@@ -273,6 +273,11 @@ class LadderOptionsTest(unittest.TestCase):
         self.assertIn("--gp-polish", ladder.runner_arguments(dict(gp_polish=True)))
         wire = ladder.runner_arguments(dict(legalize_reorient_wire=True))
         self.assertEqual(wire[wire.index("--legalize-reorient") + 1], "wire")
+        more = ladder.runner_arguments(
+            dict(legalize_channel_clearance_fab=True, line_satellites=True)
+        )
+        self.assertEqual(more[more.index("--legalize-channel-clearance") + 1], "fab")
+        self.assertIn("--line-satellites", more)
         kind = kinds.get("ladder-cell")
         campaign = {
             "schema": spec.CAMPAIGN_SCHEMA,

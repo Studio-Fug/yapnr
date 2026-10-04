@@ -24,7 +24,16 @@ default and works with or without ``PNR_COMPACT``:
     After legalization (and the align snap and the matched-length pass), a greedy in-place pass
     turns parts about their slot centre where that shortens their wirelength, stays legal and does
     not raise the part's routing-channel penalty. ``PNR_LEGALIZE_REORIENT=wire`` drops the channel
-    guard (wirelength and legality only, the prototype's rule), for the A/B.
+    guard (wirelength and legality only, the prototype's rule), for the A/B. Only where the
+    placer may turn parts (``orient``).
+``PNR_LEGALIZE_CHANNEL_CLEARANCE=fab``
+    The legalizer's routing-channel model (:class:`pnr.place.channels.ChannelModel`) spaces the
+    tracks of nets without a class at the fab clearance (``fab.clearance_mm``, the router's)
+    instead of the board's ``default_clearance_mm``.
+``PNR_LINE_SATELLITES=1``
+    A line group (:mod:`pnr.place.line_group`) carries its members' satellites: a free two-pad
+    part joined to one member pad by a two-pin net sits flush beside that member, in line with
+    it, as part of the rigid line (:func:`pnr.place.line_group.satellites`).
 
 Unset (or ``0``), every caller takes its unchanged path and writes no new JSON keys.
 """
@@ -44,6 +53,8 @@ FLAGS = (
     "PNR_POOL_SOURCE_CLAMP",
     "PNR_LEGALIZE_HPWL",
     "PNR_LEGALIZE_REORIENT",
+    "PNR_LEGALIZE_CHANNEL_CLEARANCE",
+    "PNR_LINE_SATELLITES",
 )
 
 
@@ -95,6 +106,24 @@ def legalize_reorient() -> Optional[str]:
     return REORIENT_MODES[raw]
 
 
+CHANNEL_CLEARANCES = ("fab",)
+
+
+def legalize_channel_clearance() -> Optional[str]:
+    """``PNR_LEGALIZE_CHANNEL_CLEARANCE``: ``"fab"`` or None (unset, empty or ``0``)."""
+    raw = os.environ.get("PNR_LEGALIZE_CHANNEL_CLEARANCE")
+    if raw is None or raw in ("", "0"):
+        return None
+    if raw not in CHANNEL_CLEARANCES:
+        raise ValueError("PNR_LEGALIZE_CHANNEL_CLEARANCE takes fab, got %r" % (raw,))
+    return raw
+
+
+def line_satellites() -> bool:
+    """True with ``PNR_LINE_SATELLITES=1``."""
+    return os.environ.get("PNR_LINE_SATELLITES") == "1"
+
+
 def active() -> dict:
     """The active switches and their values, for provenance and the trace (empty when off)."""
     out = {}
@@ -108,4 +137,8 @@ def active() -> dict:
         out["LEGALIZE_HPWL"] = legalize_hpwl()
     if legalize_reorient():
         out["LEGALIZE_REORIENT"] = legalize_reorient()
+    if legalize_channel_clearance():
+        out["LEGALIZE_CHANNEL_CLEARANCE"] = legalize_channel_clearance()
+    if line_satellites():
+        out["LINE_SATELLITES"] = True
     return out

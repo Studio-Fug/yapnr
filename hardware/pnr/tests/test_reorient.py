@@ -214,6 +214,33 @@ class PlacerTest(unittest.TestCase):
             if comp.ref not in calls[0]:
                 self.assertEqual(comp.rot, turned.component(comp.ref).rot)
 
+    def test_placer_never_turns_without_orient(self):
+        """``orient=False`` (the caller forbids turns): the pass does not run."""
+        from pnr.place import placer
+        from pnr.place import reorient as module
+
+        graph, constraints, rules = fixture.load("04-inverter-leds-8")
+        saved = os.environ.get("PNR_LEGALIZE_REORIENT")
+        os.environ["PNR_LEGALIZE_REORIENT"] = "wire"
+        try:
+            with mock.patch.object(module, "reorient", side_effect=AssertionError("called")):
+                placed, report = placer.place(
+                    graph,
+                    constraints,
+                    seed=0,
+                    iters=60,
+                    spread=1.3,
+                    channel_rules=rules,
+                    orient=False,
+                )
+        finally:
+            os.environ.pop("PNR_LEGALIZE_REORIENT", None)
+            if saved is not None:
+                os.environ["PNR_LEGALIZE_REORIENT"] = saved
+        self.assertTrue(report.legal)
+        for comp in graph.components:
+            self.assertEqual(placed.component(comp.ref).rot, comp.rot, comp.ref)
+
 
 if __name__ == "__main__":
     unittest.main()

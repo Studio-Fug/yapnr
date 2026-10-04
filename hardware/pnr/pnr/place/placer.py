@@ -328,9 +328,11 @@ def place(
     # Directional copper escape demand is part of production legalization.
     from .channels import ChannelModel
 
-    channels = ChannelModel(
-        cont, channel_rules or compile_routing_rules(constraints, [n.name for n in graph.nets])
+    routing_rules = channel_rules or compile_routing_rules(
+        constraints, [n.name for n in graph.nets]
     )
+    # PNR_LEGALIZE_CHANNEL_CLEARANCE=fab: unclassed nets at the fab clearance.
+    channels = ChannelModel(cont, routing_rules, **_channel_kwargs(routing_rules))
     # 2. Legalization (snap to a non-overlapping, in-outline layout).
     placed = legalize(
         cont,
@@ -361,6 +363,8 @@ def place(
         **(_side_legalization(side_plan) if sided else {}),
         **({} if not stack else dict(stack=stack)),
         **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
+        # PNR_LEGALIZE_HPWL: the wirelength term and the four-turn search (not for matched parts).
+        **_wire_kwargs(cont, constraints),
     )
     if related:
         # Hard aligns onto one exact line where that is legal (pnr.place.regions).
@@ -397,7 +401,7 @@ def place(
             **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
         )
     reorienting = legalize_flags.legalize_reorient()
-    if reorienting:
+    if reorienting and orient:
         # PNR_LEGALIZE_REORIENT: greedy in-place turns that shorten wires (pnr.place.reorient);
         # ``wire`` drops the channel guard.
         from .reorient import reorient
@@ -430,6 +434,28 @@ def place(
         )
         check_held(placed, side_plan)
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
+
+
+def _channel_kwargs(rules) -> dict:
+    """``ChannelModel`` keywords of ``PNR_LEGALIZE_CHANNEL_CLEARANCE`` (empty when off)."""
+    if legalize_flags.legalize_channel_clearance() != "fab":
+        return {}
+    fab = rules.get("fab") or {}
+    if fab.get("clearance_mm") is None:
+        return {}
+    return dict(clearance=float(fab["clearance_mm"]))
+
+
+def _wire_kwargs(graph, constraints) -> dict:
+    """``legalize`` keywords of ``PNR_LEGALIZE_HPWL`` (empty when off): its weight, and the
+    parts on a diff-pair or length-match net, which keep the plain slot search
+    (:func:`pnr.place.reorient.matched_refs`)."""
+    weight = legalize_flags.legalize_hpwl()
+    if weight is None:
+        return {}
+    from .reorient import matched_refs
+
+    return dict(wire_weight=weight, wire_exempt=frozenset(matched_refs(graph, constraints)))
 
 
 def _polish(graph, constraints, channel_rules, **legal):

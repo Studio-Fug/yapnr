@@ -244,14 +244,21 @@ def compact_environment(compact, compact_off=(), shrink=False):
 
 
 def legalize_environment(
-    gp_polish=False, gp_channels=None, pool_source_clamp=False, legalize_hpwl=None, reorient=None
+    gp_polish=False,
+    gp_channels=None,
+    pool_source_clamp=False,
+    legalize_hpwl=None,
+    reorient=None,
+    channel_clearance=None,
+    line_satellites=False,
 ):
     """The PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP / PNR_LEGALIZE_HPWL /
-    PNR_LEGALIZE_REORIENT variables of ``--gp-polish``, ``--gp-channels``,
-    ``--pool-source-clamp``, ``--legalize-hpwl`` and ``--legalize-reorient``
+    PNR_LEGALIZE_REORIENT / PNR_LEGALIZE_CHANNEL_CLEARANCE / PNR_LINE_SATELLITES variables of
+    ``--gp-polish``, ``--gp-channels``, ``--pool-source-clamp``, ``--legalize-hpwl``,
+    ``--legalize-reorient``, ``--legalize-channel-clearance`` and ``--line-satellites``
     (``pnr.legalize_flags``; set after the ambient PNR_* variables are stripped, so provenance
     records them); empty when none is given. ``reorient`` is ``"1"`` (guarded), ``"wire"`` or
-    None."""
+    None; ``channel_clearance`` is ``"fab"`` or None."""
     env = {}
     for name, value in (("--gp-channels", gp_channels), ("--legalize-hpwl", legalize_hpwl)):
         if value is not None and not (math.isfinite(value) and value > 0):
@@ -268,6 +275,12 @@ def legalize_environment(
         raise ValueError("--legalize-reorient takes nothing or wire, got %r" % (reorient,))
     if reorient:
         env["PNR_LEGALIZE_REORIENT"] = reorient
+    if channel_clearance not in (None, "fab"):
+        raise ValueError("--legalize-channel-clearance takes fab, got %r" % (channel_clearance,))
+    if channel_clearance:
+        env["PNR_LEGALIZE_CHANNEL_CLEARANCE"] = channel_clearance
+    if line_satellites:
+        env["PNR_LINE_SATELLITES"] = "1"
     return env
 
 
@@ -782,6 +795,22 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--legalize-channel-clearance",
+        choices=("fab",),
+        help=(
+            "PNR_LEGALIZE_CHANNEL_CLEARANCE=fab: the legalizer's channel model spaces unclassed "
+            "nets at the fab clearance (the router's) instead of the board default"
+        ),
+    )
+    ap.add_argument(
+        "--line-satellites",
+        action="store_true",
+        help=(
+            "PNR_LINE_SATELLITES=1: a line group carries each member's series part (a two-pad "
+            "part on a two-pin net to the member) flush beside it"
+        ),
+    )
+    ap.add_argument(
         "--shrink",
         action="store_true",
         help=(
@@ -921,6 +950,8 @@ def main():
                 args.pool_source_clamp,
                 args.legalize_hpwl,
                 args.legalize_reorient,
+                args.legalize_channel_clearance,
+                args.line_satellites,
             )
         )
     except ValueError as error:

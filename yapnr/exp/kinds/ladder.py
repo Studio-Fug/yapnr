@@ -66,6 +66,8 @@ OPTIONS = {
     "legalize_hpwl": (int, float),
     "legalize_reorient": bool,
     "legalize_reorient_wire": bool,
+    "legalize_channel_clearance_fab": bool,
+    "line_satellites": bool,
 }
 FLAGS = {
     "packed_maze": "--packed-maze",
@@ -84,6 +86,7 @@ FLAGS = {
     "gp_polish": "--gp-polish",
     "pool_source_clamp": "--pool-source-clamp",
     "legalize_reorient": "--legalize-reorient",
+    "line_satellites": "--line-satellites",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
 WEIGHTS = {"gp_channels": "--gp-channels", "legalize_hpwl": "--legalize-hpwl"}
@@ -133,6 +136,8 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
             args += [flag, repr(float(options[key]))]
     if options.get("legalize_reorient_wire") and not options.get("legalize_reorient"):
         args += ["--legalize-reorient", "wire"]  # the in-place turns without the channel guard
+    if options.get("legalize_channel_clearance_fab"):
+        args += ["--legalize-channel-clearance", "fab"]
     return args
 
 

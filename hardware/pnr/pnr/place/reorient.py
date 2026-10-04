@@ -8,7 +8,9 @@ legalizer centred the slot) where that shortens their wirelength:
 
 - greedy, best gain first: each round evaluates every candidate part at its three other turns
   and takes the single turn with the largest wirelength gain, ties broken by the reference and
-  then the turn; to a fixed point, at most four turns per candidate in all;
+  then the turn; to a fixed point, with at most four times as many turns in all as there are
+  candidates (every accepted turn strictly shortens the total wirelength, so the cap only
+  bounds the work);
 - a turn is taken only if the part's half-perimeter wirelength (plane nets left out, as the
   legalizer's term, :func:`pnr.place.legalize.wire_cost`) drops by more than :data:`GAIN_MM`,
   it is legal in place (:func:`pnr.place.metrics.pose_checker` with the legalizer's clearance,
@@ -42,6 +44,20 @@ GAIN_MM = 1e-6
 PENALTY_EPS = 1e-9
 
 
+def matched_refs(graph, constraints) -> Set[str]:
+    """The parts with a pad on a differential-pair or length-match net: the matched-length
+    pass evens them, so neither this pass nor the legalizer's wirelength term
+    (``PNR_LEGALIZE_HPWL``, ``legalize(wire_exempt=...)``) moves or turns them for wirelength."""
+    matched = set()
+    for pair in getattr(constraints, "diff_pairs", None) or []:
+        matched |= {pair.p, pair.n}
+    for group in getattr(constraints, "length_matches", None) or []:
+        matched |= set(group.nets)
+    if not matched:
+        return set()
+    return {c.ref for c in graph.components if any(pad.net in matched for pad in c.pads)}
+
+
 def frozen_refs(graph, constraints, poses=None) -> Set[str]:
     """The parts the pass never turns (see the module docstring)."""
     out = set(resolve_fixed_poses(graph, constraints) if poses is None else poses)
@@ -49,17 +65,10 @@ def frozen_refs(graph, constraints, poses=None) -> Set[str]:
     for con in constraints.constraints:
         if con.kind in ("fixed", "row", "line_group"):
             out |= set(con.refs)
-    matched = set()
-    for pair in getattr(constraints, "diff_pairs", None) or []:
-        matched |= {pair.p, pair.n}
-    for group in getattr(constraints, "length_matches", None) or []:
-        matched |= set(group.nets)
     for comp in graph.components:
         if comp.locked or str(comp.footprint).startswith(("block:", "line:")):
             out.add(comp.ref)
-        elif matched and any(pad.net in matched for pad in comp.pads):
-            out.add(comp.ref)
-    return out
+    return out | matched_refs(graph, constraints)
 
 
 def _set_turn(comp, centre, rot):

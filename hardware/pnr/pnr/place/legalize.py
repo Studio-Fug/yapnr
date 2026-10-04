@@ -28,11 +28,12 @@ the candidate cost, and every pose is set to the slot centre less the shift. ``m
 (``LEGALIZE``) grows a part's slot by a copper margin on every side. Without either,
 every slot and pose is computed exactly as before.
 
-PNR_LEGALIZE_HPWL=<w> (:mod:`pnr.legalize_flags`, default off; ``wire_weight``): every
-candidate slot also costs ``w`` times the part's wirelength there (:func:`wire_cost`, plane
-nets left out), and the slot is chosen together with the turn: the search runs once per
-quarter turn (:func:`wire_turns`, the global turn first) and keeps the cheapest outcome.
-Unset, the cost and the turn search are exactly as before.
+PNR_LEGALIZE_HPWL=<w> (:mod:`pnr.legalize_flags`, default off; the placer passes it as
+``wire_weight``): every candidate slot also costs ``w`` times the part's wirelength there
+(:func:`wire_cost`, plane nets left out), and the slot is chosen together with the turn: the
+search runs once per quarter turn (:func:`wire_turns`, the global turn first) and keeps the
+cheapest outcome. Parts on a matched-length net (``wire_exempt``) keep the plain search. With
+``wire_weight`` 0 (the default) the cost and the turn search are exactly as before.
 """
 
 from __future__ import annotations
@@ -253,6 +254,7 @@ def _place_part(
     mask=None,
     box_label="keeping pads clear of the board edge",
     shift=None,
+    bound=None,
 ) -> Tuple[int, int]:
     """Find the free ``bh x bw`` block nearest ``target`` (returns top-left r, c).
 
@@ -270,7 +272,10 @@ def _place_part(
     block centre so the part's pads and drills keep the fab edge rules; it also carries
     a hard edge band, a rectangle region and an align band.
     ``mask`` (a polygon or union region, :meth:`pnr.place.regions.LegalizeRules.mask`)
-    is a map of the top-lefts whose courtyard lies inside the region."""
+    is a map of the top-lefts whose courtyard lies inside the region.
+    ``bound`` (PNR_LEGALIZE_HPWL, :func:`_cheapest`): ``(rest, cheap)`` with
+    ``candidate_cost(xs, ys) == rest(xs, ys) + cheap(xs, ys)`` element for element and
+    ``rest >= 0``; the same slot is found evaluating ``rest`` on fewer candidates."""
     ny, nx = occ.shape
     if free is not None:
         if free is False:
@@ -328,12 +333,53 @@ def _place_part(
     if not free.any():
         raise LegalizationError("no free slot inside hard group radius")
     dist2 = (cx - target[0]) ** 2 + (cy - target[1]) ** 2
+    if bound is not None:
+        return _cheapest(dist2, free, cx, cy, *bound)
     if candidate_cost is not None:
         dist2[free] += candidate_cost(
             np.broadcast_to(cx, free.shape)[free], np.broadcast_to(cy, free.shape)[free]
         )
     dist2 = np.where(free, dist2, np.inf)
     r, c = np.unravel_index(np.argmin(dist2), dist2.shape)
+    return int(r), int(c)
+
+
+# _cheapest: candidates scored in full first, before the lower-bound prune.
+PRUNE_FIRST = 64
+
+
+def _cheapest(dist2, free, cx, cy, rest, cheap):
+    """:func:`_place_part`'s choice (the first cell of least ``dist2 + rest + cheap`` among the
+    free ones, row-major) with ``rest`` (the channel and soft costs, never negative and the
+    expensive part) evaluated only where it can matter (PNR_LEGALIZE_HPWL).
+
+    ``dist2 + cheap`` bounds every candidate's cost from below. The :data:`PRUNE_FIRST` cells
+    of least bound are scored in full; any cell whose bound exceeds the best cost so far cannot
+    win or tie, and every other cell is scored in full too. The totals are summed in the order
+    :func:`_place_part` sums them (``dist2 + (rest + cheap)``, element by element), so the
+    chosen cell, ties included, is the unpruned one."""
+    shape = free.shape
+    flat = np.flatnonzero(free)
+    xs = np.broadcast_to(cx, shape).ravel()[flat]
+    ys = np.broadcast_to(cy, shape).ravel()[flat]
+    d2 = np.broadcast_to(dist2, shape).ravel()[flat]
+    extra = np.broadcast_to(np.asarray(cheap(xs, ys), dtype=float), flat.shape)
+    lower = d2 + extra
+    order = np.argsort(lower, kind="stable")
+    total = np.full(flat.shape, np.inf)
+
+    def score(pick):
+        total[pick] = d2[pick] + (rest(xs[pick], ys[pick]) + extra[pick])
+
+    first = order[:PRUNE_FIRST]
+    score(first)
+    later = order[PRUNE_FIRST:]
+    later = later[lower[later] <= total[first].min()]
+    if later.size:
+        score(later)
+    out = np.full(free.size, np.inf)
+    out[flat] = total
+    r, c = np.unravel_index(np.argmin(out), shape)
     return int(r), int(c)
 
 
@@ -422,6 +468,31 @@ def wire_turns(rot: float, free: bool) -> List[float]:
     return [(rot + 90.0 * k) % 360 for k in range(4)]
 
 
+def banned_cells(entries, rotation, side, half_turns=False):
+    """The banned top-left cells (``(rot, r, c, side)`` backtracking entries) that apply to a
+    search at ``rotation`` on ``side``. ``half_turns`` (PNR_LEGALIZE_HPWL, parts other than hull
+    macros): a slot banned at one turn is banned at the half turn too, which occupies the same
+    block of cells."""
+    if half_turns:
+        return [
+            (rr, cc)
+            for rot, rr, cc, s in entries
+            if s == side and abs((rot - rotation) % 180.0) < 1e-9
+        ]
+    return [(rr, cc) for rot, rr, cc, s in entries if rot == rotation and s == side]
+
+
+def _wire_column(fields, xs, ys, wire):
+    """Cost capture under PNR_LEGALIZE_HPWL: the recorded candidate field of one turn
+    (columns x, y, displacement², channel, local loop) with the raw wirelength appended as a
+    sixth column; without a recorded field (no channel model) the other columns are zero."""
+    xs, ys, wire = np.broadcast_arrays(np.asarray(xs, float), np.asarray(ys, float), wire)
+    if fields is None or len(fields) != xs.size or np.shape(fields)[1] != 5:
+        zeros = np.zeros(xs.size)
+        fields = np.column_stack((xs.ravel(), ys.ravel(), zeros, zeros, zeros))
+    return np.column_stack((fields, wire.ravel()))
+
+
 def wire_cost(comp, neighbors, movable, xs, ys, skip=frozenset()):
     """Half-perimeter wirelength (mm) of ``comp``'s nets with ``comp`` (at its current turn and
     side) posed at each candidate ``(xs, ys)``, vectorised over the candidates.
@@ -507,6 +578,7 @@ def legalize(
     aligns=None,
     margins: Optional[Dict[str, float]] = None,
     wire_weight: Optional[float] = None,
+    wire_exempt=frozenset(),
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -590,19 +662,24 @@ def legalize(
     copper margin on every side. A part with an offset courtyard (PNR_COMPACT
     ``COURTYARD``) takes the slot of its body box and keeps ``pos`` its origin.
 
-    ``wire_weight`` (mm² per mm; None reads ``PNR_LEGALIZE_HPWL``, :mod:`pnr.legalize_flags`;
-    0 = off) adds ``wire_weight * wire_cost`` to every candidate's cost and to
+    ``wire_weight`` (mm² per mm, ``PNR_LEGALIZE_HPWL`` as :func:`pnr.place.placer.place`
+    passes it; None or 0 = off) adds ``wire_weight * wire_cost`` to every candidate's cost and to
     :func:`slot_cost`, and a part free to turn (``allow_rotation``, no hard rotation) has its
     slot searched at each of its four quarter turns, global turn first: the cheapest outcome
     wins, a tie keeps the earlier turn, and under ``lookahead: regions`` a turn whose every slot
     strands a part counts only when every turn does. Line and block macros turn as one body;
-    the side retry compares the two sides' best turns.
+    the side retry compares the two sides' best turns; a backtracking ban covers the banned
+    slot's half turn as well. ``wire_exempt`` (refs) keeps the plain search for those parts
+    (the placer passes the parts on a diff-pair or length-match net:
+    :func:`pnr.place.reorient.matched_refs`).
     """
-    if wire_weight is None:
-        from pnr.legalize_flags import legalize_hpwl
-
-        wire_weight = legalize_hpwl()
     wire_weight = float(wire_weight or 0.0)
+    wire_exempt = frozenset(wire_exempt or ())
+
+    def wired(comp):
+        """PNR_LEGALIZE_HPWL acts on ``comp``: the term is on and ``comp`` is not exempt."""
+        return wire_weight > 0 and comp.ref not in wire_exempt
+
     # Plane nets drop to their plane: no wirelength term (computed only when the term is on).
     wire_skip = plane_nets(channel_model) if wire_weight > 0 else frozenset()
     inflation = inflation or {}
@@ -934,7 +1011,7 @@ def legalize(
             cost += 0.0 if extra is None else float(extra)
         if side_cost is not None:
             cost += side_weight * float(side_cost(placed))
-        if wire_weight > 0:  # PNR_LEGALIZE_HPWL
+        if wired(comp):  # PNR_LEGALIZE_HPWL
             cost += wire_weight * float(wire_cost(comp, neighbors, movable, x, y, wire_skip))
         return cost
 
@@ -1012,10 +1089,10 @@ def legalize(
             grid_mm=g,
             limits=centre_limits,
             # The rotations the slot search tries per part (below).
-            turns=(
-                (lambda m: wire_turns(m.rot, allow_rotation and m.ref not in rotations))
-                if wire_weight > 0
-                else lambda m: [m.rot]
+            turns=lambda m: (
+                wire_turns(m.rot, allow_rotation and m.ref not in rotations)
+                if wired(m)
+                else [m.rot]
                 + ([(m.rot + 90) % 360] if allow_rotation and m.ref not in rotations else [])
             ),
         )
@@ -1401,6 +1478,8 @@ def legalize(
             attached = ()
             error = None
             captured_fields = {}
+            # PNR_LEGALIZE_HPWL: a ban covers the half turn (same block), hull macros aside.
+            half_turns = wired(comp) and not is_hull(comp)
             turns = [original_rotation] + (
                 [(original_rotation + 90) % 360]
                 if allow_rotation and comp.ref not in rotations
@@ -1463,13 +1542,26 @@ def legalize(
                             value = 0.0 if _base is None else _base(xs, ys)
                             return value + (0.0 if extra is None else extra)
 
-                    if wire_weight > 0:
-                        # PNR_LEGALIZE_HPWL: w times the part's wirelength at each candidate.
-                        def candidate_cost(xs, ys, _base=candidate_cost):
-                            value = 0.0 if _base is None else _base(xs, ys)
-                            return value + wire_weight * wire_cost(
-                                comp, neighbors, movable, xs, ys, wire_skip
+                    bound = None
+                    if wired(comp):
+                        rest = candidate_cost  # the channel and soft costs (or None)
+                        if not capturing and not (rules is not None and rules.has_soft(comp.ref)):
+                            # The same slot, scoring the channel cost on fewer candidates.
+                            bound = (
+                                (lambda xs, ys: 0.0) if rest is None else rest,
+                                lambda xs, ys: wire_weight
+                                * wire_cost(comp, neighbors, movable, xs, ys, wire_skip),
                             )
+
+                        # PNR_LEGALIZE_HPWL: w times the part's wirelength at each candidate.
+                        def candidate_cost(xs, ys, _base=candidate_cost, _turn=rotation):
+                            value = 0.0 if _base is None else _base(xs, ys)
+                            wire = wire_cost(comp, neighbors, movable, xs, ys, wire_skip)
+                            if capturing:
+                                captured_fields[_turn] = _wire_column(
+                                    captured_fields.get(_turn), xs, ys, wire
+                                )
+                            return value + wire_weight * wire
 
                     slot_free = hull_free(comp, bw, bh) if is_hull(comp) else None
                     slot_mask = region_mask(comp, bw, bh)
@@ -1481,24 +1573,21 @@ def legalize(
                         target,
                         limits_for(comp.ref),
                         candidate_cost=candidate_cost,
-                        forbidden=[
-                            (rr, cc)
-                            for rot, rr, cc, side in banned.get(comp.ref, ())
-                            if rot == rotation and side == comp.side
-                        ],
+                        forbidden=banned_cells(
+                            banned.get(comp.ref, ()), rotation, comp.side, half_turns
+                        ),
                         attached=attached,
                         free=slot_free,
                         box=edge_box(comp),
                         mask=slot_mask,
                         **box_label_of(comp),
                         **shifted,
+                        **({} if bound is None else dict(bound=bound)),
                     )
                     if aid is not None:
-                        tried = [
-                            (rr, cc)
-                            for rot, rr, cc, side in banned.get(comp.ref, ())
-                            if rot == rotation and side == comp.side
-                        ]
+                        tried = banned_cells(
+                            banned.get(comp.ref, ()), rotation, comp.side, half_turns
+                        )
                         for attempt in range(LOOK_AHEAD_TRIES):
                             if not starves(comp, r, c, bw, bh, sides):
                                 break
@@ -1546,6 +1635,7 @@ def legalize(
                                 box=edge_box(comp),
                                 mask=slot_mask,
                                 **box_label_of(comp),
+                                **({} if bound is None else dict(bound=bound)),
                             ),
                         )
                         if not clear:  # every tried slot strands a part: the next turn first
@@ -1592,7 +1682,7 @@ def legalize(
             return outcome[:7] + (fields,)
 
         # PNR_LEGALIZE_HPWL chooses the turn with the slot; otherwise the first turn that fits.
-        run_search = search_scored if wire_weight > 0 else search
+        run_search = search_scored if wired(comp) else search
         error, r, c, bw, bh, sides, attached, captured_fields = run_search()
         if (
             side_options
@@ -1688,6 +1778,22 @@ def legalize(
                         (position[0] - target[0]) ** 2 + (position[1] - target[1]) ** 2,
                         channel,
                         0.0,
+                    )
+                    + (
+                        # PNR_LEGALIZE_HPWL: the wirelength term of the chosen slot.
+                        (
+                            float(
+                                wire_cost(
+                                    comp,
+                                    neighbors,
+                                    movable,
+                                    *slot_pose(comp, r, c, bw, bh),
+                                    wire_skip,
+                                )
+                            ),
+                        )
+                        if wired(comp)
+                        else ()
                     ),
                     poses={q.ref: (q.pos, q.rot) for q in placed.components},
                     sides={q.ref: q.side for q in placed.components},
@@ -1752,6 +1858,8 @@ def legalize(
                     v["chosen"],
                     g,
                     channel_weight,
+                    # PNR_LEGALIZE_HPWL: the wirelength term of a part it acted on.
+                    **({} if len(v["chosen"]) < 4 else dict(wire_weight=wire_weight)),
                 )
             )
         save(

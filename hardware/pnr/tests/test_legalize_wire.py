@@ -206,22 +206,124 @@ class SlotAndTurnTest(unittest.TestCase):
 
 
 class FlagTest(unittest.TestCase):
-    def test_flag_reads_the_weight_and_off_never_calls_the_term(self):
+    def test_legalize_takes_the_weight_from_its_caller_only(self):
+        """legalize() never reads the environment: the placer passes PNR_LEGALIZE_HPWL, so the
+        pool's basin fallback and power-first placement keep the plain legalizer."""
         g, fixed = SlotAndTurnTest().readme_case()
 
         def refuse(*args, **kwargs):
-            raise AssertionError("wirelength term with the flag unset")
+            raise AssertionError("wirelength term without a weight")
 
         with env():
             reference = run(g, fixed, 0.0).to_json()
-            with mock.patch.object(legalize_mod, "wire_cost", refuse), mock.patch.object(
-                legalize_mod, "wire_turns", refuse
-            ):
-                self.assertEqual(run(g, fixed, None).to_json(), reference)
+        with env(PNR_LEGALIZE_HPWL="4"), mock.patch.object(
+            legalize_mod, "wire_cost", refuse
+        ), mock.patch.object(legalize_mod, "wire_turns", refuse):
+            self.assertEqual(run(g, fixed, None).to_json(), reference)
+
+    def test_placer_passes_the_weight_and_the_matched_parts(self):
+        from pnr.constraints import compile_constraints
+        from pnr.place import placer
+
+        r1 = two_pad("R1", "DP", "A", (5.0, 5.0))
+        r2 = two_pad("R2", "DN", "B", (5.0, 7.0))
+        r3 = two_pad("R3", "C", "A", (8.0, 5.0))
+        g = graph([r1, r2, r3])
+        con = compile_constraints({"diff_pair": [{"name": "USB", "p": "DP", "n": "DN"}]}, g.refs)
+        with env():
+            self.assertEqual(placer._wire_kwargs(g, con), {})
         with env(PNR_LEGALIZE_HPWL="4"):
-            self.assertEqual(run(g, fixed, None).to_json(), run(g, fixed, 4.0).to_json())
+            self.assertEqual(
+                placer._wire_kwargs(g, con),
+                dict(wire_weight=4.0, wire_exempt=frozenset({"R1", "R2"})),
+            )
         with env(PNR_LEGALIZE_HPWL="-1"), self.assertRaises(ValueError):
-            run(g, fixed, None)
+            placer._wire_kwargs(g, con)
+
+
+class ExemptTest(unittest.TestCase):
+    def test_exempt_part_keeps_the_plain_search(self):
+        """A matched-length part (``wire_exempt``) is legalized as without the term: its slot
+        and turn are the weight-0 ones, while the other parts still get the term."""
+        g, fixed = SlotAndTurnTest().readme_case()
+        plain = run(g, fixed, 0.0)
+        wired = run(g, fixed, 4.0)
+        exempt = run(g, fixed, 4.0, wire_exempt=frozenset({"R1"}))
+        self.assertNotEqual(
+            (wired.component("R1").pos, wired.component("R1").rot),
+            (plain.component("R1").pos, plain.component("R1").rot),
+        )
+        self.assertEqual(exempt.component("R1").pos, plain.component("R1").pos)
+        self.assertEqual(exempt.component("R1").rot, plain.component("R1").rot)
+
+
+class PruneTest(unittest.TestCase):
+    def test_pruned_choice_is_the_full_one(self):
+        """``_place_part(bound=...)`` returns the cell the full scoring returns, ties (the
+        first cell, row-major) included."""
+        from pnr.place.legalize import _place_part
+
+        rng = np.random.default_rng(7)
+        for trial in range(40):
+            ny, nx = rng.integers(8, 40, size=2)
+            occ = rng.random((ny, nx)) < 0.3
+            target = (rng.uniform(0, nx * 0.25), rng.uniform(0, ny * 0.25))
+            grain = 0.5 if trial % 2 else 1e-3  # coarse values force ties
+
+            def rest(xs, ys):
+                return np.round(np.abs(np.sin(xs * 3.1) * np.cos(ys * 1.7)) * 9 / grain) * grain
+
+            def cheap(xs, ys):
+                return np.round((np.abs(xs - 2.0) + np.abs(ys - 1.0)) * 4 / grain) * grain
+
+            def full(xs, ys):
+                return rest(xs, ys) + cheap(xs, ys)
+
+            kwargs = dict(target=target, limits=(), forbidden=[(1, 1)])
+            try:
+                want = _place_part(occ, 0.25, 2, 1, candidate_cost=full, **kwargs)
+            except Exception:  # noqa: BLE001  (no free slot: both must agree)
+                with self.assertRaises(Exception):
+                    _place_part(occ, 0.25, 2, 1, candidate_cost=full, bound=(rest, cheap), **kwargs)
+                continue
+            got = _place_part(occ, 0.25, 2, 1, candidate_cost=full, bound=(rest, cheap), **kwargs)
+            self.assertEqual(got, want, trial)
+
+    def test_same_board_with_and_without_the_prune(self):
+        from pnr.place import legalize as module
+
+        g, fixed = SlotAndTurnTest().readme_case()
+        pruned = run(g, fixed, 4.0).to_json()
+        real = module._cheapest
+
+        def unpruned(dist2, free, cx, cy, rest, cheap):
+            out = np.where(
+                free,
+                dist2
+                + (
+                    rest(np.broadcast_to(cx, free.shape), np.broadcast_to(cy, free.shape))
+                    + cheap(np.broadcast_to(cx, free.shape), np.broadcast_to(cy, free.shape))
+                ),
+                np.inf,
+            )
+            r, c = np.unravel_index(np.argmin(out), free.shape)
+            return int(r), int(c)
+
+        with mock.patch.object(module, "_cheapest", unpruned):
+            self.assertEqual(run(g, fixed, 4.0).to_json(), pruned)
+        self.assertIs(module._cheapest, real)
+
+
+class BanTest(unittest.TestCase):
+    def test_half_turn_shares_the_ban(self):
+        from pnr.place.legalize import banned_cells
+
+        entries = [(0.0, 3, 4, "top"), (90.0, 5, 6, "top"), (180.0, 7, 8, "bottom")]
+        self.assertEqual(banned_cells(entries, 0.0, "top"), [(3, 4)])
+        self.assertEqual(banned_cells(entries, 180.0, "top"), [])
+        self.assertEqual(banned_cells(entries, 180.0, "top", half_turns=True), [(3, 4)])
+        self.assertEqual(banned_cells(entries, 270.0, "top", half_turns=True), [(5, 6)])
+        self.assertEqual(banned_cells(entries, 0.0, "bottom", half_turns=True), [(7, 8)])
 
 
 class LineChaserTest(unittest.TestCase):

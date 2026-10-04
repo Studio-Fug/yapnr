@@ -180,8 +180,13 @@ def legalizer_decision(
     grid,
     channel_weight,
     local_details=(),
+    wire_weight=None,
 ):
-    """Store actual evaluated legal candidates/terms before another part is placed."""
+    """Store actual evaluated legal candidates/terms before another part is placed.
+
+    ``wire_weight`` (PNR_LEGALIZE_HPWL only): the legalizer's wirelength term is on; ``chosen``
+    then carries the chosen slot's raw wirelength fourth, the terms gain ``wirelength`` and a
+    candidate field with six columns names the sixth ``wire_raw``."""
     import numpy as np
 
     p = folder()
@@ -202,7 +207,8 @@ def legalizer_decision(
                 rotation=pose,
                 path=str(dest.resolve()),
                 sha256=hashlib.sha256(dest.read_bytes()).hexdigest(),
-                columns=["x", "y", "target_distance_squared", "channel_raw", "local_loop_weighted"],
+                columns=["x", "y", "target_distance_squared", "channel_raw", "local_loop_weighted"]
+                + (["wire_raw"] if array.ndim == 2 and array.shape[1] == 6 else []),
                 count=len(array),
             )
         )
@@ -226,6 +232,15 @@ def legalizer_decision(
             details=local_details,
         ),
     ]
+    if wire_weight is not None:
+        terms.append(
+            dict(
+                key="wirelength",
+                raw=chosen[3],
+                weight=wire_weight,
+                weighted=wire_weight * chosen[3],
+            )
+        )
     return save(
         "legalizer-decision",
         dict(

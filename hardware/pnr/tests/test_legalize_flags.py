@@ -72,6 +72,41 @@ class ParseTest(unittest.TestCase):
             with flags(PNR_LEGALIZE_HPWL=bad), self.assertRaises(ValueError):
                 legalize_flags.legalize_hpwl()
 
+    def test_channel_clearance_and_satellites(self):
+        with flags():
+            self.assertIsNone(legalize_flags.legalize_channel_clearance())
+            self.assertFalse(legalize_flags.line_satellites())
+        with flags(PNR_LEGALIZE_CHANNEL_CLEARANCE="fab", PNR_LINE_SATELLITES="1"):
+            self.assertEqual(
+                legalize_flags.active(),
+                dict(LEGALIZE_CHANNEL_CLEARANCE="fab", LINE_SATELLITES=True),
+            )
+        with flags(PNR_LEGALIZE_CHANNEL_CLEARANCE="0.2"), self.assertRaises(ValueError):
+            legalize_flags.legalize_channel_clearance()
+        import run
+
+        self.assertEqual(
+            run.legalize_environment(channel_clearance="fab", line_satellites=True),
+            dict(PNR_LEGALIZE_CHANNEL_CLEARANCE="fab", PNR_LINE_SATELLITES="1"),
+        )
+        args = run.parser().parse_args(
+            ["--out", "x", "--legalize-channel-clearance", "fab", "--line-satellites"]
+        )
+        self.assertEqual((args.legalize_channel_clearance, args.line_satellites), ("fab", True))
+
+    def test_channel_clearance_reaches_the_legalizer_model(self):
+        from pnr.place import placer
+        from pnr.place.channels import ChannelModel
+
+        graph, _constraints, rules = fixture.load("04-inverter-leds-8")
+        with flags():
+            self.assertEqual(placer._channel_kwargs(rules), {})
+        with flags(PNR_LEGALIZE_CHANNEL_CLEARANCE="fab"):
+            kwargs = placer._channel_kwargs(rules)
+        self.assertEqual(kwargs, dict(clearance=rules["fab"]["clearance_mm"]))
+        self.assertEqual(ChannelModel(graph, rules).clearance, rules["default_clearance_mm"])
+        self.assertEqual(ChannelModel(graph, rules, **kwargs).clearance, kwargs["clearance"])
+
     def test_runner_options(self):
         import run
 
@@ -144,7 +179,7 @@ class FlagOffIdentityTest(unittest.TestCase):
     golden = json.loads((fixture.DATA / "identity.json").read_text())
 
     def test_flag_off_paths_and_digests(self):
-        from pnr.place import gp_polish, initial_pool, legalize, model, reorient
+        from pnr.place import gp_polish, initial_pool, legalize, line_group, model, reorient
 
         def refuse(name):
             def call(*args, **kwargs):
@@ -156,7 +191,11 @@ class FlagOffIdentityTest(unittest.TestCase):
             (legalize, "wire_cost"),
             (legalize, "wire_turns"),
             (legalize, "plane_nets"),
+            (legalize, "_wire_column"),
             (reorient, "reorient"),
+            (reorient, "matched_refs"),
+            (line_group, "satellites"),
+            (line_group, "satellite_layout"),
             (gp_polish, "Polish"),
             (model, "_freeze"),
             (initial_pool, "_clamp_start"),

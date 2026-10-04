@@ -165,6 +165,11 @@ requirements:
 | `{shape: j, target, max_rms_db, form: kl \| log_l2, weight: uniform \| target}`        | the pattern against a target density: Kullback–Leibler divergence or mean square dB error, either read as an RMS dB error |
 | `{efficiency: j, kind: radiation \| total, min}`                                       | radiated over accepted (`radiation`) or incident (`total`) power                                                          |
 
+`max_rms_db` reads as an RMS dB error (both forms) only for small deviations from the target; it
+under-penalizes excess radiation where the target density sits at its `floor_db`, since the error
+there is bounded by the floor rather than growing with the excess. Add `form: log_l2, weight:
+uniform` when sidelobe or off-axis radiation also needs suppressing, not just the shape's bulk.
+
 `pol` is `total` (default), `co`, `cross` (Ludwig-3), `theta`, `phi`, `rhcp` or `lhcp` (IEEE
 sense). Directions: `{point: {theta_deg, phi_deg}}`, `{cut: {theta_deg: 90, points: 12}}` (a
 conical cut), `{cut: {phi_deg: 0, theta_deg: [-90, 90], step_deg: 5}}` (an elevation cut;

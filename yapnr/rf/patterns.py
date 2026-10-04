@@ -63,6 +63,11 @@ GAIN_KINDS = ("realized", "gain", "directivity")
 POLS = ("total", "co", "cross", "theta", "phi", "rhcp", "lhcp")
 TAU_DB = 0.2  # smooth max/min temperature of ripple and front-to-back (dB)
 DB = 10.0 / math.log(10.0)  # 4.343: dB per neper of power
+# A null on a direction a gain/ripple/hpbw/front-to-back/cross-pol term constrains gives u -> 0
+# and an unfloored eps=1e-30 makes phi ~ 300/s with a gradient scaling as 1/u, which dominates
+# the smooth maximum over the other, well-scaled terms (the `shape` term floors its density the
+# same way `floor_db` floors this one; see the adversarial review of c2caac2..dbda1b7, #5).
+GAIN_FLOOR_DB = -40.0
 
 
 def _frame(d) -> Frame:
@@ -585,10 +590,15 @@ def direction_table(spec, quad_dirs, quad_weights, default_frame: Frame) -> Dire
     return DirectionTable(allv, rows, quad_dirs, quad_weights)
 
 
-def _x_db(u, eps=1e-30):
+def _x_db(u, floor_db=GAIN_FLOOR_DB):
+    """10 log10(u), floored `floor_db` below the term's own peak (per frequency, last dim) so a
+    null on a constrained direction gives a finite value and a bounded gradient, same as the
+    `shape` term's `floor_db`. The floor tracks the peak with x (not detached): the exact
+    gradient includes its contribution, same as the finite-difference check sees."""
     import torch
 
-    return DB * torch.log(u + eps)
+    floor = 10 ** (floor_db / 10.0) * u.max(dim=-1, keepdim=True).values.clamp_min(1e-300)
+    return DB * torch.log(u + floor)
 
 
 def _smax(x, tau: float, dim: int = -1):

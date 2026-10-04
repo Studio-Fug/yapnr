@@ -943,6 +943,20 @@ The native FDTD kernel (branch `claude/rf-kernels`, merged into #29;
   attach both Linux wheels. glibc 2.34 is the newest symbol version the library needs.
 - **`YAPNR_RF_THREADS` sets the native pool and caps torch's threads** (torch at most 4): a job
   on a C4D-16 sets 16 without editing its spec; the Bazel RF tests set 1.
+- **A case's run directory keeps its own spec when it resumes.** The presets' new solver
+  settings changed their hash, so `cases run` on a directory started before (every published
+  run) stopped at its checkpoint. It now resumes a directory whose spec differs from the preset
+  only in backend, dtype and threads with that spec (round 2's runs keep torch float32 unless
+  the environment chooses), and `design` checks the checkpoint before it writes `spec.json`.
+  The alternative, a spec hash without the execution settings, would have changed every
+  existing hash.
+- **Mode profiles are solved once per process,** keyed by the cross-section's content: the
+  mode solve's numpy complex arithmetic was not reproducible to the last bit between processes
+  on the development Mac (a complex multiplication rounded fused in some calls and unfused in
+  others), which moved calibrations by up to 5e-11 relative; with one profile per process a
+  run's problems and both sides of an identity test agree. Two processes can still differ in
+  the last bits of a modal-source run (not in the steppers); real-arithmetic products in the
+  solve might close that, not tried (it would move every published number in the last bits).
 
 The gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`,
 [design](design/gloss.md)); owner decisions of 2026-09-30 (in Splanc) and 2026-10-02:

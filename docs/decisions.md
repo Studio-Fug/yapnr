@@ -675,7 +675,8 @@ start, formulation, iterations and outcome is in the design's table):
   and bridged. The dilated design closes and bridges them during the optimization, so the
   design must work without them; the third run's exported design met its objectives after the
   repair (t −0.139 over all three designs) and passes the criteria on all three grids.
-- **The antenna's power balance tolerance is 4 % (was 2 %).** The box closed by the ground leaves
+- **The antenna's power balance tolerance is 4 % (was 2 %).** (The explanation below was not
+  established; the review fixes below have the measurements.) The box closed by the ground leaves
   a window where the feed crosses it (needed to keep the feed's guided power out), and on the
   antenna's grid the window limits the balance to about 2–3.5 % for any radiator near the feed:
   the closed-form patch itself reads −1.9 % at its resonance and −3.5 % at 10.35 GHz; for the
@@ -695,11 +696,13 @@ start, formulation, iterations and outcome is in the design's table):
   match, and crediting dissipation as radiation (an absorber). Both new options are off by
   default and left out of the spec hash; the case uses neither.
 - **The antenna's band is 9.85–10.15 GHz (3 %) at |S11| ≤ −10 dB and η ≥ 0.6 on every grid**
-  (optimized for −10 dB and η ≥ 0.7). With the copper-edge correction the closed-form inset
+  (optimized for −10 dB and η ≥ 0.7; superseded by the review fixes below: 9.7–10.3 GHz at
+  η ≥ 0.7). With the copper-edge correction the closed-form inset
   patch on S2 matches −10 dB over 3.4 % (10.05–10.40 GHz, η 0.88): round 1's 4 % came from the
   uncorrected copper. 3 % asks for about the bandwidth of one patch on this substrate, centred
   to ±0.2 %; it is not trivial (a mis-tuned patch misses it) and a single-layer radiator can
-  reach it. The coarse and fine criteria are now the same: the grids agree to about 0.2 %.
+  reach it. The coarse and fine criteria are now the same: the grids agree to about 0.2 % (on
+  lines, a stub and the patch; the generated designs, below).
 - **The antenna is optimized over 9.65–10.35 GHz and judged over 9.85–10.15 GHz,** the way the
   diplexer's channels are widened by 0.2 GHz. The first case run optimized over the criteria
   band itself and met it on the optimization grid with 0.3 dB to spare at the lower edge; its
@@ -813,7 +816,8 @@ table):
   moves from β = 16 (V3) it passes on all three grids: |S11| −20.3, −19.2 and −19.5 dB,
   |S21| = |S31| −3.33, −3.30 and −3.31 dB (guide, "(a) Power divider").
 - **The filter banks' objective bands widen each channel by 0.1 GHz** (was 0.2 GHz) against
-  coarse-to-fine shifts, which the edge correction reduced to about 0.2 %; five points per
+  coarse-to-fine shifts, which the edge correction reduced to about 0.2 % on lines, a stub and
+  the patch (the generated designs' are in the review fixes below); five points per
   diplexer channel and four per bank channel. The criteria are unchanged.
 - **The three-channel bank keeps its spec and fails** (round 2's B1 is published as it is).
   Its best binarized design came at β = 8 (t 1.39; round 1: 2.72): every in-channel
@@ -827,6 +831,90 @@ table):
   reaches that precision only with near-threshold (gray, lossy) pixels, which the binary
   design loses (design §23.3). Sub-pixel tuning of binary copper is the open problem, not the
   spec.
+
+Round 2, review fixes (the physics and intent reviews of round 2; design §24):
+
+- **The footprint follows the pixel boundaries.** The marching-squares contour cut every convex
+  pixel corner and filled every concave one by half a pixel: the same pixels on the
+  optimization grid, other copper on the validator's finer grids (+74 to +135 sub-pixels at
+  half the pitch, ±70–100 at a third), and the diplexer's S21 notch moved +1.42 and +1.69 % from
+  the optimization grid to half and a third of its pitch against +0.08 and +0.12 % for the same
+  pixels subdivided. Every finer grid now simulates the optimizer's copper (`copper_xor` 0 in
+  every `validation.json`). Simulating chamfered copper during the optimization instead was not
+  done: the solver's copper, and the edge correction's static fields, are pixel unions.
+- **The width and space repair widens the one-pixel necks that the pixel-exact copper shows.**
+  Two two-pixel lines offset diagonally can touch along one pixel edge while every pixel is in a
+  2 × 2 copper square (so the opening keeps it); the chamfers widened such a neck to 1.4 pixels
+  and the polygon check passed it. The repair now widens each neck the polygon check of the
+  exact copper flags, at the facing void pixel with the smaller x unless its new copper would
+  come within the minimum space of another copper component (then at the other one: a first
+  version joined the antenna's islands to its port pad and its matched band fell from 19 to
+  4 %); the choice commutes with the cases' mirror symmetry, and ties of the conflict widening
+  also go to the square nearest the centre line. Re-exported: the divider +12 / −2 pixels
+  against round 2's export, the antenna +4, the bank +5 / −5, the combiner and the diplexer
+  unchanged.
+- **Accuracy is stated per kind of structure.** Lines, an open stub and the closed-form patch
+  agree between the optimization grid and a third of its pitch to 0.13–0.22 % (§21.4); a stub
+  across a two-pixel gap to 0.23 %, a stub split by a two-pixel slot to 0.31 % and a stub with
+  2 × 2 holes to 0.10 %; the generated designs' resonant features, now the same copper on every
+  grid, by 0.05–0.9 % (design §24.2; round 2's 0.7–2.2 % was mostly the export's chamfers). The
+  filter banks' objective bands stay widened by 0.1 GHz (0.8–1.3 % of their channels' centres,
+  above the measured shifts); the coarse/fine criteria split of the cases stays as it was.
+- **The antenna is judged over the design's band** (9.7–10.3 GHz, 6 %) at |S11| ≤ −10 dB and
+  η ≥ 0.7 at every point, the same on every grid, which is what the optimization asked for
+  (9.65–10.35 GHz at 0.7); round 2's 9.85–10.15 GHz at η ≥ 0.6 asked for less than the generated
+  design does (−12.2 dB and 0.80 or more over 9.7–10.3 GHz on every grid in round 2's
+  validation). The report gives the −10 dB band on each grid. The re-exported antenna meets
+  both on every grid (|S11| −12.2 / −11.5 / −11.3 dB, η ≥ 0.83 / 0.82 / 0.82; −10 dB band
+  19 %).
+- **The power balance stays at 4 % and its cause is stated as not established.** Round 2 called
+  the error window-limited and its sign safe for η. A study (design §24.7) found the box's energy
+  accounting exact (a box without a feed window closes to 0.04 %), so the error is the power
+  entering through the feed window against the port's wave power; it does not track the
+  window's size, converges with the grid (about 1 % from the optimization grid to half its
+  pitch, 0.1 % from there to a third), and with the box closed at the port's V/I plane it changes
+  sign across the band (−2.9 to +1.8 %), so neither η nor |S11| is shown to read low. The likely
+  cause is the radiator's near field at the port's V/I samples; untested. The criterion is not
+  relaxed further: over the new band the generated antenna's error at 9.7 GHz is 3.6, 4.6 and
+  4.7 % on the three grids, so it fails the check on the fine and finer grids while meeting
+  |S11| and η (η exceeds 0.7 by 0.12 or more, more than twice the imbalance). The owner's call:
+  accept the imbalance as a port-measurement uncertainty, judge it against η's margin instead,
+  or wait for a modal port extraction.
+- **The time-step library holds the diagonal copper patterns** (one-pixel diagonal lines touching
+  at corners, two- and three-pixel diagonal stripes, a knight's-move lattice, random diagonal
+  stripes). One-pixel diagonal lines every three pixels raise λ to 1.66–1.74 times the plain
+  grid's, more than the library's random patterns (1.58–1.64), which used up the 1.05 margin; a
+  random search of 55,867 single and diagonal flips from that pattern found nothing larger. The
+  step is 2.2 % smaller at the optimization pitch and 2.7 % at a third of it (S1: 0.863 and
+  0.800 of the plain step, was 0.882 and 0.822).
+- **Adaptive moves can measure their slack from the β epoch's best t**
+  (`optimizer.trust_reference: best`, the slack also scaled by β_a/β). Measured from the current
+  t (round 2's rule, still the default so that the published specs keep their hashes) each
+  accepted step may add a slack: in the divider and the combiner 21 of 40 adaptive steps were
+  accepted with t rising, and t crept from 0.037 to 0.112 in the combiner's β = 64 epoch. The
+  published runs used the current t; neither rule is a descent guarantee.
+- **The RF tests run on one thread each** (`YAPNR_RF_THREADS=1`, with OMP, MKL and OpenBLAS at 1)
+  with the long timeout (900 s) where they took more than 40 s on one thread locally, and the two
+  slowest files are split (`test_pipeline_gradient_options`, `test_tiny_design_options`): CI ran
+  four RF tests side by side on a 4-vCPU runner with 4 torch threads each, and eight of them
+  timed out (run 36939460480). No CI run of the new head yet (this round did not push), so CI
+  is not shown to pass; locally (Bazel, one test at a time on one thread, the Mac under load)
+  the 34 RF targets pass in 1373–1499 s, the slowest in 156–191 s against the 900 s timeout.
+- **The diplexer and the three-channel bank are labelled "closed-form stub filter refined by
+  topology optimization".** Their `seed: stubs` start puts a quarter-wave open stub per other
+  channel on each arm (Hammerstad, Kirschning–Jansen); 90 % of the diplexer's seed copper is in its
+  exported design and 77 % of the exported copper was seed copper (the stubs alone: 88 % kept; the
+  bank: 83 % and 75 %; `seed_overlap` in `validation.json`, free pixels). Regenerating the diplexer
+  from a non-circuit start was tried (D4: the plain junction, `seed: star`, robust from β = 8, plain
+  MMA at β = 8, `trust_reference: best` after): after 25 iterations its rejection was 13–16 dB
+  (gray; binarized t 1.09 against the stub seed's 0.49), a roll-off diplexer as in round 1, so it
+  was stopped and the published diplexer stays the refined stub filter, labelled as such. The
+  owner's sign-off is needed on publishing seeded filters at all.
+- **The combiner's topology is the seed's and the keepouts'.** The `feeds` seed and the two void
+  strips give iteration 0 the Wilkinson's input fork and its two arms to the resistor's pads;
+  the optimizer chose the arms' width and path and the outputs (36 % of the exported copper is
+  seed copper, free pixels). The guide says so; a uniform or star start with the keepouts was
+  not tried.
 
 ## Pinned versions
 

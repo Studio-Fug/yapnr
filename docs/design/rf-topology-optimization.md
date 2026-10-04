@@ -76,7 +76,7 @@ flowchart LR
 | Min width and space    | Zhou indicator constraints in the last β epoch, plus a raster check of the exported polygons                                             | as in the paper (§3.1, [16], [23])                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | Optimizer              | own MMA [19, 21] in its native min-max form                                                                                              | the reference codes are GPL and NLopt is not in the lock; MMA is about 300 lines                                                                                                                                                                                                                                                                                                                                                                                  |
 | Specs                  | normalized violations per requirement; a smooth max per excitation group and frequency; epigraph                                         | one forward and one adjoint run per group per iteration                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Export                 | marching squares on the binary pixels → keyholed polygons → a net-tie `.kicad_mod`; Touchstone; JSON                                     | KiCad net ties let one copper shape connect differently named port nets                                                                                                                                                                                                                                                                                                                                                                                           |
+| Export                 | pixel boundaries of the binary copper → keyholed polygons → a net-tie `.kicad_mod`; Touchstone; JSON                                     | KiCad net ties let one copper shape connect differently named port nets                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Cost per iteration: one forward run per excitation and one adjoint run per objective group. The
 three cases need two FDTD runs per iteration (the Wilkinson variant four), est. 12–45 s per
@@ -668,13 +668,21 @@ the union of the band samples; Δω_min for the adjoint window is taken over tha
 
 ### 10.1 Polygons
 
-The Heaviside design is a binary pixel field. Marching squares on its bilinear interpolant at
-level 0.5 traces the copper outlines: they follow the pixel edges (the node lines the solver used)
-and chamfer pixel corners by half a pixel. Contours nest into outer boundaries and holes by
+The Heaviside design is a binary pixel field. The copper outlines follow the pixel boundaries
+exactly (the node lines the solver used): every boundary edge between a copper and a void pixel,
+directed with the copper on its left, so outer loops run counter-clockwise and holes clockwise.
+A saddle (two copper pixels touching at a corner) is connected copper, as in the solver; the
+loop bridges it by cutting the two void pixels' corners by a quarter pixel, which no sample of a
+grid up to three times finer falls into. Contours nest into outer boundaries and holes by
 containment. Each hole is joined to its outer boundary by a zero-width keyhole cut (as KiCad
-fractures zones for Gerber), because footprint polygons have no holes. Collinear points merge,
-and Douglas–Peucker simplification [26] with tolerance Δ_d/8 follows. Copper islands are kept,
+fractures zones for Gerber), because footprint polygons have no holes. Collinear points merge;
+there is no simplification (every vertex carries a pixel corner). Copper islands are kept,
 since they were part of the optimized physics; one narrower than L_min fails the check of §10.2.
+The polygons rasterized at the centres of a grid two or three times finer are the pixels
+subdivided, so the validator's finer grids (§11.5) simulate the optimizer's copper. Round 2
+traced the level-½ contour of the pixel centres (marching squares), which cuts convex corners
+and fills concave ones by half a pixel: the same pixels on the optimization grid, other copper
+on the finer grids (§24.1).
 
 ### 10.2 Minimum width and space check
 
@@ -846,26 +854,26 @@ Pass criteria (nominal channels, 0.05 GHz steps):
 `tests/unit/rf/`, one Bazel target per file (`yapnr_py_tests`), float64 numpy unless noted, budgets
 for the CI arm runner:
 
-| File                        | Checks                                                                                                                                                                                                                                                    | Budget |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `test_mesh.py`              | graded axes, dual lengths, grading limits, index lookup, design-plane mapping                                                                                                                                                                             | 1 s    |
-| `test_stability.py`         | power-iteration λ_max equals the analytic value on a uniform grid (1 %); a graded grid stays bounded for 20k steps at 0.99 Δt and diverges at 1.05 Δt                                                                                                     | 10 s   |
-| `test_dtft.py`              | discrete frequency-domain residual (§4.6) ≤ 1e-10 with random σ; decimated DTFT within 1e-6 of d = 1                                                                                                                                                      | 10 s   |
-| `test_cpml.py`              | Ez dipole above ground: small domain against a large reference before its reflections return, error ≤ −50 dB (10 cells); measured value recorded                                                                                                          | 30 s   |
-| `test_microstrip.py`        | S1 at 6 cells/width, 4 substrate cells: Z_c vs Hammerstad–Jensen within 5 % at 2–4 GHz, ε_eff vs Kirschning–Jansen within 3 % at 2–12 GHz; matched line: \|S11\| ≤ −30 dB, \|S21\| ≥ −0.05 dB, ∠S21 = −Re(k)L ± 2° (engineering convention)               | 60 s   |
-| `test_sheet.py`             | G_max sheet against hard PEC edges: S21 within 0.02 dB and 0.5°; conductance averaging gives G_max/2 on boundary edges; G(ρ̄) monotone and log-symmetric                                                                                                   | 30 s   |
-| `test_power_balance.py`     | closed box: P_out + P_diss = P_in within 0.5 %; port-wave power equals feed Poynting flux within 2 %; feed leakage through B with its window ≤ 1 %; random gray 3-ports: eig(I − SᴴS) ≥ −1e-3                                                             | 90 s   |
-| `test_adjoint_gradients.py` | directional FD (2 random directions, 3 single pixels, central differences) vs adjoint ≤ 1e-5 relative for \|S21\|², \|S11\|² with de-embedding, ∠S21, η_rad, a design-plane field, an LSE group, damping on; per-frequency gradients from one adjoint run | 180 s  |
-| `test_adjoint_sources.py`   | realized real source: DTFT at ω_m equals the request within 1e-10 (half-step and integer kernels); out-of-band ≤ −90 dB; condition-number fallback                                                                                                        | 5 s    |
-| `test_material_grid.py`     | ⟨Px, y⟩ = ⟨x, Pᵀy⟩ within 1e-12; fixed ring and fixed regions; symmetry embedding and its gradient                                                                                                                                                        | 2 s    |
-| `test_filters.py`           | conic filter keeps constants, is self-adjoint, pads with the fixed ring; tanh projection maps η to η, derivative vs FD, β = ∞ is Heaviside                                                                                                                | 2 s    |
-| `test_lengthscale.py`       | width b passes, b/2 fails by ≥ 10ε, same for gaps; gradients vs FD                                                                                                                                                                                        | 5 s    |
-| `test_mma.py`               | Svanberg's three-variable toy problem converges to a KKT point (residual ≤ 1e-6); a min-max of quadratics matches its analytic optimum; determinism                                                                                                       | 5 s    |
-| `test_spec.py`              | YAML schema, φ forms, grouping by excitation, LSE bounds, epigraph shift, union of frequencies                                                                                                                                                            | 2 s    |
-| `test_torch_convention.py`  | complex autograd: ∂F/∂q = conj(grad)/2 for F = \|q\|² and Re(cq)                                                                                                                                                                                          | 1 s    |
-| `test_export.py`            | marching squares, nesting, keyholes, simplification tolerance; raster round trip (pixel XOR = 0, fine IoU ≥ 0.995); width and space violations flagged; `.kicad_mod` and Touchstone round trips; deterministic UUIDs                                      | 10 s   |
-| `test_backends.py`          | numpy vs torch float64 fields within 1e-12; torch float32 S-parameters within 1e-4                                                                                                                                                                        | 30 s   |
-| `test_tiny_design.py`       | a 2-port 6×4-pixel problem: 10 iterations lower t by a set margin; two runs are bit-identical; resume from a checkpoint is bit-identical                                                                                                                  | 60 s   |
+| File                        | Checks                                                                                                                                                                                                                                                       | Budget |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| `test_mesh.py`              | graded axes, dual lengths, grading limits, index lookup, design-plane mapping                                                                                                                                                                                | 1 s    |
+| `test_stability.py`         | power-iteration λ_max equals the analytic value on a uniform grid (1 %); a graded grid stays bounded for 20k steps at 0.99 Δt and diverges at 1.05 Δt                                                                                                        | 10 s   |
+| `test_dtft.py`              | discrete frequency-domain residual (§4.6) ≤ 1e-10 with random σ; decimated DTFT within 1e-6 of d = 1                                                                                                                                                         | 10 s   |
+| `test_cpml.py`              | Ez dipole above ground: small domain against a large reference before its reflections return, error ≤ −50 dB (10 cells); measured value recorded                                                                                                             | 30 s   |
+| `test_microstrip.py`        | S1 at 6 cells/width, 4 substrate cells: Z_c vs Hammerstad–Jensen within 5 % at 2–4 GHz, ε_eff vs Kirschning–Jansen within 3 % at 2–12 GHz; matched line: \|S11\| ≤ −30 dB, \|S21\| ≥ −0.05 dB, ∠S21 = −Re(k)L ± 2° (engineering convention)                  | 60 s   |
+| `test_sheet.py`             | G_max sheet against hard PEC edges: S21 within 0.02 dB and 0.5°; conductance averaging gives G_max/2 on boundary edges; G(ρ̄) monotone and log-symmetric                                                                                                      | 30 s   |
+| `test_power_balance.py`     | closed box: P_out + P_diss = P_in within 0.5 %; port-wave power equals feed Poynting flux within 2 %; feed leakage through B with its window ≤ 1 %; random gray 3-ports: eig(I − SᴴS) ≥ −1e-3                                                                | 90 s   |
+| `test_adjoint_gradients.py` | directional FD (2 random directions, 3 single pixels, central differences) vs adjoint ≤ 1e-5 relative for \|S21\|², \|S11\|² with de-embedding, ∠S21, η_rad, a design-plane field, an LSE group, damping on; per-frequency gradients from one adjoint run    | 180 s  |
+| `test_adjoint_sources.py`   | realized real source: DTFT at ω_m equals the request within 1e-10 (half-step and integer kernels); out-of-band ≤ −90 dB; condition-number fallback                                                                                                           | 5 s    |
+| `test_material_grid.py`     | ⟨Px, y⟩ = ⟨x, Pᵀy⟩ within 1e-12; fixed ring and fixed regions; symmetry embedding and its gradient                                                                                                                                                           | 2 s    |
+| `test_filters.py`           | conic filter keeps constants, is self-adjoint, pads with the fixed ring; tanh projection maps η to η, derivative vs FD, β = ∞ is Heaviside                                                                                                                   | 2 s    |
+| `test_lengthscale.py`       | width b passes, b/2 fails by ≥ 10ε, same for gaps; gradients vs FD                                                                                                                                                                                           | 5 s    |
+| `test_mma.py`               | Svanberg's three-variable toy problem converges to a KKT point (residual ≤ 1e-6); a min-max of quadratics matches its analytic optimum; determinism                                                                                                          | 5 s    |
+| `test_spec.py`              | YAML schema, φ forms, grouping by excitation, LSE bounds, epigraph shift, union of frequencies                                                                                                                                                               | 2 s    |
+| `test_torch_convention.py`  | complex autograd: ∂F/∂q = conj(grad)/2 for F = \|q\|² and Re(cq)                                                                                                                                                                                             | 1 s    |
+| `test_export.py`            | pixel-boundary loops, nesting, keyholes, simplification tolerance; raster round trip (pixel XOR = 0 on the grid and at two and three times its resolution); width and space violations flagged; `.kicad_mod` and Touchstone round trips; deterministic UUIDs | 10 s   |
+| `test_backends.py`          | numpy vs torch float64 fields within 1e-12; torch float32 S-parameters within 1e-4                                                                                                                                                                           | 30 s   |
+| `test_tiny_design.py`       | a 2-port 6×4-pixel problem: 10 iterations lower t by a set margin; two runs are bit-identical; resume from a checkpoint is bit-identical                                                                                                                     | 60 s   |
 
 The tolerances for Z_c, ε_eff and CPML are starting values; the implementation records the measured
 errors and sets each tolerance to the measurement plus 50 %. A slow test (tag `slow`) repeats the
@@ -909,10 +917,10 @@ microstrip check at 12 cells per width and expects the error to drop.
   `yapnr rf design SPEC.yaml --out DIR [--backend torch|numpy] [--threads 4] [--budget-min 45]`,
   `yapnr rf validate DIR [--refine 2] [--external meep]`, `yapnr rf calibrate SPEC.yaml`,
   `yapnr rf animate DIR`.
-- **Threads:** the package calls `torch.set_num_threads(n)` with n = min(4, `--threads`) and
-  honours `OMP_NUM_THREADS`; tests set 4.
-- **Dependencies:** none new. scipy and shapely are not needed: the distance transform, marching
-  squares and polygon code are small numpy routines, tested in §12.
+- **Threads:** the package calls `torch.set_num_threads(n)` with n = min(4, `--threads`),
+  capped by `YAPNR_RF_THREADS` when set; the Bazel tests set 1 (§24.5), the full cases 4.
+- **Dependencies:** none new. scipy and shapely are not needed: the distance transform, contour
+  tracing and polygon code are small numpy routines, tested in §12.
 - **Docs:** `docs/rf-inverse-design.md` (user guide with measured numbers and figures), this
   design, entries in `docs/decisions.md`, `WORKLOG.md`.
 - This is a new package, not new PnR engine behaviour, so no default-off flag is needed. Using the
@@ -1200,11 +1208,14 @@ stay consistent with −iΩμĤ = −C_E Ê − K̂.
 **Time step.** Lower ε next to edges and corners raises the largest eigenvalue of
 ε⁻¹C_Hμ⁻¹C_E. The step is courant · min(Δt_CFL, 2/√(1.01 · 1.05 λ)), λ the largest over a
 library of dense copper patterns (stripes, checkerboards, isolated pixels and holes, random
-binary and gray) on a 20 × 20 proxy of the grid's densest region (`edges.stable_dt`; cached).
-On the cases' grids that is 0.88–0.89 of the plain step at the optimization pitch and 0.82–0.83
-at a third of it (gray designs and isolated pixels raise λ by up to about 40 %; one square
-patch only by 10 %). A bound taking every factor at its extreme at once (no pattern can) would
-be tighter; this one is not a proof, so a run whose DTFTs turn non-finite stops with an error.
+binary and gray, and since §24.4 diagonal stripes and one-pixel diagonal lines) on a 20 × 20
+proxy of the grid's densest region (`edges.stable_dt`; cached in the process). On the cases'
+grids that is 0.86 of the plain step at the optimization pitch and 0.80 at a third of it (round
+2 as run, before the diagonal patterns: 0.88–0.89 and 0.82–0.83). The worst patterns raise λ
+to 1.64–1.74 times the plain grid's (one-pixel diagonal lines touching at corners every three
+pixels; random binary 1.57–1.64, one square patch 1.1). A bound taking every factor at its
+extreme at once (no pattern can) would be tighter; this one is not a proof, so a run whose
+DTFTs turn non-finite stops with an error.
 
 ### 21.2 Modal port source (`yapnr/rf/modes.py`)
 
@@ -1236,7 +1247,10 @@ subproblem is solved again from x_k with the same asymptotes, up to `max_inner` 
 refused step keeps x). An accepted improving step grows the move by 1.5 up to the schedule's.
 Unlike the conservative variant (GCMMA), which needs every constraint's approximation to be
 conservative at the new point and rarely achieves that on near-binary designs, the test is on
-the maximum only, and an accepted step costs no extra simulation.
+the maximum only, and an accepted step costs no extra simulation. It bounds each step's
+excursion, not their sum, and is no descent guarantee: measured from t_k, accepted steps crept
+upward in the published runs (§24.3); `optimizer.trust_reference: best` measures the slack from
+the epoch's best t instead.
 
 ### 21.4 Measurements
 
@@ -1368,7 +1382,8 @@ seed, whole-pixel family) matches −10 dB over 10.05–10.40 GHz (3.4 %) with �
 |S11| ≤ −10 dB with η ≥ 0.6, the same criteria on all three grids: about the bandwidth of one
 patch on S2, centred to ±0.2 %, so a single-layer radiator can reach it and a mis-tuned one
 misses it. The optimization asks for η ≥ 0.7 over 9.65–10.35 GHz, which leaves room for the
-grids' shift of the band edge (22.4). The power balance tolerance is 4 % (22.4).
+grids' shift of the band edge (22.4). The power balance tolerance is 4 % (22.4). (Since §24.7
+the antenna is judged over 9.7–10.3 GHz at η ≥ 0.7.)
 
 ### 22.4 Results
 
@@ -1399,7 +1414,9 @@ matches −10 dB from 9.57 to 11.47 GHz (18 %, resonances near 9.9 and 10.9 GHz)
 criteria band η is 0.84–0.87 on all grids. The finer grids raise the lower −10 dB edge by
 about 1 % (|S11| at 9.65 GHz −11.4, −10.5, −9.7 dB): ten times the closed-form patch's shift
 with the edge correction (§21.4), presumably the 0.8 mm slits and holes, whose edges couple
-across two cells and are corrected as isolated edges.
+across two cells and are corrected as isolated edges. (Corrected in §24.1: most of it was the
+export's chamfered copper on the finer grids; with the same copper the shift is 0.4–0.5 %, and
+stubs with two-cell slits and holes shift 0.1–0.3 %.)
 
 **Power balance.** The balance error is negative and largest at the lower band edge (run 3:
 −2.1 %, −1.0 %, −0.7 % at 9.85, 10.0, 10.15 GHz on the optimization grid; −3.4 % at 9.85 GHz
@@ -1409,7 +1426,9 @@ it are missed. With the window's margin at 1.5 and 0.8 mm (heights 3.0 and 2.3 m
 at 9.85 GHz is −4.9 and −10.5 % (the guided fringe outside the window is counted), at 4.5 and
 6 mm −3.6 and −5.4 % (more radiation missed); the closed-form patch reads −1.9 % at its
 resonance and −3.5 % at 10.35 GHz with the default window. The criterion is therefore 4 %
-(decisions); the sign means the radiated fraction reads low, if anything.
+(decisions); the sign means the radiated fraction reads low, if anything. (Not established:
+§24.7 finds the box's energy accounting exact, an error that does not track the window and,
+with the box closed at the V/I plane, changes sign across the band.)
 
 **Cost.** About 110 s per iteration (three designs, each a forward and an adjoint run, plus
 refused adaptive steps and a binarized evaluation every five iterations); 109 minutes for the
@@ -1500,7 +1519,10 @@ an idle machine; times below are wall clock.
   on the end of β = 8.
 - **Objective bands of the filter banks** widen each channel by 0.1 GHz instead of 0.2 GHz, with
   five points (diplexer) and four (bank) per channel: the widening absorbs coarse-to-fine
-  shifts, which the edge correction reduced from 1.5–2.4 % to about 0.2 %. Criteria unchanged.
+  shifts, which the edge correction reduced from 1.5–2.4 % to 0.13–0.22 % on lines, a stub and
+  the patch. (The generated designs' shifts measured in round 2, 0.7–1.9 %, were mostly the
+  export's chamfered copper; with the same copper on every grid they are in §24.2, within the
+  0.8–1.3 % that 0.1 GHz is of these channels.) Criteria unchanged.
 - **Figures** plot every |S_ij| the criteria judge (the combiner's output match and isolation,
   not only |S_i1|) and outline lumped parts.
 
@@ -1595,6 +1617,259 @@ projection at β = ∞, Hammond et al.'s later subpixel-smoothed projection, or 
 resonant filters) is the next step; the robust variants at thresholds 0.45 and 0.55 do not
 stop it, since each variant's own near-threshold pixels are gray too. Repair 27 pixels, width and space
 met, the ports one island, four floating islands.
+
+## 24. Round 2: review fixes
+
+Two reviews of round 2 (physics and intent) found that the validator's finer grids simulated
+other copper than the optimizer's, that the accuracy statements generalized from canonical
+structures to the generated designs, a time-step margin used up, adaptive steps that crept, CI
+runs that timed out, and seeds and keepouts that carry more of the generated geometry than the
+documents said. Every finding was checked against the data and fixed or answered; choices are in
+`docs/decisions.md`.
+
+### 24.1 The footprint's copper on the finer grids
+
+The export traced the level-½ contour of the pixel centres (marching squares, §10.1 as built in
+round 1), which cuts every convex pixel corner and fills every concave one by half a pixel, and
+the validator rasterized the footprint with its "inside or on" rule. On the optimization grid
+that reproduces the pixels; on the finer grids it does not: at half the pitch every concave
+corner gains a sub-pixel and nothing is removed (diplexer +74, combiner +94, antenna +100, bank
++135 sub-pixels), at a third concave corners gain and convex ones lose (diplexer +74 / −97,
+antenna +100 / −68). The reviewer re-simulated the same footprints both ways (port 1 excited):
+
+| Feature                           | Optimization grid | ½ pitch, same pixels | ½ pitch, footprint | ⅓ pitch, same pixels | ⅓ pitch, footprint |
+| --------------------------------- | ----------------- | -------------------- | ------------------ | -------------------- | ------------------ |
+| diplexer \|S21\| notch (GHz)      | 11.7254           | 11.7353 (+0.08 %)    | 11.8922 (+1.42 %)  | 11.7396 (+0.12 %)    | 11.9239 (+1.69 %)  |
+| antenna \|S11\| curve (scale fit) | —                 | —                    | —                  | +0.53 %              | +1.20 %            |
+
+So most of round 2's coarse-to-fine shift of the generated designs (0.7–1.9 %) was the export's
+geometry, not the solver; §22.4's attribution of the antenna's 1 % to its slits and holes and the
+guide's to diagonal staircases were wrong. The polygons now follow the pixel boundaries
+(`export.contour`, §10.1): the footprint rastered at two or three times the resolution is the
+pixels subdivided (unit test on 200 random masks, saddles included), and the validator reports
+`copper_xor` (sub-pixels added and removed against the subdivided design) on every finer grid,
+which fails the validation unless both are zero. Simulating chamfered copper during the
+optimization was the other option; the solver's copper (and the edge correction's static fields)
+are pixel unions, so the export follows them.
+
+The exact copper showed what the chamfers had hidden from the width check (§10.2): two two-pixel
+lines offset diagonally that touch along one pixel edge (every pixel in a 2 × 2 copper square,
+so the repair's opening keeps them) form a one-pixel (0.3 mm) neck, which the chamfers widened to
+1.4 pixels. Round 2's divider had four such necks (two mirror pairs), the antenna two and the
+bank two. The repair (`export.repair`, "diagonal necks and gaps") now widens every neck the
+polygon check of the exact copper flags, at the facing void pixel with the smaller x (the k × k
+square through it with the fewest new pixels; the choice commutes with the mirror symmetry), or
+at the other facing pixel when the new copper would come within the minimum space of another
+copper component, and ties of the conflict widening go to the square nearest the centre line.
+(A first version widened the antenna's two necks next to its port pad; the space pass then closed
+the one-pixel gap left and joined the islands beside the feed to the pad, and the matched band
+fell from 19 to 4 %.) Against round 2's exports: the divider +12 / −2 pixels (the −2 from the
+new tie-break), the antenna +4, the bank +5 / −5, the combiner and the diplexer unchanged; every
+footprint passes the width and space check on its exact copper. The optimizer's binary design is
+still compared with the exported one on the optimization grid (`same_grid`).
+
+### 24.2 What the grids agree to
+
+The same copper on every grid, the edge correction and the modal source (`slot3d.py` and
+`shifts.py` in the round-2 scratch directory `rftopo/round2/fix/`): the frequency of a resonant
+feature at half and at a third of the optimization pitch against the optimization grid. The
+canonical stubs are on S1 at 0.3 mm (§21.4's stub, 4 × 14 pixels on the 6-cell line); the
+generated designs are the published footprints (re-exported, §24.1), each feature where the
+response has a clear minimum. "Round 2" is the same feature with round 2's chamfered footprint.
+
+| Structure, feature                                           | ½ pitch | ⅓ pitch | Round 2 (⅓ pitch)  |
+| ------------------------------------------------------------ | ------- | ------- | ------------------ |
+| open stub, notch (9.947 GHz)                                 | +0.10 % | +0.13 % | same               |
+| stub 9 pixels long across a 2-pixel gap to a 6-pixel segment | +0.17 % | +0.23 % | —                  |
+| 6-pixel stub split lengthwise by a 2-pixel slot              | +0.24 % | +0.31 % | —                  |
+| 6-pixel stub with three 2 × 2 holes                          | −0.07 % | −0.10 % | —                  |
+| divider, \|S11\| null (11.30 GHz)                            | −0.14 % | −0.23 % | +1.8 % (10.21 GHz) |
+| combiner, \|S22\| null (10.23 GHz)                           | −0.39 % | −0.45 % | +0.70 %            |
+| combiner, \|S32\| null (10.39 GHz)                           | +0.59 % | +0.76 % | +2.2 %             |
+| combiner, \|S11\| null (9.70 GHz, −42 dB)                    | +0.70 % | +0.90 % | +1.4 %             |
+| diplexer, channel B's rejection notch in \|S21\| (11.79 GHz) | +0.03 % | +0.05 % | +1.9 %             |
+| diplexer, channel A's rejection notch in \|S31\| (7.46 GHz)  | +0.17 % | +0.22 % | +0.73 %            |
+| diplexer, \|S11\| null in channel B (12.26 GHz)              | +0.46 % | +0.64 % | +0.64 %            |
+| bank, \|S32\| notch in channel B (10.28 GHz)                 | +0.31 % | +0.41 % | +1.57 %            |
+| bank, \|S44\| minimum (12.42 GHz)                            | +0.29 % | +0.36 % | +1.03 %            |
+| bank, \|S33\| minimum (9.65 GHz)                             | −0.01 % | −0.00 % | +1.21 %            |
+| antenna, \|S11\| minimum (9.94 GHz)                          | +0.43 % | +0.50 % | +1.19 %            |
+| antenna, \|S11\| minimum (10.95 GHz)                         | +0.29 % | +0.39 % | —                  |
+
+Two-cell gaps and slots, which the correction treats as two isolated edges, add 0.1–0.2 % to the
+plain stub's shift; holes none. The generated designs' features move by up to 0.9 % (the
+combiner's 42 dB deep input-match null and its isolation null, set by a lumped resistor across a
+two-cell gap; not investigated further) and mostly by 0.05–0.5 %; round 2's 0.7–2.2 % was mostly
+the export. The 0.1 GHz by which the filter banks' objective bands widen
+each channel is 0.8–1.3 % of the channels' centres, above every shift here; the antenna's
+criteria are the same on every grid (§24.7).
+
+### 24.3 Adaptive moves
+
+The step test of §21.3 measured the slack from the current t, so each accepted step could raise
+t by up to the slack and the excursions added up: in the published histories 21 of the divider's
+and 21 of the combiner's 40 adaptive steps were accepted with t rising (the divider's t from
+0.030 to 0.105 over iterations 36–40, the combiner's from 0.037 to 0.112 in its β = 64 epoch),
+and the exports came from β = 16 and 32, so the later epochs did not improve the binarized
+design. `optimizer.trust_reference: best` measures the slack from the β epoch's best t so far
+and scales it by β_a/β from the first adaptive β_a (driver test: every accepted point within the
+slack of the epoch's best; unit test: a trial 0.04 above t_k is accepted from t_k and refused
+from a best 0.5 lower). The default stays `current`, the rule the published runs used, so their
+specs keep their hashes; the diplexer's run from the plain junction (§24.6) uses `best`.
+Neither rule guarantees descent; the conservative variant (§8.2) does, at a forward run per
+subproblem.
+
+### 24.4 Time step
+
+The library of §21.1 bounded λ over stripes, checkerboards, dots, holes and random patterns (1.58,
+1.64 and 1.57 times the plain grid's λ on S1 at 0.3 mm with 4 substrate cells, at 0.1 mm with 8, and
+on S2 at 0.4 mm with 6). The reviewer's two-pixel diagonal stripes ("double staircase") reach
+1.62–1.69, and one-pixel diagonal lines touching at corners every three pixels 1.66, 1.74 and 1.64:
+the step sat at 0.935 of the stable limit for them, inside the courant factor 0.95 but past the
+stated 1.05 margin on λ. A random search of 55,867 single and diagonal pixel flips from the worst
+pattern (0.1 mm, 8 cells) found nothing larger. The library now holds the diagonal families (two-
+and three-pixel diagonal stripes, one-pixel diagonal lines every three and four pixels, a
+knight's-move lattice, random diagonal stripes): the step is 0.863 of the plain step at the
+optimization pitch (was 0.882) and 0.800 at a third of it (was 0.822) on S1; on S2 the step at the
+optimization pitch is 0.524 ps (was 0.535) and at a third 0.194 ps (was 0.199). The text of §21.1
+said gray designs and isolated pixels raise λ by up to about 40 %; the library's maximum was 57–64 %
+and is now 64–74 %.
+
+### 24.5 CI
+
+The pushed branch failed CI (run 36939460480, ubuntu-24.04-arm, 4 vCPUs): eight RF tests timed out
+(six at 300 s, two at 60 s) and `test_antenna_smoke` passed 2 s under its limit; the macOS lane
+timed out `test_sheet`. Bazel runs as many tests side by side as the runner has cores, and every
+RF test asked torch for 4 threads, so the runner was oversubscribed four times over. Round 2 had
+made the tests heavier (`test_pipeline_gradient` 4 → 12 tests, `test_tiny_design` 4 → 10, the
+new `test_modes`, the edge correction and the modal source in every smoke spec). Now:
+
+- `YAPNR_RF_THREADS` caps torch's threads (`fdtd.engine.thread_count`); the RF test targets set
+  it, `OMP_NUM_THREADS`, `MKL_NUM_THREADS` and `OPENBLAS_NUM_THREADS` to 1 (the full cases keep 4);
+- `test_pipeline_gradient` and `test_tiny_design` are split in two files each (the options the
+  cases do not use in `test_pipeline_gradient_options`, the optimizer's options in
+  `test_tiny_design_options`; the shared gradient checks are `testing.GradientChecks`);
+- tests that took more than 40 s on one thread here get the long timeout (900 s), and
+  `test_lumped_ports` and `test_sheet` are medium (300 s);
+- the smoke validations sweep every fourth dense frequency.
+
+Under Bazel, one test at a time on one thread each, on the development Mac shared with a PnR
+experiment and a three-thread case validation (load 9–27): the 34 RF targets pass in 1373 s in
+all; the slowest are `test_wilkinson_smoke` (156 s), `test_pipeline_gradient_options` (149 s),
+`test_microstrip` (145 s), `test_pipeline_gradient` (139 s) and `test_tiny_design_options`
+(121 s), against the 900 s timeout, and every other one takes under 85 s. On CI's four vCPUs that
+is about 6 minutes of RF tests if a vCPU matches one core here, 12 if it is half as fast. No CI
+run of the new head exists: this round does not push, so CI is not yet shown to pass.
+
+### 24.6 Seeds, keepouts and generated geometry
+
+The owner asked that the full geometry come out of the method. The validator now reports how
+much of a seeded run's start is in its exported design (`seed_overlap` in `validation.json`, over
+the free pixels, the port pads and keepouts left out):
+
+| Case (start)          | Seed copper kept | Exported copper that was seed | IoU  |
+| --------------------- | ---------------- | ----------------------------- | ---- |
+| diplexer (`stubs`)    | 90 %             | 77 %                          | 0.71 |
+| — the stubs alone     | 88 %             | 17 %                          | 0.17 |
+| bank (`stubs`)        | 83 %             | 75 %                          | 0.65 |
+| combiner (`feeds`)    | 80 %             | 36 %                          | 0.33 |
+| antenna (`star`)      | 82 %             | 31 %                          | 0.29 |
+| divider (uniform 0.3) | —                | —                             | —    |
+
+- **Diplexer and three-channel bank:** closed-form stub filters (a junction and a quarter-wave
+  open stub per other channel, Hammerstad and Kirschning–Jansen) refined by the optimization;
+  most of their copper is the seed's. The guide and the summary table say so. A run from the
+  plain junction (D4: `seed: star`, the same spec, the eroded and dilated designs from β = 8 as
+  in the antenna, plain MMA at β = 8, `trust_reference: best` after; 25 iterations, 75 minutes)
+  reached binarized t 3.36 → 1.62 → 1.35 → 1.30 → 1.09 at iterations 0, 5, 10, 15 and 20 against
+  the stub seed's 4.28 → 1.43 → 0.80 → 0.60 → 0.51 (D2): the branches roll off (gray at
+  iteration 24: rejections 13–16 dB, in-channel −1.6 to −1.9 dB, channel A's match −7.6 dB) but
+  grow no quarter-wave stubs, as in round 1 (9–12 dB). A stub only helps once it is long
+  enough, so the gradient from the junction does not lead there; it was stopped and not
+  validated.
+- **Combiner:** the `feeds` seed and the two void strips give iteration 0 the Wilkinson's input
+  fork and two arms to the resistor's pads (§23.1), so the topology is imposed; the optimizer
+  chose the arms' width and path, the outputs and every other pixel. A uniform or star start
+  with the keepouts was not tried. The guide's combiner section and the summary table say so.
+- **Antenna and divider:** the antenna grew from its feed line (its seed is the port's feed
+  continued to the window's centre: 82 % of that line remains, 31 % of the antenna's copper);
+  the divider started uniform.
+
+### 24.7 The antenna's criteria and power balance
+
+**Criteria.** Round 2 judged the antenna over 9.85–10.15 GHz (3 %) at η ≥ 0.6, less than the
+generated design achieves and less than the optimization asked for (9.65–10.35 GHz at η ≥ 0.7).
+It is now judged over the design's band, 9.7–10.3 GHz (6 %, §11.3), at |S11| ≤ −10 dB and
+η ≥ 0.7 at every point of the dense sweep (61 points), the same on every grid, with the power
+balance at 9.7, 10.0 and 10.3 GHz; the validator sweeps 9–12 GHz as well and reports the −10 dB
+band on each grid.
+
+**The re-exported antenna** (§24.1: two one-pixel necks in the islands beside the feed widened,
++4 pixels against round 2's export). A first re-export widened each neck at its facing void pixel
+next to the port pad; the space pass then closed the one-pixel gap that left and joined both
+islands to the pad, and the matched band fell from 19 % to 4 % (|S11| −7.9 dB at 9.7 GHz): the
+repair now skips a widening whose new pixels come within the minimum space of other copper and
+widens at the other facing pixel (`export.repair`). Results in §24.8.
+
+**Power balance** (`balance_study.py`; finding: the error grew with the grid and was called
+window-limited without evidence). The study re-simulates the exported antenna and the closed-form
+patch (`seeds.patch_mask`, untuned) on the three grids with several boxes closed by the ground, in
+one run per design and grid: the default feed window (the strip ± 2h, 3h high), margins of 0.8,
+1.5, 4.5 and 6 mm, the box's feed face moved west to just east of the port's V/I samples (6.4–6.7
+mm), and no window at all. Error = (box flux + dissipation inside) / p_in − 1, p_in the port's
+net power from its waves; at 9.7, 9.85, 10.0, 10.15 and 10.3 GHz:
+
+| Antenna, box               | Coarse                         | Fine                           | Finer                          |
+| -------------------------- | ------------------------------ | ------------------------------ | ------------------------------ |
+| default window             | −3.6, −2.1, −1.0, −0.7, −0.9 % | −4.6, −3.0, −1.7, −1.1, −1.2 % | −4.7, −3.1, −1.8, −1.2, −1.2 % |
+| window margin 1.5 mm       | −5.8, −4.7, −4.0, −3.9, −4.4 % | −6.5, −5.2, −4.4, −4.1, −4.3 % | −6.6, −5.3, −4.4, −4.1, −4.3 % |
+| window margin 6 mm         | −4.5, −2.6, −1.2, −0.5, −0.5 % | −5.7, −3.7, −2.1, −1.1, −0.9 % | −5.8, −3.8, −2.1, −1.1, −0.8 % |
+| feed face at the V/I plane | −1.9, −0.3, +1.0, +1.7, +1.9 % | −2.7, −0.9, +0.6, +1.5, +1.9 % | −2.9, −1.1, +0.4, +1.4, +1.8 % |
+| no window (conservation)   | within 0.04 %                  | within 0.03 %                  | within 0.03 %                  |
+| patch, default window      | −4.0, −1.5, +0.1, +1.1, +0.5 % | −5.5, −2.7, −1.0, +0.1, −0.2 % | −5.5, −2.8, −1.0, +0.1, −0.1 % |
+| patch, face at V/I plane   | +0.6, +2.3, +3.2, +3.9, +3.6 % | −0.4, +1.5, +2.6, +3.4, +3.2 % | −0.6, +1.3, +2.4, +3.3, +3.3 % |
+
+- The solver's energy accounting is exact: without a window, the flux out of the box plus the
+  dissipation inside is zero to 0.04 % (0.15 % for the mismatched patch). The error is therefore
+  entirely the difference between the power entering through the feed window and the port's
+  net power from its waves.
+- It does not track the window: every window moves it the same way from grid to grid, by about
+  1 % at 9.7 GHz from the coarse grid to half its pitch and by 0.1 % from there to a third. So it
+  converges (round 2's three numbers suggested otherwise); it is not a fixed blind area of the
+  window either.
+- Closing the box at the V/I plane puts the 6.5 mm of feed between the V/I samples and the
+  default face inside it and changes the error by +1.7 to +3.0 %, more than that feed's line loss
+  (about 0.75 % from the textbook attenuation), and then the error changes sign across the band
+  (−2.9 to +1.8 % on the finer grid). The port's wave power is thus not consistently above or
+  below the flux it should equal, so the sign argument of round 2 (η reads low, if anything)
+  does not hold, and neither η nor |S11| is shown to be conservative.
+- The likely cause is the port extraction in the radiator's near field: radiation and substrate
+  waves reaching the feed add non-modal fields to the V/I samples and to the window, whose
+  interference with the line mode changes with frequency. It is not established; a modal
+  projection of the window fields would test it.
+
+The criterion stays at 4 % (round 2's, not relaxed further): the generated antenna's worst
+error, at 9.7 GHz, is 3.6, 4.6 and 4.7 % on the three grids, so it fails the balance check on
+the fine and finer grids. Its η exceeds 0.7 by 0.12 or more on every grid, more than twice the
+imbalance, so the radiated fraction would pass even if the whole imbalance were missing from it.
+
+### 24.8 Results after the fixes
+
+The published runs re-exported (pixel boundaries, §24.1; the time-step library, §24.4) and
+re-validated on the three grids, criteria "coarse; fine and finer" as in `cases.CRITERIA`
+(the antenna's are §24.7's). Every footprint passes the width and space check on its exact
+copper and is the exported design on every grid (`copper_xor` 0).
+
+| Case (run)              | Verdict, coarse / fine / finer | Key numbers (coarse / fine / finer)                                                                                                                                           | Round 2 as published                                   |
+| ----------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| divider (V3)            | pass / pass / pass             | \|S11\| −20.2 / −20.1 / −20.2 dB, \|S21\| −3.28 / −3.27 / −3.27 dB                                                                                                            | −20.3 / −19.2 / −19.5 dB, pass                         |
+| combiner (W11)          | pass / pass / pass             | \|S22\| −18.6 / −18.5 / −18.4 dB, \|S32\| −20.6 / −20.5 / −20.4 dB, \|S11\| −27.0 / −25.8 / −25.5 dB                                                                          | −18.6 / −17.8 / −17.9, −20.6 / −19.7 / −19.9 dB, pass  |
+| diplexer (D3)           | pass / pass / pass             | rejection B −19.1 / −19.1 / −19.1 dB, A −21.2 / −21.4 / −21.4 dB, match A −10.3 dB on all                                                                                     | rejection B −19.1 / −18.2 / −18.1 dB, pass             |
+| antenna (run 3)         | pass / fail / fail (balance)   | over 9.7–10.3 GHz: \|S11\| −12.2 / −11.5 / −11.3 dB, η ≥ 0.83 / 0.82 / 0.82, balance 3.6 / 4.6 / 4.7 %                                                                        | over 9.85–10.15 GHz: −13.2 / −13.6 / −12.8 dB, pass    |
+| three-channel bank (B1) | fail / fail / fail             | channel A at port 3 −9.9 / −9.8 / −9.8 dB, channel B at port 4 −11.3 / −11.4 / −11.5 dB, channel A's match −6.4 dB on all (criteria −15 and −8 dB coarse; −12 and −6 dB fine) | −9.7 / −10.0 / −9.8 and −10.5 / −10.1 / −10.4 dB, fail |
+
+Validation wall times on three threads with the shared Mac at load 3–27: coarse 7–114 s, fine
+2.4–15.8 minutes, finer 7.7–39 minutes per case.
 
 ## References
 

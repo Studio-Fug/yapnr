@@ -1,0 +1,22 @@
+{
+ "schema": "yapnr-rf-forward/1",
+ "spec": "r1t-osh-w-w-eq-em528",
+ "spec_sha256": "0121a31b3dfad4a46ceac4aaf0ac68d5e1e41ef1f83595d552ab7c9e1f9e7f67",
+ "copper_mm": [
+  [
+   0.0,
+   9.25,
+   -2.5,
+   2.5
+  ],
+  [
+   9.25,
+   12.25,
+   -11.0,
+   11.0
+  ]
+ ],
+ "pixels": 1796,
+ "what": "R1t on W-eq-em528",
+ "substrate": "W-eq-em528"
+}

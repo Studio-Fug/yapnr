@@ -32,8 +32,8 @@ python -m yapnr.rf.coupons expected --stackup OSHPARK-4L-FR408HR --upload M \
 
 ## Demos and references
 
-| Item               | Prediction                                                                       | Status                                                         |
-| ------------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| [D1](D1/README.md) | the optimizer's validation runs (thickness-equivalent and nominal substrate)     | not yet: D1 has not been optimized for Order 0                 |
-| [D2](D2/README.md) | the same, region W                                                               | not yet                                                        |
-| R1, R1t            | the optimizer's FDTD, forward only, loss-corrected, at refine 2 (0.05 / 0.25 mm) | not yet: the forward-simulation command is still to be written |
+| Item               | Prediction                                                                                                                                    | Status                                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [D1](D1/README.md) | the optimizer's validation runs: thickness-equivalent (M-eq), nominal (M-nom) and EM528 (M-eq-em528) substrates                               | specs and formulations written ([demos](../demos.md), [inputs](../inputs/)); not optimized yet                 |
+| [D2](D2/README.md) | the same, region W                                                                                                                            | the same                                                                                                       |
+| R1, R1t            | the optimizer's FDTD, forward only (`python -m yapnr.rf.order0 write`: forward-run directories), loss-corrected, at refine 2 (0.05 / 0.25 mm) | R1 on M-eq: run 0b ([demos](../demos.md#run-0b-the-loss-correction-and-the-s21-criterion)); the others not yet |

@@ -116,6 +116,9 @@ frequency. Every edge lies on the grid the optimizer's FDTD predicts them on: 0.
   sequence per copy.
 - [Predictions](predictions/README.md): the coupons' expected S-parameters on FR408HR and EM528,
   and the places for D1 and D2.
+- [Demos](demos.md): D1's and D2's specs, substrates (thickness-equivalent) and formulations,
+  the references' forward runs, and run 0b (the solver's loss correction and the \|S21\|
+  criterion).
 
 ## Regenerating
 

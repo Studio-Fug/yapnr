@@ -1,0 +1,47 @@
+{
+  "dense_ghz": [
+    [3.0, 7.0, 161]
+  ],
+  "coarse": [
+    {
+      "name": "|S21| min dB",
+      "kind": "s_min",
+      "ports": [2, 1],
+      "limit": -3.0,
+      "ghz": [4.25, 5.75]
+    },
+    {
+      "name": "|S11| max dB",
+      "kind": "s_max",
+      "ports": [1, 1],
+      "limit": -20.0,
+      "ghz": [4.25, 5.75]
+    },
+    {
+      "name": "passivity",
+      "kind": "passivity",
+      "limit": -0.001
+    }
+  ],
+  "fine": [
+    {
+      "name": "|S21| min dB",
+      "kind": "s_min",
+      "ports": [2, 1],
+      "limit": -3.0,
+      "ghz": [4.25, 5.75]
+    },
+    {
+      "name": "|S11| max dB",
+      "kind": "s_max",
+      "ports": [1, 1],
+      "limit": -20.0,
+      "ghz": [4.25, 5.75]
+    },
+    {
+      "name": "passivity",
+      "kind": "passivity",
+      "limit": -0.001
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+# Order 0 D2: every formulation in parallel, and the references'
+# forward predictions on the other substrates. One family (c4d-highcpu-16)
+# for the comparison. Written by python -m yapnr.rf.order0 write.
+name = "order0-d2"
+image = "edge"
+
+[defaults]
+threads = 16
+cpus = 8
+memory_gb = 24
+disk_gb = 10
+max_wall_s = 10800
+require_native = true
+
+[placement]
+shape = "c4d-highcpu-16"
+
+[[jobs]]
+id = "d2-base"
+case = "divider"
+spec = "specs/d2-base.json"
+criteria = "criteria/d2.json"
+
+[[jobs]]
+id = "d2-robust"
+case = "divider"
+spec = "specs/d2-robust.json"
+criteria = "criteria/d2.json"
+
+[[jobs]]
+id = "d2-star"
+case = "divider"
+spec = "specs/d2-star.json"
+criteria = "criteria/d2.json"
+
+[[jobs]]
+id = "d2-sched"
+case = "divider"
+spec = "specs/d2-sched.json"
+criteria = "criteria/d2.json"
+
+[[jobs]]
+id = "r1t-w-eq"
+case = "divider"
+validate = "runs/r1t-w-eq"
+criteria = "criteria/ref-w.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+
+[[jobs]]
+id = "r1t-w-nom"
+case = "divider"
+validate = "runs/r1t-w-nom"
+criteria = "criteria/ref-w.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+
+[[jobs]]
+id = "r1t-w-eq-em528"
+case = "divider"
+validate = "runs/r1t-w-eq-em528"
+criteria = "criteria/ref-w.json"
+args = ["--no-fine"]
+max_wall_s = 4800

@@ -1,0 +1,17 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Order 0's RF demos (yapnr.rf.order0): specs, formulations, forward-run directories, the loss
+# correction. No FDTD runs here (the forward directories are built with placeholder line
+# calibrations).
+yapnr_py_tests(
+    env = {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "YAPNR_RF_THREADS": "1",
+    },
+    overrides = {
+        "test_order0": {"size": "medium"},
+    },
+    deps = ["//yapnr/rf/order0"],
+)

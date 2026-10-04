@@ -207,6 +207,14 @@ hierarchical ladder driver and their animations on `claude/animations-groups-hie
   JLC06161H-2116C with a mask-off tie line. All DRC-clean; `yapnr fab check` 0 errors. Next: D1/D2
   copper and the R1/R1t FDTD predictions (#29 round 2), the fab bundles, the pre-registration
   release, the capture tooling (WP7).
+- **Order 0 part 2, setup** (branch `claude/order0-p2`, main + `claude/order0`): RF stage plans
+  require the native FDTD library and pass `YAPNR_RF_THREADS`, backend, dtype and `YAPNR_RF_*`
+  per job, `--image-commit` refuses a bundle whose C sources are not the image's (PR #30 review
+  follow-up); `yapnr.rf.coupons.equivalent` (2D thickness-equivalent substrates of regions M and
+  W on FR408HR and EM528, matched to the coupon model's line at 5 GHz); `yapnr.rf.order0` (D1/D2
+  specs in four formulations, the selection rule, criteria, forward-run directories of R1/R1t and
+  of run 0b's loss lines, the loss correction and D-O0-11); [docs/rf/order0/demos.md](docs/rf/order0/demos.md)
+  and the generated [inputs](docs/rf/order0/inputs/). Run 0b on GCP Batch (C4, Montreal).
 
 ## Next
 

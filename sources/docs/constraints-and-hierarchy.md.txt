@@ -11,7 +11,7 @@ The showcase cases (`designs.showcases()` in
 they are not ladder cases: they sit outside the ladder's gate and its pull-request lane (the
 nightly lane runs them for information). All five cases below come from one traced run: seed 0,
 a placement snapshot every 5 iterations, the legacy fabrication profile, KiCad 10.0.6 on the
-development Mac (darwin-arm64), engine `cfb7cb3`, with the ladder animations' two opt-in stages:
+development Mac (darwin-arm64), engine `d002bfa`, with the ladder animations' two opt-in stages:
 [compact placement](design/compact-placement.md) (`--compact`, `PNR_COMPACT=1`) and the
 [gloss pass](design/gloss.md) (`--gloss`, `PNR_GLOSS=1`), both off by default. The four flat
 cases use the initial placement pool (8 starts, 3 routed finalists); the hierarchical case uses
@@ -50,25 +50,32 @@ What to watch:
   other parts gather around it. The placer's rotation is a four-way choice: here it turns the
   line upright within the first five iterations and keeps it there (the engine records only the
   chosen direction, never the angles in between; a half-turn would be drawn as a flip).
-- **Legalization:** the line is placed in one step, not five (16 steps instead of 20).
+- **Legalization:** the line, with its five series resistors beside the LEDs, is placed in one
+  step, not ten (11 steps instead of 20).
 - **The pool's shortlist:** the eight starts put the line in different places and directions
-  (vertical in seven starts, horizontal in one, both ways round).
+  (vertical in six starts, horizontal in two, both ways round).
 - **The caption strips:** HPWL (the half-perimeter wirelength of every net, from the frame's
   poses) and the "LED line error", the largest distance of D1 to D5 from their best-fit line. On
   the left the dashed path through D1 to D5 shows where the sequence goes; its error ends at
-  5.91 mm. On the right it is 0.00 mm throughout.
+  6.45 mm. On the right it is 0.00 mm throughout.
 
 | Case             | Parts | Routed | Opens | Findings | Vias | Copper (mm) | HPWL (mm) | Time (s) |
 | ---------------- | ----: | :----: | ----: | -------: | ---: | ----------: | --------: | -------: |
-| `07-chaser-20`   |    20 | 100 %  |     0 |        0 |   23 |      272.90 |       240 |     74.0 |
-| `line-chaser-20` |    20 | 100 %  |     0 |        0 |   20 |      268.74 |       241 |     60.3 |
+| `07-chaser-20`   |    20 | 100 %  |     0 |        0 |   13 |      220.85 |       185 |     47.5 |
+| `line-chaser-20` |    20 | 100 %  |     0 |        0 |    9 |      209.18 |       154 |     35.2 |
 
-The line costs 1 mm of HPWL here, and its board ends with three vias and 4 mm of copper fewer
-than the free one (one seed: the two boards route differently, so the difference is not the
-line's own price). Caveats: a line turned by 180°
-reverses the sequence on the board, which a human would accept either way, so the placer may
-choose either direction (near the end of global placement its choice can flip between the two).
-Only the LEDs are grouped; their resistors stay free (a rigid LED-and-resistor row is a follow-up).
+Here the line board ends shorter: 31 mm less HPWL, 11.7 mm less copper and four vias fewer than the
+free one (one seed: the two boards come from different placements, so the difference is not the
+line's own price). Caveats: a line turned by 180° reverses the sequence on the board, which a human
+would accept either way, so the placer may choose either direction (near the end of global
+placement its choice can flip between the two).
+
+Each LED's series resistor rides in the line with it: compact placement's `SATELLITES` part
+(`PNR_LINE_SATELLITES`, [design](design/compact-placement.md), section 11) adds to a line group
+every free two-pad part joined to one member pad by a two-pin net, flush beside that member and in
+line with it, so the placer moves and turns LED and resistor rows as one body. Wirelength alone
+cannot put a resistor there (anywhere on the path from its driver pin to its LED it has the same
+wirelength). Without compact placement the resistors stay free.
 
 ## Board edges
 
@@ -107,20 +114,21 @@ What to watch:
   order ends J1, SW1, D1. The order changes in other starts, so the shortlist first replays
   the global placement of all eight starts side by side (recorded snapshots, one clock), with each
   tile's order under it: in four starts two edge parts pass each other during global placement
-  (in one of them twice), and in two the legalizer changes the order. The tiles then hold each
-  start's legalized order: three different orders among the eight.
+  (in one of them twice), and in five the legalizer changes the order (it picks each
+  part's slot with its wirelength). The tiles then hold each start's legalized order: two
+  different orders among the eight.
 - **The free board:** the dashed edge is the other board's target, drawn for reference; "on edge
   0 of 3" counts its parts within 1 mm of it. Its parts stay on the board throughout the start it
   follows (in another start of its pool, nine leave it during global placement).
 
 | Case              | Parts | Routed | Opens | Findings | Vias | Copper (mm) | HPWL (mm) | Time (s) |
 | ----------------- | ----: | :----: | ----: | -------: | ---: | ----------: | --------: | -------: |
-| `edge-io-12-free` |    12 | 100 %  |     0 |        0 |    8 |      154.85 |       126 |     55.1 |
-| `edge-io-12`      |    12 | 100 %  |     0 |        0 |   11 |      134.35 |       103 |     40.1 |
+| `edge-io-12-free` |    12 | 100 %  |     0 |        0 |    5 |      109.38 |        95 |     31.2 |
+| `edge-io-12`      |    12 | 100 %  |     0 |        0 |    6 |      122.89 |        97 |     32.7 |
 
-Here the held board ends shorter: 23 mm less HPWL and 20 mm less copper than the free one, for
-three more vias (one seed: the two boards come from different placements, so the difference is
-not the constraint's own price).
+Here the held board ends longer: 2 mm more HPWL, 13.5 mm more copper and one more via than the free
+one (one seed: the two boards come from different placements, so the difference is not the
+constraint's own price).
 
 ## Regions and alignments
 
@@ -240,7 +248,7 @@ What to watch:
 
 | Case                | Parts | Routed | Opens | Findings | Vias | Copper (mm) | HPWL (mm) | Time (s) |
 | ------------------- | ----: | :----: | ----: | -------: | ---: | ----------: | --------: | -------: |
-| `hier-twin-bank-32` |    32 | 100 %  |     0 |        0 |   42 |      558.94 |       415 |     98.9 |
+| `hier-twin-bank-32` |    32 | 100 %  |     0 |        0 |   37 |      443.97 |       320 |    102.4 |
 
 ## What is interpolated
 

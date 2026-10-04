@@ -23,34 +23,33 @@ two opt-in stages, both off by default: [compact placement](#compact-placement-o
 
 ## The cases
 
-Seed 0, with the initial placement pool (8 starts, 3 routed finalists), compact placement and
-the gloss stage (`run.py --compact --gloss`), the legacy fabrication profile; KiCad 10.0.6, engine
-`cfb7cb3`. "Opens" and "findings" are KiCad's DRC counts on the saved board; "Placed" is the
-bounding box of the placed parts' bodies (`compactness` in `result.json`) on the board's outline;
-the time is the case's wall time on the development Mac (darwin-arm64), niced, next to other
-work, gloss stage included (about 20 s of it is a fixed overhead).
+Seed 0, with the initial placement pool (8 starts, 3 routed finalists), compact placement and the
+gloss stage (`run.py --compact --gloss`), the legacy fabrication profile; KiCad 10.0.6, engine
+`d002bfa` (compact placement with the legalizer parts `WIRE`, `TURN` and `SATELLITES`). "Opens" and
+"findings" are KiCad's DRC counts on the saved board; "Placed" is the bounding box of the placed
+parts' bodies (`compactness` in `result.json`) on the board's outline; the time is the case's wall
+time on the development Mac (darwin-arm64), niced, next to other work, gloss stage included (about
+20 s of it is a fixed overhead).
 
 | Case                                                                | Parts | Nets | Layers | Added difficulty                                       | Routed | Opens | Findings | Vias | Copper (mm) | Placed on board (mm)   | Time (s) | Gate |
 | ------------------------------------------------------------------- | ----: | ---: | -----: | ------------------------------------------------------ | :----: | ----: | -------: | ---: | ----------: | ---------------------- | -------: | ---- |
-| [01 Connector + LED](#01-connector--led)                            |     2 |    2 |      2 | Basic connection; externally current-limited supply    | 100 %  |     0 |        0 |    0 |        6.33 | 5.8 × 6.2 on 18 × 14   |     27.6 | pass |
-| [02 Resistor + LED](#02-resistor--led)                              |     3 |    3 |      2 | Movable series current limiter                         | 100 %  |     0 |        0 |    0 |       14.50 | 4.6 × 10.7 on 20 × 16  |     30.9 | pass |
-| [03 Two LEDs](#03-two-leds)                                         |     5 |    4 |      2 | Shared, branched supply and return                     | 100 %  |     0 |        0 |    0 |       26.70 | 9.7 × 10.5 on 24 × 18  |     27.5 | pass |
-| [04 Inverter indicators](#04-inverter-indicators)                   |     8 |    6 |      2 | SOT-23-5 pin escapes, an unused pad, 3-pin connector   | 100 %  |     0 |        0 |    4 |       76.74 | 11.5 × 14.7 on 26 × 20 |     34.9 | pass |
-| [05 TLC555 blinker](#05-tlc555-blinker)                             |    10 |    7 |      2 | 8-pin IC, RC timing and control, bypass and bulk caps  | 100 %  |     0 |        0 |    6 |      113.37 | 14.9 × 13.9 on 30 × 24 |     50.4 | pass |
-| [06 Two-stage chaser](#06-two-stage-chaser)                         |    14 |   11 |      2 | TLC555 + CD4017B, cross-IC clock and reset, fanout     | 100 %  |     0 |        0 |   11 |      208.79 | 22.8 × 18.1 on 36 × 28 |     68.5 | pass |
-| [07 Five-stage chaser](#07-five-stage-chaser)                       |    20 |   17 |      2 | Five LED/resistor outputs, shared rails, dense routes  | 100 %  |     0 |        0 |   23 |      272.90 | 17.6 × 26.7 on 42 × 32 |     71.9 | pass |
-| [08 Five-stage chaser with plane](#08-five-stage-chaser-with-plane) |    20 |   17 |      4 | Four copper layers, ground plane attachment and refill | 100 %  |     0 |        0 |   29 |      215.62 | 22.3 × 21.7 on 42 × 32 |     66.4 | pass |
+| [01 Connector + LED](#01-connector--led)                            |     2 |    2 |      2 | Basic connection; externally current-limited supply    | 100 %  |     0 |        0 |    0 |        6.33 | 5.8 × 6.2 on 18 × 14   |     20.0 | pass |
+| [02 Resistor + LED](#02-resistor--led)                              |     3 |    3 |      2 | Movable series current limiter                         | 100 %  |     0 |        0 |    0 |       13.09 | 5.7 × 9.0 on 20 × 16   |     19.1 | pass |
+| [03 Two LEDs](#03-two-leds)                                         |     5 |    4 |      2 | Shared, branched supply and return                     | 100 %  |     0 |        0 |    0 |       24.13 | 8.3 × 8.7 on 24 × 18   |     20.3 | pass |
+| [04 Inverter indicators](#04-inverter-indicators)                   |     8 |    6 |      2 | SOT-23-5 pin escapes, an unused pad, 3-pin connector   | 100 %  |     0 |        0 |    2 |       56.08 | 12.6 × 13.6 on 26 × 20 |     25.1 | pass |
+| [05 TLC555 blinker](#05-tlc555-blinker)                             |    10 |    7 |      2 | 8-pin IC, RC timing and control, bypass and bulk caps  | 100 %  |     0 |        0 |    4 |       75.14 | 14.1 × 15.0 on 30 × 24 |     24.5 | pass |
+| [06 Two-stage chaser](#06-two-stage-chaser)                         |    14 |   11 |      2 | TLC555 + CD4017B, cross-IC clock and reset, fanout     | 100 %  |     0 |        0 |    6 |      165.58 | 20.9 × 19.6 on 36 × 28 |     33.4 | pass |
+| [07 Five-stage chaser](#07-five-stage-chaser)                       |    20 |   17 |      2 | Five LED/resistor outputs, shared rails, dense routes  | 100 %  |     0 |        0 |   13 |      220.85 | 21.2 × 23.6 on 42 × 32 |     44.1 | pass |
+| [08 Five-stage chaser with plane](#08-five-stage-chaser-with-plane) |    20 |   17 |      4 | Four copper layers, ground plane attachment and refill | 100 %  |     0 |        0 |   27 |      172.61 | 23.1 × 20.6 on 42 × 32 |     42.8 | pass |
 
-Against the animations they replace (2026-09-30: the same pool and seed in the default
-configuration, engine `6e95a4c`, on the same Mac), the parts now sit in a cluster around the
-fixed connector instead of spreading over the outline; a pin-1-origin connector's courtyard hugs
-its pins; the copper is shorter on six of the eight cases (07: 310.75 to 272.90 mm, 08: 274.30 to
-215.62 mm; longer on 02, 12.80 to 14.50 mm, and 04, 72.93 to 76.74 mm), for more vias on the
-chasers (06: 10 to 11, 07: 19 to 23, 08: 26 to 29; 05: 7 to 6). The gloss stage then removes
-most of the corners the router leaves: the eligible signal copper's bends drop from 39 to 12 on
-05, 48 to 17 on 06, 66 to 29 on 07 and 68 to 29 on 08 (12 to 11 on 04; no change on 01 to 03,
-whose short tracks it only normalizes), and its length by 3 to 6 %. These are single seeds; the
-[A/B below](#compact-placement-opt-in) measures the configuration on two.
+Against the animations they replace (2026-10-03: the same configuration without the legalizer parts,
+engine `cfb7cb3`, on the same Mac), the legalizer now picks each part's slot and turn with its
+wirelength and turns parts in place where that shortens their wires: the copper is shorter on seven
+of the eight cases (05: 113.37 to 75.14 mm, 06: 208.79 to 165.58 mm, 07: 272.90 to 220.85 mm, 08:
+215.62 to 172.61 mm; 01 is unchanged) and the vias fewer (04: 4 to 2, 05: 6 to 4, 06: 11 to 6, 07:
+23 to 13, 08: 29 to 27). These are single seeds; the [compact placement
+design](design/compact-placement.md) (section 11) measures the parts on two seeds and the hard
+rungs.
 
 The baseline configuration (no pool, neither opt-in stage), seeds 0 and 1, as the nightly CI
 lane runs it, passes all sixteen runs as well. The machine-readable results are in
@@ -127,7 +126,7 @@ KiCad: 0 unconnected, 0 findings. **Passes.**
   alt="Animation: a connector, a series resistor and an LED placed and routed; KiCad DRC
   passes."></p>
 
-A movable series current limiter. 3 nets, 0 vias, 14.5 mm of copper (4.6 × 10.7 mm placed); the
+A movable series current limiter. 3 nets, 0 vias, 13.1 mm of copper (5.7 × 9.0 mm placed); the
 gloss stage changes no copper. KiCad: 0 unconnected, 0 findings. **Passes.**
 
 ### 03 Two LEDs
@@ -136,8 +135,9 @@ gloss stage changes no copper. KiCad: 0 unconnected, 0 findings. **Passes.**
   alt="Animation: two resistor and LED branches sharing supply and return, placed and routed;
   KiCad DRC passes."></p>
 
-Two independent LED loads sharing supply and return. 4 nets, 0 vias, 26.7 mm of copper (9.7 × 10.5
-mm placed); the gloss stage changes no copper. KiCad: 0 unconnected, 0 findings. **Passes.**
+Two independent LED loads sharing supply and return. 4 nets, 0 vias, 24.1 mm of copper (8.3 × 8.7 mm
+placed); the gloss stage straightens one short track (0.01 mm less). KiCad: 0 unconnected, 0
+findings. **Passes.**
 
 ### 04 Inverter indicators
 
@@ -146,7 +146,7 @@ mm placed); the gloss stage changes no copper. KiCad: 0 unconnected, 0 findings.
   routed; KiCad DRC passes."></p>
 
 Complementary LED indicators driven by an SN74LVC1G04, with bypass capacitors and one unused pad.
-6 nets, 4 vias, 76.7 mm of copper (11.5 × 14.7 mm placed); gloss: 78.0 to 76.7 mm of copper.
+6 nets, 2 vias, 56.1 mm of copper (12.6 × 13.6 mm placed); gloss: 56.4 to 56.1 mm of copper.
 KiCad: 0 unconnected, 0 findings. **Passes.**
 
 ### 05 TLC555 blinker
@@ -157,8 +157,8 @@ KiCad: 0 unconnected, 0 findings. **Passes.**
 
 The 555 flasher: a TLC555 astable with timing, control and supply capacitors, and the README's
 animation (also as a GIF,
-<a href="animations/05-timer-led-10.gif"><code>05-timer-led-10.gif</code></a>). 7 nets, 6 vias,
-113.4 mm of copper (14.9 × 13.9 mm placed); gloss: 117.3 to 113.4 mm of copper, 39 to 12 signal
+<a href="animations/05-timer-led-10.gif"><code>05-timer-led-10.gif</code></a>). 7 nets, 4 vias,
+75.1 mm of copper (14.1 × 15.0 mm placed); gloss: 76.5 to 75.1 mm of copper, 10 to 5 signal
 bends. KiCad: 0 unconnected, 0 findings. **Passes.**
 
 ### 06 Two-stage chaser
@@ -167,8 +167,8 @@ bends. KiCad: 0 unconnected, 0 findings. **Passes.**
   alt="Animation: a TLC555 clocking a CD4017B that drives two LEDs, placed and routed; KiCad DRC
   passes."></p>
 
-A TLC555 clocking a CD4017B Johnson counter, modulo 2, with cross-IC clock and reset. 11 nets, 11
-vias, 208.8 mm of copper (22.8 × 18.1 mm placed); gloss: 214.2 to 208.8 mm of copper, 48 to 17
+A TLC555 clocking a CD4017B Johnson counter, modulo 2, with cross-IC clock and reset. 11 nets, 6
+vias, 165.6 mm of copper (20.9 × 19.6 mm placed); gloss: 167.1 to 165.6 mm of copper, 26 to 12
 signal bends. KiCad: 0 unconnected, 0 findings. **Passes.**
 
 ### 07 Five-stage chaser
@@ -178,8 +178,8 @@ signal bends. KiCad: 0 unconnected, 0 findings. **Passes.**
   two layers; KiCad DRC passes."></p>
 
 The same timer and counter driving five LED and resistor outputs on two layers: the densest
-two-layer board. 17 nets, 23 vias, 272.9 mm of copper (17.6 × 26.7 mm placed); gloss: 277.8 to
-272.9 mm of copper, 66 to 29 signal bends. KiCad: 0 unconnected, 0 findings. **Passes.**
+two-layer board. 17 nets, 13 vias, 220.8 mm of copper (21.2 × 23.6 mm placed); gloss: 225.5 to
+220.8 mm of copper, 58 to 23 signal bends. KiCad: 0 unconnected, 0 findings. **Passes.**
 
 ### 08 Five-stage chaser with plane
 
@@ -188,8 +188,8 @@ two-layer board. 17 nets, 23 vias, 272.9 mm of copper (17.6 × 26.7 mm placed); 
   placed and routed; KiCad DRC passes."></p>
 
 Case 07 on four copper layers, with the return on an inner ground plane (attachment and zone
-refill). 17 nets, 29 vias, 215.6 mm of copper (22.3 × 21.7 mm placed); gloss: 221.5 to 215.6 mm
-of copper, 68 to 29 signal bends. KiCad: 0 unconnected, 0 findings. **Passes.**
+refill). 17 nets, 27 vias, 172.6 mm of copper (23.1 × 20.6 mm placed); gloss: 176.5 to 172.6 mm
+of copper, 56 to 30 signal bends. KiCad: 0 unconnected, 0 findings. **Passes.**
 
 ## Regenerating
 
@@ -330,10 +330,20 @@ spread 1.0 and starts clustered around the fixed parts, the courtyard gap instea
 clearance in the legalizer (with a copper margin only where a part's box hugs its pads), offset
 courtyards (a pin-1-origin header occupies its real extent), a compactness tie-break after
 every completion key and the vias, and the plane drops of a `plane_layer` net without a declared
-stack planned before routing. `--compact-off PART` drops one part (`GP`, `RANK`, `LEGALIZE`,
-`COURTYARD`, `DROPS`) for an ablation. `--shrink` (`PNR_SHRINK=1`) also searches a smaller outline inside
+stack planned before routing, and the legalizer parts of the design's section 11: the
+wirelength term with the turn chosen with the slot, in-place turns, and line satellites.
+`--compact-off PART` drops one part (`GP`, `RANK`, `LEGALIZE`, `COURTYARD`, `DROPS`, `WIRE`,
+`TURN`, `SATELLITES`) for an ablation. `--shrink` (`PNR_SHRINK=1`) also searches a smaller outline inside
 the design's and writes the board at the smallest that routes; hard rungs are exempt. Both are
 recorded in `provenance.json` (`pnr_environment`).
+
+The legalizer and global-placement switches of the [design's section 11](design/compact-placement.md)
+are runner options too, off by default and usable with or without `--compact`: `--gp-polish`,
+`--gp-channels L`, `--pool-source-clamp`, `--legalize-hpwl W`, `--legalize-reorient [wire]`,
+`--legalize-channel-clearance fab` and `--line-satellites` (`PNR_GP_POLISH`, `PNR_GP_CHANNELS`,
+`PNR_POOL_SOURCE_CLAMP`, `PNR_LEGALIZE_HPWL`, `PNR_LEGALIZE_REORIENT`,
+`PNR_LEGALIZE_CHANNEL_CLEARANCE`, `PNR_LINE_SATELLITES`, recorded in `provenance.json` like the
+others).
 
 Every case's `result.json` gains `compactness`, measured alike in every arm on the parts' body
 boxes in `placed.json`: the bounding box (`bbox_mm2`, `bbox_mm`), the summed body area,

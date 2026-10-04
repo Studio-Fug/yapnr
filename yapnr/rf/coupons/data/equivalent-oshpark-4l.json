@@ -1,0 +1,436 @@
+{
+  "schema": "yapnr-coupon-equivalent/1",
+  "method": "2D quasi-static (xsec, P2): the real strip (43 um copper, the region's dielectric stack, no L1 ground, no mask) against a zero-thickness strip on a uniform substrate; h' from C0, er' from eps_eff; box M 24 x 10 mm, W 60 x 30 mm; targets 'geometric' (rf-block er, lossless) and 'coupon' (the coupon model's Djordjevic-Sarkar er and internal inductance at 5 GHz, no Kirschning-Jansen term)",
+  "f_ghz": 5.0,
+  "use": "coupon",
+  "substrates": {
+    "oshpark-4l-fr408hr:M": {
+      "matched_width_mm": 0.4,
+      "geometric": {
+        "real": {
+          "z0_ohm": 50.63401,
+          "eps_eff": 2.6749,
+          "z0_quasi_static": 50.63401,
+          "eps_eff_quasi_static": 2.6749
+        },
+        "equivalent": {
+          "er": 3.3838,
+          "h_mm": 0.17655,
+          "tan_delta": 0.00923
+        },
+        "tan_delta_real": {
+          "pp": 0.0095,
+          "core": 0.0095
+        },
+        "check": {
+          "z0_ohm": 50.63401,
+          "eps_eff": 2.6749
+        },
+        "hammerstad_jensen_on_equivalent": [50.6703, 2.67364]
+      },
+      "coupon": {
+        "real": {
+          "z0_ohm": 50.78791,
+          "eps_eff": 2.7115,
+          "z0_quasi_static": 50.5389,
+          "eps_eff_quasi_static": 2.68497
+        },
+        "equivalent": {
+          "er": 3.4417,
+          "h_mm": 0.17954,
+          "tan_delta": 0.0088
+        },
+        "tan_delta_real": {
+          "pp": 0.00906,
+          "core": 0.00906
+        },
+        "check": {
+          "z0_ohm": 50.78791,
+          "eps_eff": 2.7115
+        },
+        "hammerstad_jensen_on_equivalent": [50.8233, 2.71036],
+        "coupon_model": {
+          "stackup": "OSHPARK-4L-FR408HR",
+          "family": "M",
+          "er_5ghz": {
+            "pp": 3.5767,
+            "core": 3.8343
+          },
+          "dk_df_1ghz": {
+            "pp": [3.61, 0.009],
+            "core": [3.87, 0.009]
+          },
+          "l_int_nh_per_m": 2.7288
+        },
+        "residuals": [
+          {
+            "w_mm": 0.2,
+            "real": [71.78, 2.54428],
+            "equivalent": [74.895, 2.57938],
+            "nominal_sheet": [77.781, 2.63816]
+          },
+          {
+            "w_mm": 0.3,
+            "real": [59.325, 2.63733],
+            "equivalent": [60.324, 2.65169],
+            "nominal_sheet": [63.132, 2.70981]
+          },
+          {
+            "w_mm": 0.4,
+            "real": [50.788, 2.7115],
+            "equivalent": [50.788, 2.7115],
+            "nominal_sheet": [53.449, 2.76995]
+          },
+          {
+            "w_mm": 0.5,
+            "real": [44.503, 2.77291],
+            "equivalent": [43.979, 2.76169],
+            "nominal_sheet": [46.477, 2.82109]
+          },
+          {
+            "w_mm": 0.7,
+            "real": [35.803, 2.86936],
+            "equivalent": [34.824, 2.84119],
+            "nominal_sheet": [37.019, 2.90324]
+          },
+          {
+            "w_mm": 1.0,
+            "real": [27.802, 2.9726],
+            "equivalent": [26.662, 2.92663],
+            "nominal_sheet": [28.501, 2.99296]
+          },
+          {
+            "w_mm": 1.4,
+            "real": [21.494, 3.06668],
+            "equivalent": [20.39, 3.0045],
+            "nominal_sheet": [21.895, 3.07591]
+          },
+          {
+            "w_mm": 2.0,
+            "real": [16.086, 3.15897],
+            "equivalent": [15.119, 3.08087],
+            "nominal_sheet": [16.301, 3.15827]
+          }
+        ]
+      },
+      "nominal": {
+        "er": 3.561,
+        "h_mm": 0.1999,
+        "sheet_z0_ohm": 53.4487,
+        "sheet_eps_eff": 2.76995
+      }
+    },
+    "oshpark-4l-fr408hr:W": {
+      "matched_width_mm": 3.0,
+      "geometric": {
+        "real": {
+          "z0_ohm": 49.39885,
+          "eps_eff": 2.87476,
+          "z0_quasi_static": 49.39885,
+          "eps_eff_quasi_static": 2.87476
+        },
+        "equivalent": {
+          "er": 3.6852,
+          "h_mm": 1.35447,
+          "tan_delta": 0.00944
+        },
+        "tan_delta_real": {
+          "pp": 0.0095,
+          "core": 0.0095
+        },
+        "check": {
+          "z0_ohm": 49.39885,
+          "eps_eff": 2.87476
+        },
+        "hammerstad_jensen_on_equivalent": [49.4897, 2.87813]
+      },
+      "coupon": {
+        "real": {
+          "z0_ohm": 49.34535,
+          "eps_eff": 2.89039,
+          "z0_quasi_static": 49.30518,
+          "eps_eff_quasi_static": 2.88569
+        },
+        "equivalent": {
+          "er": 3.7088,
+          "h_mm": 1.3583,
+          "tan_delta": 0.009
+        },
+        "tan_delta_real": {
+          "pp": 0.00906,
+          "core": 0.00906
+        },
+        "check": {
+          "z0_ohm": 49.34533,
+          "eps_eff": 2.89039
+        },
+        "hammerstad_jensen_on_equivalent": [49.4363, 2.89385],
+        "coupon_model": {
+          "stackup": "OSHPARK-4L-FR408HR",
+          "family": "W",
+          "er_5ghz": {
+            "pp": 3.5767,
+            "core": 3.8343
+          },
+          "dk_df_1ghz": {
+            "pp": [3.61, 0.009],
+            "core": [3.87, 0.009]
+          },
+          "l_int_nh_per_m": 0.4554
+        },
+        "residuals": [
+          {
+            "w_mm": 1.0,
+            "real": [86.581, 2.65709],
+            "equivalent": [87.786, 2.68296],
+            "nominal_sheet": [88.344, 2.69905]
+          },
+          {
+            "w_mm": 2.0,
+            "real": [62.332, 2.7918],
+            "equivalent": [62.621, 2.80024],
+            "nominal_sheet": [63.19, 2.81606]
+          },
+          {
+            "w_mm": 3.0,
+            "real": [49.345, 2.89039],
+            "equivalent": [49.345, 2.89039],
+            "nominal_sheet": [49.878, 2.90637]
+          },
+          {
+            "w_mm": 4.0,
+            "real": [41.028, 2.9673],
+            "equivalent": [40.91, 2.96172],
+            "nominal_sheet": [41.399, 2.97809]
+          },
+          {
+            "w_mm": 5.0,
+            "real": [35.193, 3.0292],
+            "equivalent": [35.022, 3.01947],
+            "nominal_sheet": [35.47, 3.03632]
+          }
+        ]
+      },
+      "nominal": {
+        "er": 3.7404,
+        "h_mm": 1.3904,
+        "sheet_z0_ohm": 49.8781,
+        "sheet_eps_eff": 2.90637
+      }
+    },
+    "oshpark-4l-em528:M": {
+      "matched_width_mm": 0.4,
+      "geometric": {
+        "real": {
+          "z0_ohm": 48.97511,
+          "eps_eff": 2.77627,
+          "z0_quasi_static": 48.97511,
+          "eps_eff_quasi_static": 2.77627
+        },
+        "equivalent": {
+          "er": 3.5212,
+          "h_mm": 0.17219,
+          "tan_delta": 0.00515
+        },
+        "tan_delta_real": {
+          "pp": 0.0053,
+          "core": 0.0053
+        },
+        "check": {
+          "z0_ohm": 48.97511,
+          "eps_eff": 2.77627
+        },
+        "hammerstad_jensen_on_equivalent": [49.01, 2.77491]
+      },
+      "coupon": {
+        "real": {
+          "z0_ohm": 49.04669,
+          "eps_eff": 2.82422,
+          "z0_quasi_static": 48.80154,
+          "eps_eff_quasi_static": 2.79605
+        },
+        "equivalent": {
+          "er": 3.5957,
+          "h_mm": 0.17514,
+          "tan_delta": 0.00487
+        },
+        "tan_delta_real": {
+          "pp": 0.00501,
+          "core": 0.00501
+        },
+        "check": {
+          "z0_ohm": 49.04669,
+          "eps_eff": 2.82422
+        },
+        "hammerstad_jensen_on_equivalent": [49.0806, 2.823],
+        "coupon_model": {
+          "stackup": "OSHPARK-4L-EM528",
+          "family": "M",
+          "er_5ghz": {
+            "pp": 3.7407,
+            "core": 4.0889
+          },
+          "dk_df_1ghz": {
+            "pp": [3.76, 0.005],
+            "core": [4.11, 0.005]
+          },
+          "l_int_nh_per_m": 2.7416
+        },
+        "residuals": [
+          {
+            "w_mm": 0.2,
+            "real": [69.597, 2.64357],
+            "equivalent": [72.601, 2.68217],
+            "nominal_sheet": [75.483, 2.73681]
+          },
+          {
+            "w_mm": 0.3,
+            "real": [57.387, 2.74431],
+            "equivalent": [58.348, 2.76003],
+            "nominal_sheet": [61.133, 2.8137]
+          },
+          {
+            "w_mm": 0.4,
+            "real": [49.047, 2.82422],
+            "equivalent": [49.047, 2.82422],
+            "nominal_sheet": [51.672, 2.87806]
+          },
+          {
+            "w_mm": 0.5,
+            "real": [42.921, 2.89025],
+            "equivalent": [42.42, 2.87795],
+            "nominal_sheet": [44.876, 2.93262]
+          },
+          {
+            "w_mm": 0.7,
+            "real": [34.466, 2.99359],
+            "equivalent": [33.532, 2.9628],
+            "nominal_sheet": [35.68, 3.02001]
+          },
+          {
+            "w_mm": 1.0,
+            "real": [26.714, 3.10389],
+            "equivalent": [25.631, 3.05368],
+            "nominal_sheet": [27.422, 3.1151]
+          },
+          {
+            "w_mm": 1.4,
+            "real": [20.621, 3.20402],
+            "equivalent": [19.574, 3.13627],
+            "nominal_sheet": [21.036, 3.20272]
+          },
+          {
+            "w_mm": 2.0,
+            "real": [15.411, 3.30202],
+            "equivalent": [14.497, 3.21704],
+            "nominal_sheet": [15.642, 3.28947]
+          }
+        ]
+      },
+      "nominal": {
+        "er": 3.71,
+        "h_mm": 0.1948,
+        "sheet_z0_ohm": 51.672,
+        "sheet_eps_eff": 2.87806
+      }
+    },
+    "oshpark-4l-em528:W": {
+      "matched_width_mm": 3.0,
+      "geometric": {
+        "real": {
+          "z0_ohm": 47.99865,
+          "eps_eff": 3.01913,
+          "z0_quasi_static": 47.99865,
+          "eps_eff_quasi_static": 3.01913
+        },
+        "equivalent": {
+          "er": 3.891,
+          "h_mm": 1.3446,
+          "tan_delta": 0.00526
+        },
+        "tan_delta_real": {
+          "pp": 0.0053,
+          "core": 0.0053
+        },
+        "check": {
+          "z0_ohm": 47.99865,
+          "eps_eff": 3.01913
+        },
+        "hammerstad_jensen_on_equivalent": [48.0849, 3.02282]
+      },
+      "coupon": {
+        "real": {
+          "z0_ohm": 47.87842,
+          "eps_eff": 3.04426,
+          "z0_quasi_static": 47.83924,
+          "eps_eff_quasi_static": 3.03928
+        },
+        "equivalent": {
+          "er": 3.9284,
+          "h_mm": 1.34839,
+          "tan_delta": 0.00498
+        },
+        "tan_delta_real": {
+          "pp": 0.00501,
+          "core": 0.00501
+        },
+        "check": {
+          "z0_ohm": 47.87846,
+          "eps_eff": 3.04426
+        },
+        "hammerstad_jensen_on_equivalent": [47.9643, 3.04806],
+        "coupon_model": {
+          "stackup": "OSHPARK-4L-EM528",
+          "family": "W",
+          "er_5ghz": {
+            "pp": 3.7407,
+            "core": 4.0889
+          },
+          "dk_df_1ghz": {
+            "pp": [3.76, 0.005],
+            "core": [4.11, 0.005]
+          },
+          "l_int_nh_per_m": 0.4558
+        },
+        "residuals": [
+          {
+            "w_mm": 1.0,
+            "real": [84.27, 2.78823],
+            "equivalent": [85.388, 2.81911],
+            "nominal_sheet": [85.998, 2.83166]
+          },
+          {
+            "w_mm": 2.0,
+            "real": [60.551, 2.93636],
+            "equivalent": [60.821, 2.94642],
+            "nominal_sheet": [61.422, 2.95835]
+          },
+          {
+            "w_mm": 3.0,
+            "real": [47.878, 3.04426],
+            "equivalent": [47.878, 3.04426],
+            "nominal_sheet": [48.435, 3.05608]
+          },
+          {
+            "w_mm": 4.0,
+            "real": [39.775, 3.12824],
+            "equivalent": [39.665, 3.1216],
+            "nominal_sheet": [40.173, 3.13366]
+          },
+          {
+            "w_mm": 5.0,
+            "real": [34.098, 3.19574],
+            "equivalent": [33.938, 3.18418],
+            "nominal_sheet": [34.401, 3.1966]
+          }
+        ]
+      },
+      "nominal": {
+        "er": 3.9547,
+        "h_mm": 1.3802,
+        "sheet_z0_ohm": 48.4353,
+        "sheet_eps_eff": 3.05608
+      }
+    }
+  }
+}

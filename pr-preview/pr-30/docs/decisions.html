@@ -1210,6 +1210,34 @@ the optimizer chose the arms’ width and path and the outputs (36 % of the expo
 seed copper, free pixels). The guide says so; a uniform or star start with the keepouts was
 not tried.</p></li>
 </ul>
+<p>The native FDTD kernel (branch <code class="docutils literal notranslate"><span class="pre">claude/rf-kernels</span></code>, merged into #29;
+<a class="reference internal" href="rf-solver-backends.html"><span class="std std-doc">solver backends</span></a>); the owner reviews these with the pull request:</p>
+<ul class="simple">
+<li><p><strong>C with ctypes, bit-identical to numpy.</strong> One C11 file on a pthread pool, built without
+floating-point contraction or fast-math, every value computed with the numpy reference’s
+operations in the same order; the loader checks the arithmetic, the ABI and the sources’
+sha256 at load time. Rust, OpenCL (no float64 on Apple GPUs) and torch MPS were not chosen;
+CUDA is deferred until grids of 10 M cells and more.</p></li>
+<li><p><strong>The default backend is <code class="docutils literal notranslate"><span class="pre">auto</span></code>: native where the library loads, numpy otherwise</strong> (the
+spec’s default, <code class="docutils literal notranslate"><span class="pre">Simulation</span></code>’s and exact problems’). The numpy fallback gives the same float64
+values, so a missing library changes run time only; it is said once on stderr, and
+<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code> turns it into an error. torch stays available by name.</p></li>
+<li><p><strong>float64 is the default precision,</strong> and the cases’ presets (full and smoke) and the tiny
+test spec take the defaults: they run native float64, no longer torch float32 (the published
+runs in <code class="docutils literal notranslate"><span class="pre">docs/rf/</span></code> were made with torch float32 and say so in their <code class="docutils literal notranslate"><span class="pre">spec.json</span></code>; specs that
+name torch keep it). Opt-in float32 is fine for the optimizer’s steps (gradients within about
+1e-4 at full size), not for gradient checks or validation.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">build</span> <span class="pre">//...</span></code> needs a C toolchain:</strong> <code class="docutils literal notranslate"><span class="pre">//yapnr/rf</span></code> carries the library in its
+runfiles, so every RF test runs native by default. CI’s Linux and macOS runners and the
+development Mac have one; without Bazel’s native <code class="docutils literal notranslate"><span class="pre">cc_binary</span></code> (Bazel 9) the target is empty
+and everything runs numpy.</p></li>
+<li><p><strong>The wheel is per platform</strong> (<code class="docutils literal notranslate"><span class="pre">py3-none-manylinux_2_34_x86_64</span></code>, <code class="docutils literal notranslate"><span class="pre">..._aarch64</span></code>,
+<code class="docutils literal notranslate"><span class="pre">macosx_11_0_arm64</span></code>), carrying <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> with the library. The image workflow builds each
+Linux wheel on its own architecture’s runner and each image from its own wheel; releases
+attach both Linux wheels. glibc 2.34 is the newest symbol version the library needs.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code> sets the native pool and caps torch’s threads</strong> (torch at most 4): a job
+on a C4D-16 sets 16 without editing its spec; the Bazel RF tests set 1.</p></li>
+</ul>
 <p>The gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>,
 <a class="reference internal" href="design/gloss.html"><span class="std std-doc">design</span></a>); owner decisions of 2026-09-30 (in Splanc) and 2026-10-02:</p>
 <ul class="simple">

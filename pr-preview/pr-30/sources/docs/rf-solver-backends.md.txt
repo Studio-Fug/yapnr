@@ -5,50 +5,62 @@ where it matters, give the same numbers:
 
 | Backend  | What it is                                                  | Precision        | Threads                 |
 | -------- | ----------------------------------------------------------- | ---------------- | ----------------------- |
+| `native` | blocks of steps in C, `yapnr/rf/fdtd/native/fdtd.c`         | float64, float32 | a pthread pool, any `N` |
 | `numpy`  | the reference: about 70 array operations per step in Python | float64, float32 | one (numpy)             |
 | `torch`  | the same operations as torch tensors on the CPU             | float64, float32 | intra-op, at most 4     |
-| `native` | blocks of steps in C, `yapnr/rf/fdtd/native/fdtd.c`         | float64, float32 | a pthread pool, any `N` |
 
-`native` is optional: a compiled library that nothing requires. Without a usable library a
-simulation or spec that asks for `native` runs the numpy reference, and a problem whose
-`native` comes only from `YAPNR_RF_BACKEND` runs its spec's own backend and precision (the
-cases' torch float32, 4–7 times faster than numpy float64); either way it says why once on
-stderr. With `YAPNR_RF_REQUIRE_NATIVE=1` a missing or refused library is an error instead; cloud
-jobs that pay for native speed should set it.
+**The default is `auto`: native float64 wherever its library loads, the numpy reference
+otherwise.** Native float64 is numpy float64 bit for bit (below), so a run's results do not
+depend on whether the library was there, only its time does: native is 11–12 times faster than
+numpy on the shared Mac and about 40 times on a C4D-16, and 4–6 times faster than the torch
+float32 the cases ran on before. The library ships in the yapnr wheel (one per platform) and
+so in the container image, Bazel builds it for `//yapnr/rf` and its tests, and a checkout
+builds it with one command. The first simulation of a process says on stderr, once, which
+library runs (`yapnr.rf native FDTD: <path> (<instruction set>; <compiler>)`) or why numpy
+runs instead (`yapnr.rf native FDTD: <reason>; numpy backend used (the same float64 values,
+slower)`). With `YAPNR_RF_REQUIRE_NATIVE=1` a missing or refused library is an error instead;
+cloud jobs that pay for native speed should set it.
 
 ## Choosing a backend
 
-- **In code:** `Simulation(grid, structure, backend="native", dtype=np.float64, threads=8)`.
-  A simulation without a `backend` takes `$YAPNR_RF_BACKEND`, else numpy.
-- **In a spec:** `solver: {backend: native, dtype: float64, threads: 8}`.
+- **In code:** `Simulation(grid, structure)` runs `$YAPNR_RF_BACKEND`, else `auto`; or ask:
+  `Simulation(..., backend="native", dtype=np.float64, threads=8)`. `sim.backend` names the one
+  that runs.
+- **In a spec:** `solver: {backend: auto, dtype: float64, threads: 4}` are the defaults;
+  `backend` is `auto`, `native`, `numpy` or `torch`. Specs written before the native kernel say
+  `backend: torch, dtype: float32` (the cases' setting then) and keep running torch unless the
+  environment says otherwise.
 - **From the environment,** over the spec of every problem (`yapnr.rf.cases run`, the driver,
   validation):
 
-  | Variable                  | Meaning                                                                  |
-  | ------------------------- | ------------------------------------------------------------------------ |
-  | `YAPNR_RF_BACKEND`        | `numpy`, `torch` or `native`                                             |
-  | `YAPNR_RF_DTYPE`          | `float64` / `f64` or `float32` / `f32`                                   |
-  | `YAPNR_RF_THREADS`        | the native thread pool (default: the spec's `threads`)                   |
-  | `YAPNR_RF_FDTD_LIB`       | the library to load, before `yapnr/rf/fdtd/native/` and Bazel's runfiles |
-  | `YAPNR_RF_REQUIRE_NATIVE` | `1`: no fallback; a missing or refused library raises                    |
-  | `YAPNR_RF_TBLOCK`         | native schedule: `auto` (default), `0` sweeps, `N` steps per pass        |
-  | `YAPNR_RF_CACHE_MB`       | the cache `auto` plans for (default: the CPU's last-level cache)         |
-  | `YAPNR_RF_ROWS`           | rows of the box per work item (default 8)                                |
+  | Variable                  | Meaning                                                                                  |
+  | ------------------------- | ---------------------------------------------------------------------------------------- |
+  | `YAPNR_RF_BACKEND`        | `auto`, `numpy`, `torch` or `native`                                                     |
+  | `YAPNR_RF_DTYPE`          | `float64` / `f64` or `float32` / `f32`                                                   |
+  | `YAPNR_RF_THREADS`        | the native thread pool (default: the spec's `threads`); caps torch's threads (at most 4) |
+  | `YAPNR_RF_FDTD_LIB`       | the library to load, before the package's own, Bazel's runfiles and an installed wheel's |
+  | `YAPNR_RF_REQUIRE_NATIVE` | `1`: no fallback; a missing or refused library raises                                    |
+  | `YAPNR_RF_TBLOCK`         | native schedule: `auto` (default), `0` sweeps, `N` steps per pass                        |
+  | `YAPNR_RF_CACHE_MB`       | the cache `auto` plans for (default: the CPU's last-level cache)                         |
+  | `YAPNR_RF_ROWS`           | rows of the box per work item (default 8)                                                |
 
-  A backend switched by the environment runs float64 unless `YAPNR_RF_DTYPE` says otherwise:
-  the specs' float32 was chosen for torch's speed. An exact problem (`Problem(exact=True)`, the
-  gradient tests) runs numpy float64, or native float64 when `YAPNR_RF_BACKEND=native`, which
-  gives the same bits.
+  `native` chosen by the environment over a spec that names `torch` runs float64 unless
+  `YAPNR_RF_DTYPE` says otherwise (the specs' float32 was chosen for torch's speed), and without
+  a usable library runs the spec's own backend and precision (torch float32, 4–7 times faster
+  than numpy float64), saying so once. An exact problem (`Problem(exact=True)`, the gradient
+  tests) runs float64 on `auto` unless the arguments or the environment name `numpy` or
+  `native`: the same bits either way.
 
   ```bash
-  YAPNR_RF_BACKEND=native YAPNR_RF_THREADS=8 python -m yapnr.rf.cases run divider --out runs/d
+  YAPNR_RF_THREADS=16 YAPNR_RF_REQUIRE_NATIVE=1 python -m yapnr.rf.cases run divider --out runs/d
   ```
 
-`Problem.describe()` (the run's provenance) records the backend that actually ran and, for
-native, the library's file name and sha256, the sources' sha256 it was built from (when the
-build recorded it), the compiler, the instruction set its sweeps use and the threads. The pool
-never takes more threads than the process may use (its CPU affinity); on a shared machine keep
-`YAPNR_RF_THREADS` at the free cores: a thread waiting at a phase's barrier spins for about
+`Problem` logs the backend, precision and threads it runs (`FDTD backend: native float64, 4
+thread(s) (libyapnr_fdtd.so, avx512f)`), and `Problem.describe()` (the run's provenance) records
+the backend that actually ran, the threads and, for native, the library's file name and sha256,
+the sources' sha256 it was built from, the compiler and the instruction set its sweeps use. The
+pool never takes more threads than the process may use (its CPU affinity); on a shared machine
+keep `YAPNR_RF_THREADS` at the free cores: a thread waiting at a phase's barrier spins for about
 50 µs, yields for up to a millisecond and then sleeps.
 
 ## Exactness
@@ -71,10 +83,10 @@ into the library, in the instruction-set variant its sweeps use, with inputs the
 see: x·y − fl(x·y) must be 0 (no fused multiply-add) and (u + v) − u must be 0 for v below u's
 ulp (no reassociation), in float64 and float32. A library that fails is refused, as one built
 with `-ffp-contract=fast` (which overrides the pragma) or by gcc in a GNU mode (which ignores
-it). `build` also records the sha256 of the sources (`-DYF_SRC_SHA`), and the loader refuses a
-library built from other sources than the ones beside the module (a stale build), as it refuses
-one with another ABI or other structure sizes. Under `bazel test` the loader looks only in the
-runfiles, never in the source tree.
+it). Every build records the sha256 of the sources (`build` with `-DYF_SRC_SHA`, Bazel through
+a generated header), and the loader refuses a library built from other sources than the ones
+beside the module (a stale build), as it refuses one with another ABI or other structure sizes.
+Under `bazel test` the loader looks only in the runfiles, never in the source tree.
 
 What makes this possible is that the values that do not depend on the fields are computed once,
 in Python, for every backend: each block of steps tabulates the sources' values
@@ -90,8 +102,22 @@ phase factors. Every backend applies these tables, so they cannot drift apart.
   settings;
 - the divider and the antenna on their smoke grids;
 - 1 to 4 threads, both schedules, float64 and float32;
+- backend selection: `auto` with and without a library, the environment's overrides, the
+  fallback's one line, `YAPNR_RF_REQUIRE_NATIVE`, an installed wheel's library;
 - the loader's refusals (stale sources, `-ffp-contract=fast`, fast-math) and the C side's
   bounds checks (a pass longer than 32 steps, a work item larger than its scratch: error -4).
+
+`tests/unit/rf/test_native_identity.py` compares the sha256 of whole evaluations (steps, objective
+values, design gradients, S-parameters) for every round-2 solver option on and off: the
+copper-edge correction (its ε and μ factors, the extra gradient probes on the corrected edges
+and its time-step bound over the dense-pattern library, diagonal patterns included) and the
+static and modal port sources, on the divider and the antenna (smoke grids) and on a design of
+one-pixel diagonal lines every three pixels (the time step's worst pattern) on the divider's
+grid; also the Wilkinson-type combiner (a lumped resistor and its absorbed-power requirement)
+and the reactive copper sheet. Native float64 on one thread with the sweeps and on three threads
+with 3-step passes equals numpy float64; native float32 equals numpy float32; float32 is within
+1e-5 (objective values) and 2e-5 (gradients) of float64. The same matrix on the cases' full
+grids is in the benchmark notes below.
 
 float32 itself is validated as torch float32 is: S-parameters within 1e-4 of float64, and on
 the tiny production-settings spec the objective values within 1e-5 and the gradients within
@@ -101,13 +127,13 @@ the tiny production-settings spec the objective values within 1e-5 and the gradi
 5.7e-7 and per-objective gradients within 0.85e-5 to 1.2e-4 (5.6e-5 overall, cosine within
 1.5e-9 of 1), the same order as the torch float32 the cases use (9.3e-7; 1.0e-5 to 4.8e-5,
 3.1e-5 overall). That is fine for the optimizer's steps and not for gradient checks, so float64
-stays the default. The finite-difference gradient tests
-pass on native too (`YAPNR_RF_BACKEND=native YAPNR_RF_REQUIRE_NATIVE=1`) with the same numbers
-as numpy: relative errors against Richardson differences from 6.6e-11 to 2.2e-10 for most
-pipeline variants, 2.0e-9 with a reference impedance and 4.2e-8 for the absorbed-power
-requirement, and 1.9e-9 to 4.2e-8 (the S21 phase) in `test_adjoint_gradients`, where the
-difference quotient's truncation dominates. Their assertions (1e-6 and 1e-5) leave 24 times
-that margin or more. The tests pass on macOS arm64
+is the default. The finite-difference gradient tests run on the default backend (native under
+Bazel; `bazel test //tests/unit/rf:test_pipeline_gradient_numpy` and its siblings run them on
+numpy) with the same numbers either way: relative errors against Richardson differences from
+6.6e-11 to 2.2e-10 for most pipeline variants, 2.0e-9 with a reference impedance and 4.2e-8
+for the absorbed-power requirement, and 1.9e-9 to 4.2e-8 (the S21 phase) in
+`test_adjoint_gradients`, where the difference quotient's truncation dominates. Their
+assertions (1e-6 and 1e-5) leave 24 times that margin or more. The tests pass on macOS arm64
 (Apple clang), Linux arm64 (gcc 13; also under ThreadSanitizer, with no reports) and Linux
 x86-64 (gcc 13): on a C4D's Zen 5 with the AVX-512 sweeps, and with the baseline sweeps.
 
@@ -116,62 +142,58 @@ x86-64 (gcc 13): on a C4D's Zen 5 with the AVX-512 sweeps, and with the baseline
 The library is one C11 file and a header, built with any C compiler:
 
 ```bash
-python -m yapnr.rf.fdtd.native_kernel build     # -> yapnr/rf/fdtd/native/libyapnr_fdtd.*
+bazel build //yapnr/rf:libyapnr_fdtd.so          # what //yapnr/rf and its tests carry
+python -m yapnr.rf.fdtd.native_kernel build     # a checkout: -> yapnr/rf/fdtd/native/libyapnr_fdtd.*
 python -m yapnr.rf.fdtd.native_kernel status    # what backend "native" loads
-bazel build //yapnr/rf:libyapnr_fdtd.so          # manual target, the same flags
 ```
 
-- **macOS arm64:** Apple clang; NEON.
+- **macOS arm64:** Apple clang; NEON. Bazel builds it for macOS 11 and later.
 - **Linux x86-64:** gcc or clang. The sweeps are compiled three times (`target_clones`: AVX-512,
   AVX2, baseline) and the loader picks the variant the CPU supports (`status()["isa"]`).
 - **Linux arm64** (C4A): gcc or clang; NEON.
 
-The C source travels with the `yapnr.rf` package wherever the package goes (a checkout, a job
-bundle, Bazel's runfiles, a `bazel_dep`), so `build` works there. `yapnr.rf` is not part of the
-yapnr wheel (`//yapnr` does not depend on `//yapnr/rf`). Bazel's targets are manual, so
-`bazel build //...` and `bazel test //...` need no C toolchain; the plain unit test compiles the
-source with the host compiler when there is one, skips without one (a compiler that fails is a
-test error, with its messages), and in CI leaves the optimizer and case comparisons
-(`YAPNR_RF_NATIVE_QUICK=1`: about 25 s instead of 75 s on the M4) to the manual target. A
-Bazel-built library does not record the sources' sha256 (Bazel rebuilds it whenever they
-change). The library's own tests and the gradient checks on it, which fail rather than fall
-back (`YAPNR_RF_REQUIRE_NATIVE`):
+Bazel builds the library with the host's C toolchain as part of `bazel build //...`, records the
+sources' sha256 through a generated header (`//yapnr/rf:fdtd_src_sha`) and puts it in the
+runfiles of `//yapnr/rf`, so every test and binary that depends on the package runs native by
+default. On Linux it links nothing but libc (the toolchain's default libraries, libstdc++ among
+them, are off). `test_native_kernel` and `test_native_identity` run on that library and fail
+rather than skip without it (`YAPNR_RF_REQUIRE_NATIVE`). Where Bazel has no native `cc_binary`
+(Bazel 9 moved it to rules_cc) the target is an empty filegroup and everything runs numpy until
+rules_cc is added. The C source also travels with the package wherever it goes (a checkout, a
+job bundle, the runfiles, a `bazel_dep`, the wheel), so `build` works there.
 
-```bash
-bazel test //tests/unit/rf:test_native_kernel_native //tests/unit/rf:test_adjoint_gradients_native \
-  //tests/unit/rf:test_pipeline_gradient_native
-```
+### The wheel
+
+The yapnr wheel carries `yapnr.rf` with its library at `yapnr/rf/libyapnr_fdtd.so` (where the
+loader looks beside the package) and the C sources, so it is one wheel per platform, tagged for
+the platform Bazel built it on (`release/wheel.bzl`):
+
+| Platform     | Wheel                                             | Built                                        |
+| ------------ | ------------------------------------------------- | -------------------------------------------- |
+| Linux x86-64 | `yapnr-X.Y.Z-py3-none-manylinux_2_34_x86_64.whl`  | the image workflow, on `ubuntu-24.04`        |
+| Linux arm64  | `yapnr-X.Y.Z-py3-none-manylinux_2_34_aarch64.whl` | the image workflow, on `ubuntu-24.04-arm`    |
+| macOS arm64  | `yapnr-X.Y.Z-py3-none-macosx_11_0_arm64.whl`      | locally (`bazel build //release:wheel.dist`) |
+
+glibc 2.34 is the newest symbol version the library needs (`pthread_create` in libc); the image
+workflow checks that and that it needs nothing beyond libc. Releases attach both Linux wheels.
+`tests/unit/release/test_wheel.py` checks the tag, the package's files and that the wheel's
+library loads with the loader's checks.
 
 ### The container image
 
-The image (`docker/yapnr/Dockerfile`) does not build the library yet, and it has no C compiler
-(checked on C4D). Nor does it hold `yapnr.rf`: the yapnr wheel it installs does not include
-the package, and RF jobs bring it in their job bundle. The change the image needs is one build
-stage per architecture that compiles the C source from the repository (the Dockerfile's build
-context is the repository root), recording the sources' sha256 as `build` does, and a copy into
-the final stage that `YAPNR_RF_FDTD_LIB` points at:
+The image installs the wheel of its own architecture (`docker/yapnr/Dockerfile`), so its Python
+loads the library from site-packages and runs native float64 by default; the image's smoke test
+(`tools/image/rf_native_smoke.py`) checks that it loads, is the default and steps fields
+bit-identically to numpy, also as another UID on a read-only root file system. The image has no
+C compiler and needs none. On a Mac, `tools/image/build_local.sh` compiles the library for the
+image's Linux architecture in a container and puts it into the Mac's wheel
+(`tools/release/linux_wheel.py`).
 
-```dockerfile
-FROM ubuntu:24.04@sha256:<the digest the Dockerfile pins> AS rf-native
-RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev
-COPY yapnr/rf/fdtd/native/ /src/
-RUN set -eux; cd /src; \
-    sha="$(cat fdtd.c fdtd_kernels.h | sha256sum | cut -d' ' -f1)"; \
-    gcc -O3 -std=c11 -ffp-contract=off -fno-fast-math -fPIC -shared -pthread \
-      -DYF_SRC_SHA="\"$sha\"" -o /libyapnr_fdtd.so fdtd.c
-
-# in the final stage:
-COPY --from=rf-native /libyapnr_fdtd.so /opt/yapnr-rf/libyapnr_fdtd.so
-ENV YAPNR_RF_FDTD_LIB=/opt/yapnr-rf/libyapnr_fdtd.so
-```
-
-The build stage is native per architecture (the image workflow builds amd64 and arm64 on their
-own runners), adds about 270 kB, and nothing changes for a job that does not ask for `native`.
-Because the library records its sources, a job bundle whose C source differs from the image's
-does not run on the image's library: the loader refuses it as stale and goes on to the
-bundle's own `native/` (if the job built one), else falls back, or with
-`YAPNR_RF_REQUIRE_NATIVE=1` stops at once. Until the image has it, a job can ship the library
-in its job bundle and point `YAPNR_RF_FDTD_LIB` at it, as the C4D benchmarks below did.
+RF cloud jobs run a job bundle's sources on `PYTHONPATH` (`tools/exp/rf_stage_plan.py`); the
+loader then also looks at the installed wheel's library, and uses it when the bundle's C sources
+are the ones it was built from (the sha256 it records). A bundle whose C source differs from the
+image's runs numpy instead, says so, or with `YAPNR_RF_REQUIRE_NATIVE=1` stops at once; such a
+job can still ship a library of its own and point `YAPNR_RF_FDTD_LIB` at it.
 
 ## Performance
 

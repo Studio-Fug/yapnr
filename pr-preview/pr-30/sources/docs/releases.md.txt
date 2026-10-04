@@ -80,13 +80,13 @@ cycle.
 
 ## What a release publishes
 
-| What                           | Where                                                           |
-| ------------------------------ | --------------------------------------------------------------- |
-| `yapnr-vX.Y.Z.tar.gz`          | release asset: `git archive` of the tag (Bazel, AGPL source)    |
-| `yapnr-X.Y.Z-py3-none-any.whl` | release asset: the stamped wheel                                |
-| `yapnr-docs-X.Y.Z.tar.gz`      | release asset: the documentation site                           |
-| `SHA256SUMS`                   | release asset: checksums of the above                           |
-| `ghcr.io/studio-fug/yapnr`     | `X.Y.Z`, `X.Y`, `latest` (see [containers](containers.md#tags)) |
+| What                                                       | Where                                                                                                |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `yapnr-vX.Y.Z.tar.gz`                                      | release asset: `git archive` of the tag (Bazel, AGPL source)                                         |
+| `yapnr-X.Y.Z-py3-none-manylinux_2_34_{x86_64,aarch64}.whl` | release assets: the stamped wheels, one per Linux architecture (with yapnr.rf's native FDTD library) |
+| `yapnr-docs-X.Y.Z.tar.gz`                                  | release asset: the documentation site                                                                |
+| `SHA256SUMS`                                               | release asset: checksums of the above                                                                |
+| `ghcr.io/studio-fug/yapnr`                                 | `X.Y.Z`, `X.Y`, `latest` (see [containers](containers.md#tags))                                      |
 
 Every release file and image is attested; check one with
 `gh attestation verify <file or oci://image> -R Studio-Fug/yapnr`. The images also carry an SBOM

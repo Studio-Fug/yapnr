@@ -916,6 +916,34 @@ Round 2, review fixes (the physics and intent reviews of round 2; design §24):
   seed copper, free pixels). The guide says so; a uniform or star start with the keepouts was
   not tried.
 
+The native FDTD kernel (branch `claude/rf-kernels`, merged into #29;
+[solver backends](rf-solver-backends.md)); the owner reviews these with the pull request:
+
+- **C with ctypes, bit-identical to numpy.** One C11 file on a pthread pool, built without
+  floating-point contraction or fast-math, every value computed with the numpy reference's
+  operations in the same order; the loader checks the arithmetic, the ABI and the sources'
+  sha256 at load time. Rust, OpenCL (no float64 on Apple GPUs) and torch MPS were not chosen;
+  CUDA is deferred until grids of 10 M cells and more.
+- **The default backend is `auto`: native where the library loads, numpy otherwise** (the
+  spec's default, `Simulation`'s and exact problems'). The numpy fallback gives the same float64
+  values, so a missing library changes run time only; it is said once on stderr, and
+  `YAPNR_RF_REQUIRE_NATIVE=1` turns it into an error. torch stays available by name.
+- **float64 is the default precision,** and the cases' presets (full and smoke) and the tiny
+  test spec take the defaults: they run native float64, no longer torch float32 (the published
+  runs in `docs/rf/` were made with torch float32 and say so in their `spec.json`; specs that
+  name torch keep it). Opt-in float32 is fine for the optimizer's steps (gradients within about
+  1e-4 at full size), not for gradient checks or validation.
+- **`bazel build //...` needs a C toolchain:** `//yapnr/rf` carries the library in its
+  runfiles, so every RF test runs native by default. CI's Linux and macOS runners and the
+  development Mac have one; without Bazel's native `cc_binary` (Bazel 9) the target is empty
+  and everything runs numpy.
+- **The wheel is per platform** (`py3-none-manylinux_2_34_x86_64`, `..._aarch64`,
+  `macosx_11_0_arm64`), carrying `yapnr.rf` with the library. The image workflow builds each
+  Linux wheel on its own architecture's runner and each image from its own wheel; releases
+  attach both Linux wheels. glibc 2.34 is the newest symbol version the library needs.
+- **`YAPNR_RF_THREADS` sets the native pool and caps torch's threads** (torch at most 4): a job
+  on a C4D-16 sets 16 without editing its spec; the Bazel RF tests set 1.
+
 The gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`,
 [design](design/gloss.md)); owner decisions of 2026-09-30 (in Splanc) and 2026-10-02:
 

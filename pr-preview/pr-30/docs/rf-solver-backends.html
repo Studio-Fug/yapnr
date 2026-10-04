@@ -307,36 +307,44 @@ where it matters, give the same numbers:</p>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">numpy</span></code></p></td>
-<td><p>the reference: about 70 array operations per step in Python</p></td>
-<td><p>float64, float32</p></td>
-<td><p>one (numpy)</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">torch</span></code></p></td>
-<td><p>the same operations as torch tensors on the CPU</p></td>
-<td><p>float64, float32</p></td>
-<td><p>intra-op, at most 4</p></td>
-</tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">native</span></code></p></td>
 <td><p>blocks of steps in C, <code class="docutils literal notranslate"><span class="pre">yapnr/rf/fdtd/native/fdtd.c</span></code></p></td>
 <td><p>float64, float32</p></td>
 <td><p>a pthread pool, any <code class="docutils literal notranslate"><span class="pre">N</span></code></p></td>
 </tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">numpy</span></code></p></td>
+<td><p>the reference: about 70 array operations per step in Python</p></td>
+<td><p>float64, float32</p></td>
+<td><p>one (numpy)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">torch</span></code></p></td>
+<td><p>the same operations as torch tensors on the CPU</p></td>
+<td><p>float64, float32</p></td>
+<td><p>intra-op, at most 4</p></td>
+</tr>
 </tbody>
 </table>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">native</span></code> is optional: a compiled library that nothing requires. Without a usable library a
-simulation or spec that asks for <code class="docutils literal notranslate"><span class="pre">native</span></code> runs the numpy reference, and a problem whose
-<code class="docutils literal notranslate"><span class="pre">native</span></code> comes only from <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_BACKEND</span></code> runs its spec’s own backend and precision (the
-cases’ torch float32, 4–7 times faster than numpy float64); either way it says why once on
-stderr. With <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code> a missing or refused library is an error instead; cloud
-jobs that pay for native speed should set it.</p>
+<p><strong>The default is <code class="docutils literal notranslate"><span class="pre">auto</span></code>: native float64 wherever its library loads, the numpy reference
+otherwise.</strong> Native float64 is numpy float64 bit for bit (below), so a run’s results do not
+depend on whether the library was there, only its time does: native is 11–12 times faster than
+numpy on the shared Mac and about 40 times on a C4D-16, and 4–6 times faster than the torch
+float32 the cases ran on before. The library ships in the yapnr wheel (one per platform) and
+so in the container image, Bazel builds it for <code class="docutils literal notranslate"><span class="pre">//yapnr/rf</span></code> and its tests, and a checkout
+builds it with one command. The first simulation of a process says on stderr, once, which
+library runs (<code class="docutils literal notranslate"><span class="pre">yapnr.rf</span> <span class="pre">native</span> <span class="pre">FDTD:</span> <span class="pre">&lt;path&gt;</span> <span class="pre">(&lt;instruction</span> <span class="pre">set&gt;;</span> <span class="pre">&lt;compiler&gt;)</span></code>) or why numpy
+runs instead (<code class="docutils literal notranslate"><span class="pre">yapnr.rf</span> <span class="pre">native</span> <span class="pre">FDTD:</span> <span class="pre">&lt;reason&gt;;</span> <span class="pre">numpy</span> <span class="pre">backend</span> <span class="pre">used</span> <span class="pre">(the</span> <span class="pre">same</span> <span class="pre">float64</span> <span class="pre">values,</span> <span class="pre">slower)</span></code>). With <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code> a missing or refused library is an error instead;
+cloud jobs that pay for native speed should set it.</p>
 <section id="choosing-a-backend">
 <h2>Choosing a backend<a class="headerlink" href="#choosing-a-backend" title="Link to this heading">¶</a></h2>
 <ul>
-<li><p><strong>In code:</strong> <code class="docutils literal notranslate"><span class="pre">Simulation(grid,</span> <span class="pre">structure,</span> <span class="pre">backend=&quot;native&quot;,</span> <span class="pre">dtype=np.float64,</span> <span class="pre">threads=8)</span></code>.
-A simulation without a <code class="docutils literal notranslate"><span class="pre">backend</span></code> takes <code class="docutils literal notranslate"><span class="pre">$YAPNR_RF_BACKEND</span></code>, else numpy.</p></li>
-<li><p><strong>In a spec:</strong> <code class="docutils literal notranslate"><span class="pre">solver:</span> <span class="pre">{backend:</span> <span class="pre">native,</span> <span class="pre">dtype:</span> <span class="pre">float64,</span> <span class="pre">threads:</span> <span class="pre">8}</span></code>.</p></li>
+<li><p><strong>In code:</strong> <code class="docutils literal notranslate"><span class="pre">Simulation(grid,</span> <span class="pre">structure)</span></code> runs <code class="docutils literal notranslate"><span class="pre">$YAPNR_RF_BACKEND</span></code>, else <code class="docutils literal notranslate"><span class="pre">auto</span></code>; or ask:
+<code class="docutils literal notranslate"><span class="pre">Simulation(...,</span> <span class="pre">backend=&quot;native&quot;,</span> <span class="pre">dtype=np.float64,</span> <span class="pre">threads=8)</span></code>. <code class="docutils literal notranslate"><span class="pre">sim.backend</span></code> names the one
+that runs.</p></li>
+<li><p><strong>In a spec:</strong> <code class="docutils literal notranslate"><span class="pre">solver:</span> <span class="pre">{backend:</span> <span class="pre">auto,</span> <span class="pre">dtype:</span> <span class="pre">float64,</span> <span class="pre">threads:</span> <span class="pre">4}</span></code> are the defaults;
+<code class="docutils literal notranslate"><span class="pre">backend</span></code> is <code class="docutils literal notranslate"><span class="pre">auto</span></code>, <code class="docutils literal notranslate"><span class="pre">native</span></code>, <code class="docutils literal notranslate"><span class="pre">numpy</span></code> or <code class="docutils literal notranslate"><span class="pre">torch</span></code>. Specs written before the native kernel say
+<code class="docutils literal notranslate"><span class="pre">backend:</span> <span class="pre">torch,</span> <span class="pre">dtype:</span> <span class="pre">float32</span></code> (the cases’ setting then) and keep running torch unless the
+environment says otherwise.</p></li>
 <li><p><strong>From the environment,</strong> over the spec of every problem (<code class="docutils literal notranslate"><span class="pre">yapnr.rf.cases</span> <span class="pre">run</span></code>, the driver,
 validation):</p>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -348,16 +356,16 @@ validation):</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">YAPNR_RF_BACKEND</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">torch</span></code> or <code class="docutils literal notranslate"><span class="pre">native</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">auto</span></code>, <code class="docutils literal notranslate"><span class="pre">numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">torch</span></code> or <code class="docutils literal notranslate"><span class="pre">native</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">YAPNR_RF_DTYPE</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">float64</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> or <code class="docutils literal notranslate"><span class="pre">float32</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code></p></td>
-<td><p>the native thread pool (default: the spec’s <code class="docutils literal notranslate"><span class="pre">threads</span></code>)</p></td>
+<td><p>the native thread pool (default: the spec’s <code class="docutils literal notranslate"><span class="pre">threads</span></code>); caps torch’s threads (at most 4)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">YAPNR_RF_FDTD_LIB</span></code></p></td>
-<td><p>the library to load, before <code class="docutils literal notranslate"><span class="pre">yapnr/rf/fdtd/native/</span></code> and Bazel’s runfiles</p></td>
+<td><p>the library to load, before the package’s own, Bazel’s runfiles and an installed wheel’s</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">1</span></code>: no fallback; a missing or refused library raises</p></td>
@@ -374,20 +382,22 @@ validation):</p>
 </tbody>
 </table>
 </div>
-<p>A backend switched by the environment runs float64 unless <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_DTYPE</span></code> says otherwise:
-the specs’ float32 was chosen for torch’s speed. An exact problem (<code class="docutils literal notranslate"><span class="pre">Problem(exact=True)</span></code>, the
-gradient tests) runs numpy float64, or native float64 when <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_BACKEND=native</span></code>, which
-gives the same bits.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">YAPNR_RF_BACKEND</span><span class="o">=</span>native<span class="w"> </span><span class="nv">YAPNR_RF_THREADS</span><span class="o">=</span><span class="m">8</span><span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.cases<span class="w"> </span>run<span class="w"> </span>divider<span class="w"> </span>--out<span class="w"> </span>runs/d
+<p><code class="docutils literal notranslate"><span class="pre">native</span></code> chosen by the environment over a spec that names <code class="docutils literal notranslate"><span class="pre">torch</span></code> runs float64 unless
+<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_DTYPE</span></code> says otherwise (the specs’ float32 was chosen for torch’s speed), and without
+a usable library runs the spec’s own backend and precision (torch float32, 4–7 times faster
+than numpy float64), saying so once. An exact problem (<code class="docutils literal notranslate"><span class="pre">Problem(exact=True)</span></code>, the gradient
+tests) runs float64 on <code class="docutils literal notranslate"><span class="pre">auto</span></code> unless the arguments or the environment name <code class="docutils literal notranslate"><span class="pre">numpy</span></code> or
+<code class="docutils literal notranslate"><span class="pre">native</span></code>: the same bits either way.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">YAPNR_RF_THREADS</span><span class="o">=</span><span class="m">16</span><span class="w"> </span><span class="nv">YAPNR_RF_REQUIRE_NATIVE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.cases<span class="w"> </span>run<span class="w"> </span>divider<span class="w"> </span>--out<span class="w"> </span>runs/d
 </pre></div>
 </div>
 </li>
 </ul>
-<p><code class="docutils literal notranslate"><span class="pre">Problem.describe()</span></code> (the run’s provenance) records the backend that actually ran and, for
-native, the library’s file name and sha256, the sources’ sha256 it was built from (when the
-build recorded it), the compiler, the instruction set its sweeps use and the threads. The pool
-never takes more threads than the process may use (its CPU affinity); on a shared machine keep
-<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code> at the free cores: a thread waiting at a phase’s barrier spins for about
+<p><code class="docutils literal notranslate"><span class="pre">Problem</span></code> logs the backend, precision and threads it runs (<code class="docutils literal notranslate"><span class="pre">FDTD</span> <span class="pre">backend:</span> <span class="pre">native</span> <span class="pre">float64,</span> <span class="pre">4</span> <span class="pre">thread(s)</span> <span class="pre">(libyapnr_fdtd.so,</span> <span class="pre">avx512f)</span></code>), and <code class="docutils literal notranslate"><span class="pre">Problem.describe()</span></code> (the run’s provenance) records
+the backend that actually ran, the threads and, for native, the library’s file name and sha256,
+the sources’ sha256 it was built from, the compiler and the instruction set its sweeps use. The
+pool never takes more threads than the process may use (its CPU affinity); on a shared machine
+keep <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code> at the free cores: a thread waiting at a phase’s barrier spins for about
 50 µs, yields for up to a millisecond and then sleeps.</p>
 </section>
 <section id="exactness">
@@ -409,10 +419,10 @@ into the library, in the instruction-set variant its sweeps use, with inputs the
 see: x·y − fl(x·y) must be 0 (no fused multiply-add) and (u + v) − u must be 0 for v below u’s
 ulp (no reassociation), in float64 and float32. A library that fails is refused, as one built
 with <code class="docutils literal notranslate"><span class="pre">-ffp-contract=fast</span></code> (which overrides the pragma) or by gcc in a GNU mode (which ignores
-it). <code class="docutils literal notranslate"><span class="pre">build</span></code> also records the sha256 of the sources (<code class="docutils literal notranslate"><span class="pre">-DYF_SRC_SHA</span></code>), and the loader refuses a
-library built from other sources than the ones beside the module (a stale build), as it refuses
-one with another ABI or other structure sizes. Under <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span></code> the loader looks only in the
-runfiles, never in the source tree.</p>
+it). Every build records the sha256 of the sources (<code class="docutils literal notranslate"><span class="pre">build</span></code> with <code class="docutils literal notranslate"><span class="pre">-DYF_SRC_SHA</span></code>, Bazel through
+a generated header), and the loader refuses a library built from other sources than the ones
+beside the module (a stale build), as it refuses one with another ABI or other structure sizes.
+Under <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span></code> the loader looks only in the runfiles, never in the source tree.</p>
 <p>What makes this possible is that the values that do not depend on the fields are computed once,
 in Python, for every backend: each block of steps tabulates the sources’ values
 (<code class="docutils literal notranslate"><span class="pre">sources.combine</span></code>, an elementwise sum in a fixed order rather than a BLAS product) and the DTFT
@@ -426,9 +436,22 @@ correction with its μ planes, inductive sheet, a resistor with PEC edges) and o
 settings;</p></li>
 <li><p>the divider and the antenna on their smoke grids;</p></li>
 <li><p>1 to 4 threads, both schedules, float64 and float32;</p></li>
+<li><p>backend selection: <code class="docutils literal notranslate"><span class="pre">auto</span></code> with and without a library, the environment’s overrides, the
+fallback’s one line, <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE</span></code>, an installed wheel’s library;</p></li>
 <li><p>the loader’s refusals (stale sources, <code class="docutils literal notranslate"><span class="pre">-ffp-contract=fast</span></code>, fast-math) and the C side’s
 bounds checks (a pass longer than 32 steps, a work item larger than its scratch: error -4).</p></li>
 </ul>
+<p><code class="docutils literal notranslate"><span class="pre">tests/unit/rf/test_native_identity.py</span></code> compares the sha256 of whole evaluations (steps, objective
+values, design gradients, S-parameters) for every round-2 solver option on and off: the
+copper-edge correction (its ε and μ factors, the extra gradient probes on the corrected edges
+and its time-step bound over the dense-pattern library, diagonal patterns included) and the
+static and modal port sources, on the divider and the antenna (smoke grids) and on a design of
+one-pixel diagonal lines every three pixels (the time step’s worst pattern) on the divider’s
+grid; also the Wilkinson-type combiner (a lumped resistor and its absorbed-power requirement)
+and the reactive copper sheet. Native float64 on one thread with the sweeps and on three threads
+with 3-step passes equals numpy float64; native float32 equals numpy float32; float32 is within
+1e-5 (objective values) and 2e-5 (gradients) of float64. The same matrix on the cases’ full
+grids is in the benchmark notes below.</p>
 <p>float32 itself is validated as torch float32 is: S-parameters within 1e-4 of float64, and on
 the tiny production-settings spec the objective values within 1e-5 and the gradients within
 2e-5 relative (the test’s bounds; measured 1.5e-8 and 0.5–2.4e-6, torch float32 0.6e-8 and
@@ -437,72 +460,87 @@ the tiny production-settings spec the objective values within 1e-5 and the gradi
 5.7e-7 and per-objective gradients within 0.85e-5 to 1.2e-4 (5.6e-5 overall, cosine within
 1.5e-9 of 1), the same order as the torch float32 the cases use (9.3e-7; 1.0e-5 to 4.8e-5,
 3.1e-5 overall). That is fine for the optimizer’s steps and not for gradient checks, so float64
-stays the default. The finite-difference gradient tests
-pass on native too (<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_BACKEND=native</span> <span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code>) with the same numbers
-as numpy: relative errors against Richardson differences from 6.6e-11 to 2.2e-10 for most
-pipeline variants, 2.0e-9 with a reference impedance and 4.2e-8 for the absorbed-power
-requirement, and 1.9e-9 to 4.2e-8 (the S21 phase) in <code class="docutils literal notranslate"><span class="pre">test_adjoint_gradients</span></code>, where the
-difference quotient’s truncation dominates. Their assertions (1e-6 and 1e-5) leave 24 times
-that margin or more. The tests pass on macOS arm64
+is the default. The finite-difference gradient tests run on the default backend (native under
+Bazel; <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//tests/unit/rf:test_pipeline_gradient_numpy</span></code> and its siblings run them on
+numpy) with the same numbers either way: relative errors against Richardson differences from
+6.6e-11 to 2.2e-10 for most pipeline variants, 2.0e-9 with a reference impedance and 4.2e-8
+for the absorbed-power requirement, and 1.9e-9 to 4.2e-8 (the S21 phase) in
+<code class="docutils literal notranslate"><span class="pre">test_adjoint_gradients</span></code>, where the difference quotient’s truncation dominates. Their
+assertions (1e-6 and 1e-5) leave 24 times that margin or more. The tests pass on macOS arm64
 (Apple clang), Linux arm64 (gcc 13; also under ThreadSanitizer, with no reports) and Linux
 x86-64 (gcc 13): on a C4D’s Zen 5 with the AVX-512 sweeps, and with the baseline sweeps.</p>
 </section>
 <section id="building-the-library">
 <h2>Building the library<a class="headerlink" href="#building-the-library" title="Link to this heading">¶</a></h2>
 <p>The library is one C11 file and a header, built with any C compiler:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.fdtd.native_kernel<span class="w"> </span>build<span class="w">     </span><span class="c1"># -&gt; yapnr/rf/fdtd/native/libyapnr_fdtd.*</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span>build<span class="w"> </span>//yapnr/rf:libyapnr_fdtd.so<span class="w">          </span><span class="c1"># what //yapnr/rf and its tests carry</span>
+python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.fdtd.native_kernel<span class="w"> </span>build<span class="w">     </span><span class="c1"># a checkout: -&gt; yapnr/rf/fdtd/native/libyapnr_fdtd.*</span>
 python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.fdtd.native_kernel<span class="w"> </span>status<span class="w">    </span><span class="c1"># what backend &quot;native&quot; loads</span>
-bazel<span class="w"> </span>build<span class="w"> </span>//yapnr/rf:libyapnr_fdtd.so<span class="w">          </span><span class="c1"># manual target, the same flags</span>
 </pre></div>
 </div>
 <ul class="simple">
-<li><p><strong>macOS arm64:</strong> Apple clang; NEON.</p></li>
+<li><p><strong>macOS arm64:</strong> Apple clang; NEON. Bazel builds it for macOS 11 and later.</p></li>
 <li><p><strong>Linux x86-64:</strong> gcc or clang. The sweeps are compiled three times (<code class="docutils literal notranslate"><span class="pre">target_clones</span></code>: AVX-512,
 AVX2, baseline) and the loader picks the variant the CPU supports (<code class="docutils literal notranslate"><span class="pre">status()[&quot;isa&quot;]</span></code>).</p></li>
 <li><p><strong>Linux arm64</strong> (C4A): gcc or clang; NEON.</p></li>
 </ul>
-<p>The C source travels with the <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> package wherever the package goes (a checkout, a job
-bundle, Bazel’s runfiles, a <code class="docutils literal notranslate"><span class="pre">bazel_dep</span></code>), so <code class="docutils literal notranslate"><span class="pre">build</span></code> works there. <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> is not part of the
-yapnr wheel (<code class="docutils literal notranslate"><span class="pre">//yapnr</span></code> does not depend on <code class="docutils literal notranslate"><span class="pre">//yapnr/rf</span></code>). Bazel’s targets are manual, so
-<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">build</span> <span class="pre">//...</span></code> and <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code> need no C toolchain; the plain unit test compiles the
-source with the host compiler when there is one, skips without one (a compiler that fails is a
-test error, with its messages), and in CI leaves the optimizer and case comparisons
-(<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_NATIVE_QUICK=1</span></code>: about 25 s instead of 75 s on the M4) to the manual target. A
-Bazel-built library does not record the sources’ sha256 (Bazel rebuilds it whenever they
-change). The library’s own tests and the gradient checks on it, which fail rather than fall
-back (<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE</span></code>):</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span><span class="nb">test</span><span class="w"> </span>//tests/unit/rf:test_native_kernel_native<span class="w"> </span>//tests/unit/rf:test_adjoint_gradients_native<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>//tests/unit/rf:test_pipeline_gradient_native
-</pre></div>
+<p>Bazel builds the library with the host’s C toolchain as part of <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">build</span> <span class="pre">//...</span></code>, records the
+sources’ sha256 through a generated header (<code class="docutils literal notranslate"><span class="pre">//yapnr/rf:fdtd_src_sha</span></code>) and puts it in the
+runfiles of <code class="docutils literal notranslate"><span class="pre">//yapnr/rf</span></code>, so every test and binary that depends on the package runs native by
+default. On Linux it links nothing but libc (the toolchain’s default libraries, libstdc++ among
+them, are off). <code class="docutils literal notranslate"><span class="pre">test_native_kernel</span></code> and <code class="docutils literal notranslate"><span class="pre">test_native_identity</span></code> run on that library and fail
+rather than skip without it (<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE</span></code>). Where Bazel has no native <code class="docutils literal notranslate"><span class="pre">cc_binary</span></code>
+(Bazel 9 moved it to rules_cc) the target is an empty filegroup and everything runs numpy until
+rules_cc is added. The C source also travels with the package wherever it goes (a checkout, a
+job bundle, the runfiles, a <code class="docutils literal notranslate"><span class="pre">bazel_dep</span></code>, the wheel), so <code class="docutils literal notranslate"><span class="pre">build</span></code> works there.</p>
+<section id="the-wheel">
+<h3>The wheel<a class="headerlink" href="#the-wheel" title="Link to this heading">¶</a></h3>
+<p>The yapnr wheel carries <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> with its library at <code class="docutils literal notranslate"><span class="pre">yapnr/rf/libyapnr_fdtd.so</span></code> (where the
+loader looks beside the package) and the C sources, so it is one wheel per platform, tagged for
+the platform Bazel built it on (<code class="docutils literal notranslate"><span class="pre">release/wheel.bzl</span></code>):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Platform</p></th>
+<th class="head"><p>Wheel</p></th>
+<th class="head"><p>Built</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Linux x86-64</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr-X.Y.Z-py3-none-manylinux_2_34_x86_64.whl</span></code></p></td>
+<td><p>the image workflow, on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Linux arm64</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr-X.Y.Z-py3-none-manylinux_2_34_aarch64.whl</span></code></p></td>
+<td><p>the image workflow, on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>macOS arm64</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr-X.Y.Z-py3-none-macosx_11_0_arm64.whl</span></code></p></td>
+<td><p>locally (<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">build</span> <span class="pre">//release:wheel.dist</span></code>)</p></td>
+</tr>
+</tbody>
+</table>
 </div>
+<p>glibc 2.34 is the newest symbol version the library needs (<code class="docutils literal notranslate"><span class="pre">pthread_create</span></code> in libc); the image
+workflow checks that and that it needs nothing beyond libc. Releases attach both Linux wheels.
+<code class="docutils literal notranslate"><span class="pre">tests/unit/release/test_wheel.py</span></code> checks the tag, the package’s files and that the wheel’s
+library loads with the loader’s checks.</p>
+</section>
 <section id="the-container-image">
 <h3>The container image<a class="headerlink" href="#the-container-image" title="Link to this heading">¶</a></h3>
-<p>The image (<code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code>) does not build the library yet, and it has no C compiler
-(checked on C4D). Nor does it hold <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code>: the yapnr wheel it installs does not include
-the package, and RF jobs bring it in their job bundle. The change the image needs is one build
-stage per architecture that compiles the C source from the repository (the Dockerfile’s build
-context is the repository root), recording the sources’ sha256 as <code class="docutils literal notranslate"><span class="pre">build</span></code> does, and a copy into
-the final stage that <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_FDTD_LIB</span></code> points at:</p>
-<div class="highlight-dockerfile notranslate"><div class="highlight"><pre><span></span><span class="k">FROM</span><span class="w"> </span><span class="s">ubuntu:24.04@sha256:&lt;the</span><span class="w"> </span>digest<span class="w"> </span>the<span class="w"> </span>Dockerfile<span class="w"> </span>pins&gt;<span class="w"> </span>AS<span class="w"> </span>rf-native
-<span class="k">RUN</span><span class="w"> </span>apt-get<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>apt-get<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>--no-install-recommends<span class="w"> </span>gcc<span class="w"> </span>libc6-dev
-<span class="k">COPY</span><span class="w"> </span>yapnr/rf/fdtd/native/<span class="w"> </span>/src/
-<span class="k">RUN</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>-eux<span class="p">;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>/src<span class="p">;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span><span class="nv">sha</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>cat<span class="w"> </span>fdtd.c<span class="w"> </span>fdtd_kernels.h<span class="w"> </span><span class="p">|</span><span class="w"> </span>sha256sum<span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d<span class="s1">&#39; &#39;</span><span class="w"> </span>-f1<span class="k">)</span><span class="s2">&quot;</span><span class="p">;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>gcc<span class="w"> </span>-O3<span class="w"> </span>-std<span class="o">=</span>c11<span class="w"> </span>-ffp-contract<span class="o">=</span>off<span class="w"> </span>-fno-fast-math<span class="w"> </span>-fPIC<span class="w"> </span>-shared<span class="w"> </span>-pthread<span class="w"> </span><span class="se">\</span>
-<span class="w">      </span>-DYF_SRC_SHA<span class="o">=</span><span class="s2">&quot;\&quot;</span><span class="nv">$sha</span><span class="s2">\&quot;&quot;</span><span class="w"> </span>-o<span class="w"> </span>/libyapnr_fdtd.so<span class="w"> </span>fdtd.c
-
-<span class="c"># in the final stage:</span>
-<span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>rf-native<span class="w"> </span>/libyapnr_fdtd.so<span class="w"> </span>/opt/yapnr-rf/libyapnr_fdtd.so
-<span class="k">ENV</span><span class="w"> </span><span class="nv">YAPNR_RF_FDTD_LIB</span><span class="o">=</span>/opt/yapnr-rf/libyapnr_fdtd.so
-</pre></div>
-</div>
-<p>The build stage is native per architecture (the image workflow builds amd64 and arm64 on their
-own runners), adds about 270 kB, and nothing changes for a job that does not ask for <code class="docutils literal notranslate"><span class="pre">native</span></code>.
-Because the library records its sources, a job bundle whose C source differs from the image’s
-does not run on the image’s library: the loader refuses it as stale and goes on to the
-bundle’s own <code class="docutils literal notranslate"><span class="pre">native/</span></code> (if the job built one), else falls back, or with
-<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code> stops at once. Until the image has it, a job can ship the library
-in its job bundle and point <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_FDTD_LIB</span></code> at it, as the C4D benchmarks below did.</p>
+<p>The image installs the wheel of its own architecture (<code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code>), so its Python
+loads the library from site-packages and runs native float64 by default; the image’s smoke test
+(<code class="docutils literal notranslate"><span class="pre">tools/image/rf_native_smoke.py</span></code>) checks that it loads, is the default and steps fields
+bit-identically to numpy, also as another UID on a read-only root file system. The image has no
+C compiler and needs none. On a Mac, <code class="docutils literal notranslate"><span class="pre">tools/image/build_local.sh</span></code> compiles the library for the
+image’s Linux architecture in a container and puts it into the Mac’s wheel
+(<code class="docutils literal notranslate"><span class="pre">tools/release/linux_wheel.py</span></code>).</p>
+<p>RF cloud jobs run a job bundle’s sources on <code class="docutils literal notranslate"><span class="pre">PYTHONPATH</span></code> (<code class="docutils literal notranslate"><span class="pre">tools/exp/rf_stage_plan.py</span></code>); the
+loader then also looks at the installed wheel’s library, and uses it when the bundle’s C sources
+are the ones it was built from (the sha256 it records). A bundle whose C source differs from the
+image’s runs numpy instead, says so, or with <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code> stops at once; such a
+job can still ship a library of its own and point <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_FDTD_LIB</span></code> at it.</p>
 </section>
 </section>
 <section id="performance">
@@ -786,6 +824,7 @@ build lane and drivers in the image.</p></li>
 <li><a class="reference internal" href="#choosing-a-backend">Choosing a backend</a></li>
 <li><a class="reference internal" href="#exactness">Exactness</a></li>
 <li><a class="reference internal" href="#building-the-library">Building the library</a><ul>
+<li><a class="reference internal" href="#the-wheel">The wheel</a></li>
 <li><a class="reference internal" href="#the-container-image">The container image</a></li>
 </ul>
 </li>

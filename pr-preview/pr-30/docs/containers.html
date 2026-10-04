@@ -545,7 +545,7 @@ six to eight times slower on KiCad work.</p></li>
 <td><p>the command line (the entrypoint, through <code class="docutils literal notranslate"><span class="pre">yapnr-kicad-env</span></code>)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/opt/venv</span></code></p></td>
-<td><p>the controller: CPython 3.11 with the runtime lock (numpy, torch, …)</p></td>
+<td><p>the controller: CPython 3.11 with the runtime lock (numpy, torch, …) and the yapnr wheel, whose <code class="docutils literal notranslate"><span class="pre">yapnr/rf/libyapnr_fdtd.so</span></code> is the RF solver’s native kernel (<a class="reference internal" href="rf-solver-backends.html"><span class="std std-doc">solver backends</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/opt/python</span></code></p></td>
 <td><p>that CPython, from python-build-standalone (installed by uv)</p></td>

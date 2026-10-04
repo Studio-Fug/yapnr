@@ -33,6 +33,9 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 PREFIX = Path("/opt/palace")
 BUILD = Path("/src/build")
 COMPAT = "libptscotchparmetisv3.a"
+# The consumers' own functions named after the call they wrap (their code, not ParMETIS's):
+# SuperLU_DIST's get_perm_c_parmetis builds the graph and calls ParMETIS_V3_NodeND
+CONSUMER_NAMES = {"get_perm_c_parmetis": "libsuperlu_dist.a"}
 PARMETIS = re.compile("parmetis", re.IGNORECASE)
 # The static libraries Palace may link from /opt/palace (the superbuild's dependencies)
 ALLOWED = {
@@ -167,8 +170,15 @@ def deps(tripwire: str, report: Report) -> None:
     report.say("installed static libraries: %s" % ", ".join(a.name for a in archives()))
     for symbol in sorted(definers):
         report.say("  %s defined in %s" % (symbol, ", ".join(sorted(definers[symbol]))))
-    stray = {s: a for s, a in definers.items() if PARMETIS.search(s) and a != {COMPAT}}
-    report.check(not stray, "only %s defines ParMETIS names: %s" % (COMPAT, stray or "yes"))
+    own = {s: a for s, a in definers.items() if a == {CONSUMER_NAMES.get(s)}}
+    stray = {
+        s: a for s, a in definers.items() if PARMETIS.search(s) and a != {COMPAT} and s not in own
+    }
+    report.check(
+        not stray,
+        "only %s defines ParMETIS names (and the consumers' own wrappers %s): %s"
+        % (COMPAT, sorted(own) or "none", stray or "yes"),
+    )
     report.check(
         definers.get("METIS_NodeND") == {"libmetis.a"},
         "METIS_NodeND is defined once, in libmetis.a: %s"
@@ -253,14 +263,20 @@ def binary(map_path: Path, exe: Path, report: Report) -> None:
                     compat_names.add(symbol)
     for symbol in sorted(definers):
         report.say("  %s <- %s" % (symbol, ", ".join(sorted(definers[symbol]))))
+    own = {
+        s
+        for s, d in definers.items()
+        if s in CONSUMER_NAMES and all(x.startswith(CONSUMER_NAMES[s] + "(") for x in d)
+    }
     stray = {
         s: d
         for s, d in definers.items()
-        if PARMETIS.search(s) and any(not x.startswith(COMPAT) for x in d)
+        if PARMETIS.search(s) and s not in own and any(not x.startswith(COMPAT) for x in d)
     }
     report.check(
         not stray,
-        "every pulled member defining a ParMETIS name is from %s: %s" % (COMPAT, stray or "yes"),
+        "every pulled member defining a ParMETIS name is from %s (or is a consumer's own "
+        "wrapper: %s): %s" % (COMPAT, sorted(own) or "none", stray or "yes"),
     )
     metis = definers.get("METIS_NodeND", set())
     report.check(
@@ -277,9 +293,9 @@ def binary(map_path: Path, exe: Path, report: Report) -> None:
         "the executable has no ParMETIS_V32_NodeND",
     )
     report.check(
-        set(names) <= compat_names,
-        "each of them is defined by a member of %s: %s"
-        % (COMPAT, sorted(set(names) - compat_names) or "yes"),
+        set(names) <= compat_names | own,
+        "each of them is defined by a member of %s or is a consumer's own wrapper: %s"
+        % (COMPAT, sorted(set(names) - compat_names - own) or "yes"),
     )
 
 

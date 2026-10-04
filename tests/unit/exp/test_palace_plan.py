@@ -198,6 +198,12 @@ class PalacePlanTest(unittest.TestCase):
         doc = dict(palace_plan.DEFAULTS, ranks=4, memory_gb=20)  # c4d-standard-8: no template
         self.assertEqual(palace_plan.placement(doc)["vm_vcpus"], 8)
         self.assertIs(palace_plan.placement(doc)["template"], False)
+        # 13 GB: c4d-standard-8 (no template), c4-highcpu-8 (a template in the second region),
+        # so the plan keeps templates.
+        doc = dict(doc, memory_gb=13)
+        self.assertEqual(palace_plan.vm_shape("c4", 4, 13, 8, "core"), "c4-highcpu-8")
+        self.assertIs(palace_plan.placement(doc)["template"], False)
+        self.assertNotIn("template", palace_plan.placement(dict(doc, families=["c4d", "c4"])))
         doc = dict(palace_plan.DEFAULTS, ranks=16, packing="vcpu", memory_gb=20)
         self.assertEqual(palace_plan.placement(doc)["vm_vcpus"], 16)
         self.assertNotIn("template", palace_plan.placement(doc))

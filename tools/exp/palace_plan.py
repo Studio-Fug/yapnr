@@ -142,9 +142,16 @@ DEFAULTS = {
         "{id}/postpro/*.json",
     ],
 }
-# Spot instance templates exist for these shapes (infra/gcp template_shapes); a model whose VM is
-# another shape runs from an instance policy.
-TEMPLATE_SHAPES = ("c4d-highcpu-8", "c4d-highcpu-16", "c4d-standard-16")
+# Spot instance templates exist for these shapes (infra/gcp: template_shapes, and C4 in the
+# example's second region through region_template_shapes). A model whose VM shape has a template
+# in none of its families runs from an instance policy.
+TEMPLATE_SHAPES = (
+    "c4d-highcpu-8",
+    "c4d-highcpu-16",
+    "c4d-standard-16",
+    "c4-highcpu-8",
+    "c4-highcpu-16",
+)
 
 
 # --- image: the Cloud Build of docker/palace
@@ -247,7 +254,7 @@ def vm_shape(family: str, ranks: int, memory_gb: float, vcpus: int, packing: str
 
 def placement(doc: Mapping[str, Any]) -> Dict[str, Any]:
     """K models of R ranks per VM: 2*K*R vCPUs by core (C4D has two threads a core); an instance
-    policy where the VM's shape has no instance template."""
+    policy when no family's shape for the VM has an instance template."""
     ranks = int(doc["ranks"])
     per_vm = int(doc["models_per_vm"])
     vcpus = per_vm * ranks * (2 if doc["packing"] == "core" else 1)
@@ -258,7 +265,7 @@ def placement(doc: Mapping[str, Any]) -> Dict[str, Any]:
     }
     memory = float(doc["memory_gb"])
     shapes = [vm_shape(f, ranks, memory, vcpus, doc["packing"]) for f in doc["families"]]
-    if any(shape not in TEMPLATE_SHAPES for shape in shapes):
+    if not any(shape in TEMPLATE_SHAPES for shape in shapes):
         out["template"] = False
     return out
 

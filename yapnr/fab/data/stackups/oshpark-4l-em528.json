@@ -4,7 +4,7 @@
   "vendor": "oshpark",
   "title": "OSH Park 4 layer, EM528 alternate",
   "vendor_name": "4 Layer, EM528 (alternate substrate)",
-  "checkout": "Pick the EM528 alternate substrate at checkout.",
+  "checkout": "Pick the EM528 alternate substrate at checkout. On arrival the core should be red (FR408HR is milky white).",
   "thickness_mm": {
     "value": 1.6,
     "src": "O-alt"
@@ -14,10 +14,12 @@
       "kind": "mask",
       "side": "F",
       "thickness_mm": 0.01524,
-      "er": null,
-      "src": "O-6l (0.6 mil solder resist; O-4l gives none)",
-      "er_prior": 3.8,
-      "er_prior_src": "J-imp (calculator default)"
+      "tolerance_mm": 0.00508,
+      "er": 3.9,
+      "df": 0.033,
+      "er_freq_hz": null,
+      "material": "Taiyo PSR-4000BN (OSH Park purple), SMOBC",
+      "src": "O-4l-stack (assumed the same mask as the standard stackup)"
     },
     {
       "kind": "copper",
@@ -25,18 +27,18 @@
       "thickness_mm": 0.04318,
       "weight_oz": 1.0,
       "plated": true,
-      "src": "O-4l",
+      "src": "O-4l (1.7 mil finished; O-alt says 1 oz)",
       "finish": "ENIG"
     },
     {
       "kind": "dielectric",
       "type": "prepreg",
-      "material": "EM528 2 x 3313",
+      "material": "EM-528 2 x 3313, 59 % resin",
       "thickness_mm": 0.19482,
       "er": 3.76,
       "er_freq_hz": null,
       "df": 0.005,
-      "src": "O-alt"
+      "src": "O-alt (7.67 mil; no frequency stated)"
     },
     {
       "kind": "copper",
@@ -49,12 +51,12 @@
     {
       "kind": "dielectric",
       "type": "core",
-      "material": "EM528",
+      "material": "EM-528 5 x 7628",
       "thickness_mm": 0.9906,
       "er": 4.11,
       "er_freq_hz": null,
       "df": 0.005,
-      "src": "O-alt"
+      "src": "O-alt (39.00 mil)"
     },
     {
       "kind": "copper",
@@ -67,7 +69,7 @@
     {
       "kind": "dielectric",
       "type": "prepreg",
-      "material": "EM528 2 x 3313",
+      "material": "EM-528 2 x 3313, 59 % resin",
       "thickness_mm": 0.19482,
       "er": 3.76,
       "er_freq_hz": null,
@@ -87,34 +89,77 @@
       "kind": "mask",
       "side": "B",
       "thickness_mm": 0.01524,
-      "er": null,
-      "src": "O-6l (0.6 mil solder resist; O-4l gives none)",
-      "er_prior": 3.8,
-      "er_prior_src": "J-imp (calculator default)"
+      "tolerance_mm": 0.00508,
+      "er": 3.9,
+      "df": 0.033,
+      "er_freq_hz": null,
+      "material": "Taiyo PSR-4000BN (OSH Park purple), SMOBC",
+      "src": "O-4l-stack (assumed the same mask as the standard stackup)"
     }
   ],
   "tolerances": {
     "impedance_pct": null,
+    "impedance_note": "No impedance-control service. O-alt's table gives 50 ohm on L1 at 14.0 mil (predicted 50.4 ohm) against a +/-10 % band.",
     "thickness_pct": null,
-    "width_pct": null
+    "width_pct": null,
+    "src": "O-alt"
+  },
+  "frequency_data": {
+    "material": "EMC EM-528 data sheet, 50 % and 70 % resin content (OSH Park's 3313 prepreg is 59 %)",
+    "f_hz": [1000000000.0, 10000000000.0],
+    "dk_rc50": [4.0, 3.9],
+    "dk_rc70": [3.6, 3.5],
+    "df_rc50_cavity": [0.0047, 0.0061],
+    "df_rc70_cavity": [0.0044, 0.0058],
+    "src": "O-em528 (data sheet 2023-11, hosted by OSH Park)"
+  },
+  "rf": {
+    "schema_note": "Proposed block for yapnr.rf and the coupon generator (Order 0 design, 2026-10-02). Same regions as oshpark-4l-fr408hr.",
+    "f_ref_ghz": 5.0,
+    "regions": {
+      "M": {
+        "layer": "F.Cu",
+        "reference": "In1.Cu",
+        "voided": [],
+        "stackup_spec": { "er": 3.71, "tan_delta": 0.0053, "h_mm": 0.19482, "f_ref_ghz": 5.0 },
+        "grid": { "pitch_mm": 0.1, "substrate_cells": 4 },
+        "rules": { "min_width_mm": 0.2, "min_space_mm": 0.2 },
+        "port_line_mm": 0.4,
+        "l1_keepaway_mm": 1.0,
+        "src": "derived: Dk 3.76 taken as the 1 GHz value and scaled by the data sheet's 1 -> 5 GHz trend (about -1.3 %); Df from the data sheet trend at 59 % resin; 0.40 mm is 48.7 ohm with 43 um copper"
+      },
+      "W": {
+        "layer": "F.Cu",
+        "reference": "B.Cu",
+        "voided": ["In1.Cu", "In2.Cu"],
+        "stackup_spec": { "er": 3.95, "tan_delta": 0.0053, "h_mm": 1.38, "f_ref_ghz": 5.0 },
+        "grid": { "pitch_mm": 0.5, "substrate_cells": 4 },
+        "rules": { "min_width_mm": 1.0, "min_space_mm": 1.0 },
+        "port_line_mm": 3.0,
+        "l1_keepaway_mm": 4.2,
+        "src": "derived: series combination of the prepregs and the 4.11 core at 5 GHz; the 50 ohm line is 2.82 mm with copper thickness, so 3.0 mm is about 48 ohm"
+      }
+    },
+    "mask_policy": "open over all RF copper",
+    "copper_model": "zero-thickness sheet in the solver"
   },
   "sources": {
-    "J-imp": {
-      "url": "https://jlcpcb.com/impedance",
-      "accessed": "2026-10-02"
-    },
-    "O-4l": {
-      "url": "https://docs.oshpark.com/services/four-layer/",
-      "accessed": "2026-10-02"
-    },
-    "O-6l": {
-      "url": "https://docs.oshpark.com/services/six-layer/",
+    "O-4l": { "url": "https://docs.oshpark.com/services/four-layer/", "accessed": "2026-10-02" },
+    "O-4l-stack": {
+      "url": "https://docs.oshpark.com/resources/four-layer-stackup.png",
       "accessed": "2026-10-02"
     },
     "O-alt": {
       "url": "https://docs.oshpark.com/troubleshooting/alternate-4-layer-stackup/",
       "accessed": "2026-10-02"
+    },
+    "O-em528": {
+      "url": "https://docs.oshpark.com/resources/four-layer-substrate-em528.pdf",
+      "accessed": "2026-10-02"
     }
   },
-  "notes": ["O-alt states no frequency for these Dk values."]
+  "notes": [
+    "O-alt states no frequency for these Dk values.",
+    "A temporary alternate: EM528 is offered at checkout while the FR408HR stackup is unavailable (O-alt posted 2026-09-21)."
+  ]
 }

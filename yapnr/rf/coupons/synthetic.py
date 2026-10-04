@@ -70,7 +70,7 @@ def draw_truth(
     2D-table ranges)."""
     out = {}
     for n in st.params:
-        p = stackups.PARAMS[n]
+        p = stackups.param(n, st)
         z = float(np.clip(rng.standard_normal() * scale, -clip, clip))
         x = p.clip(p.nominal + z * p.sigma)
         if p.table is not None:
@@ -358,8 +358,10 @@ class PointTables:
         v = stackups.with_values(st, truth)
         self.out = {}
         for fid in families.BOARD_FAMILIES[stackup_id]:
-            fam = families.FAMILIES[fid]
-            self.out[fid] = families.solve_point(fid, {p: v[p] for p in fam.params}, mesh)
+            fam = families.get(fid, stackup_id)
+            self.out[fid] = families.solve_point(
+                fid, {p: v[p] for p in fam.params}, mesh, stackup_id=stackup_id
+            )
 
     def __getitem__(self, fid):
         return lambda values, fid=fid: self.out[fid]
@@ -447,7 +449,7 @@ def study(
         )
         if not keep_sessions:
             shutil.rmtree(ses, ignore_errors=True)
-    summary = summarize(rows)
+    summary = summarize(rows, st)
     rec = dict(
         stackup=stackup_id,
         draws=draws,
@@ -464,7 +466,7 @@ def study(
     return rec
 
 
-def summarize(rows: List[dict]) -> dict:
+def summarize(rows: List[dict], st: Optional[stackups.Stackup] = None) -> dict:
     names = list(rows[0]["z"])
     Z = np.array([[r["z"][n] for n in names] for r in rows])
     E = np.array([[r["err"][n] for n in names] for r in rows])
@@ -473,10 +475,10 @@ def summarize(rows: List[dict]) -> dict:
     for i, n in enumerate(names):
         spread = float(np.std(E[:, i], ddof=1)) if len(rows) > 1 else float("nan")
         per[n] = dict(
-            unit=stackups.PARAMS[n].unit,
+            unit=stackups.param(n, st).unit,
             rms_err=float(np.sqrt(np.mean(E[:, i] ** 2))),
             median_sigma=float(np.median(S[:, i])),
-            prior_sigma=stackups.PARAMS[n].sigma,
+            prior_sigma=stackups.param(n, st).sigma,
             mean_z=float(np.mean(Z[:, i])),
             rms_z=float(np.sqrt(np.mean(Z[:, i] ** 2))),
             coverage_2s=float(np.mean(np.abs(Z[:, i]) <= 2)),

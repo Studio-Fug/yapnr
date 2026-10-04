@@ -1,0 +1,394 @@
+{
+  "schema": "yapnr-coupon-catalog/1",
+  "stackup": "OSHPARK-4L-FR408HR",
+  "board": "O",
+  "upload": "W",
+  "launch": {
+    "pad_w": 0.8,
+    "pad_x0": 0.381,
+    "pad_len": 1.924,
+    "pad_gap": 0.1964,
+    "taper_len": 3.6,
+    "cut_layers": [],
+    "via_x": null,
+    "source": "2D (launch.py), Cinch 142-0701-851, region W",
+    "design": "oshpark-4l-fr408hr:W"
+  },
+  "launches": {
+    "M": {
+      "pad_w": 0.8,
+      "pad_x0": 0.381,
+      "pad_len": 1.924,
+      "pad_gap": 0.2102,
+      "taper_len": 1.2,
+      "cut_layers": [
+        2
+      ],
+      "via_x": null,
+      "source": "2D (launch.py), Cinch 142-0701-851, region M",
+      "design": "oshpark-4l-fr408hr:M"
+    },
+    "W": {
+      "pad_w": 0.8,
+      "pad_x0": 0.381,
+      "pad_len": 1.924,
+      "pad_gap": 0.1964,
+      "taper_len": 3.6,
+      "cut_layers": [],
+      "via_x": null,
+      "source": "2D (launch.py), Cinch 142-0701-851, region W",
+      "design": "oshpark-4l-fr408hr:W"
+    }
+  },
+  "trl": {
+    "W": {
+      "family": "W",
+      "dl": [
+        0.0,
+        5.0,
+        14.0,
+        34.0
+      ],
+      "sticks": [
+        "B01",
+        "B02",
+        "B03",
+        "B04"
+      ],
+      "reflect": "B05",
+      "verify": "",
+      "tdr": "B04"
+    }
+  },
+  "sticks": [
+    {
+      "id": "B01",
+      "kind": "thru",
+      "family": "W",
+      "trl": "W",
+      "length": 20.0,
+      "height": 16.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "mTRL thru and launch-only 2x-thru (IEEE 370)",
+      "label": "O0-W B01 W THRU",
+      "geometry": {
+        "region": "W"
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        10.0
+      ]
+    },
+    {
+      "id": "B02",
+      "kind": "line",
+      "family": "W",
+      "trl": "W",
+      "length": 25.0,
+      "height": 16.0,
+      "dl": 5.0,
+      "elements": [
+        [
+          "line",
+          "W",
+          5.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of W",
+      "label": "O0-W B02 W dL5",
+      "geometry": {
+        "region": "W"
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        15.0
+      ]
+    },
+    {
+      "id": "B03",
+      "kind": "line",
+      "family": "W",
+      "trl": "W",
+      "length": 34.0,
+      "height": 16.0,
+      "dl": 14.0,
+      "elements": [
+        [
+          "line",
+          "W",
+          14.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of W",
+      "label": "O0-W B03 W dL14",
+      "geometry": {
+        "region": "W"
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        24.0
+      ]
+    },
+    {
+      "id": "B04",
+      "kind": "line",
+      "family": "W",
+      "trl": "W",
+      "length": 54.0,
+      "height": 16.0,
+      "dl": 34.0,
+      "elements": [
+        [
+          "line",
+          "W",
+          34.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of W",
+      "label": "O0-W B04 W dL34",
+      "geometry": {
+        "region": "W"
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        44.0
+      ]
+    },
+    {
+      "id": "B05",
+      "kind": "reflect",
+      "family": "W",
+      "trl": "W",
+      "length": 30.0,
+      "height": 16.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": false,
+      "ports": 2,
+      "determines": "mTRL reflect (open at both reference planes)",
+      "label": "O0-W B05 W OPEN",
+      "geometry": {
+        "region": "W",
+        "end": "open"
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        20.0
+      ]
+    },
+    {
+      "id": "R1t",
+      "kind": "demo",
+      "family": "W",
+      "trl": "W",
+      "length": 33.0,
+      "height": 50.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": false,
+      "ports": 3,
+      "determines": "textbook reference for D2: T-junction + \u03bb/4 35.36 \u03a9 on W",
+      "label": "O0-W R1t ref Pozar 7.2",
+      "geometry": {
+        "region": "W",
+        "window": {
+          "region": "W",
+          "w": 12.25,
+          "h": 22.0,
+          "ports": [
+            [
+              "W",
+              0.0
+            ],
+            [
+              "N",
+              10.75
+            ],
+            [
+              "S",
+              10.75
+            ]
+          ],
+          "copper": [
+            [
+              0.0,
+              9.25,
+              -2.5,
+              2.5
+            ],
+            [
+              9.25,
+              12.25,
+              -11.0,
+              11.0
+            ]
+          ],
+          "arm": {
+            "w": 5.0,
+            "z0_2d": 34.47,
+            "quarter_wave_mm": 8.58,
+            "l_to_centre": 10.75,
+            "junction_d_branch_mm": 2.1764,
+            "f0_ghz_est": 5.004
+          },
+          "fdtd_pitch_mm": 0.25,
+          "source": "Pozar \u00a77.2 (T-junction) and \u00a75.5 (\u03bb/4 transformer); 2D solves; Hammerstad's T-junction reference plane; snapped to the refine-2 grid",
+          "x0": 14.0,
+          "feed": 4.0
+        },
+        "ports": [
+          {
+            "n": 1,
+            "side": "W",
+            "at": 0.0
+          },
+          {
+            "n": 2,
+            "side": "N",
+            "at": 24.75
+          },
+          {
+            "n": 3,
+            "side": "S",
+            "at": 24.75
+          }
+        ],
+        "stick_w": 16.0,
+        "rot": 90
+      },
+      "generated": true,
+      "rp_mm": []
+    },
+    {
+      "id": "D2",
+      "kind": "window",
+      "family": "W",
+      "trl": "W",
+      "length": 40.0,
+      "height": 52.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": false,
+      "ports": 3,
+      "determines": "optimizer divider, thick (placeholder window until D2 passes)",
+      "label": "O0-W D2 opt divider",
+      "geometry": {
+        "region": "W",
+        "window": {
+          "region": "W",
+          "w": 20.0,
+          "h": 24.0,
+          "ports": [
+            [
+              "W",
+              0.0
+            ],
+            [
+              "N",
+              10.0
+            ],
+            [
+              "S",
+              10.0
+            ]
+          ],
+          "x0": 14.0,
+          "feed": 4.0
+        },
+        "ports": [
+          {
+            "n": 1,
+            "side": "W",
+            "at": 0.0
+          },
+          {
+            "n": 2,
+            "side": "N",
+            "at": 24.0
+          },
+          {
+            "n": 3,
+            "side": "S",
+            "at": 24.0
+          }
+        ],
+        "stick_w": 16.0,
+        "placeholder": true,
+        "rot": 270
+      },
+      "generated": true,
+      "rp_mm": []
+    }
+  ],
+  "notes": [
+    "OSH Park 4 layer, FR408HR (EM528 alternate covered by the same tables); 3 copies; frameless single outline, 2.54 mm milled slots, OSH Park's mouse-bite tab pattern on the sticks' long sides only",
+    "edge SMA: Cinch 142-0701-851 on every port (custom footprint from Cinch's drawing); the launches are 2D-designed (launch.py), not 3D-tuned",
+    "mask open over all RF copper and its keep-away, 0.2 mm dams at the pin pads; A10 is the masked line",
+    "D2 window is a placeholder: the optimizer's footprint is added when D2 passes"
+  ],
+  "panel_mm": [
+    57.54,
+    131.16
+  ],
+  "panel_sq_in": 11.7,
+  "revision": "A",
+  "placement": {
+    "B01": {
+      "x": 36.54,
+      "y": 72.62,
+      "rot": 0
+    },
+    "B02": {
+      "x": 32.54,
+      "y": 35.54,
+      "rot": 0
+    },
+    "B03": {
+      "x": 0.0,
+      "y": 72.62,
+      "rot": 0
+    },
+    "B04": {
+      "x": 2.54,
+      "y": 54.08,
+      "rot": 0
+    },
+    "B05": {
+      "x": 0.0,
+      "y": 35.54,
+      "rot": 0
+    },
+    "R1t": {
+      "x": 0.0,
+      "y": 0.0,
+      "rot": 90
+    },
+    "D2": {
+      "x": 4.54,
+      "y": 91.16,
+      "rot": 270
+    }
+  },
+  "tabs": 15
+}

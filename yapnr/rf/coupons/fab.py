@@ -35,12 +35,41 @@ def _run(cmd: List[str], cwd: str) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=TIMEOUT_S)
 
 
-def tuned_board(stackup_id: str) -> catalog.Board:
+def tuned_board(stackup_id: str, upload: str = "") -> catalog.Board:
     st = stackups.get(stackup_id)
     from yapnr.rf.coupons import expected
 
     m = models.Model(stackup_id, stackups.with_values(st, {}), expected.GRID)
-    return catalog.tune(catalog.board(stackup_id), m)
+    b = catalog.board(stackup_id, upload)
+    if st.board == "O":
+        return catalog.tune_o(b, m)
+    return catalog.tune(b, m)
+
+
+def git_describe() -> str:
+    """The generator's commit, short hash (with -dirty when the tree has changes)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:
+        r = subprocess.run(
+            ["git", "describe", "--always", "--dirty", "--abbrev=8"],
+            cwd=here,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        return r.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def tag_info(b: catalog.Board, revision: str, git: Optional[str] = None) -> Dict[str, str]:
+    """The tag stick's text (board O): design §6."""
+    st = stackups.get(b.stackup)
+    return dict(
+        title=f"yapnr Order 0 rev {revision} {b.name}",
+        stackup=st.id.lower(),
+        git=f"gen {git or git_describe()}",
+    )
 
 
 def drc_summary(report: dict) -> dict:
@@ -68,8 +97,9 @@ def drc_summary(report: dict) -> dict:
 def fab_notes(b: catalog.Board, panel: layout.Panel, drc: Optional[dict]) -> str:
     st = stackups.get(b.stackup)
     n_cu = len(st.copper)
-    P = families.FAMILIES["P"]
-    S = families.FAMILIES["S"]
+    fams = families.of(b.stackup)
+    P = fams["P"]
+    S = fams.get("S")
     lines = [
         f"# yapnr RF coupon board {b.letter}: fab notes",
         "",
@@ -99,7 +129,7 @@ def fab_notes(b: catalog.Board, panel: layout.Panel, drc: Optional[dict]) -> str
     if b.letter == "B":
         lines.append(f"- S: L3 stripline, {S.w:.3f} mm between L2 and L4, 50 ohm.")
     else:
-        M = families.FAMILIES["M"]
+        M = fams["M"]
         lines.append(f"- M: L1 microstrip, {M.w:.3f} mm, under mask, 50 ohm.")
     lines.append(
         "- every other trace and gap on the board (the 0.7x and 1.4x width variants, the coupled"
@@ -148,33 +178,63 @@ def fab_notes(b: catalog.Board, panel: layout.Panel, drc: Optional[dict]) -> str
 
 
 def generate(
-    stackup_id: str, out_dir: str, revision: str = "1", fab: bool = True
+    stackup_id: str,
+    out_dir: str,
+    revision: str = "1",
+    fab: bool = True,
+    upload: str = "",
+    git: Optional[str] = None,
 ) -> Dict[str, object]:
+    """Write a coupon board's KiCad project (board O: one upload) and, with a headless
+    kicad-cli, its DRC; JLC boards also get their Gerbers and fab notes (board O's fab staging
+    goes through `yapnr fab build` instead)."""
     st = stackups.get(stackup_id)
-    b = tuned_board(stackup_id)
-    name = f"board-{b.letter}"
+    b = tuned_board(stackup_id, upload)
+    osh = b.panel == "osh"
+    if osh and revision == "1":
+        revision = catalog.O_REV
+    name = b.name
     os.makedirs(out_dir, exist_ok=True)
-    text, panel = layout.board_text(stackup_id, b, revision)
+    info = tag_info(b, revision, git) if osh else None
+    text, panel = layout.board_text(stackup_id, b, revision, info)
     pcb = os.path.join(out_dir, f"{name}.kicad_pcb")
     with open(pcb, "w", encoding="utf-8") as f:
         f.write(text)
+    rules = layout.RULES_OSHPARK_4L if osh else None
     with open(os.path.join(out_dir, f"{name}.kicad_pro"), "w", encoding="utf-8") as f:
-        json.dump(layout.project_json(name), f, indent=2)
+        json.dump(layout.project_json(name, rules), f, indent=2)
         f.write("\n")
     with open(os.path.join(out_dir, f"{name}.kicad_dru"), "w", encoding="utf-8") as f:
-        f.write(layout.dru_text(panel.mask_rules))
+        f.write(layout.dru_text(panel.mask_rules, bites=osh))
     cat = b.to_json()
     heights = {pl.stick.id: pl.stick.height for pl in panel.placed}
     for s in cat["sticks"]:
         if s["id"] in heights:
             s["height"] = heights[s["id"]]
     cat["panel_mm"] = [round(panel.width, 2), round(panel.height, 2)]
+    if osh:
+        cat["panel_sq_in"] = round(panel.width * panel.height / 645.16, 2)
+        cat["revision"] = revision
+        cat["placement"] = {
+            it.stick.id: dict(
+                x=round(it.x - layout.ORIGIN[0], 3), y=round(it.y - layout.ORIGIN[1], 3), rot=it.rot
+            )
+            for it in panel.items
+        }
+        cat["tabs"] = len(panel.tabs)
     with open(os.path.join(out_dir, "catalog.json"), "w", encoding="utf-8") as f:
         json.dump(cat, f, indent=2)
         f.write("\n")
     out: Dict[str, object] = dict(board=pcb, panel=(panel.width, panel.height), drc=None)
     cli = kicad_cli()
     if not (fab and cli):
+        return out
+    if osh:
+        drc = run_drc(cli, out_dir, name)
+        out["drc"] = drc
+        with open(os.path.join(out_dir, "drc-summary.json"), "w", encoding="utf-8") as f:
+            json.dump(drc, f, indent=2)
+            f.write("\n")
         return out
     with tempfile.TemporaryDirectory() as tmp:
         for ext in ("kicad_pcb", "kicad_pro", "kicad_dru"):
@@ -254,6 +314,56 @@ def generate(
             zi.compress_type = zipfile.ZIP_DEFLATED
             z.writestr(zi, notes.encode())
         out["fab_zip"] = zpath
+    return out
+
+
+def run_drc(cli: str, out_dir: str, name: str) -> dict:
+    """KiCad's DRC with the zones refilled, on a copy of the project in `out_dir`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        for ext in ("kicad_pcb", "kicad_pro", "kicad_dru"):
+            shutil.copy(os.path.join(out_dir, f"{name}.{ext}"), tmp)
+        rep = os.path.join(tmp, "drc.json")
+        r = _run(
+            [
+                cli,
+                "pcb",
+                "drc",
+                "--refill-zones",
+                "--format",
+                "json",
+                "--severity-all",
+                "-o",
+                rep,
+                f"{name}.kicad_pcb",
+            ],
+            tmp,
+        )
+        if not os.path.exists(rep):
+            raise RuntimeError(f"kicad-cli drc failed: {r.stderr[-2000:]}")
+        with open(rep, encoding="utf-8") as f:
+            return drc_summary(json.load(f))
+
+
+def generate_launch_check(region: str, out_dir: str, drc: bool = True) -> Dict[str, object]:
+    """The launch check board of one Order 0 region (`catalog.launch_check_board`: a thru and
+    a line stick with the Cinch 142-0701-851 launch), with the OSH Park 4-layer rules, and its
+    KiCad DRC when a headless kicad-cli is configured."""
+    b = catalog.launch_check_board(region)
+    name = f"launch-{region}"
+    os.makedirs(out_dir, exist_ok=True)
+    text, panel = layout.board_text(b.stackup, b)
+    pcb = os.path.join(out_dir, f"{name}.kicad_pcb")
+    with open(pcb, "w", encoding="utf-8") as f:
+        f.write(text)
+    with open(os.path.join(out_dir, f"{name}.kicad_pro"), "w", encoding="utf-8") as f:
+        json.dump(layout.project_json(name, layout.RULES_OSHPARK_4L), f, indent=2)
+        f.write("\n")
+    with open(os.path.join(out_dir, f"{name}.kicad_dru"), "w", encoding="utf-8") as f:
+        f.write(layout.dru_text(panel.mask_rules))
+    out: Dict[str, object] = dict(board=pcb, panel=(panel.width, panel.height), drc=None)
+    cli = kicad_cli()
+    if drc and cli:
+        out["drc"] = run_drc(cli, out_dir, name)
     return out
 
 

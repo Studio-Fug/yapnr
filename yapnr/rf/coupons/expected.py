@@ -8,12 +8,13 @@ not 3D-modelled yet (design §6.2).
 
 from __future__ import annotations
 
+import math
 import os
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 
-from yapnr.rf.coupons import catalog, models, stackups, touchstone
+from yapnr.rf.coupons import catalog, families, models, stackups, touchstone
 
 GRID = np.arange(1, 181) * 100e6  # 0.1 to 18 GHz in 100 MHz steps (design §1.2: 0.1-18 GHz)
 
@@ -57,4 +58,169 @@ def write(
             digits=4,
         )
         out[s.id] = path
+    return out
+
+
+# --- board O (Order 0): the coupon sticks of an upload on FR408HR and on EM528 --------------------
+
+GRID_O = np.arange(1, 201) * 30e6  # 30 MHz to 6 GHz in 30 MHz steps (the LibreVNA's range)
+GRID_O_CPAD = np.arange(1, 1001) * 6e6  # A16 on the measurement grid (6 MHz steps)
+O_SUBSTRATES = ("OSHPARK-4L-FR408HR", "OSHPARK-4L-EM528")
+
+
+def cpad_z(model: models.Model, fam: str, size_mm: float) -> np.ndarray:
+    """Input impedance at the reference plane of a square C-pad (A16): an open-ended wide line
+    of the pad's family, as long as the pad plus its open-end extension (Kirschning-Jansen-
+    Koster at the pad's w/h); the step from the M line to the pad is not modelled (est.)."""
+    fam_d = families.get(fam, model.st.id)
+    line = model.line(fam)
+    k = len(model.f) // 2
+    h, er = fam_d.dispersion_substrate(model.v)
+    ext = models.open_end_extension(size_mm, h, er, float(line.eps_eff[k]))
+    return 1.0 / model.stub_admittance(fam, size_mm + ext, "open")
+
+
+def notches(model: models.Model, elements, z_ref, f_lo: float, f_hi: float) -> List[float]:
+    """Frequencies (Hz) of the |S21| minima of a structure between f_lo and f_hi, located on
+    the 6 MHz grid and refined on a 10 kHz grid with a parabola through the three lowest points:
+    the pre-registered scalars sit well below the grid step (review L1)."""
+    st_id, v = model.st.id, model.v
+    f0 = np.arange(f_lo, f_hi + 1.0, 6e6)
+    m0 = models.Model(st_id, v, f0, tables=model.tables, roughness=model.roughness)
+    a = np.abs(models.structure_s(m0, elements, z_ref)[:, 1, 0])
+    out = []
+    for k in range(1, len(f0) - 1):
+        if not (a[k] < a[k - 1] and a[k] <= a[k + 1] and a[k] < 0.5):
+            continue
+        f1 = np.arange(f0[k] - 12e6, f0[k] + 12e6 + 1.0, 1e4)
+        m1 = models.Model(st_id, v, f1, tables=model.tables, roughness=model.roughness)
+        b = np.abs(models.structure_s(m1, elements, z_ref)[:, 1, 0])
+        j = int(np.clip(np.argmin(b), 1, len(f1) - 2))
+        y0, y1, y2 = b[j - 1], b[j], b[j + 1]
+        den = y0 - 2 * y1 + y2
+        out.append(float(f1[j] + (0.5 * (y0 - y2) / den * 1e4 if den > 0 else 0.0)))
+    return out
+
+
+def scalars_o(design: catalog.Board, sid: str, out_dir: str) -> Dict[str, str]:
+    """The pre-registered scalars of one upload on one substrate (review L1): the held-out
+    notches (ring n = 1 and 3, the stub) to 10 kHz, and every line family's εeff, α and Zc on
+    the measurement grid (6 MHz to 6 GHz in 6 MHz steps) as CSV."""
+    from yapnr.rf.coupons import jsonfmt
+
+    st = stackups.get(sid)
+    v = stackups.with_values(st, {})
+    f = GRID_O_CPAD
+    model = models.Model(sid, v, f)
+    doc = {
+        "schema": "yapnr-order0-scalars/1",
+        "stackup": sid,
+        "geometry": f"{O_SUBSTRATES[0]} design, upload {design.name}",
+        "parameters": "nominal",
+        "notches_ghz": {},
+        "lines_csv": "lines.csv",
+    }
+    for s in design.sticks:
+        if s.kind not in ("ring", "stub"):
+            continue
+        ref = model.line(design.trl[s.trl]["family"]).zc[0]
+        found = notches(model, s.elements, ref, 0.5e9, 6.0e9)
+        doc["notches_ghz"][s.id] = [round(x / 1e9, 5) for x in found]
+    fams = sorted(
+        {s.family for s in design.sticks if s.family and s.kind in ("line", "variant", "thru")}
+    )
+    cols, rows = ["f_ghz"], [[f"{x / 1e9:.3f}" for x in f]]
+    for fam in fams:
+        line = model.line(fam)
+        cols += [f"{fam}.eps_eff", f"{fam}.alpha_db_per_cm", f"{fam}.zc_re", f"{fam}.zc_im"]
+        rows += [
+            [f"{x:.5f}" for x in line.eps_eff],
+            [f"{x:.5f}" for x in line.gamma.real * 20 / math.log(10) / 100],
+            [f"{x:.3f}" for x in line.zc.real],
+            [f"{x:.3f}" for x in line.zc.imag],
+        ]
+    os.makedirs(out_dir, exist_ok=True)
+    p_csv = os.path.join(out_dir, "lines.csv")
+    with open(p_csv, "w", encoding="utf-8") as fh:
+        fh.write(",".join(cols) + "\n")
+        for r in zip(*rows):
+            fh.write(",".join(r) + "\n")
+    p_json = os.path.join(out_dir, "scalars.json")
+    jsonfmt.dump(doc, p_json)
+    return {f"{sid}:scalars": p_json, f"{sid}:lines": p_csv}
+
+
+def write_o(
+    upload: str,
+    out_dir: str,
+    substrates=O_SUBSTRATES,
+    f: Optional[np.ndarray] = None,
+) -> Dict[str, str]:
+    """Expected S-parameters of every modelled coupon stick of one board O upload, on each
+    substrate, at nominal parameters: the geometry is the FR408HR design (tuned there), the
+    model the substrate's. Reference plane to reference plane, 50 Ω (renormalized from the
+    TRL line's Zc). The demos (R1, R1t, D1, D2) are FDTD predictions (WP3), not written here."""
+    from yapnr.rf.coupons import fab
+
+    f = GRID_O if f is None else f
+    design = fab.tuned_board(O_SUBSTRATES[0], upload)
+    out = {}
+    for sid in substrates:
+        st = stackups.get(sid)
+        sub = sid.split("-")[-1].lower()
+        d = os.path.join(out_dir, sub)
+        os.makedirs(d, exist_ok=True)
+        model = models.Model(sid, stackups.with_values(st, {}), f)
+        out.update(scalars_o(design, sid, d))
+        head = [
+            f"stackup {sid}, nominal parameters; geometry of the {O_SUBSTRATES[0]} design",
+            "model: 2D quasi-static RLGC (Djordjevic-Sarkar, Huray roughness, Wheeler loss);"
+            " generated by python -m yapnr.rf.coupons expected --stackup"
+            f" {O_SUBSTRATES[0]} --upload {design.upload}",
+        ]
+        for s in design.sticks:
+            if s.kind == "cpad":
+                fc = GRID_O_CPAD
+                mc = models.Model(sid, stackups.with_values(st, {}), fc)
+                for k, (size, fam) in enumerate(zip(s.geometry["pads"], s.geometry["families"])):
+                    z = cpad_z(mc, fam, size)
+                    g50 = (z - 50.0) / (z + 50.0)
+                    name = f"{s.id}-{fam}-pad{k + 1}.s1p"
+                    path = os.path.join(d, name)
+                    touchstone.write(
+                        path,
+                        fc,
+                        g50,
+                        [f"yapnr Order 0 {design.name}: {s.id} port {k + 1}, {size:g} mm C-pad"]
+                        + head
+                        + [
+                            "open-ended wide line + KJK open end; the line-to-pad step not"
+                            " modelled; 50 ohm"
+                        ],
+                        fmt="db",
+                        digits=5,
+                    )
+                    out[f"{sid}:{s.id}:{k + 1}"] = path
+                continue
+            if s.ports != 2 or s.kind in ("thru", "reflect", "demo", "window") or not s.elements:
+                continue
+            fam_ref = design.trl[s.trl]["family"]
+            ref = model.line(fam_ref).zc
+            s50 = models.renormalize(models.structure_s(model, s.elements, ref), ref, 50.0)
+            name = f"{s.id}-{s.family.replace('-', '').replace('.', '')}-{s.kind}.s2p"
+            path = os.path.join(d, name)
+            touchstone.write(
+                path,
+                f,
+                s50,
+                [f"yapnr Order 0 {design.name}: {s.label} ({s.kind}, family {s.family})"]
+                + head
+                + [
+                    f"reference planes {s.rp[0]:g} mm from each end; 50 ohm (from the {fam_ref}"
+                    " line's Zc)"
+                ],
+                fmt="db",
+                digits=5,
+            )
+            out[f"{sid}:{s.id}"] = path
     return out

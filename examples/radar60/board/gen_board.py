@@ -119,6 +119,116 @@ def _glob_literal(path):
     return "".join("[%s]" % c if c in "[*?" else c for c in path)
 
 
+def _circle_cover(cx, cy, radius, n=32):
+    """A polygon with ``n`` sides that covers the circle (cx, cy, radius)."""
+    rr = radius / math.cos(math.pi / n)
+    return [
+        [
+            round(cx + rr * math.cos(2 * math.pi * (i + 0.5) / n), 4),
+            round(cy + rr * math.sin(2 * math.pi * (i + 0.5) / n), 4),
+        ]
+        for i in range(n)
+    ]
+
+
+def copper_keepouts(fp):
+    """``copper_keepout`` (v1, routing; stage 3a trial 2's inputs, now generated): the RF region
+    on F.Cu-In2.Cu (tracks, vias and pours) with the RF macro's group exempt; the R4 guard band
+    (tracks and vias) allowing the RF, PWR, GND and ANALOG classes; the drawn mounting-hole and
+    radome-land keepouts (the router does not read drawn rule areas); and under the flash's
+    exposed pad no via of any net (Macronix: no vias or traces under the EP; a GND track may
+    still reach the pad on F.Cu)."""
+    d = fp.doc
+    group = d["rf"]["block"]["group"]
+    out = [
+        {
+            "name": "rf_region_%d" % (i + 1),
+            "rect": list(r),
+            "layers": list(RF_LAYERS),
+            "exempt_groups": [group],
+        }
+        for i, r in enumerate(d["rf"]["region"])
+    ]
+    out += [
+        {
+            "name": "rf_guard_%d" % (i + 1),
+            "rect": list(r),
+            "layers": list(RF_LAYERS),
+            "items": ["tracks", "vias"],
+            "allow_classes": list(R4_EXEMPT),
+        }
+        for i, r in enumerate(d["rf"]["guard"])
+    ]
+    holes, lands = d["mounting_holes"], d["radome_lands"]
+    out += [
+        {
+            "name": "mh%d" % (i + 1),
+            "polygon": _circle_cover(at[0], at[1], holes["keepout_diameter"] / 2),
+            "items": ["tracks", "vias"],
+        }
+        for i, at in enumerate(holes["at"])
+    ]
+    out += [
+        {
+            "name": "radome_land%d" % (i + 1),
+            "polygon": _circle_cover(at[0], at[1], lands["keepout_diameter"] / 2),
+            "items": ["tracks", "vias"],
+        }
+        for i, at in enumerate(lands["at"])
+    ]
+    ep = d.get("flash_ep")
+    if ep:
+        flash = "@" + fp.part("flash")
+        out.append(
+            {
+                "name": "flash_ep_vias",
+                "ref": flash,
+                "rect_mm": list(ep["rect_mm"]),
+                "layers": ["F.Cu"],
+                "items": ["vias"],
+            }
+        )
+        out.append(
+            {
+                "name": "flash_ep_tracks",
+                "ref": flash,
+                "rect_mm": list(ep["rect_mm"]),
+                "layers": ["F.Cu"],
+                "items": ["tracks"],
+                "allow_classes": ["GND"],
+            }
+        )
+    return out
+
+
+FANOUT_KEYS = (
+    "skip_pads",
+    "via_classes",
+    "surface_rings",
+    "forbidden_exits",
+    "neck_mm",
+    "neck_classes",
+    "drop_nets",
+    "lock",
+)
+
+
+def fanout_entry(fp):
+    """U1's ``fanout`` entry (pnr.fanout) from floorplan ``fanout``: the escape plan both the
+    router and the placement read (bottom sites become fixed bottom poses; integrate.py turns its
+    surface exits into placement keepouts). Parts by address."""
+    f = fp.doc["fanout"]
+    entry = {"name": f["name"], "ref": "@" + fp.part("radio")}
+    entry.update({k: f[k] for k in FANOUT_KEYS if k in f})
+    sites = f.get("bottom_sites")
+    if sites:
+        entry["bottom_sites"] = dict(
+            parts=["@" + _glob_literal(a) for a in sites["parts"]],
+            **{k: v for k, v in sites.items() if k != "parts"},
+        )
+    return entry
+
+
 def constraints(fp: Floorplan):
     """The yapnr constraint document (a dict; written with comments by :func:`constraints_text`)."""
     d = fp.doc
@@ -183,6 +293,8 @@ def constraints(fp: Floorplan):
             "anchor": refs(spec["anchor"])[0],
             "radius_mm": spec["radius_mm"],
             "hard": True,
+            # pad-anchored (stage 3b): measured from that pad of the anchor, not its origin
+            **({"anchor_pad": str(spec["anchor_pad"])} if spec.get("anchor_pad") else {}),
         }
         for spec in d["groups"].values()
     ]
@@ -202,31 +314,8 @@ def constraints(fp: Floorplan):
     fixed_lands = {
         "RL%d" % (i + 1): {"at": at, "rot": 0, "side": "top"} for i, at in enumerate(lands["at"])
     }
-    # Copper keepouts relative to U1 (rect_mm in U1's own y-up frame): the router blocks every
-    # layer there and writeback draws a KiCad rule area. Inverse of pnr.graph.footprint_point.
     cx, cy = u1["at"]
-    a = math.radians(u1["rot"])
-    co, si = math.cos(a), math.sin(a)
-
-    def local(x, y):
-        dx, dy = x - cx, y - cy
-        return (round(co * dx + si * dy, 4), round(-si * dx + co * dy, 4))
-
-    copper_keepout = []
-    for i, r in enumerate(d["rf"]["region"]):
-        p0, p1 = local(r[0], r[1]), local(r[2], r[3])
-        copper_keepout.append(
-            {
-                "name": "rf_region_%d" % (i + 1),
-                "ref": radio,
-                "rect_mm": [
-                    min(p0[0], p1[0]),
-                    min(p0[1], p1[1]),
-                    max(p0[0], p1[0]),
-                    max(p0[1], p1[1]),
-                ],
-            }
-        )
+    copper_keepout = copper_keepouts(fp)
     # Placement keepout: the RF region less U1's courtyard (the macro is drawn around U1, whose
     # courtyard reaches into it; yapnr would count the fixed U1 as a keepout violation).
     half = u1["courtyard_mm"] / 2
@@ -243,6 +332,9 @@ def constraints(fp: Floorplan):
             "layers": d["board"]["copper_layers"],
             "default_clearance_mm": 0.2,
             "references_on_fab": True,
+            # No plane drop outside the fanout plan (stage 3a review): writeback adds none, so
+            # a drop never lands on the RF macro's launches.
+            "plane_fallback_drops": False,
         },
         "fab": {"track_width_mm": 0.15},
         "fixed": {
@@ -256,30 +348,6 @@ def constraints(fp: Floorplan):
             },
             **fixed_holes,
             **fixed_lands,
-            **(
-                {
-                    "@"
-                    + fp.part("lvds_header"): {
-                        "at": d["lvds_header_fixed"]["at"],
-                        "rot": d["lvds_header_fixed"]["rot"],
-                        "side": d["lvds_header_fixed"]["side"],
-                    }
-                }
-                if d.get("lvds_header_fixed")
-                else {}
-            ),
-            **(
-                {
-                    "@"
-                    + fp.part("jtag"): {
-                        "at": d["jtag_fixed"]["at"],
-                        "rot": d["jtag_fixed"]["rot"],
-                        "side": d["jtag_fixed"]["side"],
-                    }
-                }
-                if d.get("jtag_fixed")
-                else {}
-            ),
         },
         **(
             {"orientation": {r: rot for role, rot in d["orientations"].items() for r in refs(role)}}
@@ -288,6 +356,18 @@ def constraints(fp: Floorplan):
         ),
         "keepout": keepout,
         "copper_keepout": copper_keepout,
+        # The RF macro (merged into the source board by integrate.py source): copper the engine
+        # keeps exactly as drawn, its footprints held out of the placement.
+        "fixed_block": [
+            {
+                "name": d["rf"]["block"]["name"],
+                "group": d["rf"]["block"]["group"],
+                "anchor": radio,
+                "solid_layers": list(d["rf"]["block"]["solid_layers"]),
+            }
+        ],
+        "fanout": [fanout_entry(fp)],
+        **({"legalize": dict(d["legalize"])} if d.get("legalize") else {}),
         "region": region,
         **({"side": side} if side else {}),
         "group": group,

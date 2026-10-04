@@ -142,6 +142,22 @@ parts:
   pmic_vana: pmic.c_vana # 100 nF at VANA (8.2.1.5)
   # ANA#17A damping options (DNP) on the radio rails: not part of the PMIC block region
   supply_damping: ['pmic.r_damp_*', 'pmic.c_damp_*']
+  # Pad-anchored groups (stage 3b): each damping RC at its ferrite's rail pad, the rail ferrites
+  # at the balls they feed, each snubber resistor at its inductor's switch-node pad
+  damp_r_rf1: pmic.r_damp_rf1
+  damp_c_rf1: pmic.c_damp_rf1
+  damp_r_rf2: pmic.r_damp_rf2
+  damp_c_rf2: pmic.c_damp_rf2
+  damp_r_1v8: pmic.r_damp_1v8
+  damp_c_1v8: pmic.c_damp_1v8
+  fb_rf1: pmic.fb_rf1 # 1V0_SH -> 1V0_RF1 (G5, H5, J5)
+  fb_rf2: ['pmic.fb_rf2_a', 'pmic.fb_rf2_b'] # 1V0_SH -> 1V0_RF2 (C2, D2), in parallel
+  fb_rf2_a: pmic.fb_rf2_a
+  fb_1v8: pmic.fb_1v8
+  l_b0: pmic.l_b0
+  l_b1: pmic.l_b1
+  l_b2: pmic.l_b2
+  l_b3: pmic.l_b3
 
 # Net classes by net-name glob (the schematic's suggested names). The class names are the ones
 # radar60.kicad_dru tests.
@@ -247,25 +263,88 @@ rf:
     - [31.2, 21.7, 56.469, 26.7] # south of the TX region, east of the package
     - [51.469, 26.7, 56.469, 47.35] # east of the TX bank
   fence_via: { drill: 0.15, diameter: 0.32, min_pitch: 0.45 } # RFS-5; 11 mil hole to hole
+  # The macro as the engine's fixed_block: integrate.py merges it into the source board in U1's
+  # frame and groups every item; its In2.Cu GND pour is a solid obstacle to foreign vias.
+  block: { name: rfm1, group: RFM1_MACRO, solid_layers: [In2.Cu] }
 
 noise: # plan 3.4 noise budget and 7.5 R4
   sw_to_crystal_mm: 8.0
   sw_to_rf_mm: 5.0
 
-# Placement regions (plan 5.1, 7.3); yapnr `region` constraints, hard.
-# J2 (development connector) is fixed (review 2026-10-03): as a region part it was placed after
-# every grouped block and lost its one window above J1 (29 of 32 starts with the block groups,
-# 15 of 32 with J2 grouped too). Its pose is the stage-2 mechanical winner's (p008, seed 837832,
-# reva/placement.json of commit 735327c), unchanged [D].
-lvds_header_fixed: { at: [20.75, 11.5], rot: 0, side: top, courtyard_mm: [21.09, 8.09] }
-# J3 (JTAG, DNP) is fixed too: as a region part it lost its window in 2 of 8 starts. At the
-# west edge (courtyard x 0.6-8.0), below the radome land RL1's keepout (y <= 24.3) and clear of
-# MH1, it leaves x 8.3-19.5 west of U1 to the flash, whose 7.46 x 5.59 mm courtyard fits neither
-# between J2 and U1 (5.8 mm) nor between the former J3 pose and U1 (5.7 mm) [D].
-jtag_fixed: { at: [4.3, 19.5], rot: 90, side: top, courtyard_mm: [7.45, 8.67] }
+# U1's escape plan (yapnr `fanout`; stage 3a trial 2's entry, fanout track T1 variant A with the
+# review fixes). integrate.py plans it before placement (U1 fixed, with the macro's copper) and
+# turns every surface exit into a placement keepout (`exit_bands`), so no part sits in front of
+# an escaping ball; `bottom_sites` become fixed bottom poses under the array.
+fanout:
+  name: u1
+  # The seven RF balls belong to the macro. A2/B2 (VOUT_PA) have no legal via site under the
+  # current rules (stage 3a 5.3); D14: macro v2 owns their feed (stage 3c), so they are skipped.
+  skip_pads: [B4, B6, B8, F2, H2, K2, M2, A2, B2]
+  via_classes:
+    ground: { diameter_mm: 0.35, drill_mm: 0.15, nets: [GND], sites: [interstitial, outside] }
+    # radar60.kicad_dru: crystal nets take no via, LVDS stays on the outer layers, supply and
+    # signal vias under U1 are 0.40/0.20
+    xtal: { diameter_mm: 0.4, drill_mm: 0.2, nets: ['XTAL_*'], layers: [F.Cu] }
+    lvds:
+      {
+        diameter_mm: 0.4,
+        drill_mm: 0.2,
+        nets: ['LVDS_*'],
+        sites: [vacant, outside],
+        layers: [F.Cu, B.Cu],
+      }
+    supply:
+      {
+        diameter_mm: 0.4,
+        drill_mm: 0.2,
+        nets: [1V0_PA, 1V0_RF1, 1V0_RF2, 1V2, 1V8, 3V3_RADIO_IO, VBGAP, VOUT_14APLL, VOUT_14SYNTH],
+        sites: [vacant, outside],
+      }
+    default: { diameter_mm: 0.4, drill_mm: 0.2, sites: [vacant, outside] }
+  surface_rings: 2
+  forbidden_exits: [north, east]
+  neck_mm: 0.1
+  neck_classes: [LVDS]
+  # supplies and the LDO outputs drop a via beside the ball (decoupled under the array, fed
+  # from In3) instead of escaping
+  drop_nets: [1V0_PA, 1V0_RF1, 1V0_RF2, 1V2, 1V8, 3V3_RADIO_IO, VBGAP, VOUT_14APLL, VOUT_14SYNTH]
+  lock: true
+  # Bottom-side decoupling sites under the array, in priority order (trial 2 placed 6 of 9;
+  # the VOUT_PA corner parts keep their bottom regions until macro v2 puts its pocket vias in)
+  bottom_sites:
+    parts: [radio.c_vbgap, radio.c_apll, radio.c_synth, radio.c_rf1, radio.c_sram, radio.c_vco]
+    max_stub_mm: 1.0
+    zone: shadow
+    rotations: [0, 90]
+  # integrate.py: each surface exit becomes a strip this wide, from the exit to this far beyond
+  # U1's courtyard (the router's tail turns within 2 mm); touching strips merge [D]
+  exit_bands: { width_mm: 0.5, beyond_courtyard_mm: 2.5 }
+
+# The flash's exposed pad (Macronix PM2257 rev. 1.4, drawing 6110-3401: 3.40 x 4.00 mm, GND or
+# floating): no vias or traces under it. A copper keepout in U3's frame (integrate.py, routing).
+flash_ep: { rect_mm: [-1.7, -2.0, 1.7, 2.0] }
+
+# Legalizer options (yapnr `legalize`, opt-in): the outline is not a whole number of 0.25 mm
+# slots (47.35 mm), and J2, J3 and the ball-anchored slots are window parts (stage 3a: 27/32
+# legal starts with these against fewer without).
+legalize: { outline: exact, order: scarcity, lookahead: regions }
 
 # Placement regions (plan 5.1, 7.3); yapnr `region` constraints, hard.
 regions:
+  # J2 (development connector) is a region part again (stage 3b): its stage-2 fixed pose predates
+  # the parts track's QTH land (rows at +-3.086 mm) and the 47.35 mm board. Its 20.59 x 8.24 mm
+  # courtyard has about 5 mm of play along x, between the eFuse block (y <= 7.25) and the flash
+  # and crystal blocks (y >= 15.75), under the crystal region [D]. With the legalizer's
+  # `order: scarcity` it is placed before the roomy blocks (stage 3a: 27/32 legal starts).
+  lvds_header:
+    {
+      parts: [lvds_header],
+      rect: [8.0, 7.25, 34.0, 15.6],
+      reason: 'J2 above J1, below the flash and Y1',
+    }
+  # J3 (JTAG, DNP) at the west edge: below the radome land RL1's keepout (y <= 24.5) and above
+  # MH1's (y >= 6.75), west of the flash block (x <= 8.3); only its upright turn fits [D].
+  jtag: { parts: [jtag], rect: [0.6, 8.0, 8.3, 24.3], reason: 'J3 at the west edge' }
   # Plan 5.1 gives y 18-40; the radome rule keeps a 5 mm header 8.7 mm from the RX patches, and
   # the R4 guard band starts at y 28.2 west of the RX margin, so the region stops at y 28.2; the
   # west radome land (3.5, 27) takes its north-west corner, so it reaches down to y 8 [D]
@@ -292,35 +371,67 @@ regions:
       rect: [41.0, 2.0, 58.0, 21.7],
       reason: 'switch nodes >= 8 mm from Y1 and >= 5 mm from RF',
     }
-  # Y1 south of CLKP/CLKM (B15/C15 at (29.9, 23.45)/(29.25, 23.45)), between U1's courtyard
-  # (y >= 21.75, 0.2 mm clearance) and J2's (y <= 15.55), west of the RF guard [D].
+  # Y1 south of CLKP/CLKM (B15/C15 at (29.9, 23.45)/(29.25, 23.45)), below its load caps and
+  # east of the SPIA exit band (E15, x <= 28.2; stage 3b: the old region x 23.5-30.2 stood in
+  # front of the LVDS and SPIA exits, the trial's no-access balls), above J2 (y >= 15.75). Only
+  # its flat turn fits (4.29 x 3.59 mm in 4.6 x 3.95). Its pads stay 8.5 mm or more from the
+  # switch region (x >= 41) [D].
   crystal:
     {
       parts: [crystal],
-      rect: [23.5, 15.75, 30.2, 21.55],
-      reason: 'Y1 below B15/C15, outside the RF guard',
+      rect: [28.4, 15.75, 33.0, 19.7],
+      reason: 'Y1 below its load caps, east of the exit bands',
     }
-  # Ball-anchored slots (review 2026-10-03). The legalizer works on a 0.25 mm grid with 0.2 mm
+  # Ball-anchored slots (review 2026-10-03; `slot: true`: integrate.py refuses a slot that meets
+  # another net's exit band). The legalizer works on a 0.25 mm grid with 0.2 mm
   # courtyard clearance, so an 0402 (courtyard 1.91 x 1.01 mm) takes a 2.25 x 1.25 mm slot. U1's
   # courtyard (0.5 mm beyond the body) blocks up to x 32.0 east of it and down to y 22.0 below
   # it; the TX region blocks y >= 26.5 east of it. Each rect bounds one part's courtyard to one
   # slot, and an orientation (`orientations`) turns its signal pad (pad 1) toward the ball [D]:
   # APLL cap, pad (32.645, 25.875), 2.25 mm from A10 (30.55, 26.7)
   radio_apll:
-    { parts: [radio_apll], rect: [32.1, 25.3, 34.15, 26.45], reason: 'VOUT_14APLL cap at A10' }
+    {
+      parts: [radio_apll],
+      slot: true,
+      rect: [32.1, 25.3, 34.15, 26.45],
+      reason: 'VOUT_14APLL cap at A10',
+    }
   # VBGAP cap, pad (32.645, 24.625), 3.44 mm from B10 (29.9, 26.7)
   radio_vbgap:
-    { parts: [radio_vbgap], rect: [32.1, 24.05, 34.15, 25.2], reason: 'VBGAP cap at B10' }
+    {
+      parts: [radio_vbgap],
+      slot: true,
+      rect: [32.1, 24.05, 34.15, 25.2],
+      reason: 'VBGAP cap at B10',
+    }
   # SYNTH cap, pad (32.645, 23.375), 3.07 mm from B13 (29.9, 24.75)
   radio_synth:
-    { parts: [radio_synth], rect: [32.1, 22.8, 34.15, 23.95], reason: 'VOUT_14SYNTH cap at B13' }
-  # Crystal load caps below CLKP (B15 at 29.9) and CLKM (C15 at 29.25), y 23.45, west of the R4
-  # guard band (x < 31.2 above y 21.7): pads (29.645, 21.375) and (28.355, 21.375), 2.09 and
-  # 2.26 mm from their balls (SWRS219F 7.12.2: as close as possible)
+    {
+      parts: [radio_synth],
+      slot: true,
+      rect: [32.1, 22.8, 34.15, 23.95],
+      reason: 'VOUT_14SYNTH cap at B13',
+    }
+  # Crystal load caps below CLKP (B15 at 29.9) and CLKM (C15 at 29.25), y 23.45 (SWRS219F
+  # 7.12.2: as close as possible). Stage 3b: each may sit only in its own ball's exit band (B15
+  # 29.65-30.15, C15 29.0-29.5), never in the SPIA band (E15, x <= 28.2: the old CLKM slot
+  # x 26.85-28.9 blocked it). The CLKM cap upright (pad 1 north) over C15's band, the CLKP cap
+  # flat (pad 1 west) east of C15's band and below the R4 guard band (y <= 21.7 east of x 31.2):
+  # pads about (28.9, 21.46) and (30.12, 21.0), 2.0 and 2.5 mm from their balls [D].
   xtal_cap_p:
-    { parts: [xtal_cap_p], rect: [29.1, 20.8, 31.15, 21.95], reason: 'CLKP load cap below B15' }
+    {
+      parts: [xtal_cap_p],
+      slot: true,
+      rect: [29.5, 20.3, 31.7, 21.7],
+      reason: 'CLKP load cap below B15',
+    }
   xtal_cap_n:
-    { parts: [xtal_cap_n], rect: [26.85, 20.8, 28.9, 21.95], reason: 'CLKM load cap below C15' }
+    {
+      parts: [xtal_cap_n],
+      slot: true,
+      rect: [28.2, 19.9, 29.6, 22.05],
+      reason: 'CLKM load cap below C15',
+    }
   # VOUT_PA (A2/B2), VIN_13RF2 (C2/D2) and the PA 0 ohm feed on the bottom side under the corner
   # (balls at x 28.6-30.55, y 31.9; the pocket holds no 0402 courtyard, not even with a 0.5 mm
   # U1 courtyard: 1.69 mm wide against 1.91). The macro's launch vias stand at y 31.575 (RX,
@@ -331,6 +442,7 @@ regions:
   pa_cap:
     {
       parts: [pa_cap],
+      slot: true,
       rect: [30.05, 29.4, 31.2, 31.85],
       side: bottom,
       reason: 'VOUT_PA 220 nF at A2/B2',
@@ -338,6 +450,7 @@ regions:
   pa_r:
     {
       parts: [pa_r],
+      slot: true,
       rect: [28.6, 31.85, 30.95, 33.2],
       side: bottom,
       reason: 'PA 0 ohm between D2 and B2',
@@ -345,6 +458,7 @@ regions:
   rf2_cap:
     {
       parts: [rf2_cap],
+      slot: true,
       rect: [26.1, 31.85, 28.6, 33.2],
       side: bottom,
       reason: 'VIN_13RF2 220 nF at C2/D2',
@@ -380,15 +494,17 @@ regions:
       rect: [15.0, 26.0, 19.55, 33.0],
       reason: 'VIN_13RF1 and VIN_18BB caps west of G5-J5 / F5, K5',
     }
-  # The QSPI clock's series resistor at the source, R12 (21.45, 25.4), below the R4 guard (y < 28.2)
-  # The QSPI clock's series resistor at the source, R12 (21.45, 25.4), below the R4 guard: U1's
-  # courtyard blocks x >= 20.0 west of it, so the slot centre is (18.875, 25.375) and pad 1
-  # (QSPI_CLK, east) is 2.1 mm from the ball [D]
+  # The QSPI clock's series resistor at the source, R12 (21.45, 25.4), below the R4 guard
+  # (y < 28.2). Stage 3b: the west exit bands of R12's neighbours (P10, P12, R13: x 17.75-20.25
+  # at the 0.325 mm exit pitch) leave no 0402 room in front of R12, so the slot is just west of
+  # them; pad 1 (QSPI_CLK, east) about 4.5 mm from the ball, against 2.1 mm before (at 80 MHz
+  # about 30 ps more stub) [D]
   qspi_series:
     {
       parts: [qspi_series],
-      rect: [17.85, 24.8, 19.95, 25.95],
-      reason: 'QSPI_CLK 22 ohm next to R12',
+      slot: true,
+      rect: [15.4, 24.8, 17.55, 25.95],
+      reason: 'QSPI_CLK 22 ohm west of the R12 exit bands',
     }
   # Protection at J1 (review 2026-10-03: the ESD diodes sat 27-32 mm away, behind the CAN
   # transceiver). J1's pins 5-8 (CAN, UART) are at x 30.6-34.4, y 5.1; north of them is J2's
@@ -411,7 +527,7 @@ orientations:
   radio_vbgap: 0
   radio_synth: 0
   xtal_cap_p: 0
-  xtal_cap_n: 180
+  xtal_cap_n: 270
   pa_cap: 270
   pa_r: 0
   rf2_cap: 180
@@ -440,13 +556,13 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
       radius_mm: 14.0,
       reason: 'bulk within about 9 mm of the package edge',
     }
-  # Y1 below U1's courtyard (y <= 21.56 with clearance) is at least 8.24 mm (rotation 0) south
-  # of U1's centre, and 8.5 mm away inside the crystal region: the plan's 7 mm cannot be met [D].
+  # Y1 below its load caps (stage 3b, y <= 19.7) is at least 10.2 mm from U1's centre inside
+  # the crystal region (11.3 at its middle): the plan's 7 mm cannot be met [D].
   crystal:
     {
       anchor: radio,
       members: [crystal],
-      radius_mm: 9.5,
+      radius_mm: 12.5,
       reason: 'Y1 within about 3 mm of B15/C15 (4.55 mm south of U1 centre)',
     }
   # U2's courtyard is 6.14 x 6.64 mm. Buck2 and Buck3 now use the IHLP-1616BZ (courtyard
@@ -458,8 +574,16 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   # 0805 centre comes no closer than 4.3 mm (courtyard 3.07 + 0.2 + 0.98), an 0402 3.7 mm [D].
   pmic_in_caps:
     { anchor: pmic, members: [pmic_in_caps], radius_mm: 5.0, reason: 'CIN at VIN_Bx/PGND_Bx' }
-  pmic_snubbers:
-    { anchor: pmic, members: [pmic_snub_r], radius_mm: 7.5, reason: 'snubbers at the switch nodes' }
+  # Each snubber resistor at its inductor's switch-node pad (pad 1), measured from that pad
+  # (stage 3b; was 7.5 mm from U2's centre). 3.5 mm: at 3.0 only 8 of 32 starts were legal [D].
+  snb_l0:
+    { anchor: l_b0, anchor_pad: '1', members: [snb_r0], radius_mm: 3.5, reason: 'snubber at SW_B0' }
+  snb_l1:
+    { anchor: l_b1, anchor_pad: '1', members: [snb_r1], radius_mm: 3.5, reason: 'snubber at SW_B1' }
+  snb_l2:
+    { anchor: l_b2, anchor_pad: '1', members: [snb_r2], radius_mm: 3.5, reason: 'snubber at SW_B2' }
+  snb_l3:
+    { anchor: l_b3, anchor_pad: '1', members: [snb_r3], radius_mm: 3.5, reason: 'snubber at SW_B3' }
   # each snubber's capacitor next to its resistor (one placement put a pair 9.9 mm apart when
   # both were only tied to U2) [D]
   snb0: { anchor: snb_r0, members: [snb_c0], radius_mm: 2.5, reason: 'snubber R-C pair' }
@@ -467,6 +591,75 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   snb2: { anchor: snb_r2, members: [snb_c2], radius_mm: 2.5, reason: 'snubber R-C pair' }
   snb3: { anchor: snb_r3, members: [snb_c3], radius_mm: 2.5, reason: 'snubber R-C pair' }
   pmic_vana: { anchor: pmic, members: [pmic_vana], radius_mm: 5.0, reason: 'VANA filter cap' }
+  # Rail ferrites near the balls they feed (stage 3b, from the IR budget: the 1.0 V branches
+  # have about 4 mOhm of copper from the ferrite to the worst ball, about 15 mm of In3 at
+  # 2.7 mm width), measured from the ball [D]
+  fb_rf1:
+    {
+      anchor: radio,
+      anchor_pad: H5,
+      members: [fb_rf1],
+      radius_mm: 12.0,
+      reason: '1V0_RF1 ferrite within 12 mm of G5/H5/J5',
+    }
+  fb_rf2:
+    {
+      anchor: radio,
+      anchor_pad: D2,
+      members: [fb_rf2],
+      radius_mm: 10.0,
+      reason: '1V0_RF2 ferrites within 10 mm of C2/D2',
+    }
+  # The damping options (ANA#17A, DNP) at their ferrite's rail pad, each capacitor at its
+  # resistor's damping pad (pad 2) [D]
+  damp_rf1:
+    {
+      anchor: fb_rf1,
+      anchor_pad: '2',
+      members: [damp_r_rf1],
+      radius_mm: 3.0,
+      reason: 'RF1 damping R at the ferrite',
+    }
+  damp_rf2:
+    {
+      anchor: fb_rf2_a,
+      anchor_pad: '2',
+      members: [damp_r_rf2],
+      radius_mm: 3.0,
+      reason: 'RF2 damping R at the ferrite',
+    }
+  damp_1v8:
+    {
+      anchor: fb_1v8,
+      anchor_pad: '2',
+      members: [damp_r_1v8],
+      radius_mm: 3.0,
+      reason: '1V8 damping R at the ferrite',
+    }
+  damp_c_rf1:
+    {
+      anchor: damp_r_rf1,
+      anchor_pad: '2',
+      members: [damp_c_rf1],
+      radius_mm: 2.0,
+      reason: 'RF1 damping C at its R',
+    }
+  damp_c_rf2:
+    {
+      anchor: damp_r_rf2,
+      anchor_pad: '2',
+      members: [damp_c_rf2],
+      radius_mm: 2.0,
+      reason: 'RF2 damping C at its R',
+    }
+  damp_c_1v8:
+    {
+      anchor: damp_r_1v8,
+      anchor_pad: '2',
+      members: [damp_c_1v8],
+      radius_mm: 2.0,
+      reason: '1V8 damping C at its R',
+    }
   # Blocks (review 2026-10-03; held back at integration because the legalizer stranded J2,
   # which is fixed now). Radii [D]: the anchor's courtyard half width + 0.2 mm + the members'.
   # U5's courtyard is 4.14 mm square; 11 threshold/timer parts within 5.5 mm failed 4 of 8 starts
@@ -479,7 +672,7 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   # (the QSPI resistor's strip lost in 4 of 8 starts): these groups only put them in the radio's
   # block, where the legalizer orders parts by their free slots; the regions bound them.
   qspi_series:
-    { anchor: radio, members: [qspi_series], radius_mm: 9.5, reason: 'order: radio block' }
+    { anchor: radio, members: [qspi_series], radius_mm: 11.0, reason: 'order: radio block' }
   crystal_caps:
     { anchor: radio, members: [crystal_caps], radius_mm: 9.5, reason: 'order: radio block' }
   # The protection parts join J1's block, so the legalizer places them before unrelated blocks

@@ -11,11 +11,12 @@ where it matters, give the same numbers:
 
 **The default is `auto`: native float64 wherever its library loads, the numpy reference
 otherwise.** Native float64 is numpy float64 bit for bit (below), so a run's results do not
-depend on whether the library was there, only its time does: native is 11–12 times faster than
-numpy on the shared Mac and about 40 times on a C4D-16, and 4–6 times faster than the torch
-float32 the cases ran on before. The library ships in the yapnr wheel (one per platform) and
-so in the container image, Bazel builds it for `//yapnr/rf` and its tests, and a checkout
-builds it with one command. The first simulation of a process says on stderr, once, which
+depend on whether the library was there, only its time does: one evaluation is 13–16 times
+faster than numpy on the shared Mac (4 threads) and 38–42 times on a C4D-16, and 3.4–6.3 times
+faster than the torch float32 the cases ran on before ([measurements](#performance)). The
+library ships in the yapnr wheel (one per platform) and so in the container image, Bazel builds
+it for `//yapnr/rf` and its tests, and a checkout builds it with one command. The first
+simulation of a process says on stderr, once, which
 library runs (`yapnr.rf native FDTD: <path> (<instruction set>; <compiler>)`) or why numpy
 runs instead (`yapnr.rf native FDTD: <reason>; numpy backend used (the same float64 values,
 slower)`). With `YAPNR_RF_REQUIRE_NATIVE=1` a missing or refused library is an error instead;
@@ -56,7 +57,7 @@ cloud jobs that pay for native speed should set it.
   ```
 
 `Problem` logs the backend, precision and threads it runs (`FDTD backend: native float64, 4
-thread(s) (libyapnr_fdtd.so, avx512f)`), and `Problem.describe()` (the run's provenance) records
+thread(s) (libyapnr_fdtd.so, x86-64 avx512f)`), and `Problem.describe()` (the run's provenance) records
 the backend that actually ran, the threads and, for native, the library's file name and sha256,
 the sources' sha256 it was built from, the compiler and the instruction set its sweeps use. The
 pool never takes more threads than the process may use (its CPU affinity); on a shared machine
@@ -197,6 +198,45 @@ job can still ship a library of its own and point `YAPNR_RF_FDTD_LIB` at it.
 
 ## Performance
 
+### The default, measured on the integrated branch
+
+One evaluation (forward and adjoint runs, gradients; the optimizer's unit per iteration) of a
+gray design on the cases' full grids, round-2 settings (copper-edge correction, its time step
+over the diagonal patterns, modal source), line calibrations cached, seconds. `auto` is the
+default schedule; the Mac ran at most 4 threads, niced, at a load of 4–6.
+
+| Grid (cells)                  | numpy f64, 1 thread | torch f32, 4 threads | native f64, 1 / 4 / 16 threads | native f32 |
+| ----------------------------- | ------------------- | -------------------- | ------------------------------ | ---------- |
+| C4D-16: divider (0.20 M)      | 85.5                | 12.4                 | 11.2 / 4.09 / **2.24**         | 1.96       |
+| C4D-16: antenna (0.26 M)      | 147                 | 23.2                 | 21.0 / 6.78 / **3.70**         | 3.15       |
+| C4D-16: diagonal design       | 114                 | 16.3                 | 14.6 / 5.00 / **2.68**         | 2.31       |
+| C4D-16: divider, refine 2     | –                   | –                    | – / – / **17.3** (sweeps 30.5) | 7.67       |
+| C4D-16: 60 GHz column, 1.79 M | –                   | –                    | – / – / **126**                | 55.5       |
+| M4: divider                   | 72.3                | 25.1                 | 11.8 / **5.07** / –            | 5.36       |
+| M4: antenna                   | 147                 | 39.0                 | 26.9 / **11.4** / –            | 6.56       |
+| M4: diagonal design           | 100                 | 36.5                 | 14.2 / **6.20** / –            | 4.45       |
+| M4: divider, refine 2         | –                   | –                    | – / **55.5** / – (sweeps 60.5) | 20.7       |
+
+- **Against the cases' former torch float32:** 5.5–6.3 times faster on C4D-16, 3.4–5.9 times on
+  the Mac at 4 threads; against numpy 38–42 times (C4D) and 13–16 times (Mac). On each machine
+  every float64 row of a grid has the same objective value t, numpy's included.
+- **The schedule:** at 0.20 M cells `auto` runs the sweeps on the C4D (the box fits its 32 MiB
+  L3) and 7-step passes on the M4 (6–13 % faster than sweeps there); at 0.80 M cells the passes
+  win on both (C4D 17.3 against 30.5 s, M4 55.5 against 60.5 s). On the C4D the antenna's
+  8-step passes are within 10 % of the sweeps either way.
+- **The library behind the C4D rows is the one CI built** into the linux/amd64 wheel (gcc 13,
+  AVX-512 sweeps), run from a job bundle of the same commit; `test_native_kernel` and the
+  gradient tests passed on it there.
+- **The full-size identity matrix** (`test_native_identity`'s twelve configurations on the full
+  grids: divider, antenna, diagonal design × edge correction × port source): native float64
+  equal to numpy float64 by sha256 in every configuration on both machines (C4D: 1 and 16
+  threads, sweeps and `auto`; M4: 4 threads, both schedules), native float32 equal to numpy
+  float32 (M4), and float32 within 2.0e-6 of float64 in the objective values and 1.2e-5 in the
+  worst gradient.
+
+The rest of this section is the rf-kernels benchmark (before the merge with round 2's review
+fixes; the kernel is the same).
+
 The divider's round-2 grid (124 × 74 × 22 = 0.20 M cells, CPML on five sides, the copper-edge
 correction, decimation 67), the forward run with every probe, milliseconds per step. Mac mini
 M4, shared (load 7–10, nice 10, so the threads ran where the scheduler put them):
@@ -233,7 +273,13 @@ The objective t is 41.41874 for every float64 run and 41.41875 for native float3
 relative); float64 against numpy is bit for bit (the tests above, run on the same VM).
 
 The `auto` schedule follows these numbers: sweeps while the box (fields and ψ) fits in half the
-last-level cache, passes sized to that cache otherwise. Handing out 8 rows per work item
+last-level cache, passes sized to that cache otherwise, and sweeps for any run whose probes take
+more than 0.25 DTFT samples per cell and step (probe edges × frequencies / decimation / cells):
+in a pass a row's samples are accumulated by the thread that updated the row, so a flux section
+on a few rows keeps the other threads waiting. The line calibrations (decimation 1, 105
+frequencies: 7.7 samples per cell and step) took 43.1 s in passes and 8.9 s in sweeps on the
+divider (M4, 4 threads); the optimizer's runs (about 0.009) are faster in passes. Handing out 8
+rows per work item
 instead of 2 made the Mac about 20 % faster on 4 threads (fewer claims on the shared counter).
 The barrier that sleeps after a millisecond (and scratch allocated once per pool) costs nothing
 measurable: on the shared Mac at 6 threads, interleaved against the previous build, the divider

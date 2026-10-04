@@ -32,6 +32,23 @@ def is_magnetic(comp: str) -> bool:
     return comp[0] == "h"
 
 
+def combine(amp: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """Σ_k amp[k] w[..., k] for amplitudes amp (K, P) and weights w (..., K), summed in k order
+    with elementwise operations only (no BLAS), so every value is reproducible: the engine's
+    and the native kernel's source values (`separable`)."""
+    w = np.asarray(w, dtype=np.float64)
+    v = amp[0] * w[..., 0:1]
+    for k in range(1, amp.shape[0]):
+        v = v + amp[k] * w[..., k : k + 1]
+    return v
+
+
+def _steps(n0: int, n1: int, last: int):
+    """Steps n0 .. n1 − 1 and whether a source that ends after step `last` is on."""
+    n = np.arange(n0, n1)
+    return n, n <= last
+
+
 def source_time(n, dt: float, magnetic: bool):
     """Time of step n's source sample: nΔt for K (magnetic), (n + ½)Δt for J (electric)."""
     return (np.asarray(n, dtype=np.float64) + (0.0 if magnetic else 0.5)) * dt
@@ -133,6 +150,19 @@ class ProfileSource:
         t = source_time(n, self.dt, is_magnetic(self.comp))
         return self.amp0 * float(self.waveform(t)) - self.amp2 * float(self._d2(t))
 
+    def separable(self):
+        """values(n) = combine([amp0, −amp2], [s(t_n), s''(t_n)]) (the engine's form)."""
+
+        def weights(n0, n1):
+            n, on = _steps(n0, n1, self.end_step)
+            w = np.zeros((n.size, 2))
+            t = source_time(n[on], self.dt, is_magnetic(self.comp))
+            w[on, 0] = self.waveform(t)
+            w[on, 1] = self._d2(t)
+            return w, on
+
+        return np.stack([self.amp0, -self.amp2]), weights
+
 
 @dataclass
 class PulseSource:
@@ -160,6 +190,17 @@ class PulseSource:
         return self.amplitude * float(
             self.waveform(source_time(n, self.dt, is_magnetic(self.comp)))
         )
+
+    def separable(self):
+        """values(n) = amplitude · waveform(t_n) (the engine's form)."""
+
+        def weights(n0, n1):
+            n, on = _steps(n0, n1, self.end_step)
+            w = np.zeros((n.size, 1))
+            w[on, 0] = self.waveform(source_time(n[on], self.dt, is_magnetic(self.comp)))
+            return w, on
+
+        return self.amplitude[None, :], weights
 
 
 def nuttall(n_window: int) -> np.ndarray:
@@ -261,10 +302,11 @@ class NuttallFit:
         return rhs @ self._inv.T
 
     def series(self, coef: np.ndarray, n: int) -> np.ndarray:
-        """s[n] for every edge (zero outside 0..N)."""
+        """s[n] for every edge (zero outside 0..N), summed over the basis in order
+        (`combine`)."""
         if n < 0 or n > self.n_window:
             return np.zeros(coef.shape[0])
-        return coef @ self._basis[:, n]
+        return combine(np.ascontiguousarray(coef.T), self._basis[:, n])
 
     def realized(self, coef: np.ndarray, omega: np.ndarray) -> np.ndarray:
         """DTFT of the realized series at `omega` (P, len(omega)); for tests."""
@@ -290,3 +332,15 @@ class SpectralSource:
         if n > self.fit.n_window:
             return None
         return self.fit.series(self.coef, n)
+
+    def separable(self):
+        """values(n) = combine(coefᵀ, basis[:, n]) (the engine's form)."""
+        basis = self.fit._basis
+
+        def weights(n0, n1):
+            n, on = _steps(n0, n1, self.fit.n_window)
+            w = np.zeros((n.size, basis.shape[0]))
+            w[on] = basis[:, n[on]].T
+            return w, on
+
+        return np.ascontiguousarray(self.coef.T), weights

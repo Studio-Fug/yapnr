@@ -14,8 +14,14 @@ k J^n + (b/2)(E^{n+1} + E^n). The outer boundary and the ground plane are PEC:
 tangential E on them is never updated. H probes are accumulated at t = (n + ½)Δt after the H
 update, E probes at t = (n + 1)Δt after the E update.
 
-Backends: "numpy" (reference) and "torch" (CPU, intra-op threads), float64 or float32 fields.
-The code path is shared; only a handful of array primitives differ (`_NumpyOps`, `_TorchOps`).
+Backends: "numpy" (reference) and "torch" (CPU, intra-op threads), float64 or float32 fields;
+their code path is shared and only a handful of array primitives differ (`_NumpyOps`,
+`_TorchOps`). "native" (`native_kernel`, optional) runs blocks of steps in C with the numpy
+reference's operations in the same order: float64 runs are bit-identical to numpy's.
+
+A run advances in blocks of steps that end where the stop rule checks; the sources' values and
+the DTFT phase factors of a block are tabulated once (`_BlockTables`) and every backend uses
+the same tables.
 """
 
 from __future__ import annotations
@@ -31,6 +37,7 @@ from yapnr.rf.constants import MU0
 from yapnr.rf.fdtd.cpml import CPMLParams, profile
 from yapnr.rf.fdtd.dtft import Accumulator
 from yapnr.rf.fdtd.monitors import Probe
+from yapnr.rf.fdtd.sources import combine
 from yapnr.rf.fdtd.stop import StopRule, relative_change
 from yapnr.rf.materials import Structure
 from yapnr.rf.mesh import E_COMPONENTS, H_COMPONENTS, Grid, staggered
@@ -261,7 +268,14 @@ def thread_count(threads: int) -> int:
 
 
 class Simulation:
-    """A microstrip FDTD model ready to run: grid, materials, CPML and the time step."""
+    """A microstrip FDTD model ready to run: grid, materials, CPML and the time step.
+
+    `backend` "numpy" (the reference), "torch" or "native" (`native_kernel`; falls back to
+    numpy, saying so once, when its library is missing or refused, or raises with
+    ``$YAPNR_RF_REQUIRE_NATIVE``); None: ``$YAPNR_RF_BACKEND`` or numpy.
+    `threads`: torch's intra-op threads (at most 4) or the native pool (``$YAPNR_RF_THREADS``
+    overrides it).
+    """
 
     def __init__(
         self,
@@ -271,7 +285,7 @@ class Simulation:
         dt: float | None = None,
         courant: float = 0.95,
         cpml: CPMLParams = CPMLParams(),
-        backend: str = "numpy",
+        backend: str | None = None,
         dtype=np.float64,
         threads: int = 4,
     ):
@@ -279,7 +293,18 @@ class Simulation:
         self.structure = structure
         self.cpml = cpml
         self.dt = float(dt) if dt is not None else courant * grid.courant_dt()
-        self.ops = make_ops(backend, dtype)
+        if backend is None:
+            backend = os.environ.get("YAPNR_RF_BACKEND", "").strip().lower() or "numpy"
+        self.requested_backend = backend
+        kernel = None
+        if backend == "native":
+            from yapnr.rf.fdtd import native_kernel
+
+            kernel = native_kernel.require_or_warn()
+            if kernel is None:
+                backend = "numpy"
+        # The native backend builds its coefficients with the numpy primitives (same values).
+        self.ops = make_ops("numpy" if backend == "native" else backend, dtype)
         self.backend = backend
         self.dtype = np.dtype(dtype)
         if backend == "torch":
@@ -290,9 +315,19 @@ class Simulation:
             c: tuple(slice(None) if staggered(c, a) else slice(1, -1) for a in range(3))
             for c in E_COMPONENTS
         }
-        self._build_terms()
+        self._native = None
+        self._build_terms(allocate=kernel is None)
+        if kernel is not None:
+            from yapnr.rf.fdtd.native_kernel import NativeStepper
+
+            self._native = NativeStepper(self, kernel, threads)
         self.update_materials()
         self.reset()
+
+    @property
+    def threads(self) -> int | None:
+        """Threads of the native stepper (None for the other backends)."""
+        return self._native.threads if self._native is not None else None
 
     # -- setup ----------------------------------------------------------------------------------
 
@@ -301,7 +336,9 @@ class Simulation:
         shape[axis] = v.size
         return self.ops.array(v.reshape(shape))
 
-    def _build_terms(self) -> None:
+    def _build_terms(self, allocate: bool = True) -> None:
+        """Curl terms and their CPML slabs; `allocate` the ψ arrays (the native stepper keeps
+        its own)."""
         grid, dt, ops = self.grid, self.dt, self.ops
         self.terms: dict[str, list[_Term]] = {}
         for comp, spec in list(_E_TERMS.items()) + list(_H_TERMS.items()):
@@ -356,7 +393,8 @@ class Simulation:
                     else:
                         b = self._bshape(b, u)
                         cd = self._bshape(cd, u)
-                    slabs.append(_Slab(sl, b, cd, ops.zeros(tuple(pshape)), u, gap))
+                    psi = ops.zeros(tuple(pshape)) if allocate else None
+                    slabs.append(_Slab(sl, b, cd, psi, u, gap))
                 terms.append(
                     _Term(sign, src, u, dsl, self._bshape(ik, u), slabs, shape=tuple(shape))
                 )
@@ -395,6 +433,12 @@ class Simulation:
                 self._sheet[comp] = {
                     name: tuple(self.ops.array(a) for a in arrs) for name, arrs in br.items()
                 }
+        if self._native is not None:
+            self._native.set_materials(
+                self._ca, self._cb, [(c, k0, k1, m) for c, k0, k1, m, _ in self._mu], self._sheet
+            )
+            # The stepper holds per-plane copies (scalars for uniform planes).
+            self._ca, self._cb = {}, {}
         self._reset_sheet()
 
     def _reset_sheet(self) -> None:
@@ -411,6 +455,12 @@ class Simulation:
 
     def reset(self) -> None:
         """Zero all fields and CPML auxiliary arrays."""
+        if self._native is not None:
+            self._native.reset()
+            # Views of the native buffers in the (x, y, z) shapes of the other backends.
+            self.f = dict(self._native.views)
+            self.n = 0
+            return
         self.f = {c: self.ops.zeros(self.grid.shape(c)) for c in E_COMPONENTS + H_COMPONENTS}
         self._fint = {c: self.f[c][self._interior[c]] for c in E_COMPONENTS}
         self._curl = {}
@@ -479,6 +529,24 @@ class Simulation:
             ops.axpby_(jlo, sh["k"][0], sh["bh"][0], esum)
             ops.axpby_(jhi, sh["k"][1], sh["bh"][1], esum)
 
+    def advance(self, steps: int) -> None:
+        """Step the current fields `steps` times without sources or probes (tests: the same
+        kernels as `run`, from a state set through `f`)."""
+        steps = int(steps)
+        if steps <= 0:
+            return
+        omega = np.zeros(1)
+        if self._native is not None:
+            stepper = self._native.start([], [], omega.size, 1)
+        else:
+            stepper = _PythonRun(self, [], [], {}, 1)
+        n = self.n
+        while n < self.n + steps:
+            n1 = min(n + _MAX_BLOCK, self.n + steps)
+            stepper.block(n, n1, _BlockTables([], omega, self.dt, 1, n, n1))
+            n = n1
+        self.n = n
+
     def field(self, comp: str) -> np.ndarray:
         """A float64 numpy copy of the current values of `comp`."""
         return np.array(self.ops.to_numpy(self.f[comp]), dtype=np.float64)
@@ -497,11 +565,15 @@ class Simulation:
     ) -> RunResult:
         """Run from zero fields until `stop` is met; return the probes' DTFTs at `omega`.
 
-        `sources` have `comp`, `index`, `values(n)` (None once ended) and `end_step`.
+        `sources` have `comp`, `index`, `values(n)` (None once ended) and `end_step`, and
+        optionally `separable()` (`sources`), which tabulates a block of steps at once.
         `callback(sim, n)` (optional) is called after every step, for time-domain tests.
         """
-        ops, dt = self.ops, self.dt
+        dt = self.dt
         omega = np.atleast_1d(np.asarray(omega, dtype=np.float64))
+        decimation = int(decimation)
+        if decimation < 1:
+            raise ValueError("decimation must be >= 1")
         self.reset()
         names = [p.name for p in probes]
         if len(set(names)) != len(names):
@@ -509,18 +581,16 @@ class Simulation:
         acc = {
             p.name: Accumulator(omega, p.index.size, dt, half_step=p.comp[0] == "h") for p in probes
         }
-        pidx = {p.name: ops.index(p.index) for p in probes}
-        e_probes = [p for p in probes if p.comp[0] == "e"]
-        h_probes = [p for p in probes if p.comp[0] == "h"]
-        e_src, h_src = [], []
+        plan = []
         for s in sources:
             idx = np.asarray(s.index, dtype=np.int64)
             if np.unique(idx).size != idx.size:
                 raise ValueError("source edges must be unique")
             if s.comp[0] == "e":
-                e_src.append((s, ops.index(idx), self._cb_full[s.comp].reshape(-1)[idx]))
+                scale = self._cb_full[s.comp].reshape(-1)[idx]
             else:
-                h_src.append((s, ops.index(idx), np.full(idx.size, dt / MU0)))
+                scale = np.full(idx.size, dt / MU0)
+            plan.append(_SourcePlan.of(s, idx, scale))
         src_end = max([s.end_step for s in sources], default=0)
         check_names = list(stop.probes) if stop.probes else names
         period = stop.period(dt)
@@ -528,32 +598,21 @@ class Simulation:
         good = 0
         converged = False
         history = []
+        if self._native is not None:
+            stepper = self._native.start(
+                plan, [(p, acc[p.name]) for p in probes], omega.size, decimation
+            )
+        else:
+            stepper = _PythonRun(self, plan, probes, acc, decimation)
         t0 = time.perf_counter()
         n = 0
         while n < stop.max_steps:
-            for comp, k0, k1, _, old in self._mu:
-                ops.copy_into(self.f[comp][:, :, k0:k1], old)
-            self._step_h()
-            for s, idx, scale in h_src:
-                v = s.values(n)
-                if v is not None:
-                    ops.sub_at(self.f[s.comp], idx, scale * v)
-            for comp, k0, k1, m, old in self._mu:
-                ops.blend_(self.f[comp][:, :, k0:k1], old, m)
-            if n % decimation == 0:
-                for p in h_probes:
-                    acc[p.name].add(ops.take(self.f[p.comp], pidx[p.name]), n, decimation)
-            self._step_e()
-            for s, idx, scale in e_src:
-                v = s.values(n)
-                if v is not None:
-                    ops.sub_at(self.f[s.comp], idx, scale * v)
-            if self._sheet:
-                self._step_sheet()
-            if (n + 1) % decimation == 0:
-                for p in e_probes:
-                    acc[p.name].add(ops.take(self.f[p.comp], pidx[p.name]), n + 1, decimation)
-            n += 1
+            # Steps up to the next stop check (or a callback after every step).
+            n1 = min(_next_check(n, src_end, period, stop.min_steps), stop.max_steps)
+            n1 = n + 1 if callback is not None else min(n1, n + _MAX_BLOCK)
+            tables = _BlockTables(plan, omega, dt, decimation, n, n1)
+            stepper.block(n, n1, tables)
+            n = n1
             self.n = n
             if callback is not None:
                 callback(self, n)
@@ -581,3 +640,131 @@ class Simulation:
             decimation=decimation,
             history=history,
         )
+
+
+# Longest block of steps between two looks at the stop rule (bounds the source tables).
+_MAX_BLOCK = 512
+
+
+def _next_check(n: int, src_end: int, period: int, min_steps: int) -> int:
+    """The first step count m > n at which `Simulation.run` checks the stop rule: m > src_end,
+    m >= min_steps and (m − src_end) a multiple of `period`."""
+    lo = max(n + 1, src_end + 1, min_steps)
+    return src_end + -(-(lo - src_end) // period) * period
+
+
+@dataclass
+class _SourcePlan:
+    """A source as the run applies it: F[index] −= scale · v_n, with v_n = Σ_k amp[k] w_n[k]
+    (`sources.combine`, k in order) for separable sources, else the source's own values(n)."""
+
+    source: object
+    comp: str
+    index: np.ndarray
+    scale: np.ndarray
+    amp: np.ndarray | None
+    weights: object
+    handle: object = None
+
+    @classmethod
+    def of(cls, s, index, scale) -> "_SourcePlan":
+        sep = getattr(s, "separable", None)
+        if sep is not None:
+            amp, weights = sep()
+            amp = np.ascontiguousarray(amp, dtype=np.float64)
+            if amp.shape != (amp.shape[0], index.size) or amp.shape[0] < 1:
+                raise ValueError("separable source: amplitudes must be (K, edges)")
+        else:
+            amp = None
+
+            def weights(n0, n1, s=s, size=index.size):
+                table = np.zeros((n1 - n0, size))
+                act = np.zeros(n1 - n0, dtype=bool)
+                for b, n in enumerate(range(n0, n1)):
+                    v = s.values(n)
+                    if v is not None:
+                        table[b] = v
+                        act[b] = True
+                return table, act
+
+        return cls(s, s.comp, index, np.asarray(scale, dtype=np.float64), amp, weights)
+
+
+def _phases(omega: np.ndarray, dt: float, decimation: int, samples, half: bool):
+    """`Accumulator.add`'s weights w cos(ωt), w sin(ωt) (rows: samples), w = dΔt."""
+    t = (np.asarray(samples, dtype=np.float64) + (0.5 if half else 0.0)) * dt
+    w = decimation * dt
+    ph = omega[None, :] * t[:, None]
+    return w * np.cos(ph), w * np.sin(ph)
+
+
+class _BlockTables:
+    """Everything of steps n0 .. n1 − 1 that does not depend on the fields: per source the
+    weights (B, K) (or values (B, P)) and whether it is on, and the DTFT phase factors of the
+    H samples (steps n with n % d = 0, sample n) and E samples ((n + 1) % d = 0, sample n + 1).
+    Every backend uses these tables, so they apply bit-identical values."""
+
+    def __init__(self, plan, omega, dt, decimation, n0, n1):
+        self.n0, self.n1 = n0, n1
+        self.sources = [sp.weights(n0, n1) for sp in plan]
+        steps = np.arange(n0, n1)
+        h = steps[steps % decimation == 0]
+        e = steps[(steps + 1) % decimation == 0] + 1
+        self.phases = _phases(omega, dt, decimation, h, True) + _phases(
+            omega, dt, decimation, e, False
+        )
+
+
+class _PythonRun:
+    """The numpy/torch steps of a run (the reference)."""
+
+    def __init__(self, sim: Simulation, plan, probes, acc, decimation: int):
+        self.sim = sim
+        self.dec = decimation
+        ops = sim.ops
+        for sp in plan:
+            sp.handle = ops.index(sp.index)
+        self.h_src = [(n, sp) for n, sp in enumerate(plan) if sp.comp[0] == "h"]
+        self.e_src = [(n, sp) for n, sp in enumerate(plan) if sp.comp[0] == "e"]
+        self.plan = plan
+        self.h_probes = [(p, ops.index(p.index), acc[p.name]) for p in probes if p.comp[0] == "h"]
+        self.e_probes = [(p, ops.index(p.index), acc[p.name]) for p in probes if p.comp[0] == "e"]
+
+    def block(self, n0: int, n1: int, tables: _BlockTables) -> None:
+        sim, ops, dec = self.sim, self.sim.ops, self.dec
+        f = sim.f
+        values = [
+            combine(sp.amp, w) if (sp.amp is not None and act.any()) else w
+            for sp, (w, act) in zip(self.plan, tables.sources)
+        ]
+        active = [act for _, act in tables.sources]
+        hcos, hsin, ecos, esin = tables.phases
+        hs = es = 0
+        for n in range(n0, n1):
+            b = n - n0
+            for comp, k0, k1, _, old in sim._mu:
+                ops.copy_into(f[comp][:, :, k0:k1], old)
+            sim._step_h()
+            for q, sp in self.h_src:
+                if active[q][b]:
+                    ops.sub_at(f[sp.comp], sp.handle, sp.scale * values[q][b])
+            for comp, k0, k1, m, old in sim._mu:
+                ops.blend_(f[comp][:, :, k0:k1], old, m)
+            if n % dec == 0:
+                for p, idx, a in self.h_probes:
+                    v = ops.take(f[p.comp], idx)
+                    a.re += np.outer(hcos[hs], v)
+                    a.im += np.outer(hsin[hs], v)
+                hs += 1
+            sim._step_e()
+            for q, sp in self.e_src:
+                if active[q][b]:
+                    ops.sub_at(f[sp.comp], sp.handle, sp.scale * values[q][b])
+            if sim._sheet:
+                sim._step_sheet()
+            if (n + 1) % dec == 0:
+                for p, idx, a in self.e_probes:
+                    v = ops.take(f[p.comp], idx)
+                    a.re += np.outer(ecos[es], v)
+                    a.im += np.outer(esin[es], v)
+                es += 1

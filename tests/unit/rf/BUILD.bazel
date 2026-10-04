@@ -48,6 +48,15 @@ yapnr_py_tests(
         "test_lumped_ports": {"size": "medium"},
         "test_microstrip": _SLOW,
         "test_modes": _SLOW,
+        # The kernel's equivalence on a library compiled with the host compiler (skips without
+        # one); the optimizer and case comparisons run in test_native_kernel_native below.
+        "test_native_kernel": dict(
+            _SLOW_TESTING,
+            env = dict(
+                _ENV,
+                YAPNR_RF_NATIVE_QUICK = "1",
+            ),
+        ),
         "test_pipeline_gradient": _SLOW_TESTING,
         "test_pipeline_gradient_options": _SLOW_TESTING,
         "test_ports": _SLOW,
@@ -80,3 +89,56 @@ py_test(
     ],
     deps = ["//yapnr/rf"],
 )
+
+# The native FDTD stepper (//yapnr/rf:libyapnr_fdtd.so, needs a C toolchain): its equivalence
+# tests on the Bazel-built library, and the finite-difference gradient checks run on it
+# (YAPNR_RF_BACKEND=native: exact problems and default simulations use the native stepper;
+# YAPNR_RF_REQUIRE_NATIVE: an unloadable library fails them instead of running numpy).
+#   bazel test //tests/unit/rf:test_native_kernel_native //tests/unit/rf:test_adjoint_gradients_native \
+#     //tests/unit/rf:test_pipeline_gradient_native
+py_test(
+    name = "test_native_kernel_native",
+    size = "medium",
+    srcs = ["test_native_kernel.py"],
+    data = ["//yapnr/rf:libyapnr_fdtd.so"],
+    env = dict(
+        _ENV,
+        YAPNR_RF_REQUIRE_NATIVE = "1",
+    ),
+    main = "test_native_kernel.py",
+    tags = [
+        "manual",
+        "native",
+    ],
+    deps = [
+        "//yapnr/rf",
+        "//yapnr/rf:testing",
+    ],
+)
+
+[
+    py_test(
+        name = name + "_native",
+        size = "medium",
+        srcs = [name + ".py"],
+        data = ["//yapnr/rf:libyapnr_fdtd.so"],
+        env = dict(
+            _ENV,
+            YAPNR_RF_BACKEND = "native",
+            YAPNR_RF_REQUIRE_NATIVE = "1",
+        ),
+        main = name + ".py",
+        tags = [
+            "manual",
+            "native",
+        ],
+        deps = [
+            "//yapnr/rf",
+            "//yapnr/rf:testing",
+        ],
+    )
+    for name in [
+        "test_adjoint_gradients",
+        "test_pipeline_gradient",
+    ]
+]

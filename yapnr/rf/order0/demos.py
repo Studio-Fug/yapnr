@@ -115,9 +115,10 @@ SELECTION = (
     "Among the formulations whose exported design passes every validation criterion on all"
     " three grids (coarse; fine and finer), ship the one with the largest worst-case margin"
     " over the fine and finer grids, the margin of a check being (limit - worst) in dB for"
-    " |S11| and (worst - limit) for |S21| and |S31|; on a tie (0.05 dB) the earlier one in the"
-    " order base, robust, star, sched. Every attempt and its validation is published (§7 items"
-    " 1 and 6)."
+    " |S11| and (worst - limit) for |S21| and |S31|; on a tie (within 0.05 dB) the one whose"
+    " export changed the fewest pixels in the width and space repair (validation.json"
+    " `repaired_pixels`), then the earlier one in the order base, robust, star, sched. Every"
+    " attempt and its validation is published (§7 items 1 and 6)."
 )
 ROUND2_SOLVER = dict(edge_correction=True, port_source="mode")
 

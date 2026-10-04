@@ -63,8 +63,11 @@ against the baseline, aimed at the main risk that D1 does not pass (Order 0 desi
 **Selection rule (fixed before any run).** Among the formulations whose exported design passes
 every validation criterion on all three grids (coarse; fine and finer), ship the one with the
 largest worst-case margin over the fine and finer grids, the margin of a check being (limit −
-worst) in dB for \|S11\| and (worst − limit) for \|S21\| and \|S31\|; on a tie (0.05 dB) the
-earlier one in the order base, robust, star, sched. Every attempt and its validation is published.
+worst) in dB for \|S11\| and (worst − limit) for \|S21\| and \|S31\|; on a tie (within 0.05 dB)
+the one whose export changed the fewest pixels in the width and space repair (`repaired_pixels` in
+`validation.json`), then the earlier one in the order base, robust, star, sched. Every attempt and
+its validation is published. (The repair tie-break was added on 2026-10-04 at 09:48 UTC, after the
+compute campaigns were submitted at 09:46 and before any of their tasks had finished.)
 
 ## Criteria
 

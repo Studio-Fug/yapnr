@@ -243,6 +243,34 @@ def compact_environment(compact, compact_off=(), shrink=False):
     return env
 
 
+def legalize_environment(
+    gp_polish=False, gp_channels=None, pool_source_clamp=False, legalize_hpwl=None, reorient=None
+):
+    """The PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP / PNR_LEGALIZE_HPWL /
+    PNR_LEGALIZE_REORIENT variables of ``--gp-polish``, ``--gp-channels``,
+    ``--pool-source-clamp``, ``--legalize-hpwl`` and ``--legalize-reorient``
+    (``pnr.legalize_flags``; set after the ambient PNR_* variables are stripped, so provenance
+    records them); empty when none is given. ``reorient`` is ``"1"`` (guarded), ``"wire"`` or
+    None."""
+    env = {}
+    for name, value in (("--gp-channels", gp_channels), ("--legalize-hpwl", legalize_hpwl)):
+        if value is not None and not (math.isfinite(value) and value > 0):
+            raise ValueError("%s takes a positive weight, got %r" % (name, value))
+    if gp_polish:
+        env["PNR_GP_POLISH"] = "1"
+    if gp_channels is not None:
+        env["PNR_GP_CHANNELS"] = repr(float(gp_channels))
+    if pool_source_clamp:
+        env["PNR_POOL_SOURCE_CLAMP"] = "1"
+    if legalize_hpwl is not None:
+        env["PNR_LEGALIZE_HPWL"] = repr(float(legalize_hpwl))
+    if reorient not in (None, "1", "wire"):
+        raise ValueError("--legalize-reorient takes nothing or wire, got %r" % (reorient,))
+    if reorient:
+        env["PNR_LEGALIZE_REORIENT"] = reorient
+    return env
+
+
 def fab_data_inputs(repo):
     return [repo / p for p in FAB_DATA_SOURCES] + sorted(
         (repo / "yapnr/fab/data/profiles").glob("*.json")
@@ -716,6 +744,44 @@ def parser():
         help="With --compact: drop one part, PNR_COMPACT_<PART>=0 (repeatable; ablations)",
     )
     ap.add_argument(
+        "--gp-polish",
+        action="store_true",
+        help=(
+            "PNR_GP_POLISH=1: a final global-placement phase on the legalizer's own slots, turns "
+            "frozen (docs/design/compact-placement.md, section 11)"
+        ),
+    )
+    ap.add_argument(
+        "--gp-channels",
+        type=float,
+        metavar="LAMBDA",
+        help="PNR_GP_CHANNELS=LAMBDA: the polish (implied) also weighs the legalizer's channel cost",
+    )
+    ap.add_argument(
+        "--pool-source-clamp",
+        action="store_true",
+        help="PNR_POOL_SOURCE_CLAMP=1: the initial pool's source start begins inside the outline",
+    )
+    ap.add_argument(
+        "--legalize-hpwl",
+        type=float,
+        metavar="W",
+        help=(
+            "PNR_LEGALIZE_HPWL=W: the legalizer's slot cost gains W times the part's wirelength "
+            "and the turn is chosen with the slot among all four"
+        ),
+    )
+    ap.add_argument(
+        "--legalize-reorient",
+        nargs="?",
+        const="1",
+        choices=("1", "wire"),
+        help=(
+            "PNR_LEGALIZE_REORIENT=1: in-place turns that shorten wires after legalization, "
+            "never raising a part's channel shortage; 'wire' drops that guard"
+        ),
+    )
+    ap.add_argument(
         "--shrink",
         action="store_true",
         help=(
@@ -848,6 +914,15 @@ def main():
         env["PNR_BATCHED_WIRELENGTH"] = "1"
     try:
         env.update(compact_environment(args.compact, args.compact_off, args.shrink))
+        env.update(
+            legalize_environment(
+                args.gp_polish,
+                args.gp_channels,
+                args.pool_source_clamp,
+                args.legalize_hpwl,
+                args.legalize_reorient,
+            )
+        )
     except ValueError as error:
         raise SystemExit(str(error))
     env["PNR_FAB_PROFILE"] = (

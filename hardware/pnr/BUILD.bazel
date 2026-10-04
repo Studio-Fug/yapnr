@@ -1723,6 +1723,39 @@ py_test(
     ],
 )
 
+# Legalizer and global-placement switches (PNR_GP_POLISH, PNR_GP_CHANNELS,
+# PNR_POOL_SOURCE_CLAMP, PNR_LEGALIZE_HPWL, PNR_LEGALIZE_REORIENT; default off;
+# docs/design/compact-placement.md section 11): parsing, the runner's options, the trace header
+# and the flag-off identity against the compact goldens on two ladder cases.
+py_test(
+    name = "legalize_flags_test",
+    size = "medium",
+    srcs = [
+        "tests/compact_fixture.py",
+        "tests/test_legalize_flags.py",
+    ],
+    # run.py reads the regression modules.
+    data = glob([
+        "pnr/**/*.py",
+        "regression/*.py",
+        "testdata/compact/*",
+    ]),
+    imports = [
+        ".",
+        "regression",
+        "tests",
+    ],
+    main = "tests/test_legalize_flags.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
+)
+
 # PNR_LEGALIZE_HPWL: the legalizer's wirelength term and four-turn search (the README's
 # line-chaser resistors end flush with the row).
 py_test(

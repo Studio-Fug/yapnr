@@ -1762,6 +1762,30 @@ py_test(
     ],
 )
 
+# PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP: global placement on the
+# legalizer's slots and channel cost (pnr.place.gp_polish).
+py_test(
+    name = "gp_polish_test",
+    size = "medium",
+    srcs = [
+        "tests/compact_fixture.py",
+        "tests/test_gp_polish.py",
+    ],
+    data = ["testdata/compact/04-inverter-leds-8.json"],
+    imports = [
+        ".",
+        "tests",
+    ],
+    main = "tests/test_gp_polish.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
 # The hierarchical ladder driver (regression/hier_case.py) on a synthetic 10-part design.
 py_test(
     name = "hier_case_test",

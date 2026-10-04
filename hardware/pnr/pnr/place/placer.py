@@ -8,6 +8,13 @@ PNR_COMPACT=1 (default off; :mod:`pnr.place.compact`, docs/design/compact-placem
 spread 1.0 and starts drawn in a cluster box (``GP``), the compact legalizer settings
 (``LEGALIZE``: courtyard gap, copper margins, 0.125 mm slots, pads off the outline) and
 offset courtyards (``COURTYARD``) wherever a part has an off-centre body.
+
+Legalizer and global-placement switches (:mod:`pnr.legalize_flags`, default off, with or
+without PNR_COMPACT; docs/design/compact-placement.md section 11): ``PNR_GP_POLISH`` /
+``PNR_GP_CHANNELS`` end global placement with a phase on the legalizer's slots (and its
+channel cost, :mod:`pnr.place.gp_polish`), ``PNR_LEGALIZE_HPWL`` gives the legalizer a
+wirelength term and the choice of all four turns, and ``PNR_LEGALIZE_REORIENT`` turns parts in
+place after legalization (:mod:`pnr.place.reorient`).
 """
 
 from __future__ import annotations
@@ -270,6 +277,17 @@ def place(
 
     # 1. Global placement (continuous position + orientation, and side when free).
     sided = side_plan.active
+    polish = _polish(
+        graph,
+        constraints,
+        channel_rules,
+        clearance=clearance,
+        grid_mm=grid_mm,
+        spread=spread,
+        inflation=inflation,
+        pad_edge=pad_edge,
+        margins=tight.margins if tight else None,
+    )
     placement = global_place(
         graph,
         constraints,
@@ -294,6 +312,8 @@ def place(
             if compact.enabled("GP")
             else {}
         ),
+        # PNR_GP_POLISH: a final phase on the legalizer's slots (pnr.place.gp_polish).
+        **({} if polish is None else dict(polish=polish)),
     )
     positions, rotations = placement[:2]
     cont = BoardGraph.from_json(graph.to_json())
@@ -410,6 +430,26 @@ def place(
         )
         check_held(placed, side_plan)
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
+
+
+def _polish(graph, constraints, channel_rules, **legal):
+    """The global-placement polish of ``PNR_GP_POLISH`` / ``PNR_GP_CHANNELS``
+    (:class:`pnr.place.gp_polish.Polish`) with the legalizer's ``clearance``, ``grid_mm``,
+    ``inflation``, ``pad_edge`` rule, copper ``margins`` and spreading floor (``spread``
+    capped as the legalizer's), and with ``PNR_GP_CHANNELS`` its weight and the routing rules;
+    None when off."""
+    if not legalize_flags.gp_polish():
+        return None
+    from pnr.constraints import compile_routing_rules
+
+    from .gp_polish import Polish
+
+    weight = legalize_flags.gp_channels()
+    rules = None
+    if weight is not None:
+        rules = channel_rules or compile_routing_rules(constraints, [n.name for n in graph.nets])
+    legal["spread"] = min(legal["spread"], _LEGALIZE_SPREAD_CAP)
+    return Polish(channel_weight=weight, rules=rules, **legal)
 
 
 def _legal_outline(constraints):

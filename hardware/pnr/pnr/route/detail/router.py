@@ -1017,6 +1017,9 @@ def route_board(
     _mark_copper_keepouts(grid, graph, rules)
     _mark_source_arrays(grid, graph, rules)
 
+    if class_mode in ("maze", "repair"):
+        # Escape options of two nets keep the larger of their class clearances.
+        grid.class_escapes = True
     # Plan a pin escape per pad (E2 via-in-pad / E3 dog-bone) — the access cell the
     # maze routes each net from, plus the escape geometry that bonds pad→access.
     signal_nets = {net.name for net in graph.nets if net.name not in planes and net.degree >= 2}

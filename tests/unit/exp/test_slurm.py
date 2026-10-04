@@ -76,6 +76,13 @@ class SlurmTest(unittest.TestCase):
         self.assertIn("--chunk 2", sbatch)
         self.assertIn("apptainer exec --cleanenv --containall", sbatch)
 
+    def test_the_campaign_runtime_launches_the_wrapper(self):
+        runtime = '\n[runtime]\npython = "/opt/solver/bin/python"\nentrypoint = ""\n'
+        plan = self.plan(testing.LADDER_CAMPAIGN + runtime)
+        sbatch = (plan.dir / "backend" / "slurm" / "c1m3.sbatch").read_text()
+        self.assertIn('"${YAPNR_SIF}" /opt/solver/bin/python\n', sbatch)
+        self.assertNotIn(slurm.IMAGE_ENTRYPOINT, sbatch)
+
     def run_element(self, sbatch, restarts, signal_usr1, code=0):
         """Run the batch script with stub apptainer and scontrol; returns (exit, scontrol call)."""
         stubs = self.tmp / "stubs"

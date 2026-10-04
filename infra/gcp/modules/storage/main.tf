@@ -32,6 +32,10 @@ variable "guard_email" {
   type = string
 }
 
+variable "image_build_email" {
+  type = string
+}
+
 variable "result_retention_days" {
   type = number
 }
@@ -143,6 +147,18 @@ resource "google_storage_bucket_iam_member" "guard_control" {
   condition {
     title      = "control-prefix-only"
     expression = "resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.runs.name}/objects/control/\")"
+  }
+}
+
+# Cloud Build reads the image build context that `gcloud builds submit` stages under cloudbuild/.
+resource "google_storage_bucket_iam_member" "image_build_source" {
+  bucket = google_storage_bucket.inputs.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${var.image_build_email}"
+
+  condition {
+    title      = "cloudbuild-staging-only"
+    expression = "resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.inputs.name}/objects/cloudbuild/\")"
   }
 }
 

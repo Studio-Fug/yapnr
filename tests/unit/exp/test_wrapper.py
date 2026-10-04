@@ -329,6 +329,26 @@ class RunCommandTest(unittest.TestCase):
             self.assertIsNone(stopped)
             self.assertLess(time.monotonic() - start, 30)
 
+    def test_the_campaign_runtime_names_the_image_python(self):
+        # An image other than yapnr's (no /opt/venv): ${PYTHON} is the campaign's runtime.python.
+        verdict = {"file": "out/done.json", "json_path": "passed"}
+        task = testing.python_task("t/rt", WRITE_DONE % "True", verdict=verdict)
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Path(tmp) / "store"
+            base = testing.write_store_campaign(store, [task])
+            meta = json.loads((base / "campaign.json").read_text())
+            meta["image"] = {
+                "ref": "registry.example/solver/image@" + testing.DIGEST,
+                "runtime": {"python": sys.executable, "entrypoint": ""},
+            }
+            (base / "campaign.json").write_text(json.dumps(meta))
+            result = testing.run_wrapper(
+                store, 0, "image", extra=["--work-root", str(Path(tmp) / "work")]
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            marker = json.loads((base / "tasks" / "t~rt" / "_DONE").read_text())
+            self.assertEqual(marker["verdict"], "pass")
+
     def test_with_launcher_uses_the_task_entrypoint_in_the_image(self):
         task = {"entrypoint": sys.executable}
         argv = wrapper.with_launcher(["x"], task, {"use_task_entrypoint": True, "launcher": []})

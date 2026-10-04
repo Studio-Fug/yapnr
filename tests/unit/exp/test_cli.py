@@ -52,6 +52,49 @@ class CliTest(unittest.TestCase):
             )
             self.assertEqual(code, 0, err)
 
+    def test_plan_lists_the_candidates_and_submit_takes_a_region_pin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            cfg = testing.write_config(tmp)
+            ranking = ", ".join('["%s", "%s"]' % pair for pair in testing.RANKING)
+            cfg.write_text(cfg.read_text().replace("[gcp]\n", "[gcp]\nranking = [%s]\n" % ranking))
+            text = testing.SMOKE_CAMPAIGN.replace(
+                "[config]", testing.RANKED_FAMILIES + "\n[config]"
+            )
+            campaign = testing.write_campaign(tmp / "smoke.toml", text)
+            code, out, err = self.run_cli(
+                "exp",
+                "--config",
+                str(cfg),
+                "plan",
+                str(campaign),
+                "--backend",
+                "gcp-batch",
+                "--offline",
+                "--image-digest",
+                testing.DIGEST,
+                "--out",
+                str(tmp / "plan"),
+            )
+            self.assertEqual(code, 0, err)
+            self.assertRegex(out, r"1\. c4d-highcpu-16 +us-west4 +\$0\.\d{4}/VM-h")
+            self.assertRegex(out, r"2\. c4-highcpu-16 +northamerica-northeast1 ")
+            self.assertRegex(out, r"3\. c4-highcpu-16 +us-west4 ")
+            self.assertIn("spill     submit places each class", out)
+            code, out, err = self.run_cli(
+                "exp",
+                "--config",
+                str(cfg),
+                "submit",
+                str(tmp / "plan"),
+                "--dry-run",
+                "--region",
+                "northamerica-northeast1",
+            )
+            self.assertEqual(code, 0, err)
+            self.assertIn("pinned to northamerica-northeast1", out)
+            self.assertIn("--location=northamerica-northeast1", out)
+
     def test_errors_are_one_line(self):
         with tempfile.TemporaryDirectory() as tmp:
             cfg = testing.write_config(Path(tmp))

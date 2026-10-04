@@ -18,7 +18,10 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
     out.mkdir(parents=True, exist_ok=False)
     rules = Path(rules).resolve()
     board = Path(board).resolve()
-    env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent.parent))
+    # The KiCad workers import pnr and, for a vendor data profile (PNR_FAB_PROFILE), the
+    # yapnr package beside it (yapnr.fab: the profile files).
+    pnr_root = Path(__file__).resolve().parent.parent
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(pnr_root), str(pnr_root.parent.parent)]))
 
     def invoke(args, name):
         from pnr.proc import (  # one KiCad worker: PNR_WORKER_TIMEOUT; stays in this process group
@@ -28,8 +31,12 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         with (out / name).open("w") as f:
             run_checked(args, session=False, env=env, stdout=f, stderr=subprocess.STDOUT)
 
+    # With fixed blocks declared (rules fixed_blocks) the export holds their
+    # footprints out of placed.json and records their copper as blocks.
     invoke(
-        [kicad_python, "-m", "pnr.fixed_copper", str(board), "--export-dir", str(out)], "export.log"
+        [kicad_python, "-m", "pnr.fixed_copper", str(board), "--export-dir", str(out)]
+        + (["--rules", str(rules)] if json.loads(rules.read_text()).get("fixed_blocks") else []),
+        "export.log",
     )
     g = BoardGraph.from_json((out / "placed.json").read_text())
     policy = json.loads(rules.read_text())
@@ -57,9 +64,11 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         fixed_copper=json.loads((out / "fixed.json").read_text()),
     )
     routes = out / "routes.json"
-    routes.write_text(
-        json.dumps(dict(tracks=result.tracks, vias=result.vias, unrouted=result.result.unrouted))
-    )
+    payload = dict(tracks=result.tracks, vias=result.vias, unrouted=result.result.unrouted)
+    if result.via_spans:  # blind, buried and micro vias (pnr.via_policy)
+        payload["via_spans"] = result.via_spans
+    payload.update(result.extras())  # a declared fanout's via sizes and locked copper
+    routes.write_text(json.dumps(payload))
     (out / "result.json").write_text(
         json.dumps(
             dict(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import tempfile
 import unittest
@@ -134,6 +135,117 @@ class PlanTest(unittest.TestCase):
         )
         placement = plan.placement(plan.classes[0].name)
         self.assertEqual((placement.family, placement.region), ("t2d", "northamerica-northeast1"))
+
+    def ranked_smoke(self, **kw):
+        self.config.gcp.ranking = list(testing.RANKING)
+        text = testing.SMOKE_CAMPAIGN.replace("[config]", testing.RANKED_FAMILIES + "\n[config]")
+        return self.plan(text, **kw)
+
+    def test_ranked_pairs_are_the_candidates_in_order(self):
+        plan = self.ranked_smoke()
+        name = plan.classes[0].name
+        self.assertEqual(
+            [p.pair for p in plan.candidates(name)],
+            ["c4d/us-west4", "c4/northamerica-northeast1", "c4/us-west4"],
+        )
+        self.assertEqual(plan.placement(name).pair, "c4d/us-west4")  # what the estimate prices
+        rows = plan.meta["candidates"][name]
+        self.assertEqual(
+            [r["shape"] for r in rows], ["c4d-highcpu-16", "c4-highcpu-16", "c4-highcpu-16"]
+        )
+        # Each candidate carries its prices and the class's estimate there.
+        self.assertTrue(all("fallback" not in r["price_source"] for r in rows), rows)
+        montreal, vegas = rows[1], rows[2]
+        self.assertLess(montreal["vm_hour_usd"], vegas["vm_hour_usd"] / 2)
+        self.assertLess(montreal["expected_usd"], vegas["expected_usd"])
+        self.assertLessEqual(rows[0]["expected_usd"], rows[0]["ceiling_usd"])
+        self.assertAlmostEqual(plan.meta["estimate"]["expected_usd"], rows[0]["expected_usd"], 3)
+
+    def test_ranked_families_are_allowed_by_default(self):
+        # A campaign that names no families may use every family the owner ranked.
+        self.assertEqual(planning.default_families(testing.RANKING), ["c4d", "c4", "c3d", "t2d"])
+        self.config.gcp.ranking = list(testing.RANKING)
+        plan = self.plan(testing.SMOKE_CAMPAIGN)
+        self.assertEqual(
+            [p.pair for p in plan.candidates(plan.classes[0].name)],
+            ["c4d/us-west4", "c4/northamerica-northeast1", "c4/us-west4"],
+        )
+        # A campaign's own families still restrict them.
+        plan = self.plan(
+            testing.SMOKE_CAMPAIGN.replace(
+                "[config]", '[placement]\nfamilies = ["c4d"]\n\n[config]'
+            ),
+            out=self.tmp / "c4d",
+        )
+        self.assertEqual([p.pair for p in plan.candidates(plan.classes[0].name)], ["c4d/us-west4"])
+
+    def test_without_a_ranking_a_class_has_one_candidate(self):
+        plan = self.plan(testing.SMOKE_CAMPAIGN)
+        name = plan.classes[0].name
+        self.assertEqual(len(plan.meta["candidates"][name]), 1)
+        self.assertEqual(plan.candidates(name), [plan.placement(name)])
+
+    def test_wall_clock_budgeted_candidates_keep_one_machine_type(self):
+        # Two classes; 8 tasks of 3.4 GB fill a C4 highcpu VM but not a C4D one (30 GB), so C4D
+        # would run the classes on two machine types and is dropped from both.
+        def task(name, memory_gb):
+            return {
+                "id": name,
+                "command": ["${PYTHON}", "-c", "pass"],
+                "record": "out/%s.json" % name,
+                "resources": {"cpus": 1, "memory_gb": memory_gb, "disk_gb": 1, "max_wall_s": 600},
+            }
+
+        stage = [task("a%d" % i, 1) for i in range(8)] + [task("b%d" % i, 3.4) for i in range(8)]
+        (self.tmp / "stage.jsonl").write_text("".join(json.dumps(t) + "\n" for t in stage))
+        text = (
+            'schema = "yapnr-campaign-v1"\nkind = "mc-eval"\nname = "wcb"\nsource = "none"\n'
+            'image = "edge"\n\n%s\n[config]\nstage_plan = "stage.jsonl"\n' % testing.RANKED_FAMILIES
+        )
+        self.config.gcp.ranking = [
+            ("c4", "northamerica-northeast1"),
+            ("c4d", "us-west4"),
+            ("c4", "us-west4"),
+        ]
+        plan = self.plan(text)
+        self.assertEqual(plan.meta["determinism"], "wall_clock_budgeted")
+        for cls in plan.classes:
+            self.assertEqual(
+                [p.pair for p in plan.candidates(cls.name)],
+                ["c4/northamerica-northeast1", "c4/us-west4"],
+            )
+            self.assertEqual({p.shape for p in plan.candidates(cls.name)}, {"c4-highcpu-16"})
+        # With C4D preferred, the classes cannot share a machine type: as before, an error.
+        self.config.gcp.ranking = list(testing.RANKING)
+        with self.assertRaises(planning.PlanError):
+            self.plan(text, out=self.tmp / "c4d")
+        # One class: every ranked family is a candidate.
+        plan = self.plan(
+            testing.LADDER_CAMPAIGN + "\n" + testing.RANKED_FAMILIES, out=self.tmp / "l"
+        )
+        self.assertEqual(
+            [p.pair for p in plan.candidates("c1m3")],
+            ["c4d/us-west4", "c4/northamerica-northeast1", "c4/us-west4"],
+        )
+
+    def test_a_region_pinned_at_plan_keeps_only_its_candidates(self):
+        plan = self.ranked_smoke(region="northamerica-northeast1")
+        name = plan.classes[0].name
+        self.assertEqual([p.pair for p in plan.candidates(name)], ["c4/northamerica-northeast1"])
+
+    def test_a_chosen_placement_replaces_the_planned_one(self):
+        plan = self.plan(testing.SMOKE_CAMPAIGN)
+        meta = dict(plan.meta)
+        meta.pop("candidates")  # a plan made before candidates existed
+        (plan.dir / "campaign.json").write_text(json.dumps(meta))
+        old = planning.Plan(plan.dir)
+        name = old.classes[0].name
+        self.assertEqual(old.candidates(name), [old.placement(name)])
+        moved = dataclasses.replace(old.placement(name), region="us-west4")
+        old.choose(name, moved)
+        self.assertEqual(old.placement(name), moved)
+        self.assertEqual(old.placements()[name], moved)
+        self.assertNotEqual(planning.Plan(plan.dir).placement(name), moved)  # not written
 
     def test_shape_and_region_overrides(self):
         plan = self.plan(

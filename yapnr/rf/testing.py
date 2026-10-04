@@ -1,0 +1,247 @@
+"""Test helpers.
+
+- `GradientChecks`: the shared body of the pipeline gradient tests (tests/unit/rf).
+- `tiny_spec`: a tiny two-port spec for the optimizer tests (about 1e4 cells, 6 × 6 pixels):
+  S-parameter requirements on a 2.4 mm square region between two 2-cell (0.8 mm) feeds on a
+  0.8 mm substrate, 8–12 GHz; the best binary design is the straight line continuing the
+  feeds. A run of the optimization on it takes about 1.5 s per iteration (numpy, float64; the
+  default backend, native where its library loads, is faster).
+- `CaseChecks`: the shared body of the end-to-end case tests (tests/e2e/rf, design §11). Each
+  case test optimizes its preset (`yapnr.rf.cases`), exports it, re-validates the exported
+  footprint on the optimization grid and on a finer grid, and asserts the case's criteria.
+  A full run (Bazel `:test_<case>`, tagged `manual`) takes minutes to an hour on 4 threads; its
+  run directory is `$YAPNR_RF_RUN_DIR/<case>` when that is set (a finished or interrupted run
+  there resumes from its checkpoint), else the test's undeclared outputs. The smoke run
+  (`:test_<case>_smoke`, `YAPNR_RF_SMOKE=1`, in CI) is the same topology on a tiny grid for
+  four iterations; it asserts the pipeline (progress, export, a pixel-exact re-simulation of
+  the footprint, a finite and roughly passive fine re-simulation), not the RF targets.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import os
+import shutil
+import tempfile
+
+import numpy as np
+
+from yapnr.rf import cases
+from yapnr.rf.export.kicad import read_footprint
+from yapnr.rf.ports import LineCalibration
+from yapnr.rf.spec import (
+    Band,
+    GridSpec,
+    OptimizerSpec,
+    Port,
+    RadiatedFraction,
+    Rules,
+    S,
+    SolverSpec,
+    Spec,
+    StackupSpec,
+)
+
+GRID = GridSpec(
+    pitch_mm=0.4,
+    substrate_cells=2,
+    meas_cells=2,
+    src_cells=5,
+    pml_gap=2,
+    core_cells=1,
+    margin_mm=1.2,
+    air_mm=2.4,
+    pml_cells=6,
+    pml_top_cells=6,
+    f_max_ghz=15.0,
+)
+
+
+def tiny_spec(*, radiated: bool = False, **optimizer) -> Spec:
+    reqs = [S(2, 1).at_least_db(-0.3, band="b"), S(1, 1).at_most_db(-15, band="b")]
+    if radiated:
+        reqs.append(RadiatedFraction(1).at_most(0.1, band="b"))
+    opt = dict(betas=(8, 16, 32), iterations_per_beta=4)
+    opt.update(optimizer)
+    return Spec(
+        name="tiny",
+        stackup=StackupSpec(3.0, 0.002, 0.8, 10.0),
+        grid=GRID,
+        design_region=(0.0, 2.4, -1.2, 1.2),
+        ports=(Port(1, "W", 0.0, 2), Port(2, "E", 0.0, 2)),
+        bands={"b": Band(8.0, 12.0, 3)},
+        requirements=tuple(reqs),
+        rules=Rules(0.8, 0.8),
+        symmetry="mirror_y",
+        optimizer=OptimizerSpec(**opt),
+        solver=SolverSpec(sweep_points=11),
+    )
+
+
+def nominal_calibration() -> dict:
+    """A fixed line calibration (skips the calibration run in gradient tests)."""
+    om = 2 * np.pi * np.array([8e9, 10e9, 12e9])
+    zc = np.array([72 + 1j, 72.5 + 0.8j, 73 + 0.6j])
+    return {"*": LineCalibration(om, zc, om * np.sqrt(2.3) / 3e8 + 0.5j, 0.0)}
+
+
+# -- the native kernel --------------------------------------------------------------------------
+
+_NATIVE_BUILT: dict = {}
+
+
+def native_kernel_or_skip(test):
+    """The native FDTD kernel for a test: the library the loader finds (Bazel: the one
+    //yapnr/rf carries), else one compiled once per process with the host compiler (``cc`` or
+    ``$CC``, into a temporary directory removed at exit); skips the test without either, and
+    fails it instead when ``YAPNR_RF_REQUIRE_NATIVE`` is set."""
+    import atexit
+    import shutil
+    import tempfile
+    from unittest.mock import patch
+
+    from yapnr.rf.fdtd import native_kernel
+
+    kernel = native_kernel.load()
+    if (
+        kernel is None
+        and "dir" not in _NATIVE_BUILT
+        and native_kernel.SOURCE.is_file()
+        and shutil.which(os.environ.get("CC", "cc"))
+    ):
+        out = _NATIVE_BUILT["dir"] = tempfile.mkdtemp(prefix="yapnr-fdtd-")
+        atexit.register(shutil.rmtree, out, True)
+        _NATIVE_BUILT["library"] = native_kernel.build_library(out)
+    if kernel is None and "library" in _NATIVE_BUILT:
+        # (again after a test that made the loader forget it)
+        native_kernel.reset()
+        with patch.dict(os.environ, {native_kernel.ENV_LIB: str(_NATIVE_BUILT["library"])}):
+            kernel = native_kernel.load()
+    if kernel is None:
+        reason = "native FDTD library unavailable: " + native_kernel.status()["reason"]
+        if native_kernel.required():  # the library is the point
+            test.fail(reason)
+        test.skipTest(reason)
+    return kernel
+
+
+# -- pipeline gradients -------------------------------------------------------------------------
+
+
+class GradientChecks:
+    """Mixin of the pipeline gradient tests (tests/unit/rf/test_pipeline_gradient*.py): the
+    whole pipeline's gradient against Richardson-extrapolated central differences along a
+    random direction, and the length-scale constraints' at β = 128. A subclass calls
+    `setup_gradient(spec, seed)` in its setUpClass and mixes with TestCase."""
+
+    OBJECTIVE = "spec"
+
+    @classmethod
+    def setup_gradient(cls, spec, seed: int) -> None:
+        from yapnr.rf.problem import Problem
+
+        cls.p = p = Problem(spec, exact=True, calibrations=nominal_calibration())
+        rng = np.random.default_rng(seed)
+        cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
+        cls.beta = 8.0
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta), objective=cls.OBJECTIVE)
+        cls.ev = ev
+        cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
+        cls.v = rng.standard_normal(cls.x.size)
+
+    def _f(self, x):
+        rho = self.p.param.rho_bar(x, self.beta)
+        return self.p.evaluate(rho, gradients=False, objective=self.OBJECTIVE).values
+
+    def test_runs_converged(self):
+        self.assertTrue(self.ev.converged)
+        self.assertEqual(len(self.ev.keys), 3)
+
+    def test_directional_derivative(self):
+        h = 1e-4
+        x, v = self.x, self.v
+        d1 = (self._f(x + h * v) - self._f(x - h * v)) / (2 * h)
+        d2 = (self._f(x + 0.5 * h * v) - self._f(x - 0.5 * h * v)) / h
+        fd = (4 * d2 - d1) / 3
+        adj = self.grad @ v
+        np.testing.assert_allclose(adj, fd, rtol=1e-6)
+
+    def test_lengthscale_gradient(self):
+        ls = self.p.lengthscale
+        self.assertIsNotNone(ls)
+        h = 1e-5
+        g, dg = self.p.param.lengthscale(self.x, 128.0, ls)
+        gp, _ = self.p.param.lengthscale(self.x + h * self.v, 128.0, ls)
+        gm, _ = self.p.param.lengthscale(self.x - h * self.v, 128.0, ls)
+        np.testing.assert_allclose(dg @ self.v, (gp - gm) / (2 * h), rtol=1e-5)
+
+
+# -- end-to-end cases ---------------------------------------------------------------------------
+
+SMOKE = os.environ.get("YAPNR_RF_SMOKE") == "1"
+
+
+def _summary(report: dict) -> str:
+    return json.dumps(cases.validate_summary(report), indent=1)
+
+
+class CaseChecks:
+    """Mixin of the e2e case tests (tests/e2e/rf): set `CASE` and mix with TestCase."""
+
+    CASE: str = ""
+
+    def setUp(self):
+        self._tmp = None
+        base = os.environ.get("YAPNR_RF_RUN_DIR") or os.environ.get("TEST_UNDECLARED_OUTPUTS_DIR")
+        if not base:
+            self._tmp = base = tempfile.mkdtemp(prefix="rf-e2e-")
+        suffix = "-smoke" if SMOKE else ""
+        self.out = os.path.join(base, self.CASE + suffix)
+
+    def tearDown(self):
+        if self._tmp:
+            shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def test_case(self):
+        report = cases.run(self.CASE, self.out, scale="smoke" if SMOKE else "full")
+        for name in ("footprint.kicad_mod", "result.json", "validation.json", "history.json"):
+            self.assertTrue(os.path.exists(os.path.join(self.out, name)), name)
+        spec = cases.spec_for(self.CASE, "smoke" if SMOKE else "full")
+        n = len(spec.ports)
+        for name in (f"coarse.s{n}p", f"coarse_dense.s{n}p", f"fine.s{n}p"):
+            self.assertTrue(os.path.exists(os.path.join(self.out, name)), name)
+        fp = read_footprint(os.path.join(self.out, "footprint.kicad_mod"))
+        n_pads = n + 2 * len(spec.lumped)  # the ports, then two pads per lumped part
+        self.assertEqual(sorted(int(p["number"]) for p in fp.pads), list(range(1, n_pads + 1)))
+        # The footprint reproduces the exported design on its grid, pixel for pixel.
+        same = report["same_grid"]
+        self.assertEqual(same["pixel_xor"], 0)
+        if SMOKE:
+            self._smoke_checks(report)
+            return
+        # The width and space check passes, every port is joined, and the exported design
+        # stays close to the optimizer's binary design (validate.EXPORT_DB, EXPORT_ABS).
+        self.assertTrue(report["export_ok"], (same, report.get("drc"), report["footprint"]))
+        self.assertTrue(report["coarse"]["ok"], _summary(report))
+        self.assertTrue(report["fine"]["ok"], _summary(report))
+        if "finer" in report:
+            self.assertTrue(report["finer"]["ok"], _summary(report))
+
+    def _smoke_checks(self, report):
+        with open(os.path.join(self.out, "history.json"), encoding="utf-8") as fh:
+            hist = json.load(fh)["iterations"]
+        self.assertEqual(len(hist), 4)
+        ts = [h["t"] for h in hist]
+        self.assertLess(min(ts[1:]), ts[0])  # the epigraph value fell at least once
+        for level in ("coarse", "fine"):
+            table = report[level]["table"]
+            for key, vals in table.items():
+                if key.startswith("S"):
+                    self.assertTrue(all(math.isfinite(v) for v in vals), (level, key))
+                    self.assertLessEqual(max(vals), 0.5, (level, key))  # roughly passive
+            pas = [c for c in report[level]["checks"] if c["kind"] == "passivity"][0]
+            self.assertGreater(pas["worst"], -0.2, level)
+        fine_cells = report["fine"]["grid"]["cells"]
+        self.assertGreater(fine_cells, report["coarse"]["grid"]["cells"])
+        self.assertTrue(np.isfinite(report["coarse"]["checks"][0]["worst"]))

@@ -38,9 +38,11 @@ def extent(comp, rot):
 
 
 def edge_distance(header, comp, pose, edge):
-    """Distance (µm) from the courtyard to the named board edge (negative: past it)."""
-    x, y, rot, _side = pose
-    w, h = extent(comp, rot)
+    """Distance (µm) from the courtyard (PNR_COMPACT: the body box) to the named board edge
+    (negative: past it)."""
+    from .render import courtyard_rect
+
+    x, y, w, h = courtyard_rect(comp, pose)
     width, height = header["outline"]["w"], header["outline"]["h"]
     if edge == "south":
         return y - h / 2.0
@@ -232,8 +234,9 @@ def draw_over(renderer, draw, tf, poses, constraints, reference, ss):
         if ref not in poses or ref not in renderer.components:
             continue
         comp = renderer.components[ref]
-        x, y, rot, _side = poses[ref]
-        w, h = extent(comp, rot)
+        from .render import courtyard_rect
+
+        x, y, w, h = courtyard_rect(comp, poses[ref])  # the body box under PNR_COMPACT
         d = edge_distance(header, comp, poses[ref], edge)
         if edge == "south":
             a, b = (x, y - h / 2.0), (x, 0)
@@ -269,8 +272,9 @@ def _rigid_box(renderer, draw, tf, poses, refs, color, ss, margin=350):
         comp = renderer.components.get(ref)
         if comp is None:
             continue
-        x, y, rot, _side = poses[ref]
-        w, h = extent(comp, rot)
+        from .render import courtyard_rect
+
+        x, y, w, h = courtyard_rect(comp, poses[ref])  # the body box under PNR_COMPACT
         for cx, cy in ((-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)):
             px, py = x + cx, y + cy
             us.append(px * ux + py * uy)

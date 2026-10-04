@@ -193,9 +193,16 @@ def derive(graph, constraints, rules, *, block_of=None):
     connected = {n for n in present if npins[n] >= 2 or n in ports}
     pats = _plane_patterns(constraints, rules)
     access = [a for a in rules.get("plane_access_intents") or [] if a.get("net") in present]
-    R = {n for n in present if any(fnmatch.fnmatch(n, p) for p in pats)} | {
-        a["net"] for a in access
-    }
+    from pnr.stack import resolve
+
+    # A declared copper stack adds every net with a dedicated plane (pnr.stack).
+    stack = resolve(rules, getattr(graph, "stack", None))
+    dedicated = stack.plane_nets if stack is not None else frozenset()
+    R = (
+        {n for n in present if any(fnmatch.fnmatch(n, p) for p in pats)}
+        | {a["net"] for a in access}
+        | (dedicated & present)
+    )
     P = {n for n in present - R if net_policy(n, rules)["mode"] == "power"}
     loop_nets = P | R
     signal = connected - loop_nets

@@ -40,8 +40,8 @@ from yapnr.exp.backends.base import Backend, Stores, SubmitError
 from yapnr.exp.config import Config, SlurmSite
 from yapnr.exp.store import LocalStore
 
-IMAGE_PYTHON = "/opt/venv/bin/python"
-IMAGE_ENTRYPOINT = "/usr/local/bin/yapnr-kicad-env"
+IMAGE_PYTHON = image.YAPNR_PYTHON
+IMAGE_ENTRYPOINT = image.YAPNR_ENTRYPOINT
 # Time for staging and upload per task, and for the element's start.
 TASK_GRACE_S = 300
 ELEMENT_GRACE_S = 600
@@ -90,6 +90,8 @@ def render_sbatch(
     ]
     directives += list(site.extra_sbatch)
     module = module_line(site)
+    python, entrypoint = image.runtime(plan_meta.get("image") or {})
+    launch = " ".join(shlex.quote(x) for x in (entrypoint, python) if x)
     lines = ["#!/bin/bash", "# yapnr exp: campaign %s, class %s." % (cid, cls.name)]
     lines += ["#SBATCH %s" % d for d in directives]
     lines += [
@@ -107,7 +109,7 @@ def render_sbatch(
         "cmd=(%s exec --cleanenv --containall" % shlex.quote(site.apptainer),
         '  --bind "${YAPNR_STORE}:/store" --bind "${scratch}:/scratch"',
         '  --env "YAPNR_BACKEND=slurm,YAPNR_SIF_SHA256=${YAPNR_SIF_SHA256:-}"',
-        '  "${YAPNR_SIF}" %s %s' % (IMAGE_ENTRYPOINT, IMAGE_PYTHON),
+        '  "${YAPNR_SIF}" %s' % launch,
         "  /store/campaigns/%s/task.py --store /store --inputs /store/bundles" % cid,
         '  --campaign %s --submission "${YAPNR_SUBMISSION}"' % cid,
         '  --chunk %d --retry "${restarts}" --toolchain image --work-root /scratch)' % chunk,

@@ -944,3 +944,32 @@ g1c05 0/5 -> accepted (4 vias, skew 0.203-0.285 <= 0.3, 0 DRC violations, opens 
 controls p007 (t0) and h3p010 (production route, one trial later) identical to production.
 Still failing (stage 1, TP1 landing blocker + shared uncoupled budget = design proposals 2/3):
 ab-h4p030, ab-deepS, ab-h5r0, h3p035, g1c00.
+
+## Hard-rung gap fixes (2026-10-03): stackups, via kinds, sides, length tuning, router speed
+
+Branch `claude/gap-fixes` (five tracks merged on `claude/ladder-hard-rungs`). New behaviour comes
+from the board's own inputs; a board without them routes as before (the eight ladder cases and the
+four showcases give byte-identical `placed.json`, `routes.json` and boards on two seeds).
+
+| Input (what turns it on) | Behaviour | Code |
+| --- | --- | --- |
+| a KiCad stackup with a `power`/`mixed` layer or a no-track `.kicad_dru` rule (all conditions: `docs/hardware/pnr-inputs.md`) | every signal layer routed, any layer count; plane drops planned with the escapes; planes formed by writeback | `pnr/stack.py`, `router.layer_plan` |
+| the rules' `via_policy` (ladder drivers: `via_policy.board_policy`) | blind, buried and micro spans the stack can build, one build per board, return ties | `pnr/via_policy.py` |
+| `board.sides: double` | placement chooses the side of free parts (global relaxation, legalizer, flips and swaps) | `pnr/place/sides.py`, `place/detail_moves.py` |
+| `diff_pairs` / `length_match` (`tuning.meanders`, `tuning.placement`, both on) | meander tuning to KiCad's length measure; matched-leg placement | `route/detail/tune.py`, `length_model.py`, `place/matched.py` |
+| none: default kernel | packed A* with dense per-net fields (identical routes) | `route/detail/dense_maze.py`, `packed_maze.py` |
+| none: `PNR_EXACT_SEPARATION=recover` (default; `full`, `off`) | a route the halo model leaves open is routed again with the exact pairwise separation, kept if fewer open | `route/detail/exact_route.py` |
+
+Opt-ins: `PNR_MAZE_KERNEL=native` (the C search loop, `route/detail/native/maze.c`, loaded with
+ctypes from `PNR_MAZE_LIB` or beside the package; falls back to packed), `PNR_PACKED_MAZE=0` or
+`PNR_MAZE_KERNEL=reference` (the reference A*), `PNR_TUNE_STRICT=1` (a tuning error raises instead
+of keeping the untuned route). `run.py`: `--maze-kernel native`, `--reference-maze`,
+`--exact-separation`, `--design-json` (the length-matching scratch designs); `--packed-maze` is a
+no-op kept for recorded configurations.
+
+Limits: a grid with a via model routes on the reference kernel (the dense fields do not model
+spans), so the exact recovery skips it, and the tuner only adds meanders there; the native KiCad
+repair loop and the hierarchical driver add through vias only; matched-net parts keep their side;
+the detail side pass has no channel-aware cost; a placement courtyard is centred on the footprint
+origin (the THT-header rung never legalizes); region and align constraints are on
+`claude/gap-constraints`.

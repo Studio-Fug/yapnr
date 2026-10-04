@@ -3,13 +3,90 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-03 (the gloss port's review fixes, on `claude/gloss-port`).
-Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on `claude/fab-order`.
-Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile toolchain and the
-privacy-scan trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and
-their animations on `claude/animations-groups-hier`.
+Last updated: 2026-10-04 (RF round 2 with the native FDTD kernel on `claude/rf-topopt`, merged
+with `main`; the hard rungs on `claude/ladder-hard-rungs` and the engine's fixes for
+them on `claude/gap-fixes`, with `claude/gap-constraints` merged; the gloss port's review fixes on
+`claude/gloss-port`). Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on
+`claude/fab-order`. Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile
+toolchain and the privacy-scan trailer rule merged; line groups, hard board edges, the
+hierarchical ladder driver and their animations on `claude/animations-groups-hier`.
 
 ## In progress
+
+- **RF microstrip inverse design** (#29, branch `claude/rf-topopt`; design
+  [docs/design/rf-topology-optimization.md](docs/design/rf-topology-optimization.md), guide
+  [docs/rf-inverse-design.md](docs/rf-inverse-design.md), choices in
+  [docs/decisions.md](docs/decisions.md)). Done: the solver (`yapnr.rf`: Yee FDTD, CPML, line ports,
+  exact adjoint), the optimizer (material grid, conic filter, tanh projection, Zhou length scale,
+  own MMA with the epigraph, robust variants, adaptive moves, specs with lumped resistors and their
+  absorbed share, checkpoints, the best binarized design exported), net-tie `.kicad_mod` export,
+  Touchstone, result JSON, the animation, and five end-to-end cases re-validated from the footprint
+  on three grids. Round 2 (2026-10-02/03): a copper-edge correction and a modal port source, the
+  antenna grown from the feed line alone, the cases re-run. Review fixes (2026-10-03, design §24):
+  the footprint follows the pixel boundaries (the chamfered export had put other copper on the finer
+  grids: most of round 2's 0.7–2 % grid shifts), the repair widens the one-pixel necks the exact
+  copper shows, the time-step library holds the diagonal patterns, the `trust_reference` option, one
+  thread per Bazel RF test with long timeouts (CI had timed out; it passes now), `seed_overlap` and
+  the −10 dB band in `validation.json`, the antenna judged over 9.7–10.3 GHz at η ≥ 0.7. Results
+  (same copper on every grid): divider, combiner (topology given by seed and keepouts) and diplexer
+  (a closed-form stub filter refined, 77 % seed) pass on all three grids; the antenna meets |S11|
+  and η on all three but fails the 4 % power balance at 9.7 GHz on the finer two (4.6, 4.7 %; cause
+  not established, design §24.7); the bank fails (adjacent channels −9.8 and −11.4 dB against −12
+  dB). A diplexer from the plain junction (robust, 25 iterations) only rolled off (rejection 13–16
+  dB; stopped). Artifacts in `docs/rf/`. Native kernel (2026-10-03, `claude/rf-kernels` merged
+  with `main`, [docs/rf-solver-backends.md](docs/rf-solver-backends.md)): the C stepper is the
+  default backend wherever its library loads (`auto`, float64, bit-identical to numpy; numpy
+  otherwise, said once), with every round-2 option (sha256 matrix in `test_native_identity`);
+  Bazel builds it into `//yapnr/rf`, the wheel is per platform (manylinux_2_34 x86_64 and
+  aarch64, macOS arm64) and the image loads it from the wheel (smoke-tested). Verified again
+  independently (2026-10-04): the full-grid identity matrix on a C4D, end-to-end runs on the
+  smoke grids, the divider and antenna re-validated on native float64 (round 2's verdicts, within
+  2.5e-4 dB); one iteration on a C4D-16 takes 1.47 s (divider) and 16.1 s (D1 size) at 16
+  threads, 8.4 and 6.3 times faster than torch float32. Fixed then: a case's run directory
+  resumes with its own spec, a process solves each port mode profile once (the solve's last
+  bits varied between processes on the Mac), and the library's first load is thread-safe
+  (threads asking while it ran had fallen back to numpy). Next: the owner's
+  decisions (balance criterion, the seeded filter banks, the native defaults), sub-pixel tuning
+  of binary copper for resonant filters, a modal port extraction for radiators, a `yapnr rf`
+  CLI, an external cross-check, footprints in PnR.
+
+- **Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`, both off by default)**
+  (branch `claude/compact` on `main`; design
+  [docs/design/compact-placement.md](docs/design/compact-placement.md)): offset courtyards, the
+  compact legalizer, spread 1.0 with clustered starts, a compactness tie-break after the vias,
+  legacy plane drops planned before routing (`DROPS`) and the flat driver's outline search.
+  Flag-off identity holds on x86 (placed and routed bytes of 30 cells against `main`). The A/B
+  (GCP, seeds 0 and 1) passes the ladder, the showcases, the header rung, `08-chaser-20-plane`
+  on ten seeds and the nightly hard rungs, but 5 of 16 manual `09-mcu-usb-31` cells regress (USB
+  pair skew), so it stays opt-in. The docs and README animations (ladder and showcases) are
+  regenerated with `--compact --gloss` (renderer 3: the gloss stage as a before/after; CI's
+  traced runs take the same options). Next: reserve room for pair tuning under compact, then
+  another A/B.
+
+- **Hard-rung gap fixes** (branch `claude/gap-fixes` on `claude/ladder-hard-rungs`, local, not
+  pushed). The hard rungs (`regression/hard_rungs.py`: stackups, via kinds, sides, absolute and
+  relative constraints, Monte-Carlo search, a THT header) found capabilities the engine lacked.
+  Five tracks are merged, each new behaviour following from the board's inputs (a board without
+  them routes as before; the eight ladder cases and four showcases give identical boards):
+
+  - declared stackups (`pnr/stack.py`): a KiCad stackup with a `power` or `mixed` layer, or a
+    custom rule keeping tracks off a layer, routes every signal layer of any count; plane drops are
+    planned with the pin escapes; every plane layer is formed (full outline by default);
+  - blind, buried and micro vias (`pnr/via_policy.py`, the rules' `via_policy`): only spans the
+    declared stack can build, one build per board, return ties between two planes of one net;
+  - sides (`board.sides: double`, `pnr/place/sides.py`, `detail_moves.py`): placement chooses the
+    side of free parts; writeback mirrors bottom parts on `B.*`;
+  - length matching (`pnr/route/detail/tune.py`, `pnr/length_model.py`, `pnr/place/matched.py`):
+    declared pairs and groups are tuned with meanders against KiCad's own length measure;
+  - router speed: the packed kernel with dense per-net fields is the default (identical routes),
+    an optional C search loop (`PNR_MAZE_KERNEL=native`), and an exact-separation recovery
+    (`PNR_EXACT_SEPARATION=recover`, the default) for routes the halo model leaves open.
+
+  Results (two seeds each): ladder and showcases 24 of 24, CPU 2,281 s to 442 s; hard rungs clean
+  in 37 of 48 runs (7 before), CPU 11,537 s to 1,964 s on the 46 runs with a before. Still failing:
+  07/09 `abs` and `rel` (`region`, `align`: on `claude/gap-constraints`, not merged), 09 `header`
+  (no legal placement) and 09 4L-SSGS seed 0 (USB pair skew after a detour). Three "Ladder fix"
+  commits came with the tracks (the plane check, the side check, the HDI microvia size).
 
 - **Gloss, dekink and corridor coalescing (`PNR_GLOSS`, off by default)** (branch
   `claude/gloss-port`; design [docs/design/gloss.md](docs/design/gloss.md)): ported from Splanc's
@@ -192,6 +269,17 @@ their animations on `claude/animations-groups-hier`.
     2.5 MB budget at quality 70 by 450 bytes here, the encoder steps down where it must). The
     ladder's own animations still sweep single parts through half-turns (their timelines are
     pinned); move them to flips with the next deliberate refresh of `docs/animations/`.
+18. Hard-rung gaps: merge `claude/gap-constraints` (region and align; it conflicts with the sides
+    track in seven placement files) and rerun the `abs` and `rel` rungs; give the placement model
+    an origin-to-courtyard offset (the THT header's origin is pin 1, so its courtyard is placed
+    off by half its length and never legalizes); carry the three Ladder fixes (plane check, side
+    check, HDI microvia) to `claude/ladder-hard-rungs`, or land the rungs and the fixes together.
+19. Owner: whether the optional C maze kernel becomes "use it when present". Recommended once CI
+    runs `dense_maze_native_test` and `exact_route_native_test` on both Linux architectures; until
+    then the packed Python kernel stays the default and no C toolchain is needed.
+20. Boards with blind, buried or micro vias: the packed and native kernels hand them to the
+    reference kernel (so no exact-separation recovery there), the length tuner only adds
+    meanders, and the native KiCad repair loop and the hierarchical driver add through vias only.
 
 ## Blockers
 
@@ -208,6 +296,13 @@ their animations on `claude/animations-groups-hier`.
   caused by this branch.
 
 ## Do not retry
+
+- Exporting RF designs as marching-squares contours of the pixel centres (half-pixel chamfers):
+  on finer grids that is other copper than the optimizer's, and the re-validation's resonances
+  moved 1–2 % for it. Trace the pixel boundaries (`yapnr.rf.export.contour`).
+- Widening a one-pixel neck at whichever facing void pixel comes first: next to other copper it
+  leaves a one-pixel gap that the space pass closes, merging islands (the antenna's matched band
+  fell from 19 to 4 %). `export.repair` checks the distance to other components.
 
 - Letting a Bazel library under `yapnr/` go without `//yapnr:package`: rules_python then
   auto-creates empty `yapnr/__init__.py` files in its runfiles, and Bazel 7's sandbox reuse once

@@ -297,6 +297,7 @@ CAMPAIGN_KEYS = {
     "visibility",
     "source",
     "image",
+    "runtime",
     "matrix",
     "config",
     "configs",
@@ -316,6 +317,28 @@ PLACEMENT_KEYS = {
     "vm_vcpus",
     "packing",
 }
+
+
+RUNTIME_KEYS = {"python", "entrypoint"}
+
+
+def runtime_errors(runtime: Any) -> List[str]:
+    """``runtime``: how a campaign's image runs the task wrapper, for images other than yapnr's.
+
+    ``python`` is the interpreter in the image that runs ``task.py`` and that ``${PYTHON}`` names
+    in commands (default ``/opt/venv/bin/python``); ``entrypoint`` the launcher around both
+    (default ``/usr/local/bin/yapnr-kicad-env``; ``""`` for none, the image's own entrypoint).
+    """
+    if not isinstance(runtime, dict):
+        return ["runtime is a table {python, entrypoint}"]
+    errors = ["unknown runtime key %r" % k for k in sorted(set(runtime) - RUNTIME_KEYS)]
+    python = runtime.get("python", "/opt/venv/bin/python")
+    if not (isinstance(python, str) and python.startswith("/") and len(python) > 1):
+        errors.append("runtime.python is an absolute path in the image")
+    entrypoint = runtime.get("entrypoint", "")
+    if not (isinstance(entrypoint, str) and (entrypoint == "" or entrypoint.startswith("/"))):
+        errors.append("runtime.entrypoint is an absolute path in the image, or '' for none")
+    return errors
 
 
 def campaign_errors(campaign: Any) -> List[str]:
@@ -342,6 +365,7 @@ def campaign_errors(campaign: Any) -> List[str]:
         re.match(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$", image) or IMAGE_RE.match(image)
     ):
         errors.append("image is a tag of the yapnr image or a full image reference")
+    errors += runtime_errors(campaign.get("runtime", {}))
     for key in ("matrix", "config", "configs", "tools", "placement"):
         if key in campaign and not isinstance(campaign[key], dict):
             errors.append("%s is a table" % key)

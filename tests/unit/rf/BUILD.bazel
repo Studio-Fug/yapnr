@@ -1,0 +1,135 @@
+load("@rules_python//python:defs.bzl", "py_test")
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# One thread per test (`YAPNR_RF_THREADS` caps torch's and sets the native pool's, the others
+# numpy's and OpenMP's): Bazel runs as many tests side by side as the machine has cores, and
+# with 4 threads each on CI's 4-vCPU runner they oversubscribed it 4 times over and timed out
+# (design §24). numpy's
+# OpenBLAS stays on one thread in any case: with its own threads spinning beside torch's, an
+# adjoint run took 1.6 times as long.
+_ENV = {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "YAPNR_RF_THREADS": "1",
+}
+
+# Fast tests (design §12): seconds to about four minutes each on one thread. The optimizer
+# tests share a tiny two-port spec (//yapnr/rf:testing); the pipeline gradient and the tiny
+# design are split in two files each so that the halves run side by side. Tests that took more
+# than 40 s on one thread of the development Mac (shared with other work) get the long timeout
+# (900 s): CI's runner is slower per core. test_kicad_cli runs in the KiCad lane only
+# (headless kicad-cli in YAPNR_KICAD_CLI).
+_SLOW = {
+    "size": "medium",
+    "timeout": "long",
+}
+
+_SLOW_TESTING = dict(
+    _SLOW,
+    deps = ["//yapnr/rf:testing"],
+)
+
+_NATIVE_ENV = {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "YAPNR_RF_REQUIRE_NATIVE": "1",
+}
+
+yapnr_py_tests(
+    env = _ENV,
+    overrides = {
+        "test_adjoint_gradients": _SLOW,
+        "test_animate": {
+            "deps": [
+                "//yapnr/rf:animate_lib",
+                "//yapnr/rf:testing",
+            ],
+        },
+        "test_balance": {
+            "deps": ["//yapnr/rf:testing"],
+            "size": "medium",
+        },
+        "test_dtft": _SLOW,
+        "test_kicad_cli": {"tags": ["kicad"]},
+        "test_lumped_ports": {"size": "medium"},
+        "test_microstrip": _SLOW,
+        "test_modes": _SLOW,
+        # The native kernel against numpy, on the library Bazel builds (//yapnr/rf carries it):
+        # the tests pick their own thread counts (up to 3 and 4; no YAPNR_RF_THREADS), so they
+        # reserve that many CPUs from Bazel's scheduler (`cpu:N`; on a smaller runner such a
+        # test runs alone) instead of oversubscribing the runner for the tests beside them, and
+        # a library that does not load fails them instead of skipping (YAPNR_RF_REQUIRE_NATIVE).
+        "test_native_identity": dict(
+            _SLOW_TESTING,
+            env = _NATIVE_ENV,
+            # One shard per test method (1-2 min each on CI).
+            shard_count = 5,
+            tags = ["cpu:3"],
+        ),
+        "test_native_kernel": dict(
+            _SLOW_TESTING,
+            env = _NATIVE_ENV,
+            tags = ["cpu:4"],
+        ),
+        "test_pipeline_gradient": _SLOW_TESTING,
+        "test_pipeline_gradient_options": _SLOW_TESTING,
+        "test_ports": _SLOW,
+        "test_power_balance": {"size": "medium"},
+        "test_sheet": {"size": "medium"},
+        "test_tiny_design": _SLOW_TESTING,
+        "test_tiny_design_options": _SLOW_TESTING,
+    },
+    deps = ["//yapnr/rf"],
+)
+
+# The microstrip check repeated at twice the resolution: about 4 minutes on 4 threads, so it is
+# manual (not part of `bazel test //...` or CI); run it when the solver changes:
+#   bazel test //tests/unit/rf:test_microstrip_slow
+py_test(
+    name = "test_microstrip_slow",
+    size = "large",
+    srcs = ["test_microstrip.py"],
+    env = dict(
+        _ENV,
+        MKL_NUM_THREADS = "4",
+        OMP_NUM_THREADS = "4",
+        YAPNR_RF_SLOW = "1",
+        YAPNR_RF_THREADS = "4",
+    ),
+    main = "test_microstrip.py",
+    tags = [
+        "manual",
+        "slow",
+    ],
+    deps = ["//yapnr/rf"],
+)
+
+# The tests above run the default backend: native float64 on the library //yapnr/rf carries,
+# bit-identical to numpy (test_native_identity). The numpy reference of the finite-difference
+# gradient checks, by hand:
+#   bazel test //tests/unit/rf:test_adjoint_gradients_numpy //tests/unit/rf:test_pipeline_gradient_numpy
+[
+    py_test(
+        name = name + "_numpy",
+        size = "medium",
+        timeout = "long",
+        srcs = [name + ".py"],
+        env = dict(
+            _ENV,
+            YAPNR_RF_BACKEND = "numpy",
+        ),
+        main = name + ".py",
+        tags = ["manual"],
+        deps = [
+            "//yapnr/rf",
+            "//yapnr/rf:testing",
+        ],
+    )
+    for name in [
+        "test_adjoint_gradients",
+        "test_pipeline_gradient",
+        "test_pipeline_gradient_options",
+    ]
+]

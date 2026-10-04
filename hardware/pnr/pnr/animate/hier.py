@@ -174,11 +174,18 @@ def _chapter(number):
 
 
 def block_rank_text(score):
-    """A trial's rank key (missing, port debt, area, vias, copper) as a short text."""
+    """A trial's rank key (:func:`pnr.hier.synth.rank_key`: missing, unmatched lengths, port
+    debt, area, vias, copper; a trace from before the unmatched-lengths term has five) as a
+    short text."""
     if not isinstance(score, list) or len(score) < 5:
         return ""
-    missing, debt, area, vias, _copper = score[:5]
+    if len(score) >= 6:
+        missing, unmatched, debt, area, vias = score[:5]
+    else:
+        (missing, debt, area, vias), unmatched = score[:4], 0
     text = "debt %.0f · %.0f sq mm · %d vias" % (float(debt), float(area), int(vias))
+    if unmatched:
+        text = "%d unmatched · " % int(unmatched) + text
     return ("%d open · " % int(missing) + text) if missing else text
 
 

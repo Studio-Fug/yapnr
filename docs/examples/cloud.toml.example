@@ -14,6 +14,10 @@ submit_service_account = "yapnr-submit"            # account ids; the project gi
 runner_service_account = "yapnr-runner"
 # The Artifact Registry remote repository (upstream https://ghcr.io) in each region.
 registry = "{region}-docker.pkg.dev/{project}/ghcr"
+# The standard repository for task images that are not on GHCR (docker/openems, by Cloud Build),
+# and the account Cloud Build runs those builds as.
+images = "{region}-docker.pkg.dev/{project}/images"
+image_build_service_account = "yapnr-image-build"
 subnetwork = "projects/{project}/regions/{region}/subnetworks/yapnr-{region}"
 # Instance templates for Hyperdisk-only families (template_families), one per shape and region.
 template = "yapnr-{shape}-{model}-{region}"
@@ -22,8 +26,11 @@ gcloud = "gcloud"                                  # the gcloud CLI (a user-spac
 # gcloud_configuration = "yapnr"                   # a named gcloud configuration, if not active
 # The Billing Catalog API key for `yapnr exp prices --refresh`, read from the macOS Keychain.
 price_api_key_command = ["security", "find-generic-password", "-s", "yapnr-billing-catalog", "-w"]
-# Ranked (family, region) pairs, from the calibration; empty: every family in every region.
-ranking = [["c4d", "us-west4"], ["c3d", "northamerica-northeast1"]]
+# Ranked (family, region) pairs, from the calibration and the prices. Each class's candidates are
+# the ranked pairs it can use, in order; submit places it on the first whose region has Spot quota
+# for one more VM (docs/cloud-experiments.md, "Regions and quota-aware placement"). Ranked families
+# are allowed by default. Empty: one placement per class (the cheapest per result), no spill-over.
+ranking = [["c4d", "us-west4"], ["c4", "northamerica-northeast1"]]
 queue_timeout_s = 1800
 # The container runs as root so it can write the gcsfuse mounts (Batch mounts them as root).
 container_user = "0:0"

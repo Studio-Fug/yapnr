@@ -8,6 +8,10 @@ yapnr_py_tests(
         "//:requirements-runtime.in",
         "//release:wheel_for_test",
     ],
+    overrides = {
+        # Loads the wheel's native library with yapnr.rf's loader.
+        "test_wheel": {"deps": ["//yapnr/rf"]},
+    },
     deps = [
         "//tools/release:release_lib",
         requirement("packaging"),

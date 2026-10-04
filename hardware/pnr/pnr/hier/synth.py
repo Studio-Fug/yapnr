@@ -156,6 +156,8 @@ def run_trial(
         rec["port_debt_mm"] = sum(m["port_debt_mm"] for m in results)
         rec["n_vias"] = sum(len(m["vias"]) for m in results)
         rec["copper_mm"] = sum(m["copper_length_mm"] for m in results)
+        if any("length_unmatched" in m for m in results):
+            rec["length_unmatched"] = sum(m.get("length_unmatched", 0) for m in results)
         rec["status"] = "ok"
     except Exception as error:
         rec.update(status="failed", error=repr(error), traceback=traceback.format_exc()[-2500:])
@@ -185,6 +187,8 @@ def instance_board(graph, constraints, rules, block, local, w, h):
 def rank_key(r):
     return (
         r.get("missing", math.inf),
+        # Declared pairs / groups inside the block left outside their budgets.
+        r.get("length_unmatched", 0),
         r.get("port_debt_mm", math.inf),
         r.get("area", math.inf),
         r.get("n_vias", math.inf),

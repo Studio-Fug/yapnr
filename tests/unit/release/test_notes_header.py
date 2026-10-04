@@ -19,7 +19,10 @@ class NotesHeaderTest(unittest.TestCase):
         self.archive = os.path.join(self._tmp.name, "yapnr-v0.3.1.tar.gz")
         with open(self.archive, "wb") as handle:
             handle.write(b"not really a tarball")
-        self.wheel = os.path.join(self._tmp.name, "yapnr-0.3.1-py3-none-any.whl")
+        self.wheel = [
+            os.path.join(self._tmp.name, "yapnr-0.3.1-py3-none-manylinux_2_34_x86_64.whl"),
+            os.path.join(self._tmp.name, "yapnr-0.3.1-py3-none-manylinux_2_34_aarch64.whl"),
+        ]
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -31,8 +34,7 @@ class NotesHeaderTest(unittest.TestCase):
             digest=DIGEST,
             kicad_version="10.0.6",
             archive=self.archive,
-            wheel=self.wheel,
-            **kwargs,
+            **{"wheel": self.wheel, **kwargs},
         )
 
     def test_integrity_is_sri(self):
@@ -45,7 +47,8 @@ class NotesHeaderTest(unittest.TestCase):
         self.assertIn(f"docker pull ghcr.io/studio-fug/yapnr@{DIGEST}", text)
         self.assertIn("KiCad 10.0.6", text)
         base = "https://github.com/Studio-Fug/yapnr/releases/download/v0.3.1/"
-        self.assertIn(base + "yapnr-0.3.1-py3-none-any.whl", text)
+        self.assertIn(base + "yapnr-0.3.1-py3-none-manylinux_2_34_x86_64.whl", text)
+        self.assertIn(base + "yapnr-0.3.1-py3-none-manylinux_2_34_aarch64.whl", text)
         self.assertIn(f'urls = ["{base}yapnr-v0.3.1.tar.gz"]', text)
         self.assertIn(f'integrity = "{notes_header.sri_sha256(self.archive)}"', text)
         self.assertIn('strip_prefix = "yapnr-0.3.1"', text)
@@ -62,6 +65,23 @@ class NotesHeaderTest(unittest.TestCase):
     def test_upgrade_notes(self):
         text = self._render(upgrade_notes="docs/releases/v0.3.md")
         self.assertIn("https://github.com/Studio-Fug/yapnr/blob/v0.3.1/docs/releases/v0.3.md", text)
+
+    def test_one_wheel(self):
+        text = self._render(wheel="/tmp/yapnr-0.3.1-py3-none-macosx_11_0_arm64.whl")
+        self.assertIn("v0.3.1/yapnr-0.3.1-py3-none-macosx_11_0_arm64.whl", text)
+
+    def test_cli_takes_every_wheel(self):
+        import contextlib
+        import io
+
+        out = io.StringIO()
+        args = ["--tag", "v0.3.1", "--pep440", "0.3.1", "--digest", DIGEST]
+        args += ["--kicad-version", "10.0.6", "--archive", self.archive]
+        for w in self.wheel:
+            args += ["--wheel", w]
+        with contextlib.redirect_stdout(out):
+            notes_header.main(args)
+        self.assertEqual(out.getvalue().count("pip install"), 2)
 
     def test_rejects_a_non_release_tag(self):
         with self.assertRaises(ValueError):

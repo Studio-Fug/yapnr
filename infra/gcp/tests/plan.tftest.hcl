@@ -44,6 +44,11 @@ run "owner_config_matches_the_cli" {
   }
 
   assert {
+    condition     = output.owner_config.images == "{region}-docker.pkg.dev/example-project/images"
+    error_message = "the images pattern must match [gcp] images in the owner config"
+  }
+
+  assert {
     condition     = output.owner_config.template == "yapnr-{shape}-{model}-{region}"
     error_message = "the template pattern must match [gcp] template in the owner config"
   }
@@ -82,6 +87,62 @@ run "templates_per_shape_and_region" {
   }
 }
 
+run "a_region_can_have_its_own_shapes" {
+  command = plan
+
+  # northamerica-northeast1 offers C4 but not C4D: its own list replaces template_shapes there.
+  variables {
+    region_template_shapes = {
+      "northamerica-northeast1" = ["c4-highcpu-16", "c4-highcpu-8"]
+    }
+  }
+
+  assert {
+    condition     = length(output.templates) == 5
+    error_message = "three default shapes in us-west4 and two of its own in northamerica-northeast1"
+  }
+
+  assert {
+    condition = toset(keys(output.templates)) == toset([
+      "yapnr-c4d-highcpu-16-spot-us-west4",
+      "yapnr-c4d-standard-16-spot-us-west4",
+      "yapnr-c4d-highcpu-8-spot-us-west4",
+      "yapnr-c4-highcpu-16-spot-northamerica-northeast1",
+      "yapnr-c4-highcpu-8-spot-northamerica-northeast1",
+    ])
+    error_message = "us-west4 keeps today's template names; northamerica-northeast1 gets only C4"
+  }
+
+  assert {
+    condition     = module.templates.names["yapnr-c4-highcpu-8-spot-northamerica-northeast1"].region == "northamerica-northeast1"
+    error_message = "each template is recorded with its region"
+  }
+}
+
+run "region_shapes_name_enabled_regions_only" {
+  command = plan
+
+  variables {
+    region_template_shapes = {
+      "europe-west4" = ["c4a-highcpu-16"]
+    }
+  }
+
+  expect_failures = [var.region_template_shapes]
+}
+
+run "region_shapes_are_not_empty" {
+  command = plan
+
+  variables {
+    region_template_shapes = {
+      "northamerica-northeast1" = []
+    }
+  }
+
+  expect_failures = [var.region_template_shapes]
+}
+
 run "one_subnet_per_region" {
   command = plan
 
@@ -113,4 +174,18 @@ run "regions_are_required" {
   }
 
   expect_failures = [var.regions]
+}
+
+run "images_repository_per_region" {
+  command = plan
+
+  assert {
+    condition     = length(module.registry.images) == 2
+    error_message = "one images repository per region"
+  }
+
+  assert {
+    condition     = output.owner_config.image_build_service_account == "yapnr-image-build"
+    error_message = "Cloud Build runs image builds as yapnr-image-build"
+  }
 }

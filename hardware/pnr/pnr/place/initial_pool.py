@@ -9,6 +9,12 @@ downstream: this module chooses a starting placement, never a finished PCB.
 
 PNR_PAIR_LANDING_RESERVE=1 (src13, default off): the prepared source graph (flat
 MC placement and hierarchical_place) carries the diff-pair via landing reserves.
+
+PNR_COMPACT=1 (default off, :mod:`pnr.place.compact`): the stratified and Latin starts
+are drawn in the cluster box (``GP``, the same draws), the pool places at spread 1.0, the
+basin fallback legalizes with the compact legalizer settings (``LEGALIZE``) and
+(``RANK``) the routed finalists rank by :func:`route_rank` with the compactness bucket
+after the completion keys.
 """
 
 from __future__ import annotations
@@ -22,15 +28,15 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from pnr import legalize_flags
 from pnr import trace as _trace
 from pnr.constraints import Constraint, Enforcement
 from pnr.graph import BoardGraph, BoardOutline
 
+from . import compact
 from .geometry import (
     apply_hard_sides,
     courtyard_rect,
-    hard_edge_bands,
-    hard_group_edges,
     hard_group_limits,
     keepout_rects,
     outline_size,
@@ -42,6 +48,9 @@ from .geometry import (
 from .legalize import LegalizationError
 from .metrics import hard_violations, hpwl
 from .placer import PlacementReport, place
+from .sides import apply_held, opposite
+from .sides import plan as side_plan
+from .sides import policy_of, same_footprint, stack_refs, under_body_sides
 
 
 @dataclass(frozen=True)
@@ -123,6 +132,9 @@ def _prepared_source(graph, constraints, rules=None):
         from .pair_landing import attach
 
         attach(source, rules)
+    if policy_of(constraints) == "double":
+        # A held part's one side (an edge_align side), as place() applies it.
+        apply_held(source, side_plan(source, constraints, rules))
     width, height = outline_size(source, constraints)
     source.outline = BoardOutline(width, height)
     return source
@@ -150,8 +162,16 @@ def _opposite_body_basins(graph, constraints):
     keepouts = keepout_rects(fixed_graph, constraints, poses)
     groups = hard_group_limits(constraints, {c.ref: c.pos for c in graph.components})
     clearance = constraints.board.default_clearance_mm
-    # A line-group member moves only with its whole group (pnr.place.line_group).
-    lined = {r for con in constraints.constraints if con.kind == "line_group" for r in con.refs}
+    # A line-group member moves only with its whole group (pnr.place.line_group); an
+    # aligned part only along its line (pnr.place.regions).
+    lined = {
+        r
+        for con in constraints.constraints
+        if con.kind in ("line_group", "align")
+        for r in con.refs
+    }
+    from .regions import region_offenders
+
     basins = []
     for moving in sorted(graph.components, key=lambda c: (-len(c.pads), c.ref)):
         if moving.ref in poses or moving.locked or len(moving.pads) < 4 or moving.ref in lined:
@@ -177,6 +197,8 @@ def _opposite_body_basins(graph, constraints):
                     continue
                 if any(rect.overlaps(k, gap=clearance) for k in keepouts):
                     continue
+                if region_offenders([trial], constraints):
+                    continue
                 if any(
                     math.dist(trial.pos, (x, y)) > radius + 1e-9
                     for x, y, radius in groups.get(trial.ref, ())
@@ -201,19 +223,26 @@ def _opposite_body_basins(graph, constraints):
     return basins
 
 
-def initial_starts(graph, constraints, config, seed=0, orient=True):
+def initial_starts(graph, constraints, config, seed=0, orient=True, rules=None):
     """Return explicit independent global starts; no perturbation of a last route.
 
     Baseline preserves the previous global initialization exactly. Subsequent
     arrangements cover board-wide strata or independent Latin-hypercube axes;
     sampled cardinal rotations alter pin-facing topology as well as centres.
     Hard-fixed centres/rotations are left for the existing constraint resolver.
+    ``rules`` (the routing rules) lets the side plan hold plane-access parts, as the
+    placer does.
     """
     width, height = outline_size(graph, constraints)
-    fixed = set(resolve_fixed_poses(graph, constraints)) | {
-        c.ref for c in graph.components if c.locked
-    }
+    fixed_poses = resolve_fixed_poses(graph, constraints)
+    fixed = set(fixed_poses) | {c.ref for c in graph.components if c.locked}
     movable = sorted((c for c in graph.components if c.ref not in fixed), key=lambda c: c.ref)
+    # Side-free parts (pnr.place.sides): explicit starts also draw sides, from their
+    # own generator so positions and rotations are those of a single-sided start.
+    plan = side_plan(graph, constraints, rules)
+    free = [r for r in plan.free if r not in fixed]
+    # PNR_COMPACT GP: the draws land in the cluster box instead of the whole board.
+    box = compact.cluster_box(graph, constraints, width, height) if compact.enabled("GP") else None
     result = [dict(id="start-00", kind="legacy-global", seed=seed, positions=None, rotations=None)]
     result.append(
         dict(
@@ -224,6 +253,10 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
             rotations={c.ref: c.rot for c in movable} if orient else None,
         )
     )
+    if legalize_flags.pool_source_clamp():
+        # PNR_POOL_SOURCE_CLAMP: the source start begins inside the outline (the cluster box
+        # under PNR_COMPACT GP), not at source rows that may lie far off the board.
+        _clamp_start(movable, result[1]["positions"], box, width, height)
     count = len(movable)
     for index in range(2, config.starts):
         this_seed = seed + 104729 * index
@@ -256,10 +289,19 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
         for comp, (u, v) in zip(movable, normalized):
             half_x = min(width / 2, comp.courtyard[0] / 2)
             half_y = min(height / 2, comp.courtyard[1] / 2)
-            positions[comp.ref] = [
-                half_x + u * (width - 2 * half_x),
-                half_y + v * (height - 2 * half_y),
-            ]
+            if box is None:
+                positions[comp.ref] = [
+                    half_x + u * (width - 2 * half_x),
+                    half_y + v * (height - 2 * half_y),
+                ]
+            else:
+                x0, y0, x1, y1 = compact.occupied_box(comp)
+                half_x = min(width / 2, (x1 - x0) / 2)
+                half_y = min(height / 2, (y1 - y0) / 2)
+                positions[comp.ref] = [
+                    compact.box_coordinate(u, half_x, box[0], box[2], width),
+                    compact.box_coordinate(v, half_y, box[1], box[3], height),
+                ]
             if orient:
                 rotations[comp.ref] = 90 * rng.randrange(4)
         result.append(
@@ -271,6 +313,29 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
                 rotations=rotations if orient else None,
             )
         )
+        if free:
+            side_rng = random.Random(this_seed ^ SIDE_SALT)
+            result[-1]["sides"] = {
+                ref: (
+                    opposite(plan.source[ref])
+                    if side_rng.random() < START_FLIP_PROBABILITY
+                    else plan.source[ref]
+                )
+                for ref in free
+            }
+    # Regions and aligns: move the start points into the outline, their hard regions
+    # and onto the align lines (a projection; no extra random draws). The outline fit
+    # (_fit_outline) runs where a region or align is declared; PNR_FIT_OUTLINE=1 runs
+    # it for every design, PNR_FIT_OUTLINE=0 for none (a control).
+    from .regions import declared
+
+    fit = os.environ.get("PNR_FIT_OUTLINE")
+    if declared(constraints):
+        for start in result[1:]:
+            _project_start(graph, constraints, start, fit=fit != "0")
+    elif fit == "1":
+        for start in result[1:]:
+            _fit_outline(graph, constraints, start["positions"])
     # Reserve at most two of the bounded starts for otherwise easily-erased
     # under-body basins. This adds topology diversity, not more route budget.
     for start, basin in zip(result[2:4], _opposite_body_basins(graph, constraints)):
@@ -279,7 +344,195 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
         start["positions"][basin["ref"]] = basin["at"]
         if start["rotations"] is not None:
             start["rotations"][basin["ref"]] = basin["rot"]
+    if free:
+        _under_body_start(graph, plan, result, fixed_poses, width, height)
+        if declared(constraints):
+            # The under-body start moves and flips parts after the projection above.
+            for start in result[2:]:
+                if start["kind"] == "under-body-sides":
+                    _project_start(graph, constraints, start, fit=False)
     return result
+
+
+def _clamp_coordinate(value, half, lo, size, limit):
+    """``value`` clamped so a part of half extent ``half`` lies in ``[lo, lo + size]`` (at
+    the box centre when it does not fit), then in ``[half, limit - half]`` of the outline: the
+    rule :func:`pnr.place.compact.box_coordinate` maps draws with."""
+    if size >= 2.0 * half:
+        value = min(max(value, lo + half), lo + size - half)
+    else:
+        value = lo + size / 2.0
+    return min(max(value, half), max(half, limit - half))
+
+
+def _clamp_start(movable, positions, box, width, height):
+    """``PNR_POOL_SOURCE_CLAMP``: each movable position of ``positions`` clamped into ``box``
+    ((x0, y0, w, h), the PNR_COMPACT cluster box; None: the outline) and the outline, with the
+    half extents the other explicit starts use (the occupied box under the cluster box)."""
+    x0, y0, bw, bh = (0.0, 0.0, width, height) if box is None else box
+    for comp in movable:
+        if comp.ref not in positions:
+            continue
+        if box is None:
+            half_x = min(width / 2, comp.courtyard[0] / 2)
+            half_y = min(height / 2, comp.courtyard[1] / 2)
+        else:
+            a0, b0, a1, b1 = compact.occupied_box(comp)
+            half_x = min(width / 2, (a1 - a0) / 2)
+            half_y = min(height / 2, (b1 - b0) / 2)
+        x, y = positions[comp.ref]
+        positions[comp.ref] = [
+            _clamp_coordinate(float(x), half_x, x0, bw, width),
+            _clamp_coordinate(float(y), half_y, y0, bh, height),
+        ]
+
+
+# Side starts (pnr.place.sides): a free part starts on its other side with this
+# probability; the generator is salted apart from the position/rotation one.
+START_FLIP_PROBABILITY = 0.25
+SIDE_SALT = 0x5DE5
+UNDER_BODY_STEP_MM = 1.5
+
+
+def _under_body_start(graph, plan, result, fixed_poses, width, height):
+    """Turn the last explicit start into an under-body proposal: every free two-pin
+    part starts under the largest part it shares a net with, on the other side
+    (:func:`pnr.place.sides.under_body_sides`), spread along x; other free parts
+    start on their source side. A start, never a rule."""
+    under = under_body_sides(graph, plan)
+    start = next((s for s in reversed(result[2:]) if s["kind"] != "opposite-body-global"), None)
+    if not under or start is None:
+        return
+    start["kind"] = "under-body-sides"
+    start["sides"] = {ref: plan.source[ref] for ref in start["sides"]}
+    by_host = {}
+    for ref, (side, host) in sorted(under.items()):
+        start["sides"][ref] = side
+        by_host.setdefault(host, []).append(ref)
+    for host, refs in sorted(by_host.items()):
+        centre = (start["positions"] or {}).get(host) or fixed_poses.get(host)
+        if centre is None:
+            centre = graph.component(host).pos
+        for k, ref in enumerate(refs):
+            comp = graph.component(ref)
+            half_x = min(width / 2, comp.courtyard[0] / 2)
+            half_y = min(height / 2, comp.courtyard[1] / 2)
+            x = centre[0] + (k - (len(refs) - 1) / 2) * UNDER_BODY_STEP_MM
+            start["positions"][ref] = [
+                min(max(x, half_x), width - half_x),
+                min(max(centre[1], half_y), height - half_y),
+            ]
+
+
+# Margin, as a fraction of the outline, that _fit_outline leaves on each side.
+FIT_MARGIN = 0.05
+
+
+def _fit_outline(graph, constraints, positions):
+    """Bring a start whose points leave the outline inside it, keeping their order.
+
+    A source board may hold its parts outside the outline (a generated staging row, a
+    netlist import); projecting only the region parts would then leave the start half
+    on and half off the board, which the global placer does not recover from.
+
+    - Most points off the board (a staging layout): on each axis whose points leave
+      the outline, the points' span maps affinely onto the outline less
+      :data:`FIT_MARGIN`; every point is then clamped so the part's courtyard fits.
+    - Most points on the board (a designer's layout with a few parts parked beside
+      it): only the parked points move. On each axis, the coordinates that leave the
+      outline map from their own span onto the outline less the margin (a single one
+      is clamped), and each moved point is clamped so the courtyard fits; every part
+      already on the board keeps its place.
+
+    A start already inside the outline is unchanged."""
+    width, height = outline_size(graph, constraints)
+    sizes = (width, height)
+    off = [
+        ref for ref, (x, y) in positions.items() if not (0.0 <= x <= width and 0.0 <= y <= height)
+    ]
+    if not off:
+        return
+    by_ref = {c.ref: c for c in graph.components}
+    staging = 2 * len(off) > len(positions)
+    moving = list(positions) if staging else off
+    fitted = {ref: list(positions[ref]) for ref in moving}
+    for k, size in enumerate(sizes):
+        margin = FIT_MARGIN * size
+        if staging:
+            mapped = moving
+        else:
+            mapped = [r for r in moving if not 0.0 <= positions[r][k] <= size]
+        values = [positions[r][k] for r in mapped]
+        lo, hi = (min(values), max(values)) if values else (0.0, 0.0)
+        scale = hi - lo > 1e-9 and (lo < 0.0 or hi > size)
+        for ref in moving:
+            value = positions[ref][k]
+            if scale and ref in mapped:
+                value = margin + (value - lo) / (hi - lo) * (size - 2.0 * margin)
+            half = min(size / 2.0, by_ref[ref].courtyard[k] / 2.0) if ref in by_ref else 0.0
+            fitted[ref][k] = min(max(value, half), size - half)
+    positions.update(fitted)
+
+
+def _project_start(graph, constraints, start, fit=True):
+    """Project ``start``'s positions into the outline (:func:`_fit_outline`, with
+    ``fit``), into the hard regions of their refs, then each align's members onto the
+    line through the median of their anchors (a fixed member's anchor when there is
+    one), each part on the side the start gives it."""
+    from .regions import (
+        align_rules,
+        anchor_offset,
+        anchor_spec,
+        anchor_value,
+        project_start,
+        region_rules,
+    )
+
+    positions, rotations = start["positions"], start["rotations"] or {}
+    by_ref = {c.ref: c for c in graph.components}
+    # A part the start draws on its other side (pnr.place.sides) has the mirrored
+    # footprint's anchors and body.
+    for ref, side in (start.get("sides") or {}).items():
+        if ref in by_ref and by_ref[ref].side != side:
+            by_ref[ref] = copy.deepcopy(by_ref[ref])
+            set_component_side(by_ref[ref], side)
+    poses = resolve_fixed_poses(graph, constraints)
+    hard_rot = resolve_hard_rotations(constraints)
+
+    def rot_of(ref):
+        return hard_rot.get(ref, rotations.get(ref, by_ref[ref].rot))
+
+    if fit:
+        _fit_outline(graph, constraints, positions)
+    regions = region_rules(constraints)
+    for ref, xy in positions.items():
+        rules = [c for c in regions if ref in c.refs]
+        if rules and ref in by_ref:
+            positions[ref] = project_start(by_ref[ref], rules, xy, rot_of(ref))
+    for con in align_rules(constraints):
+        axis = con.params["axis"]
+        k = 0 if axis == "x" else 1
+        members = [r for r in con.refs if r in by_ref]
+        fixed = [
+            anchor_value(by_ref[r], anchor_spec(con, r), axis, rot_of(r), poses[r])
+            for r in members
+            if r in poses
+        ]
+        free = [
+            anchor_value(by_ref[r], anchor_spec(con, r), axis, rot_of(r), positions[r])
+            for r in members
+            if r in positions
+        ]
+        values = sorted(fixed or free)
+        if not values or not free:
+            continue
+        mid = len(values) // 2
+        line = values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2.0
+        for r in members:
+            if r in positions:
+                point = list(positions[r])
+                point[k] = line - anchor_offset(by_ref[r], anchor_spec(con, r), axis, rot_of(r))
+                positions[r] = point
 
 
 def _pose(graph):
@@ -351,7 +604,23 @@ def diverse_shortlist(candidates, count, cost_key, mandatory=(), refs=None):
     return chosen
 
 
-def _hard_and_source_errors(candidate, source, constraints):
+def uses_other_side(candidate, plan):
+    """True when a pool candidate puts a part off its source side (pnr.place.sides)."""
+    return plan.active and any(
+        c.side != plan.source.get(c.ref, c.side) for c in candidate["graph"].components
+    )
+
+
+def keep_other_side(pool, required, key, plan):
+    """``required`` ids plus the cheapest (by ``key``) candidate of ``pool`` that uses
+    the other side, when the plan frees a part and none of ``required`` does."""
+    if not plan.active or any(uses_other_side(c, plan) for c in pool if c["id"] in required):
+        return required
+    users = sorted((c for c in pool if uses_other_side(c, plan)), key=lambda c: (c[key], c["id"]))
+    return required + [users[0]["id"]] if users else required
+
+
+def _hard_and_source_errors(candidate, source, constraints, rules=None):
     errors = {k: v for k, v in hard_violations(candidate, constraints).items() if v}
     before = {c.ref: c for c in source.components}
     changed = []
@@ -359,15 +628,20 @@ def _hard_and_source_errors(candidate, source, constraints):
         changed.append("component_set")
     if [asdict(n) for n in candidate.nets] != [asdict(n) for n in source.nets]:
         changed.append("netlist")
+    plan = None
     for comp in candidate.components:
         original = before.get(comp.ref)
         if original is None:
             continue
-        if (
-            [asdict(p) for p in comp.pads] != [asdict(p) for p in original.pads]
-            or comp.side != original.side
-            or comp.footprint != original.footprint
-        ):
+        if comp.side != original.side:
+            # Only a part the side policy frees may change side, as the same
+            # footprint mirrored (pnr.place.sides).
+            plan = plan or side_plan(source, constraints, rules)
+            if not plan.allows(comp.ref, comp.side) or not same_footprint(comp, original):
+                changed.append(comp.ref)
+        elif [asdict(p) for p in comp.pads] != [
+            asdict(p) for p in original.pads
+        ] or comp.footprint != original.footprint:
             changed.append(comp.ref)
     if changed:
         errors["source_geometry_changed"] = changed
@@ -392,7 +666,7 @@ def _route_metrics(board):
     length = sum(math.dist(a, b) for _, _, a, b, _ in board.tracks)
     # These are screening metrics, not DRC/electrical qualification. Deferred
     # modes remain explicitly listed and all finalists receive the same budget.
-    return dict(
+    out = dict(
         missing_connections=missing,
         unresolved_nets=sorted(unresolved),
         deferred_nets=sorted(board.deferred_nets),
@@ -400,6 +674,32 @@ def _route_metrics(board):
         copper_length_mm=length,
         objective=[missing, len(unresolved), len(board.vias), length],
     )
+    report = getattr(board, "length_report", None)
+    if report is not None:
+        # Declared pairs / groups the tuner left outside their budgets (route_rank).
+        out["length_unmatched"] = sum(
+            1 for r in report if r.get("status") in ("length_unmatched", "tuning_error")
+        )
+    return out
+
+
+def route_rank(metrics) -> tuple:
+    """Sort key of routed candidates: missing connections, unresolved nets, then
+    declared pairs / groups outside their budgets (``length_unmatched``, only when
+    the design declares any), then vias and copper length (the ``objective``).
+
+    PNR_COMPACT ``RANK``: a record carrying the compactness ``bucket``
+    (:func:`pnr.place.compact.rank_bucket`) ranks it after every completion key and the
+    vias, before the copper length: on a fixed outline a smaller bounding box is free
+    but a via is not. Under PNR_SHRINK (the outline follows the bounding box) the
+    bucket ranks before the vias. A record without one is keyed as before."""
+    objective = list(metrics.get("objective") or [math.inf])
+    head = tuple(objective[:2]) + (metrics.get("length_unmatched", 0),)
+    if "bucket" not in metrics:
+        return head + tuple(objective[2:])
+    if compact.shrink_enabled():
+        return head + (metrics["bucket"],) + tuple(objective[2:])
+    return head + tuple(objective[2:3]) + (metrics["bucket"],) + tuple(objective[3:])
 
 
 def select_initial_placement(
@@ -429,10 +729,12 @@ def select_initial_placement(
     from .cost_capture import initial_start_context
 
     config = config or InitialPoolConfig()
+    spread = compact.spread(spread)  # PNR_COMPACT GP: 1.0 (unchanged otherwise)
     constraints = preserve_source_locks(graph, constraints)
     source = _prepared_source(graph, constraints, rules)
     fixed = set(resolve_fixed_poses(source, constraints))
     movable_refs = [c.ref for c in source.components if c.ref not in fixed]
+    plan = side_plan(source, constraints, rules)
     root = Path(output) if output else None
     if root:
         root.mkdir(parents=True, exist_ok=True)
@@ -450,7 +752,7 @@ def select_initial_placement(
     )
     legal = []
     seen = {}
-    for start in initial_starts(source, constraints, config, seed, orient):
+    for start in initial_starts(source, constraints, config, seed, orient, rules=rules):
         record = dict(start, status="started")
         report["candidates"].append(record)
         folder = root / start["id"] if root else None
@@ -460,7 +762,7 @@ def select_initial_placement(
         with initial_start_context(start), _trace.scope(start["id"], "start", kind=start["kind"]):
             t = time.monotonic()
             try:
-                source_errors = _hard_and_source_errors(source, source, constraints)
+                source_errors = _hard_and_source_errors(source, source, constraints, rules)
                 if start["kind"] == "source-start" and not source_errors:
                     # Retain an existing legal incumbent exactly, including its chosen
                     # rotations. The optimizer would otherwise erase this baseline.
@@ -493,6 +795,7 @@ def select_initial_placement(
                             channel_rules=rules,
                             initial_positions=start["positions"],
                             initial_rotations=start["rotations"],
+                            **({"initial_sides": start["sides"]} if start.get("sides") else {}),
                         )
                     except LegalizationError as error:
                         if not start.get("basin_anchors") or not legal:
@@ -503,9 +806,11 @@ def select_initial_placement(
                         # This extra bounded attempt is reported, not called a new
                         # independent optimized global placement.
                         from .channels import ChannelModel
-                        from .legalize import legalize, pad_edge_rule
+                        from .legalize import legalize, legalize_constraint_kwargs, pad_edge_rule
 
                         seed_graph = copy.deepcopy(legal[0]["graph"])
+                        # PNR_COMPACT LEGALIZE: the compact legalizer settings (None: off).
+                        tight = compact.legalize_settings(source, placement_constraints, rules)
                         poses = resolve_fixed_poses(seed_graph, placement_constraints)
                         for anchor in start["basin_anchors"]:
                             comp = seed_graph.component(anchor["ref"])
@@ -520,29 +825,41 @@ def select_initial_placement(
                             seed_graph,
                             source.outline.width,
                             source.outline.height,
-                            fixed=poses,
-                            keepouts=keepout_rects(seed_graph, placement_constraints, poses),
-                            group_limits=hard_group_limits(
-                                placement_constraints, poses, partial=True
+                            clearance=(
+                                placement_constraints.board.default_clearance_mm
+                                if tight is None
+                                else tight.gap
                             ),
-                            group_edges=hard_group_edges(placement_constraints),
-                            rotations=resolve_hard_rotations(placement_constraints),
-                            clearance=placement_constraints.board.default_clearance_mm,
-                            grid_mm=0.25,
+                            grid_mm=0.25 if tight is None else tight.grid_mm,
                             allow_rotation=orient,
                             channel_model=ChannelModel(seed_graph, rules),
                             spread=min(spread, 1.3),
-                            **(
-                                {}
-                                if pad_edge_rule(placement_constraints, rules) is None
-                                else dict(pad_edge=pad_edge_rule(placement_constraints, rules))
+                            **legalize_constraint_kwargs(
+                                seed_graph,
+                                placement_constraints,
+                                poses,
+                                pad_edge_rule(placement_constraints, rules),
                             ),
                             **(
                                 {}
-                                if not hard_edge_bands(placement_constraints)
-                                else dict(edge_bands=hard_edge_bands(placement_constraints))
+                                if not stack_refs(seed_graph, placement_constraints)
+                                else dict(stack=stack_refs(seed_graph, placement_constraints))
+                            ),
+                            **(
+                                {} if not (tight and tight.margins) else dict(margins=tight.margins)
                             ),
                         )
+                        from .regions import declared, snap_aligns
+
+                        if declared(placement_constraints):
+                            snap_aligns(
+                                placed,
+                                placement_constraints,
+                                compact.placement_clearance(placement_constraints),
+                                pad_edge_rule(placement_constraints, rules),
+                                (source.outline.width, source.outline.height),
+                                **compact.margin_kwargs(tight),
+                            )
                         prep = PlacementReport(
                             placed.outline.width,
                             placed.outline.height,
@@ -550,7 +867,7 @@ def select_initial_placement(
                             hpwl(placed),
                             **hard_violations(placed, constraints),
                         )
-                errors = _hard_and_source_errors(placed, source, constraints)
+                errors = _hard_and_source_errors(placed, source, constraints, rules)
                 if errors or not prep.legal:
                     record.update(status="rejected_hard_constraints", errors=errors)
                     continue
@@ -561,6 +878,10 @@ def select_initial_placement(
                     hpwl_mm=hpwl(placed),
                     cheap_score=cheap_score(placed, rules),
                 )
+                if plan.active:
+                    record["other_side"] = sorted(
+                        c.ref for c in placed.components if c.side != plan.source.get(c.ref)
+                    )
                 if identity in seen:
                     record.update(status="duplicate", duplicate_of=seen[identity])
                     continue
@@ -612,8 +933,22 @@ def select_initial_placement(
     mandatory = [baseline["id"]]
     if incumbent and incumbent["id"] not in mandatory and config.route_finalists > 1:
         mandatory.append(incumbent["id"])
+
+    # With side-free parts, one candidate that uses the other side is kept through
+    # each shortlist (the cheapest by that stage's screen), so the routed comparison
+    # always includes one; the route objective still decides.
+    def other_side(candidate):
+        return uses_other_side(candidate, plan)
+
+    def with_other_side(pool, required, key):
+        return keep_other_side(pool, required, key, plan)
+
     proxy_candidates = diverse_shortlist(
-        legal, config.proxy_budget, "cheap_score", mandatory=mandatory, refs=movable_refs
+        legal,
+        config.proxy_budget,
+        "cheap_score",
+        mandatory=with_other_side(legal, mandatory, "cheap_score"),
+        refs=movable_refs,
     )
     for candidate in proxy_candidates:
         record = candidate["record"]
@@ -637,7 +972,7 @@ def select_initial_placement(
         proxy_candidates,
         config.route_finalists,
         "proxy_score",
-        mandatory=mandatory,
+        mandatory=with_other_side(proxy_candidates, mandatory, "proxy_score"),
         refs=movable_refs,
     )
     if _trace.current() is not None:  # PNR_TRACE_DIR only
@@ -657,6 +992,14 @@ def select_initial_placement(
         fixed_refs=sorted(fixed),
         movable_refs=sorted(movable_refs),
         shortlisted_finalists=[c["id"] for c in finalists],
+        **(
+            dict(
+                side_policy=plan.policy,
+                other_side_candidates=sorted(c["id"] for c in legal if other_side(c)),
+            )
+            if plan.active
+            else {}
+        ),
         shortlist_policy="baseline/incumbent, best estimated cost, unrepresented legal geometric basin, then RMS diversity",
         placement_optimizer_iterations_per_start=iters,
         minimum_finalist_pose_distance=min(
@@ -734,6 +1077,12 @@ def select_initial_placement(
             else:
                 os.environ["PNR_LIVE_CANDIDATE"] = previous_lane
         metrics = _route_metrics(route)
+        if compact.enabled("RANK"):
+            # PNR_COMPACT RANK: the compactness bucket joins route_rank after completion.
+            measured = compact.metrics(
+                candidate["graph"], source.outline.width, source.outline.height
+            )
+            metrics = dict(metrics, bucket=measured["bucket"], compactness=measured)
         record.update(
             status="routed_finalist",
             routing=metrics,
@@ -745,17 +1094,16 @@ def select_initial_placement(
         evaluated.append(candidate)
         report["route_finalists"].append(name)
         if root:
-            (root / name / "routes.json").write_text(
-                json.dumps(
-                    dict(
-                        tracks=route.tracks,
-                        vias=route.vias,
-                        unrouted=route.result.unrouted,
-                        deferred=sorted(route.deferred_nets),
-                    ),
-                    indent=2,
-                )
+            payload = dict(
+                tracks=route.tracks,
+                vias=route.vias,
+                unrouted=route.result.unrouted,
+                deferred=sorted(route.deferred_nets),
             )
+            if getattr(route, "via_spans", None):  # blind, buried, micro (pnr.via_policy)
+                payload["via_spans"] = route.via_spans
+            payload.update(getattr(route, "extras", dict)())  # a declared fanout's (pnr.fanout)
+            (root / name / "routes.json").write_text(json.dumps(payload, indent=2))
             (root / name / "routing-result.json").write_text(
                 json.dumps(
                     dict(
@@ -767,7 +1115,7 @@ def select_initial_placement(
                     indent=2,
                 )
             )
-    chosen = min(evaluated, key=lambda c: (c["metrics"]["objective"], c["id"]))
+    chosen = min(evaluated, key=lambda c: (route_rank(c["metrics"]), c["id"]))
     if _trace.current() is not None:  # PNR_TRACE_DIR only
         _trace.select(
             "chosen",

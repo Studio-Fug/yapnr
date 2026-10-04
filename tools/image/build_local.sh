@@ -37,8 +37,31 @@ echo "==> yapnr ${version} (${revision:0:7}), KiCad base ${base_tag}"
 echo "==> building the wheel"
 bazel build //release:wheel.dist --stamp --embed_label="${version}"
 dist="$(mktemp -d)"
-trap 'rm -rf "${dist}"' EXIT
-cp "$(bazel info bazel-bin)"/release/wheel_dist/yapnr-*.whl "${dist}/"
+host="$(mktemp -d)"
+trap 'rm -rf "${dist}" "${host}"' EXIT
+cp "$(bazel info bazel-bin)"/release/wheel_dist/yapnr-*.whl "${host}/"
+
+# The wheel carries yapnr.rf's native library for the platform Bazel ran on. Elsewhere than on
+# Linux (a Mac), build the library for the image's Linux architecture in a container, with the
+# flags of //yapnr/rf:libyapnr_fdtd.so and the sources' sha256, and put it in the wheel instead
+# (tools/release/linux_wheel.py retags it).
+if [ "$(uname -s)" = Linux ]; then
+    cp "${host}"/yapnr-*.whl "${dist}/"
+else
+    arch="$(docker version --format '{{.Server.Arch}}')"
+    ubuntu="$(sed -nE 's/^FROM --platform=\$BUILDPLATFORM (ubuntu:[0-9.]+@sha256:[0-9a-f]+) .*/\1/p' \
+        docker/yapnr/Dockerfile)"
+    native=yapnr/rf/fdtd/native
+    sha="$(cat "${native}/fdtd.c" "${native}/fdtd_kernels.h" | shasum -a 256 | cut -c1-64)"
+    echo "==> the wheel's native FDTD library for linux/${arch} (gcc in ${ubuntu%@*})"
+    docker run --rm --platform "linux/${arch}" -v "${PWD}/${native}:/src:ro" -v "${host}:/out" \
+        "${ubuntu}" sh -c "set -e; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq; \
+            apt-get install -y -qq --no-install-recommends gcc libc6-dev >/dev/null; \
+            gcc -O3 -std=c11 -ffp-contract=off -fno-fast-math -fPIC -shared -pthread \
+                -DYF_SRC_SHA='\"${sha}\"' -o /out/libyapnr_fdtd.so /src/fdtd.c"
+    python3 tools/release/linux_wheel.py "$(ls "${host}"/yapnr-*.whl)" \
+        "${host}/libyapnr_fdtd.so" "${arch}" "${dist}"
+fi
 ls "${dist}"
 
 if [ -z "${BASE}" ]; then

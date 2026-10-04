@@ -128,11 +128,14 @@ def _flag(args: List[str], name: str) -> Optional[str]:
 
 
 class FakeCloud(Gcloud):
-    """Records every call and answers from an in-memory model (objects, Batch jobs).
+    """Records every call and answers from an in-memory model (objects, Batch jobs, quotas).
 
     ``objects`` maps ``gs://bucket/path`` to bytes. ``jobs`` maps a job's full name to its
-    description. ``handlers`` can override any command: a function of the stripped argv that
-    returns a Result or None (fall through).
+    description. ``quotas`` maps a region to its Spot CPU quota as ``(limit, usage)`` (a region
+    not in it answers without quotas: unknown). ``templates`` maps the instance templates that
+    exist to their machine types; ``None`` answers every template as present.
+    ``handlers`` can override any command: a function of the stripped argv that returns a Result
+    or None (fall through).
     """
 
     def __init__(self, project: str = "example-project", impersonate: Optional[str] = None, **kw):
@@ -140,6 +143,8 @@ class FakeCloud(Gcloud):
         self.objects: Dict[str, bytes] = {}
         self.jobs: Dict[str, Dict[str, Any]] = {}
         self.tasks: Dict[str, List[Dict[str, Any]]] = {}
+        self.quotas: Dict[str, Any] = {}
+        self.templates: Optional[Dict[str, str]] = None
         self.handlers: List[Callable[[List[str]], Optional[Result]]] = []
 
     def _execute(self, argv: List[str], timeout: float, input_text: Optional[str]) -> Result:
@@ -193,6 +198,21 @@ class FakeCloud(Gcloud):
             return Result(0, json.dumps(self.tasks.get(name, [])), "")
         if args[:2] == ["logging", "read"]:
             return Result(0, "[]", "")
+        if args[:3] == ["compute", "regions", "describe"] and args[3] in self.quotas:
+            limit, usage = self.quotas[args[3]]
+            quota = {"metric": "PREEMPTIBLE_CPUS", "limit": float(limit), "usage": float(usage)}
+            return Result(0, json.dumps({"name": args[3], "quotas": [quota]}), "")
+        if args[:2] == ["compute", "instance-templates"] and self.templates is not None:
+            if args[2] == "describe":
+                if args[3] not in self.templates:
+                    return Result(1, "", "ERROR: The resource '%s' was not found" % args[3])
+                return Result(0, json.dumps({"name": args[3]}), "")
+            if args[2] == "list":
+                listing = [
+                    {"name": name, "properties": {"machineType": shape}}
+                    for name, shape in sorted(self.templates.items())
+                ]
+                return Result(0, json.dumps(listing), "")
         return Result(0, "[]" if "--format=json" in args else "", "")
 
     def _job_name(self, job: Optional[str], location: Optional[str]) -> str:

@@ -42,6 +42,32 @@ class Capture(unittest.TestCase):
             self.assertLess(np.linalg.norm(v[i, :2] - d["position"]), 1e-8)
             self.assertAlmostEqual(d["total"], float(v[i, 2] + 25 * v[i, 3] + v[i, 4]), places=7)
 
+    def test_wirelength_term_is_recorded_and_capture_keeps_the_board(self):
+        """PNR_LEGALIZE_HPWL: the decision carries the wirelength term and its candidate field
+        a sixth column; capturing (which scores every candidate) chooses the same slots."""
+        g, cc = fixture()
+        kw = dict(seed=17, iters=80)
+        env = {"PNR_COST_CAPTURE_DIR": "", "PNR_LEGALIZE_HPWL": "4"}
+        with patch.dict(os.environ, env):
+            base, _ = place(g, cc, **kw)
+        with tempfile.TemporaryDirectory() as td, patch.dict(
+            os.environ, dict(env, PNR_COST_CAPTURE_DIR=td)
+        ):
+            actual, _ = place(g, cc, **kw)
+            self.assertEqual(actual.to_json(), base.to_json())
+            docs = [json.loads(p.read_text()) for p in Path(td).glob("*.json")]
+            d = next(d for d in docs if d["kind"] == "legalizer-decision")
+            keys = [t["key"] for t in d["terms"]]
+            self.assertEqual(keys[-1], "wirelength")
+            self.assertAlmostEqual(d["total"], sum(t["weighted"] for t in d["terms"]), places=8)
+            field = next(f for f in d["candidate_fields"] if f["rotation"] == d["rotation"])
+            self.assertEqual(field["columns"][-1], "wire_raw")
+            v = np.load(field["path"])["values"]
+            i = np.argmin(((v[:, :2] - d["position"]) ** 2).sum(1))
+            self.assertAlmostEqual(
+                d["total"], float(v[i, 2] + 25 * v[i, 3] + v[i, 4] + 4 * v[i, 5]), places=7
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

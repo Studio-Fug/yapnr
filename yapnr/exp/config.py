@@ -59,6 +59,9 @@ class Gcp:
     submit_service_account: str = "yapnr-submit"
     runner_service_account: str = "yapnr-runner"
     registry: str = "{region}-docker.pkg.dev/{project}/ghcr"
+    # Task images that are not on GHCR (third-party solvers, built by Cloud Build from docker/).
+    images: str = "{region}-docker.pkg.dev/{project}/images"
+    image_build_service_account: str = "yapnr-image-build"
     subnetwork: str = "projects/{project}/regions/{region}/subnetworks/yapnr-{region}"
     template: str = "yapnr-{shape}-{model}-{region}"
     gcloud: str = "gcloud"

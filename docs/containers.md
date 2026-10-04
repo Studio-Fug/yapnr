@@ -210,17 +210,17 @@ the viewer service brings its own.
 
 ## What is inside
 
-| Path                     | What                                                                   |
-| ------------------------ | ---------------------------------------------------------------------- |
-| `/usr/local/bin/yapnr`   | the command line (the entrypoint, through `yapnr-kicad-env`)           |
-| `/opt/venv`              | the controller: CPython 3.11 with the runtime lock (numpy, torch, ...) |
-| `/opt/python`            | that CPython, from python-build-standalone (installed by uv)           |
-| `/usr/bin/kicad-cli`     | KiCad's command line                                                   |
-| `/usr/bin/python3`       | KiCad's Python 3.12 with `pcbnew`, for KiCad-side workers              |
-| `/usr/share/kicad/`      | footprints, symbols and templates (no 3D models)                       |
-| `/etc/yapnr/kicad-seed/` | the global library tables every user starts from                       |
-| `/usr/share/doc/yapnr/`  | `LICENSE`, `THIRD_PARTY.md`, `SOURCES` and `licenses/`                 |
-| `/project`               | the working directory; mount the project here                          |
+| Path                     | What                                                                                                                                                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/usr/local/bin/yapnr`   | the command line (the entrypoint, through `yapnr-kicad-env`)                                                                                                                                              |
+| `/opt/venv`              | the controller: CPython 3.11 with the runtime lock (numpy, torch, ...) and the yapnr wheel, whose `yapnr/rf/libyapnr_fdtd.so` is the RF solver's native kernel ([solver backends](rf-solver-backends.md)) |
+| `/opt/python`            | that CPython, from python-build-standalone (installed by uv)                                                                                                                                              |
+| `/usr/bin/kicad-cli`     | KiCad's command line                                                                                                                                                                                      |
+| `/usr/bin/python3`       | KiCad's Python 3.12 with `pcbnew`, for KiCad-side workers                                                                                                                                                 |
+| `/usr/share/kicad/`      | footprints, symbols and templates (no 3D models)                                                                                                                                                          |
+| `/etc/yapnr/kicad-seed/` | the global library tables every user starts from                                                                                                                                                          |
+| `/usr/share/doc/yapnr/`  | `LICENSE`, `THIRD_PARTY.md`, `SOURCES` and `licenses/`                                                                                                                                                    |
+| `/project`               | the working directory; mount the project here                                                                                                                                                             |
 
 The controller Python and KiCad's Python are separate on purpose: the controller runs Bazel's
 exact interpreter and wheel versions (the runtime locks are pinned to `requirements.lock`), and

@@ -3,6 +3,11 @@
 This evaluates the actual global placer's formula at rigid, observed poses. It
 is not the historical soft-rotation loss or the legalizer/route-probe objective.
 A counterfactual field uses whole-board delta, not an allocated component share.
+
+PNR_COMPACT (:mod:`pnr.place.compact`, default off): as in the global placer, a part's
+offset courtyard (``COURTYARD``) spreads, stays in the outline, aligns and avoids
+keep-outs with its body box centred at ``pos`` plus its offset, and the overlap and
+keep-out terms keep the courtyard gap (``LEGALIZE``).
 """
 
 import fnmatch
@@ -51,6 +56,9 @@ DEFAULTS = dict(
 # 'wirelength' holds J3's nets, 'power_tap' J3's taps, 'lex_guard' the weighted
 # guards on J1/J2, and 'power_trunk'/'power_loop' show raw J1 parts at weight 0.
 BASE_TERMS = 9
+# The global placer's region and align terms (pnr.place.regions.GlobalTerms) are
+# appended after the others only when a design declares a region or an align.
+RELATED_TERMS = (("region", "Region protrusion", "mm²"), ("alignment", "Alignment spread", "mm²"))
 
 
 class Objective:
@@ -64,7 +72,8 @@ class Objective:
         effective_offsets=None,
         effective_half=None,
         roles=None,
-        pf_state=None
+        pf_state=None,
+        effective_shift=None
     ):
         self.graph = graph
         self.constraints = constraints
@@ -89,6 +98,9 @@ class Objective:
         self.keys = {}
         self.all_keys = {}
         halves = []
+        shifts = []
+        from .geometry import body_shift, compact_body
+
         for i, c in enumerate(graph.components):
             t = math.radians(c.rot)
             ct, st = math.cos(t), math.sin(t)
@@ -96,8 +108,13 @@ class Objective:
             # Same cardinal extent model as global_place at one-hot rotation.
             if abs(c.rot / 90 - round(c.rot / 90)) > 1e-5:
                 raise ValueError("Global placer only supports cardinal rotations: " + c.ref)
-            h = np.array(c.courtyard) / 2 * scale
+            body = compact_body(c)  # PNR_COMPACT offset courtyard (None: centred)
+            if body is None:
+                h = np.array(c.courtyard) / 2 * scale
+            else:
+                h = np.array((body[2] - body[0], body[3] - body[1])) / 2 * scale
             halves.append(h[::-1] if round(c.rot / 90) % 2 else h)
+            shifts.append(body_shift(c) or (0.0, 0.0))
             for pad in c.pads:
                 self.keys[c.ref, pad.name] = len(offsets)
                 self.all_keys.setdefault((c.ref, pad.name), []).append(len(offsets))
@@ -105,6 +122,10 @@ class Objective:
                 x, y = pad.offset
                 offsets.append((x * ct - y * st, x * st + y * ct))
         self.half = np.array(halves)
+        # Body-centre offsets from the origins (PNR_COMPACT offset courtyards), else None.
+        self.shift = None
+        if any(s != (0.0, 0.0) for s in shifts) or effective_shift is not None:
+            self.shift = np.array(shifts if effective_shift is None else effective_shift, float)
         self.pin_owner = np.array(self.pin_owner, dtype=int)
         self.offsets = np.array(offsets, dtype=float).reshape((-1, 2))
         if effective_offsets is not None:
@@ -131,7 +152,9 @@ class Objective:
             ]
         )
         self.overlap = np.triu(self.overlap, 1)
-        self.clearance = float(constraints.board.default_clearance_mm)
+        from .compact import placement_clearance
+
+        self.clearance = placement_clearance(constraints)
         self.width, self.height = outline_size(graph, constraints)
         self.keepouts = keepout_rects(graph, constraints, self.fixed)
         self.cap = []
@@ -161,6 +184,55 @@ class Objective:
                     self.cap.append((src, dst, sorted(set(self.pin_owner[src + dst])), con.weight))
         if roles is not None:
             self._power_first(roles, pf_state)
+        self.related = []
+        from .regions import declared
+
+        if declared(constraints):
+            self._related()
+        self.term_keys = list(TERMS[: self.nterms]) + (
+            [k for k, _, _ in RELATED_TERMS] if self.related else []
+        )
+        self.nall = len(self.term_keys)
+
+    def _related(self):
+        """Region/align terms at the observed rigid poses (GlobalTerms at one-hot
+        rotations): ('region', comp, corner offsets, area, weight) and ('align',
+        members, anchor offsets, axis index, weight)."""
+        from pnr.constraints import Enforcement
+
+        from .regions import (
+            GP_ALIGN_WEIGHT,
+            GP_REGION_WEIGHT,
+            align_rules,
+            anchor_offset,
+            anchor_spec,
+            area_of,
+            placed_boxes,
+            region_rules,
+        )
+
+        comps = self.graph.components
+        for con in region_rules(self.constraints):
+            weight = GP_REGION_WEIGHT if con.enforcement is Enforcement.HARD else con.weight
+            for ref in con.refs:
+                i = self.index.get(ref)
+                if i is None or not self.movable[i]:
+                    continue
+                c = comps[i]
+                offsets = []
+                for b in placed_boxes(c, con, pos=(0.0, 0.0)):
+                    offsets += [(b[0], b[1]), (b[2], b[1]), (b[0], b[3]), (b[2], b[3])]
+                self.related.append(("region", i, np.array(offsets), area_of(con), weight))
+        for con in align_rules(self.constraints):
+            members = [self.index[r] for r in con.refs if r in self.index]
+            if len(members) < 2:
+                continue
+            axis = con.params["axis"]
+            offsets = np.array(
+                [anchor_offset(comps[i], anchor_spec(con, comps[i].ref), axis) for i in members]
+            )
+            weight = GP_ALIGN_WEIGHT if con.enforcement is Enforcement.HARD else con.weight
+            self.related.append(("align", members, offsets, 0 if axis == "x" else 1, weight))
 
     def _power_first(self, roles, pf_state):
         """Final-stage staged loss factors; without pf_state the stage-3 end values are used and the guard is 0."""
@@ -214,7 +286,7 @@ class Objective:
         if pos.shape[1:] != (self.n, 2):
             raise ValueError("position shape")
         b = len(pos)
-        raw = np.zeros((b, self.n, self.nterms))
+        raw = np.zeros((b, self.n, self.nall))
         weighted = np.zeros_like(raw)
         pf = self.pf
 
@@ -265,7 +337,9 @@ class Objective:
                         * np.logaddexp(0.0, (J[j] - (1 + pf["eps"][j - 1]) * star) / scale),
                         sorted(owners[j]),
                     )
-        delta = np.abs(pos[:, :, None, :] - pos[:, None, :, :])
+        # Courtyard centres (PNR_COMPACT offset courtyards: pos plus the body offsets).
+        body = pos if self.shift is None else pos + self.shift
+        delta = np.abs(body[:, :, None, :] - body[:, None, :, :])
         span = (
             self.half[:, None, :]
             + self.half[None, :, :]
@@ -276,8 +350,8 @@ class Objective:
         raw[:, :, 1] = contribution
         weighted[:, :, 1] = contribution * (self.cfg["w_spread"] if pf is None else pf["w_ov"])
         bound = (
-            np.maximum(self.half - pos, 0) ** 2
-            + np.maximum(pos + self.half - np.array([self.width, self.height]), 0) ** 2
+            np.maximum(self.half - body, 0) ** 2
+            + np.maximum(body + self.half - np.array([self.width, self.height]), 0) ** 2
         ).sum(2) * self.movable
         raw[:, :, 2] = bound
         weighted[:, :, 2] = bound * (self.cfg["w_bound"] if pf is None else pf["bound"])
@@ -297,7 +371,7 @@ class Objective:
                 if edge in ("south", "west")
                 else (self.height if axis else self.width) - extent
             )
-            add(5, (pos[:, i, axis] - target) ** 2, [i], weight)
+            add(5, (body[:, i, axis] - target) ** 2, [i], weight)
         for i, j, radius, weight in self.groups if pf is None else self.pf_groups:
             add(
                 6,
@@ -306,7 +380,7 @@ class Objective:
                 weight * (1.0 if pf is None else pf["group"]),
             )
         for k in self.keepouts:
-            delta = np.abs(pos - np.array([k.cx, k.cy]))
+            delta = np.abs(body - np.array([k.cx, k.cy]))
             area = (
                 np.maximum(
                     self.half + np.array([k.w / 2, k.h / 2]) + self.clearance - delta, 0
@@ -320,6 +394,14 @@ class Objective:
                 axis=(1, 2)
             )
             add(8, dist, owners, weight)
+        for kind, who, offsets, data, weight in self.related:
+            if kind == "region":
+                pts = pos[:, who, None, :] + offsets[None]
+                add(self.nterms, data.dist2(pts[..., 0], pts[..., 1]).sum(1), [who], weight)
+            else:
+                anchors = pos[:, who, data] + offsets[None]
+                spread = ((anchors - anchors.mean(1, keepdims=True)) ** 2).sum(1)
+                add(self.nterms + 1, spread, who, weight)
         return raw, weighted
 
     def report(self):
@@ -337,23 +419,39 @@ class Objective:
                 [self.cfg["w_keep"]],
                 sorted(set(v[3] for v in self.cap if i in v[2])),
             ]
+            if self.related:
+                extra = [
+                    sorted(
+                        set(
+                            v[4]
+                            for v in self.related
+                            if v[0] == kind and (v[1] == i if kind == "region" else i in v[1])
+                        )
+                    )
+                    for kind in ("region", "align")
+                ]
             if self.pf is not None:
                 weights[1:3] = [[self.pf["w_ov"]], [self.pf["bound"]]]
                 weights[6] = sorted(
                     set(v[3] * self.pf["group"] for v in self.pf_groups if i in v[:2])
                 )
                 weights += [[0.0], [0.0], [1.0], [1.0]]
+            labels, units = list(LABELS[: self.nterms]), list(UNITS[: self.nterms])
+            if self.related:
+                weights += extra
+                labels += [label for _, label, _ in RELATED_TERMS]
+                units += [unit for _, _, unit in RELATED_TERMS]
             terms = [
                 dict(
                     key=k,
-                    label=LABELS[t],
+                    label=labels[t],
                     raw_share=float(raw[0, i, t]),
                     weighted=float(w[0, i, t]),
-                    unit=UNITS[t],
+                    unit=units[t],
                     weights=weights[t],
                     effective_weight=float(w[0, i, t] / raw[0, i, t]) if raw[0, i, t] else None,
                 )
-                for t, k in enumerate(TERMS[: self.nterms])
+                for t, k in enumerate(self.term_keys)
             ]
             locks = [
                 c.params
@@ -436,11 +534,20 @@ class Objective:
         regions = {c.ref: placement_rects(c) for c in self.graph.components}
         limits = hard_group_limits(self.constraints, {c.ref: c.pos for c in self.graph.components})
         sides = resolve_hard_sides(self.constraints)
+        from .regions import ref_ok
 
         def legal(c):
             rect = courtyard_rect(c)
             return (
                 rect.inside(self.width, self.height)
+                and (
+                    not self.related
+                    or ref_ok(
+                        [c if x.ref == c.ref else x for x in self.graph.components],
+                        self.constraints,
+                        c.ref,
+                    )
+                )
                 and (c.ref not in sides or c.side == sides[c.ref])
                 and not any(rect.overlaps(k) for k in self.keepouts)
                 and not any(
@@ -474,7 +581,7 @@ class Objective:
             values=values,
             component_scores=shares,
             term_delta=term_delta,
-            term_keys=list(TERMS[: self.nterms]),
+            term_keys=list(self.term_keys),
             legal=valid,
             current_position=list(old),
             current_component_score=local_base,

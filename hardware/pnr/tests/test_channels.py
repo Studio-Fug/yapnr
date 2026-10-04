@@ -77,6 +77,15 @@ class ChannelTests(unittest.TestCase):
         )
         self.assertAlmostEqual(model.demand({"power", "n0"}), 2.15)
         self.assertAlmostEqual(model.demand({"dp", "dn"}), 0.95)
+        # A pair that leaves width and gap to the defaults: fab track, clearance.
+        model = ChannelModel(
+            example(),
+            {
+                "default_clearance_mm": 0.15,
+                "diff_pairs": [{"p": "dp", "n": "dn", "width_mm": None, "gap_mm": None}],
+            },
+        )
+        self.assertAlmostEqual(model.demand({"dp", "dn"}), 2 * 0.2 + 0.15 + 2 * 0.15)
 
     def test_duplicate_pads_do_not_add_tracks(self):
         graph = example()

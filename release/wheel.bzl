@@ -2,6 +2,16 @@
 
 load("@rules_python//python:packaging.bzl", "py_wheel")
 
+# The platform tag of the wheel built here: it carries a native library built for the host
+# (//yapnr/rf:libyapnr_fdtd.so). Linux: glibc 2.34 is the newest symbol version the library
+# needs (pthread in libc); macOS: built for 11.0 and later.
+WHEEL_PLATFORM = select({
+    "@bazel_tools//src/conditions:darwin_arm64": "macosx_11_0_arm64",
+    "@bazel_tools//src/conditions:darwin_x86_64": "macosx_11_0_x86_64",
+    "@bazel_tools//src/conditions:linux_aarch64": "manylinux_2_34_aarch64",
+    "@bazel_tools//src/conditions:linux_x86_64": "manylinux_2_34_x86_64",
+})
+
 def yapnr_wheel(name, version, deps, **kwargs):
     """A py_wheel of the yapnr package with the project's metadata.
 
@@ -29,6 +39,7 @@ def yapnr_wheel(name, version, deps, **kwargs):
         extra_distinfo_files = {Label("//:LICENSE"): "LICENSE"},
         homepage = "https://github.com/Studio-Fug/yapnr",
         license = "AGPL-3.0-or-later",
+        platform = WHEEL_PLATFORM,
         project_urls = {
             "Documentation": "https://studio-fug.github.io/yapnr/",
             "Issues": "https://github.com/Studio-Fug/yapnr/issues",

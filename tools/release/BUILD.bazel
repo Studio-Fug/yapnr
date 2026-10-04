@@ -2,13 +2,14 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 package(default_visibility = ["//visibility:public"])
 
-# Version and image tags from git, and the release notes header
-# (docs/releases.md). Stdlib-only and Python 3.9 compatible: CI runs these
-# scripts with the runner's python3.
+# Version and image tags from git, the release notes header (docs/releases.md)
+# and the Linux wheel a Mac's tools/image/build_local.sh makes. Stdlib-only and
+# Python 3.9 compatible: CI runs these scripts with the runner's python3.
 py_library(
     name = "release_lib",
     srcs = [
         "__init__.py",
+        "linux_wheel.py",
         "notes_header.py",
         "version.py",
     ],

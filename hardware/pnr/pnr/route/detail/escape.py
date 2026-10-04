@@ -48,6 +48,14 @@ class Escape:
     stub_path: Optional[List[Tuple[float, float]]] = None
     via_xy: Optional[Tuple[float, float]] = None  # via site (mm): pad ctr or stub end
     segments: Optional[list] = None  # joint access: (layer name, exact start, end)
+    width: Optional[float] = None  # a plane drop's stub width (its pad's entry width)
+    # The via's span (pnr.via_policy.Span) under the grid's via model; None: through.
+    via_span: Optional[object] = None
+    # The declared fanout (pnr.route.detail.fanout) this escape belongs to: it is
+    # emitted at its own ``width``, or ``widths`` per segment. None for every
+    # planned escape.
+    fanout: Optional[str] = None
+    widths: Optional[List[float]] = None
 
 
 @dataclass
@@ -56,6 +64,8 @@ class EscapePlan:
     escapes: List[Escape] = field(default_factory=list)
     blocked_nets: Set[str] = field(default_factory=set)
     diagnostics: dict = field(default_factory=dict)
+    # Plane drops (stack-aware): net -> centres of surface pads left without one.
+    drop_failures: Dict[str, List[Tuple[float, float]]] = field(default_factory=dict)
 
 
 def _line_clear(
@@ -66,14 +76,19 @@ def _line_clear(
     return all(grid.passable(layer, ci + di * k, cj + dj * k, net) for k in range(dist + 1))
 
 
-def _via_clean(grid: RouteGrid, i: int, j: int, net: str, via_keepout: int, point=None) -> bool:
+def _via_clean(
+    grid: RouteGrid, i: int, j: int, net: str, via_keepout: int, point=None, layers=None
+) -> bool:
     """True if a via for ``net`` at column (i, j) clears all *other*-net copper — its
-    keep-out halo (all layers) touches no cell owned by another net. A Ø0.45 via
-    dropped in a 0.5 mm-pitch pad field would short its neighbours; this rejects that
-    (the pad must then dog-bone out, or stay unrouted — honest ground truth)."""
-    if not grid.hole_site_clear(grid.center_of(i, j)):
+    keep-out halo (all layers, or a span's ``layers``) touches no cell owned by
+    another net. A Ø0.45 via dropped in a 0.5 mm-pitch pad field would short its
+    neighbours; this rejects that (the pad must then dog-bone out, or stay unrouted —
+    honest ground truth)."""
+    # A grid with a via model never shares a site with another net's escape via.
+    owner = net if getattr(grid, "via_model", None) is not None else None
+    if not grid.hole_site_clear(grid.center_of(i, j), net=owner):
         return False
-    for la in range(grid.nlayers):
+    for la in range(grid.nlayers) if layers is None else layers:
         # ``point``: an exact off-grid via site (a pad centre) for the fab
         # profile's via-to-SMD-pad rule; None judges the cell centre.
         if not grid.via_passable(la, i, j, net, point):
@@ -84,6 +99,15 @@ def _via_clean(grid: RouteGrid, i: int, j: int, net: str, via_keepout: int, poin
                 if owner is not None and owner != net:
                     return False
     return True
+
+
+def via_layer_order(nlayers: int, side: int) -> List[int]:
+    """Layers to try for an escape via from the pad layer ``side``: the opposite
+    outer layer first (B.Cu for a top pad, F.Cu for a bottom pad), then the inner
+    layers from F.Cu's side."""
+    opposite = 0 if side == nlayers - 1 else nlayers - 1
+    order = [opposite] + list(range(1, nlayers - 1))
+    return [la for la in dict.fromkeys(order) if 0 <= la < nlayers and la != side]
 
 
 def _has_free_neighbor(grid: RouteGrid, c: Cell, net: str) -> bool:
@@ -108,6 +132,12 @@ def plan_escapes(
     joint_max_options: int = 16,
     joint_max_states: int = 20000,
     joint_max_cluster_size: int = 24,
+    drop_widths: Optional[Dict[str, float]] = None,
+    drop_in_pad: bool = False,
+    drop_pad_width: Optional[Dict[Tuple[str, str], float]] = None,
+    plane_access=None,
+    drop_span=None,
+    skip_pads=None,
 ) -> EscapePlan:
     """Plan a legal escape for every pad of the routable ``net_names``.
 
@@ -117,6 +147,15 @@ def plan_escapes(
     Escape vias reserve their keep-out (``via_keepout``) in the grid so subsequent
     escapes and the maze stay clear. Returns the per-pad access cells + the escape
     geometry to emit.
+
+    ``drop_widths`` (net -> stub width) names the nets with a dedicated plane whose
+    surface pads get a plane drop, planned jointly (``joint`` only; the sequential
+    planner leaves them to the native plane fanout); ``drop_pad_width`` sizes each
+    pad's stub ((ref, pad) -> width) and ``plane_access``
+    (:class:`pnr.stack.PlaneAccess`) admits only via sites inside the net's own
+    plane fill. ``drop_span(net, side)`` gives a drop's blind or micro via span
+    under the grid's via model (None: a through via). ``skip_pads`` ((ref, pad)
+    pairs) are left alone: a declared fanout (:mod:`.fanout`) holds them.
     """
     if joint:
         from .joint_escape import plan_joint_escapes
@@ -132,6 +171,12 @@ def plan_escapes(
             max_options=joint_max_options,
             max_states=joint_max_states,
             max_cluster_size=joint_max_cluster_size,
+            drop_widths=drop_widths,
+            drop_in_pad=drop_in_pad,
+            drop_pad_width=drop_pad_width,
+            plane_access=plane_access,
+            drop_span=drop_span,
+            **({"skip_pads": skip_pads} if skip_pads else {}),
         )
     plan = EscapePlan()
     plan.diagnostics = {"model": "legacy-sequential", "complete": None}
@@ -142,7 +187,7 @@ def plan_escapes(
         side = grid.side_layer(comp.side)
         cx_part, cy_part = comp.pos
         for name, net, r in pad_rects(comp):
-            if net not in net_names:
+            if net not in net_names or (skip_pads and (comp.ref, name) in skip_pads):
                 continue
             ci, cj = grid.cell_of(r.cx, r.cy)
             center = Cell(side, ci, cj)
@@ -217,6 +262,12 @@ def _offgrid_escape(grid, net, center, pad_xy, side, part_center):
                 if (
                     not (0 <= x + dx <= grid.width and 0 <= y + dy <= grid.height)
                     or grid.blocked[side, j, i]
+                ):
+                    return False
+                # Keepouts with allow lists and fixed-block copper: centre samples.
+                if not (dx or dy) and (
+                    (getattr(grid, "net_keepouts", None) and grid.net_blocked(net, side, i, j))
+                    or getattr(grid, "fixed_owned", {}).get((side, i, j), net) != net
                 ):
                     return False
         for layer, owner, r in grid.pad_rectangles:
@@ -348,8 +399,7 @@ def _plan_one(
     # 1) Via-in-pad (E2): a via straight down the pad centre to another layer with
     # room. Prefer the opposite outer layer, then the inner-layer gaps.
     if allow_via_in_pad:
-        order = [la for la in (grid.nlayers - 1, 1, 2) if 0 <= la < grid.nlayers and la != side]
-        for la in order:
+        for la in via_layer_order(grid.nlayers, side):
             tgt = Cell(la, ci, cj)
             if (
                 grid.via_passable(la, ci, cj, net, pad_xy)
@@ -393,9 +443,7 @@ def _plan_one(
                         stub_to=grid.center_of(ni, nj),
                     )
                 # dog-bone + via to another layer at the offset cell
-                for la in (grid.nlayers - 1, 1, 2):
-                    if not (0 <= la < grid.nlayers) or la == side:
-                        continue
+                for la in via_layer_order(grid.nlayers, side):
                     tgt = Cell(la, ni, nj)
                     if (
                         grid.via_passable(la, ni, nj, net)

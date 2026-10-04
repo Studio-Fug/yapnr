@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -22,6 +23,9 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
     # yapnr package beside it (yapnr.fab: the profile files).
     pnr_root = Path(__file__).resolve().parent.parent
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(pnr_root), str(pnr_root.parent.parent)]))
+    # The KiCad workers' numeric solves (pnr.ir_extract) run here when KiCad's Python has
+    # no numpy.
+    env.setdefault("PNR_PYTHON", sys.executable)
 
     def invoke(args, name):
         from pnr.proc import (  # one KiCad worker: PNR_WORKER_TIMEOUT; stays in this process group

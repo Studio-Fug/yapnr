@@ -1,6 +1,9 @@
 """Extract a supply rail's copper from a KiCad board and report its IR drop.
 
-Runs under KiCad's Python (``pcbnew``; numpy for the solve). For each ``ir_drop``
+Runs under KiCad's Python (``pcbnew``). The solve needs numpy: without it in this
+Python (a KiCad build without numpy, as in the container image), the rails' copper
+goes to the numeric Python named by ``PNR_PYTHON`` (``python -m pnr.ir_drop --jobs``),
+which the regression runner and :mod:`pnr.staged_signal` set. For each ``ir_drop``
 entry of the routing rules (:mod:`pnr.power_spec`) it collects the rail's copper in
 the graph frame (:func:`pnr.ingest._board_frame`, mm, y up): the **filled** zone
 polygons per copper layer (as the last refill left them), the tracks and arcs with
@@ -19,6 +22,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -220,12 +225,12 @@ def _terminals(copper, entry, key):
 def report(board, rules: Dict, out_dir: Path, path: Optional[str] = None, heatmaps=False) -> Dict:
     """Every ``ir_drop`` rail of ``rules`` on ``board``: ``{net: report}`` (also
     written to ``out_dir/ir.json``)."""
-    from pnr.ir_drop import solve
     from pnr.power_spec import rail_current
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     result = {}
+    jobs = []
     for entry in rules.get("ir_drop") or []:
         net = entry["net"]
         copper = extract(board, net, path)
@@ -237,8 +242,7 @@ def report(board, rules: Dict, out_dir: Path, path: Optional[str] = None, heatma
         current = rail_current(rules, net, entry.get("current_a"))
         if current is None:
             raise ValueError("ir_drop %s: no current_a and no @pnr-current or class current" % net)
-        rep = solve(
-            copper,
+        kwargs = dict(
             sources=sources,
             sinks=sinks,
             current_a=current,
@@ -250,13 +254,51 @@ def report(board, rules: Dict, out_dir: Path, path: Optional[str] = None, heatma
             two_point=entry.get("two_point", True),
             heatmap=str(out_dir / ("ir-" + net.replace("/", "_"))) if heatmaps else None,
         )
-        rep["hard"] = bool(entry.get("hard"))
+        jobs.append(dict(net=net, copper=copper, kwargs=kwargs, hard=bool(entry.get("hard"))))
+    for job, rep in zip(jobs, solve_jobs(jobs, out_dir)):
+        copper = job["copper"]
+        rep["hard"] = job["hard"]
         rep["sources"] = [
-            "%s.%s" % (copper["pads"][k]["ref"], copper["pads"][k]["pad"]) for k in sources
+            "%s.%s" % (copper["pads"][k]["ref"], copper["pads"][k]["pad"])
+            for k in job["kwargs"]["sources"]
         ]
-        result[net] = rep
+        result[job["net"]] = rep
     (out_dir / "ir.json").write_text(json.dumps(result, indent=2, sort_keys=True))
     return result
+
+
+def solve_jobs(jobs: List[Dict], out_dir: Path) -> List[Dict]:
+    """:func:`pnr.ir_drop.solve` of each job (``{copper, kwargs}``): here when numpy
+    imports, else in the numeric Python ``PNR_PYTHON`` names (``-m pnr.ir_drop --jobs``)."""
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        python = os.environ.get("PNR_PYTHON")
+        if not python:
+            raise RuntimeError(
+                "pnr.ir_extract: this Python has no numpy; set PNR_PYTHON to a Python with "
+                "numpy for the solve"
+            )
+        path = Path(out_dir) / "ir-jobs.json"
+        solved = Path(out_dir) / "ir-solved.json"
+        path.write_text(json.dumps(jobs))
+        root = str(Path(__file__).resolve().parent.parent)
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(
+            [root] + [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p]
+        )
+        subprocess.run(
+            [python, "-m", "pnr.ir_drop", "--jobs", str(path), "--out", str(solved)],
+            check=True,
+            env=env,
+        )
+        reports = json.loads(solved.read_text())
+        path.unlink()
+        solved.unlink()
+        return reports
+    from pnr.ir_drop import solve
+
+    return [solve(job["copper"], **job["kwargs"]) for job in jobs]
 
 
 def main(argv=None) -> int:
@@ -279,7 +321,7 @@ def main(argv=None) -> int:
     bad = 0
     for net, rep in sorted(result.items()):
         line = "ir_drop %s: %s" % (net, rep["status"])
-        if "r_eff_mohm" in rep:
+        if rep.get("r_eff_mohm") is not None:
             line += " (%.3f mOhm, %.3f mV at %.3g A)" % (
                 rep["r_eff_mohm"],
                 rep["worst_drop_mv"],

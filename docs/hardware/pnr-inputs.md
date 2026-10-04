@@ -795,7 +795,10 @@ trace carrying the whole current would carry per mm, and `status` (`pass`, `fail
 against the budget, `open`, or `unsolved` when the solve stops short of its
 tolerance: then no drop or resistance is given). Warnings take the quantified-assumption form, for
 instance what the worst sink's drop would be if the whole current went to it.
-With `--heatmaps` each layer's potential is written as a PNG. Copper only: the
+With `--heatmaps` each layer's potential is written as a PNG. The extraction runs
+under KiCad's Python; where that Python has no numpy (the container image's), the
+solve runs in the numeric Python named by `PNR_PYTHON`, which `regression/run.py` and
+`pnr.staged_signal` set. Copper only: the
 resistance of parts in the path (ferrites, sense resistors) is not modelled. On the
 `-rails` rung's VDD (320 thousand nodes at 0.05 mm) 0.1 mm gives 2.590 against
 2.574 mOhm (0.6 %) in 4 s against 57 s of one solve.

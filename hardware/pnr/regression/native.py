@@ -297,7 +297,8 @@ def audit(spec, root, pcb):
     netwidth = {n: rules["fab"]["track_width_mm"] for n in set(expected.values()) if n}
     for cls in rules["net_classes"]:
         for n in cls["nets"]:
-            netwidth[n] = max(netwidth[n], cls["width_mm"])
+            # A class that sets only a clearance leaves the width to the fab.
+            netwidth[n] = max(netwidth[n], cls["width_mm"] or 0.0)
     thin = [
         str(t.m_Uuid.AsString())
         for t in b.GetTracks()

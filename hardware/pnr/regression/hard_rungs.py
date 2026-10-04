@@ -1544,7 +1544,8 @@ def ufbga_block(spec):
 
 
 # Net class clearances, a board's custom rules and its own outline on the BGA rung
-# (11-ufbga201-fanout-6L-SGSGPS-classes): the supply plane class at 0.15 mm and two
+# (11-ufbga201-fanout-6L-SGSGPS-classes): the supply plane class at 0.12 mm (its
+# 0.35 mm interstitial drops leave 0.125 mm to the 0.32 mm balls around them) and two
 # ring-0 south GPIO nets in a CLK class at 0.20 mm that the custom rules keep off
 # vias and 0.25 mm from every net without a class; a 1 mm fiducial with its own
 # 0.6 mm clearance and 0.5 mm mask margin in the south exits' corridor; an outline
@@ -1576,7 +1577,7 @@ def ufbga_classes(spec):
     spec["expected_connected_pads"] = connected_pads(spec["parts"])
     cons = spec["constraints"]
     cons["fixed"]["FID1"] = dict(at=list(CLASSES_FIDUCIAL), rot=0, side="top")
-    cons["net_class"]["plane_vcc"]["clearance_mm"] = 0.15
+    cons["net_class"]["plane_vcc"]["clearance_mm"] = 0.12
     cons["net_class"]["clk"] = dict(nets=clk, clearance_mm=0.2)
     cons["board"].update(class_clearance="maze", dru_routing=True, edge="exact")
     spec["outline_shape"] = dict(CLASSES_OUTLINE)
@@ -1597,7 +1598,7 @@ def ufbga_classes(spec):
     spec["name"] += "-classes"
     spec["description"] = (
         spec.get("description", "")
-        + " With class clearances (supply 0.15 mm, two CLK nets 0.20 mm), custom rules (no "
+        + " With class clearances (supply 0.12 mm, two CLK nets 0.20 mm), custom rules (no "
         "vias on CLK, CLK 0.25 mm from unclassed nets, hole to edge to the stroke), a "
         "fiducial with its own clearance in an exit corridor and 1 mm rounded corners."
     )

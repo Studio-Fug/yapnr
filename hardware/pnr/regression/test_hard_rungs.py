@@ -348,7 +348,7 @@ class HardRungContract(unittest.TestCase):
         self.assertEqual(rules["class_clearance"], "maze")
         classes = {c["name"]: c for c in rules["net_classes"]}
         self.assertEqual(classes["clk"]["clearance_mm"], 0.2)
-        self.assertEqual(classes["plane_vcc"]["clearance_mm"], 0.15)
+        self.assertEqual(classes["plane_vcc"]["clearance_mm"], 0.12)
 
     def test_bga_block_rung(self):
         """The BGA rung with a fixed block: its launch copper digest, ground stitching

@@ -225,7 +225,8 @@ the plane nets pass beside it. Its `no_copper` checks judge zones too (`items: z
 so a plane poured into the launch fails the rung.
 
 `11-ufbga201-fanout-6L-SGSGPS-classes` adds routing rules (one new dimension,
-`constraints`): the supply plane class at 0.15 mm and the ring-0 south balls R4 and R8
+`constraints`): the supply plane class at 0.12 mm (its 0.35 mm interstitial drops leave
+0.125 mm to the balls around them) and the ring-0 south balls R4 and R8
 (PB1, PE7, to J2) in a CLK class at 0.20 mm; custom rules (`dru_rules`, written into
 the judge's `.kicad_dru`) that bar vias on CLK, keep CLK 0.25 mm from every net without
 a class and hold holes 0.425 mm from the outline's stroke edge; a 1 mm fiducial (KiCad's

@@ -44,6 +44,11 @@ run "owner_config_matches_the_cli" {
   }
 
   assert {
+    condition     = output.owner_config.images == "{region}-docker.pkg.dev/example-project/images"
+    error_message = "the images pattern must match [gcp] images in the owner config"
+  }
+
+  assert {
     condition     = output.owner_config.template == "yapnr-{shape}-{model}-{region}"
     error_message = "the template pattern must match [gcp] template in the owner config"
   }
@@ -113,4 +118,18 @@ run "regions_are_required" {
   }
 
   expect_failures = [var.regions]
+}
+
+run "images_repository_per_region" {
+  command = plan
+
+  assert {
+    condition     = length(module.registry.images) == 2
+    error_message = "one images repository per region"
+  }
+
+  assert {
+    condition     = output.owner_config.image_build_service_account == "yapnr-image-build"
+    error_message = "Cloud Build runs image builds as yapnr-image-build"
+  }
 }

@@ -4,7 +4,9 @@
 checked against the vendored Batch v1 discovery document before anything is sent. The job:
 
 - runs the published image from the region's Artifact Registry remote repository (a pull-through
-  cache of ghcr.io), pinned by digest, with the image's ``yapnr-kicad-env`` as entrypoint;
+  cache of ghcr.io), pinned by digest, with the image's ``yapnr-kicad-env`` as entrypoint; an
+  image named by its full reference elsewhere (the project's ``images`` repository) runs as
+  named, with the campaign's ``runtime`` (interpreter, entrypoint) when it is not a yapnr image;
 - runs ``task.py`` (the campaign's copy, in the runs bucket) once per task: ``BATCH_TASK_INDEX``
   maps through ``submissions/<n>.indices`` to a line of ``tasks.jsonl``;
 - mounts the runs bucket read-write and the inputs bucket's ``bundles/`` read-only (gcsfuse);
@@ -33,8 +35,8 @@ from yapnr.exp.store import GcsStore
 
 RUNS_MOUNT = "/mnt/disks/runs"
 INPUTS_MOUNT = "/mnt/disks/inputs"
-IMAGE_PYTHON = "/opt/venv/bin/python"
-IMAGE_ENTRYPOINT = "/usr/local/bin/yapnr-kicad-env"
+IMAGE_PYTHON = image.YAPNR_PYTHON
+IMAGE_ENTRYPOINT = image.YAPNR_ENTRYPOINT
 WORK_ROOT = "/tmp/yapnr-work"
 # Reserved Batch exit codes worth a retry (docs.cloud.google.com/batch/docs/troubleshooting):
 # 50001 Spot preemption, 50002 VM stopped reporting, 50003 VM rebooted, 50006 VM recreated; and
@@ -92,8 +94,9 @@ def render_job(
     options = "--init --shm-size 1g"
     if gcp.container_user:
         options += " --user %s" % gcp.container_user
+    python, entrypoint = image.runtime(plan_meta.get("image") or {})
     commands = [
-        IMAGE_PYTHON,
+        python,
         "%s/campaigns/%s/task.py" % (RUNS_MOUNT, cid),
         "--store",
         RUNS_MOUNT,
@@ -148,6 +151,10 @@ def render_job(
     }
     if network:
         allocation["network"] = network
+    container: Dict[str, Any] = {"imageUri": image_uri}
+    if entrypoint:
+        container["entrypoint"] = entrypoint
+    container.update(commands=commands, options=options)
     task_group = {
         "taskCount": str(task_count),
         "parallelism": str(parallelism),
@@ -156,12 +163,7 @@ def render_job(
             "runnables": [
                 {
                     "displayName": "yapnr-task",
-                    "container": {
-                        "imageUri": image_uri,
-                        "entrypoint": IMAGE_ENTRYPOINT,
-                        "commands": commands,
-                        "options": options,
-                    },
+                    "container": container,
                     "timeout": "%ds" % (wall + UPLOAD_GRACE_S),
                 }
             ],

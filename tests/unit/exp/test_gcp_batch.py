@@ -101,6 +101,46 @@ class GcpBatchTest(unittest.TestCase):
         self.assertEqual(group["taskSpec"]["maxRunDuration"], "2400s")  # 1800 + 300 + 300
         self.assertEqual(group["taskSpec"]["runnables"][0]["timeout"], "2100s")
 
+    def test_an_image_of_the_project_with_its_own_runtime(self):
+        # A task image from the project's images repository (openEMS): pulled as named, run with
+        # the campaign's interpreter and without the yapnr launcher.
+        ref = "us-west4-docker.pkg.dev/example-project/images/openems:x86-64-v4"
+        stage = self.tmp / "stage.jsonl"
+        stage.write_text(
+            json.dumps(
+                {
+                    "id": "m0",
+                    "command": ["${PYTHON}", "job/run.py"],
+                    "record": "out/m0/job.json",
+                    "resources": {"cpus": 4, "memory_gb": 4, "max_wall_s": 3600},
+                }
+            )
+            + "\n"
+        )
+        campaign = (
+            'schema = "yapnr-campaign-v1"\nkind = "mc-eval"\nname = "em"\nsource = "none"\n'
+            'image = "%s"\n\n[runtime]\npython = "/opt/openEMS/venv/bin/python"\n'
+            'entrypoint = ""\n\n[config]\nstage_plan = "stage.jsonl"\n' % ref
+        )
+        plan = self.plan(campaign)
+        self.assertEqual(
+            plan.meta["image"]["runtime"],
+            {"python": "/opt/openEMS/venv/bin/python", "entrypoint": ""},
+        )
+        job = render(plan, self.config)
+        self.assertEqual(batch_schema.validate(job, batch_schema.load()), [])
+        container = job["taskGroups"][0]["taskSpec"]["runnables"][0]["container"]
+        self.assertEqual(container["imageUri"], ref.rsplit(":", 1)[0] + "@" + testing.DIGEST)
+        self.assertNotIn("entrypoint", container)
+        self.assertEqual(container["commands"][0], "/opt/openEMS/venv/bin/python")
+        tasks = [json.loads(x) for x in (plan.dir / "tasks.jsonl").read_text().splitlines()]
+        self.assertEqual([t["entrypoint"] for t in tasks], [None])
+        # The yapnr image keeps its launcher and interpreter.
+        job = render(self.plan(testing.SMOKE_CAMPAIGN, replace=True), self.config)
+        container = job["taskGroups"][0]["taskSpec"]["runnables"][0]["container"]
+        self.assertEqual(container["entrypoint"], gcp_batch.IMAGE_ENTRYPOINT)
+        self.assertEqual(container["commands"][0], gcp_batch.IMAGE_PYTHON)
+
     def test_reaper_finds_the_deadline_on_the_job(self):
         # The reaper (infra/gcp/functions/guard) cancels a job by its own `deadline` label.
         plan = self.plan(testing.SMOKE_CAMPAIGN)

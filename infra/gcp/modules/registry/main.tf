@@ -2,6 +2,10 @@
 # pull-through cache, so VMs pull the yapnr image without internet access and same-region pulls
 # are free. While the GHCR packages are private, the repository authenticates upstream with a
 # read:packages token from Secret Manager.
+#
+# Next to it, a standard repository `images` per region for task images that are not published on
+# GHCR (third-party solvers such as openEMS, built by Cloud Build from docker/): the readers pull,
+# the writers (the image build account) push, and a cleanup policy bounds the storage.
 
 variable "project_id" {
   type = string
@@ -18,6 +22,18 @@ variable "regions" {
 variable "readers" {
   description = "Service accounts that pull images, by a static name (for_each keys must be known at plan time)."
   type        = map(string)
+}
+
+variable "writers" {
+  description = "Service accounts that push to the images repositories, by a static name."
+  type        = map(string)
+  default     = {}
+}
+
+variable "untagged_retention_days" {
+  description = "Untagged image versions in the images repositories older than this are deleted."
+  type        = number
+  default     = 30
 }
 
 variable "ghcr_token_secret" {
@@ -72,6 +88,57 @@ resource "google_artifact_registry_repository_iam_member" "reader" {
   member     = "serviceAccount:${var.readers[each.value[1]]}"
 }
 
+resource "google_artifact_registry_repository" "images" {
+  for_each      = toset(var.regions)
+  project       = var.project_id
+  location      = each.value
+  repository_id = "images"
+  description   = "Task images built by Cloud Build (pinned by digest in campaigns)"
+  format        = "DOCKER"
+  mode          = "STANDARD_REPOSITORY"
+  labels        = { yapnr = "1" }
+
+  # A KEEP policy wins over a DELETE policy: the newest versions of every image stay.
+  cleanup_policies {
+    id     = "keep-recent"
+    action = "KEEP"
+    most_recent_versions {
+      keep_count = 5
+    }
+  }
+
+  cleanup_policies {
+    id     = "delete-old-untagged"
+    action = "DELETE"
+    condition {
+      tag_state  = "UNTAGGED"
+      older_than = "${var.untagged_retention_days * 86400}s"
+    }
+  }
+}
+
+resource "google_artifact_registry_repository_iam_member" "images_reader" {
+  for_each = {
+    for pair in setproduct(var.regions, keys(var.readers)) : "${pair[0]}-${pair[1]}" => pair
+  }
+  project    = var.project_id
+  location   = each.value[0]
+  repository = google_artifact_registry_repository.images[each.value[0]].repository_id
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${var.readers[each.value[1]]}"
+}
+
+resource "google_artifact_registry_repository_iam_member" "images_writer" {
+  for_each = {
+    for pair in setproduct(var.regions, keys(var.writers)) : "${pair[0]}-${pair[1]}" => pair
+  }
+  project    = var.project_id
+  location   = each.value[0]
+  repository = google_artifact_registry_repository.images[each.value[0]].repository_id
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${var.writers[each.value[1]]}"
+}
+
 # The Artifact Registry service agent reads the upstream token (private GHCR only).
 resource "google_secret_manager_secret_iam_member" "upstream" {
   count     = var.ghcr_token_secret == null ? 0 : 1
@@ -83,6 +150,10 @@ resource "google_secret_manager_secret_iam_member" "upstream" {
 
 output "repositories" {
   value = { for r, repo in google_artifact_registry_repository.ghcr : r => repo.id }
+}
+
+output "images" {
+  value = { for r, repo in google_artifact_registry_repository.images : r => repo.id }
 }
 
 output "upstream_authenticated" {

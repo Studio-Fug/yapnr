@@ -34,6 +34,12 @@ resource "google_service_account" "build" {
   display_name = "yapnr exp: builds the guard functions"
 }
 
+resource "google_service_account" "image_build" {
+  project      = var.project_id
+  account_id   = "yapnr-image-build"
+  display_name = "yapnr exp: Cloud Build of task images (pushes to the images repository only)"
+}
+
 resource "google_project_iam_member" "submit" {
   for_each = toset([
     "roles/batch.jobsEditor",
@@ -78,6 +84,15 @@ resource "google_project_iam_member" "build" {
   member  = "serviceAccount:${google_service_account.build.email}"
 }
 
+# Cloud Build runs image builds as yapnr-image-build, which writes their logs; its pushes are
+# granted on the images repositories alone (modules/registry), its source reads on one prefix of
+# the inputs bucket (modules/storage).
+resource "google_project_iam_member" "image_build" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.image_build.email}"
+}
+
 # yapnr-submit may launch jobs as yapnr-runner only.
 resource "google_service_account_iam_member" "submit_acts_as_runner" {
   service_account_id = google_service_account.runner.name
@@ -119,6 +134,14 @@ output "runner_email" {
 
 output "guard_email" {
   value = google_service_account.guard.email
+}
+
+output "image_build_email" {
+  value = google_service_account.image_build.email
+}
+
+output "image_build_account_id" {
+  value = google_service_account.image_build.account_id
 }
 
 output "build_id" {

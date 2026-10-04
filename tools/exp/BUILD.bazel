@@ -2,18 +2,32 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 package(default_visibility = ["//visibility:public"])
 
-# Stage-plan generators for `yapnr exp` campaigns (docs/cloud-experiments.md). rf_job.py and
-# rf_diag.py run inside the tasks, from the job bundle rf_stage_plan.py writes.
+# Stage-plan generators for `yapnr exp` campaigns (docs/cloud-experiments.md). rf_job.py,
+# rf_diag.py and openems_job.py run inside the tasks, from the job bundles the generators write.
 py_library(
     name = "exp_lib",
     srcs = [
         "__init__.py",
+        "openems_job.py",
+        "openems_plan.py",
         "rf_diag.py",
         "rf_job.py",
         "rf_stage_plan.py",
     ],
     imports = ["../.."],
     deps = ["//tools:package"],
+)
+
+# `bazel run //tools/exp:openems_plan -- plan JOBS.toml --out DIR` (plan, digests, collect; the
+# `image` build reads docker/openems, so run that one as python3 tools/exp/openems_plan.py).
+py_binary(
+    name = "openems_plan",
+    srcs = ["openems_plan.py"],
+    main = "openems_plan.py",
+    deps = [
+        ":exp_lib",
+        "//yapnr/exp",
+    ],
 )
 
 # `bazel run //tools/exp:rf_stage_plan -- JOBS.toml --repo CHECKOUT --out DIR`

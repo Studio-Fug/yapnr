@@ -14,6 +14,10 @@ submit_service_account = "yapnr-submit"            # account ids; the project gi
 runner_service_account = "yapnr-runner"
 # The Artifact Registry remote repository (upstream https://ghcr.io) in each region.
 registry = "{region}-docker.pkg.dev/{project}/ghcr"
+# The standard repository for task images that are not on GHCR (docker/openems, by Cloud Build),
+# and the account Cloud Build runs those builds as.
+images = "{region}-docker.pkg.dev/{project}/images"
+image_build_service_account = "yapnr-image-build"
 subnetwork = "projects/{project}/regions/{region}/subnetworks/yapnr-{region}"
 # Instance templates for Hyperdisk-only families (template_families), one per shape and region.
 template = "yapnr-{shape}-{model}-{region}"

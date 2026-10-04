@@ -77,6 +77,22 @@ class TaskSpecTest(unittest.TestCase):
         )
         self.assertEqual(len(errors), 5, errors)
 
+    def test_runtime_is_checked(self):
+        base = {"schema": spec.CAMPAIGN_SCHEMA, "kind": "mc-eval"}
+        ok = {"python": "/opt/openEMS/venv/bin/python", "entrypoint": ""}
+        self.assertEqual(spec.campaign_errors(dict(base, runtime=ok)), [])
+        self.assertEqual(spec.campaign_errors(dict(base, runtime={"entrypoint": "/bin/env"})), [])
+        errors = spec.campaign_errors(
+            dict(base, runtime={"python": "python3", "entrypoint": "env", "user": "x"})
+        )
+        self.assertEqual(len(errors), 3, errors)
+        self.assertEqual(
+            spec.campaign_errors(dict(base, runtime="x")),
+            ["runtime is a table {python, entrypoint}"],
+        )
+        self.assertEqual(image.runtime({}), (image.YAPNR_PYTHON, image.YAPNR_ENTRYPOINT))
+        self.assertEqual(image.runtime({"runtime": ok}), (ok["python"], None))
+
     def test_placement_keys_are_checked_not_ignored(self):
         def errors(**placement):
             return spec.campaign_errors(

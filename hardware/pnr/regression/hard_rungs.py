@@ -38,6 +38,7 @@ allow. Footprints are KiCad 10 stock library parts; pin maps follow the device
 datasheets named beside each part.
 """
 
+import math
 from copy import deepcopy
 
 from designs import LIB, chaser, circuit, part, timer_parts
@@ -57,13 +58,14 @@ HARD_LIB = {
     "c_1206": "Capacitor_SMD:C_1206_3216Metric",
     "terminal_2p": "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",
     "hole_m2": "MountingHole:MountingHole_2.2mm_M2",
+    "u_fl": "Connector_Coaxial:U.FL_Hirose_U.FL-R-SMT-1_Vertical",
 }
 
 
 # Pad names a footprint repeats (one net for every copy): the receptacle's eight
 # shield pads. The generator maps a name to all its pads; the connected-pad count the
 # runner asserts counts each copy.
-REPEATED_PADS = {HARD_LIB["usb_micro_b"]: {"SH": 8}}
+REPEATED_PADS = {HARD_LIB["usb_micro_b"]: {"SH": 8}, HARD_LIB["u_fl"]: {"2": 2}}
 
 
 def connected_pads(parts):
@@ -963,6 +965,223 @@ def chaser_sidelock(spec):
     )
 
 
+# ------------------------------------------------------ fixed copper (arcs)
+
+# A fixed block on the chaser (07-chaser-20-4L-SGPS-arcblock): two matched meander
+# delay lines carrying the clock to two U.FL monitor outputs (Hirose U.FL-R-SMT-1, the
+# stock footprint: pad 1 signal, both pads 2 ground), 64 locked arcs, a ground rail of
+# fence vias between them and ground vias at the outer ground pads, all one KiCad group.
+# The engine holds the connectors out of placement and joins the clock to each line's
+# free west end (its port). A copper keep-out over the block bars foreign tracks on
+# F.Cu and vias (In1.Cu listed) but not In2.Cu or B.Cu tracks; a 2 mm class guard
+# around it lets only the planes' nets and the clock cross on the signal layers.
+ARC_GROUP = "DELAY_LINES"
+ARC_NAME = "delay"
+ARC_LINES = (27.6, 22.4)  # each line's baseline y; its U.FL sits on it at x = UFL_X
+ARC_PORT_X, ARC_START_X, UFL_X = 24.8, 27.0, 39.7
+ARC_R, ARC_GAP, ARC_H, ARC_PERIODS = 0.25, 0.15, 1.8, 8  # 4 quarter arcs per period
+ARC_W, RAIL_W = 0.25, 0.4  # the clock's and the ground class's (plane_gnd) widths
+ARC_VIA = (0.6, 0.3)  # the chaser fab's via
+ARC_KEEPOUT = [26.3, 19.8, 41.75, 30.2]  # the block (F.Cu tracks, vias)
+ARC_GUARD = [24.3, 17.8, 42.0, 32.0]  # 2 mm around it, clipped at the board edge
+KICAD_PAGE_MM = 30.0  # the generator's outline offset (pnr.writeback frame_region)
+
+
+def meander(net, y0):
+    """``(tracks, arcs)`` of one line: the port lead from (ARC_PORT_X, y0), the
+    rounded square-wave of ARC_PERIODS periods (four quarter arcs each), and the lead
+    into its U.FL's pad 1."""
+    r, g, h, w = ARC_R, ARC_GAP, ARC_H, ARC_W
+    s = math.sqrt(0.5) * r
+    tracks = [[net, "F.Cu", [ARC_PORT_X, y0], [ARC_START_X, y0], w]]
+    arcs = []
+    x = ARC_START_X
+    for _ in range(ARC_PERIODS):
+        up, top = (x + r, y0 + r), (x + r, y0 + h - r)
+        a, b = (x + 2 * r, y0 + h), (x + 2 * r + g, y0 + h)
+        down, low = (x + 3 * r + g, y0 + h - r), (x + 3 * r + g, y0 + r)
+        nxt = x + 4 * r + g
+        arcs.append([net, "F.Cu", [x, y0], [x + s, y0 + r - s], list(up), w])
+        tracks.append([net, "F.Cu", list(up), list(top), w])
+        arcs.append([net, "F.Cu", list(top), [x + 2 * r - s, y0 + h - r + s], list(a), w])
+        tracks.append([net, "F.Cu", list(a), list(b), w])
+        arcs.append([net, "F.Cu", list(b), [x + 2 * r + g + s, y0 + h - r + s], list(down), w])
+        tracks.append([net, "F.Cu", list(down), list(low), w])
+        arcs.append([net, "F.Cu", list(low), [nxt - s, y0 + r - s], [nxt, y0], w])
+        tracks.append([net, "F.Cu", [nxt, y0], [nxt + g, y0], w])
+        x = nxt + g
+    tracks.append([net, "F.Cu", [x, y0], [UFL_X - 1.525, y0], w])
+    return tracks, arcs
+
+
+def arc_block():
+    """The block: footprint poses, tracks, arcs and vias (engine mm, y up)."""
+    tracks, arcs, vias = [], [], []
+    for y0 in ARC_LINES:
+        t, a = meander("CLOCK", y0)
+        tracks += t
+        arcs += a
+    top, bottom = ARC_LINES
+    rail_y = (top + bottom) / 2
+    fence = [ARC_START_X + 0.6 + 1.3 * k for k in range(8)]
+    vias += [["GND", [x, rail_y]] for x in fence]
+    # The rail joins the fence vias and the U.FLs' inner ground pads.
+    tracks.append(["GND", "F.Cu", [fence[0], rail_y], [UFL_X, rail_y], RAIL_W])
+    tracks.append(["GND", "F.Cu", [UFL_X, top - 1.475], [UFL_X, bottom + 1.475], RAIL_W])
+    for y in (top + 1.475, bottom - 1.475):  # the outer ground pads to their own vias
+        tracks.append(["GND", "F.Cu", [UFL_X, y], [UFL_X + 1.4, y], RAIL_W])
+        vias.append(["GND", [UFL_X + 1.4, y]])
+    return dict(
+        name=ARC_NAME,
+        group=ARC_GROUP,
+        footprints={"J10": [UFL_X, top, 0], "J11": [UFL_X, bottom, 0]},
+        tracks=tracks,
+        arcs=arcs,
+        vias=[[net, xy, ARC_VIA[0], ARC_VIA[1]] for net, xy in vias],
+    )
+
+
+def block_sha256(block, height, offset=KICAD_PAGE_MM):
+    """The copper digest of a generated block (``pnr.fixed_copper.block_digest`` of
+    its group without an anchor: KiCad nanometres from the outline's lower-left
+    corner, y down), computed from the generator's own coordinates."""
+    import hashlib
+
+    ox, oy = round(offset * 1e6), round((offset + height) * 1e6)
+
+    def local(p):
+        return "%d %d" % (
+            round((offset + p[0]) * 1e6) - ox,
+            round((offset + height - p[1]) * 1e6) - oy,
+        )
+
+    rows = []
+    for net, layer, a, b, w in block["tracks"]:
+        rows.append("|".join(["segment", local(a), local(b), "w %d" % round(w * 1e6), layer, net]))
+    for net, layer, a, m, b, w in block["arcs"]:
+        rows.append(
+            "|".join(["arc", local(a), local(m), local(b), "w %d" % round(w * 1e6), layer, net])
+        )
+    for net, xy, d, drill in block["vias"]:
+        rows.append(
+            "|".join(
+                [
+                    "via",
+                    local(xy),
+                    "d %d" % round(d * 1e6),
+                    "drill %d" % round(drill * 1e6),
+                    "type through",
+                    "F.Cu-B.Cu",
+                    net,
+                ]
+            )
+        )
+    rows.sort()
+    return hashlib.sha256("\n".join(rows).encode()).hexdigest()
+
+
+def rect_polygon(rect):
+    x0, y0, x1, y1 = rect
+    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+
+
+def chaser_arcblock(spec):
+    """``spec`` (the 4L-SGPS chaser) with the fixed block: its parts, the block, the
+    constraints that express it to the engine (``fixed_block``, ``copper_keepout``
+    v1, a placement ``keepout``) and the tool-neutral checks (``copper_digest``,
+    ``no_copper``)."""
+    spec = deepcopy(spec)
+    block = arc_block()
+    block["sha256"] = block_sha256(block, spec["constraints"]["board"]["outline"]["h"])
+    spec["fixed_block"] = block
+    for ref in sorted(block["footprints"]):
+        spec["parts"].append(pinned(ref, "u_fl", "U.FL clock monitor", {"1": "CLOCK", "2": "GND"}))
+    spec["expected_components"] = len(spec["parts"])
+    spec["expected_connected_pads"] = connected_pads(spec["parts"])
+    cons = spec["constraints"]
+    cons["fixed_block"] = [
+        dict(
+            name=ARC_NAME, group=ARC_GROUP, sha256=block["sha256"], refs=sorted(block["footprints"])
+        )
+    ]
+    planes = sorted(k for k, c in cons["net_class"].items() if c.get("plane_layer"))
+    x0, y0, x1, y1 = ARC_KEEPOUT
+    gx0, gy0, gx1, gy1 = ARC_GUARD
+    guards = {
+        "guard-west": [gx0, gy0, x0, gy1],
+        "guard-south": [x0, gy0, gx1, y0],
+        "guard-north": [x0, y1, gx1, gy1],
+    }
+    cons["copper_keepout"] = [
+        dict(
+            name="block",
+            rect=list(ARC_KEEPOUT),
+            layers=["F.Cu", "In1.Cu"],
+            items=["tracks", "vias"],
+            exempt_groups=[ARC_GROUP],
+        )
+    ] + [
+        dict(
+            name=name,
+            rect=rect,
+            layers=["F.Cu", "B.Cu"],
+            items=["tracks", "vias"],
+            allow_classes=planes,
+            allow_nets=["CLOCK"],
+        )
+        for name, rect in guards.items()
+    ]
+    cons["keepout"] = (cons.get("keepout") or []) + [
+        dict(name="block", polygon=rect_polygon(ARC_GUARD))
+    ]
+    spec["checks"].append(
+        dict(
+            id="block-copper",
+            kind="copper_digest",
+            group=ARC_GROUP,
+            sha256=block["sha256"],
+            engine="fixed_block",
+        )
+    )
+    spec["checks"].append(
+        dict(
+            id="keepout-block",
+            kind="no_copper",
+            polygon=rect_polygon(ARC_KEEPOUT),
+            layers=["F.Cu", "In1.Cu"],
+            items=["tracks", "vias", "pads"],
+            allow_nets=[],
+            exempt_groups=[ARC_GROUP],
+            engine="copper_keepout",
+        )
+    )
+    allowed = sorted({n for k in planes for n in cons["net_class"][k]["nets"]} | {"CLOCK"})
+    for name, rect in guards.items():
+        spec["checks"].append(
+            dict(
+                id="keepout-" + name,
+                kind="no_copper",
+                polygon=rect_polygon(rect),
+                layers=["F.Cu", "B.Cu"],
+                items=["tracks", "vias", "pads"],
+                allow_nets=allowed,
+                exempt_groups=[ARC_GROUP],
+                engine="copper_keepout",
+            )
+        )
+    spec["name"] += "-arcblock"
+    spec["description"] = (
+        spec.get("description", "")
+        + " With a fixed block: two matched meander delay lines (64 locked arcs) from the "
+        "clock to two U.FL monitor outputs, a fenced ground rail, a copper keep-out over "
+        "it and a 2 mm class guard."
+    )
+    spec["dims"]["parts"] = "arcblock"
+    spec["features"] = sorted(set(spec["features"]) | {"fixed-copper", "arcs", "copper-keepout"})
+    spec["ci"] = dict(lane="nightly", minutes=30)
+    return spec
+
+
 # --------------------------------------------------------- run configurations
 
 # yapnr's configuration per family (run.py arguments). The ladder's documented best: the
@@ -1003,6 +1222,7 @@ def hard_rungs():
     chasers += [with_via_policy(six, "blind-buried"), with_via_policy(six, "hdi")]
     chasers += [with_double_sided(base), with_double_sided(with_stackup(base, "4L-SGPS"))]
     chasers += [chaser_absolute(base), chaser_relative(base), chaser_sidelock(base)]
+    chasers.append(chaser_arcblock(chasers[0]))  # on 4L-SGPS: one new dimension
     others = [quad_bank(), power_switch()]
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST

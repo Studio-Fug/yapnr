@@ -38,7 +38,7 @@ def apply(board, graph, rules):
     ]
     protected = {
         i["ref"] for i in rules.get("plane_access_intents", []) if i["kind"] == "power_array"
-    } | {i["ref"] for i in rules.get("copper_keepouts", [])}
+    } | {i["ref"] for i in rules.get("copper_keepouts", []) if i.get("ref")}
     if protected & set(moved):
         raise ValueError("Cannot independently move source-owned array/keepout")
     for ref in moved:

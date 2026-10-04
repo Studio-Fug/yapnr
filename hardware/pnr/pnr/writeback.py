@@ -347,6 +347,7 @@ def form_planes(
     codes = dict(net_code or _net_code_map(board))
     board.BuildConnectivity()
     added = 0
+    left = []
     for net in sorted(stack.plane_nets):
         code = codes.get(net)
         if code is None:
@@ -359,7 +360,13 @@ def form_planes(
             and pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
             and not _has_through_access(board, pad)
         ]
-        if unreached:
+        if unreached and (rules or {}).get("plane_fallback_drops", True) is False:
+            # board.plane_fallback_drops: false: no copper nobody routed; listed.
+            left.extend(
+                "%s.%s" % (pad.GetParentFootprint().GetReference(), pad.GetNumber())
+                for pad in unreached
+            )
+        elif unreached:
             added += _dogbone_fanout_net(board, code, rules=rules, skip_connected=True, stack=stack)
     if regions is None:
         pads: Dict[str, list] = {}
@@ -400,6 +407,12 @@ def form_planes(
         board.Add(z)
         present.setdefault(region.layer, set()).add(region.net)
         made.append((region.layer, region.net))
+    if left:
+        sys.stderr.write(
+            "writeback: unreached plane pads (plane_fallback_drops false): %d: %s\n"
+            % (len(left), " ".join(sorted(left)))
+        )
+        return dict(fallback_vias=added, zones=made, unreached=sorted(left))
     return dict(fallback_vias=added, zones=made)
 
 
@@ -446,7 +459,9 @@ def _collect_obstacles(board):
     """Conservative copper capsules (start, end, radius, net code).
 
     Pad bounding-box diagonals enclose rotated/custom copper. Straight tracks
-    are full capsules, not endpoint discs. Arcs use their enclosing box.
+    are full capsules, not endpoint discs. Arcs use their enclosing box. Rule
+    areas that bar tracks or vias, and the engine's copper keepouts (``PNR
+    keepout:``, whose allow lists live in custom rules), are their enclosing box.
     An unreadable track collection raises instead of silently ignoring copper.
     """
     import math
@@ -469,7 +484,12 @@ def _collect_obstacles(board):
     for fp in board.GetFootprints():
         zones.extend(fp.Zones())
     for zone in zones:
-        if zone.GetIsRuleArea() and (zone.GetDoNotAllowTracks() or zone.GetDoNotAllowVias()):
+        # A copper keepout with allow lists or exempt groups forbids nothing by its
+        # flags (its custom rules do, pnr.writeback.keepout_dru): an obstacle too.
+        barred = zone.GetIsRuleArea() and zone.GetZoneName().startswith("PNR keepout:")
+        if zone.GetIsRuleArea() and (
+            zone.GetDoNotAllowTracks() or zone.GetDoNotAllowVias() or barred
+        ):
             box = zone.GetBoundingBox()
             center = box.GetCenter()
             point = (center.x, center.y)
@@ -733,6 +753,22 @@ def _dogbone_fanout_net(
         )
         oracle = Oracle(board, checked_rules)
     added, skipped = 0, []
+    # Copper keepouts whose rule areas carry no flags (their allow lists are custom
+    # rules, keepout_dru): no drop of a net they bar lands in them or crosses them.
+    # None: as before.
+    allowed = {
+        "PNR keepout:" + k["name"]: set(k.get("allowed_nets") or ())
+        for k in (rules or {}).get("copper_keepouts", [])
+        if "items" in k
+    }
+    barred = [
+        (z.Outline(), allowed.get(z.GetZoneName(), set()))
+        for z in board.Zones()
+        if z.GetIsRuleArea()
+        and z.GetZoneName().startswith("PNR keepout:")
+        and not z.GetDoNotAllowTracks()
+        and not z.GetDoNotAllowVias()
+    ]
     board.BuildConnectivity()
     for fp in board.GetFootprints():
         center = fp.GetPosition()
@@ -818,6 +854,17 @@ def _dogbone_fanout_net(
                     if not (
                         bounds.GetLeft() + edge <= x <= bounds.GetRight() - edge
                         and bounds.GetTop() + edge <= y <= bounds.GetBottom() - edge
+                    ):
+                        continue
+                    if barred and any(
+                        pad.GetNetname() not in nets
+                        and (
+                            area.Collide(pcbnew.VECTOR2I(x, y), round(via_r))
+                            or area.Collide(
+                                pcbnew.SEG(pos, pcbnew.VECTOR2I(x, y)), round(trace_w / 2.0)
+                            )
+                        )
+                        for area, nets in barred
                     ):
                         continue
                     if oracle:
@@ -958,15 +1005,30 @@ def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
     return True
 
 
-def _clear_tracks(board) -> int:
+def _clear_tracks(board, keep_groups=None) -> int:
     """Remove all existing tracks + vias (mm-scale preview routing from the base
     autoroute pass). Moving footprints invalidates them; the detailed router
-    re-routes from a clean placed board. Returns the count removed."""
+    re-routes from a clean placed board. Returns the count removed. Items of the
+    KiCad groups named in ``keep_groups`` (fixed blocks, pnr.fixed_block) stay."""
     n = 0
     for t in list(board.GetTracks()):  # PCB_TRACK and PCB_VIA
+        if keep_groups and group_name(t) in keep_groups:
+            continue
         board.Delete(t)  # discarded (Delete, not Remove: see pnr.fanout_reserve.release)
         n += 1
     return n
+
+
+def group_name(item) -> Optional[str]:
+    """Name of the outermost KiCad group holding ``item`` (None outside any)."""
+    group = item.GetParentGroup()
+    name = None
+    while group is not None:
+        name = group.GetName()
+        # KiCad 10 returns the EDA_GROUP mixin; its item knows the enclosing group.
+        owner = group.AsEdaItem() if hasattr(group, "AsEdaItem") else group
+        group = owner.GetParentGroup()
+    return name
 
 
 def normalize_item_uuids(board):
@@ -1005,7 +1067,13 @@ def normalize_item_uuids(board):
 
 
 def apply_placement(
-    board, graph: BoardGraph, *, width: float, height: float, layers: int = 2
+    board,
+    graph: BoardGraph,
+    *,
+    width: float,
+    height: float,
+    layers: int = 2,
+    keep_groups=None,
 ) -> int:
     """Move each footprint in ``board`` to its pose in ``graph``; clear old tracks;
     set the copper layer count.
@@ -1037,7 +1105,7 @@ def apply_placement(
         fp.SetOrientationDegrees(float(comp.rot))
         placed += 1
 
-    _clear_tracks(board)  # drop stale preview routing; the detail router re-routes
+    _clear_tracks(board, keep_groups)  # drop stale preview routing; the detail router re-routes
     # Keep pad nets/ratsnest consistent after the moves.
     board.BuildConnectivity()
     _ = pcbnew.F_Cu  # touch pcbnew so linters don't flag the import
@@ -1377,6 +1445,9 @@ def apply_copper_keepouts(board, graph, rules, height):
             board.Delete(zone)  # recreated below; the old area is discarded
     frame = _WriteFrame(height)
     for spec in rules.get("copper_keepouts", []):
+        if "items" in spec:
+            board.Add(_keepout_v1_area(board, graph, spec, frame))
+            continue
         comp = graph.component(spec["ref"])
         x0, y0, x1, y1 = spec["rect_mm"]
         zone = pcbnew.ZONE(board)
@@ -1394,6 +1465,87 @@ def apply_copper_keepouts(board, graph, rules, height):
             polygon.Append(frame.point(*footprint_point(comp, x, y)))
         board.Add(zone)
     return len(rules.get("copper_keepouts", []))
+
+
+def _keepout_v1_area(board, graph, spec, frame):
+    """The rule area of a v1 keepout: on its layers; without allow lists or exempt
+    groups it forbids its ``items`` itself (v0's flags), otherwise it forbids nothing
+    and :func:`keepout_dru` writes its custom rules."""
+    import pcbnew
+
+    from pnr.fixed_block import keepout_class_mode, keepout_polygon
+
+    zone = pcbnew.ZONE(board)
+    zone.SetIsRuleArea(True)
+    zone.SetZoneName("PNR keepout:" + spec["name"])
+    lset = pcbnew.LSET()
+    for name in spec["layers"]:
+        lset.AddLayer(copper_layer(board, name))
+    zone.SetLayerSet(lset)
+    flags = not keepout_class_mode(spec)
+    items = set(spec["items"])
+    zone.SetDoNotAllowTracks(flags and "tracks" in items)
+    zone.SetDoNotAllowVias(flags and "vias" in items)
+    zone.SetDoNotAllowZoneFills(flags and "pours" in items)
+    zone.SetDoNotAllowPads(False)
+    zone.SetDoNotAllowFootprints(False)
+    polygon = zone.Outline()
+    polygon.NewOutline()
+    for x, y in keepout_polygon(graph, spec):
+        polygon.Append(frame.point(x, y))
+    return zone
+
+
+def keepout_dru(rules: Optional[dict]) -> Optional[str]:
+    """The custom rules (``.kicad_dru``) of the v1 keepouts with allow lists or exempt
+    groups, as one marked block (pnr.fab_profile.append_board_rules), or None when
+    there are none. Per keepout and layer: items intersecting its rule area are
+    disallowed unless their net is allowed (``hasNetclass`` for a class, the net name
+    for a net) or they belong to an exempt group (``memberOfGroup``)."""
+    from pnr.fab_profile import KEEPOUT_DRU_BEGIN, KEEPOUT_DRU_END
+    from pnr.fixed_block import keepout_class_mode
+
+    def quote(text):
+        if "'" in text or '"' in text or "\\" in text:
+            raise ValueError("keepout DRU: unsupported quote in %r" % text)
+        return text
+
+    kinds = {"tracks": "track", "vias": "via", "pours": "zone"}
+    rules_out = []
+    for spec in (rules or {}).get("copper_keepouts", []):
+        if "items" not in spec or not keepout_class_mode(spec):
+            continue
+        name = quote(spec["name"])
+        terms = ["A.intersectsArea('PNR keepout:%s')" % name]
+        terms += ["!A.hasNetclass('%s')" % quote(c) for c in spec.get("allow_classes") or []]
+        literal = set(spec.get("allowed_nets") or []) - _class_nets(rules, spec)
+        terms += ["A.NetName != '%s'" % quote(n) for n in sorted(literal)]
+        terms += ["!A.memberOfGroup('%s')" % quote(g) for g in spec.get("exempt_groups") or []]
+        disallow = " ".join(kinds[i] for i in ("tracks", "vias", "pours") if i in spec["items"])
+        for layer in spec["layers"]:
+            rules_out.append(
+                '(rule "yapnr keepout %s %s"\n  (layer "%s")\n  (condition "%s")\n'
+                "  (constraint disallow %s))" % (name, layer, layer, " && ".join(terms), disallow)
+            )
+    if not rules_out:
+        return None
+    return (
+        "%s (pnr.writeback: copper_keepout allow lists and exempt groups; replaced whole)\n"
+        "%s\n%s\n" % (KEEPOUT_DRU_BEGIN, "\n".join(rules_out), KEEPOUT_DRU_END)
+    )
+
+
+def _class_nets(rules, spec):
+    """Nets of the keepout's allowed classes (their ``hasNetclass`` term covers them)."""
+    classes = set(spec.get("allow_classes") or [])
+    nets = set()
+    for nc in (rules or {}).get("net_classes", []):
+        if nc["name"] in classes:
+            nets.update(nc.get("nets") or [])
+    for dp in (rules or {}).get("diff_pairs", []):
+        if "dp_" + dp["name"] in classes:
+            nets.update((dp["p"], dp["n"]))
+    return nets
 
 
 def apply_mounting_holes(board, rules, height):
@@ -1501,7 +1653,10 @@ def writeback(
     if rules and rules.get("references_on_fab"):
         for fp in board.GetFootprints():
             fp.Reference().SetLayer(pcbnew.B_Fab if fp.IsFlipped() else pcbnew.F_Fab)
-    n = apply_placement(board, graph, width=width, height=height, layers=layers)
+    keep = {b["group"] for b in (rules or {}).get("fixed_blocks") or []}
+    n = apply_placement(
+        board, graph, width=width, height=height, layers=layers, keep_groups=keep or None
+    )
     # Type the plane layers as POWER so signals stay on the outer layers
     # (F.Cu/B.Cu) and the inner layers carry the ground/power planes (pnr.planes).
     if rules:
@@ -1559,6 +1714,13 @@ def writeback(
         fh.write(text)
     if rules and out_pcb.endswith(".kicad_pcb"):
         patch_project_rules(out_pcb[: -len(".kicad_pcb")] + ".kicad_pro", rules)
+        block = keepout_dru(rules)
+        if block is not None:
+            # The keepouts with allow lists: their rules beside the profile's (or a
+            # hand-written file's) own, only this block replaced.
+            from pnr.fab_profile import append_board_rules
+
+            append_board_rules(out_pcb, block)
     # NB: planes are poured *after* the detailed route (see pnr.planes) — a
     # FreeRouting DSN/SES round-trip drops pre-poured zones.
     return n

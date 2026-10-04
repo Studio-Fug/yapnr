@@ -56,8 +56,9 @@ _STENCIL_MARGIN = 1e-9
 # routed by the reference kernel; with neither, those sources behave as before.
 MODELLED_SOURCES = {
     "RouteGrid.in_bounds": "82de6984f75cd003",
-    "RouteGrid.passable": "7f8055f702f9068a",
-    "RouteGrid.via_passable": "24c4f5a0141c8844",
+    "RouteGrid.passable": "f41d01c807510018",
+    "RouteGrid.via_passable": "4bc5e549155b1065",
+    "RouteGrid.net_blocked": "050219db9320ed86",
     "RouteGrid.plated_transition": "c1d3b5a6d337614d",
     "RouteGrid.hole_site_clear": "d9a3389fb1469b61",
     "maze._astar_reference": "afd46e640e9d7ef5",
@@ -65,8 +66,8 @@ MODELLED_SOURCES = {
 MODELLED_ATTRIBUTES = frozenset(
     (
         "_pth_keepouts _smd_index _wide_seen _wide_specs _wide_tables access blocked "
-        "clearance component_pth_min_drill drilled_pads escape_segments escape_vias "
-        "height hole_clearance in_pad layer_mask layers net_clearances net_widths nlayers "
+        "clearance component_pth_min_drill drilled_pads escape_segments escape_vias fixed_owned "
+        "height hole_clearance in_pad layer_mask layers net_clearances net_keepouts net_widths nlayers "
         "npth_hole_gap nx ny pad_net pad_rectangles pad_track_halo pad_via_halo pitch plated_ports "
         "protected_escape_access pth_hole_gap routing_track_halos routing_via_keepout "
         "smd_pads smd_via_blocked source_drill_plated source_drills track_width "
@@ -367,6 +368,15 @@ class GridStatic:
             if wide is not None:
                 passable &= (wide == -1) | (wide == index)
             via = self.via_free & own_pad & ((self.halo == -1) | (self.halo == index))
+            # RouteGrid.passable / via_passable: keepouts with allow lists bar every
+            # net outside their lists (RouteGrid.net_blocked).
+            for track_mask, via_mask, allowed in getattr(self.grid, "net_keepouts", ()) or ():
+                if net is not None and net in allowed:
+                    continue
+                if track_mask is not None:
+                    passable = passable & ~track_mask
+                if via_mask is not None:
+                    via = via & ~via_mask
             cached = self._nets[net] = (passable, via, self._plated(net))
         return cached
 

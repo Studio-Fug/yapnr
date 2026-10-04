@@ -63,6 +63,8 @@ filegroup(
         "pnr/drc_warm/session.py",
 
         "pnr/fixed_copper.py",
+        # Fixed blocks and copper keepouts (stdlib only): fixed_copper and writeback.
+        "pnr/fixed_block.py",
         "pnr/paired_bootstrap.py",
         "pnr/placement_trials.py",
         "pnr/placement_copper.py",
@@ -1127,6 +1129,40 @@ py_test(
     deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
 )
 
+# Fixed copper blocks (arcs, polygons, ownership, ports) and per-layer / per-class
+# copper keepouts: schema, router, dense fields, custom-rules block.
+py_test(
+    name = "fixed_block_test",
+    size = "small",
+    srcs = ["tests/test_fixed_block.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_fixed_block.py",
+    deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
+)
+
+# The same through KiCad (KiCad Python only, by hand: python3 -m unittest
+# tests.test_fixed_block_kicad; PNR_KICAD_CLI for the custom-rules case): schema-2
+# export, digest frame, validate, writeback keeping the block, plane_fallback_drops,
+# keepout rule areas and custom rules judged by KiCad's DRC.
+py_test(
+    name = "fixed_block_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_fixed_block_kicad.py",
+        "tests/test_stack_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_fixed_block_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 py_test(
     name = "feedback_tie_test",
     size = "small",
@@ -1397,13 +1433,19 @@ py_test(
     deps = [":pnr"],
 )
 
-# The constraint checker's plane and microvia-span checks on small boards (KiCad's Python:
-# run it there by hand, python3 -m unittest test_check_constraints in regression/).
+# The constraint checker's plane, microvia-span, copper-digest and no-copper checks on
+# small boards, and the fixed-block rung's generated digest (KiCad's Python: run it
+# there by hand, python3 -m unittest test_check_constraints in regression/).
 py_test(
     name = "check_constraints_test",
     size = "small",
     srcs = [
         "regression/check_constraints.py",
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/native.py",
+        "regression/run.py",
+        "regression/stackup.py",
         "regression/test_check_constraints.py",
     ],
     imports = ["regression"],
@@ -1413,6 +1455,7 @@ py_test(
         "manual",
         "requires-kicad",
     ],
+    deps = [":pnr"],
 )
 
 py_binary(

@@ -324,6 +324,9 @@ def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[di
         diameter = spec["clearance_diameter_mm"]
         grid.block_region(Rect(x, y, diameter, diameter), grow=grid.via_radius)
     for spec in rules.get("copper_keepouts", []):
+        if "items" in spec:  # v1: per layer, per item, optional allow lists
+            _mark_keepout_v1(grid, graph, spec)
+            continue
         comp = graph.component(spec["ref"])
         x0, y0, x1, y1 = spec["rect_mm"]
         # The same transform as writeback's rule area (mirrored with the pads).
@@ -338,6 +341,81 @@ def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[di
             ),
             grow=grid.via_radius,
         )
+
+
+def _mark_keepout_v1(grid: RouteGrid, graph: BoardGraph, spec: dict) -> None:
+    """A v1 keepout on the grid. Tracks are barred on the listed layers the grid
+    routes; vias (through: every layer) wherever any listed layer bars them, as
+    KiCad's rule areas do. A cell is barred when its centre comes within half the
+    widest track (or the via radius) plus half a cell diagonal of the polygon.
+    Without allow lists every net is barred (static obstacles); with them only the
+    nets outside ``allowed_nets`` (:meth:`RouteGrid.add_net_keepout`). Pours are
+    writeback's (rule area flags or custom rules)."""
+    import numpy as np
+
+    from pnr.fixed_block import keepout_polygon
+
+    poly = keepout_polygon(graph, spec)
+    names = list(spec.get("layers") or grid.layers)
+    items = spec.get("items") or ("tracks", "vias", "pours")
+    layers = [grid.layers.index(n) for n in names if n in grid.layers]
+    cell_radius = grid.pitch / math.sqrt(2)
+    widest = max([grid.track_width] + list((grid.net_widths or {}).values()))
+    shape = (grid.nlayers, grid.ny, grid.nx)
+    track = via = None
+    if "tracks" in items and layers:
+        cells = grid.polygon_cells(poly, (), widest / 2 + cell_radius)
+        track = np.zeros(shape, dtype=bool)
+        track[layers] = cells
+    if "vias" in items and names:
+        cells = grid.polygon_cells(poly, (), grid.via_radius + cell_radius)
+        via = np.zeros(shape, dtype=bool)
+        via[:] = cells
+    if spec.get("allow_classes") or spec.get("allow_nets"):
+        if track is not None or via is not None:
+            grid.add_net_keepout(track, via, spec.get("allowed_nets") or ())
+        return
+    if track is not None:
+        grid.blocked |= track
+    if via is not None:
+        grid.via_blocked |= via
+
+
+def block_ports(grid: RouteGrid, graph: BoardGraph, copper: Optional[dict], skip=()):
+    """``{net: [(Cell, point, layer)]}``: where the router joins each fixed block's
+    copper (pnr.fixed_block.pick_ports): for every net with pads in ``graph`` (and
+    not in ``skip``, the plane nets), one free end per connected piece of its block
+    copper that no pad already reaches, on a routed layer, at a cell the net may
+    enter. ``{}`` without blocks."""
+    from pnr.fixed_block import components_touching, pick_ports
+
+    from .grid import Cell
+
+    if not copper or not copper.get("blocks"):
+        return {}
+    pads = {}
+    for comp in graph.components:
+        side = grid.layers[grid.side_layer(comp.side)]
+        for (_name, net, r), pad in zip(pad_rects(comp), comp.pads):
+            if not net:
+                continue
+            for layer in grid.layers if pad.through_hole else (side,):
+                pads.setdefault(net, []).append((layer, r.left, r.bottom, r.right, r.top))
+    out = {}
+    for block in copper["blocks"]:
+        nets = {t[0] for t in block.get("tracks", [])} | {a[0] for a in block.get("arcs") or []}
+        nets |= {v.get("net") for v in block.get("vias", [])}
+        for net in sorted(n for n in nets if n and n in pads and n not in skip):
+            joined = components_touching(block, net, pads[net])
+            centres = [((x0 + x1) / 2, (y0 + y1) / 2) for _, x0, y0, x1, y1 in pads[net]]
+            for point, layer in pick_ports(block, net, centres, joined):
+                if layer not in grid.layers:
+                    continue
+                la = grid.layers.index(layer)
+                i, j = grid.cell_of(*point)
+                if grid.passable(la, i, j, net):
+                    out.setdefault(net, []).append((Cell(la, i, j), point, layer))
+    return out
 
 
 def _mark_source_arrays(grid, graph, rules):
@@ -763,6 +841,10 @@ def route_board(
     ``fixed_copper_own_net`` its own net may reach and pass it (the hierarchical
     knit joins pads that block copper already connects), other nets may not.
     """
+    if fixed_copper is None and rules and rules.get("fixed_copper"):
+        # Fixed blocks' copper carried in the rules (pnr.fixed_block): every route of
+        # the board, the placement loop's included, keeps it.
+        fixed_copper = rules["fixed_copper"]
     fab = _fab(rules)
     track_width_mm = fab["track_width_mm"] if track_width_mm is None else track_width_mm
     clearance_mm = fab["clearance_mm"]
@@ -861,6 +943,11 @@ def route_board(
             max([track_width_mm] + [net_width.get(n, track_width_mm) for n in signal_nets]),
             **({"own_net": True} if fixed_copper_own_net else {}),
         )
+    # Fixed blocks join their nets at free ends of their copper (route_board's
+    # targets besides the pads); a net with one pad and a port is routed too.
+    ports = block_ports(grid, graph, fixed_copper, planes | deferred)
+    for net in ports:
+        signal_nets.add(net)
     # Stack-aware: every surface pad of a net with a dedicated plane drops a through
     # via to it, planned jointly with the signal exits (no drop is left to after
     # routing). Each stub carries its own pad's required entry width, and its via
@@ -935,6 +1022,14 @@ def route_board(
     # PNR_COMPACT DROPS: the drops are planned and reserved; the maze's predicates never
     # read the own-region cells, so the grid goes on as the maze kernels know it.
     grid.own_plane_cells = {}
+    for net, cells in sorted(ports.items()):
+        if net not in plan.blocked_nets:
+            plan.net_access.setdefault(net, []).extend(cell for cell, _, _ in cells)
+    if ports:
+        plan.diagnostics["block_ports"] = {
+            net: [[layer, round(p[0], 6), round(p[1], 6)] for _, p, layer in cells]
+            for net, cells in sorted(ports.items())
+        }
     from pnr.stack import assess
 
     stack_warnings = list(assess(rules, getattr(graph, "stack", None))[1])
@@ -1055,6 +1150,15 @@ def route_board(
         if rn is None or esc.access not in set(rn.cells):
             continue
         _emit_escape(board, esc, grid, net_width.get(esc.net, track_width_mm), span_at)
+    for net, cells in sorted(ports.items()):
+        # The block port's exact end to the cell centre where the route begins.
+        rn = result.nets.get(net)
+        reached = set(rn.cells) if rn is not None else set()
+        for cell, point, layer in cells:
+            if cell in reached:
+                centre = grid.center_of(cell.i, cell.j)
+                w = net_width.get(net, track_width_mm)
+                board.tracks.append((net, layer, tuple(point), centre, w))
     # Zero-length pad-to-grid stubs add no connection and become dangling items.
     board.tracks = [t for t in board.tracks if math.dist(t[2], t[3]) >= 1e-6]
     board.vias = list(dict.fromkeys(board.vias))
@@ -1082,11 +1186,19 @@ def route_board(
                 via_keepout=via_keepout,
                 access=net_access,
                 via_radius=via_radius_mm,
-                fixed_copper=fixed_copper,
+                fixed_copper=_flat(fixed_copper),
             )
     if route_trace is not None:
         route_trace.end(board)
     return board
+
+
+def _flat(copper):
+    """Fixed copper as straight tracks and vias (arcs as chords, blocks merged) for
+    the length tuner; schema-1 copper unchanged."""
+    from pnr.fixed_block import flatten
+
+    return flatten(copper)
 
 
 def _emit_escape(board: BoardRoute, esc, grid: RouteGrid, w: float, span_at=None) -> None:

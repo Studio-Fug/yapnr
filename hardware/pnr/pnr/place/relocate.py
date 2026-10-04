@@ -404,7 +404,7 @@ def propose(
     fixed = resolve_fixed_poses(g, constraints)
     unsupported = {
         v["ref"] for v in rules.get("plane_access_intents", []) if v["kind"] == "power_array"
-    } | {v["ref"] for v in rules.get("copper_keepouts", [])}
+    } | {v["ref"] for v in rules.get("copper_keepouts", []) if v.get("ref")}
     legal = translation_checker(g, constraints)
     from .geometry import set_component_side
     from .metrics import pose_checker

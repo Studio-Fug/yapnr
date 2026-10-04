@@ -15,7 +15,7 @@ on F.Cu is on neither side).
 
 Check kinds: ``inside_board``, ``side``, ``fixed``, ``edge``, ``orientation``,
 ``keepout``, ``region``, ``proximity``, ``line``, ``align``, ``plane``,
-``microvia_span``.
+``microvia_span``, ``copper_digest``, ``no_copper``.
 
     python3 check_constraints.py BOARD.kicad_pcb --spec SPEC.json --out OUT.json
 
@@ -292,6 +292,130 @@ def check_microvia_span(b, c):
     )
 
 
+def group_of(item):
+    """Name of the outermost KiCad group holding ``item`` (None outside any)."""
+    group = item.GetParentGroup()
+    name = None
+    while group is not None:
+        name = group.GetName()
+        owner = group.AsEdaItem() if hasattr(group, "AsEdaItem") else group
+        group = owner.GetParentGroup()
+    return name
+
+
+VIA_KINDS = {
+    int(pcbnew.VIATYPE_THROUGH): "through",
+    int(pcbnew.VIATYPE_BLIND): "blind",
+    int(pcbnew.VIATYPE_BURIED): "buried",
+    int(pcbnew.VIATYPE_MICROVIA): "micro",
+}
+
+
+def check_copper_digest(b, c):
+    """The copper of KiCad group ``group`` is the copper the rung gave: sha256 over
+    every track, arc and via of the group, to the nanometre, in the frame of footprint
+    ``anchor`` (position and orientation) or, without one, of the outline's lower-left
+    corner (KiCad's y down): kind, points, width or via size, drill, type and layers,
+    and net. (The same rows as the engine's pnr.fixed_copper.block_digest, computed
+    here independently.)"""
+    import hashlib
+
+    board = b.board
+    if c.get("anchor"):
+        fp = b.fps[c["anchor"]]
+        ox, oy, turn = fp.GetPosition().x, fp.GetPosition().y, fp.GetOrientationDegrees()
+    else:
+        ox, oy, turn = pcbnew.FromMM(b.x0), pcbnew.FromMM(b.y1), 0.0
+    quarter = round(turn / 90.0)
+    if abs(turn - 90.0 * quarter) > 1e-9:
+        raise ValueError("copper_digest: anchor turned off a quarter turn")
+
+    def local(p):
+        dx, dy = p.x - ox, p.y - oy
+        for _ in range(quarter % 4):
+            dx, dy = -dy, dx
+        return "%d %d" % (dx, dy)
+
+    rows = []
+    for t in board.GetTracks():
+        if group_of(t) != c["group"]:
+            continue
+        kind, name = t.GetClass(), board.GetLayerName
+        if kind == "PCB_VIA":
+            row = [
+                "via",
+                local(t.GetPosition()),
+                "d %d" % t.GetWidth(t.TopLayer()),
+                "drill %d" % t.GetDrillValue(),
+                "type %s" % VIA_KINDS.get(int(t.GetViaType()), str(int(t.GetViaType()))),
+                "%s-%s" % (name(t.TopLayer()), name(t.BottomLayer())),
+            ]
+        elif kind == "PCB_ARC":
+            row = ["arc", local(t.GetStart()), local(t.GetMid()), local(t.GetEnd())]
+            row += ["w %d" % t.GetWidth(), name(t.GetLayer())]
+        else:
+            row = ["segment", local(t.GetStart()), local(t.GetEnd())]
+            row += ["w %d" % t.GetWidth(), name(t.GetLayer())]
+        rows.append("|".join(row + [t.GetNetname()]))
+    rows.sort()
+    digest = hashlib.sha256("\n".join(rows).encode()).hexdigest()
+    return (
+        digest == c["sha256"],
+        dict(sha256=digest, items=len(rows)),
+        dict(sha256=c["sha256"]),
+    )
+
+
+def check_no_copper(b, c):
+    """No foreign copper in a polygon (board frame, mm) on ``layers``: tracks, arcs
+    and vias (``items`` tracks / vias) and footprint pads (``pads``) touching it,
+    unless their net is in ``allow_nets`` or they belong to a KiCad group in
+    ``exempt_groups`` (a pad: its footprint's group). Zones are not judged."""
+    board = b.board
+    keep = pcbnew.SHAPE_POLY_SET()
+    keep.NewOutline()
+    for x, y in c["polygon"]:
+        keep.Append(pcbnew.FromMM(b.x0 + x), pcbnew.FromMM(b.y1 - y))
+    allowed = set(c.get("allow_nets") or [])
+    exempt = set(c.get("exempt_groups") or [])
+    items = set(c.get("items") or ("tracks", "vias", "pads"))
+    candidates = []
+    for t in board.GetTracks():
+        is_via = t.GetClass() == "PCB_VIA"
+        if ("vias" if is_via else "tracks") in items:
+            candidates.append((t, "via" if is_via else "track", group_of(t)))
+    if "pads" in items:
+        for fp in board.GetFootprints():
+            for pad in fp.Pads():
+                candidates.append((pad, "pad", group_of(fp)))
+    hits = []
+    for layer_name in c["layers"]:
+        layer = board.GetLayerID(layer_name)
+        for item, kind, group in candidates:
+            if item.GetNetname() in allowed or (group and group in exempt):
+                continue
+            if not item.IsOnLayer(layer):
+                continue
+            shape = pcbnew.SHAPE_POLY_SET()
+            item.TransformShapeToPolygon(shape, layer, 0, 1000, pcbnew.ERROR_INSIDE)
+            shape.BooleanIntersection(keep)
+            if shape.OutlineCount() and shape.Area() > 0:
+                p = item.GetPosition()
+                hits.append(
+                    dict(
+                        kind=kind,
+                        net=item.GetNetname(),
+                        layer=layer_name,
+                        at=[round(mm(p.x) - b.x0, 3), round(b.y1 - mm(p.y), 3)],
+                    )
+                )
+    return (
+        not hits,
+        dict(foreign=len(hits), examples=hits[:5]),
+        dict(layers=c["layers"], allow_nets=sorted(allowed), exempt_groups=sorted(exempt)),
+    )
+
+
 KINDS = dict(
     inside_board=check_inside_board,
     side=check_side,
@@ -305,6 +429,8 @@ KINDS = dict(
     align=check_align,
     plane=check_plane,
     microvia_span=check_microvia_span,
+    copper_digest=check_copper_digest,
+    no_copper=check_no_copper,
 )
 
 

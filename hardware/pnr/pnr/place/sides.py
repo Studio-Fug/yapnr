@@ -174,7 +174,7 @@ def plan(graph, constraints, rules: Optional[dict] = None) -> SidePlan:
         r for con in constraints.constraints if con.kind in ("line_group", "row") for r in con.refs
     }
     tied = {r for con in constraints.constraints if con.kind == "keepout" for r in con.refs}
-    tied |= {k["ref"] for k in constraints.copper_keepouts}
+    tied |= {k["ref"] for k in constraints.copper_keepouts if k.get("ref")}
     intents = {v.get("ref") for v in (rules or {}).get("plane_access_intents", []) or []}
     edge_side = {
         ref: con.params["side"]

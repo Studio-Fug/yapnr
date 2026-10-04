@@ -122,6 +122,16 @@ class PartitionTest(unittest.TestCase):
         self.assertTrue(all(r.priority >= 1 for r in part.regions if r.net != "GND"))
 
 
+class OverlapTest(unittest.TestCase):
+    def test_a_terminal_inside_another_ones_disc_is_reached(self):
+        # A planned via inside a pad's reach disc (a decoupling cap beside its ball's
+        # via): the tree that reaches the disc reaches the via too.
+        terms = dict(TERMS, A=TERMS["A"] + [via("A4", (2.4, 2.3))])
+        part = run(terms=terms)
+        self.assertEqual(part.report["nets"]["A"]["reached"], 4)
+        self.assertEqual(part.report["nets"]["A"]["unreached"], [])
+
+
 class WidthTest(unittest.TestCase):
     def test_current_widens_the_trunk(self):
         from pnr.electrical import current_width

@@ -232,11 +232,21 @@ def _steiner(cost: np.ndarray, terminals: List[np.ndarray], root: int):
     owner = {}
     for t, cells in enumerate(terminals):
         for c in cells.tolist():
-            owner.setdefault(c, t)
+            owner.setdefault(c, []).append(t)
     tree = set(int(c) for c in terminals[root].tolist() if math.isfinite(flat[c]))
     path_cells = set()
     reached = [root] if tree else []
     remaining = set(range(len(terminals))) - {root}
+
+    def covered(cells):
+        """Terminals the new tree cells already touch (overlapping discs) are reached."""
+        for c in cells:
+            for t in owner.get(c, ()):
+                if t in remaining:
+                    remaining.discard(t)
+                    reached.append(t)
+
+    covered(tree)
     length = 0.0
     sq2 = math.sqrt(2.0)
     while remaining and tree:
@@ -249,9 +259,9 @@ def _steiner(cost: np.ndarray, terminals: List[np.ndarray], root: int):
             d, k = heapq.heappop(heap)
             if d > dist.get(k, math.inf):
                 continue
-            t = owner.get(k)
-            if t is not None and t in remaining:
-                found = (k, t)
+            hit = [t for t in owner.get(k, ()) if t in remaining]
+            if hit:
+                found = (k, hit[0])
                 break
             j, i = divmod(k, nx)
             ck = flat[k]
@@ -293,9 +303,11 @@ def _steiner(cost: np.ndarray, terminals: List[np.ndarray], root: int):
             length += math.hypot(a[0] - b[0], a[1] - b[1])
             k = p
         tree |= path_cells
-        tree |= set(int(c) for c in terminals[t].tolist() if math.isfinite(flat[c]))
+        added = set(int(c) for c in terminals[t].tolist() if math.isfinite(flat[c])) - tree
+        tree |= added
         reached.append(t)
         remaining.discard(t)
+        covered(path_cells | added)
     return np.array(sorted(path_cells), dtype=np.int64), reached, length
 
 

@@ -636,7 +636,14 @@ def _partition(
     for k, n in enumerate(nets):
         mine = grown == k
         lab, count = _label(mine)
-        keep = [c for c in range(count) if (claimed[lab == c] == k).any()]
+        # The piece holding the trunk (or, without one, the most claimed copper); a
+        # rail's other pieces (lands of terminals no tree reached) get no region.
+        anchor = trunks[n] & mine
+        if anchor.any():
+            keep = sorted(set(lab[anchor].tolist()) - {-1})
+        else:
+            sizes = [int((claimed[lab == c] == k).sum()) for c in range(count)]
+            keep = [int(np.argmax(sizes))] if sizes and max(sizes) else []
         mine = np.isin(lab, keep) & mine
         grown[(grown == k) & ~mine] = -1
         info = report["nets"][n]
@@ -724,6 +731,10 @@ def _connect(ctx, label0, order):
         trunk = (dilate(spine, half) & ~later | spine) & allowed if spine.any() else spine.copy()
         for t in reached:  # a via's land, a pad's reach disc (its drop's landing ground)
             trunk |= ctx["cells_of"][n][t] & allowed
+        # Only copper joined to the tree: a disc that blocked copper cuts in two keeps
+        # the part the tree reaches (a drop in the other part would land on an island).
+        anchor = spine if spine.any() else _cells(g, flat_terms[root] if flat_terms else [])
+        trunk = _joined(trunk | (label == k), anchor) & trunk
         label[trunk & (label < 0)] = k
         spines[n] = spine
         lengths[n] = (length, reach)
@@ -732,6 +743,21 @@ def _connect(ctx, label0, order):
             ctx["terminals"][n][t] for t in range(len(ctx["terminals"][n])) if t not in set(reached)
         ]
     return label, spines, unreached, lengths, reached_of
+
+
+def _cells(g, flat):
+    out = g.zeros()
+    out.ravel()[np.asarray(flat, dtype=np.int64)] = True
+    return out
+
+
+def _joined(mask, anchor):
+    """The 4-connected pieces of ``mask`` that hold a cell of ``anchor``."""
+    if not anchor.any():
+        return np.zeros_like(mask)
+    lab, _count = _label(mask)
+    keep = sorted(set(lab[anchor & mask].tolist()) - {-1})
+    return np.isin(lab, keep) & mask
 
 
 def _root(net, terms, flat_terms, sources):

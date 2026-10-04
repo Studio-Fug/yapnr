@@ -32,8 +32,19 @@ the bounding rectangle, for 3 copies.
 | **O0-W** | the thick-microstrip (region W) calibration set, R1t, the D2 window                  | 57.5 × 131.2 mm, 11.7 sq in  | $117 | 16            |
 | **O0-D** | the D1 window, an R1 copy, a thru, a 9 mm and a 30 mm line (uploaded when D1 passes) | 90.6 × 51.5 mm, 7.2 sq in    | $72  | 12            |
 
-The windows of D1 and D2 are placeholders: `yapnr fab check` refuses those boards
-(`FAB-PLACEHOLDER`) until the optimizer's copper is in.
+The D2 window is a placeholder: `yapnr fab check` refuses O0-W (`FAB-PLACEHOLDER`) until D2
+passes, or the owner decides to ship it empty or as a registered miss (outside this repo, see
+the PR description).
+
+D1 passed (`d1-star`, label `O0 D1 divider-osh-m ad20e643`). `catalog.o_optimized` now merges
+its validated copper (`export.contour`'s own representation) into O0-D's window as one custom
+pad (the main body, one net) plus the 14 floating etch islands as separate netless F.Cu fills
+(`layout_o.optimized_pad`); regenerate with `python -m yapnr.rf.coupons generate --stackup
+OSHPARK-4L-FR408HR --upload D --out <dir>`. The merge is mechanically correct (ports, nets,
+orientation) but the regenerated board is **not yet KiCad-DRC clean**: a 0.127 mm netclass
+clearance violation between the main pad and one floating island (actual 0.100 mm) needs an
+owner call (see the PR description) before upload, so the checked-in
+`examples/rf-coupons/order0/O0-D/` still carries the placeholder window.
 
 The KiCad projects, catalogues and DRC results are in
 [examples/rf-coupons/order0/](../../../examples/rf-coupons/order0/README.md).

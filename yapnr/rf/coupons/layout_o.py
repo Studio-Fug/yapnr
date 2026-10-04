@@ -679,6 +679,8 @@ def demo_stick(wr: Writer, pl: Placed):
             layer="Dwgs.User",
             angle=pl.angle,
         )
+    elif "islands" in win:
+        optimized_pad(wr, pl, s, xw, nets[1])
     else:
         copper_pad(wr, pl, s, xw, nets[1])
     # fences beside the feeds were placed by the launches (to x_win); stitch the rest
@@ -742,6 +744,40 @@ def copper_pad(wr: Writer, pl: Placed, s: catalog.Stick, xw: float, net: str):
         " (width 0) (fill yes))))"
     ]
     wr.footprint(f"Reference_{s.id}", pl.p(cx, cy), ang, body, ("refcu", s.id), ref=f"U{s.id}")
+
+
+def optimized_pad(wr: Writer, pl: Placed, s: catalog.Stick, xw: float, net: str):
+    """D1's (or D2's) own winning copper (`catalog.o_optimized`): the main body that touches a
+    port as one custom pad's primitives (one net, same convention as `copper_pad`'s R1/R1t),
+    the floating islands as separate netless F.Cu fills (the same idiom `tag_stick` uses for
+    the QR's dark modules). The optimizer's frame has y-up with its origin at the window
+    centre, same as `copper_pad`'s anchor, so no extra shift is needed once the exporter's
+    y-down convention (`export.kicad.write_footprint`) is undone."""
+    win = s.geometry["window"]
+    ww = win["w"]
+    isl = win["islands"]
+    cx, cy = xw + ww / 2, 0.0
+    ang = pl.angle
+
+    def local(poly):
+        return [(x, -y) for x, y in poly]
+
+    prims = "".join(
+        " (gr_poly (pts "
+        + " ".join(f"(xy {_n(x)} {_n(y)})" for x, y in local(poly))
+        + ") (width 0) (fill yes))"
+        for poly in isl["connected"]
+    )
+    body = [
+        f'\t\t(pad "1" smd custom (at 0 0 {_n(ang)}) (size 0.1 0.1) (layers "F.Cu")'
+        f' (net "{net}") (uuid "{_u("ref", s.id)}")'
+        " (options (clearance outline) (anchor rect))"
+        f" (primitives{prims}))"
+    ]
+    wr.footprint(f"Optimized_{s.id}", pl.p(cx, cy), ang, body, ("optcu", s.id), ref=f"U{s.id}")
+    for k, poly in enumerate(isl["floating"]):
+        pts = [pl.p(cx + x, cy + y) for x, y in local(poly)]
+        wr.gr_poly("F.Cu", pts, (s.id, "isl", k))
 
 
 # --- the tag stick (A15) -------------------------------------------------------------------

@@ -762,6 +762,39 @@ def o_reference(region: str) -> dict:
     )
 
 
+D1_WINNER = "docs/rf/order0/predictions/D1/runs/d1-star/footprint.kicad_mod"
+
+
+def o_optimized(stick_id: str, footprint_path: str) -> dict:
+    """D1 (or D2): the optimizer's own validated copper (export.contour's representation,
+    the one actually re-simulated to pass D-O0-11), split into the one main body that touches
+    a port (one shared net, `layout_o.optimized_pad`) and the floating islands that touch none
+    (etch artefacts below the width/space rule, inert; `predict.md`'s 14 on `d1-star`), by the
+    same point-in-polygon test `export.report.footprint_of` used to build the file. Falls back
+    to the plain placeholder window when the file is not there (D2: no winner yet)."""
+    import os
+
+    from yapnr.rf.export.contour import point_in_loop
+    from yapnr.rf.export.kicad import read_footprint
+
+    win = dict(O_WINDOWS[stick_id])
+    if not os.path.isfile(footprint_path):
+        return win
+    rf = read_footprint(footprint_path)
+    centers = [p["at"] for p in rf.pads]
+    connected, floating = [], []
+    for poly in rf.polygons:
+        (connected if any(point_in_loop(c, poly) for c in centers) else floating).append(poly)
+    for p in rf.pads:
+        connected.extend(p["primitives"])
+    win["islands"] = dict(
+        connected=[poly.tolist() for poly in connected],
+        floating=[poly.tolist() for poly in floating],
+        source=footprint_path,
+    )
+    return win
+
+
 def _o_line_sticks(prefix, n0, region, dls, set_id, label, verify=None) -> List[Stick]:
     fam = O_LINE[region]
     w = O_STICK_W[region]
@@ -1125,14 +1158,25 @@ def _board_o(st, upload: str) -> Board:
                 o_reference("M"),
             )
         )
+        import os
+
+        _repo_root = os.path.dirname(  # yapnr/rf/coupons/catalog.py -> repo root
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
+        d1_win = o_optimized("D1", os.path.join(_repo_root, D1_WINNER))
         s.append(
             _o_demo(
                 "D1",
-                "window",
+                "demo" if "islands" in d1_win else "window",
                 "M",
                 f"{tag} D1 opt divider",
-                "optimizer divider, thin: the headline demo (placeholder window until D1 passes)",
-                O_WINDOWS["D1"],
+                "optimizer divider, thin: the headline demo"
+                + (
+                    " (d1-star, ad20e643, filled)"
+                    if "islands" in d1_win
+                    else " (placeholder window until D1 passes)"
+                ),
+                d1_win,
             )
         )
         trl["M"] = dict(

@@ -52,12 +52,14 @@ DEFAULT_ROWS = 8
 # The cache the wavefront schedule plans for when the last level cannot be read, MiB.
 DEFAULT_CACHE_MB = 8.0
 MAX_TBLOCK = 8
-# Whether the `auto` schedule may choose wavefront passes. Not on macOS: on the M4 the passes
-# were never faster than the sweeps (6 threads, 0.20-1.79 M cells), and on the shared Mac, niced
-# (its threads land on the efficiency cores, whose L2 is 4 MiB, not the 16 MiB `auto` plans
-# for), the divider's and the antenna's line calibrations and one evaluation took 3-4 times as
-# long in 8-step passes as in sweeps.
-PASSES_PAY = sys.platform != "darwin"
+# The `auto` schedule runs a block in passes only while its probes take at most this many DTFT
+# samples per cell and step (probe edges x frequencies / decimation / cells): in a pass a row's
+# probe samples are accumulated by the thread that updated the row, so probes concentrated on a
+# few rows (a flux section) leave the other threads waiting. The line calibrations (decimation
+# 1, 105 frequencies) take 7.7 per cell and step and ran 4.8 times slower in passes than in
+# sweeps (divider, M4, 4 threads: 43.1 s against 8.9 s); the optimizer's runs take about 0.009
+# and were 11 % faster in passes (5.7 s against 6.4 s per evaluation).
+PROBE_SAMPLES_PER_CELL = 0.25
 BACKENDS = ("auto", "numpy", "torch", "native")
 
 HERE = Path(__file__).resolve().parent
@@ -633,17 +635,16 @@ class NativeStepper:
 
     def _tblock(self) -> int:
         """Steps per wavefront pass (0: the sweeps, one pass over the box per half step):
-        ``$YAPNR_RF_TBLOCK`` N, else ("auto") the sweeps on macOS (`PASSES_PAY`) and while the
-        box (fields and ψ) fits in half the last-level cache (``$YAPNR_RF_CACHE_MB``, else read
-        from the system), and otherwise as many steps as keep about three planes per step in
-        that cache (0 when not even one fits). C4D-16 (32 MiB L3), divider at 0.80 M cells,
-        16 threads: 0.74 ms per step in 5-step passes against 1.24 in sweeps; at 0.20 M cells
-        the sweeps are ahead."""
+        ``$YAPNR_RF_TBLOCK`` N, else ("auto") the sweeps while the box (fields and ψ) fits in
+        half the last-level cache (``$YAPNR_RF_CACHE_MB``, else read from the system), and
+        otherwise as many steps as keep about three planes per step in that cache (0 when not
+        even one fits); a run with many probe samples takes the sweeps anyway (`_NativeRun`,
+        `PROBE_SAMPLES_PER_CELL`). C4D-16 (32 MiB L3), divider at 0.80 M cells, 16 threads:
+        0.74 ms per step in 5-step passes against 1.24 in sweeps; at 0.20 M cells the sweeps
+        are ahead."""
         env = os.environ.get(ENV_TBLOCK, "").strip().lower()
         if env not in ("", "auto"):
             return max(0, min(MAX_TBLOCK, int(env)))
-        if not PASSES_PAY:
-            return 0
         cache = float(os.environ.get(ENV_CACHE, "").strip() or last_level_cache_mb()) * 2**20
         psi = sum(p.nbytes for p in self._psi)
         box = 6 * self.size * self.dtype.itemsize + psi
@@ -888,6 +889,13 @@ class _NativeRun:
         self.st = stepper
         self.m = int(omega_count)
         tblock = stepper.tblock
+        forced = os.environ.get(ENV_TBLOCK, "").strip().lower() not in ("", "auto")
+        if tblock and not forced:
+            nx, ny, nz = stepper.sim.grid.n
+            samples = sum(p.index.size for p, _ in probes) * max(1, self.m) / max(1, decimation)
+            if samples > PROBE_SAMPLES_PER_CELL * nx * ny * nz:
+                tblock = 0  # probe-heavy (a line calibration): the sweeps share the probes out
+        self.tblock = tblock
         index = {c: n for n, c in enumerate(COMPONENTS)}
         self.srcs = srcs
         self.src = (YfSrc * max(1, len(srcs)))()

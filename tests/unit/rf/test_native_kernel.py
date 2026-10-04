@@ -451,26 +451,47 @@ class RunTest(unittest.TestCase):
                         self.assert_same(got, ref)
 
     def test_schedule_policy(self):
-        """auto: the sweeps while the box fits in half the cache, else passes sized to it;
-        always the sweeps on macOS (PASSES_PAY)."""
+        """auto: the sweeps while the box fits in half the cache, else passes sized to it; a
+        run with many probe samples per cell and step takes the sweeps anyway, unless
+        YAPNR_RF_TBLOCK forces passes."""
         kernel_or_skip(self)
         env = native_kernel.ENV_TBLOCK, native_kernel.ENV_CACHE
-        for pay in (True, False):
-            for tblock, cache, want in (
-                ("", "1024", 0),
-                ("auto", "1", None if pay else 0),
-                ("0", "1", 0),
-                ("6", "", 6),
-            ):
-                with patch.dict(os.environ, dict(zip(env, (tblock, cache)))), patch.object(
-                    native_kernel, "PASSES_PAY", pay
-                ):
-                    sim = Simulation(self.dom.grid, self.st, dt=self.dt, backend="native")
-                    if want is None:
-                        self.assertGreaterEqual(sim._native.tblock, 1)
-                    else:
-                        self.assertEqual(sim._native.tblock, want)
+        for tblock, cache, want in (
+            ("", "1024", 0),
+            ("auto", "1", None),
+            ("0", "1", 0),
+            ("6", "", 6),
+        ):
+            with patch.dict(os.environ, dict(zip(env, (tblock, cache)))):
+                sim = Simulation(self.dom.grid, self.st, dt=self.dt, backend="native")
+                if want is None:
+                    self.assertGreaterEqual(sim._native.tblock, 1)
+                else:
+                    self.assertEqual(sim._native.tblock, want)
         self.assertGreater(native_kernel.last_level_cache_mb(), 0.0)
+        from yapnr.rf.fdtd.dtft import Accumulator
+
+        p1, _ = self.dom.ports
+        cells = int(np.prod(self.dom.grid.n))
+        edges = sum(p.index.size for p in p1.probes)
+        for tblock, m, dec, want in (
+            ("auto", 1, 50, None),  # light: passes
+            ("auto", 8 * cells // edges + 1, 1, 0),  # heavy: the sweeps
+            ("4", 8 * cells // edges + 1, 1, 4),  # forced
+        ):
+            omega = np.linspace(1e10, 7e10, m)
+            with patch.dict(os.environ, dict(zip(env, (tblock, "1")))):
+                sim = Simulation(self.dom.grid, self.st, dt=self.dt, backend="native")
+                probes = [
+                    (p, Accumulator(omega, p.index.size, sim.dt, p.comp[0] == "h"))
+                    for p in p1.probes
+                ]
+                run = sim._native.start([], probes, m, dec)
+                if want is None:
+                    self.assertGreaterEqual(run.tblock, 1)
+                else:
+                    self.assertEqual(run.tblock, want)
+                self.assertEqual(run.run.tblock, run.tblock)
 
     def test_wavefront_runs_equal_numpy(self):
         """Sources, mu blend, sheet and probes row by row inside the passes."""

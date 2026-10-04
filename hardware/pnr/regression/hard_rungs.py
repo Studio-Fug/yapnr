@@ -1124,7 +1124,7 @@ def ufbga_base():
         "J2": dict(at=[w / 2, 3.6], rot=180, side="top"),
         "J3": dict(at=[3.6, h / 2], rot=90, side="top"),
         "J4": dict(at=[w - 3.6, h / 2], rot=270, side="top"),
-        "J5": dict(at=[2.5, 3.0], rot=0, side="top"),
+        "J5": dict(at=[2.5, 5.5], rot=0, side="top"),
     }
     # Escape every ball of U1: ground and supply drops 0.35/0.15 at interstitial sites,
     # signals by the 0.40/0.20 class; no surface exit north (an antenna edge, say).

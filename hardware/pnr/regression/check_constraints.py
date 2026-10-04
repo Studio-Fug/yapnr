@@ -305,19 +305,34 @@ def _ref_pads(b, ref):
 
 def check_via_class(b, c):
     """Every via of ``nets`` inside ``ref``'s courtyard is ``diameter_mm``/``drill_mm``
-    and, with ``site: interstitial``, sits at the centre of four of the part's balls."""
+    and, with ``site: interstitial``, sits at the centre of a cell of the part's ball
+    lattice (pitch per axis from its pads, in the footprint's own frame)."""
     x0, y0, x1, y1 = b.courtyard(c["ref"])
     nets = set(c["nets"])
-    pads = [xy for xy, _ in _ref_pads(b, c["ref"]).values()]
-    pitch = min(
-        (
-            math.dist(p, q)
-            for i, p in enumerate(pads)
-            for q in pads[i + 1 :]
-            if math.dist(p, q) > TOL
-        ),
-        default=0.0,
-    )
+    fp = b.fps[c["ref"]]
+    # The ball lattice in the footprint's own frame: pitch per axis, origin at a ball.
+    local = [(mm(p.GetFPRelativePosition().x), mm(p.GetFPRelativePosition().y)) for p in fp.Pads()]
+
+    def pitch(values):
+        v = sorted({round(x, 4) for x in values})
+        gaps = [round(q - p, 3) for p, q in zip(v, v[1:]) if q - p > TOL]
+        return min(gaps, key=lambda g: (-gaps.count(g), g)) if gaps else 0.0
+
+    px, py = pitch([p[0] for p in local]), pitch([p[1] for p in local])
+    ox, oy = local[0] if local else (0.0, 0.0)
+    angle = math.radians(fp.GetOrientationDegrees())
+    centre = fp.GetPosition()
+
+    def interstitial(via):
+        # The via in the footprint frame (KiCad y down, as GetFPRelativePosition).
+        dx, dy = mm(via.x - centre.x), mm(via.y - centre.y)
+        u = dx * math.cos(angle) - dy * math.sin(angle)
+        v = dx * math.sin(angle) + dy * math.cos(angle)
+        if fp.IsFlipped():
+            u = -u
+        fu, fv = (u - ox) / px - 0.5, (v - oy) / py - 0.5
+        return abs(fu - round(fu)) * px <= 0.005 and abs(fv - round(fv)) * py <= 0.005
+
     wrong, off_site, count = [], [], 0
     for t in b.board.GetTracks():
         if t.GetClass() != "PCB_VIA" or t.GetNetname() not in nets:
@@ -330,10 +345,8 @@ def check_via_class(b, c):
         size = (round(mm(t.GetWidth(pcbnew.F_Cu)), 4), round(mm(t.GetDrillValue()), 4))
         if abs(size[0] - c["diameter_mm"]) > TOL or abs(size[1] - c["drill_mm"]) > TOL:
             wrong.append([round(at[0], 3), round(at[1], 3), *size])
-        if c.get("site") == "interstitial":
-            near = sorted(math.dist(at, q) for q in pads)[:4]
-            if len(near) < 4 or any(abs(d - pitch / math.sqrt(2)) > 0.01 for d in near):
-                off_site.append([round(at[0], 3), round(at[1], 3)])
+        if c.get("site") == "interstitial" and not (px and py and interstitial(p)):
+            off_site.append([round(at[0], 3), round(at[1], 3)])
     return (
         count > 0 and not wrong and not off_site,
         dict(vias=count, wrong_size=wrong[:10], off_site=off_site[:10]),

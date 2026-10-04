@@ -241,6 +241,11 @@ class FanoutChecks(unittest.TestCase):
         )
         self.assertFalse(ok)
         self.assertEqual(len(measured["off_site"]), 1)
+        # A cell centre beside the array (no ball on one side) is still a lattice site.
+        ok, measured, _ = self.run_check(
+            "via_class", self.VIA, vias=[("GND", 10.975, 10.325, 0.35, 0.15)]
+        )
+        self.assertTrue(ok, measured)
 
     def test_escape_by_via_or_by_leaving_the_courtyard(self):
         check = dict(ref="U1", pads=["A1", "C3"])

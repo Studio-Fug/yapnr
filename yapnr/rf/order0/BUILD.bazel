@@ -5,12 +5,14 @@ package(default_visibility = ["//visibility:public"])
 # Order 0's RF demos (docs/rf/order0/): specs and formulations of D1/D2, the references' and
 # run 0b's forward-run directories, criteria, the loss correction. It uses the solver (specs, the
 # exporter for the forward runs) and the coupon package (the board's windows, R1/R1t, the
-# equivalent substrates, the coupon line model).
+# equivalent substrates, the coupon line model); the predictions stage's loss correction per
+# substrate and the resonators' notches (predict.py).
 py_library(
     name = "order0",
     srcs = [
         "__init__.py",
         "demos.py",
+        "predict.py",
         "write.py",
     ],
     imports = ["../../.."],

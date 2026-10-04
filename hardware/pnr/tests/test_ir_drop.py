@@ -234,6 +234,40 @@ class ViaTest(unittest.TestCase):
         self.assertGreater(ohms(r), barrel_ohm(0.3, 0.2, rho=RHO) + RHO / T_IN * 9.4 / 2.0)
 
 
+class NetworkTest(unittest.TestCase):
+    def test_merged_ends_leave_no_self_loop(self):
+        # A track inside one via land: both ends merge into the land's node.
+        from pnr.ir_drop import build
+
+        c = copper(
+            pads=[dot("S", (1.0, 1.0)), dot("L", (3.0, 1.0), layer="B.Cu")],
+            tracks=[
+                dict(layer="F.Cu", a=[1.0, 1.0], b=[3.0, 1.0], width_mm=0.25),
+                dict(layer="F.Cu", a=[2.95, 1.0], b=[3.05, 1.0], width_mm=0.25),
+            ],
+            vias=[dict(at=[3.0, 1.0], drill_mm=0.2, diameter_mm=0.4, top="F.Cu", bottom="B.Cu")],
+        )
+        i, j, _g, _kind = build(c)["edges"]
+        self.assertTrue(len(i) and (i != j).all())
+        r = solve(c, sources=[0], sinks=[1], current_a=1.0, two_point=False)
+        expect = RHO * 2.0 / (0.25 * T_OUT) + barrel_ohm(1.0, 0.2, rho=RHO)
+        self.assertLess(abs(ohms(r) - expect), 0.15 * expect)
+
+    def test_a_solve_short_of_its_tolerance_is_unsolved(self):
+        c = copper(
+            pads=[dot("S", (0.0, 0.0)), dot("L", (5.0, 0.0))],
+            tracks=[
+                dict(layer="F.Cu", a=[0.0, 0.0], b=[2.0, 0.0], width_mm=0.2),
+                dict(layer="F.Cu", a=[2.0, 0.0], b=[5.0, 0.0], width_mm=0.3),
+            ],
+        )
+        r = solve(c, sources=[0], sinks=[1], current_a=1.0, budget_mohm=1e9, max_iter=0)
+        self.assertEqual(r["status"], "unsolved")
+        self.assertIsNone(r["r_eff_mohm"])
+        self.assertIn("residual", r["warnings"][0]["statement"])
+        self.assertEqual(solve(c, sources=[0], sinks=[1], current_a=1.0)["status"], "pass")
+
+
 class ReportTest(unittest.TestCase):
     def test_budget_warnings_and_heatmap(self):
         c = copper(

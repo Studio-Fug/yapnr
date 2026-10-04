@@ -420,13 +420,17 @@ def build(
     rep = np.array([_find(parent, k) for k in range(len(parent))] + extra, dtype=np.int64)
     if len(rep) < net.n:
         rep = np.concatenate([rep, np.arange(len(rep), net.n)])
+    # An edge whose two ends merged into one node (inside a via land) carries no
+    # current; kept, it would only inflate the Jacobi preconditioner's diagonal.
+    ri, rj = rep[i], rep[j]
+    keep = ri != rj
     return dict(
         raster=raster,
         layers=layers,
         node=node,
         rep=rep,
         n=net.n,
-        edges=(rep[i], rep[j], g, kind),
+        edges=(ri[keep], rj[keep], g[keep], kind[keep]),
         pad_cells=pad_cells,
         track_edges=track_edges,
         thick=thick,
@@ -605,9 +609,15 @@ def solve(
         report["two_point"] = tp
     report["density"] = _density(model, v, current_a, copper_oz_delta_t_c)
     status = "open" if opens else "pass"
-    if not opens and budget_mohm is not None and report["r_eff_mohm"] > budget_mohm + 1e-12:
+    if not opens and not (math.isfinite(report["residual"]) and report["residual"] <= tol):
+        # CG stopped short of its tolerance: no number of this solve is a result.
+        status = "unsolved"
+        report["worst_drop_mv"] = report["r_eff_mohm"] = report["loss_w"] = None
+        report["density"] = {}
+        report.pop("two_point", None)
+    if status == "pass" and budget_mohm is not None and report["r_eff_mohm"] > budget_mohm + 1e-12:
         status = "fail"
-    if not opens and budget_mv is not None and report["worst_drop_mv"] > budget_mv + 1e-12:
+    if status == "pass" and budget_mv is not None and report["worst_drop_mv"] > budget_mv + 1e-12:
         status = "fail"
     if budget_mohm is not None:
         report["budget_mohm"] = budget_mohm
@@ -702,6 +712,15 @@ def _warnings(report, budget_mohm, budget_mv) -> List[Dict]:
                 statement="sinks %s are not joined to the source by copper"
                 % ", ".join(report["opens"]),
                 consequence="no DC path: the rail does not reach them",
+            )
+        )
+        return out
+    if report.get("status") == "unsolved":
+        out.append(
+            dict(
+                statement="the solve stopped at a relative residual of %.3g after %d iterations"
+                % (report["residual"], report["iterations"]),
+                consequence="no drop or resistance is reported for this rail",
             )
         )
         return out

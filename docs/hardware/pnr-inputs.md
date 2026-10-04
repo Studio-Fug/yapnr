@@ -789,7 +789,8 @@ the effective resistance (worst drop / current), the two-point resistance of eac
 sink with the others open (`two_point`), the I²R loss, the largest current per mm of width on
 each layer with its location and a `neck` flag where it is above what an IPC-2221
 trace carrying the whole current would carry per mm, and `status` (`pass`, `fail`
-against the budget, or `open`). Warnings take the quantified-assumption form, for
+against the budget, `open`, or `unsolved` when the solve stops short of its
+tolerance: then no drop or resistance is given). Warnings take the quantified-assumption form, for
 instance what the worst sink's drop would be if the whole current went to it.
 With `--heatmaps` each layer's potential is written as a PNG. Copper only: the
 resistance of parts in the path (ferrites, sense resistors) is not modelled. On the

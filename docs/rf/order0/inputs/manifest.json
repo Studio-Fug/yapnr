@@ -123,6 +123,14 @@
     "line-m-w070-l30": {
       "spec": "line-osh-m-w0p70-l30-m-eq",
       "sha256": "2b14f09414fe5124b2a66d810472f7a5070febd8e6cda128ebeb37b74ed78107"
+    },
+    "line-w-w300-l20": {
+      "spec": "line-osh-w-w3p00-l20-w-eq",
+      "sha256": "02ab086eb18a78028ab123eba90ac3ccdcb1745c3cb020d28b6c0be63683f0e8"
+    },
+    "line-w-w300-l60": {
+      "spec": "line-osh-w-w3p00-l60-w-eq",
+      "sha256": "60ca90b75f6ede52711dd7cf3d5b6c520f2e55c1a6071e47c2fda53d67121304"
     }
   }
 }

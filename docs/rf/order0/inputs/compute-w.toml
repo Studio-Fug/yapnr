@@ -94,3 +94,27 @@ threads = 8
 cpus = 4
 memory_gb = 8
 disk_gb = 4
+
+[[jobs]]
+id = "line-w-w300-l20"
+case = "divider"
+validate = "runs/line-w-w300-l20"
+criteria = "criteria/line.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+threads = 8
+cpus = 4
+memory_gb = 8
+disk_gb = 4
+
+[[jobs]]
+id = "line-w-w300-l60"
+case = "divider"
+validate = "runs/line-w-w300-l60"
+criteria = "criteria/line.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+threads = 8
+cpus = 4
+memory_gb = 8
+disk_gb = 4

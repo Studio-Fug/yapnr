@@ -29,6 +29,8 @@ from yapnr.rf.order0 import demos
 
 REF_SUBSTRATES = {"M": ("M-eq", "M-nom", "M-eq-em528"), "W": ("W-eq", "W-nom", "W-eq-em528")}
 LINES = (("M", 0.40, 10.0), ("M", 0.40, 30.0), ("M", 0.70, 10.0), ("M", 0.70, 30.0))
+# Region W's loss lines (the 3.0 mm port line, 20 and 60 mm): in the compute stage's W campaign.
+W_LINES = (("W", 3.0, 20.0), ("W", 3.0, 60.0))
 # Resources of one RF task: 16 threads of the native kernel on 8 cores (a c4d-/c4-highcpu-16;
 # memory-bound beyond 8 threads, PR #30's benchmark), with room for the refine-3 grid.
 # An optimization fits one 3-hour attempt (about 1.5-2 h: 70 iterations at 16-75 s, then the
@@ -125,7 +127,7 @@ def write(out: str, s21: float = -3.4, offset: float = 0.10, data: Optional[dict
             )
             manifest["runs"][rid] = dict(spec=spec.name, sha256=spec.sha256())
     _dump(os.path.join(out, "criteria", "line.json"), demos.line_criteria())
-    for region, w, length in LINES:
+    for region, w, length in LINES + W_LINES:
         spec, rects = demos.line_spec(region, w, length, data=data)
         lid = f"line-{region.lower()}-w{int(round(w * 100)):03d}-l{length:g}"
         demos.forward_dir(
@@ -177,6 +179,10 @@ def write(out: str, s21: float = -3.4, offset: float = 0.10, data: Optional[dict
         prefix = "r1-" if region == "M" else "r1t-"
         jobs += [fwd(prefix + key.lower(), f"ref-{region.lower()}") for key in refs]
         if region == "W":
+            jobs += [
+                fwd(f"line-w-w{int(round(w * 100)):03d}-l{length:g}", "line")
+                for _, w, length in W_LINES
+            ]
             jobs = [
                 dict(j, **dict(W_TASK, max_wall_s=j.get("max_wall_s", W_TASK["max_wall_s"])))
                 for j in jobs

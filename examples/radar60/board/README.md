@@ -248,3 +248,12 @@ macro's v2 feed (D14); the fanout plan escapes 32 of the 37 Rev A signal balls (
 N13 and N7 lose their resources to higher-priority balls) and drops 84 of 92 plane and supply
 balls (GND A3, A5, A7, G1, J1, L1 at the RF edges and L10, and 1V2 P14, have no legal site; a
 failed P14 blocks the whole 1V2 net until partial fanout lands in the engine).
+
+Routing inputs (stage 3b engine, later the same day): `floorplan.yaml` now turns on the router's
+class clearances, the board's custom rules and its exact outline, partial fanout, an In3 plane
+partition for 1V0_RF1 and 1V0_RF2 and an IR report per rail. `reva/` was placed before them and
+is kept: with them the fanout plan moves 1V0_RF1/1V0_RF2 from drop nets to In3 plane nets and
+C62 loses its bottom site, so `finish --placement` now rebuilds `p030` with a bottom-site and a
+region finding. A re-place under the new inputs (19 of 32 legal, 18 pass the audit, `p005`)
+routed worse in the stage-3b trial (170 unconnected items against 142 for `p030`), so the
+placement waits for the stage-3c re-place with macro v2.

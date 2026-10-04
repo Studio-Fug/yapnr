@@ -1458,6 +1458,24 @@ py_test(
     deps = [":pnr"],
 )
 
+# The checker's proximity check from a pad of the anchor (anchor_pad), KiCad's Python: run
+# it there by hand, python3 -m unittest test_check_proximity in regression/.
+py_test(
+    name = "check_proximity_test",
+    size = "small",
+    srcs = [
+        "regression/check_constraints.py",
+        "regression/test_check_proximity.py",
+    ],
+    imports = ["regression"],
+    main = "regression/test_check_proximity.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+)
+
 py_binary(
     name = "native_regression",
     srcs = [
@@ -1701,6 +1719,23 @@ py_test(
     deps = [
         ":pnr",
         ":pnr_place",
+    ],
+)
+
+# Opt-in legalizer options (legalize:, pnr.place.legal_options): the parser, outline:
+# exact, scarcity order, region look-ahead, pad-anchored hard groups, and an unchanged
+# legalizer without them.
+py_test(
+    name = "legal_options_test",
+    size = "small",
+    srcs = ["tests/test_legal_options.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_legal_options.py",
+    deps = [
+        ":pnr",
+        ":pnr_place",
+        requirement("numpy"),
     ],
 )
 

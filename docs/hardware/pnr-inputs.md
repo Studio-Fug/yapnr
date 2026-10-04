@@ -414,12 +414,30 @@ Pulls members within `radius_mm` of an `anchor`, so a functional block (a
 switching regulator and its inductor + caps, a crystal and its load caps) lands
 together — shorter loops, less noise.
 
-| Key         | Meaning                                            |
-| ----------- | -------------------------------------------------- |
-| `members`   | Refs/globs to cluster.                             |
-| `anchor`    | The ref they cluster around (usually the main IC). |
-| `radius_mm` | Target radius (default ~5 mm).                     |
-| `weight`    | Penalty weight (default 2.0).                      |
+| Key          | Meaning                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| `members`    | Refs/globs to cluster.                                                                     |
+| `anchor`     | The ref they cluster around (usually the main IC).                                         |
+| `radius_mm`  | Target radius (default ~5 mm).                                                             |
+| `weight`     | Penalty weight (default 2.0).                                                              |
+| `hard`       | `true`: each member's centre must lie within `radius_mm` (a placement outside is illegal). |
+| `anchor_pad` | With `hard`: measure from the centre of this pad of the anchor, not from its origin.       |
+
+A hard group measures each member's centre from the anchor's origin. For a part that
+must sit at one pad of a bigger one (a snubber at an inductor's switch-node pad, a
+decoupling capacitor at its ball), the origin can be several millimetres from the pad
+that matters, so `anchor_pad` measures from that pad instead, at the anchor's pose,
+rotation and side (a bottom-side anchor's pads are mirrored with it). The legalizer
+places the anchor before its members and bounds each member by a disc about the pad;
+the hard check (`group_outside`) and the benchmark checker's `proximity` check
+(`anchor_pad`) measure the same point. A pad name the anchor does not have is
+refused by name. The soft pull of global placement still aims at the anchor's
+origin; the legalizer applies the pad.
+
+```yaml
+group:
+  - { members: [C31], anchor: L2, anchor_pad: "2", radius_mm: 2.5, hard: true }
+```
 
 ### `line_group` — hold parts in one rigid line (hard)
 
@@ -669,6 +687,56 @@ unrouted, the build **fails** with the count — a partially-routed board is not
 board. (`route_max_passes = 0` lets the router run to completion; set
 `require_routed = False` only to inspect a deliberately-partial result.) `drc_gate`
 similarly turns DRC violations into a build failure.
+
+### `legalize` — legalizer options (opt-in)
+
+The legalizer snaps the global placement onto a grid of slots (0.25 mm) and packs
+the parts one by one. These options change how; each is off unless the file sets it,
+and a design without the section is legalized exactly as before.
+
+| Key         | Values                         | Meaning                                                                                        |
+| ----------- | ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `outline`   | `raster` (default), `exact`    | `exact`: every part's courtyard stays inside the outline by the test the hard check uses.      |
+| `order`     | `blocks` (default), `scarcity` | `scarcity`: a part held by a hard region or edge band competes with the hard-group blocks.     |
+| `lookahead` | `none` (default), `regions`    | `regions`: a slot that strands a held part with few slots left is refused (when another fits). |
+
+```yaml
+legalize:
+  outline: exact
+  order: scarcity
+  lookahead: regions
+```
+
+`outline: exact` matters when the outline is not a whole number of slots (a 46.3 mm
+board on the 0.25 mm grid): the slot raster then has a partial last row or column
+that reaches past the edge, and a part packed there keeps its courtyard inside the
+raster but up to a slot minus half the clearance outside the board, which the
+placement's hard check refuses (`outside_outline`). With `exact` each slot centre is
+bounded by the box in which the part's courtyard, at the tried rotation and side, lies
+inside the outline, and the legalizer checks the result with the hard check itself.
+The length-matching pass after legalization keeps off those cells too. The outline is
+the `board.outline` rectangle; rounded corners are not modelled.
+
+`order: scarcity` changes the order parts are packed in. The legalizer packs the
+parts of hard groups (and aligns) block by block, picking next the block with the
+fewest free slots per square millimetre of its parts, and only then every other part,
+fewest free slots first. A part held only by a narrow hard `region` (a connector's one
+window) therefore comes after every block and can find its window full. With
+`scarcity` each part held by a hard region or a hard `edge_align` band, and in no
+group, is a block of its own and takes its turn by the same measure, so a window part
+goes before a roomy block; and once such a part has fewer free slots left than every
+part of the block being packed (a roomy region a block is filling), it goes next.
+
+`lookahead: regions` checks each slot before taking it: a greedy trial pack of the
+parts still to place that are held by a hard group, region or edge band, can still
+reach the slot and would keep at most 64 free slots once it is taken (a part that does
+not fit even without the slot is stranded anyway and left out). When one of them no
+longer fits, the next nearest slot is tried (up to 40), then the part's other turn;
+when no turn has a slot that strands nothing, the nearest slot of the first is kept
+and backtracking deals with the part. It is
+the look-ahead of power-first placement (`PNR_POWER_FIRST=1`, which refuses regions)
+for the default flow, and costs the trial packs: it is meant for boards with narrow
+regions.
 
 ## How intent becomes a layout
 

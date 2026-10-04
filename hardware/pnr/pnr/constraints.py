@@ -243,6 +243,8 @@ class CompiledConstraints:
     length_matches: List[LengthMatch] = field(default_factory=list)
     # Meander rules for pair / group length tuning (``tuning:``); None = defaults.
     tuning: Optional[Dict] = None
+    # Opt-in legalizer options (``legalize:``, :mod:`pnr.place.legal_options`); None = off.
+    legalize: Optional[Dict] = None
     copper_keepouts: List[Dict] = field(default_factory=list)
     mounting_holes: List[Dict] = field(default_factory=list)
     # Fixed copper blocks (``fixed_block``, pnr.fixed_block): KiCad groups kept as drawn.
@@ -361,6 +363,46 @@ def _parse_tuning(raw) -> Optional[Dict]:
     if unknown:
         raise ConstraintError("tuning: unknown key(s) %s" % ", ".join(unknown))
     return out
+
+
+# ``legalize:`` (pnr.place.legal_options): each key's values, the first the default.
+LEGALIZE_OPTIONS = {
+    "outline": ("raster", "exact"),
+    "order": ("blocks", "scarcity"),
+    "lookahead": ("none", "regions"),
+}
+
+
+def _parse_legalize(raw) -> Optional[Dict]:
+    """The ``legalize:`` block: opt-in legalizer options, each a name from
+    :data:`LEGALIZE_OPTIONS` (``outline: exact`` keeps every courtyard inside the board
+    outline by the same test as the hard check, ``order: scarcity`` orders parts held to
+    a region or an edge band with the hard-group blocks by remaining slots,
+    ``lookahead: regions`` refuses a slot that strands a scarce region or group part).
+    None when absent; only the keys given, so a default-valued key is kept as written."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConstraintError("legalize must be a mapping")
+    unknown = sorted(set(raw) - set(LEGALIZE_OPTIONS))
+    if unknown:
+        raise ConstraintError("legalize: unknown key(s) %s" % ", ".join(map(str, unknown)))
+    out: Dict = {}
+    for key, allowed in LEGALIZE_OPTIONS.items():
+        if key in raw:
+            out[key] = _require_enum(raw[key], allowed, f"legalize.{key}")
+            if out[key] is None:
+                raise ConstraintError(f"legalize.{key} must be one of {allowed}")
+    return out
+
+
+def _anchor_pad(value, hard: bool) -> str:
+    """A hard group's ``anchor_pad``: the anchor's pad name (number or string)."""
+    if not hard:
+        raise ConstraintError("group.anchor_pad requires hard: true")
+    if isinstance(value, bool) or not isinstance(value, (str, int)) or str(value) == "":
+        raise ConstraintError("group.anchor_pad must be a pad name")
+    return str(value)
 
 
 def _expand_nets(patterns: Iterable[str], net_names: Sequence[str]) -> Tuple[str, ...]:
@@ -1063,6 +1105,7 @@ def compile_constraints(
         "diff_pair",
         "length_match",
         "tuning",
+        "legalize",
         "copper_keepout",
         "fixed_block",
     }
@@ -1284,12 +1327,16 @@ def compile_constraints(
                 raise ConstraintError("hard group requires a known anchor")
         if anchor is not None and anchor not in known_refs:
             warnings.append(f"group.anchor: unknown component ref {anchor!r}")
+        params = {"anchor": anchor, "radius_mm": entry.get("radius_mm")}
+        if entry.get("anchor_pad") is not None:
+            # A hard group measured from one pad of its anchor (pnr.place.legal_options).
+            params["anchor_pad"] = _anchor_pad(entry["anchor_pad"], hard)
         constraints.append(
             Constraint(
                 kind="group",
                 enforcement=Enforcement.HARD if hard else Enforcement.SOFT,
                 refs=refs,
-                params={"anchor": anchor, "radius_mm": entry.get("radius_mm")},
+                params=params,
                 weight=float(entry.get("weight", DEFAULT_WEIGHTS["group"])),
             )
         )
@@ -1366,6 +1413,7 @@ def compile_constraints(
             )
         )
     tuning = _parse_tuning(doc.get("tuning"))
+    legalize = _parse_legalize(doc.get("legalize"))
 
     # Mechanical fastener envelopes reserve both faces and every copper layer.
     import math
@@ -1464,6 +1512,7 @@ def compile_constraints(
         diff_pairs=diff_pairs,
         length_matches=length_matches,
         tuning=tuning,
+        legalize=legalize,
         copper_keepouts=copper_keepouts,
         mounting_holes=mounting_holes,
         fixed_blocks=fixed_blocks,

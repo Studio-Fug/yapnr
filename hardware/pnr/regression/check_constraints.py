@@ -569,6 +569,18 @@ def check_pad_distance(b, c):
     return worst <= c["max_mm"] + TOL, dict(distance_mm=out), dict(max_mm=c["max_mm"])
 
 
+def check_net_vias(b, c):
+    """The vias of ``nets`` number at most ``max`` (default 0: a no-via rule)."""
+    nets = set(c["nets"])
+    found = []
+    for t in b.board.GetTracks():
+        if t.GetClass() == "PCB_VIA" and t.GetNetname() in nets:
+            p = t.GetPosition()
+            found.append([t.GetNetname(), round(mm(p.x) - b.x0, 3), round(b.y1 - mm(p.y), 3)])
+    limit = int(c.get("max", 0))
+    return len(found) <= limit, dict(vias=len(found), at=found[:10]), dict(max=limit)
+
+
 KINDS = dict(
     inside_board=check_inside_board,
     side=check_side,
@@ -587,6 +599,7 @@ KINDS = dict(
     via_class=check_via_class,
     escape=check_escape,
     pad_distance=check_pad_distance,
+    net_vias=check_net_vias,
 )
 
 

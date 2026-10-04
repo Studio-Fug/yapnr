@@ -224,6 +224,17 @@ In4.Cu (the engine cuts its VCC plane out of it), and a class guard on F.Cu lets
 the plane nets pass beside it. Its `no_copper` checks judge zones too (`items: zones`),
 so a plane poured into the launch fails the rung.
 
+`11-ufbga201-fanout-6L-SGSGPS-classes` adds routing rules (one new dimension,
+`constraints`): the supply plane class at 0.15 mm and the ring-0 south balls R4 and R8
+(PB1, PE7, to J2) in a CLK class at 0.20 mm; custom rules (`dru_rules`, written into
+the judge's `.kicad_dru`) that bar vias on CLK, keep CLK 0.25 mm from every net without
+a class and hold holes 0.425 mm from the outline's stroke edge; a 1 mm fiducial (KiCad's
+`Fiducial_1mm_Mask2mm`: its own 0.6 mm clearance and 0.5 mm mask margin) fixed in the
+south exits' corridor; and an outline with 1 mm corner radii drawn at 0.15 mm
+(`outline_shape`, native.py). The engine declares `board.class_clearance: maze`,
+`dru_routing` and `edge: exact`; KiCad's DRC judges clearance, mask bridges and hole to
+edge, and the `net_vias` check (`check_constraints.py`) holds CLK to no via.
+
 ## Length-matching scratch designs
 
 No ladder case or hard rung declares a length-match group, so

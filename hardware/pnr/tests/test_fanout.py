@@ -337,6 +337,36 @@ class PlanTest(unittest.TestCase):
                     segment_polygon(tuple(a), tuple(b), pour), w / 2 + 0.1 - 1e-6
                 )
 
+    def test_v1_keepouts_bar_their_items_layers_and_nets_only(self):
+        # A copper_keepout v1 (pnr.fixed_block) as rules.json carries it: its layers,
+        # items and allow lists resolved to allowed_nets; a v0 one bars everything.
+        from pnr.fanout.planner import _obstacles
+
+        graph = board(array(3), {})
+        comp = graph.component("U1")
+        poly = [[1.0, 1.0], [2.0, 1.0], [2.0, 2.0], [1.0, 2.0]]
+        r = rules()
+        r["copper_keepouts"] = [
+            dict(
+                name="guard",
+                polygon=poly,
+                layers=["F.Cu", "In2.Cu"],
+                items=["tracks"],
+                allow_classes=["gnd"],
+                allow_nets=[],
+                allowed_nets=["GND"],
+                exempt_groups=[],
+            ),
+            dict(name="vias", polygon=poly, layers=["In2.Cu"], items=["vias"], allowed_nets=[]),
+            dict(name="old", ref="U1", rect_mm=[-1.0, -1.0, 1.0, 1.0]),
+        ]
+        layers = ["F.Cu", "In2.Cu", "B.Cu"]
+        obs = _obstacles(graph, r, spec(), comp, Pose(comp.pos, comp.rot), layers, None)
+        areas = {a[0]: a[2:] for a in obs.areas}
+        self.assertEqual(areas["keepout:guard"], (frozenset({0, 1}), False, frozenset({"GND"})))
+        self.assertEqual(areas["keepout:vias"], (frozenset(), True, frozenset()))
+        self.assertEqual(areas["keepout:old"], (None, True, frozenset()))
+
     def test_a_class_keeps_its_nets_on_its_layers(self):
         positions = array(7)
         signals = {b for b in positions if ROWS.index(b[0]) in (2, 3)}

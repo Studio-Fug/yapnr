@@ -616,7 +616,9 @@ fanout:
 How it works (`pnr/fanout`): the lattice gives the sites; tracks run on the half
 lattice (through the channel between two balls, the interstitial sites and the
 vacant ones, orthogonal or at 45 degrees) and every object is judged on exact
-geometry against the lands, fixed copper, `copper_keepout`s, mounting holes,
+geometry against the lands, fixed copper, `copper_keepout`s (a v1 keepout bars
+only its `items` on its `layers`, and lets its allowed nets and classes through, as
+the router does), mounting holes,
 reserved corridors, the outline and the fab's via, hole and edge rules. All balls
 are assigned together by negotiated congestion, so signals and drops share the
 sites: most signals escaped first, then most drops, then the least length and vias.

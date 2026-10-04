@@ -18,11 +18,13 @@ Stack, boundaries, ports, mesh and far field follow stage 2's column model
   of the variants' edges), and a model's own `mesh_lines` (x, y) are added as fixed lines.
 
   python3 openems/ant_sim.py MODEL.json --excite TX2.Pg --out OUT [--threads 4] [--res 0.025]
-      [--mesh-ref OTHER.json,...]
+      [--mesh-ref OTHER.json,...] [--probe-bond]
 
 Outputs OUT/result.json (S of every port, RL-10 band of the excited port, far field per band
 frequency: broadside directivity and realized gain, radiation efficiency, HPBW, E- and H-plane
-cuts) and OUT/s.csv.
+cuts) and OUT/s.csv. `--probe-bond` adds plane-pair voltage probes (bondprobe.py: bondply under
+the banks, L1-L2 and L2-L3 in the open pour), their ring-down poles and port-to-probe transfers
+(result.json "probes", OUT/probes.json); probes add no mesh lines.
 """
 
 import argparse
@@ -229,6 +231,12 @@ def model(m, args):
             "e_bond", dump_type=10, frequency=[f * 1e9 for f in args.dump_bond_f], file_type=1
         )
         dump.AddBox([sx0, sy0, zb], [sx1, sy1, zb])
+    probes = []
+    if getattr(args, "probe_bond", False):  # plane-pair voltage probes (bondprobe.py)
+        import bondprobe
+
+        probes = bondprobe.points(m)
+        bondprobe.add(csx, probes, z_l2, z_l1)
     gx, gy, gz = (np.array(grid.GetLines(dd)) for dd in "xyz")
     meta = dict(
         mesh=dict(nx=len(gx), ny=len(gy), nz=len(gz)),
@@ -240,6 +248,7 @@ def model(m, args):
         ),
         k_rough=k_r,
         substrate_mm=[sx1 - sx0, sy1 - sy0],
+        probes=probes,
     )
     if args.setup_only:
         meta["x_lines"] = [round(float(v), 5) for v in gx]
@@ -271,6 +280,7 @@ def main():
     ap.add_argument("--dump-bond", action="store_true", help="E at mid-bondply (e_bond.h5)")
     ap.add_argument("--dump-bond-f", type=float, nargs="+", default=[60.3, 62.05, 63.8])
     ap.add_argument("--mesh-ref", help="comma-separated models whose edges join the mesh template")
+    ap.add_argument("--probe-bond", action="store_true", help="plane-pair probes (bondprobe.py)")
     a = ap.parse_args()
     m = json.load(open(a.model))
     out = os.path.abspath(a.out)
@@ -355,6 +365,10 @@ def main():
         header=",".join(hdr),
         fmt="%.6g",
     )
+    if a.probe_bond:  # ring-down poles and port-to-plane-pair transfers (bondprobe.py)
+        import bondprobe
+
+        res["probes"] = bondprobe.analyse(sim, out, meta["probes"], pe, 9.0e9)
     pc = m["phase_centres"][a.excite.split(".")[0]]
     theta = np.arange(-180.0, 180.5, 1.0)
     for fx in NF_F:

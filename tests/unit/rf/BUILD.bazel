@@ -57,17 +57,21 @@ yapnr_py_tests(
         "test_microstrip": _SLOW,
         "test_modes": _SLOW,
         # The native kernel against numpy, on the library Bazel builds (//yapnr/rf carries it):
-        # the tests pick their own thread counts (no YAPNR_RF_THREADS), and a library that does
-        # not load fails them instead of skipping (YAPNR_RF_REQUIRE_NATIVE).
+        # the tests pick their own thread counts (up to 3 and 4; no YAPNR_RF_THREADS), so they
+        # reserve that many CPUs from Bazel's scheduler (`cpu:N`; on a smaller runner such a
+        # test runs alone) instead of oversubscribing the runner for the tests beside them, and
+        # a library that does not load fails them instead of skipping (YAPNR_RF_REQUIRE_NATIVE).
         "test_native_identity": dict(
             _SLOW_TESTING,
             env = _NATIVE_ENV,
-            # One shard per test method (about 1.5-2 min each on one CI core).
+            # One shard per test method (1-2 min each on CI).
             shard_count = 5,
+            tags = ["cpu:3"],
         ),
         "test_native_kernel": dict(
             _SLOW_TESTING,
             env = _NATIVE_ENV,
+            tags = ["cpu:4"],
         ),
         "test_pipeline_gradient": _SLOW_TESTING,
         "test_pipeline_gradient_options": _SLOW_TESTING,

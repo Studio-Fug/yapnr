@@ -228,11 +228,13 @@ mm), TX2's serpentine top (1.48 mm) and TX1's second contact.
 | VOUT_PA pocket            | 29.56-31.25 x 33.2-35.0       | 29.557-31.250 x 33.450-34.200 (holds no part: the VOUT_PA parts are on the bottom side) |
 
 `../board/floorplan.yaml` follows this frame (board 60 x 47.35 mm, `gen_board.py --check
---macro` passes for rfm1-m/n/p); the placed board in `../board/reva/` is still the old macro's.
-The board integration (`../board/kicad_ops.merge_macro`) still expects the seven corporate
-columns only: it has to take the four `radar60:COL2_DUMMY` footprints, the four
-`radar60:R_0201_0603Metric_LOAD` loads RT1-RT4 (BOM parts) and the mask islands before the macro
-can be merged again.
+--macro` passes for rfm1-m/n/p). The board integration (`../board/kicad_ops.merge_macro`, stage
+3b) takes the columns from the record: the seven corporate columns and the four
+`radar60:COL2_DUMMY` columns become pads of RFM1 (`rxd0`, `rxd5`, `txd0`, `txd4` on the board-only
+nets `RF_RXD0` ... `RF_TXD4`), the four `radar60:R_0201_0603Metric_LOAD` loads become the locked,
+assembled parts RT1-RT4 at the record's centres, and the mask opening's polygons (the islands
+are its gaps) are copied as drawn. The macro digest R1 v2 covers the loads' pads and the mask
+polygons besides the copper; `../board/reva/` is placed with this macro.
 
 ## Coupons (`generated/coupons/coupons.json`)
 

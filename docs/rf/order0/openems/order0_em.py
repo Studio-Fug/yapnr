@@ -69,6 +69,20 @@ FREQS = np.linspace(1.0e9, 8.0e9, 701)
 F0, FC = 4.5e9, 3.5e9  # Gaussian pulse: 1-8 GHz above -20 dB
 
 
+def dc_free_pulse(f0: float = F0, fc: float = FC) -> str:
+    """openEMS's Gaussian pulse (the same f0 and -20 dB bandwidth) less its DC content, as an
+    fparser string of t (s). The launch models have no DC path from the centre conductor to
+    ground (their coax ports are not resistive), so the Gaussian's DC part (2 % of its peak
+    spectrum here) stayed behind as a static field and the energy never fell below -31 dB."""
+    tau = 1.5174 / (math.pi * fc)  # exp(-(pi tau fc)^2) = 0.1: the -20 dB half-bandwidth
+    t0 = 3.3 * tau
+    k = math.exp(-((math.pi * f0 * tau) ** 2))  # cos(...) - k integrates to zero
+    return (
+        f"(cos({2 * math.pi * f0:.10e}*(t-{t0:.10e}))-{k:.10e})"
+        f"*exp(-((t-{t0:.10e})/{tau:.10e})^2)"
+    )
+
+
 def kappa(er: float) -> float:
     return 2 * math.pi * F_REF * EPS0 * er * STACK["tand"]
 
@@ -442,6 +456,9 @@ def main(argv=None) -> int:
         plist, bc, info = build_launch(m, a, CSX, FDTD)
     else:
         raise SystemExit(f"unknown model kind {m['kind']!r}")
+    if m["kind"] == "launch":
+        FDTD.SetCustomExcite(dc_free_pulse(), F0, 8.5e9)
+        info["excitation"] = "openEMS Gaussian (f0 4.5 GHz, fc 3.5 GHz) less its DC content"
     FDTD.SetBoundaryCond(bc)
     print(json.dumps(dict(model=m["name"], excite=a.excite, **info)), flush=True)
     if a.setup_only:  # build openEMS's operator (catches geometry errors), no time steps

@@ -126,6 +126,8 @@ def collect(runs_dir: str) -> dict:
             continue
         r = load(p)
         model = r["raw"]["model"]
+        if r["raw"].get("kind") == "msl":  # one model at several meshes: d1-r05, d1-r025
+            model += "-r" + ("%g" % r["raw"]["res_mm"]).replace("0.", "")
         out.setdefault(model, []).append(r)
     return out
 

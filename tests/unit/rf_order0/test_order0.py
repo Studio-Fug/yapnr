@@ -215,3 +215,100 @@ class WriteTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResonatorTest(unittest.TestCase):
+    """The held-out ring A11 and stub A12 as forward runs of our FDTD (design §7 item 2)."""
+
+    def test_ring_and_stub_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for fn in (demos.ring_spec, demos.stub_spec):
+                spec, mask, geo = fn("M-eq")
+                self.assertEqual(spec.symmetry, "none")
+                self.assertEqual(spec.grid.pitch_mm, demos.COUPON_PITCH)
+                self.assertEqual([p.side for p in spec.ports], ["W", "E"])
+                out = demos.forward_dir(spec, mask, os.path.join(tmp, spec.name), geo)
+                again = validate.load_spec(out)
+                fp = read_footprint(os.path.join(out, "footprint.kicad_mod"))
+                got = validate.footprint_mask(fp, again, again.grid.pitch_mm)
+                np.testing.assert_array_equal(got, mask > 0.5)
+                self.assertEqual(validate.pad_widths(fp, again), {1: 8, 2: 8})
+                info = json.loads(read(out, "forward.json"))
+                self.assertEqual(info["pixels"], int(mask.sum()))
+                self.assertEqual(info["stick"], geo["stick"])
+
+    def test_ring_geometry(self):
+        spec, mask, geo = demos.ring_spec("M-eq-em528")
+        self.assertEqual(geo["rp_to_rp_mm"], 36.0)  # the reference planes 36 mm apart
+        x0, x1, y0, y1 = spec.design_region
+        # the ring (mean radius r, 0.40 mm strip) lies inside the window, south of the port axis
+        self.assertLess(y0, geo["centre_mm"][1] - geo["radius_mm"] - 0.2)
+        self.assertGreater(y1, geo["centre_mm"][1] + geo["radius_mm"] + 0.2)
+        self.assertEqual(spec.stackup, demos.stackup("M-eq-em528"))
+        self.assertEqual(spec.solver.max_steps, demos.RING_MAX_STEPS)
+
+    def test_stub_snapped(self):
+        _, _, geo = demos.stub_spec()
+        self.assertLessEqual(abs(geo["stub_simulated_mm"] - geo["stub_drawn_mm"]), 0.025 + 1e-9)
+
+    def test_predict_writes_jobs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = write.predict(tmp, image="ghcr.io/x/y@sha256:" + "ab" * 32)
+            self.assertIn("a11-ring-m-eq", manifest["runs"])
+            self.assertIn("line-w-w300-l60-w-eq-em528", manifest["runs"])
+            jobs_m = tomllib.loads(read(tmp, "predict-m.toml"))
+            self.assertEqual(jobs_m["placement"]["shape"], "c4-highcpu-16")
+            self.assertTrue(jobs_m["image"].endswith("ab" * 32))
+            ids = {j["id"] for j in jobs_m["jobs"]}
+            self.assertIn("line-m-w070-l30-m-nom", ids)
+            jobs_w = tomllib.loads(read(tmp, "predict-w.toml"))
+            self.assertEqual(len(jobs_w["jobs"]), 4)
+
+
+class PredictTest(unittest.TestCase):
+    """Loss correction per substrate (predict.py)."""
+
+    def test_line_ids(self):
+        from yapnr.rf.order0 import predict
+
+        self.assertEqual(
+            predict.line_ids("M-eq")["line"][:2], ("line-m-w040-l10", "line-m-w040-l30")
+        )
+        self.assertEqual(predict.line_ids("W-nom")["line"][1], "line-w-w300-l60-w-nom")
+        self.assertEqual(predict.stackup_of("M-eq-em528"), "OSHPARK-4L-EM528")
+
+    def test_correct_all_on_synthetic_data(self):
+        from yapnr.rf.order0 import predict
+
+        f = np.linspace(3e9, 7e9, 161)
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = os.path.join(tmp, "lines")
+            os.makedirs(lines)
+            for w in ("040", "070"):
+                for length in (10, 30):
+                    s = np.zeros((f.size, 2, 2), complex)
+                    s[:, 1, 0] = s[:, 0, 1] = 10 ** (-0.010 * length / 20)
+                    write_touchstone(os.path.join(lines, f"line-m-w{w}-l{length}.s2p"), f, s)
+            src = os.path.join(tmp, "pred", "x")
+            os.makedirs(src)
+            s = np.zeros((f.size, 3, 3), complex)
+            s[:, 0, 0] = 0.05
+            s[:, 1, 0] = s[:, 2, 0] = s[:, 0, 1] = s[:, 0, 2] = 10 ** (-3.25 / 20)
+            write_touchstone(os.path.join(src, "d.s3p"), f, s)
+            items = [("d1", "x/d.s3p", "M-eq", "ratio"), ("r1", "x/d.s3p", "M-eq", "r1"),
+                     ("gone", "x/none.s3p", "M-eq", "ratio")]  # fmt: skip
+            out = predict.correct_all(os.path.join(tmp, "out"), items, os.path.join(tmp, "pred"),
+                                      [lines])  # fmt: skip
+            self.assertTrue(out["items"]["gone"]["missing"])
+            for name in ("d1", "r1"):
+                item = out["items"][name]
+                self.assertLess(item["corrected"]["s21_min_db"], item["raw"]["s21_min_db"])
+                self.assertEqual(item["corrected"]["s11_max_db"], item["raw"]["s11_max_db"])
+                self.assertTrue(os.path.isfile(os.path.join(tmp, "out", item["file"])))
+
+    def test_notch(self):
+        from yapnr.rf.order0 import predict
+
+        f = np.linspace(5e9, 6e9, 201)
+        s21 = np.sqrt(0.01**2 + ((f - 5.4321e9) / 1e9) ** 2)  # a notch 40 dB deep, smooth
+        self.assertAlmostEqual(predict.notch(f, s21, 5.4e9) / 1e9, 5.4321, places=4)

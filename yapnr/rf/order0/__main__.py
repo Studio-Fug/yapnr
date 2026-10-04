@@ -26,6 +26,9 @@ def main(argv=None) -> int:
     pr = sub.add_parser("predict", help="the predictions stage: resonators and loss lines")
     pr.add_argument("--out", required=True)
     pr.add_argument("--image", default="edge", help="the image (pin the designs' digest)")
+    co = sub.add_parser("correct", help="loss-corrected demo and reference predictions")
+    co.add_argument("--out", required=True)
+    co.add_argument("--lines", nargs="*", default=[], help="more loss-line directories")
     v = sub.add_parser("variant", help="an optimized run's footprint as a forward run")
     v.add_argument("--run", required=True, help="the (fetched) run directory")
     v.add_argument("--out", required=True)
@@ -36,6 +39,14 @@ def main(argv=None) -> int:
         from yapnr.rf.order0 import demos
 
         print(demos.forward_variant(args.run, args.out, args.substrate, not args.no_wide))
+        return 0
+    if args.command == "correct":
+        from yapnr.rf.order0 import predict
+
+        roots = predict.line_roots() + list(args.lines)
+        summary = predict.correct_all(args.out, roots=roots)
+        for name, item in summary["items"].items():
+            print(name, json.dumps({k: item.get(k) for k in ("raw", "corrected")}))
         return 0
     if args.command == "predict":
         manifest = write.predict(args.out, image=args.image)

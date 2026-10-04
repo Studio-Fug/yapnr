@@ -19,11 +19,17 @@ Order (each via keeps the fab's 0.43 mm centre spacing to every earlier one):
    boundary, its corners fixed);
 6. repair: a row point left uncovered gets a via, after shifting up to two movable vias if needed;
    nudge: a pair of consecutive fence vias over 0.50 mm apart (G4) is closed by moving a movable via
-   by up to 0.12 mm;
-7. a stitch_grid grid in the open pour (optional: drops are counted by reason);
-8. fill: GND that no via reaches within stitch_reach gets a via where a site exists; what is left
-   becomes a pour keepout (gap), never an unstitched sliver.
-Only lattice vias sit above Pg (E - runin_out), so every column's run-in sees the same vias.
+   by up to 0.12 mm; bridge: where that is not enough (a gap one more via cannot split, where a
+   shared row leaves its partner) a chain of up to five vias shifts by up to 0.24 mm and a fence
+   via is inserted;
+7. a stitch_grid grid in the open pour (optional: drops are counted by reason); with the D15
+   strips pour (C) the grid is the L2-L3 lattice at l23_pitch instead (role l23);
+8. fill: GND that no via reaches within the D15 thresholds (stitch_reach at an edge, stitch_dmax
+   inside the pour) gets a via where a site exists; what is left becomes a pour keepout (gap),
+   never an unstitched sliver;
+9. the L2-L3 plane pair: points farther than l23_dmax from every via get one (role l23).
+Only lattice vias (and the K2 posts, inside the cut-outs) sit above Pg (E - runin_out), so every
+column's run-in sees the same vias. No GND via comes within pa_clear of the D14 PA copper.
 """
 
 from __future__ import annotations
@@ -64,6 +70,11 @@ class Placer:
         self.pad1 = [_bbox(ld.pad1) for ld in mc.loads.values()]
         self.pad2 = [_bbox(ld.pad2) for ld in mc.loads.values()]
         self.load_zones = [ld.via_zone for ld in mc.loads.values()]
+        self.pa = []  # D14: PA copper grown by pa_clear (no GND via pad inside)
+        if getattr(mc, "pa", None) is not None:
+            from .pa import keepouts
+
+            self.pa = keepouts(mc.pa, float(mc.params["pa_clear"]))
 
     # ---- site rules -------------------------------------------------------------------
     def in_pour(self, q: Pt, m: float) -> bool:
@@ -96,6 +107,9 @@ class Placer:
         for z in self.load_zones:  # the load cell's own vias only (placed before this check)
             if z[0] < q[0] < z[2] and z[1] < q[1] < z[3]:
                 return "load zone"
+        for r in self.pa:
+            if rect_dist(q, r) < pr - 1e-9:
+                return "pa feed"
         if self.lines.dist(q, ru.site_min) < ru.site_min - 1e-6:
             return "line"
         return None
@@ -259,6 +273,258 @@ class Placer:
         sq = fence_sequences(self.mc, self.ru, self, rows=rows)
         stats["left"] = sum(len(r["bad"]) + len(r["holes"]) for r in sq.values())
         return stats
+
+    def bridge(self) -> Dict[str, int]:
+        """Fence pairs over 0.50 mm apart that one more via cannot split (under 0.86 mm, where a
+        shared row leaves its partner and both ends are held by other rows): shift a chain of up to
+        five movable vias on one side of the gap away from it (by the same 0.02-0.24 mm, each along
+        its own direction from the gap) and insert a fence via on a row point between, if that
+        lowers the number of over-limit pairs and openings within 1.5 mm."""
+        from .rules import fence_rows, fence_sequences
+
+        stats = dict(bridged=0, left=0)
+        rows = fence_rows(self.mc, self.ru, self)
+
+        def count(bb):
+            sq = fence_sequences(self.mc, self.ru, self, bbox=bb, rows=rows)
+            return sum(len(r["bad"]) + len(r["holes"]) for r in sq.values())
+
+        def sequence(pts):
+            seq = []
+            for _, q in pts:
+                if q is None:
+                    continue
+                dd, j = self.idx.nearest(q, 0.60)
+                if j >= 0 and (not seq or seq[-1] != j):
+                    seq.append(j)
+            return seq
+
+        for _ in range(4):
+            sq = fence_sequences(self.mc, self.ru, self, rows=rows)
+            bad = [(k, i, j) for k, r in sq.items() for i, j, _ in r["bad"]]
+            if not bad:
+                break
+            done = False
+            for key, i, j in bad:
+                a, b = self.idx.pts[i], self.idx.pts[j]
+                g = math.dist(a, b)
+                if g <= 0.50:
+                    continue
+                mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+                bb = (mid[0] - 1.5, mid[1] - 1.5, mid[0] + 1.5, mid[1] + 1.5)
+                base = count(bb)
+                seq = sequence(rows[key])
+                if i not in seq or j not in seq:
+                    continue
+                ia, ib = seq.index(i), seq.index(j)
+                if ia > ib:
+                    ia, ib = ib, ia
+                cands = sorted(
+                    (q for _, q in rows[key] if q is not None and math.dist(q, mid) < g / 2),
+                    key=lambda q: math.dist(q, mid),
+                )[:30]
+                best = None
+                for side in (-1, 1):
+                    for n_ch in range(1, 6):
+                        chain = (
+                            seq[max(0, ia - n_ch + 1) : ia + 1] if side < 0 else seq[ib : ib + n_ch]
+                        )
+                        if len(chain) < n_ch or any(v in self.fixed for v in chain):
+                            break
+                        old = {v: self.idx.pts[v] for v in chain}
+                        for k in range(1, 13):
+                            dlt = 0.02 * k
+                            new = {}
+                            for v, q in old.items():
+                                ux, uy = q[0] - mid[0], q[1] - mid[1]
+                                ul = math.hypot(ux, uy) or 1.0
+                                new[v] = (q[0] + dlt * ux / ul, q[1] + dlt * uy / ul)
+                            ok = True
+                            for v, q in new.items():
+                                if self.site(q) is not None or any(
+                                    x not in new for x in self.idx.within(q, self.lim - 1e-6)
+                                ):
+                                    ok = False
+                                    break
+                            if not ok:
+                                continue
+                            for v, q in new.items():
+                                self.idx.move(v, q)
+                            for c in cands:
+                                if self.idx.within(c, self.lim - 1e-6):
+                                    continue
+                                self.idx.add(c)
+                                cnt = count(bb)
+                                self.idx.pop()
+                                kk = (cnt, n_ch, dlt)
+                                if cnt < base and (best is None or kk < best[0]):
+                                    best = (kk, dict(new), c)
+                            for v, q in old.items():
+                                self.idx.move(v, q)
+                if best is not None:
+                    _, new, c = best
+                    for v, q in new.items():
+                        self.idx.move(v, q)
+                        o = self.vias[v]
+                        self.vias[v] = (q, o[1], o[2], o[3])
+                    self._push(c, "fence")
+                    stats["bridged"] += 1
+                    done = True
+                    break
+                # no slack within reach: plan the row's stretch again round the gap
+                for n_side in (3, 5, 8):
+                    if self._replan(rows, key, seq, ia, ib, n_side, bb, count, base):
+                        stats["replanned"] = stats.get("replanned", 0) + 1
+                        done = True
+                        break
+                if done:
+                    break
+            if not done:
+                break
+        sq = fence_sequences(self.mc, self.ru, self, rows=rows)
+        stats["left"] = sum(len(r["bad"]) + len(r["holes"]) for r in sq.values())
+        return stats
+
+    def _replan(self, rows, key, seq, ia, ib, n_side, bb, count, base) -> bool:
+        """Remove the movable vias of `key`'s sequence within n_side of the gap (ia, ib) and lay
+        that stretch of the row again: from a run-in pair or ring site at one end, a walk of
+        chords in [0.43, 0.50] mm (`_walk`, every phase tried), else one `cover_row` chain; the
+        other rows that used the removed vias are covered again. Kept if the count drops."""
+        lo, hi = max(0, ia - n_side + 1), min(len(seq), ib + n_side)
+        gone = [v for v in seq[lo:hi] if v not in self.fixed]
+        if not gone:
+            return False
+        pts = rows[key]
+        near = [
+            k
+            for k, (_, q) in enumerate(pts)
+            if q is not None and any(math.dist(q, self.idx.pts[v]) < 0.30 for v in gone)
+        ]
+        k0, k1 = min(near), max(near)
+        stretch = pts[k0 : k1 + 1]
+        old = {v: (self.idx.pts[v], self.vias[v]) for v in gone}
+        far = (1e6, 1e6)
+        for v in gone:
+            self.idx.move(v, far)
+            o = self.vias[v]
+            self.vias[v] = (far, o[1], o[2], "dead")
+        n0 = len(self.vias)
+        need0, log0 = len(self.need), len(self.log["row_gaps"])
+
+        def others():
+            for k2, pts2 in rows.items():
+                if k2 == key:
+                    continue
+                nr = [
+                    k
+                    for k, (_, q) in enumerate(pts2)
+                    if q is not None and any(math.dist(q, old[v][0]) < 0.30 for v in gone)
+                ]
+                if nr:
+                    self.cover_row(
+                        pts2[min(nr) : max(nr) + 1],
+                        self.ru.pitch / 2,
+                        "fence",
+                        f"{k2} replan",
+                        p_max=0.47,
+                    )
+
+        def undo():
+            while len(self.vias) > n0:
+                self.vias.pop()
+                self.idx.pop()
+            del self.need[need0:]
+            del self.log["row_gaps"][log0:]
+
+        ends = [e for e in (seq[ia], seq[ib]) if e in self.fixed]
+        ends = [e for e in ends if self.vias[e][3] in ("runin", "ring")]
+        tried = 0
+        for e in ends:
+            for chain in self._walk(stretch, self.idx.pts[e]):
+                tried += 1
+                for q in chain:
+                    self._push(q, "fence")
+                # the rest of the row's stretch, then the rows that shared the removed vias
+                self.cover_row(stretch, self.ru.pitch / 2, "fence", f"{key} replan", p_max=0.47)
+                others()
+                if count(bb) < base:
+                    return True
+                undo()
+                if tried > 60:
+                    break
+        self.cover_row(stretch, self.ru.pitch / 2, "fence", f"{key} replan", p_max=0.47)
+        others()
+        if count(bb) < base:
+            return True
+        undo()
+        for v, (q, rec) in old.items():
+            self.idx.move(v, q)
+            self.vias[v] = rec
+        return False
+
+    def _walk(self, stretch, pair: Pt):
+        """Fence vias on the row points of `stretch` from the end at `pair` backwards, every
+        chord in [0.43, 0.50] mm, each >= the fab spacing from every other via, ending within
+        0.50 mm of a via already there; yields one chain per first chord and common chord."""
+        raw = [q for _, q in stretch if q is not None]
+        if not raw:
+            return
+        if math.dist(raw[0], pair) > math.dist(raw[-1], pair):
+            raw = raw[::-1]  # walk from the pair's end
+        pts = [raw[0]]  # the row points, densified to 4 um between neighbours closer than 0.05
+        for a, b in zip(raw, raw[1:]):
+            n = max(1, int(math.dist(a, b) / 0.004)) if math.dist(a, b) < 0.05 else 1
+            pts += [
+                (a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n)
+                for k in range(1, n + 1)
+            ]
+        lim = self.lim
+
+        def free(q, chain):
+            return not self.idx.within(q, lim - 1e-6) and all(
+                math.dist(q, c) >= lim - 1e-9 for c in chain
+            )
+
+        for t1 in [0.43 + 0.005 * k for k in range(15)]:
+            for t in [0.46, 0.45, 0.47, 0.44, 0.48, 0.435, 0.49, 0.43, 0.50]:
+                chain, last, k0, tt = [], pair, 0, t1
+                while True:
+                    d_last = math.dist(last, pair)
+                    ks = [
+                        k
+                        for k in range(k0, len(pts))
+                        if 0.43 - 1e-9 <= math.dist(pts[k], last) <= 0.50 + 1e-9
+                        and math.dist(pts[k], pair) > d_last
+                    ]
+                    if not ks:
+                        break
+                    ks = [kk for kk in ks if free(pts[kk], chain) and self.site(pts[kk]) is None]
+                    if not ks:
+                        break
+                    k = min(ks, key=lambda kk: abs(math.dist(pts[kk], last) - tt))
+                    q = pts[k]
+                    chain.append(q)
+                    beyond = [
+                        j
+                        for j in self.idx.within(q, 0.50 + 1e-9)
+                        if math.dist(self.idx.pts[j], pair) > math.dist(q, pair) + 0.2
+                    ]
+                    if beyond:
+                        yield list(chain)  # the walk meets a via beyond the stretch
+                        break
+                    last, k0, tt = q, k, t
+
+    def compact(self) -> None:
+        """Drop the vias a re-plan removed; rebuild the index and the fixed set."""
+        keep = [k for k, v in enumerate(self.vias) if v[3] != "dead"]
+        if len(keep) == len(self.vias):
+            return
+        remap = {k: n for n, k in enumerate(keep)}
+        self.vias = [self.vias[k] for k in keep]
+        self.fixed = {remap[k] for k in self.fixed if k in remap}
+        self.idx = PointIndex(0.5)
+        for v in self.vias:
+            self.idx.add(v[0])
 
     def _push(self, c: Pt, role: str) -> None:
         self.idx.add(c)
@@ -680,6 +946,10 @@ def place(mc, ru) -> None:
             pl.add(q, role, True)
         lattice[bank] = len(lattice_sites(mc, ru, bank))
 
+    # K2: the L2-L3 posts inside the cut-outs (fixed, identical in every column's frame)
+    for q in getattr(mc, "posts", []) or []:
+        pl.add(q, "post", True)
+
     # 3. dummy loads: the load cell's own vias (its zone is closed to every other via)
     for ld in mc.loads.values():
         for q in ld.vias:
@@ -792,19 +1062,25 @@ def place(mc, ru) -> None:
 
     pl.log["repair"] = pl.repair()
     pl.log["nudge"] = pl.nudge()
+    if pl.log["nudge"]["left"]:
+        pl.log["bridge"] = pl.bridge()
+        pl.compact()
 
-    # 7. grid in the open pour
-    g = float(p["stitch_grid"])
+    # 7. grid in the open pour (A 0.60, B 1.00); with C's strips the L2-L3 lattice (l23_pitch)
+    strips = p["pour_mode"] == "strips"
+    g = float(p["l23_pitch"] if strips else p["stitch_grid"])
+    role = "l23" if strips else "grid"
     for i in range(int(math.floor(x_lo / g)), int(math.ceil(x_hi / g)) + 1):
         for j in range(int(math.floor(y_s / g)), int(math.ceil(y_hi / g)) + 1):
             q = (round(i * g, 6), round(j * g, 6))
             why = pl.site(q)
             if why is not None:
-                pl._drop("grid", why)
+                pl._drop(role, why)
                 continue
-            pl.add(q, "grid", False)
+            pl.add(q, role, False)
 
-    # 8. fill what the grid leaves unreached; the rest becomes gap
+    # 8. fill what the grid leaves unreached (edges stitch_reach, interior stitch_dmax); the rest
+    # becomes gap
     fill_rounds = []
     for rnd in range(8):
         mc.vias = list(pl.vias)
@@ -815,7 +1091,7 @@ def place(mc, ru) -> None:
             break
         added = 0
         for pc in pieces:
-            q = _fill_site(pc, pl)
+            q = _fill_site(pc, pl, pc.get("limit_mm"))
             if q is not None and pl.add(q, "fill", False) == "ok":
                 added += 1
         if not added:
@@ -830,16 +1106,43 @@ def place(mc, ru) -> None:
     pl.log["made_gap"] = [
         dict(at=pc["at"], long_mm=pc["long_mm"], area_mm2=pc["area_mm2"]) for pc in res["pieces"]
     ]
+
+    # 9. the L2-L3 plane pair: within l23_dmax of a via (straight line)
+    from . import pour as pour_mod
+
+    l23_rounds = []
+    for rnd in range(8):
+        mc.vias = list(pl.vias)
+        res = pour_mod.l23_raster(mc, ru)
+        l23_rounds.append(len(res["pieces"]))
+        if not res["pieces"]:
+            break
+        added = 0
+        for pc in res["pieces"]:
+            q = _fill_site(pc, pl, float(p["l23_dmax"]), geodesic=False)
+            if q is not None and pl.add(q, "l23", False) == "ok":
+                added += 1
+        if not added:
+            break
+    mc.vias = list(pl.vias)
+    pl.log["l23_rounds"] = l23_rounds
     pl.log["lattice_sites"] = lattice
     mc.via_log = pl.log
     mc.rows = rows
 
 
-def _fill_site(pc: Dict, pl: Placer) -> Optional[Pt]:
+def _fill_site(
+    pc: Dict, pl: Placer, limit: Optional[float] = None, geodesic: bool = True
+) -> Optional[Pt]:
     """A via site that reaches the unreached piece `pc`: the valid point nearest the piece's
-    pixel closest to its centroid, on a 0.02 mm lattice within stitch_reach of it."""
+    pixel closest to its centroid, on a 0.02 mm lattice within the piece's limit of it
+    (stitch_reach at an edge, stitch_dmax inside the pour, l23_dmax for the L2-L3 pair). A
+    geodesic limit is searched within the edge reach first (a straight line through the pour)."""
     ax, ay = pc["near"]
-    reach = float(pl.mc.params["stitch_reach"]) - 0.02
+    lim = float(limit if limit is not None else pl.mc.params["stitch_reach"])
+    if geodesic:
+        lim = min(lim, float(pl.mc.params["stitch_reach"]))
+    reach = lim - 0.02
     best = None
     n = int(reach / 0.02)
     for i in range(-n, n + 1):

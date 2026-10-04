@@ -1,0 +1,1004 @@
+{
+  "s3b-A": {
+    "overrides": {
+      "d15": "A"
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 282,
+      "runin": 44,
+      "load": 20,
+      "fence": 206,
+      "isolation": 21,
+      "stitch": 172,
+      "grid": 600,
+      "fill": 78,
+      "total": 1437
+    },
+    "vias_0p15_drill": 1437,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 436.802,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.5735,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-B": {
+    "overrides": {
+      "d15": "B"
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 282,
+      "runin": 44,
+      "load": 20,
+      "fence": 206,
+      "isolation": 21,
+      "stitch": 172,
+      "grid": 204,
+      "fill": 7,
+      "total": 970
+    },
+    "vias_0p15_drill": 970,
+    "l1_dmax_mm": [0.461, 0.766],
+    "l1_area_beyond_mm2": {
+      "0.45": 76.8721,
+      "0.60": 10.2075,
+      "0.75": 0.0012
+    },
+    "l1_gnd_mm2": 436.739,
+    "l23_largest_gap_radius_mm": 0.756,
+    "cutoff_ghz": {
+      "lattice_l1l2": 81.2,
+      "lattice_l2l3": 81.7,
+      "largest_gap_l2l3": 58.7,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.5735,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-C": {
+    "overrides": {
+      "d15": "C"
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 282,
+      "runin": 44,
+      "load": 20,
+      "fence": 206,
+      "isolation": 21,
+      "stitch": 172,
+      "l23": 204,
+      "fill": 23,
+      "total": 986
+    },
+    "vias_0p15_drill": 986,
+    "l1_dmax_mm": [0.461, 0.422],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 148.7,
+    "l23_largest_gap_radius_mm": 0.744,
+    "cutoff_ghz": {
+      "lattice_l1l2": 81.2,
+      "lattice_l2l3": 81.7,
+      "largest_gap_l2l3": 59.7,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.5735,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-S1": {
+    "overrides": {
+      "dummies": "outer"
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 277,
+      "runin": 36,
+      "load": 10,
+      "fence": 172,
+      "isolation": 22,
+      "stitch": 160,
+      "grid": 545,
+      "fill": 88,
+      "total": 1324
+    },
+    "vias_0p15_drill": 1324,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 404.153,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.89, 5.95],
+        [4.39, 5.45],
+        [4.39, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.3,
+        "inner": 8.12
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 18
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 15.2865,
+      "TX2": 15.2865,
+      "TX3": 15.2865
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 7.01,
+    "tx_dx_bank": 0.05,
+    "pocket_board": [29.563, 33.45, 31.25, 35.0],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-S15": {
+    "overrides": {
+      "dummies": "outer+txd0"
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 268,
+      "runin": 40,
+      "load": 15,
+      "fence": 209,
+      "isolation": 22,
+      "stitch": 164,
+      "grid": 525,
+      "fill": 140,
+      "total": 1397
+    },
+    "vias_0p15_drill": 1397,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 409.487,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.89, 5.95],
+        [4.39, 5.45],
+        [4.39, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.3,
+        "inner": 8.12
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.2115,
+      "TX2": 18.2115,
+      "TX3": 18.2115
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 8.78,
+    "tx_dx_bank": 1.205,
+    "pocket_board": [29.563, 33.45, 31.25, 35.0],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-open": {
+    "overrides": {
+      "dummy_term": "open"
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 282,
+      "runin": 44,
+      "load": 20,
+      "fence": 206,
+      "isolation": 21,
+      "stitch": 172,
+      "grid": 600,
+      "fill": 78,
+      "total": 1437
+    },
+    "vias_0p15_drill": 1437,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 436.802,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.5735,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-K2": {
+    "overrides": {
+      "l23_cavity": "K2"
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 282,
+      "runin": 44,
+      "post": 55,
+      "load": 20,
+      "fence": 206,
+      "isolation": 21,
+      "stitch": 172,
+      "grid": 600,
+      "fill": 78,
+      "total": 1492
+    },
+    "vias_0p15_drill": 1492,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 436.802,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 2.914,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 2.914,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 55,
+    "tx_p0_p1_mm": {
+      "TX1": 18.5735,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-K1": {
+    "overrides": {
+      "l23_cavity": "K1"
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 282,
+      "runin": 44,
+      "load": 20,
+      "fence": 206,
+      "isolation": 21,
+      "stitch": 172,
+      "grid": 592,
+      "fill": 91,
+      "total": 1442
+    },
+    "vias_0p15_drill": 1442,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 436.87,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.578,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.578,
+        "tm_modes_57_70": 23
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.5735,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-SER": {
+    "overrides": {
+      "column": "series"
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 285,
+      "runin": 44,
+      "load": 20,
+      "fence": 216,
+      "isolation": 4,
+      "stitch": 167,
+      "grid": 600,
+      "fill": 41,
+      "total": 1391
+    },
+    "vias_0p15_drill": 1391,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 422.87,
+    "l23_largest_gap_radius_mm": 0.457,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 104.6,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.516,
+        "tm_modes_57_70": 25
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.516,
+        "tm_modes_57_70": 22
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 19.7285,
+      "TX2": 19.7285,
+      "TX3": 19.7285
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 4.702,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-T2": {
+    "overrides": {
+      "tx_eq": "T2"
+    },
+    "checks_failed": ["G4 fence continuity"],
+    "vias": {
+      "launch": 14,
+      "ring": 283,
+      "runin": 44,
+      "load": 20,
+      "fence": 213,
+      "isolation": 21,
+      "stitch": 172,
+      "grid": 587,
+      "fill": 84,
+      "total": 1438
+    },
+    "vias_0p15_drill": 1438,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 436.458,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.95, 5.45],
+        [4.45, 5.45],
+        [3.95, 5.45],
+        [3.95, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 6.75,
+        "inner": 7.56
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.34,
+      "antipad_to_feed_mm": 0.9128
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.6835,
+      "TX2": 18.6835,
+      "TX3": 18.6835
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.91,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.5, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-T4": {
+    "overrides": {
+      "tx_skew_budget_ps": 7.9
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 283,
+      "runin": 44,
+      "load": 20,
+      "fence": 201,
+      "isolation": 23,
+      "stitch": 172,
+      "grid": 604,
+      "fill": 79,
+      "total": 1440
+    },
+    "vias_0p15_drill": 1440,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 437.645,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.937
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 17.1123,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 1.4612,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.309, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-pa0": {
+    "overrides": {
+      "pa_feed": false
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 283,
+      "runin": 44,
+      "load": 20,
+      "fence": 206,
+      "isolation": 21,
+      "stitch": 172,
+      "grid": 606,
+      "fill": 75,
+      "total": 1441
+    },
+    "vias_0p15_drill": 1441,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 438.524,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": null,
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.555,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.5735,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-C1lo": {
+    "overrides": {
+      "fullwave_l_scale": 0.98,
+      "inset": 0.25,
+      "w35": 0.3,
+      "t_y": 0.25
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 282,
+      "runin": 44,
+      "load": 20,
+      "fence": 206,
+      "isolation": 21,
+      "stitch": 172,
+      "grid": 598,
+      "fill": 83,
+      "total": 1440
+    },
+    "vias_0p15_drill": 1440,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 436.802,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.562,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.562,
+        "tm_modes_57_70": 24
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.5735,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  },
+  "s3b-C1hi": {
+    "overrides": {
+      "fullwave_l_scale": 1.04,
+      "inset": 0.4,
+      "w35": 0.45,
+      "t_y": 0.49,
+      "div_l_scale": 1.04
+    },
+    "checks_failed": [],
+    "vias": {
+      "launch": 14,
+      "ring": 282,
+      "runin": 44,
+      "load": 20,
+      "fence": 206,
+      "isolation": 21,
+      "stitch": 172,
+      "grid": 589,
+      "fill": 94,
+      "total": 1442
+    },
+    "vias_0p15_drill": 1442,
+    "l1_dmax_mm": [0.461, 0.461],
+    "l1_area_beyond_mm2": {
+      "0.45": 0.0,
+      "0.60": 0.0,
+      "0.75": 0.0
+    },
+    "l1_gnd_mm2": 437.202,
+    "l23_largest_gap_radius_mm": 0.463,
+    "cutoff_ghz": {
+      "lattice_l1l2": 141.0,
+      "lattice_l2l3": 141.8,
+      "largest_gap_l2l3": 103.0,
+      "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+    },
+    "pa": {
+      "vias": [
+        [4.89, 5.45],
+        [4.39, 5.45],
+        [3.89, 5.45],
+        [3.89, 5.95]
+      ],
+      "ir_drop_mv": {
+        "outer": 7.61,
+        "inner": 8.42
+      },
+      "i_peak_per_via_a": 0.625,
+      "neck_mm": 0.28,
+      "antipad_to_feed_mm": 0.7217
+    },
+    "cavity": {
+      "RX": {
+        "largest_via_free_radius_mm": 3.578,
+        "tm_modes_57_70": 26
+      },
+      "TX": {
+        "largest_via_free_radius_mm": 3.578,
+        "tm_modes_57_70": 23
+      }
+    },
+    "posts": 0,
+    "tx_p0_p1_mm": {
+      "TX1": 18.5735,
+      "TX2": 18.5735,
+      "TX3": 18.5735
+    },
+    "tx_spread_mm": 0.0,
+    "tx_entry_y": 6.8,
+    "tx_dx_bank": 3.547,
+    "pocket_board": [29.557, 33.45, 31.25, 34.2],
+    "drc": {
+      "violations": {},
+      "unconnected": 0
+    }
+  }
+}

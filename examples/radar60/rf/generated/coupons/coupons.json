@@ -187,8 +187,8 @@
       "kind": "strip stitching: GND of the 60 GHz set within 0.45 mm (geodesic) of a GND via",
       "region_bbox": [0.5, 0.5, 35.225, 23.25],
       "grid_mm": 0.6,
-      "vias_added": 1310,
-      "fill_rounds": [167, 54, 39, 33, 29],
+      "vias_added": 1309,
+      "fill_rounds": [167, 52, 39, 33, 29],
       "made_gap": [
         {
           "at": [1.604, 0.722],

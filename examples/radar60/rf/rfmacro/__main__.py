@@ -1,7 +1,8 @@
 """radar60 RF macro generator.
 
   python -m rfmacro xsec                         # 2D line table -> results/xsec.json (FEA env)
-  python -m rfmacro build [--variant -1|0|1] [--out DIR] [--set key=value ...]
+  python -m rfmacro build [--variant -1|0|1] [--out DIR] [--name NAME] [--set key=value ...]
+  python -m rfmacro variants [--out DIR] [--only NAME,...]   # stage-3b boards (rfmacro.variants)
   python -m rfmacro drc DIR/NAME.kicad_pcb       # headless KiCad DRC (YAPNR_KICAD_CLI)
   python -m rfmacro coupons [--out DIR]
 
@@ -92,6 +93,27 @@ def drc(pcb: str, keep_filled: bool = False) -> dict:
     return summary
 
 
+def _build_one(ov: dict, out_root: str, name: str) -> list:
+    from . import kicad, macro, report
+
+    mc = macro.build(ov)
+    out = os.path.join(out_root, name)
+    opts = ", ".join(f"{k}={v}" for k, v in sorted(ov.items()) if k != "variant")
+    var = int(ov.get("variant", 0))
+    title = f"radar60 RFM1 conventional macro, variant {var:+d}" + (f" ({opts})" if opts else "")
+    paths = kicad.write(mc, out, name, title.replace('"', "'") + " (PLACEHOLDER until C1/C2)")
+    rec = report.record(mc)
+    rec["schema"] = SCHEMA
+    rec["overrides"] = ov
+    rec["files"] = {k: os.path.basename(v) for k, v in paths.items()}
+    with open(os.path.join(out, f"{name}.json"), "w") as fh:
+        json.dump(rec, fh, indent=1)
+        fh.write("\n")
+    bad = [c["check"] for c in mc.checks if c.get("ok") is False]
+    print(json.dumps(dict(out=out, checks_failed=bad), indent=1), flush=True)
+    return bad
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="rfmacro", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -102,6 +124,10 @@ def main(argv=None) -> int:
     b.add_argument("--variant", type=int, default=0, choices=(-1, 0, 1))
     b.add_argument("--out", default=os.path.join(ROOT, "build"))
     b.add_argument("--set", action="append", default=[], help="parameter override key=json")
+    b.add_argument("--name", help="output name (default rfm1-m|n|p)")
+    v = sub.add_parser("variants")
+    v.add_argument("--out", default=os.path.join(ROOT, "build", "stage3b"))
+    v.add_argument("--only", help="comma-separated variant names")
     d = sub.add_parser("drc")
     d.add_argument("pcb")
     d.add_argument("--keep-filled", action="store_true", help="also save the zone-filled board")
@@ -124,31 +150,24 @@ def main(argv=None) -> int:
             )
         return 0
     if a.cmd == "build":
-        from . import kicad, macro, report
-
         ov = {"variant": a.variant}
         for kv in a.set:
             k, v = kv.split("=", 1)
             ov[k] = json.loads(v)
-        mc = macro.build(ov)
         tag = {-1: "m", 0: "n", 1: "p"}[a.variant]
-        name = f"rfm1-{tag}"
-        out = os.path.join(a.out, name)
-        paths = kicad.write(
-            mc,
-            out,
-            name,
-            f"radar60 RFM1 conventional macro, variant {a.variant:+d} (PLACEHOLDER until C1/C2)",
-        )
-        rec = report.record(mc)
-        rec["schema"] = SCHEMA
-        rec["files"] = {k: os.path.basename(v) for k, v in paths.items()}
-        with open(os.path.join(out, f"{name}.json"), "w") as fh:
-            json.dump(rec, fh, indent=1)
-            fh.write("\n")
-        bad = [c for c in mc.checks if c.get("ok") is False]
-        print(json.dumps(dict(out=out, checks_failed=[c["check"] for c in bad]), indent=1))
+        bad = _build_one(ov, a.out, a.name or f"rfm1-{tag}")
         return 1 if bad else 0
+    if a.cmd == "variants":
+        from . import variants
+
+        names = a.only.split(",") if a.only else list(variants.BOARDS)
+        failed = {}
+        for n in names:
+            bad = _build_one(dict(variants.BOARDS[n]), a.out, n)
+            if bad:
+                failed[n] = bad
+        print(json.dumps(dict(out=a.out, built=names, failed=failed), indent=1))
+        return 1 if failed else 0
     if a.cmd == "drc":
         res = drc(a.pcb, a.keep_filled)
         print(json.dumps(res, indent=1))

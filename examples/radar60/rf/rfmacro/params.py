@@ -125,7 +125,8 @@ DEFAULTS: Dict[str, object] = {
     "runin_out": 0.90,
     # meander radius: legs 2R = 1.0 mm apart share one fence row; a via sits at each U-turn centre
     "meander_r": 0.50,
-    # terminated dummy columns: "both" (all four bank ends), "outer" (RX0 and TX4) or "none"
+    # terminated dummy columns: "both" (S2, all four bank ends), "outer" (S1, the open ends RXD0
+    # and TXD4), "outer+txd0" (S1.5, S1 plus TXD0) or "none"
     "dummies": "both",
     # dummy load: 50 ohm thin-film 0201 (KiCad R_0201_0603Metric land), along the run-in axis.
     # Every load is the same cell (review 2026-10-04: fill vias had landed in three of the four
@@ -164,11 +165,105 @@ DEFAULTS: Dict[str, object] = {
     # ring sites between the run-in pairs and round the cut-out sides: 0.35 keeps the cut-out
     # edge between two sites 0.447 apart within stitch_reach (0.40 would leave 0.46) [D]
     "ring_inset": 0.35,
-    # L1 GND stitching: every GND point within lambda_g/10 (0.29 mm) + the 0.16 mm pad radius of a
-    # GND via, or the GND is removed; open pour gets this via grid [D]
+    # L1 GND stitching: every GND point at an edge (within `edge_band` of a gap, cut-out or pour
+    # edge) within lambda_g/10 (0.29 mm) + the 0.16 mm pad radius of a GND via, or the GND is
+    # removed (stitch or remove; owner D15 keeps it) [D]
     "stitch_reach": 0.45,
-    "stitch_grid": 0.60,
+    "edge_band": 0.30,
+    # D15 ground-stitching study (owner 2026-10-04): the open-pour variant. None takes the value
+    # of the `d15` preset (POUR_PRESETS below):
+    # A "grid": today's 0.60 mm grid, every L1 GND point within 0.45 mm of a via;
+    # B "sparse": a 1.00 mm grid, interior L1 GND within the hard maximum 0.75 mm of a via (fill
+    #   vias where it is exceeded; closes stage 2's 2.9 mm unstitched corners), edges as A;
+    # C "strips": no L1 pour in the antenna area except the GCPW ground strips (gap edge to the
+    #   fence row's pads + strip_margin), the rings round the cut-outs (to the guard-band row's
+    #   pads + strip_margin, which holds the isolation strip), the load cells and the launch
+    #   ground under the package; the L2-L3 pair keeps its own lattice (vias with bare L1 pads).
+    "d15": "A",
+    "pour_mode": None,
+    "stitch_grid": None,  # interior grid pitch (the open pour; in C the L2-L3 lattice)
+    "stitch_dmax": None,  # hard maximum, interior L1 GND point to a via (geodesic)
+    # L2-L3 plane pair (bondply): every point of it outside the cut-outs, the package and the PA
+    # island within l23_dmax (straight line) of a GND through via, a grid of l23_pitch first. A
+    # separate parameter so the L2-L3 stitching can be set apart from the L1 pour; the vias are
+    # through vias, so the two lattices are one set of vias, placed as their union. A's 0.60 mm
+    # holds under the GCPW (fence rows 1.0 mm apart at 0.45 mm: 0.55 mm) [D]
+    "l23_pitch": None,
+    "l23_dmax": None,
+    "strip_margin": 0.10,
+    # dummy-column termination: "load" (the fitted 0201, default) or "open" (land pattern, part not
+    # fitted); "short" is refused (rf-uniform: a shorted dummy changes the pattern by 3 dB at
+    # 60.3 GHz, an open one by 1.2 dB)
+    "dummy_term": "load",
+    # L2-L3 bondply cavity under each bank (rf-uniform: excited through the L2 windows, -10 to
+    # -25 dB, contained by the ring): "K0" the ring only (today); "K2" L2-L3 posts (through vias)
+    # round the window groups wherever L1 is free: pads >= post_clear from patch copper (stage 2
+    # saw pads detune patches), pad edge >= post_line_clear from the column's line centrelines
+    # (the pour's pour_clear_feed), every column the same (instanced per cell, G2); "K1" solid
+    # L2 under the patches (sets windows False) [D]
+    "l23_cavity": "K0",
+    "post_clear": 0.60,
+    "post_line_clear": 0.45,
+    "post_pitch": 0.50,
+    # C1 column retune: the divider's electrical lengths (the 35 ohm lambda/4 and the south arm's
+    # lambda_g/2 surplus) scaled together [D]
+    "div_l_scale": 1.0,
+    # D5: "corporate" (RFS-4, the required topology) or "series" (RFS-4S, the coupon's series-fed
+    # column in the bank: the lower patch inset-fed on its axis from P1, a lambda_g/2 link of
+    # ser_link_w on the window to the upper patch, one L2 window per column; no in-gap input)
+    "column": "corporate",
+    "ser_link_scale": 1.0,
+    "ser_link_w": 0.10,
+    # TX feed options (stage 3b): "T0" fingers of meander_r (today); "T2" TX1's north-west
+    # fingers at meander_r_nw 0.75 (lane fingers keep meander_r: a lane holds 2R + a <= 1.342
+    # mm). tx_skew_budget_ps > 0 (T4, needs the owner's waiver of the 2 ps target): TX1's
+    # north-west finger equalizes only to within that skew (TX1 has the longest meanders; TX2's
+    # lane fingers keep their length). tx_order maps the balls to the columns west to east (T3):
+    # only the nested order is planar on L1 for L-routes, any other is refused as crossing
+    "tx_eq": "T0",
+    "meander_r_nw": None,
+    "tx_skew_budget_ps": 0.0,
+    "tx_order": ["TX1", "TX2", "TX3"],
+    # D14 (owner 2026-10-04): the macro owns the VOUT_PA (1V0_PA) feed. A2 and B2 are joined on
+    # L1 by a bar between ball rows 1 and 3; the copper leaves east of row A between A1 and A3,
+    # runs north inside the package outline to the pocket and ends on pa_vias through vias
+    # (pa_via drill/pad: the board's 0.20/0.40 general class) that tie to the L4 1V0 pour and
+    # carry the bottom-side caps. Board rules unchanged: PWR clearance pa_clear to every foreign
+    # land, via and pour [BD constraints net_class PWR]; vias wholly inside the pocket, outside
+    # the RF region [BD floorplan rf.pocket]. Sizing [D]: 2.5 A peak, 1.0 A RMS on the whole
+    # 1.0 V rail [BD §3.3, ARCH-03; TI publishes no PA split], <= pa_via_i_max per via, IR drop
+    # <= pa_ir_max, via barrels of pa_plating_um (IPC-6012 class 2 minimum average)
+    "pa_feed": True,
+    "pa_net": "1V0_PA",
+    "pa_balls": ["A2", "B2"],
+    "pa_i_peak": 2.5,
+    "pa_i_rms": 1.0,
+    "pa_via": [0.20, 0.40],
+    "pa_vias": 4,
+    "pa_via_i_max": 1.0,
+    # IR drop budget of the feed [D]: §3.3's fix leaves 0.96 V nominal at the balls after 28 mV
+    # of IR drop, so 10 mV more keeps the nominal at the 0.95 V minimum
+    "pa_ir_max": 0.010,
+    "pa_clear": 0.15,
+    "pa_plating_um": 20.0,
+    "pa_copper_margin": 0.05,  # PA copper beyond each via pad [D]
+    # L2 anti-pad (via pad + pa_clear) edge to the nearest feed centreline [D]: 0.2 mm (2 h)
+    # beyond the coplanar ground's 0.30 mm, so the GCPW reference under the line and its gaps is
+    # whole
+    "pa_antipad_feed_min": 0.50,
 }
+
+# D15 open-pour presets (owner 2026-10-04): a parameter left None takes its preset's value
+POUR_PRESETS = {
+    "A": dict(pour_mode="grid", stitch_grid=0.60, stitch_dmax=0.45, l23_pitch=0.60, l23_dmax=0.60),
+    "B": dict(
+        pour_mode="sparse", stitch_grid=1.00, stitch_dmax=0.75, l23_pitch=1.00, l23_dmax=0.75
+    ),
+    "C": dict(
+        pour_mode="strips", stitch_grid=1.00, stitch_dmax=0.45, l23_pitch=1.00, l23_dmax=0.75
+    ),
+}
+DUMMY_OPTIONS = ("both", "outer", "outer+txd0", "none")
 
 
 def resolve(overrides: Dict[str, object] | None = None) -> Dict[str, object]:
@@ -180,8 +275,37 @@ def resolve(overrides: Dict[str, object] | None = None) -> Dict[str, object]:
         p.update(overrides)
     if p["variant"] not in (-1, 0, 1):
         raise ValueError("variant must be -1, 0 or +1 (D12 bracketing)")
+    if p["d15"] not in POUR_PRESETS:
+        raise ValueError(f"d15 must be one of {sorted(POUR_PRESETS)}")
+    for k, v in POUR_PRESETS[str(p["d15"])].items():
+        if p[k] is None:
+            p[k] = v
+    if p["pour_mode"] not in ("grid", "sparse", "strips"):
+        raise ValueError("pour_mode must be grid, sparse or strips")
+    if p["dummies"] not in DUMMY_OPTIONS:
+        raise ValueError(f"dummies must be one of {DUMMY_OPTIONS}")
+    if p["dummy_term"] == "short":
+        raise ValueError(
+            "dummy_term 'short' refused: a shorted dummy changes the pattern by 3 dB at 60.3 GHz "
+            "(rf-uniform); use 'load' (fitted 0201) or 'open'"
+        )
+    if p["dummy_term"] not in ("load", "open"):
+        raise ValueError("dummy_term must be load or open")
+    if p["l23_cavity"] not in ("K0", "K1", "K2"):
+        raise ValueError("l23_cavity must be K0, K1 or K2")
+    if p["l23_cavity"] == "K1":
+        p["windows"] = False  # solid L2 under the patches
+    if p["column"] not in ("corporate", "series"):
+        raise ValueError("column must be corporate or series")
+    if p["tx_eq"] not in ("T0", "T2"):
+        raise ValueError("tx_eq must be T0 or T2 (T1, the accordion: see the README)")
+    if p["meander_r_nw"] is None:
+        p["meander_r_nw"] = 0.75 if p["tx_eq"] == "T2" else p["meander_r"]
+    if sorted(p["tx_order"]) != ["TX1", "TX2", "TX3"]:
+        raise ValueError("tx_order must be a permutation of TX1, TX2, TX3")
     if p["in_x"] is None:
-        p["in_x"] = D_LATTICE / 2
+        # corporate: the input runs up the column's east gap; series: on the column's axis
+        p["in_x"] = D_LATTICE / 2 if p["column"] == "corporate" else 0.0
     return p
 
 

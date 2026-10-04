@@ -108,6 +108,8 @@ for t in d["tracks"]:
         nets.setdefault(t["net"], []).append(track_poly(t))
 load_pads = {}  # net -> (signal pad polygon, gnd pad polygon)
 for pd in d["pads"]:
+    if pd["layer"] == "F.Cu" and pd["net"].startswith("1V0_"):  # the PA feed's copper (D14)
+        nets.setdefault(pd["net"], []).append(mp(pd["poly"]))
     if pd["layer"] != "F.Cu" or not pd["ref"].startswith(("RT", "RL")):
         continue
     q = mp(pd["poly"])
@@ -133,6 +135,11 @@ for n in lines:
 # its gap is filled with GND
 ppts = {n: Point(*p[n]) for n in port_names}
 dropped_gaps = []
+# the D14 PA feed (1V0_PA) stays as built: its copper on L1 and its vias as posts to L2 (this
+# stack's floor), i.e. the bottom caps as an RF short (E1-PA brackets open and short)
+power = {n: v for n, v in nets.items() if n.startswith("1V0_")}
+for n in power:
+    nets.pop(n)
 for n in list(nets):
     own = [ppts[k] for k in port_names if k.startswith(n + ".")]
     lp = [Point(*ld["at"]) for ld in loads if ld["net"] == n]
@@ -156,6 +163,7 @@ if dropped_gaps:
     others = unary_union([v.buffer(GAP) for v in nets.values()])
     gnd = gnd.union(fill.difference(others)).buffer(0)
 
+nets.update(power)
 vias = [v for v in d["vias"] if board_zone.contains(Point(v[0], v[1]))]
 # synthetic lead-in: straight GCPW for every line, GND band, fence rows between and beside them
 for n, c in lead:

@@ -296,13 +296,17 @@ Each region has its own preemptible CPU quota (step 4), so a second region doubl
 once. A region needs four things: the quota, an entry in the tfvars' `regions` (its subnet,
 registry caches and templates; `region_template_shapes` when it lacks a family of
 `template_shapes`), `quota_preferences` for the budget guard, and an entry in `[gcp] regions` of
-the owner config. Then rank the (family, region) pairs:
+the owner config. Then rank the (family, region) pairs; each ranked pair of a Hyperdisk family
+needs templates for its shapes in its region (`yapnr exp doctor` lists them):
 
 ```toml
 [gcp]
 regions = ["us-west4", "northamerica-northeast1"]
-ranking = [["c4d", "us-west4"], ["c4", "northamerica-northeast1"], ["c4", "us-west4"]]
+ranking = [["c4d", "us-west4"], ["c4", "northamerica-northeast1"]]
 ```
+
+A second pair in the same region (C4 in `us-west4`, say) adds no capacity: it draws on the same
+quota.
 
 - **Plan.** Every ranked pair a class can use is a candidate, in rank order (a campaign without
   `[placement] families` may use every ranked family). `plan` prints them with their price per

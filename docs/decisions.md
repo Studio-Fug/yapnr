@@ -897,9 +897,11 @@ Round 2, review fixes (the physics and intent reviews of round 2; design §24):
   with the long timeout (900 s) where they took more than 40 s on one thread locally, and the two
   slowest files are split (`test_pipeline_gradient_options`, `test_tiny_design_options`): CI ran
   four RF tests side by side on a 4-vCPU runner with 4 torch threads each, and eight of them
-  timed out (run 36939460480). No CI run of the new head yet (this round did not push), so CI
-  is not shown to pass; locally (Bazel, one test at a time on one thread, the Mac under load)
-  the 34 RF targets pass in 1373–1499 s, the slowest in 156–191 s against the 900 s timeout.
+  timed out (run 36939460480). Locally (Bazel, one test at a time on one thread, the Mac under
+  load) the 34 RF targets passed in 1373–1499 s, the slowest in 156–191 s against the 900 s
+  timeout. CI passes on the integrated branch (the native kernel merged; `edf9c2f`, runs
+  37182863668 and 37182863672): all 36 RF targets, the smoke cases included, the slowest in
+  119 s on the Linux arm64 runner and 131 s on macOS.
 - **The diplexer and the three-channel bank are labelled "closed-form stub filter refined by
   topology optimization".** Their `seed: stubs` start puts a quarter-wave open stub per other
   channel on each arm (Hammerstad, Kirschning–Jansen); 90 % of the diplexer's seed copper is in its

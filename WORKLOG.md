@@ -26,7 +26,7 @@ hierarchical ladder driver and their animations on `claude/animations-groups-hie
   the footprint follows the pixel boundaries (the chamfered export had put other copper on the finer
   grids: most of round 2's 0.7–2 % grid shifts), the repair widens the one-pixel necks the exact
   copper shows, the time-step library holds the diagonal patterns, the `trust_reference` option, one
-  thread per Bazel RF test with long timeouts (CI had timed out; not yet re-run), `seed_overlap` and
+  thread per Bazel RF test with long timeouts (CI had timed out; it passes now), `seed_overlap` and
   the −10 dB band in `validation.json`, the antenna judged over 9.7–10.3 GHz at η ≥ 0.7. Results
   (same copper on every grid): divider, combiner (topology given by seed and keepouts) and diplexer
   (a closed-form stub filter refined, 77 % seed) pass on all three grids; the antenna meets |S11|

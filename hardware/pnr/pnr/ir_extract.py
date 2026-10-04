@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -287,10 +286,10 @@ def solve_jobs(jobs: List[Dict], out_dir: Path) -> List[Dict]:
         env["PYTHONPATH"] = os.pathsep.join(
             [root] + [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p]
         )
-        subprocess.run(
-            [python, "-m", "pnr.ir_drop", "--jobs", str(path), "--out", str(solved)],
-            check=True,
-            env=env,
+        from pnr.proc import run_checked  # bounded (PNR_WORKER_TIMEOUT)
+
+        run_checked(
+            [python, "-m", "pnr.ir_drop", "--jobs", str(path), "--out", str(solved)], env=env
         )
         reports = json.loads(solved.read_text())
         path.unlink()

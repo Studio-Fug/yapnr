@@ -638,9 +638,11 @@ with 0.32 mm lands and 0.10/0.10 rules a 0.35/0.15 via fits an interstitial site
 and a 0.40/0.20 one does not, and one 0.10 mm track fits between two balls.
 
 The router reserves the planned copper, routes each escaped signal on from the
-first free grid cell beyond its exit (the tail to it keeps each foreign pad at the
-larger of the two nets' class clearances, and the fanout copper keeps other nets'
-vias at the largest class clearance), and leaves the fanned-out balls to the plan.
+first free grid cell beyond its exit, straight out or, when a part closes that
+way, turning up to 75 degrees within 2 mm (the tail keeps each foreign pad at the
+larger of the two nets' class clearances and is judged against class keepouts
+exactly, as the plan was; the fanout copper keeps other nets' vias at the largest
+class clearance), and leaves the fanned-out balls to the plan.
 A ball whose exit finds no such cell is not emitted, and its planned copper goes
 back to the maze;
 the drop via of a plane ball is its connection. The fanout's vias keep their class

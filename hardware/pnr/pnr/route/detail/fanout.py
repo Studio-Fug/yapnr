@@ -83,6 +83,31 @@ def _clear_of_pads(pads, net, layer, a, b, width, clearance):
     return True
 
 
+def _via_halo(grid, segments, vias):
+    """Cells whose centre a via of another net may not take: closer than via radius
+    + clearance + half the copper to a segment (on its layer) or a via (every
+    layer). Exact at cell centres, where the maze puts its vias."""
+    from pnr.writeback import _segment_distance_sq
+
+    out = set()
+    reach = grid.via_radius + grid.clearance
+
+    def mark(layers, a, b, grow):
+        i0, j0 = grid.cell_of(min(a[0], b[0]) - grow, min(a[1], b[1]) - grow)
+        i1, j1 = grid.cell_of(max(a[0], b[0]) + grow, max(a[1], b[1]) + grow)
+        for j in range(j0, j1 + 1):
+            for i in range(i0, i1 + 1):
+                c = grid.center_of(i, j)
+                if _segment_distance_sq(a, b, c, c) < grow * grow - 1e-10:
+                    out.update((la, i, j) for la in layers)
+
+    for la, a, b, w in segments:
+        mark((la,), a, b, w / 2 + reach)
+    for p, d in vias:
+        mark(range(grid.nlayers), p, p, d / 2 + reach)
+    return out
+
+
 def _access(grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2.0):
     """The first cell along the exit's outward ray that ``net`` may hold and leave
     outward, with a clear tail from the exit to its centre: ``(cell, tail end)``."""
@@ -284,6 +309,15 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
                 taken[cell] = "\0conflict"
             owner = grid.pad_net.get(cell)
             grid.pad_net[cell] = net if owner is None or owner == net else "\0conflict"
+        # A maze via sits on a cell centre: keep every other net's via centre at
+        # least via radius + clearance + half the copper from this copper, exactly.
+        for cell in _via_halo(
+            grid,
+            [(la, a, b, w) for (la, a, b), w in zip(segments + tail, widths)],
+            [(via, row["via"][2])] if via is not None else [],
+        ):
+            owner = grid.via_halo.get(cell)
+            grid.via_halo[cell] = net if owner is None or owner == net else "\0conflict"
         esc = Escape(
             net=net,
             kind="joint",

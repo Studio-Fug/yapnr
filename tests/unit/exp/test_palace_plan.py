@@ -61,6 +61,9 @@ print("\nCompleted 1 iteration of adaptive mesh refinement (AMR):")
 print(" Indicator norm = 4.000e-03, global unknowns = 12000")
 print("ranks", os.environ.get("FAKE_NP"), "omp", os.environ.get("OMP_NUM_THREADS"))
 open(os.path.join(out, "port-S.csv"), "w").write(os.environ["FAKE_PORT_S"])
+if (config["Model"].get("Refinement") or {}).get("SaveAdaptMesh"):
+    stem = os.path.splitext(os.path.basename(config["Model"]["Mesh"]))[0]
+    open(os.path.join(out, stem + ".meshgz"), "w").write("MFEM NC mesh v1.0")
 json.dump({"GitTag": "v0.18.1-160-gb797ea8",
            "Problem": {"MPISize": int(os.environ["FAKE_NP"]), "DegreesOfFreedom": 12000,
                        "MultigridDegreesOfFreedom": [3000, 12000], "MeshElements": 2500,
@@ -407,6 +410,53 @@ class PalacePlanTest(unittest.TestCase):
         self.assertEqual(set(record["stages"]), {"prepare", "version", "dry_run"})
         self.assertIn("meshed 4", (work / "out" / "m1.log").read_text())
         self.assertIsNone(record["palace"])
+
+    def test_the_job_runner_solves_stages_first(self):
+        work = self.tmp / "stages"
+        (work / "models" / "mesh").mkdir(parents=True)
+        (work / "models" / "cpw.json").write_text(CONFIG)
+        (work / "models" / "mesh" / "cpw.msh").write_text("$MeshFormat\n")
+        amr = palace_job.relaxed_json(CONFIG)
+        amr["Model"]["Refinement"] = {"MaxIts": 2, "SaveAdaptMesh": True}
+        (work / "models" / "amr.json").write_text(json.dumps(amr))
+        (work / "models" / "check.json").write_text(CONFIG)
+        stages = ["--stage", "models/amr.json", "--stage", "models/check.json@1"]
+        record = self.run_job(work, stages + ["--mesh-from", "models/amr.json"])
+        log = (work / "out" / "m1.log").read_text()
+        self.assertTrue(record["ok"], log)
+        self.assertEqual(
+            [(r["config"], r["ranks"], r["exit"]) for r in record["stage_runs"]],
+            [("models/amr.json", 4, 0), ("models/check.json", 1, 0)],
+        )
+        self.assertEqual(record["stage_runs"][0]["palace"]["dofs"], 12000)
+        self.assertIn("ranks 1 omp 1", log)
+        adapted = work / "out" / "m1" / "stage-amr" / "cpw.meshgz"
+        self.assertTrue(adapted.is_file())
+        config = json.loads((work / "out" / "m1" / "config.json").read_text())
+        self.assertEqual(config["Model"]["Mesh"], str(adapted.resolve()))
+        self.assertTrue((work / "out" / "m1" / "stage-check" / "port-S.csv").is_file())
+        # a failed stage stops the job before the main solve
+        work = self.tmp / "stage-fails"
+        record = self.run_job(work, ["--stage", "models/cpw.json"], {"FAKE_EXIT": "5"})
+        self.assertEqual((record["ok"], record["failed"], record["exit"]), (False, "stage:cpw", 5))
+        self.assertNotIn("solve", record["stages"])
+
+    def test_plan_passes_stages(self):
+        job = {
+            "id": "t",
+            "config": "s.json",
+            "stages": ["a.json", "c.json@1"],
+            "mesh_from": "a.json",
+        }
+        base = dict(palace_plan.DEFAULTS, name="n", image="i", jobs=[job])
+        self.assertEqual(palace_plan.check_jobs(base), [])
+        command = palace_plan.stage_line(job, base)["command"]
+        flags = command[command.index("--stage") : command.index("--")]
+        self.assertEqual(
+            flags, ["--stage", "a.json", "--stage", "c.json@1", "--mesh-from", "a.json"]
+        )
+        bad = dict(base, jobs=[dict(job, mesh_from="b.json")])
+        self.assertTrue(any("mesh_from" in e for e in palace_plan.check_jobs(bad)))
 
     # --- collect
 

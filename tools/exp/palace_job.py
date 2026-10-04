@@ -2,23 +2,30 @@
 """Run one Palace model inside a task and record what it did (tools/exp/palace_plan.py).
 
     python3 job/palace_job.py --id ID --ranks R [--bind core|hwthread|none] [--set KEY=VALUE]...
-        [--prepare JSON_ARGV] [--reference DIR] [--reference-tol T] [--dry-run-only] -- CONFIG
+        [--prepare JSON_ARGV] [--stage CONFIG[@RANKS]]... [--mesh-from STAGE_CONFIG]
+        [--reference DIR] [--reference-tol T] [--dry-run-only] -- CONFIG
 
 Runs the Palace configuration CONFIG on R MPI ranks in the task's work directory:
 
 1. ``--prepare '["code/mesh.py", "models/a.json", "--out", "{out}"]'`` (optional) first runs that
    script with the interpreter running this file, for a task that meshes its model (gmsh) and
    writes CONFIG itself;
-2. CONFIG (Palace's relaxed JSON: comments, trailing commas, integer ranges) is read, each
+2. each ``--stage CONFIG[@RANKS]`` (optional, in order) is solved first, as CONFIG is below but
+   with its output in ``out/ID/stage-<name>`` (``<name>``: the file's stem) and on RANKS ranks
+   if given (one rank works round a Palace limit, see docs/rf-palace.md); ``--mesh-from S``
+   then solves CONFIG on the adapted mesh that stage S saved (``Model.Refinement.SaveAdaptMesh``:
+   ``<stem>.meshgz``, or ``.mesh`` without zlib). Refinement, then a sweep of the refined mesh,
+   is one task this way. A failed stage stops the job (``failed`` = ``stage:<name>``);
+3. CONFIG (Palace's relaxed JSON: comments, trailing commas, integer ranges) is read, each
    ``--set Dotted.Key=VALUE`` (VALUE as JSON, else a string; list items by index) replaces a
    value, ``Problem.Output`` becomes ``out/ID/postpro`` and a relative ``Model.Mesh`` becomes
    absolute; the result is ``out/ID/config.json``;
-3. ``palace --version`` and ``palace --dry-run`` (one process) check the build and the
+4. ``palace --version`` and ``palace --dry-run`` (one process) check the build and the
    configuration;
-4. ``mpirun -np R`` runs the solve from CONFIG's directory, ranks bound to cores (``--bind
+5. ``mpirun -np R`` runs the solve from CONFIG's directory, ranks bound to cores (``--bind
    core``, one model per VM), to hardware threads (``hwthread``) or not at all (``none``, for
    several models on one VM);
-5. with ``--reference DIR``, the solve's ``port-S.csv`` is compared with ``DIR/port-S.csv`` as
+6. with ``--reference DIR``, the solve's ``port-S.csv`` is compared with ``DIR/port-S.csv`` as
    complex S-parameters (``max |dS|`` against ``--reference-tol``, default 0.01).
 
 ``{out}`` in CONFIG, the prepare arguments and DIR becomes ``out/ID`` and ``{ranks}`` becomes R.
@@ -155,13 +162,13 @@ def set_path(config, key, value):
             node = node[part]
 
 
-def effective_config(path, sets, out_dir):
-    """The configuration to solve: ``sets`` applied, output in ``out_dir/postpro``, the mesh path
+def effective_config(path, sets, out_dir, post="postpro"):
+    """The configuration to solve: ``sets`` applied, output in ``out_dir/post``, the mesh path
     absolute (relative to the configuration's directory)."""
     config = relaxed_json(Path(path).read_text())
     for key, value in sets:
         set_path(config, key, value)
-    config.setdefault("Problem", {})["Output"] = str(out_dir / "postpro")
+    config.setdefault("Problem", {})["Output"] = str(out_dir / post)
     model = config.get("Model") or {}
     mesh = model.get("Mesh")
     if isinstance(mesh, str) and not os.path.isabs(mesh):
@@ -393,6 +400,17 @@ class Run:
         self.log.close()
 
 
+def adapted_mesh(stage_config):
+    """The adapted mesh a refinement stage saved: ``<Output>/<mesh stem>.meshgz`` (``.mesh``
+    when MFEM has no zlib), None if neither exists."""
+    post = Path(stage_config["Problem"]["Output"])
+    stem = Path(stage_config["Model"]["Mesh"]).stem
+    for ext in (".meshgz", ".mesh"):
+        if (post / (stem + ext)).is_file():
+            return post / (stem + ext)
+    return None
+
+
 def subst(text, out_dir, ranks):
     return text.replace("{out}", str(out_dir)).replace("{ranks}", str(ranks))
 
@@ -406,6 +424,13 @@ def main(argv=None):
         "--set", action="append", default=[], help="Dotted.Key=VALUE in the configuration"
     )
     ap.add_argument("--prepare", help="a JSON list: a script and its arguments, run first")
+    ap.add_argument(
+        "--stage",
+        action="append",
+        default=[],
+        help="CONFIG[@RANKS]: a Palace configuration solved before the main one",
+    )
+    ap.add_argument("--mesh-from", help="the stage whose adapted mesh the main solve uses")
     ap.add_argument("--reference", help="a directory with the expected port-S.csv")
     ap.add_argument("--reference-tol", type=float, default=0.01, help="max |dS| (default 0.01)")
     ap.add_argument("--dry-run-only", action="store_true", help="check the configuration only")
@@ -432,6 +457,14 @@ def main(argv=None):
             or not all(isinstance(a, str) for a in prepare)
         ):
             raise ValueError("--prepare is a JSON list of strings")
+        stages = []
+        for spec in args.stage:
+            path, at, nranks = spec.rpartition("@") if "@" in spec else (spec, "", "")
+            stages.append((path, int(nranks) if at else args.ranks))
+        if any(r < 1 for _, r in stages):
+            raise ValueError("a stage runs on at least 1 rank")
+        if args.mesh_from and args.mesh_from not in [p for p, _ in stages]:
+            raise ValueError("--mesh-from %s is not one of the stages" % args.mesh_from)
     except ValueError as err:
         ap.error(str(err))
     out_rel = Path("out") / args.id
@@ -452,6 +485,8 @@ def main(argv=None):
         "bind": args.bind,
         "sets": {k: v for k, v in sets},
         "prepare": prepare,
+        "stage_runs": [],
+        "mesh_from": args.mesh_from,
         "reference": None,
         "palace": None,
         "attempt": os.environ.get("YAPNR_ATTEMPT"),
@@ -461,10 +496,52 @@ def main(argv=None):
         argv_prep = [sys.executable] + [subst(a, out_rel, args.ranks) for a in prepare]
         code = run.stage("prepare", argv_prep, env=env)
         failed = "prepare" if code else None
+    adapted = {}
+    for path, nranks in stages if not failed and not args.dry_run_only else []:
+        name = Path(path).stem
+        try:
+            binary = palace_binary(args.palace)
+            stage_cfg = effective_config(
+                Path(subst(path, out_rel, nranks)), sets, out_dir, "stage-" + name
+            )
+            stage_file = out_dir / ("stage-%s.json" % name)
+            stage_file.write_text(json.dumps(stage_cfg, indent=1) + "\n")
+        except (OSError, ValueError) as err:
+            run.note("palace_job: stage %s: %s" % (path, err))
+            failed, code = "stage:" + name, 2
+            break
+        lines = []
+        argv_stage = [args.mpirun, "-np", str(nranks)] + BIND_FLAGS[args.bind]
+        argv_stage += [binary, str(stage_file)]
+        code = run.stage(
+            "stage:" + name,
+            argv_stage,
+            cwd=str(Path(subst(path, out_rel, nranks)).resolve().parent),
+            env=env,
+            keep=lines,
+        )
+        record["stage_runs"].append(
+            dict(
+                config=path,
+                ranks=nranks,
+                exit=code,
+                palace=palace_metadata(Path(stage_cfg["Problem"]["Output"])),
+                **parse_log(lines),
+            )
+        )
+        adapted[path] = adapted_mesh(stage_cfg)
+        if code:
+            failed = "stage:" + name
+            break
     if not failed:
         try:
             binary = palace_binary(args.palace)
             config = effective_config(config_path, sets, out_dir)
+            if args.mesh_from and not args.dry_run_only:
+                mesh = adapted.get(args.mesh_from)
+                if mesh is None:
+                    raise ValueError("stage %s saved no adapted mesh" % args.mesh_from)
+                config["Model"]["Mesh"] = str(mesh.resolve())
             (out_dir / "config.json").write_text(json.dumps(config, indent=1) + "\n")
         except (OSError, ValueError) as err:
             run.note("palace_job: %s" % err)

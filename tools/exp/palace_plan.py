@@ -36,6 +36,12 @@ a VM (one by default: a model gets the VM's cores, ranks bound to them)::
     # set = {"Solver.Order" = 3}; prepare = ["code/mesh.py", "models/a.json", "--out", "{out}"];
     # ranks, bind, memory_gb, disk_gb, max_wall_s, summary, labels, dry_run_only per job
 
+    [[jobs]]                                   # refinement, then a sweep of the refined mesh
+    id = "tx12-A"
+    stages = ["models/tx12-A/palace-amr.json"] # solved first ("CONFIG@1": on one rank)
+    mesh_from = "models/tx12-A/palace-amr.json"  # the main solve uses that stage's adapted mesh
+    config = "models/tx12-A/palace-sweep.json"
+
 ``config`` and ``reference`` are paths in the task: relative to the work directory (an input) or
 absolute in the image, ``{out}`` being the model's output directory (a ``prepare`` script writes
 the mesh and the configuration there). ``DIR`` receives copies of the input directories, the job
@@ -110,6 +116,8 @@ TOP_KEYS = {
 JOB_KEYS = {
     "id",
     "config",
+    "stages",
+    "mesh_from",
     "reference",
     "reference_tol",
     "prepare",
@@ -141,6 +149,11 @@ DEFAULTS = {
         "{id}/*.json",
         "{id}/postpro/*.csv",
         "{id}/postpro/*.json",
+        # stages (--stage): their tables, and every refinement iteration's
+        "{id}/stage-*/*.csv",
+        "{id}/stage-*/*.json",
+        "{id}/stage-*/iteration*/*.csv",
+        "{id}/stage-*/iteration*/*.json",
     ],
 }
 # Spot instance templates exist for these shapes (infra/gcp: template_shapes, and C4 in the
@@ -229,6 +242,11 @@ def check_jobs(doc: Mapping[str, Any]) -> List[str]:
             errors.append("%s: config is the Palace configuration's path in the task" % where)
         if "reference" in job and (not isinstance(job["reference"], str) or not job["reference"]):
             errors.append("%s: reference is a directory with port-S.csv" % where)
+        stages = job.get("stages", [])
+        if not isinstance(stages, list) or not all(isinstance(v, str) and v for v in stages):
+            errors.append("%s: stages is a list of configuration paths" % where)
+        elif "mesh_from" in job and job["mesh_from"] not in [v.rsplit("@", 1)[0] for v in stages]:
+            errors.append("%s: mesh_from names one of the stages" % where)
         if not isinstance(job.get("dry_run_only", False), bool):
             errors.append("%s: dry_run_only is true or false" % where)
         errors += _check_model(where + ": ", job)
@@ -288,6 +306,10 @@ def stage_line(job: Mapping[str, Any], doc: Mapping[str, Any]) -> Dict[str, Any]
         flags += ["--set", "%s=%s" % (key, json.dumps(value))]
     if job.get("prepare"):
         flags += ["--prepare", json.dumps(list(job["prepare"]))]
+    for spec in job.get("stages", []):
+        flags += ["--stage", spec]
+    if job.get("mesh_from"):
+        flags += ["--mesh-from", job["mesh_from"]]
     if job.get("reference"):
         flags += ["--reference", job["reference"]]
         if "reference_tol" in job:

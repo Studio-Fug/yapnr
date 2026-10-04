@@ -67,7 +67,8 @@ CASES = [
     ),
     ("rf_net_via", "via", dict(at=(52, 14), drill=0.2, size=0.4, net="RF_TX1"), "rf_no_vias"),
     ("part_in_rf_region", "part", dict(at=(18, 40), ref="C90"), "rf_region_parts"),
-    ("part_in_pocket", "part", dict(at=(30.4, 34.1), ref="C91"), None),
+    # the RF-uniformity pocket is 1.69 x 1.0 mm (y 33.2-34.2): an 0402 courtyard just fits in it
+    ("part_in_pocket", "part", dict(at=(30.4, 33.7), ref="C91"), None),
     ("macro_in_rf_region", "part", dict(at=(24, 42), ref="RFM1"), None),
     (
         "digital_track_in_guard",
@@ -84,7 +85,7 @@ CASES = [
     (
         "power_track_in_guard",
         "track",
-        dict(a=(46, 30), b=(46, 32), layer="F.Cu", net="PWR_1V8"),
+        dict(a=(53, 30), b=(53, 32), layer="F.Cu", net="PWR_1V8"),  # east of the TX bank
         None,
     ),
     (
@@ -103,6 +104,15 @@ CASES = [
         "gnd_015_via_under_u1",
         "via",
         dict(at=(25.675, 27.675), drill=0.15, size=0.35, net="GND"),
+        None,
+    ),
+    # the RF macro's GND stitching in the VOUT_PA pocket, outside the RF region (rfm1-n's own
+    # positions): clear of U1's courtyard, and where it meets it (the GND rule there asks 0.35)
+    ("fence_via_in_pocket", "via", dict(at=(30.2, 34.0), drill=0.15, size=0.32, net="GND"), None),
+    (
+        "fence_via_in_pocket_at_u1",
+        "via",
+        dict(at=(30.8, 33.4), drill=0.15, size=0.32, net="GND"),
         None,
     ),
     (

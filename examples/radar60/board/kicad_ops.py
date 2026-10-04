@@ -76,11 +76,15 @@ def macro_nets(record=None):
 MACRO_NETS = macro_nets()
 
 
-def _address(fp):
+def _field(fp, name):
     for field in fp.GetFields():
-        if field.GetName() == "atopile_address":
+        if field.GetName() == name:
             return field.GetText()
-    return ""
+    return None
+
+
+def _address(fp):
+    return _field(fp, "atopile_address") or ""
 
 
 # ---------------------------------------------------------------- s-expression helpers
@@ -633,6 +637,11 @@ def finish(placed_pcb, floorplan_pcb, macro_pcb, out_pcb, report_json):
     report["engine_keepout_rule_areas"] = sorted(
         z.GetZoneName() for z in board.Zones() if z.GetZoneName().startswith("PNR keepout:")
     )
+    # Writeback draws those rule areas with fresh UUIDs; named ones get UUIDs from their names, so
+    # the board rebuilt from the placement record (finish --placement) is the same file.
+    for z in board.Zones():
+        if z.GetZoneName().startswith("PNR keepout:"):
+            z.m_Uuid.Clone(pcbnew.KIID(_uuid("zone:" + z.GetZoneName())))
     for ref in ["U1", "RFM1"] + load_refs:
         board.FindFootprintByReference(ref).SetLocked(True)
     pcbnew.SaveBoard(out_pcb, board)
@@ -648,11 +657,11 @@ def finish(placed_pcb, floorplan_pcb, macro_pcb, out_pcb, report_json):
     filler.Fill(board.Zones())
     pcbnew.SaveBoard(out_pcb, board)
     rfm1 = board.FindFootprintByReference("RFM1")
-    field = rfm1.GetFieldByName("geometry_sha256") if rfm1 else None
+    field = _field(rfm1, "geometry_sha256") if rfm1 else None
     report["macro"] = dict(
         geometry_sha256=record["geometry_sha256"],
-        rfm1_field=field.GetText() if field else None,
-        rfm1_field_equal=bool(field) and field.GetText() == record["geometry_sha256"],
+        rfm1_field=field,
+        rfm1_field_equal=field == record["geometry_sha256"],
         variant=_variant(record),
         status=record.get("status"),
         columns=len(record.get("columns") or {}),

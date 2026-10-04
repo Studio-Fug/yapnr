@@ -448,8 +448,10 @@ def placement_audit(graph, poses, floorplan):
 # ---------------------------------------------------------------- final board
 
 
-def _constraint_checks(parts, floorplan):
-    """The hard placement constraints again, on the written board."""
+def _constraint_checks(parts, floorplan, sited=()):
+    """The hard placement constraints again, on the written board. ``sited``: the addresses
+    of the parts the fanout fixed at bottom sites (integrate.py prepare took them out of their
+    floorplan regions)."""
     d = floorplan
     by_addr = {p["address"]: p for p in parts if p["address"]}
     by_ref = {p["ref"]: p for p in parts}
@@ -466,7 +468,7 @@ def _constraint_checks(parts, floorplan):
         rects = spec.get("areas") or [
             d["rf"]["pocket"] if spec["rect"] == "rf.pocket" else spec["rect"]
         ]
-        members = [p for r in spec["parts"] for p in role(r)]
+        members = [p for r in spec["parts"] for p in role(r) if p["address"] not in sited]
         outside = [
             p["ref"]
             for p in members
@@ -511,14 +513,19 @@ def _constraint_checks(parts, floorplan):
     return out
 
 
-def fanout_checks(parts, fanout):
+def fanout_checks(parts, fanout, macro_group=None):
     """The fanout inputs on the placed board (integrate.py prepare's plan): no part's courtyard
-    in an exit band (any side), and every bottom-site part at its site on the bottom side."""
+    in an exit band (any side; U1 and the RF macro's footprints, which are copper and a mask
+    opening rather than placed parts, aside), and every bottom-site part at its site on the
+    bottom side."""
     out = {"bands": {}, "sites": {}}
     if not fanout:
         return out
+    placed = [
+        p for p in parts if p["ref"] != "U1" and not (macro_group and p.get("group") == macro_group)
+    ]
     for band in fanout.get("bands") or []:
-        inside = sorted(p["ref"] for p in parts if overlap(p["box"], band["rect"]))
+        inside = sorted(p["ref"] for p in placed if overlap(p["box"], band["rect"]))
         out["bands"][band["name"]] = {"balls": band["balls"], "rect": band["rect"], "parts": inside}
     by_address = {p["address"]: p for p in parts if p["address"]}
     for ref, site in (fanout.get("bottom_sites") or {}).items():
@@ -595,9 +602,10 @@ def board_audit(
     parts = parts_from_board(poses, h)
     res = checks(parts, floorplan)
     fail = failures(res, floorplan)
-    cons = _constraint_checks(parts, floorplan)
+    sited = {s.get("address") for s in ((fanout or {}).get("bottom_sites") or {}).values()}
+    cons = _constraint_checks(parts, floorplan, sited)
     macro = _macro_checks(parts, macro_record, finish)
-    fan = fanout_checks(parts, fanout)
+    fan = fanout_checks(parts, fanout, floorplan["rf"].get("block", {}).get("group"))
     drc_s = _drc_summary(drc)
     placement_types = {
         "courtyards_overlap",

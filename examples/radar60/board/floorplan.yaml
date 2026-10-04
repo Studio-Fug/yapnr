@@ -333,18 +333,20 @@ legalize: { outline: exact, order: scarcity, lookahead: regions }
 regions:
   # J2 (development connector) is a region part again (stage 3b): its stage-2 fixed pose predates
   # the parts track's QTH land (rows at +-3.086 mm) and the 47.35 mm board. Its 20.59 x 8.24 mm
-  # courtyard has about 5 mm of play along x, between the eFuse block (y <= 7.25) and the flash
-  # and crystal blocks (y >= 15.75), under the crystal region [D]. With the legalizer's
-  # `order: scarcity` it is placed before the roomy blocks (stage 3a: 27/32 legal starts).
+  # body has about 5 mm of play along x, between the eFuse block and the flash and crystal
+  # blocks (y >= 15.75), under the crystal region; the legalizer's 0.25 mm slots need about
+  # 0.5 mm of play across, so the window reaches 0.3 mm into the eFuse block's (y 6.95) [D]
+  # (8.35 mm, the first try, left J2 no slot in 4 of 4 starts). With `order: scarcity` it is
+  # placed before the roomy blocks.
   lvds_header:
     {
       parts: [lvds_header],
-      rect: [8.0, 7.25, 34.0, 15.6],
+      rect: [8.0, 6.95, 34.0, 15.7],
       reason: 'J2 above J1, below the flash and Y1',
     }
   # J3 (JTAG, DNP) at the west edge: below the radome land RL1's keepout (y <= 24.5) and above
-  # MH1's (y >= 6.75), west of the flash block (x <= 8.3); only its upright turn fits [D].
-  jtag: { parts: [jtag], rect: [0.6, 8.0, 8.3, 24.3], reason: 'J3 at the west edge' }
+  # MH1's (y >= 6.75), west of the flash block (x <= 8.4); only its upright turn fits [D].
+  jtag: { parts: [jtag], rect: [0.5, 8.0, 8.4, 24.3], reason: 'J3 at the west edge' }
   # Plan 5.1 gives y 18-40; the radome rule keeps a 5 mm header 8.7 mm from the RX patches, and
   # the R4 guard band starts at y 28.2 west of the RX margin, so the region stops at y 28.2; the
   # west radome land (3.5, 27) takes its north-west corner, so it reaches down to y 8 [D]

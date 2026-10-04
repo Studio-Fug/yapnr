@@ -719,6 +719,18 @@ def board_rules(fp):
             ],
         ),
         (
+            "The RF macro's GND stitching vias in the VOUT_PA pocket (RF uniformity, rfm1-m/n/p:"
+            " four 0.15/0.32 vias) keep the RF region's fence class; after the U1 and general"
+            " rules, which they override",
+            "pocket_fence_vias",
+            "A.Type == 'Via' && A.intersectsArea('RF_POCKET') && A.hasNetclass('GND') && "
+            "A.Hole <= %smm" % _n(fence["drill"] + 0.005),
+            [
+                "(constraint hole_size (min %smm))" % _n(fence["drill"]),
+                "(constraint via_diameter (min %smm))" % _n(fence["diameter"]),
+            ],
+        ),
+        (
             "Crystal nets stay on F.Cu over the solid In1.Cu (no vias; plan 7.1)",
             "xtal_no_vias",
             "A.Type == 'Via' && A.hasNetclass('XTAL')",

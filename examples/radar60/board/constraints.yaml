@@ -433,12 +433,12 @@ legalize:
 region:
   - name: lvds_header
     refs: ['@debug.j2']
-    rect: [8, 7.25, 34, 15.6]
+    rect: [8, 6.95, 34, 15.7]
     hard: true
     reason: 'J2 above J1, below the flash and Y1'
   - name: jtag
     refs: ['@debug.j3']
-    rect: [0.6, 8, 8.3, 24.3]
+    rect: [0.5, 8, 8.4, 24.3]
     hard: true
     reason: 'J3 at the west edge'
   - name: pmic_block

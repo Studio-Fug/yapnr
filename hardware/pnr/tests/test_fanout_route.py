@@ -200,6 +200,76 @@ class FanoutRouteTest(unittest.TestCase):
         self.assertNotIn("fanout", r.escape_diagnostics)
         self.assertTrue(all(math.isfinite(v[1]) for v in r.vias))
 
+    def grid(self):
+        from pnr.route.detail.grid import RouteGrid
+
+        return RouteGrid.from_graph(
+            self.g,
+            20,
+            20,
+            pitch=0.25,
+            layers=("F.Cu", "In2.Cu", "B.Cu"),
+            clearance=0.1,
+            track_width=0.1,
+            via_radius=0.2,
+        )
+
+    def test_a_ball_without_access_gives_its_copper_back(self):
+        # An exit whose outward ray is blocked has no access cell: the ball is not
+        # emitted, so its planned copper leaves the escape tables (and its cells the
+        # fanout's claims) instead of costing the maze capacity it never uses.
+        from pnr.fanout import cached_plan, classify
+        from pnr.route.detail.fanout import plan_fanouts
+
+        layers, drops, signals = classify(self.g, self.rules)
+        plan = cached_plan(
+            self.g,
+            self.rules,
+            self.rules["fanouts"][0],
+            grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+            plane_nets={"GND"},
+            signal_nets={n.name for n in self.g.nets if n.name != "GND"},
+        )
+        name, row = next((k, r) for k, r in sorted(plan["terminals"].items()) if r.get("exit"))
+        grid = self.grid()
+        la = grid.layers.index(row["layer"])
+        ex, ey = row["exit"]
+        ox, oy = row["outward"]
+        for k in range(12):
+            i, j = grid.cell_of(ex + ox * 0.2 * k, ey + oy * 0.2 * k)
+            grid.blocked[la, j, i] = True
+        fo = plan_fanouts(
+            grid,
+            self.g,
+            self.rules,
+            plane_nets={"GND"},
+            signal_nets={n.name for n in self.g.nets if n.name != "GND"},
+            via_keepout=1,
+        )
+        self.assertIn(name, fo.report["U1"]["no_access"])
+        self.assertIn(row["net"], fo.blocked_nets)
+        mine = [s for s in grid.escape_segments if s[1] == row["net"]]
+        self.assertEqual(mine, [])
+        self.assertNotIn(row["net"], [v[0] for v in grid.escape_vias])
+        self.assertFalse([k for k in fo.via_sizes if k[0] == row["net"]])
+        others = [s for s in grid.escape_segments if s[1] != row["net"]]
+        self.assertTrue(others)  # the other balls keep theirs
+
+    def test_class_clearances_reach_the_halo_and_the_pad_checks(self):
+        from pnr.place.geometry import Rect
+        from pnr.route.detail.fanout import _clear_of_pads, _via_halo
+
+        grid = self.grid()
+        segment = [(1, (5.0, 5.0), (8.0, 5.0), 0.1)]
+        plain = _via_halo(grid, segment, [])
+        grid.net_clearances = {"PWR": 0.15}
+        wide = _via_halo(grid, segment, [])
+        self.assertTrue(plain < wide)  # a PWR via keeps 0.15 mm from this copper
+        pad = [(0, "PWR", Rect(6.0, 5.32, 0.3, 0.3))]  # 0.12 mm from the track's edge
+        self.assertTrue(_clear_of_pads(pad, "S", 0, (5.0, 5.0), (7.0, 5.0), 0.1, 0.1))
+        classes = {"PWR": 0.15}
+        self.assertFalse(_clear_of_pads(pad, "S", 0, (5.0, 5.0), (7.0, 5.0), 0.1, 0.1, classes))
+
 
 if __name__ == "__main__":
     unittest.main()

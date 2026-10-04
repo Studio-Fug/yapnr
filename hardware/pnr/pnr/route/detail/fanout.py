@@ -58,13 +58,18 @@ def _foreign_pads(grid, own_rects):
     ]
 
 
-def _clear_of_pads(pads, net, layer, a, b, width, clearance):
+def _clear_of_pads(pads, net, layer, a, b, width, clearance, classes=None):
+    """``a``-``b`` of ``width`` clears every pad of another net on ``layer`` by the
+    larger of the two nets' clearances (``classes``: net -> class clearance; the
+    fab ``clearance`` holds where larger or absent)."""
     from pnr.writeback import _segment_distance_sq
 
-    radius = width / 2 + clearance
+    classes = classes or {}
+    base = clearance
     for la, owner, r in pads:
         if la != layer or owner == net:
             continue
+        radius = width / 2 + max(base, classes.get(net, 0.0), classes.get(owner, 0.0))
         if (
             max(a[0], b[0]) + radius < r.left
             or min(a[0], b[0]) - radius > r.right
@@ -86,11 +91,14 @@ def _clear_of_pads(pads, net, layer, a, b, width, clearance):
 def _via_halo(grid, segments, vias):
     """Cells whose centre a via of another net may not take: closer than via radius
     + clearance + half the copper to a segment (on its layer) or a via (every
-    layer). Exact at cell centres, where the maze puts its vias."""
+    layer). Exact at cell centres, where the maze puts its vias. The clearance is
+    the largest one a via there may need: any net class's (``grid.net_clearances``)
+    where larger than the fab's."""
     from pnr.writeback import _segment_distance_sq
 
     out = set()
-    reach = grid.via_radius + grid.clearance
+    classes = getattr(grid, "net_clearances", None) or {}
+    reach = grid.via_radius + max([grid.clearance] + list(classes.values()))
 
     def mark(layers, a, b, grow):
         i0, j0 = grid.cell_of(min(a[0], b[0]) - grow, min(a[1], b[1]) - grow)
@@ -108,9 +116,12 @@ def _via_halo(grid, segments, vias):
     return out
 
 
-def _access(grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2.0):
+def _access(grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2.0, pads=None):
     """The first cell along the exit's outward ray that ``net`` may hold and leave
-    outward, with a clear tail from the exit to its centre: ``(cell, tail end)``."""
+    outward, with a clear tail from the exit to its centre: ``(cell, tail end)``.
+    The tail keeps each foreign pad in ``pads`` at the larger of the two nets' class
+    clearances (``grid.net_clearances``)."""
+    classes = getattr(grid, "net_clearances", None) or {}
     steps = max(1, int(math.ceil(reach_mm / (grid.pitch / 4))))
     seen = set()
     for k in range(steps + 1):
@@ -139,6 +150,15 @@ def _access(grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2
             grid, net, layer, exit_xy, centre, width
         ):
             continue
+        if (
+            classes
+            and pads
+            and math.dist(centre, exit_xy) > 1e-9
+            and not _clear_of_pads(
+                pads, net, layer, exit_xy, centre, width, grid.clearance, classes
+            )
+        ):
+            continue
         return Cell(layer, i, j), centre
     return None
 
@@ -152,6 +172,7 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
     out = FanoutRouting()
     layer_index = {name: i for i, name in enumerate(grid.layers)}
     clearance = grid.clearance
+    classes = getattr(grid, "net_clearances", None) or {}
     planned = []
     for spec in rules.get("fanouts") or []:
         plan = cached_plan(
@@ -172,8 +193,10 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
         planned.append((spec, plan, comp, centres, side, own_rects))
     # 1. Every planned copper item is exact escape copper before any access is chosen.
     rows = []
+    foreign_of = {}
     for spec, plan, comp, centres, side, own_rects in planned:
         foreign = _foreign_pads(grid, own_rects)
+        foreign_of[spec["name"]] = foreign
         summary = dict(plan["diagnostics"])
         summary.update(inputs_sha256=plan["inputs_sha256"], conflicts_on_board=[], no_access=[])
         for name, row in plan["terminals"].items():
@@ -203,12 +226,14 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             via = tuple(row["via"][:2]) if row.get("via") else None
             width = row["width_mm"]
             clash = any(
-                not _clear_of_pads(foreign, row["net"], la, a, b, width, clearance)
+                not _clear_of_pads(foreign, row["net"], la, a, b, width, clearance, classes)
                 for la, a, b in segments
             ) or (
                 via is not None
                 and any(
-                    not _clear_of_pads(foreign, row["net"], la, via, via, row["via"][2], clearance)
+                    not _clear_of_pads(
+                        foreign, row["net"], la, via, via, row["via"][2], clearance, classes
+                    )
                     for la in range(grid.nlayers)
                 )
             )
@@ -228,7 +253,9 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
         out.report[spec["name"]] = summary
     # 2. Cells every planned item occupies (owners per cell), without access tails.
     owners: Dict[Tuple[int, int, int], Set[str]] = {}
-    for spec, comp, name, row, pad_xy, side, segments, via in rows:
+    claims: Dict[Tuple[Tuple[int, int, int], str], int] = {}  # (cell, net): items
+    row_cells = {}
+    for k, (spec, comp, name, row, pad_xy, side, segments, via) in enumerate(rows):
         if segments is None:
             continue
         cells = _occupied(
@@ -237,11 +264,28 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             [via] if via is not None else [],
             via_keepout,
         )
+        row_cells[k] = cells
         for cell in cells:
             owners.setdefault(cell, set()).add(row["net"])
+            claims[cell, row["net"]] = claims.get((cell, row["net"]), 0) + 1
+
+    def release(k, row, segments, via):
+        """A planned ball whose exit found no access is never emitted: its copper
+        leaves the escape tables and its cells go back to the maze."""
+        net = row["net"]
+        for la, a, b in segments:
+            grid.escape_segments.remove((la, net, a, b))
+        if via is not None:
+            grid.escape_vias.remove((net, via))
+            out.via_sizes.pop((net, via[0], via[1]), None)
+        for cell in row_cells.get(k, ()):
+            claims[cell, net] -= 1
+            if not claims[cell, net]:
+                owners[cell].discard(net)
+
     # 3. Access cells, then the escapes; each owned cell goes to its net (or nobody).
     taken: Dict[Tuple[int, int, int], str] = {}
-    for spec, comp, name, row, pad_xy, side, segments, via in rows:
+    for k, (spec, comp, name, row, pad_xy, side, segments, via) in enumerate(rows):
         net = row["net"]
         if segments is None:
             site = (min(pad_xy[0], grid.width - 1e-9), min(pad_xy[1], grid.height - 1e-9))
@@ -277,11 +321,13 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
                 tail_width,
                 taken,
                 owners,
+                pads=foreign_of[spec["name"]],
             )
             if found is None:
                 out.report[spec["name"]]["no_access"].append(name)
                 out.failure_sites.setdefault(net, []).append(tuple(row["exit"]))
                 out.blocked_nets.add(net)
+                release(k, row, segments, via)
                 out.escapes.append(
                     Escape(
                         net=net,

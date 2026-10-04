@@ -121,9 +121,10 @@ class CapacityGraph:
         layer_index = {name: k for k, name in enumerate(self.layers)}
         for v in rules.get("copper_keepouts", []):
             if "items" in v:
-                # v1: its bounding box on its own layers when it bars tracks; a keepout
-                # with allow lists or exempt groups is not modelled (optimistic).
-                if v.get("allowed_nets") or v.get("exempt_groups") or "tracks" not in v["items"]:
+                # v1: its bounding box on its own layers when it bars tracks. One with
+                # allowed nets is not modelled (optimistic); exempt groups alone exempt
+                # only fixed copper, so it bars every routed net, as the router reads it.
+                if v.get("allowed_nets") or "tracks" not in v["items"]:
                     continue
                 if v.get("polygon") is not None:
                     pts = v["polygon"]

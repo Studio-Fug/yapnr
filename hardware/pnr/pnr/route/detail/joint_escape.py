@@ -34,6 +34,16 @@ class AccessOption:
 
 def _segment_clear(grid, net, layer, a, b, width, own=None):
     radius = width / 2 + grid.clearance
+    # Net class clearances (route_board's _net_clearances): two nets keep the larger
+    # of theirs, as KiCad's DRC judges them, against pads and escape copper. A board
+    # without class clearances keeps the fab clearance (the grid's) exactly.
+    classes = getattr(grid, "net_clearances", None) or {}
+
+    def reach(owner):
+        if net not in classes and owner not in classes:
+            return radius
+        return width / 2 + max(grid.clearance, classes.get(net, 0.0), classes.get(owner, 0.0))
+
     # The blocked mask includes absolute keepouts, no-net pads, the edge inset
     # and retained copper. Exact foreign-pad checks below may relax pad *halos*,
     # but they may never relax this mask, except ``own``: the cells of the net's own
@@ -63,34 +73,38 @@ def _segment_clear(grid, net, layer, a, b, width, own=None):
     for la, owner, r in grid.pad_rectangles:
         if la != layer or owner == net:
             continue
+        grow = reach(owner) if classes else radius
         if (
-            max(a[0], b[0]) + radius < r.left
-            or min(a[0], b[0]) - radius > r.right
-            or max(a[1], b[1]) + radius < r.bottom
-            or min(a[1], b[1]) - radius > r.top
+            max(a[0], b[0]) + grow < r.left
+            or min(a[0], b[0]) - grow > r.right
+            or max(a[1], b[1]) + grow < r.bottom
+            or min(a[1], b[1]) - grow > r.top
         ):
             continue
         if any(r.left <= p[0] <= r.right and r.bottom <= p[1] <= r.top for p in (a, b)):
             return False
         corners = [(r.left, r.bottom), (r.right, r.bottom), (r.right, r.top), (r.left, r.top)]
         if any(
-            _segment_distance_sq(a, b, corners[k], corners[(k + 1) % 4]) < radius**2 - 1e-10
+            _segment_distance_sq(a, b, corners[k], corners[(k + 1) % 4]) < grow**2 - 1e-10
             for k in range(4)
         ):
             return False
     for la, owner, c, d in grid.escape_segments:
-        if (
-            la == layer
-            and owner != net
-            and _segment_distance_sq(a, b, c, d)
-            < ((width + grid.net_widths.get(owner, grid.track_width)) / 2 + grid.clearance) ** 2
-            - 1e-10
-        ):
+        if la != layer or owner == net:
+            continue
+        other = grid.net_widths.get(owner, grid.track_width)
+        grow = reach(owner) if classes else radius
+        if grow is radius:
+            limit = ((width + other) / 2 + grid.clearance) ** 2 - 1e-10
+        else:
+            limit = (other / 2 + grow) ** 2 - 1e-10
+        if _segment_distance_sq(a, b, c, d) < limit:
             return False
     for owner, p in grid.escape_vias:
         if (
             owner != net
-            and _segment_distance_sq(a, b, p, p) < (grid.via_radius + radius) ** 2 - 1e-10
+            and _segment_distance_sq(a, b, p, p)
+            < (grid.via_radius + (reach(owner) if classes else radius)) ** 2 - 1e-10
         ):
             return False
     return True

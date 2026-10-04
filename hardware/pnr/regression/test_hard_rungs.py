@@ -38,6 +38,9 @@ CHECK_KINDS = {
     "via_class",
     "escape",
     "pad_distance",
+    "unconnected",
+    "ir_drop",
+    "rail_zones",
 }
 
 
@@ -147,11 +150,17 @@ class HardRungContract(unittest.TestCase):
                     self.assertEqual(len(owners), 1)
                     self.assertEqual(owners[0].get("plane_layer"), layer)
                 planes = [c for c in classes.values() if c.get("plane_layer")]
-                self.assertEqual(len(planes), len(first))
+                # A partitioned plane layer (plane_partition) carries several rails,
+                # each in a class of its own naming the layer, and a rail_zones check
+                # in place of the one-net plane check.
+                parts = spec["constraints"].get("plane_partition") or []
+                shared = sum(len(p["nets"]) - 1 for p in parts)
+                self.assertEqual(len(planes), len(first) + shared)
                 self.assertEqual(
                     sum(c["kind"] == "plane" for c in spec["checks"]),
-                    code.count("G") + code.count("P"),
+                    code.count("G") + code.count("P") - len(parts),
                 )
+                self.assertEqual(sum(c["kind"] == "rail_zones" for c in spec["checks"]), len(parts))
 
     def test_the_judge_enforces_via_policy_planes_and_pairs(self):
         for spec in self.rungs:
@@ -358,6 +367,48 @@ class HardRungContract(unittest.TestCase):
         self.assertEqual(rules["fanouts"][0]["skip_pads"], ["F15"])
         launch = [c for c in spec["checks"] if c["id"] == "keepout-launch"][0]
         self.assertIn("zones", launch["items"])
+
+    def test_partial_and_rails_rungs(self):
+        from hard_rungs import PARTIAL_BRIDGED, PARTIAL_OPEN, RAIL_HEADERS, _ball_xy
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+        from pnr.fanout.geom import segment_polygon
+
+        parent = self.by_name["11-ufbga201-fanout-6L-SGSGPS"]
+        spec = self.by_name["11-ufbga201-fanout-6L-SGSGPS-partial"]
+        (fanout,) = spec["constraints"]["fanout"]
+        self.assertEqual(fanout["partial"], {"bridge": True})
+        self.assertEqual(nets_of(spec), nets_of(parent))
+        u1 = spec["parts"][0]["pins"]
+        self.assertEqual(u1[PARTIAL_BRIDGED], "VCC")
+        self.assertEqual(u1[PARTIAL_OPEN], "VCC")
+        # The bridge's path to C7 clears every reserved square (0.1 mm stub, 1 um margin).
+        a, b = _ball_xy(PARTIAL_BRIDGED), _ball_xy("C7")
+        self.assertEqual(u1["C7"], "VCC")
+        for r in fanout["reserved"]:
+            if r["name"].startswith("c8-"):
+                self.assertGreater(segment_polygon(a, b, r["polygon"]), 0.05 + 1e-3)
+        (check,) = [c for c in spec["checks"] if c["kind"] == "unconnected"]
+        self.assertEqual(check["pads"], ["U1." + PARTIAL_OPEN])
+
+        rails = self.by_name["11-ufbga201-fanout-6L-SGSGPS-rails"]
+        nets = {n for p in rails["parts"] for n in p["pins"].values() if n}
+        self.assertNotIn("VCC", nets)
+        self.assertTrue({"VDD", "VDDA", "VBAT"} <= nets)
+        refs = [p["ref"] for p in rails["parts"]]
+        for net, (ref, _at) in RAIL_HEADERS.items():
+            self.assertIn(ref, refs)
+            self.assertIn(ref, rails["constraints"]["fixed"])
+        c = compile_constraints(rails["constraints"], refs)
+        rules = compile_routing_rules(c, sorted(nets))
+        (part,) = rules["plane_partition"]
+        self.assertEqual(part["nets"], ["VDD", "VDDA", "VBAT"])
+        self.assertEqual(part["fill"], "GND")
+        self.assertEqual([e["net"] for e in rules["ir_drop"]], ["VDD", "VDDA", "VBAT"])
+        balls = [e for e in rules["ir_drop"] if e["net"] == "VDDA"][0]["sinks"]
+        self.assertEqual(sorted(balls), ["U1:P1", "U1:R1"])
+        classes = [x for x in rules["net_classes"] if x.get("plane_layer") == part["layer"]]
+        self.assertEqual(sorted(n for x in classes for n in x["nets"]), ["VBAT", "VDD", "VDDA"])
 
     def test_runner_offers_the_hard_rungs(self):
         args = parser().parse_args(["--out", "x", "--hard"])

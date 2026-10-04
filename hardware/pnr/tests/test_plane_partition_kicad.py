@@ -132,5 +132,91 @@ class DrawTest(unittest.TestCase):
             self.assertEqual(result[net]["status"], "pass", result[net].get("opens"))
 
 
+@unittest.skipUnless(NATIVE, "requires KiCad Python")
+class CheckerTest(unittest.TestCase):
+    """The constraint checker's supply checks (regression/check_constraints.py) on the
+    drawn partition: rail_zones, ir_drop and unconnected."""
+
+    def test_supply_checks(self):
+        import sys
+
+        import pcbnew as k
+
+        from pnr.plane_partition import _CACHE, Terminal, partition
+        from pnr.writeback import draw_plane_regions
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "regression"))
+        from check_constraints import run_checks
+
+        b, pads, v = board()
+        # A's last pad loses its via: it is cut off from the rest of A.
+        cut = pads["A"][2]
+        for t in list(b.GetTracks()):
+            p = t.GetPosition()
+            if t.GetClass() == "PCB_VIA" and (p.x, p.y) == (v(*cut).x, v(*cut).y):
+                b.Remove(t)
+        terms = {
+            net: [Terminal("%s%d.1" % (net, n), "via", p, 0.2) for n, p in enumerate(points)]
+            for net, points in pads.items()
+        }
+        entry = dict(
+            layer="In2.Cu",
+            nets=["A", "B"],
+            order="current",
+            split_gap_mm=0.3,
+            min_width_mm=1.0,
+            fill="GND",
+            core_no_vias=True,
+            terminal_reach_mm=0.8,
+            h_mm=0.1,
+        )
+        _CACHE.clear()
+        part = partition(entry, width=W, height=H, terminals=terms, blocked=[])
+        rules = dict(fab=dict(clearance_mm=0.1, track_width_mm=0.1))
+        full = [v(0, 0), v(W, 0), v(W, H), v(0, H)]
+        draw_plane_regions(b, part.rows(), rules, lambda p: v(*p), full)
+        k.ZONE_FILLER(b).Fill(b.Zones())
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "checks.kicad_pcb")
+            k.SaveBoard(path, b)
+            spec = dict(
+                checks=[
+                    dict(
+                        id="rails",
+                        kind="rail_zones",
+                        layer="In2.Cu",
+                        nets=["A", "B"],
+                        fill="GND",
+                        min_area_mm2=1.0,
+                    ),
+                    dict(
+                        id="ir-B",
+                        kind="ir_drop",
+                        net="B",
+                        sources=["B0:1"],
+                        sinks="all",
+                        current_a=1.0,
+                        budget_mv=50.0,
+                    ),
+                    dict(
+                        id="ir-A",
+                        kind="ir_drop",
+                        net="A",
+                        sources=["A0:1"],
+                        sinks="all",
+                        current_a=1.0,
+                        budget_mv=50.0,
+                    ),
+                    dict(id="cut", kind="unconnected", pads=["A2.1"]),
+                ]
+            )
+            result = run_checks(path, spec)
+        status = {r["id"]: r["status"] for r in result["checks"]}
+        self.assertEqual(status["rails"], "satisfied", result["checks"][0])
+        self.assertEqual(status["ir-B"], "satisfied", result["checks"][1])
+        self.assertEqual(status["ir-A"], "violated")  # A2.1 has no copper to the plane: open
+        self.assertEqual(status["cut"], "satisfied", result["checks"][3])
+
+
 if __name__ == "__main__":
     unittest.main()

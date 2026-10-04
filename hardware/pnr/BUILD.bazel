@@ -820,12 +820,16 @@ py_test(
     ],
 )
 
-# The partition drawn by writeback and filled by KiCad, and its rails' IR drop. It needs
-# KiCad's Python (pcbnew): run it there by hand.
+# The partition drawn by writeback and filled by KiCad, its rails' IR drop, and the
+# checker's supply checks (rail_zones, ir_drop, unconnected). It needs KiCad's Python
+# (pcbnew): run it there by hand.
 py_test(
     name = "plane_partition_kicad_test",
     size = "small",
-    srcs = ["tests/test_plane_partition_kicad.py"],
+    srcs = [
+        "regression/check_constraints.py",
+        "tests/test_plane_partition_kicad.py",
+    ],
     imports = ["."],
     legacy_create_init = False,
     main = "tests/test_plane_partition_kicad.py",

@@ -24,8 +24,10 @@ vendored Palace schema (``schema.py``).
 
 from __future__ import annotations
 
+import cmath
 import copy
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+import math
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from yapnr.rf.palace import schema
 from yapnr.rf.planar import model
@@ -33,6 +35,37 @@ from yapnr.rf.planar import model
 L0 = 1.0e-3  # mesh units: mm
 
 LINEAR_DEFAULT = dict(Type="Default", KSPType="GMRES", Tol=1.0e-6, MaxIts=400)
+MU0 = 4.0e-7 * math.pi
+COPPER_BCS = ("conductivity", "impedance")
+
+
+def sheet_impedance(sigma: float, thickness_mm: float, f_ghz: float) -> Tuple[float, float]:
+    """(Rs ohm/sq, Ls H/sq) of a conductor sheet at ``f_ghz``: Palace's own finite-thickness
+    surface impedance of a ``Conductivity`` boundary (the HFSS thin-trace formula, which is
+    (1 + i)/(sigma delta) once the sheet is a few skin depths thick and 2/(sigma t) when it is
+    much thinner: Palace cracks an interior sheet and applies it on both faces), frozen at one
+    frequency.
+
+    The ``impedance`` copper boundary writes these as an ``Impedance`` boundary. At b797ea8 a
+    ``Conductivity`` sheet that crosses a wave-port face (or a BoundaryMode cross-section) aborts
+    the 2D mode solve when it runs on more than one MPI rank ("Dimension mismatch for
+    MaterialPropertyCoefficient and libCEED integrator": the ranks that own none of the sheet's
+    edges get an empty coefficient), while ``Impedance`` boundaries are skipped where empty.
+    The price is Rs and Ls fixed at ``f_ghz``: Rs scales as sqrt(f), so about +/-7 % over
+    54-70 GHz around 62 GHz."""
+    omega = 2.0 * math.pi * f_ghz * 1e9
+    delta = cmath.sqrt(2.0 / (MU0 * sigma * omega))
+    base = 1.0 / (sigma * delta)
+    z = (1.0 + 1.0j) * base
+    if thickness_mm > 0:
+        nu = thickness_mm * 1e-3 / delta
+        den = cmath.cosh(nu) - cmath.cos(nu)
+        z = (
+            base
+            * ((cmath.sinh(nu) + cmath.sin(nu)) + 1.0j * (cmath.sinh(nu) - cmath.sin(nu)))
+            / den
+        )
+    return float(z.real), float(z.imag / omega)
 
 
 def _groups(rec: Dict[str, Any], prefix: str) -> Dict[str, int]:
@@ -72,17 +105,27 @@ def _boundaries(
     rec: Dict[str, Any],
     excite: Optional[Iterable[str]],
     absorbing_order: Optional[int],
+    copper_bc: str = "conductivity",
+    copper_f_ghz: Optional[float] = None,
 ) -> Dict[str, Any]:
+    if copper_bc not in COPPER_BCS:
+        raise ValueError(f"copper_bc is one of {COPPER_BCS}, not {copper_bc!r}")
+    if copper_bc == "impedance" and not copper_f_ghz:
+        raise ValueError("an impedance copper boundary needs its frequency (copper_f_ghz)")
     layers = {la["name"]: la for la in doc["stack"]["layers"]}
     pec: List[int] = []
     pmc: List[int] = []
     absorbing: List[int] = []
     order = 1
     cond: List[Dict[str, Any]] = []
+    imp: List[Dict[str, Any]] = []
     for key, tag in sorted(_groups(rec, "cond:").items(), key=lambda kv: kv[1]):
         lay = layers[key.split(":", 1)[0]]
         if lay["model"] == "pec":
             pec.append(tag)
+        elif lay["model"] == "sheet" and copper_bc == "impedance":
+            rs, ls = sheet_impedance(model.sigma_eff(lay), float(lay["t"]), float(copper_f_ghz))
+            imp.append(dict(Attributes=[tag], Rs=rs, Ls=ls))
         elif lay["model"] == "sheet":
             cond.append(
                 dict(
@@ -117,6 +160,8 @@ def _boundaries(
         out["Absorbing"] = dict(Attributes=sorted(absorbing), Order=order)
     if cond:
         out["Conductivity"] = cond
+    if imp:
+        out["Impedance"] = imp
     ports = model.port_geometry(doc)
     port_tags = _groups(rec, "port:")
     want = None if excite is None else set(excite)
@@ -173,6 +218,9 @@ def driven(
     output: str = "postpro",
     absorbing_order: Optional[int] = None,
     linear: Optional[Dict[str, Any]] = None,
+    adaptive_max_samples: Optional[int] = None,
+    copper_bc: str = "conductivity",
+    copper_f_ghz: Optional[float] = None,
     verbose: int = 2,
 ) -> Dict[str, Any]:
     """A Driven configuration: S-parameters from ``f_min`` to ``f_max`` (GHz) every ``f_step``.
@@ -187,7 +235,12 @@ def driven(
     refinement: Dict[str, Any] = {}
     if amr:
         refinement = dict(
-            Tol=1e-2, MaxIts=6, UpdateFraction=0.7, Nonconformal=True, SaveAdaptMesh=True
+            Tol=1e-2,
+            MaxIts=6,
+            UpdateFraction=0.7,
+            Nonconformal=True,
+            SaveAdaptMesh=True,
+            SaveAdaptIterations=True,
         )
         refinement.update(amr)
     if amr and amr_freqs:
@@ -205,13 +258,22 @@ def driven(
     drv: Dict[str, Any] = dict(Samples=samples)
     if adaptive_tol:
         drv["AdaptiveTol"] = float(adaptive_tol)
+        if adaptive_max_samples:
+            drv["AdaptiveMaxSamples"] = int(adaptive_max_samples)
     if save:
         drv["Save"] = [float(f) for f in save]
     cfg = dict(
         Problem=dict(Type="Driven", Verbose=int(verbose), Output=output),
         Model=dict(Mesh=mesh_file or rec.get("file", "mesh.msh"), L0=L0, Refinement=refinement),
         Domains=dict(Materials=_materials(doc, rec)),
-        Boundaries=_boundaries(doc, rec, excite, absorbing_order),
+        Boundaries=_boundaries(
+            doc,
+            rec,
+            excite,
+            absorbing_order,
+            copper_bc,
+            copper_f_ghz or 0.5 * (f_min + f_max),
+        ),
         Solver=dict(
             Order=int(order),
             Device="CPU",
@@ -234,28 +296,52 @@ def boundary_mode(
     port: str,
     freq: float,
     *,
+    face: str = "port",
+    copper_bc: str = "conductivity",
     n: int = 1,
     order: int = 2,
     mesh_file: Optional[str] = None,
     output: str = "postpro",
     verbose: int = 2,
 ) -> Dict[str, Any]:
-    """The 2D mode solve on wave port ``port``'s face of the 3D mesh at ``freq`` GHz: effective
-    index, propagation constant and Z_PV along the port's voltage path."""
+    """The 2D mode solve on wave port ``port``'s plane of the 3D mesh at ``freq`` GHz: effective
+    index, propagation constant and Z_PV along the port's voltage path.
+
+    ``face="port"`` solves on the port face alone with the rest of its wall PEC: the shielded
+    guide the 3D run's wave port sees (``WavePortPEC``). ``face="wall"`` solves on the whole wall
+    the port lies in (port face and wall), bounded by the other walls as the 3D model has them
+    (absorbing walls become Robin edges): the line as an open structure, the like of a 2D
+    cross-section solver's. A wall attribute is never both PEC and absorbing (Palace refuses an
+    attribute with two boundary conditions)."""
     tags = _groups(rec, "port:")
     if port not in tags:
         raise KeyError(f"no port face {port!r} in the mesh")
+    if face not in ("port", "wall"):
+        raise ValueError(f"face is 'port' or 'wall', not {face!r}")
     g = model.port_geometry(doc)[port]
     if g["kind"] != "wave":
         raise ValueError(f"port {port} is not a wave port")
-    bnd = _boundaries(doc, rec, [], None)
-    keep = {k: bnd[k] for k in ("PEC", "PMC", "Conductivity", "Absorbing") if k in bnd}
-    keep["PEC"] = dict(
-        Attributes=sorted(
-            set(keep.get("PEC", {}).get("Attributes", []))
-            | set(bnd.get("WavePortPEC", {}).get("Attributes", []))
-        )
-    )
+    bnd = _boundaries(doc, rec, [], None, copper_bc, freq)
+    walls = _groups(rec, "wall:")
+    keep = {
+        k: copy.deepcopy(bnd[k]) for k in ("PEC", "PMC", "Conductivity", "Impedance") if k in bnd
+    }
+    pec = set(keep.get("PEC", {}).get("Attributes", []))
+    absorbing = set(bnd.get("Absorbing", {}).get("Attributes", []))
+    attributes = [tags[port]]
+    if face == "port":
+        guard = set(bnd.get("WavePortPEC", {}).get("Attributes", []))
+        pec |= guard
+        absorbing -= guard
+    else:
+        own = walls[g["wall"]]
+        attributes.append(own)
+        pec.discard(own)
+        absorbing.discard(own)
+    if pec:
+        keep["PEC"] = dict(Attributes=sorted(pec))
+    if absorbing:
+        keep["Absorbing"] = dict(Attributes=sorted(absorbing), Order=bnd["Absorbing"]["Order"])
     keep["Postprocessing"] = dict(
         Impedance=[dict(Index=1, VoltagePath=g["voltage_path"], NSamples=200)]
     )
@@ -267,7 +353,9 @@ def boundary_mode(
         Solver=dict(
             Order=int(order),
             Device="CPU",
-            BoundaryMode=dict(Freq=float(freq), N=int(n), Save=int(n), Attributes=[tags[port]]),
+            BoundaryMode=dict(
+                Freq=float(freq), N=int(n), Save=int(n), Attributes=sorted(attributes)
+            ),
             Linear=dict(Tol=1e-9),
         ),
     )

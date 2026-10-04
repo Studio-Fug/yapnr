@@ -5,6 +5,7 @@
            [--amr-its N --amr-freqs F ...] [--mesh-file FILE] [--name palace.json]
     mode DIR --port PORT --freq F [--name ...]
     case MODEL.json --out DIR [--band F0 F1 DF --excite PORT ... --amr-freqs F ...]
+    configs DIR ...                     # rewrite a meshed case's configs (validation settings)
     validate CONFIG.json ...
     validation --out DIR [--record RFMACRO.json] [--feed NAME=MODEL.json ...]
                [--feed-result OPENEMS_RESULT.json] [--only NAME ...]
@@ -118,6 +119,18 @@ def cmd_case(a) -> int:
     return 0
 
 
+def cmd_configs(a) -> int:
+    for d in a.dirs:
+        doc = _load(os.path.join(d, "model.json"))
+        rec = _load(os.path.join(d, "mesh.json"))
+        rec["configs"] = validation.write_configs(
+            doc, rec, d, validation.case_settings(doc["name"])
+        )
+        _dump(rec, os.path.join(d, "mesh.json"))
+        print(f"{d}: " + ", ".join(rec["configs"]))
+    return 0
+
+
 def cmd_validate(a) -> int:
     sch = schema.load()
     if sch is None:
@@ -201,6 +214,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--edge-h", type=float)
     p.add_argument("--threads", type=int, default=1)
     p.set_defaults(fn=cmd_case)
+    p = sub.add_parser("configs", help="rewrite the run configs of meshed validation cases")
+    p.add_argument("dirs", nargs="+")
+    p.set_defaults(fn=cmd_configs)
     p = sub.add_parser("validate", help="check configs against the vendored Palace schema")
     p.add_argument("configs", nargs="+")
     p.set_defaults(fn=cmd_validate)

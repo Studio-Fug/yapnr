@@ -28,25 +28,43 @@ AMR_DEFAULT = dict(Tol=1e-2, MaxIts=6, UpdateFraction=0.7, MaxSize=4_000_000)
 
 
 def case_settings(name: str) -> Dict[str, Any]:
-    """Sweep, excitation and refinement frequencies of a case (GHz)."""
+    """Sweep, excitation and refinement settings of a case (GHz).
+
+    ``amr`` overrides ``AMR_DEFAULT`` (Palace stops refining once a solve has more than
+    ``MaxSize`` unknowns, so the last mesh can be up to about twice that); ``adaptive_max_samples``
+    caps the adaptive sweep's full solves (Palace's default is 20); ``copper_bc`` "impedance"
+    writes the copper sheets as Impedance boundaries frozen at the band centre (see
+    ``config.sheet_impedance``: Palace b797ea8 aborts a multi-rank mode solve whose cross-section
+    a Conductivity sheet crosses)."""
     if name.startswith("line-"):
         return dict(
             band=(54.0, 70.0, 0.5),
             adaptive_tol=1e-3,
             excite=["P1"],
             amr_freqs=[62.0],
+            amr=dict(MaxIts=4, MaxSize=2_000_000),
             modes=[1.0, 30.0, 62.0],
+            copper_bc="impedance",
         )
     if name.startswith("patch-"):
         return dict(
-            band=(58.0, 66.0, 0.05), adaptive_tol=1e-4, excite=["P1"], amr_freqs=[61.0, 61.9, 62.8]
+            band=(58.0, 66.0, 0.05),
+            adaptive_tol=1e-4,
+            adaptive_max_samples=30,
+            excite=["P1"],
+            amr_freqs=[61.0, 61.9, 62.8],
+            amr=dict(MaxIts=5, MaxSize=2_500_000),
+            copper_bc="impedance",
         )
     if name.startswith("tx12-"):
         return dict(
             band=(54.0, 70.0, 0.025),
             adaptive_tol=1e-4,
+            adaptive_max_samples=30,
             excite=["TX1.P0"],
-            amr_freqs=[59.0, 60.0, 61.0],
+            amr_freqs=[59.0, 60.0, 61.0, 63.8],
+            amr=dict(MaxIts=5, MaxSize=2_500_000),
+            copper_bc="impedance",
         )
     raise KeyError(name)
 
@@ -86,17 +104,36 @@ def write_case(
         fh.write("\n")
     rec = mesh.build(doc, out, **(mesh_opts or {}))
     st = settings or case_settings(doc["name"])
+    rec["configs"] = write_configs(doc, rec, out, st)
+    with open(os.path.join(out, "mesh.json"), "w", encoding="utf-8") as fh:
+        json.dump(rec, fh, indent=1)
+        fh.write("\n")
+    return rec
+
+
+def write_configs(
+    doc: Dict[str, Any], rec: Dict[str, Any], out: str, st: Dict[str, Any]
+) -> List[str]:
+    """The run configs of a meshed case (``rec`` its mesh record) into ``out``; their names.
+
+    ``palace-uniform.json`` sweeps the initial mesh, ``palace-amr.json`` refines it at the
+    ``amr_freqs`` (saving every iteration's results and the adapted mesh) and
+    ``palace-sweep.json`` sweeps the adapted mesh; ``palace-mode-<f>GHz.json`` (the port face,
+    shielded as the 3D port sees it) and ``palace-mode-wall-<f>GHz.json`` (the whole wall, open)
+    are the 2D mode solves on P1's plane."""
     f0, f1, df = st["band"]
+    copper = dict(
+        copper_bc=st.get("copper_bc", "conductivity"), copper_f_ghz=st.get("copper_f_ghz")
+    )
+    sweep = dict(
+        adaptive_tol=st["adaptive_tol"],
+        adaptive_max_samples=st.get("adaptive_max_samples"),
+        excite=st["excite"],
+        **copper,
+    )
     cfgs = {
         "palace-uniform.json": config.driven(
-            doc,
-            rec,
-            f0,
-            f1,
-            df,
-            adaptive_tol=st["adaptive_tol"],
-            excite=st["excite"],
-            output="postpro-uniform",
+            doc, rec, f0, f1, df, output="postpro-uniform", **sweep
         ),
         "palace-amr.json": config.driven(
             doc,
@@ -105,9 +142,10 @@ def write_case(
             f1,
             df,
             excite=st["excite"],
-            amr=AMR_DEFAULT,
+            amr=dict(AMR_DEFAULT, **st.get("amr", {})),
             amr_freqs=st["amr_freqs"],
             output="postpro-amr",
+            **copper,
         ),
         "palace-sweep.json": config.driven(
             doc,
@@ -115,26 +153,28 @@ def write_case(
             f0,
             f1,
             df,
-            adaptive_tol=st["adaptive_tol"],
-            excite=st["excite"],
             mesh_file="postpro-amr/mesh.meshgz",
             output="postpro-sweep",
+            **sweep,
         ),
     }
     for f in st.get("modes", []):
-        cfgs[f"palace-mode-{f:g}GHz.json"] = config.boundary_mode(
-            doc, rec, "P1", f, output=f"postpro-mode-{f:g}GHz"
-        )
+        for face, tag in (("port", ""), ("wall", "wall-")):
+            cfgs[f"palace-mode-{tag}{f:g}GHz.json"] = config.boundary_mode(
+                doc,
+                rec,
+                "P1",
+                f,
+                face=face,
+                copper_bc=copper["copper_bc"],
+                output=f"postpro-mode-{tag}{f:g}GHz",
+            )
     for fname, cfg in cfgs.items():
         config.check(cfg)
         with open(os.path.join(out, fname), "w", encoding="utf-8") as fh:
             json.dump(cfg, fh, indent=1)
             fh.write("\n")
-    rec["configs"] = sorted(cfgs)
-    with open(os.path.join(out, "mesh.json"), "w", encoding="utf-8") as fh:
-        json.dump(rec, fh, indent=1)
-        fh.write("\n")
-    return rec
+    return sorted(cfgs)
 
 
 def build_all(

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import math
 import unittest
 
 from yapnr.rf.palace import config, schema
@@ -181,6 +182,55 @@ class DrivenTest(unittest.TestCase):
         )
         with self.assertRaises(KeyError):
             config.boundary_mode(self.doc, self.rec, "P9", 62.0)
+        # a guarded wall is PEC in the port-face solve, never also absorbing
+        absorbing = cfg["Boundaries"].get("Absorbing", {}).get("Attributes", [])
+        self.assertFalse(set(absorbing) & set(cfg["Boundaries"]["PEC"]["Attributes"]))
+
+    def test_impedance_copper(self):
+        cfg = config.driven(
+            self.doc, self.rec, 54.0, 70.0, 0.5, copper_bc="impedance", excite=["P1"]
+        )
+        self.assertEqual(config.validate(cfg), [])
+        self.assertNotIn("Conductivity", cfg["Boundaries"])
+        imp = cfg["Boundaries"]["Impedance"]
+        tag = {k: v["tag"] for k, v in self.rec["groups"].items()}
+        self.assertEqual(
+            sorted(i["Attributes"][0] for i in imp),
+            sorted([tag["cond:L1:SIG"], tag["cond:L1:GND"]]),
+        )
+        # frozen at the band centre (62 GHz): thick copper, Rs = omega Ls = 1/(sigma delta)
+        sigma = model.sigma_eff(self.doc["stack"]["layers"][0])
+        omega = 2 * math.pi * 62e9
+        rs = math.sqrt(omega * 4e-7 * math.pi / (2 * sigma))
+        self.assertAlmostEqual(imp[0]["Rs"] / rs, 1.0, places=9)
+        self.assertAlmostEqual(imp[0]["Ls"] * omega / rs, 1.0, places=9)
+        mode = config.boundary_mode(self.doc, self.rec, "P1", 1.0, copper_bc="impedance")
+        self.assertEqual(config.validate(mode), [])
+        self.assertIn("Impedance", mode["Boundaries"])
+        with self.assertRaises(ValueError):
+            config.driven(self.doc, self.rec, 54.0, 70.0, 0.5, copper_bc="lossy")
+
+    def test_sheet_impedance_thin_limit(self):
+        # a sheet much thinner than the skin depth: per face (Palace cracks an interior sheet
+        # and applies the boundary on both faces) twice its DC sheet resistance 1/(sigma t)
+        rs, ls = config.sheet_impedance(5.8e7, 1e-5, 1.0)  # 10 nm at 1 GHz (delta 2 um)
+        self.assertAlmostEqual(rs * 5.8e7 * 1e-8, 2.0, places=3)
+
+    def test_boundary_mode_wall(self):
+        cfg = config.boundary_mode(self.doc, self.rec, "P1", 1.0, face="wall")
+        self.assertEqual(config.validate(cfg), [])
+        tag = {k: v["tag"] for k, v in self.rec["groups"].items()}
+        self.assertEqual(
+            cfg["Solver"]["BoundaryMode"]["Attributes"],
+            sorted([tag["port:P1"], tag["wall:xmin"]]),
+        )
+        absorbing = cfg["Boundaries"]["Absorbing"]["Attributes"]
+        self.assertNotIn(tag["wall:xmin"], absorbing)
+        self.assertNotIn(tag["wall:xmin"], cfg["Boundaries"]["PEC"]["Attributes"])
+        self.assertIn(tag["wall:ymin"], absorbing)
+        self.assertIn(tag["wall:xmax"], absorbing)  # parallel to the plane: no edge there
+        with self.assertRaises(ValueError):
+            config.boundary_mode(self.doc, self.rec, "P1", 1.0, face="box")
 
 
 if __name__ == "__main__":

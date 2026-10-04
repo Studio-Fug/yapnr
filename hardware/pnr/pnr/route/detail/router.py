@@ -897,11 +897,14 @@ def route_board(
     # Per-net track width from the net classes (type/amperage), default = fab width.
     net_width = _net_widths(rules, track_width_mm)
     pitch = detail_pitch(pitch, track_width_mm, clearance_mm)
-    # board.class_clearance: maze: a net's own clearance is its class clearance where
-    # that exceeds the fab's (KiCad judges two nets at the larger of theirs); its
-    # track halo and via keep-out are sized from it, and the exact check after the
-    # route (class_check) holds every pair to it. Off: the fab clearance for all.
-    class_maze = (rules or {}).get("class_clearance") == "maze"
+    # board.class_clearance: a net's own clearance is its class clearance where that
+    # exceeds the fab's (KiCad judges two nets at the larger of theirs). ``maze``:
+    # its track halo, via keep-out and static-copper tables are sized from it while
+    # it routes; ``repair``: it routes as without the switch, and only the nets the
+    # checks after the route find too close are routed again, exactly (class_check).
+    # Both end with those checks and the copper audit. Off: the fab clearance for all.
+    class_mode = (rules or {}).get("class_clearance")
+    class_maze = class_mode == "maze"
     # board.dru_routing: the board's custom rules where they constrain routing
     # (rules["dru"], pnr.dru_rules, attached by the drivers; route.detail.dru_apply).
     # A small pair clearance raises one side's clearance before the halos are sized.
@@ -1194,11 +1197,31 @@ def route_board(
         **({"via_keepouts": via_keepouts} if via_keepouts else {}),
     )
     class_report = None
-    if class_maze:
-        # The exact pairwise rule over the routed nets: offenders rerouted (class_check).
-        from .class_check import repair
+    if class_mode in ("maze", "repair"):
+        # The routed nets against the static copper at their class clearances (every
+        # net now judges it through class tables), then the exact pairwise rule over
+        # them: offenders routed again, exactly, around the rest (class_check).
+        from .class_check import repair, static_offenders
 
-        class_report = repair(grid, net_access, result, via_cost=3.0 / grid.pitch)
+        if not class_maze:
+            grid.class_tables = frozenset(net_access)
+        grid.reserve_wide_pad_clearance()
+        static_tracks, static_vias = _static_copper(
+            grid, plan, result, net_width, track_width_mm, drop_widths
+        )
+        offenders = static_offenders(
+            grid,
+            result,
+            net_width,
+            static_tracks,
+            static_vias,
+            _fanout_via_sizes(fanouts),
+            classes=_net_clearances(rules),
+        )
+        class_report = repair(
+            grid, net_access, result, via_cost=3.0 / grid.pitch, also=sorted(offenders)
+        )
+        class_report["mode"] = class_mode
         class_report["halos"] = {
             "nets": len(class_of),
             "via_keepouts": dict(sorted(via_keepouts.items())),
@@ -1376,6 +1399,34 @@ def route_board(
     if route_trace is not None:
         route_trace.end(board)
     return board
+
+
+def _static_copper(grid, plan, result, net_width, track_width_mm, drop_widths):
+    """The escape copper route_board will emit (plane drops, and the escapes whose net
+    reaches their access cell in ``result``), as ``(tracks, vias)`` in its emitted
+    form: class_check.static_offenders' static copper."""
+    from types import SimpleNamespace
+
+    sink = SimpleNamespace(tracks=[], vias=[])
+    reached = {n: set(rn.cells) for n, rn in result.nets.items()}
+    for esc in plan.escapes:
+        if esc.kind == "blocked":
+            continue
+        if esc.net in drop_widths:
+            w = esc.width or drop_widths[esc.net]
+        elif esc.access in reached.get(esc.net, ()):
+            w = esc.width if esc.fanout else net_width.get(esc.net, track_width_mm)
+        else:
+            continue
+        _emit_escape(sink, esc, grid, w)
+    return sink.tracks, sink.vias
+
+
+def _fanout_via_sizes(fanouts):
+    """``[[net, x, y, diameter, drill]]`` of a fanout's vias (empty without one)."""
+    if fanouts is None:
+        return []
+    return [[n, x, y, d, h] for (n, x, y), (d, h) in sorted(fanouts.via_sizes.items())]
 
 
 def _flat(copper):

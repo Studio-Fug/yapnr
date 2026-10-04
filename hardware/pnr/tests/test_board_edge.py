@@ -93,6 +93,37 @@ class InsetTest(unittest.TestCase):
         # Without the board's rule: the physical 0.5 mm from the centre line.
         self.assertAlmostEqual(via_edge_inset({"fab": FAB}, {"stroke_mm": 0.15}, 0.2, 0.2), 0.601)
 
+    def test_notch_and_cutout(self):
+        # A 10 x 6 mm board with a 2 x 2 mm notch in its top edge and a 1 mm round
+        # cut-out: cells in either are outside the board.
+        lines = [(0, 0, 10, 0), (10, 0, 10, 6), (10, 6, 6, 6), (6, 6, 6, 4), (6, 4, 4, 4)]
+        lines += [(4, 4, 4, 6), (4, 6, 0, 6), (0, 6, 0, 0)]
+        text = "(kicad_pcb\n"
+        for x0, y0, x1, y1 in lines:  # pcbnew y down
+            text += (
+                '(gr_line (start %g %g) (end %g %g) (stroke (width 0.1)) (layer "Edge.Cuts"))\n'
+                % (
+                    30 + x0,
+                    36 - y0,
+                    30 + x1,
+                    36 - y1,
+                )
+            )
+        text += (
+            '(gr_circle (center 32 32) (end 32.5 32) (stroke (width 0.1)) (layer "Edge.Cuts")))\n'
+        )
+        edges = parse_edges(text)
+        self.assertEqual(edges["size"], [10.0, 6.0])
+        grid = RouteGrid(10, 6, 0.25)
+        outside, dist = grid_edge_masks(grid, edges)
+        i, j = grid.cell_of(5.0, 5.0)  # in the notch
+        self.assertTrue(outside[j, i])
+        i, j = grid.cell_of(2.0, 4.0)  # in the cut-out (pcbnew (32, 32) is engine (2, 4))
+        self.assertTrue(outside[j, i])
+        i, j = grid.cell_of(5.0, 3.0)  # below the notch, about 1 mm from its floor
+        self.assertFalse(outside[j, i])
+        self.assertAlmostEqual(dist[j, i], 4.0 - 3.125, places=6)
+
     def test_rounded_corner_distance(self):
         grid = RouteGrid(60, 46.3, 0.25)
         outside, dist = grid_edge_masks(grid, parse_edges(RADAR))

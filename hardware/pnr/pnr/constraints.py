@@ -521,8 +521,10 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
 # Opt-in detailed-router switches under ``board:`` -> (rules.json key, allowed values).
 # Each is off unless declared, and a board without any keeps its rules.json bytes.
 #   class_clearance: maze   net class clearances in the maze router's halos and
-#                           tables, with an exact check after routing
+#                           tables, with exact checks after routing
 #                           (pnr.route.detail.router, pnr.route.detail.class_check)
+#   class_clearance: repair the route as without the switch, then the same checks:
+#                           only the nets too close are routed again, exactly
 #   edge: exact             the board's own Edge.Cuts outline (arcs, stroke) for
 #                           the router's edge and hole-to-edge model, kept by
 #                           writeback (pnr.board_edge)
@@ -530,7 +532,7 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
 #   dru_routing: true       the board's custom rules (.kicad_dru) where they
 #                           constrain routing (pnr.dru_rules, route.detail.dru_apply)
 ROUTING_SWITCHES = {
-    "class_clearance": ("class_clearance", ("maze",)),
+    "class_clearance": ("class_clearance", ("maze", "repair")),
     "edge": ("edge", ("exact",)),
     "keep_outline": ("keep_outline", (True, False)),
     "dru_routing": ("dru_routing", (True, False)),

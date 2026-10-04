@@ -142,6 +142,47 @@ class ChannelTest(unittest.TestCase):
         self.assertGreater(max(ys), 6.0)  # through the upper channel
 
 
+class RepairModeTest(unittest.TestCase):
+    """``class_clearance: repair``: the route as without the switch, then only the
+    nets too close routed again."""
+
+    @classmethod
+    def setUpClass(cls):
+        graph, compiled, rules = _compiled({"class_clearance": "repair"})
+        cls.board = route_board(graph, compiled, rules, pitch=0.25)
+
+    def test_the_pair_is_repaired_and_both_route(self):
+        report = self.board.escape_diagnostics["class_clearance"]
+        self.assertEqual(report["mode"], "repair")
+        self.assertEqual(report["pairs"], [["X", "Y"]])
+        self.assertEqual(len(report["rerouted"]), 1)
+        self.assertEqual(self.board.result.unrouted, [])
+        self.assertEqual(report["audit"]["count"], 0)
+
+    def test_halos_stay_the_fabs(self):
+        self.assertEqual(self.board.grid.routing_track_halos["X"], 0)
+        self.assertFalse(getattr(self.board.grid, "routing_via_keepouts", None))
+
+
+class StaticOffenderTest(unittest.TestCase):
+    def test_route_via_too_close_to_an_escape_via(self):
+        # The radar trial-2 case: a PWR (0.15 mm) via 0.50 mm from a GND fanout via.
+        from pnr.route.detail.class_check import static_offenders
+
+        grid = RouteGrid(4, 4, 0.25, clearance=0.1, track_width=0.15, via_radius=0.2)
+        grid.net_clearances = {"V": 0.15}
+        a, b = Cell(0, 5, 8), Cell(1, 5, 8)  # a via at (1.375, 2.125)
+        route = _Route([Cell(0, 4, 8), a, b], [(Cell(0, 4, 8), a), (a, b)])
+        rn = _to_geometry(route)
+        result = RouteResult(nets={"V": rn}, unrouted=[], iterations=1)
+        near = [("GND", 1.375, 2.125 + 0.5)]
+        far = [("GND", 1.375, 2.125 + 0.55)]
+        hits = static_offenders(grid, result, {}, [], near)
+        self.assertEqual(sorted(hits), ["V"])
+        self.assertEqual(hits["V"][0]["kind"], "via-via")
+        self.assertEqual(static_offenders(grid, result, {}, [], far), {})
+
+
 class RepairTest(unittest.TestCase):
     def _grid(self):
         grid = RouteGrid(6, 3, 0.25, clearance=0.1, track_width=0.15, via_radius=0.2)

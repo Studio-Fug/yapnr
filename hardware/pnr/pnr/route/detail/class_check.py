@@ -64,13 +64,15 @@ def _cover(pairs, size):
     return ripped
 
 
-def repair(grid, net_access, result, *, via_cost, session=None):
+def repair(grid, net_access, result, *, via_cost, session=None, also=()):
     """Rip and reroute the nets of ``result`` (a :class:`~.maze.RouteResult`, changed
-    in place) that the exact pairwise rule finds too close to another (module doc).
-    Returns the report: ``pairs`` (the conflicting pairs, at most 20), ``ripped``,
-    ``rerouted`` (whole again), ``partial`` (branches kept, connections open) and
-    ``open`` (nothing kept). A grid outside the dense model (the reference kernel,
-    a via model) is checked but not rerouted: its offenders are ripped to open."""
+    in place) that the exact pairwise rule finds too close to another (module doc),
+    and the nets ``also`` names (too close to static copper: :func:`static_offenders`).
+    Returns the report: ``pairs`` (the conflicting pairs, at most 20), ``static``
+    (``also``), ``ripped``, ``rerouted`` (whole again), ``partial`` (branches kept,
+    connections open) and ``open`` (nothing kept). A grid outside the dense model
+    (the reference kernel, a via model) is checked but not rerouted: its offenders
+    are ripped to open."""
     from .dense_maze import DenseSession, build_exact_field
     from .exact_route import Occupancy, Separation, Zone, supported
     from .maze import (
@@ -92,7 +94,7 @@ def repair(grid, net_access, result, *, via_cost, session=None):
     routes = {
         n: route_of(result.nets[n]) for n in nets if n in result.nets and result.nets[n].cells
     }
-    report = {"pairs": [], "ripped": [], "rerouted": [], "partial": [], "open": []}
+    report = {"pairs": [], "static": [], "ripped": [], "rerouted": [], "partial": [], "open": []}
     if not routes:
         return report
     sep = AtTheRule(grid, nets)
@@ -104,11 +106,15 @@ def repair(grid, net_access, result, *, via_cost, session=None):
     for name, zone in sorted(zones.items()):
         if occ.conflicts(zone):
             pairs.update(tuple(sorted((name, other))) for other in occ.crossed(zone))
-    if not pairs:
+    static = sorted(n for n in set(also) if n in routes)
+    if not pairs and not static:
         return report
     report["pairs"] = [list(p) for p in sorted(pairs)[:20]]
     report["pair_count"] = len(pairs)
-    ripped = _cover(pairs, {n: len(r.cells) for n, r in routes.items()})
+    report["static"] = static
+    # The static offenders first: ripping them may already part a pair.
+    pairs = {p for p in pairs if not set(p) & set(static)}
+    ripped = static + _cover(pairs, {n: len(r.cells) for n, r in routes.items()})
     report["ripped"] = sorted(ripped)
     committed = Occupancy(grid, sep)
     for name, zone in zones.items():
@@ -217,13 +223,62 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, pairs=None, classes=None, 
     each other and against the grid's pads (every layer a through via crosses).
     Two nets keep the larger of their class clearances (``grid.net_clearances``)
     and the fab's; a pad that sets its own (``grid.pad_keepaways``) keeps that where
-    larger. ``via_sizes`` gives a via's diameter where it is not the fab's
+    larger; a pad whose land is exact (``grid.smd_pads``) is judged with its corner
+    radius. ``via_sizes`` gives a via's diameter where it is not the fab's
     (``[net, x, y, diameter, drill]``). ``classes`` (net -> class clearance) stands
     in for ``grid.net_clearances`` (which may hold clearances raised for routing);
     ``pairs`` (``frozenset({a, b})`` -> mm, a board's pair rules: pnr.dru_rules) adds
     pair clearances, judged out to their own distance. Returns ``{"count": n,
     "items": [...]}`` with at most ``limit`` items ``{net, other, kind, layer,
     gap_mm, need_mm, at}``. Same-net copper and drill spacing are not judged here."""
+    items = _copper_items(grid, tracks, vias, via_sizes)
+    rows = _shortfalls(grid, items, classes=classes, pairs=pairs)
+    return {"count": len(rows), "items": rows[:limit]}
+
+
+def static_offenders(grid, result, widths, tracks, vias, via_sizes=(), *, classes=None):
+    """The nets of ``result`` (a RouteResult, grid geometry) whose routed copper is too
+    close to other nets' static copper (``tracks``/``vias``: escapes, fanouts,
+    ports, as route_board emits them; the grid's pads), by :func:`copper_audit`'s
+    rule. ``widths``: net -> track width. Returns ``{net: [shortfall rows]}``."""
+    route_tracks, route_vias = [], []
+    plated = getattr(grid, "plated_transition", lambda *a: None)
+    for net, rn in result.nets.items():
+        w = widths.get(net, grid.track_width)
+        for la, p, q in rn.segments:
+            route_tracks.append((net, grid.layers[la], grid.center_of(*p), grid.center_of(*q), w))
+        for i, j in rn.vias:
+            if plated(net, i, j) is None:
+                route_vias.append((net, *grid.center_of(i, j)))
+    items = [it + ("route",) for it in _copper_items(grid, route_tracks, route_vias, ())]
+    items += [it + ("static",) for it in _copper_items(grid, tracks, vias, via_sizes)]
+    out: Dict[str, list] = {}
+    for row in _shortfalls(grid, items, classes=classes, only="route"):
+        out.setdefault(row["net"], []).append(row)
+    return out
+
+
+def _copper_items(grid, tracks, vias, via_sizes):
+    """``(kind, layer index or None for every layer, net, (a, b), half width)``."""
+    layer_index = {name: k for k, name in enumerate(grid.layers)}
+    radius = {(n, round(x, 6), round(y, 6)): d / 2 for n, x, y, d, *_ in via_sizes}
+    items = []
+    for net, layer, a, b, width in tracks:
+        if layer in layer_index:
+            items.append(("track", layer_index[layer], net, (tuple(a), tuple(b)), width / 2))
+    for net, x, y in vias:
+        r = radius.get((net, round(x, 6), round(y, 6)), grid.via_radius)
+        items.append(("via", None, net, ((x, y), (x, y)), r))
+    return items
+
+
+def _shortfalls(grid, items, *, classes=None, pairs=None, only=None):
+    """Rows (``{net, other, kind, layer, gap_mm, need_mm, at}``, sorted) of every
+    pair of different nets' copper ``items`` (and items against the grid's pads)
+    closer than their rule. With ``only``, items carry a sixth field, a tag, and a
+    pair counts only when exactly one of its items is tagged ``only`` (or the item
+    is and the other is a pad): that item's net is then the row's ``net``."""
+    from pnr.place.geometry import Rect
     from pnr.writeback import _segment_distance_sq
 
     if classes is None:
@@ -235,23 +290,18 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, pairs=None, classes=None, 
         for n in key:
             far[n] = max(far.get(n, 0.0), d)
     keepaways = getattr(grid, "pad_keepaways", None) or {}
-    layer_index = {name: k for k, name in enumerate(grid.layers)}
+    corners = {(la, owner, r): c for la, owner, r, c in getattr(grid, "smd_pads", ()) or ()}
 
     def clearance(net):
         return max(grid.clearance, classes.get(net, 0.0))
 
-    radius = {(n, round(x, 6), round(y, 6)): d / 2 for n, x, y, d, *_ in via_sizes}
-    # Items: (kind, layer index or None for every layer, net, geometry, half width).
-    items = []
-    for net, layer, a, b, width in tracks:
-        if layer in layer_index:
-            items.append(("track", layer_index[layer], net, (tuple(a), tuple(b)), width / 2))
-    for net, x, y in vias:
-        r = radius.get((net, round(x, 6), round(y, 6)), grid.via_radius)
-        items.append(("via", None, net, ((x, y), (x, y)), r))
-    pads = [
-        ("pad", la, owner, r, keepaways.get((la, owner, r))) for la, owner, r in grid.pad_rectangles
-    ]
+    pads = []
+    for la, owner, r in grid.pad_rectangles:
+        corner = corners.get((la, owner, r)) or 0.0
+        core = r
+        if corner > 0:  # an exact rounded land: its core rectangle less the radius
+            core = Rect(r.cx, r.cy, max(0.0, r.w - 2 * corner), max(0.0, r.h - 2 * corner))
+        pads.append((la, owner, r, core, corner, keepaways.get((la, owner, r))))
     reach = 2.0
     buckets = defaultdict(list)
 
@@ -264,12 +314,14 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, pairs=None, classes=None, 
         (a, b) = item[3]
         for key in boxes(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])):
             buckets[key].append(("copper", k))
-    for k, (_, _, _, r, _) in enumerate(pads):
+    for k, (_, _, r, _, _, _) in enumerate(pads):
         for key in boxes(r.left, r.bottom, r.right, r.top):
             buckets[key].append(("pad", k))
     found = {}
     judged = set()  # copper pairs (lower index, higher), each judged once
-    for k, (kind, layer, net, (a, b), half) in enumerate(items):
+    for k, item in enumerate(items):
+        kind, layer, net, (a, b), half = item[:5]
+        tag = item[5] if len(item) > 5 else None
         seen = set()
         window = max(reach, far.get(net, 0.0) + 1.0)
         x0, y0 = min(a[0], b[0]) - window, min(a[1], b[1]) - window
@@ -280,11 +332,17 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, pairs=None, classes=None, 
                     continue
                 seen.add((what, m))
                 if what == "copper":
-                    okind, olayer, other, (c, d), ohalf = items[m]
+                    other_item = items[m]
+                    okind, olayer, other, (c, d), ohalf = other_item[:5]
                     if other == net:
                         continue
                     if layer is not None and olayer is not None and layer != olayer:
                         continue
+                    if only is not None:
+                        if tag != only:
+                            continue  # a tagged item judges its pairs from its own side
+                        if len(other_item) > 5 and other_item[5] == only:
+                            continue  # two tagged items: not this check's pair
                     key2 = (min(k, m), max(k, m))
                     if key2 in judged:
                         continue
@@ -294,10 +352,15 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, pairs=None, classes=None, 
                     need = max(need, pairs.get(frozenset((net, other)), 0.0))
                     pair = "-".join(sorted((kind, okind)))
                 else:
-                    _, olayer, other, rect, keep = pads[m]
+                    if only is not None and tag != only:
+                        continue
+                    olayer, other, rect, core, corner, keep = pads[m]
                     if other == net or (layer is not None and olayer != layer):
                         continue
-                    gap = (_segment_rect(a, b, rect) if a != b else _point_rect(a, rect)) - half
+                    if a != b:
+                        gap = _segment_rect(a, b, core) - corner - half
+                    else:
+                        gap = _point_rect(a, core) - corner - half
                     need = max(clearance(net), clearance(other), keep or 0.0)
                     need = max(need, pairs.get(frozenset((net, other)), 0.0))
                     pair = kind + "-pad"
@@ -313,18 +376,19 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, pairs=None, classes=None, 
                         need_mm=round(need, 4),
                         at=[round(v, 4) for v in a],
                     )
-    rows = sorted(found.values(), key=lambda v: (v["net"], v["other"], v["kind"], v["at"]))
-    return {"count": len(rows), "items": rows[:limit]}
+    return sorted(found.values(), key=lambda v: (v["net"], v["other"], v["kind"], v["at"]))
 
 
 def summarize(report: Dict) -> List[str]:
     """One line per non-empty part of a :func:`repair` report, for the log."""
     out = []
-    if report.get("pairs"):
+    if report.get("pairs") or report.get("static"):
         out.append(
-            "class clearance: %d pair(s) too close; ripped %s; rerouted %d, partial %d, open %d"
+            "class clearance: %d pair(s) too close, %d net(s) too close to static copper; "
+            "ripped %s; rerouted %d, partial %d, open %d"
             % (
                 report.get("pair_count", len(report["pairs"])),
+                len(report.get("static") or ()),
                 ", ".join(report["ripped"]),
                 len(report["rerouted"]),
                 len(report["partial"]),

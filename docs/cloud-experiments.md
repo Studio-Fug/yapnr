@@ -674,8 +674,9 @@ syft's scan of the image) and fails otherwise; the image's README has the detail
 build with ParMETIS, `palace:b797ea8-x86-64-v3`, is kept for evaluation (comparisons) only.
 
 Cloud Build builds it on the 8-vCPU machine the regional quota allows, in a 3-hour budget (the
-default timeout is 10 minutes); the first build (with ParMETIS) took 31 minutes (22 for the
-dependencies, 6 for Palace), about $0.56 (October 2026). The dependency stages are pushed as
+default timeout is 10 minutes); a build without its caches takes about 25 minutes (14 for the
+dependencies, 5 for Palace), about $0.45, and one with both dependency stages cached about 7
+minutes (October 2026). The dependency stages are pushed as
 `palace-deps:<tag>-x86-64-v3-solvers` (the ordering libraries and the direct solvers) and
 `palace-deps:<tag>-x86-64-v3` before Palace compiles and are read back with `--cache-from`, so a
 build that fails in MFEM or Palace, or a change to the runtime stage, does not rebuild the

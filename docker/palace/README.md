@@ -101,7 +101,7 @@ AVX-512 gained openEMS about 3 %. `cloudbuild.yaml` builds one with
 
 ```sh
 python3 tools/exp/palace_plan.py image          # prints the gcloud builds submit command
-python3 tools/exp/palace_plan.py image --run    # submits it and waits (about 40 minutes)
+python3 tools/exp/palace_plan.py image --run    # submits it and waits (about 25 minutes)
 python3 tools/exp/palace_plan.py digests        # the tag's digest and size
 ```
 
@@ -109,8 +109,11 @@ The build runs as `yapnr-image-build` (`infra/gcp`) on `E2_HIGHCPU_8` (8 vCPUs, 
 3-hour timeout. Stages: `solvers` (the patched source; Scotch, METIS, ScaLAPACK, SuperLU_DIST,
 MUMPS; the conformance test and the checks), pushed as `palace-deps:<tag>-<variant>-solvers`;
 `deps` (MFEM, hypre, libCEED and the rest), pushed as `palace-deps:<tag>-<variant>`; then Palace
-and the task image, and syft's scan. The first build with ParMETIS (build `38aa2afc`,
-2026-10-04) took 31 minutes, about $0.56. The dependencies build at `-j6` and Palace at `-j4`,
+and the task image, and syft's scan. Without the caches it takes about 25 minutes (2026-10-04,
+builds `7d4d6bb3` and `393992c1`): 1 minute of apt, 2 for the solvers stage, 12 for the other
+dependencies (MFEM most of it), 5 for Palace, 2 for the runtime stage, the pushes and syft; about
+$0.45. With both dependency stages cached, about 7 minutes ($0.12). The dependencies build at
+`-j6` and Palace at `-j4`,
 each with a second pass at `-j2` should the compiler run out of memory. Locally (any platform;
 `ARCH_FLAGS=` for arm64, where PyPI has no gmsh wheel and the image goes without it):
 `docker build -t palace:local docker/palace`.

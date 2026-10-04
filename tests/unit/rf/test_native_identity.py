@@ -32,6 +32,11 @@ from yapnr.rf.testing import native_kernel_or_skip
 
 OPTIONS = ((False, "static"), (True, "static"), (False, "mode"), (True, "mode"))
 F32_VALUES, F32_GRADS = 1e-5, 2e-5
+# Bazel's test sharding (the target's shard_count): test method k runs on shard k mod N.
+SHARDS = int(os.environ.get("TEST_TOTAL_SHARDS", "1"))
+SHARD = int(os.environ.get("TEST_SHARD_INDEX", "0"))
+if os.environ.get("TEST_SHARD_STATUS_FILE"):
+    open(os.environ["TEST_SHARD_STATUS_FILE"], "a").close()
 
 
 def digest(ev) -> str:
@@ -50,6 +55,18 @@ def design(kind: str, shape) -> np.ndarray:
 
 
 class NativeIdentityTest(unittest.TestCase):
+    ORDER = (
+        "test_divider",
+        "test_antenna",
+        "test_diagonal_pattern",
+        "test_wilkinson_lumped_resistor",
+        "test_reactive_sheet",
+    )
+
+    def setUp(self):
+        if self.ORDER.index(self._testMethodName) % SHARDS != SHARD:
+            self.skipTest(f"on shard {self.ORDER.index(self._testMethodName) % SHARDS}")
+
     def spec(self, case, edge=None, source=None, **optimizer):
         from yapnr.rf import cases
 

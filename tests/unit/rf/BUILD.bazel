@@ -62,6 +62,8 @@ yapnr_py_tests(
         "test_native_identity": dict(
             _SLOW_TESTING,
             env = _NATIVE_ENV,
+            # One shard per test method (about 1.5-2 min each on one CI core).
+            shard_count = 5,
         ),
         "test_native_kernel": dict(
             _SLOW_TESTING,

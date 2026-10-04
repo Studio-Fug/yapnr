@@ -63,13 +63,11 @@ class LeapfrogLimitTest(unittest.TestCase):
         sim.f["ez"][:, [0, -1], :] = 0
         start = max(np.abs(sim.f[c]).max() for c in ("ex", "ey", "ez"))
         peak = start
-        for n in range(steps):
-            sim._step_h()
-            sim._step_e()
-            if n % 500 == 0:
-                peak = max(peak, max(float(np.abs(sim.f[c]).max()) for c in ("ex", "ey", "ez")))
-                if peak > 1e8 * start:
-                    break
+        for _ in range(0, steps, 500):
+            sim.advance(500)  # source-free steps on any backend
+            peak = max(peak, max(float(np.abs(sim.f[c]).max()) for c in ("ex", "ey", "ez")))
+            if peak > 1e8 * start:
+                break
         return peak / start
 
     def test_cfl_is_conservative(self):

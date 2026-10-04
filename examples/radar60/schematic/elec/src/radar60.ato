@@ -241,6 +241,17 @@ module Radar60:
     # @pnr-current {"target":"pmic.fb_rf1","pads":["2"],"scope":"net","rms_current_a":1.0,"peak_current_a":2.5}
     # @pnr-current {"target":"pmic.fb_rf2_a","pads":["2"],"scope":"net","rms_current_a":1.0,"peak_current_a":2.5}
     # @pnr-current {"target":"radio.r_pa","pads":["2"],"scope":"net","rms_current_a":1.0,"peak_current_a":2.5}
+    # Power-stage necks (stage 3b, F3): the buck switch-node pads (0.25 mm wide on the RNF0026C)
+    # and the PMIC and eFuse 5V_SYS pads may leave their pad through a short neck (at most 0.6 mm)
+    # before the full current width; the engine checks each neck's loss and drop
+    # (pnr.electrical.neck_budget). 0.25 x 0.6 mm of 35 um copper is 1.2 mOhm: 3.3 mV at the
+    # 2.8 A SW_B2 peak, 1.2 mW at 1 A rms [D]. The 5V_SYS terminal carries the eFuse envelope.
+    # @pnr-current {"target":"pmic.u2","pads":["10"],"scope":"terminal","rms_current_a":0.1,"peak_current_a":0.5,"neck_max_length_mm":0.6}
+    # @pnr-current {"target":"pmic.u2","pads":["12"],"scope":"terminal","rms_current_a":0.6,"peak_current_a":1.25,"neck_max_length_mm":0.6}
+    # @pnr-current {"target":"pmic.u2","pads":["25"],"scope":"terminal","rms_current_a":1.0,"peak_current_a":2.8,"neck_max_length_mm":0.6}
+    # @pnr-current {"target":"pmic.u2","pads":["23"],"scope":"terminal","rms_current_a":0.5,"peak_current_a":1.2,"neck_max_length_mm":0.6}
+    # @pnr-current {"target":"pmic.u2","pads":["9","13","18","22","26"],"scope":"terminal","rms_current_a":0.6,"peak_current_a":1.5,"neck_max_length_mm":0.6}
+    # @pnr-current {"target":"power_in.efuse","pads":["6"],"scope":"terminal","rms_current_a":0.6,"peak_current_a":1.5,"neck_max_length_mm":0.6}
     # The 2 mOhm shunt is read at the two Kelvin pads (5 mV at 2.5 A; O10).
     # @pnr-kelvin {"shunt":"pmic.r_sh","positive_pad":"1","negative_pad":"2","sense_component":"pmic.tp_isns","sense_positive_pad":"1","sense_negative_pad":"2","avoid_shared_power_neck":true}
     # QSPI at 80 MHz: 22 Ohm series at the clock source, 25 mm maximum, GND reference (proposed fields).

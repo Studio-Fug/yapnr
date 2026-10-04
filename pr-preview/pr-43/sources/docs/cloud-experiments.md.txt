@@ -320,7 +320,8 @@ quota.
   not room. When no candidate has room the class waits in the first (Batch queues the job until
   quota frees up). The caps are checked on the chosen placements, `submissions/<n>.json` records
   the choice under `placement.choice` (the pair, its rank, why, and each candidate looked at), and
-  `status` prints each submission's region. A class with one candidate reads nothing.
+  `status` prints each submission's region. A class with one candidate reads nothing, and
+  `submit --dry-run` reads no quota (it makes no calls), so it shows the first candidate.
 - **One machine type.** A wall-clock-budgeted campaign (`ladder-cell`, `bench` and `mc-eval` by
   default) runs on one machine type: a family is a candidate only if it gives every class the same
   shape, the first submission chooses it by quota, and later submissions keep it. A campaign that

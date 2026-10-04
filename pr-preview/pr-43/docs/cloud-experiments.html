@@ -646,7 +646,8 @@ VMs. A candidate whose instance template does not exist is skipped; a quota it c
 not room. When no candidate has room the class waits in the first (Batch queues the job until
 quota frees up). The caps are checked on the chosen placements, <code class="docutils literal notranslate"><span class="pre">submissions/&lt;n&gt;.json</span></code> records
 the choice under <code class="docutils literal notranslate"><span class="pre">placement.choice</span></code> (the pair, its rank, why, and each candidate looked at), and
-<code class="docutils literal notranslate"><span class="pre">status</span></code> prints each submission’s region. A class with one candidate reads nothing.</p></li>
+<code class="docutils literal notranslate"><span class="pre">status</span></code> prints each submission’s region. A class with one candidate reads nothing, and
+<code class="docutils literal notranslate"><span class="pre">submit</span> <span class="pre">--dry-run</span></code> reads no quota (it makes no calls), so it shows the first candidate.</p></li>
 <li><p><strong>One machine type.</strong> A wall-clock-budgeted campaign (<code class="docutils literal notranslate"><span class="pre">ladder-cell</span></code>, <code class="docutils literal notranslate"><span class="pre">bench</span></code> and <code class="docutils literal notranslate"><span class="pre">mc-eval</span></code> by
 default) runs on one machine type: a family is a candidate only if it gives every class the same
 shape, the first submission chooses it by quota, and later submissions keep it. A campaign that

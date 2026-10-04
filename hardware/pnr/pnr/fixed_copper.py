@@ -416,6 +416,14 @@ def append(source, fixed, routes, rules, out):
             t.SetLocked(True)
         board.Add(t)
         keep.append(t)
+    if routes.get("plane_regions"):
+        # A plane partition (pnr.plane_partition): its layers' zones as routed.
+        from pnr.writeback import draw_plane_regions
+
+        _f, outline = _board_frame(board)
+        w, h = outline.width, outline.height
+        full = [point((0, 0)), point((w, 0)), point((w, h)), point((0, h))]
+        draw_plane_regions(board, routes["plane_regions"], rules, point, full, codes)
     board.BuildConnectivity()
     entries = repair_changed_entries(board, rules, before_entries)
     copy_board(source, out)

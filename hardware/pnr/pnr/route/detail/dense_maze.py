@@ -57,22 +57,24 @@ _STENCIL_MARGIN = 1e-9
 MODELLED_SOURCES = {
     "RouteGrid.in_bounds": "82de6984f75cd003",
     "RouteGrid.passable": "f41d01c807510018",
-    "RouteGrid.via_passable": "4bc5e549155b1065",
+    "RouteGrid.via_passable": "f4014ccd63839c19",
     "RouteGrid.net_blocked": "050219db9320ed86",
     "RouteGrid.plated_transition": "c1d3b5a6d337614d",
     "RouteGrid.hole_site_clear": "d9a3389fb1469b61",
-    "maze._astar_reference": "afd46e640e9d7ef5",
+    "maze._astar_reference": "125e36d494aee037",
 }
 MODELLED_ATTRIBUTES = frozenset(
     (
-        "_pth_keepouts _smd_index _wide_seen _wide_specs _wide_tables access blocked "
-        "clearance component_pth_min_drill drilled_pads escape_segments escape_vias fixed_owned "
+        "_pth_keepouts _smd_index _via_tables _wide_seen _wide_specs _wide_tables access blocked "
+        "class_escapes class_tables clearance component_pth_min_drill drilled_pads "
+        "escape_segments escape_vias "
         "height hole_clearance in_pad layer_mask layers net_clearances net_keepouts net_widths nlayers "
-        "npth_hole_gap nx ny pad_net pad_rectangles pad_track_halo pad_via_halo pitch plated_ports "
-        "protected_escape_access pth_hole_gap routing_track_halos routing_via_keepout "
+        "npth_hole_gap nx ny pad_keepaways pad_net pad_rectangles pad_track_halo pad_via_halo "
+        "pitch plated_ports "
+        "fixed_owned protected_escape_access pth_hole_gap routing_track_halos routing_via_keepout "
         "smd_pads smd_via_blocked source_drill_plated source_drills track_width "
         "via_blocked via_drill_radius via_halo via_hole_gap via_radius via_spacing "
-        "via_to_smd_pad wide_pad_net width"
+        "routing_via_keepouts via_to_smd_pad wide_pad_net wide_via_net width"
     ).split()
 )
 _PREDICATES = ("passable", "via_passable", "plated_transition", "hole_site_clear")
@@ -354,6 +356,14 @@ class GridStatic:
                 wide = self._wide.get(id(table))
                 if wide is None:
                     wide = self._wide[id(table)] = self._owners(table, self.pad.shape)
+            # RouteGrid.via_passable: board.class_clearance: maze gives the net a via
+            # table (RouteGrid.wide_via_net), shared by the nets of one clearance.
+            table = (getattr(self.grid, "wide_via_net", None) or {}).get(net)
+            wide_via = None
+            if table is not None:
+                wide_via = self._wide.get(id(table))
+                if wide_via is None:
+                    wide_via = self._wide[id(table)] = self._owners(table, self.pad.shape)
             index = self.names.get(net, -2)
             own_pad = (self.pad == -1) | (self.pad == index)
             passable = ~self.blocked & own_pad
@@ -368,6 +378,8 @@ class GridStatic:
             if wide is not None:
                 passable &= (wide == -1) | (wide == index)
             via = self.via_free & own_pad & ((self.halo == -1) | (self.halo == index))
+            if wide_via is not None:
+                via &= (wide_via == -1) | (wide_via == index)
             # RouteGrid.passable / via_passable: keepouts with allow lists bar every
             # net outside their lists (RouteGrid.net_blocked).
             for track_mask, via_mask, allowed in getattr(self.grid, "net_keepouts", ()) or ():
@@ -513,9 +525,11 @@ def build_field(
     stencil = static.stencil()
     if stencil is None:
         return None
+    from .maze import net_via_keepout
+
     nl, ny, nx = grid.nlayers, grid.ny, grid.nx
     track_halo = getattr(grid, "routing_track_halos", {}).get(net, 0)
-    via_halo = getattr(grid, "routing_via_keepout", 0)
+    via_halo = net_via_keepout(grid, net)
     passable, via_ok, plated = static.net(net)
 
     # The search's blocked footprint: raw cells plus the net's track halo.

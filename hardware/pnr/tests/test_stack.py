@@ -480,7 +480,16 @@ class RungConsistency(unittest.TestCase):
             no_tracks = re.findall(r'\(rule "([^ ]+) is a [^ ]+ plane: no tracks"', dru_text(spec))
             with self.subTest(case=spec["name"]):
                 self.assertIsNotNone(stack)
-                self.assertEqual([layer for layer, _ in stack.dedicated], no_tracks)
+                # A partitioned layer (plane_partition) carries several rails: once.
+                layers = list(dict.fromkeys(layer for layer, _ in stack.dedicated))
+                self.assertEqual(layers, no_tracks)
+                if spec["constraints"].get("plane_partition"):
+                    (part,) = spec["constraints"]["plane_partition"]
+                    self.assertEqual(
+                        [n for layer, n in stack.dedicated if layer == part["layer"]],
+                        part["nets"],
+                    )
+                    continue
                 self.assertEqual(
                     list(stack.dedicated),
                     [

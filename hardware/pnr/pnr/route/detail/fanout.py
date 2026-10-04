@@ -16,7 +16,13 @@ process (:func:`pnr.fanout.cached_plan`) and becomes, on this grid:
 * **pads left alone**: the fanned-out balls are skipped by the escape and drop
   planner (``skip_pads``);
 * **failures**: a ball the plan could not escape or drop, or whose exit has no free
-  access cell here, blocks its net and is localized at the ball (failure sites).
+  access cell here, blocks its net and is localized at the ball (failure sites);
+* **partial fanouts** (the entry's ``partial``): such a ball no longer blocks its net.
+  With ``bridge`` it is first joined by a surface stub to an adjacent ball of its net
+  whose escape stands (judged exactly); otherwise it goes back to the board's escape
+  planner (out of ``skip_pads``), and :func:`resolve_partial` records whether that
+  planner escaped it or it stays open (a failure site, ``BoardRoute.partial_open``).
+  The net routes among its other terminals; the report lists every such ball.
 
 Nothing here runs without ``rules["fanouts"]``.
 """
@@ -27,6 +33,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Tuple
 
+from pnr.graph import footprint_point
 from pnr.place.geometry import pad_rects
 
 from .escape import Escape
@@ -46,6 +53,20 @@ class FanoutRouting:
     locked: Set[str] = field(default_factory=set)  # fanout names written locked
     protected: Dict[Tuple[int, int, int], str] = field(default_factory=dict)
     report: Dict = field(default_factory=dict)
+    # Partial fanouts only (the entry's ``partial``), else empty. ``retry``: (ref, pad)
+    # -> (net, fanout name, pad centre, reason) of the failed balls handed back to the
+    # board's escape planner; ``partial_open``: net -> {"REF.PAD": reason} of the balls
+    # left unconnected (resolve_partial completes it).
+    retry: Dict[Tuple[str, str], Tuple[str, str, Tuple[float, float], str]] = field(
+        default_factory=dict
+    )
+    partial_open: Dict[str, Dict[str, str]] = field(default_factory=dict)
+
+    def note_partial(self, fanout, ball, net, reason, outcome):
+        """Record one partial-fanout ball in its fanout's report (``partial``)."""
+        self.report[fanout].setdefault("partial", {})[ball] = dict(
+            net=net, reason=reason, outcome=outcome
+        )
 
 
 def _foreign_pads(grid, own_rects):
@@ -58,18 +79,23 @@ def _foreign_pads(grid, own_rects):
     ]
 
 
-def _clear_of_pads(pads, net, layer, a, b, width, clearance, classes=None):
+def _clear_of_pads(pads, net, layer, a, b, width, clearance, classes=None, keepaways=None):
     """``a``-``b`` of ``width`` clears every pad of another net on ``layer`` by the
     larger of the two nets' clearances (``classes``: net -> class clearance; the
-    fab ``clearance`` holds where larger or absent)."""
+    fab ``clearance`` holds where larger or absent) and of the pad's own
+    (``keepaways``: RouteGrid.pad_keepaways, a local clearance or mask margin)."""
     from pnr.writeback import _segment_distance_sq
 
     classes = classes or {}
+    keepaways = keepaways or {}
     base = clearance
     for la, owner, r in pads:
         if la != layer or owner == net:
             continue
         radius = width / 2 + max(base, classes.get(net, 0.0), classes.get(owner, 0.0))
+        keep = keepaways.get((la, owner, r)) if keepaways else None
+        if keep is not None:
+            radius = max(radius, width / 2 + keep)
         if (
             max(a[0], b[0]) + radius < r.left
             or min(a[0], b[0]) - radius > r.right
@@ -240,12 +266,13 @@ def _first_access(
             grid, net, layer, exit_xy, centre, width, areas, exact
         ):
             continue
+        keepaways = getattr(grid, "pad_keepaways", None)
         if (
-            classes
+            (classes or keepaways)
             and pads
             and math.dist(centre, exit_xy) > 1e-9
             and not _clear_of_pads(
-                pads, net, layer, exit_xy, centre, width, grid.clearance, classes
+                pads, net, layer, exit_xy, centre, width, grid.clearance, classes, keepaways
             )
         ):
             continue
@@ -304,6 +331,9 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
     # 1. Every planned copper item is exact escape copper before any access is chosen.
     rows = []
     foreign_of = {}
+    ball_escape = {}  # (fanout, ball) -> its emitted joint Escape (partial bridges)
+    pending = []  # partial fanouts: failed balls, bridged or handed back below
+    access_ball = {}  # protected access cell -> (spec, ref, ball, pad centre)
     for spec, plan, comp, centres, side, own_rects in planned:
         foreign = _foreign_pads(grid, own_rects)
         foreign_of[spec["name"]] = foreign
@@ -328,6 +358,7 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
                         fanout=spec["name"],
                     )
                 )
+                ball_escape[spec["name"], name] = out.escapes[-1]
                 continue
             if row["kind"] == "failed":
                 rows.append((spec, comp, name, row, pad_xy, side, None, None))
@@ -335,14 +366,25 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             segments = [(layer_index[la], tuple(a), tuple(b)) for la, a, b in row["segments"]]
             via = tuple(row["via"][:2]) if row.get("via") else None
             width = row["width_mm"]
+            keepaways = getattr(grid, "pad_keepaways", None)
             clash = any(
-                not _clear_of_pads(foreign, row["net"], la, a, b, width, clearance, classes)
+                not _clear_of_pads(
+                    foreign, row["net"], la, a, b, width, clearance, classes, keepaways
+                )
                 for la, a, b in segments
             ) or (
                 via is not None
                 and any(
                     not _clear_of_pads(
-                        foreign, row["net"], la, via, via, row["via"][2], clearance, classes
+                        foreign,
+                        row["net"],
+                        la,
+                        via,
+                        via,
+                        row["via"][2],
+                        clearance,
+                        classes,
+                        keepaways,
                     )
                     for la in range(grid.nlayers)
                 )
@@ -398,6 +440,14 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
     for k, (spec, comp, name, row, pad_xy, side, segments, via) in enumerate(rows):
         net = row["net"]
         if segments is None:
+            if spec.get("partial"):
+                reason = (
+                    "conflicts with another part's pad on the board"
+                    if row.get("intended") and "reason" not in row
+                    else "plan: %s" % row.get("reason", "unresolved")
+                )
+                pending.append((spec, comp, name, row, pad_xy, side, reason))
+                continue
             site = (min(pad_xy[0], grid.width - 1e-9), min(pad_xy[1], grid.height - 1e-9))
             out.failure_sites.setdefault(net, []).append(site)
             if row.get("intended") == "drop":
@@ -424,6 +474,7 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             access = Cell(far, *grid.cell_of(*via))
             out.access.setdefault(net, []).append(access)
             out.protected[(access.layer, access.i, access.j)] = net
+            access_ball[(access.layer, access.i, access.j)] = (spec, comp.ref, name, pad_xy)
         elif row["kind"] == "drop" or (row["kind"] == "via_in_pad" and "exit" not in row):
             access = Cell(side, *grid.cell_of(*pad_xy))
         else:
@@ -445,6 +496,12 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             )
             if found is None:
                 out.report[spec["name"]]["no_access"].append(name)
+                if spec.get("partial"):
+                    release(k, row, segments, via)
+                    pending.append(
+                        (spec, comp, name, row, pad_xy, side, "no access cell beyond its exit")
+                    )
+                    continue
                 out.failure_sites.setdefault(net, []).append(tuple(row["exit"]))
                 out.blocked_nets.add(net)
                 release(k, row, segments, via)
@@ -464,6 +521,7 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
                 grid.escape_segments.append((layer, net, tuple(row["exit"]), centre))
             out.access.setdefault(net, []).append(access)
             out.protected[(access.layer, access.i, access.j)] = net
+            access_ball[(access.layer, access.i, access.j)] = (spec, comp.ref, name, pad_xy)
         widths = [row["width_mm"]] * len(segments) + [tail_width] * len(tail)
         cells = _occupied(
             grid,
@@ -500,11 +558,144 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             fanout=spec["name"],
         )
         out.escapes.append(esc)
+        ball_escape[spec["name"], name] = esc
     # An access cell another fanout net's tail took is no longer its net's.
+    lost = set()
     for key, net in sorted(out.protected.items()):
         if grid.pad_net.get(key) != net:
             del out.protected[key]
             out.access[net] = [c for c in out.access.get(net, []) if (c.layer, c.i, c.j) != key]
+            owner = access_ball.get(key)
+            if owner is not None and owner[0].get("partial"):
+                spec, ref, name, pad_xy = owner
+                lost.add((spec["name"], name))
+                reason = "its access cell went to another fanout's tail"
+                out.partial_open.setdefault(net, {})["%s.%s" % (ref, name)] = reason
+                out.note_partial(spec["name"], name, net, reason, "open")
+                out.failure_sites.setdefault(net, []).append(grid.center_of(key[1], key[2]))
+                continue
             out.blocked_nets.add(net)
             out.failure_sites.setdefault(net, []).append(grid.center_of(key[1], key[2]))
+    # Partial fanouts: each failed ball is bridged to a standing neighbour of its net,
+    # or handed back to the board's escape planner (resolve_partial judges it).
+    for spec, comp, name, row, pad_xy, side, reason in pending:
+        net = row["net"]
+        if (spec.get("partial") or {}).get("bridge"):
+            other = _bridge(
+                grid, spec, comp, name, row, pad_xy, side, ball_escape, lost, areas, via_keepout
+            )
+            if other is not None:
+                out.note_partial(spec["name"], name, net, reason, "bridged to %s" % other)
+                # Its connection is the neighbour's escape (which carries the stub);
+                # this empty one says the pad is held (not late copper).
+                out.escapes.append(
+                    Escape(
+                        net=net,
+                        kind="joint",
+                        access=Cell(side, *grid.cell_of(*pad_xy)),
+                        pad_xy=pad_xy,
+                        side_layer=grid.layers[side],
+                        segments=[],
+                        fanout=spec["name"],
+                    )
+                )
+                continue
+        if spec["partial"].get("retry", True) is False:
+            out.note_partial(spec["name"], name, net, reason, "open")
+            out.partial_open.setdefault(net, {})["%s.%s" % (comp.ref, name)] = reason
+            out.failure_sites.setdefault(net, []).append(
+                (min(pad_xy[0], grid.width - 1e-9), min(pad_xy[1], grid.height - 1e-9))
+            )
+            out.escapes.append(
+                Escape(
+                    net=net,
+                    kind="blocked",
+                    access=Cell(side, *grid.cell_of(*pad_xy)),
+                    pad_xy=pad_xy,
+                    side_layer=grid.layers[side],
+                )
+            )
+            continue
+        out.skip_pads.discard((comp.ref, name))
+        out.retry[(comp.ref, name)] = (net, spec["name"], pad_xy, reason)
     return out
+
+
+def _bridge(grid, spec, comp, name, row, pad_xy, side, ball_escape, lost, areas, via_keepout):
+    """Join failed ball ``name`` by a straight surface stub (its planned width) to the
+    nearest adjacent ball of its net whose escape stands (orthogonal, then diagonal
+    neighbours on the array's lattice), judged exactly: foreign pads at the larger
+    class clearance, escape copper, escape vias, keepouts and rule areas. The stub
+    joins that ball's escape (emitted with it) and is reserved like fanout copper.
+    Returns the neighbour's name, or None."""
+    net = row["net"]
+    width = row.get("width_mm") or grid.net_widths.get(net, grid.track_width)
+    centres = {n: (r.cx, r.cy) for n, _net, r in pad_rects(comp)}
+    nets = {n: owner for n, owner, _r in pad_rects(comp)}
+    pitch = min(
+        (math.dist(a, b) for a in centres.values() for b in centres.values() if a != b),
+        default=0.0,
+    )
+    if pitch <= 0:
+        return None
+    candidates = []
+    for other, xy in centres.items():
+        if other == name or nets.get(other) != net or (spec["name"], other) in lost:
+            continue
+        esc = ball_escape.get((spec["name"], other))
+        d = math.dist(pad_xy, xy)
+        if esc is None or esc.kind != "joint" or d > pitch * math.sqrt(2) * 1.01:
+            continue
+        candidates.append((round(d, 9), other, xy, esc))
+    # The fanout's own reserved corridors bar its copper (as in its planner).
+    reserved = []
+    for r in spec.get("reserved") or []:
+        if r["frame"] == "board":
+            poly = [tuple(p) for p in r["polygon"]]
+        else:
+            poly = [footprint_point(comp, x, y) for x, y in r["polygon"]]
+        layers = frozenset() if "*" in r["layers"] else frozenset(r["layers"])
+        reserved.append((poly, layers, frozenset()))
+    for _d, other, xy, esc in sorted(candidates):
+        if not _tail_clear(grid, net, side, pad_xy, xy, width, list(areas) + reserved, exact=True):
+            continue
+        layer = grid.layers[side]
+        esc.segments = list(esc.segments) + [(layer, pad_xy, xy)]
+        base = esc.widths if esc.widths is not None else [esc.width] * (len(esc.segments) - 1)
+        esc.widths = list(base) + [width]
+        grid.escape_segments.append((side, net, pad_xy, xy))
+        for cell in _occupied(grid, [(side, pad_xy, xy, width)], [], via_keepout):
+            owner = grid.pad_net.get(cell)
+            grid.pad_net[cell] = net if owner is None or owner == net else "\0conflict"
+        for cell in _via_halo(grid, [(side, pad_xy, xy, width)], []):
+            owner = grid.via_halo.get(cell)
+            grid.via_halo[cell] = net if owner is None or owner == net else "\0conflict"
+        return other
+    return None
+
+
+def resolve_partial(grid, fanouts, plan):
+    """After the board's escape planner (``plan``, which got the retried balls): each
+    retried ball is escaped or open. A net the planner blocked only through retried
+    balls that stayed open is unblocked (it routes among its other terminals)."""
+    retried_open = {}
+    for (ref, name), (net, fanout, xy, reason) in sorted(fanouts.retry.items()):
+        esc = next(
+            (e for e in plan.escapes if e.net == net and math.dist(e.pad_xy, xy) < 1e-6), None
+        )
+        if esc is not None and esc.kind != "blocked":
+            fanouts.note_partial(fanout, name, net, reason, "escaped by the board's escapes")
+            continue
+        fanouts.note_partial(fanout, name, net, reason, "open")
+        fanouts.partial_open.setdefault(net, {})["%s.%s" % (ref, name)] = reason
+        if esc is not None and esc.access in plan.net_access.get(net, []):
+            plan.net_access[net].remove(esc.access)  # no terminal for the maze there
+        fanouts.failure_sites.setdefault(net, []).append(
+            (min(xy[0], grid.width - 1e-9), min(xy[1], grid.height - 1e-9))
+        )
+        retried_open.setdefault(net, []).append(xy)
+    for net in sorted(plan.blocked_nets):
+        blocked = [e.pad_xy for e in plan.escapes if e.net == net and e.kind == "blocked"]
+        mine = retried_open.get(net, [])
+        if blocked and all(any(math.dist(p, q) < 1e-6 for q in mine) for p in blocked):
+            plan.blocked_nets.discard(net)

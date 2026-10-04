@@ -55,6 +55,16 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         layout=json.loads(g.to_json()),
         data=dict(phase="signals", provisional=True),
     )
+    # board.edge: exact: this board's own outline for the router (pnr.board_edge);
+    # board.dru_routing: its custom rules where they constrain routing (pnr.dru_rules).
+    from pnr.board_edge import attach_edges
+    from pnr.dru_rules import attach_dru
+
+    attach_edges(policy, board.read_text())
+    dru_path = board.with_suffix(".kicad_dru")
+    attach_dru(
+        policy, dru_path.read_text() if dru_path.exists() else None, [n.name for n in g.nets]
+    )
     started = time.monotonic()
     result = route_board(
         g,
@@ -102,6 +112,13 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         [kicad_python, "-m", "pnr.planes", str(final), "--rules", str(rules), "--refill-only"],
         "refill.log",
     )
+    if policy.get("ir_drop"):
+        # The rails' IR-drop report on the refilled board (pnr.ir_extract), declared only.
+        invoke(
+            [kicad_python, "-m", "pnr.ir_extract", str(final), "--rules", str(rules)]
+            + ["--out", str(out / "ir"), "--heatmaps"],
+            "ir.log",
+        )
     from pnr.native_drc import run_drc
 
     run_drc(kicad_cli, board, out / "baseline.drc.json", env=env)

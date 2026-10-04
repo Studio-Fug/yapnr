@@ -159,10 +159,16 @@ class BoardRoute:
     # copper written locked, {"tracks": [[net, layer, a, b]], "vias": [[net, x, y]]}.
     via_sizes: List[list] = field(default_factory=list)
     locked: dict = field(default_factory=dict)
+    # Partial fanouts only (pnr.route.detail.fanout): net -> {"REF.PAD": reason} of the
+    # balls left unconnected while their nets routed among the other terminals.
+    partial_open: dict = field(default_factory=dict)
+    # Declared plane partitions only (pnr.plane_partition): the rails' regions, as
+    # routes.json ``plane_regions`` rows for writeback.
+    plane_regions: List[dict] = field(default_factory=list)
 
     @property
     def fully_routed(self) -> bool:
-        return self.result.fully_routed
+        return self.result.fully_routed and not self.partial_open
 
     def extras(self) -> dict:
         """The ``routes.json`` keys a declared fanout adds (empty without one)."""
@@ -171,6 +177,8 @@ class BoardRoute:
             out["via_sizes"] = self.via_sizes
         if self.locked:
             out["locked"] = self.locked
+        if self.plane_regions:
+            out["plane_regions"] = self.plane_regions
         return out
 
     def summary(self) -> str:
@@ -234,7 +242,7 @@ def layer_plan(graph: BoardGraph, rules: Optional[dict]):
 _WARNED: Set[str] = set()
 
 
-def _warn_once(warnings) -> None:
+def _warn_once(warnings, source="pnr.stack") -> None:
     """Each stack warning (pnr.stack.assess) once per process, on stderr, where the
     run's place-and-route log keeps it; the route result also carries them."""
     import sys
@@ -242,7 +250,7 @@ def _warn_once(warnings) -> None:
     for text in warnings:
         if text not in _WARNED:
             _WARNED.add(text)
-            sys.stderr.write("pnr.stack: warning: %s\n" % text)
+            sys.stderr.write("%s: warning: %s\n" % (source, text))
 
 
 # Copper thickness of one ounce per square foot (mm), the IPC-2221 unit.
@@ -323,6 +331,37 @@ def _plane_region_rects(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict
         y1 = max(r.top for r in rs)
         out.append((net, la, Rect((x0 + x1) / 2.0, (y0 + y1) / 2.0, x1 - x0, y1 - y0)))
     return out
+
+
+def _exact_edge(grid: RouteGrid, rules: Optional[dict], width: float, height: float, nets=()):
+    """``board.edge: exact``: bar the cells the board's own outline forbids
+    (pnr.board_edge.block_exact_edge, ``rules["board_edges"]`` from the drivers'
+    attach_edges) and return its report; None when off. An outline that does not
+    frame the ``width`` x ``height`` placement region is left to the rectangle
+    model (reported, with a warning)."""
+    rules = rules or {}
+    if rules.get("edge") != "exact":
+        return None
+    edges = rules.get("board_edges")
+    if not edges:
+        _warn_once(
+            ["board.edge: exact without the board's outline (board_edges): rectangle"],
+            "pnr.route",
+        )
+        return {"model": "rectangle", "reason": "no board_edges in the rules"}
+    w, h = edges.get("size") or (None, None)
+    if w is None or abs(w - width) > 1e-3 or abs(h - height) > 1e-3:
+        _warn_once(
+            [
+                "board.edge: exact: the outline (%s x %s mm) does not frame the %.3f x %.3f mm "
+                "placement region: rectangle" % (w, h, width, height)
+            ],
+            "pnr.route",
+        )
+        return {"model": "rectangle", "reason": "outline size differs from the region"}
+    from pnr.board_edge import block_exact_edge
+
+    return dict(block_exact_edge(grid, rules, edges, nets), model="exact")
 
 
 def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict]) -> None:
@@ -598,7 +637,7 @@ def tie_plane_layers(grid, graph, stack, plan, result, plane_access, via_keepout
     holes = []
     for name, rn in result.nets.items():
         if rn.cells:
-            for c in _footprint(grid, rn.cells, via_keepout, net_halo.get(name, 0)):
+            for c in _footprint(grid, rn.cells, via_keepout, net_halo.get(name, 0), net=name):
                 occupied.setdefault((c.layer, c.i, c.j), set()).add(name)
         holes.extend((name, grid.center_of(i, j)) for i, j in rn.vias)
 
@@ -866,10 +905,35 @@ def route_board(
     # Per-net track width from the net classes (type/amperage), default = fab width.
     net_width = _net_widths(rules, track_width_mm)
     pitch = detail_pitch(pitch, track_width_mm, clearance_mm)
+    # board.class_clearance: a net's own clearance is its class clearance where that
+    # exceeds the fab's (KiCad judges two nets at the larger of theirs). ``maze``:
+    # its track halo, via keep-out and static-copper tables are sized from it while
+    # it routes; ``repair``: it routes as without the switch, and only the nets the
+    # checks after the route find too close are routed again, exactly (class_check).
+    # Both end with those checks and the copper audit. Off: the fab clearance for all.
+    class_mode = (rules or {}).get("class_clearance")
+    class_maze = class_mode == "maze"
+    # board.dru_routing: the board's custom rules where they constrain routing
+    # (rules["dru"], pnr.dru_rules, attached by the drivers; route.detail.dru_apply).
+    # A small pair clearance raises one side's clearance before the halos are sized.
+    dru = (rules or {}).get("dru") if (rules or {}).get("dru_routing") else None
+    raised = {}
+    if dru:
+        from .dru_apply import raised_clearances
+
+        raised = raised_clearances(dru)
+    class_of = _net_clearances(rules) if class_maze else {}
+    for n, value in raised.items():
+        if class_maze:
+            class_of[n] = max(class_of.get(n, 0.0), value)
+
+    def own_clearance(n):
+        return max(clearance_mm, class_of.get(n, 0.0))
+
     # Every net reserves enough track halo for this pitch, including signals:
     # other-net centre must be ≥ width/2 + clearance + ½signal from this net's cells.
     net_halo = {
-        n: _track_halo(w, track_width_mm, clearance_mm, pitch)
+        n: _track_halo(w, track_width_mm, own_clearance(n), pitch)
         for n in (net.name for net in graph.nets)
         for w in (net_width.get(n, track_width_mm),)
     }
@@ -879,6 +943,12 @@ def route_board(
     # allowed other-net via sits ⌈(via_d+clr)/pitch⌉ cells away ⇒ keep-out radius one
     # less. (Default 0.45/0.13/0.30 ⇒ 1; a tighter fab needs a wider halo.)
     via_keepout = max(1, math.ceil((2 * via_radius_mm + clearance_mm) / pitch) - 1)
+    # A net whose class clearance needs more keeps its own (class_clearance: maze).
+    via_keepouts = {}
+    for n in sorted(class_of):
+        k = max(via_keepout, math.ceil((2 * via_radius_mm + own_clearance(n)) / pitch) - 1)
+        if k > via_keepout:
+            via_keepouts[n] = k
 
     width, height = outline_size(graph, constraints)
     layers, planes, stack = layer_plan(graph, rules)
@@ -899,6 +969,21 @@ def route_board(
             current_layer_mask(stack, layers, rules, net_width, track_width_mm) or None
         )
     grid.net_clearances = _net_clearances(rules)
+    for n, value in raised.items():  # dru_routing: small pair clearances (dru_apply)
+        grid.net_clearances[n] = max(grid.net_clearances.get(n, 0.0), value)
+    dru_report = None
+    if dru:
+        # The layers a net may use: disallow track by layer, disallow via (its pads'
+        # one layer); intersected with the stack's current-rated masks.
+        from .dru_apply import layer_masks
+
+        masks, dru_report = layer_masks(grid, graph, dru)
+        if masks:
+            merged = dict(grid.layer_mask or {})
+            for n, allowed in masks.items():
+                merged[n] = merged[n] & allowed if n in merged else allowed
+            grid.layer_mask = merged
+        dru_report["raised_clearances"] = dict(sorted(raised.items()))
     grid.reserve_wide_pad_clearance()
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.
@@ -931,12 +1016,18 @@ def route_board(
             edge + track_width_mm / 2,
             max(edge + via_radius_mm, float(extra["hole_to_edge_mm"]) + fab["via_drill_mm"] / 2),
         )
+    # board.edge: exact: the board's own outline (arcs, notches, stroke) as KiCad
+    # judges it, beside the rectangle model above (pnr.board_edge).
+    edge_report = _exact_edge(grid, rules, width, height, [net.name for net in graph.nets])
     # Split planes on the inner layers become obstacles the signals route around
     # (matching the 2 mm writeback pour margin).
     _mark_plane_regions(grid, graph, rules, margin=PLANE_REGION_MARGIN_MM, stack=stack)
     _mark_copper_keepouts(grid, graph, rules)
     _mark_source_arrays(grid, graph, rules)
 
+    if class_mode in ("maze", "repair"):
+        # Escape options of two nets keep the larger of their class clearances.
+        grid.class_escapes = True
     # Plan a pin escape per pad (E2 via-in-pad / E3 dog-bone) — the access cell the
     # maze routes each net from, plus the escape geometry that bonds pad→access.
     signal_nets = {net.name for net in graph.nets if net.name not in planes and net.degree >= 2}
@@ -984,9 +1075,10 @@ def route_board(
                     drop_widths[pad.net] = max(drop_widths.get(pad.net, 0.0), w)
         for n, w in drop_widths.items():
             net_width.setdefault(n, w)
+        regions = plane_regions(stack, graph.stack, pad_points(graph), width, height)
         plane_access = PlaneAccess(
             stack,
-            plane_regions(stack, graph.stack, pad_points(graph), width, height),
+            regions,
             inset=via_radius_mm,
             outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
@@ -1034,6 +1126,25 @@ def route_board(
             via_keepout=via_keepout,
             fixed_copper=fixed_copper,
         )
+    partitions = []
+    if plane_access is not None and rules and rules.get("plane_partition"):
+        # Rails sharing a plane layer (pnr.plane_partition): territories from their own
+        # balls and pads (after the fanouts, whose vias are terminals or obstacles)
+        # replace the bounding-box regions on that layer for every drop below.
+        from pnr.plane_partition import for_route
+
+        partitions = for_route(
+            grid, graph, rules, stack, width, height, fixed_copper=fixed_copper, fanouts=fanouts
+        )
+        done = {p.layer for p in partitions}
+        regions = [r for r in regions if r.layer not in done]
+        regions += [r for p in partitions for r in p.regions]
+        plane_access = PlaneAccess(
+            stack,
+            regions,
+            inset=via_radius_mm,
+            outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
+        )
     plan = plan_escapes(
         grid,
         graph,
@@ -1065,14 +1176,31 @@ def route_board(
             for net, cells in sorted(ports.items())
         }
     if fanouts is not None:
+        if fanouts.retry:
+            # Partial fanouts: the balls handed back are escaped or open now.
+            from .fanout import resolve_partial
+
+            resolve_partial(grid, fanouts, plan)
         plan.escapes.extend(fanouts.escapes)
         for n, cells in sorted(fanouts.access.items()):
             plan.net_access.setdefault(n, []).extend(cells)
         plan.blocked_nets |= fanouts.blocked_nets
+        for n in sorted(fanouts.partial_open):
+            if n not in drop_widths and len(plan.net_access.get(n, [])) < 2:
+                plan.blocked_nets.add(n)  # nothing left to join: the net stays open
         for n, sites in sorted(fanouts.drop_failures.items()):
             plan.drop_failures.setdefault(n, []).extend(sites)
         grid.protected_escape_access.update(fanouts.protected)
         plan.diagnostics["fanout"] = fanouts.report
+    if edge_report is not None:
+        plan.diagnostics["board_edge"] = edge_report
+    if dru:
+        # Large pair clearances: each side kept off the other side's copper (dru_apply).
+        from .dru_apply import pair_keepouts
+
+        dru_report["pair_keepouts"] = pair_keepouts(
+            grid, [net.name for net in graph.nets], dru, fixed_copper
+        )
     from pnr.stack import assess
 
     stack_warnings = list(assess(rules, getattr(graph, "stack", None))[1])
@@ -1090,6 +1218,10 @@ def route_board(
         graph, grid, plan, net_width, track_width_mm, planes, deferred, max_iters
     )
 
+    if class_maze:
+        # Every routed net judges the static copper (pads, escapes) at its own width
+        # and class clearance, its vias too (RouteGrid.class_tables).
+        grid.class_tables = frozenset(net_access)
     # Price a layer transition in physical distance so finer grids do not
     # accidentally make short via excursions cheaper than surface detours.
     result = route(
@@ -1101,7 +1233,36 @@ def route_board(
         rrr_rounds=ripup_rounds,
         via_cost=3.0 / grid.pitch,
         late_copper=_late_copper(graph, planes, deferred, plan.escapes),
+        **({"via_keepouts": via_keepouts} if via_keepouts else {}),
     )
+    class_report = None
+    if class_mode in ("maze", "repair"):
+        # The routed nets against the static copper at their class clearances (every
+        # net now judges it through class tables), then the exact pairwise rule over
+        # them: offenders routed again, exactly, around the rest (class_check).
+        from .class_check import repair, static_offenders
+
+        if not class_maze:
+            grid.class_tables = frozenset(net_access)
+        grid.reserve_wide_pad_clearance()
+        static_tracks, static_vias = _static_copper(
+            grid, plan, result, net_width, track_width_mm, drop_widths
+        )
+        offenders = static_offenders(
+            grid,
+            result,
+            net_width,
+            static_tracks,
+            static_vias,
+            _fanout_via_sizes(fanouts),
+            classes=_net_clearances(rules),
+        )
+        class_report = repair(grid, net_access, result, via_cost=3.0 / grid.pitch, also=offenders)
+        class_report["mode"] = class_mode
+        class_report["halos"] = {
+            "nets": len(class_of),
+            "via_keepouts": dict(sorted(via_keepouts.items())),
+        }
 
     if deferred or plan.blocked_nets:
         from .maze import RoutedNet
@@ -1146,6 +1307,18 @@ def route_board(
         board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
     for net, sites in sorted((fanouts.failure_sites if fanouts is not None else {}).items()):
         board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
+    if fanouts is not None and fanouts.partial_open:
+        board.partial_open = {n: dict(v) for n, v in sorted(fanouts.partial_open.items())}
+    if partitions:
+        board.plane_regions = [row for p in partitions for row in p.rows()]
+        board.escape_diagnostics["plane_partition"] = [p.report for p in partitions]
+        for p in partitions:
+            for net, info in sorted(p.report["nets"].items()):
+                sites = [tuple(t["at"]) for t in info["unreached"]]
+                if sites:  # a terminal no territory reaches is a failure site
+                    board.failure_sites[net] = sorted(
+                        set(board.failure_sites.get(net, [])) | set(sites)
+                    )
     if os.environ.get("PNR_LOCAL_PRESSURE") == "1":
         from .pressure import localized_pressure
 
@@ -1242,9 +1415,67 @@ def route_board(
                 via_radius=via_radius_mm,
                 fixed_copper=_flat(fixed_copper),
             )
+    if dru:
+        from .dru_apply import length_report
+
+        dru_report["length"] = length_report(board.tracks, dru)
+        dru_report["applied"] = dru.get("applied", [])
+        dru_report["unmodelled"] = dru.get("unmodelled", [])
+        board.escape_diagnostics["dru"] = dru_report
+    if class_report is not None or (dru and dru.get("pair_clearances")):
+        # What the emitted copper keeps from other nets at their class clearances
+        # and the board's pair rules (the raised clearances are routing's only).
+        import sys
+
+        from .class_check import copper_audit, summarize
+        from .dru_apply import pair_needs
+
+        audit = copper_audit(
+            grid,
+            board.tracks,
+            board.vias,
+            board.via_sizes,
+            pairs=pair_needs(dru),
+            classes=_net_clearances(rules),
+        )
+        if class_report is not None:
+            class_report["audit"] = audit
+            board.escape_diagnostics["class_clearance"] = class_report
+            for line in summarize(class_report):
+                sys.stderr.write(line + "\n")
+        else:
+            dru_report["audit"] = audit
     if route_trace is not None:
         route_trace.end(board)
     return board
+
+
+def _static_copper(grid, plan, result, net_width, track_width_mm, drop_widths):
+    """The escape copper route_board will emit (plane drops, and the escapes whose net
+    reaches their access cell in ``result``), as ``(tracks, vias)`` in its emitted
+    form: class_check.static_offenders' static copper."""
+    from types import SimpleNamespace
+
+    sink = SimpleNamespace(tracks=[], vias=[])
+    reached = {n: set(rn.cells) for n, rn in result.nets.items()}
+    for esc in plan.escapes:
+        if esc.kind == "blocked":
+            continue
+        if esc.net in drop_widths:
+            w = esc.width or drop_widths[esc.net]
+        elif esc.access in reached.get(esc.net, ()):
+            w = esc.width if esc.fanout else net_width.get(esc.net, track_width_mm)
+        else:
+            continue
+        _emit_escape(sink, esc, grid, w)
+    return sink.tracks, sink.vias
+
+
+def _fanout_via_sizes(fanouts):
+    """``[[net, x, y, diameter, drill]]`` of a fanout's vias (empty without one)."""
+    if fanouts is None:
+        return []
+    return [[n, x, y, d, h] for (n, x, y), (d, h) in sorted(fanouts.via_sizes.items())]
 
 
 def _flat(copper):

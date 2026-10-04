@@ -5,8 +5,10 @@
 # and linux/arm64; see docs/containers.md.
 #
 # Build context: the repository root (.dockerignore passes docker/, the notices and
-# third_party/image-licenses only). The yapnr wheel (bazel build //release:wheel.dist) comes in
-# through the named build context `dist`:
+# third_party/image-licenses only). The yapnr wheel of the target architecture (bazel build
+# //release:wheel.dist on that architecture: it carries yapnr.rf's native FDTD library, which
+# the controller Python loads from site-packages) comes in through the named build context
+# `dist`:
 #
 #   docker buildx build -f docker/yapnr/Dockerfile --build-context dist=<dir with the wheel> .
 #

@@ -4,6 +4,7 @@ name: Image
 #   ghcr.io/studio-fug/yapnr-kicad  Ubuntu 24.04 + KiCad 10 (tag: docker/yapnr-kicad/TAG), and
 #                                   <tag>-src, the source packages of its KiCad build
 #   ghcr.io/studio-fug/yapnr        that base + CPython 3.11, numpy, CPU torch + the yapnr wheel
+#                                   (one per architecture, with yapnr.rf's native FDTD library)
 # Built natively on ubuntu-24.04 (linux/amd64) and ubuntu-24.04-arm (linux/arm64), no QEMU, and
 # smoke-tested on both (tools/image/smoke_image.sh) before anything is tagged.
 #
@@ -232,11 +233,24 @@ jobs:
               "publish now: ${publish_base_src}"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-  # The yapnr wheel, stamped with the version from git. Pure Python: built once.
+  # The yapnr wheel, stamped with the version from git, one per architecture: it carries
+  # yapnr.rf's native FDTD library (//yapnr/rf:libyapnr_fdtd.so) built natively on each
+  # runner with the runner's gcc, and is tagged for it (py3-none-manylinux_2_34_<cpu>).
   wheel:
     needs: plan
     if: needs.plan.outputs.build == 'true'
-    runs-on: ubuntu-24.04-arm
+    name: wheel (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            tag: manylinux_2_34_x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            tag: manylinux_2_34_aarch64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
       - name: Setup repository
@@ -262,6 +276,7 @@ jobs:
       - name: Build the wheel
         env:
           VERSION: ${{ needs.plan.outputs.version }}
+          TAG: ${{ matrix.tag }}
         run: |
           bazel build //release:wheel.dist --config=ci --stamp --embed_label="${VERSION}" \
             --repository_cache="$HOME/.cache/bazel-repo"
@@ -269,11 +284,32 @@ jobs:
           cp "$(bazel info --config=ci bazel-bin)"/release/wheel_dist/yapnr-*.whl dist/
           ls -l dist
           test "$(find dist -name 'yapnr-*.whl' | wc -l)" -eq 1
+          test "$(find dist -name "yapnr-*-py3-none-${TAG}.whl" | wc -l)" -eq 1
+
+      # The library in the wheel: built for this architecture, no newer glibc symbols than the
+      # wheel's tag promises, and nothing beyond libc and the dynamic loader.
+      - name: Check the wheel's native library
+        env:
+          TAG: ${{ matrix.tag }}
+        run: |
+          rm -rf /tmp/wheel && mkdir -p /tmp/wheel
+          python3 -m zipfile -e dist/yapnr-*.whl /tmp/wheel
+          lib=/tmp/wheel/yapnr/rf/libyapnr_fdtd.so
+          file "${lib}"
+          glibc="$(objdump -T "${lib}" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)"
+          echo "newest glibc symbol version: ${glibc}"
+          want="$(echo "${TAG}" | sed -E 's/^manylinux_([0-9]+)_([0-9]+)_.*/GLIBC_\1.\2/')"
+          test "$(printf '%s\n%s\n' "${glibc}" "${want}" | sort -V | tail -n 1)" = "${want}"
+          readelf -d "${lib}" | grep NEEDED
+          if readelf -d "${lib}" | grep NEEDED | grep -vE 'libc\.so|ld-linux|libpthread|libm\.so'; then
+            echo "unexpected shared library dependencies" >&2
+            exit 1
+          fi
 
       - name: Upload the wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: wheel
+          name: wheel-${{ matrix.arch }}
           path: dist/
           if-no-files-found: error
           retention-days: 7
@@ -308,7 +344,7 @@ jobs:
       - name: Download the wheel
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: wheel
+          name: wheel-${{ matrix.arch }}
           path: dist
 
       - name: Build and smoke-test
@@ -357,7 +393,7 @@ jobs:
       - name: Download the wheel
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: wheel
+          name: wheel-${{ matrix.arch }}
           path: dist
 
       - name: Build, smoke-test and push by digest

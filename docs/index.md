@@ -75,6 +75,8 @@ containers
 viewer
 frontends/atopile
 part-cache
+rf-inverse-design
+rf-solver-backends
 fab-and-ordering
 releases
 rf-fab-coupons
@@ -94,6 +96,7 @@ decisions
 design/animations
 design/constraint-and-hier-animations
 design/fea-integration
+design/rf-topology-optimization
 design/rf-fab-coupons
 design/cloud-experiments
 design/fab-and-ordering

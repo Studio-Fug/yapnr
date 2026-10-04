@@ -8,7 +8,7 @@ name: Release
 #   ci       the whole CI workflow at the tag (ci.yaml; its Pages jobs skip themselves)
 #   image    both images for both architectures, smoke-tested, pushed with the release tags
 #            (image.yaml: X.Y.Z, X.Y, latest; X.Y.Z-rc.N only for release candidates)
-#   release  source archive, wheel, docs tarball, SHA256SUMS, attestations, then the GitHub
+#   release  source archive, wheels, docs tarball, SHA256SUMS, attestations, then the GitHub
 #            release: a draft with every file and the generated notes (grouped by PR label,
 #            .github/release.yml), published last
 #
@@ -137,11 +137,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Built earlier in this run: the wheel by image.yaml, the site by ci.yaml.
-      - name: Download the wheel
+      # Built earlier in this run: the wheels (one per architecture) by image.yaml, the site by
+      # ci.yaml.
+      - name: Download the wheels
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: wheel
+          pattern: wheel-*
+          merge-multiple: true
           path: ${{ runner.temp }}/wheel
 
       - name: Download the documentation site
@@ -159,6 +161,7 @@ jobs:
           git archive --format=tar --prefix="yapnr-${VERSION}/" "${ref}" \
             | gzip -n > "out/yapnr-${TAG:-${PEP440}}.tar.gz"
           cp "${RUNNER_TEMP}"/wheel/yapnr-*.whl out/
+          test "$(find out -name 'yapnr-*.whl' | wc -l)" -eq 2
           mtime="$(git log -1 --format=%ct "${ref}")"
           tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@${mtime}" \
             -C "${RUNNER_TEMP}/site" -cf - . | gzip -n > "out/yapnr-docs-${VERSION}.tar.gz"
@@ -198,10 +201,11 @@ jobs:
           if [ -f "docs/releases/v${major_minor}.md" ]; then
             upgrade=(--upgrade-notes "docs/releases/v${major_minor}.md")
           fi
-          wheels=(out/yapnr-*.whl)
+          wheels=()
+          for wheel in out/yapnr-*.whl; do wheels+=(--wheel "${wheel}"); done
           python3 tools/release/notes_header.py --tag "${tag}" --pep440 "${PEP440}" \
             --digest "${digest}" --kicad-version "${KICAD_VERSION}" \
-            --archive "out/yapnr-${TAG:-${PEP440}}.tar.gz" --wheel "${wheels[0]}" \
+            --archive "out/yapnr-${TAG:-${PEP440}}.tar.gz" "${wheels[@]}" \
             ${upgrade[@]+"${upgrade[@]}"} > "${RUNNER_TEMP}/notes.md"
           cat "${RUNNER_TEMP}/notes.md" >> "${GITHUB_STEP_SUMMARY}"
 

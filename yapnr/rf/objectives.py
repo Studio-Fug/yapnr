@@ -10,6 +10,9 @@ band (φ ≤ 0 means met), with x = 10 log10(|S|² + 1e-10):
     absorbed fraction ≥ a_min        φ = (a_min − a)/s      s = 0.1   (≤ a_max likewise)
     lost fraction ≤ l_max            φ = (l − l_max)/s      s = 0.1   (≥ l_min likewise)
 
+Pattern requirements (`patterns`, board models) give one violation per frequency and
+direction (or per hpbw point): every one of them is a term of the smooth maximum below.
+
 Requirements group by excitation (S_ij and the radiated, absorbed and lost fractions of port j
 belong to excitation j). Per group and frequency the violations combine into one smooth maximum,
 f_{g,m} = τ log Σ_r exp(φ_r(ω_m)/τ), at most τ log K above the true maximum; one adjoint run
@@ -38,6 +41,7 @@ class Group:
     excitation: int
     requirements: tuple[Requirement, ...]
     active: np.ndarray  # (R, M) bool: requirement r constrains frequency m
+    indices: tuple = ()  # the requirements' positions in spec.requirements
 
     @property
     def frequencies_active(self) -> np.ndarray:
@@ -49,16 +53,29 @@ def build_groups(spec: Spec, freqs: np.ndarray) -> list[Group]:
     """The objective groups of a spec at the objective frequencies `freqs` (Hz)."""
     reqs = spec.requirements
     if spec.optimizer.aggregate == "none":
-        parts = [(f"r{k + 1}", (r,)) for k, r in enumerate(reqs)]
+        parts = [(f"r{k + 1}", (k,)) for k in range(len(reqs))]
     else:
         parts = []
         for j in spec.excitations:
-            parts.append((f"x{j}", tuple(r for r in reqs if r.excitation == j)))
+            parts.append((f"x{j}", tuple(k for k, r in enumerate(reqs) if r.excitation == j)))
     groups = []
-    for name, rs in parts:
+    for name, ks in parts:
+        rs = tuple(reqs[k] for k in ks)
         active = np.array([spec.band_mask(r.band, freqs) for r in rs])
-        groups.append(Group(name, rs[0].excitation, rs, active))
+        groups.append(Group(name, rs[0].excitation, rs, active, tuple(ks)))
     return groups
+
+
+def phi_terms(req, k: int, quantities: dict, freqs: np.ndarray):
+    """The violations of requirement `req` (spec index k) as (T, M) torch: one row for the
+    S-parameter and fraction requirements, one per direction (or hpbw point) for pattern
+    requirements (`patterns.phi_pattern`)."""
+    from yapnr.rf.patterns import PatternRequirement, phi_pattern
+
+    if isinstance(req, PatternRequirement):
+        far = quantities["far"][req.excitation]
+        return phi_pattern(req, k, far, quantities["table"], freqs)
+    return phi(req, quantities, freqs).reshape(1, -1)
 
 
 def phi(req: Requirement, quantities: dict, freqs: np.ndarray):
@@ -96,11 +113,17 @@ def group_values(group: Group, quantities: dict, freqs: np.ndarray, tau: float):
     without an active requirement are a large negative constant without gradient."""
     import torch
 
-    phis = torch.stack([phi(r, quantities, freqs) for r in group.requirements])
-    active = torch.as_tensor(group.active)
-    masked = torch.where(active, phis / tau, torch.full_like(phis, -1e30))
-    if len(group.requirements) == 1:
+    terms, act = [], []
+    indices = group.indices or tuple(range(len(group.requirements)))
+    for r, k, a in zip(group.requirements, indices, group.active):
+        t = phi_terms(r, k, quantities, freqs)
+        terms.append(t)
+        act.append(np.broadcast_to(a[None], (t.shape[0], a.size)))
+    phis = torch.cat(terms)
+    active = torch.as_tensor(np.concatenate(act))
+    if phis.shape[0] == 1:
         return torch.where(active[0], phis[0], torch.full_like(phis[0], -1e30))
+    masked = torch.where(active, phis / tau, torch.full_like(phis, -1e30))
     return tau * torch.logsumexp(masked, dim=0)
 
 
@@ -111,7 +134,8 @@ def violations(spec: Spec, quantities: dict, freqs: np.ndarray, excitation: int)
     for k, r in enumerate(spec.requirements):
         if r.excitation != excitation:
             continue
-        v = phi(r, quantities, freqs).detach().numpy().astype(np.float64)
+        # The worst term (direction) of each frequency.
+        v = phi_terms(r, k, quantities, freqs).detach().numpy().astype(np.float64).max(axis=0)
         v = np.where(spec.band_mask(r.band, freqs), v, np.nan)
         out[f"{k + 1}: {r.label}"] = v
     return out

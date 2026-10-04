@@ -104,12 +104,140 @@ class GridSpec:
 class Port:
     """A line port: number, the side of the design region it enters (W, E, S, N), the
     transverse position of the strip centre (mm) and its width in cells (None: chosen by
-    calibration for 50 Ω)."""
+    calibration for 50 Ω). Or, in a board model (`board`), a lumped port (`kind="lumped"`):
+    Ez columns from the ground to the copper on the grid nodes inside the rectangle `x_mm` ×
+    `y_mm` (a degenerate side is a line of nodes), `ohms` (default 50) in series with the
+    source (design §26.1)."""
 
     n: int
-    side: str
-    at_mm: float
+    side: str | None = None
+    at_mm: float | None = None
     width_cells: int | None = None
+    kind: str = "line"
+    x_mm: tuple | None = None
+    y_mm: tuple | None = None
+    ohms: float | None = None
+
+    def to_dict(self) -> dict:
+        if self.kind == "lumped":
+            return {
+                "n": self.n,
+                "kind": "lumped",
+                "x_mm": list(self.x_mm),
+                "y_mm": list(self.y_mm),
+                "ohms": 50.0 if self.ohms is None else self.ohms,
+            }
+        return {
+            "n": self.n,
+            "side": self.side,
+            "at_mm": self.at_mm,
+            "width_cells": self.width_cells,
+        }
+
+
+@dataclass(frozen=True)
+class Rect:
+    """An axis-aligned rectangle (mm)."""
+
+    x_mm: tuple
+    y_mm: tuple
+
+    def to_dict(self) -> dict:
+        return {"x_mm": list(self.x_mm), "y_mm": list(self.y_mm)}
+
+    def si(self) -> tuple:
+        return (tuple(v * 1e-3 for v in self.x_mm), tuple(v * 1e-3 for v in self.y_mm))
+
+
+@dataclass(frozen=True)
+class GroundSpec:
+    """A board's ground plane (at `stackup.h_mm` below the copper): the outline (default the
+    board's) less the keepout rectangles."""
+
+    x_mm: tuple | None = None
+    y_mm: tuple | None = None
+    keepout: tuple = ()
+
+    def to_dict(self) -> dict:
+        out: dict = {}
+        if self.x_mm is not None:
+            out["x_mm"] = list(self.x_mm)
+            out["y_mm"] = list(self.y_mm)
+        if self.keepout:
+            out["keepout"] = [k.to_dict() for k in self.keepout]
+        return out
+
+
+@dataclass(frozen=True)
+class BoardSpec:
+    """A board model (design §26.1): the board's outline `x_mm` × `y_mm`, its substrate block
+    `thickness_mm` (default `stackup.h_mm`, the ground at the bottom), its `ground` ("infinite":
+    a PEC floor under everything, far field by image theory; or a `GroundSpec`), fixed top
+    `copper` outside the design region (feeds to the ports), `air_mm` of air beyond it to the
+    CPML (default λ0/4 at the highest frequency) and `max_cell_mm` (default min(λd/15, λ0/20))."""
+
+    x_mm: tuple
+    y_mm: tuple
+    thickness_mm: float | None = None
+    ground: object = field(default_factory=GroundSpec)
+    air_mm: float | None = None
+    max_cell_mm: float | None = None
+    copper: tuple = ()
+    pml_cells: int = 8
+
+    @property
+    def infinite(self) -> bool:
+        return self.ground == "infinite"
+
+    def to_dict(self) -> dict:
+        out: dict = {"x_mm": list(self.x_mm), "y_mm": list(self.y_mm)}
+        if self.thickness_mm is not None:
+            out["thickness_mm"] = self.thickness_mm
+        out["ground"] = "infinite" if self.infinite else self.ground.to_dict()
+        for key in ("air_mm", "max_cell_mm"):
+            if getattr(self, key) is not None:
+                out[key] = getattr(self, key)
+        if self.copper:
+            out["copper"] = [r.to_dict() for r in self.copper]
+        if self.pml_cells != 8:
+            out["pml_cells"] = self.pml_cells
+        return out
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "BoardSpec":
+        d = dict(d)
+        unknown = set(d) - {f.name for f in fields(cls)}
+        if unknown:
+            raise ValueError(f"board: unknown keys {sorted(unknown)}")
+        ground = d.get("ground", {})
+        if ground != "infinite":
+            if not isinstance(ground, dict):
+                raise ValueError("board.ground: 'infinite' or {x_mm, y_mm, keepout}")
+            bad = set(ground) - {"x_mm", "y_mm", "keepout"}
+            if bad:
+                raise ValueError(f"board.ground: unknown keys {sorted(bad)}")
+            ground = GroundSpec(
+                _tuple(ground.get("x_mm")),
+                _tuple(ground.get("y_mm")),
+                tuple(_rect(k) for k in ground.get("keepout", ())),
+            )
+        return cls(
+            x_mm=tuple(float(v) for v in d["x_mm"]),
+            y_mm=tuple(float(v) for v in d["y_mm"]),
+            thickness_mm=d.get("thickness_mm"),
+            ground=ground,
+            air_mm=d.get("air_mm"),
+            max_cell_mm=d.get("max_cell_mm"),
+            copper=tuple(_rect(r) for r in d.get("copper", ())),
+            pml_cells=int(d.get("pml_cells", 8)),
+        )
+
+
+def _rect(d: dict) -> Rect:
+    bad = set(d) - {"x_mm", "y_mm"}
+    if bad:
+        raise ValueError(f"rectangle: unknown keys {sorted(bad)}")
+    return Rect(tuple(float(v) for v in d["x_mm"]), tuple(float(v) for v in d["y_mm"]))
 
 
 @dataclass(frozen=True)
@@ -178,10 +306,10 @@ class Lumped:
 @dataclass(frozen=True)
 class RadiationBox:
     """The radiated-power box (design §25.2–§25.3): closed by the ground, without feed windows,
-    enclosing the design region by `clearance_cells` on every side and above the copper.
-    `offset_mm` (beyond the design region) and `height_mm` (above the copper) optionally place
-    its faces further out; the result does not depend on them beyond the feed's own loss inside
-    the box (about 0.12 %/mm on S2, the audit).
+    enclosing the design region (and, with a `board`, the whole board) by `clearance_cells` on
+    every side and above the copper. `offset_mm` (beyond the design region) and `height_mm`
+    (above the copper) optionally place its faces further out; the result does not depend on
+    them beyond the feed's own loss inside the box (about 0.12 %/mm on S2, the audit).
 
     The feed windows of round 2 (`window_margin_mm`, `window_height_mm`) are removed: they
     dropped 3–6 % of the input power leaving backwards through the window and counted 1–1.6 %
@@ -447,7 +575,12 @@ class Requirement:
 
     @classmethod
     def from_dict(cls, d: dict) -> list["Requirement"]:
-        """One requirement, or two for `between_db`."""
+        """One requirement, or two for `between_db` (a pattern requirement for the keys of
+        `patterns.QUANTITIES`)."""
+        from yapnr.rf.patterns import PatternRequirement, is_pattern
+
+        if is_pattern(d):
+            return [PatternRequirement.from_dict(d)]
         d = dict(d)
         band = d.pop("band", None)
         if band is None:
@@ -561,10 +694,12 @@ class Loss:
         return Requirement("loss", (self.port,), "min", float(value), band, scale)
 
 
-def _flatten(reqs) -> tuple[Requirement, ...]:
+def _flatten(reqs) -> tuple:
+    from yapnr.rf.patterns import PatternRequirement
+
     out = []
     for r in reqs:
-        if isinstance(r, Requirement):
+        if isinstance(r, (Requirement, PatternRequirement)):
             out.append(r)
         else:
             out.extend(_flatten(r))
@@ -590,6 +725,13 @@ class Spec:
     optimizer: OptimizerSpec = field(default_factory=OptimizerSpec)
     solver: SolverSpec = field(default_factory=SolverSpec)
     lumped: tuple[Lumped, ...] = ()
+    # A board model (design §26): a finite board in free space or on an infinite ground, with
+    # lumped ports; needed by every pattern requirement (`patterns`).
+    board: BoardSpec | None = None
+    # The far field's frame ({"frame": {"axis": "+z", "zero": "+x"}}: θ from the axis, φ from
+    # `zero`), and the named target densities of `shape` requirements (`patterns.Target`).
+    far_field: dict | None = None
+    patterns: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "requirements", _flatten(self.requirements))
@@ -612,8 +754,24 @@ class Spec:
         if sorted(numbers) != list(range(1, len(numbers) + 1)):
             raise ValueError("ports must be numbered 1..N")
         for p in self.ports:
-            if p.side not in SIDES:
-                raise ValueError(f"port {p.n}: side must be one of {SIDES}")
+            if p.kind == "lumped":
+                if p.x_mm is None or p.y_mm is None or len(p.x_mm) != 2 or len(p.y_mm) != 2:
+                    raise ValueError(f"port {p.n}: a lumped port needs x_mm and y_mm [lo, hi]")
+                if p.ohms is not None and not p.ohms > 0:
+                    raise ValueError(f"port {p.n}: ohms must be positive")
+                if self.board is None:
+                    raise ValueError(f"port {p.n}: lumped ports need a board model (`board`)")
+            elif p.kind == "line":
+                if p.side not in SIDES or p.at_mm is None:
+                    raise ValueError(f"port {p.n}: side must be one of {SIDES}, with at_mm")
+                if self.board is not None:
+                    raise ValueError(
+                        f"port {p.n}: a board model's ports are lumped (a line port's feed "
+                        "into the CPML would cross the Huygens box, design §26.1)"
+                    )
+            else:
+                raise ValueError(f"port {p.n}: kind must be 'line' or 'lumped'")
+        self._validate_board()
         if not self.requirements:
             raise ValueError("a spec needs at least one requirement")
         for r in self.requirements:
@@ -668,6 +826,62 @@ class Spec:
         if any(r.quantity == "radiated" for r in self.requirements) and self.radiation is None:
             object.__setattr__(self, "radiation", RadiationBox())
 
+    def _validate_board(self) -> None:
+        from yapnr.rf.patterns import PatternRequirement, _frame, parse_target
+
+        pats = [r for r in self.requirements if isinstance(r, PatternRequirement)]
+        b = self.board
+        if b is None:
+            if pats:
+                raise ValueError(
+                    f"requirement {pats[0].label}: pattern and efficiency requirements need a "
+                    "board model (`board`): the infinite substrate has no far field (its "
+                    "surface wave never leaves a closed surface; design §25.4)"
+                )
+            if self.far_field is not None or self.patterns:
+                raise ValueError("far_field and patterns need a board model (`board`)")
+            return
+        (x0, x1), (y0, y1) = sorted(b.x_mm), sorted(b.y_mm)
+        if not (x1 > x0 and y1 > y0):
+            raise ValueError("board: x_mm and y_mm must be [lo, hi] with hi > lo")
+        if b.thickness_mm is not None and b.thickness_mm < self.stackup.h_mm - 1e-12:
+            raise ValueError("board.thickness_mm must be at least stackup.h_mm")
+        if b.infinite:
+            if b.thickness_mm not in (None, self.stackup.h_mm):
+                raise ValueError("board: over an infinite ground the block is the substrate h")
+        else:
+            g = b.ground
+            if (g.x_mm is None) != (g.y_mm is None):
+                raise ValueError("board.ground: x_mm and y_mm together")
+        if self.radiation is not None and (
+            self.radiation.offset_mm is not None or self.radiation.height_mm is not None
+        ):
+            raise ValueError(
+                "radiation.offset_mm and height_mm do not apply to a board model: its Huygens "
+                "box encloses the whole board (radiation.clearance_cells)"
+            )
+        if self.optimizer.seed is not None:
+            raise ValueError("optimizer.seed: the closed-form starts need line ports")
+        if self.optimizer.reference_ohm is not None:
+            raise ValueError("optimizer.reference_ohm: lumped ports are referenced to their ohms")
+        if self.far_field is not None:
+            unknown = set(self.far_field) - {"frame"}
+            if unknown:
+                raise ValueError(f"far_field: unknown keys {sorted(unknown)}")
+            _frame(self.far_field.get("frame"))
+        for name, t in self.patterns.items():
+            parse_target(t.spec if hasattr(t, "spec") else t)
+        for r in pats:
+            if r.quantity == "shape" and r.spec["target"] not in self.patterns:
+                raise ValueError(f"requirement {r.label}: unknown target {r.spec['target']!r}")
+
+    @property
+    def frame(self):
+        """The far field's frame (`farfield.Frame`)."""
+        from yapnr.rf.patterns import _frame
+
+        return _frame((self.far_field or {}).get("frame"))
+
     # -- derived --------------------------------------------------------------------------------
 
     def objective_frequencies(self) -> np.ndarray:
@@ -709,7 +923,7 @@ class Spec:
             },
             "symmetry": self.symmetry,
             "rules": clean(self.rules),
-            "ports": [clean(p) for p in self.ports],
+            "ports": [p.to_dict() for p in self.ports],
             "bands": {k: _band_dict(v) for k, v in sorted(self.bands.items())},
             "requirements": [r.to_dict() for r in self.requirements],
             "fixed": [
@@ -734,6 +948,12 @@ class Spec:
             out["radiation"] = self.radiation.to_dict()
         if self.lumped:
             out["lumped"] = [clean(el) for el in self.lumped]
+        if self.board is not None:
+            out["board"] = self.board.to_dict()
+        if self.far_field is not None:
+            out["far_field"] = self.far_field
+        if self.patterns:
+            out["patterns"] = {k: v.spec for k, v in sorted(self.patterns.items())}
         return out
 
     def canonical_json(self) -> str:
@@ -754,9 +974,24 @@ class Spec:
         ports = []
         for p in d["ports"]:
             p = dict(p)
+            if p.get("kind", "line") == "lumped":
+                unknown = set(p) - {"n", "kind", "x_mm", "y_mm", "ohms"}
+                if unknown:
+                    raise ValueError(f"port {p.get('n')}: unknown keys {sorted(unknown)}")
+                ports.append(
+                    Port(
+                        int(p["n"]),
+                        kind="lumped",
+                        x_mm=tuple(float(v) for v in p["x_mm"]),
+                        y_mm=tuple(float(v) for v in p["y_mm"]),
+                        ohms=float(p.get("ohms", 50.0)),
+                    )
+                )
+                continue
             width = p.pop("width_cells", None)
             if width in (None, "auto"):
                 width = None
+            p.pop("kind", None)
             ports.append(Port(int(p["n"]), str(p["side"]), float(p["at_mm"]), width))
         bands = {}
         for name, b in d["bands"].items():
@@ -794,6 +1029,9 @@ class Spec:
             optimizer=_build(OptimizerSpec, d.get("optimizer", {})),
             solver=_build(SolverSpec, d.get("solver", {})),
             lumped=tuple(_build(Lumped, el) for el in d.get("lumped", ())),
+            board=None if d.get("board") is None else BoardSpec.from_dict(d["board"]),
+            far_field=d.get("far_field"),
+            patterns=_targets(d.get("patterns", {})),
         )
 
     @classmethod
@@ -806,6 +1044,12 @@ class Spec:
 
             return cls.from_dict(yaml.safe_load(text))
         return cls.from_dict(json.loads(text))
+
+
+def _targets(d: dict) -> dict:
+    from yapnr.rf.patterns import parse_target
+
+    return {str(k): parse_target(v) for k, v in d.items()}
 
 
 def _band_dict(b: Band) -> dict:

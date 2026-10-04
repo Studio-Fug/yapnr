@@ -31,7 +31,7 @@ import numpy as np
 
 from yapnr.rf import sparams
 from yapnr.rf.adjoint import gradient, wirtinger
-from yapnr.rf.constants import ETA0
+from yapnr.rf.constants import C0, ETA0
 from yapnr.rf.design.filters import ConicFilter
 from yapnr.rf.design.lengthscale import LengthScale, conic_radius
 from yapnr.rf.design.material_grid import MaterialGrid
@@ -104,6 +104,50 @@ def domain_spec(
         ratio=g.ratio,
         n_pml=g.pml_cells,
         n_pml_top=g.pml_top_cells,
+    )
+
+
+def board_geometry(spec: Spec, *, refine: int = 1, n_sub: int | None = None):
+    """The `board.BoardGeometry` of a board spec (SI units)."""
+    from yapnr.rf.board import BoardGeometry, LumpedPortSpec
+
+    b = spec.board
+    st = spec.stackup.to_stackup()
+    g = spec.grid
+    f_max = g.f_max_ghz * 1e9 if g.f_max_ghz else source_pulse(spec).f_top
+    if b.infinite:
+        ground, keepouts = "infinite", ()
+    else:
+        gx = b.ground.x_mm if b.ground.x_mm is not None else b.x_mm
+        gy = b.ground.y_mm if b.ground.y_mm is not None else b.y_mm
+        ground = (tuple(v * 1e-3 for v in gx), tuple(v * 1e-3 for v in gy))
+        keepouts = tuple(k.si() for k in b.ground.keepout)
+    return BoardGeometry(
+        stackup=st,
+        pitch=g.pitch_mm * 1e-3 / refine,
+        n_sub=int(n_sub or g.substrate_cells * refine),
+        design=tuple(v * 1e-3 for v in spec.design_region),
+        outline=(tuple(v * 1e-3 for v in b.x_mm), tuple(v * 1e-3 for v in b.y_mm)),
+        thickness=(b.thickness_mm or spec.stackup.h_mm) * 1e-3,
+        ground=ground,
+        keepouts=keepouts,
+        ports=tuple(
+            LumpedPortSpec(
+                p.n,
+                tuple(v * 1e-3 for v in p.x_mm),
+                tuple(v * 1e-3 for v in p.y_mm),
+                50.0 if p.ohms is None else p.ohms,
+            )
+            for p in spec.ports
+        ),
+        copper=tuple(r.si() for r in b.copper),
+        f_max=f_max,
+        air=(b.air_mm or 0.0) * 1e-3,
+        max_cell=(b.max_cell_mm or 0.0) * 1e-3,
+        core_cells=g.core_cells * refine,
+        ratio=g.ratio,
+        n_pml=b.pml_cells,
+        clearance=(spec.radiation.clearance_cells if spec.radiation else 2) * refine,
     )
 
 
@@ -208,17 +252,41 @@ class Problem:
         self._cal_by_width: dict[int, LineCalibration] = {}
         self._given_cal = calibrations
 
-        widths = self._resolve_widths(n_sub)
+        self.board = spec.board is not None
+        if self.board:
+            from yapnr.rf.board import BoardDomain
+
+            widths = {}
+            self.domain = BoardDomain(board_geometry(spec, refine=refine, n_sub=n_sub))
+        else:
+            widths = self._resolve_widths(n_sub)
+            self.domain = Domain(domain_spec(spec, widths, refine=refine, n_sub=n_sub))
         self.widths = widths
-        self.domain = Domain(domain_spec(spec, widths, refine=refine, n_sub=n_sub))
         dom = self.domain
         self.grid = dom.grid
         self.dt = self._time_step(self.grid)
-        self.ports = {pg.port.number: pg for pg in dom.ports}
-        self.cal = {n: self._calibration(widths[n]) for n in self.ports}
-        self.port_extraction = sv.port_extraction
+        if self.board:
+            self.ports = {pg.number: pg for pg in dom.ports}
+            self.cal = {}
+        else:
+            self.ports = {pg.port.number: pg for pg in dom.ports}
+            self.cal = {n: self._calibration(widths[n]) for n in self.ports}
+        self.port_extraction = "lumped" if self.board else sv.port_extraction
         self.box = None
-        if spec.radiation is not None:
+        self.far = None
+        self.table = None
+        self.targets: dict = {}
+        self.warnings: list = []
+        if self.board:
+            from yapnr.rf.domain import ClosedBox
+            from yapnr.rf.farfield import FarField
+
+            clearance = spec.radiation.clearance_cells if spec.radiation is not None else 2
+            huygens = dom.huygens_box(clearance * self.refine)
+            self.box = ClosedBox(huygens)
+            self.far = FarField(huygens, image=dom.infinite)
+            self._pattern_setup()
+        elif spec.radiation is not None:
             rb = spec.radiation
             self.box = dom.radiation_box(
                 clearance=rb.clearance_cells * self.refine,
@@ -228,7 +296,7 @@ class Problem:
         # The modal planes of the line ports (design §25.1): the ports' waves with "modal"
         # extraction, and the modes that separate the guided waves on the box's feed faces.
         self.modal: dict = {}
-        if self.port_extraction == "modal" or self.box is not None:
+        if not self.board and (self.port_extraction == "modal" or self.box is not None):
             for n, pg in self.ports.items():
                 others = [q for m, q in self.ports.items() if m != n]
                 self.modal[n] = ModalPlane(
@@ -238,7 +306,7 @@ class Problem:
                     edge_correction=self.edge_correction,
                     neighbours=others,
                 )
-        if self.box is not None:
+        if self.box is not None and not self.board:
             for n, face in self.box.feeds.items():
                 self.box.planes[n] = self.modal[n].plane(face.node, f"rad_p{n}")
         self.port_probes = [p for n in sorted(self.ports) for p in self.ports[n].probes]
@@ -298,7 +366,10 @@ class Problem:
             extra = [pr for pr, _ in self.lumped_probes.values()]
             self.port_probes = self.port_probes + extra
             self.watched = self.watched + [pr.name for pr in extra]
-        if spec.lumped:
+        if self.board:
+            for pg in self.ports.values():
+                pg.apply(self.sim.structure)
+        if spec.lumped or self.board:
             self.sim.update_materials()
         for a in self.assumptions():
             self.log(f"assumption ({a['code']}): {a['message']}")
@@ -399,7 +470,14 @@ class Problem:
         fixed = np.zeros((ni, nj), bool)
         value = np.zeros((ni, nj))
         depth = PAD_DEPTH * self.refine
-        for pg in dom.ports:
+        if self.board:
+            # A lumped port inside the window: the pixels around its columns are copper.
+            for pg in dom.ports:
+                for a, b in dom.port_pixels(pg):
+                    if i0 <= a < i1 and j0 <= b < j1:
+                        fixed[a - i0, b - j0] = True
+                        value[a - i0, b - j0] = 1.0
+        for pg in [] if self.board else dom.ports:
             along = (
                 slice(pg.i_ref, pg.i_ref + depth)
                 if pg.sign > 0
@@ -541,7 +619,10 @@ class Problem:
         )
 
     def port_sources(self, port: int) -> list:
-        """The forward sources of port `port` (`spec.solver.port_source`)."""
+        """The forward sources of port `port` (`spec.solver.port_source`; a lumped port's
+        Thevenin source)."""
+        if self.board:
+            return [self.ports[port].source(self.pulse, self.dt)]
         return self.ports[port].sources(
             self.pulse,
             self.dt,
@@ -550,18 +631,141 @@ class Problem:
             edge_correction=self.edge_correction,
         )
 
-    def port_waves(self, n: int, dft, omega):
-        """(a, b) of port `n` at its reference plane (`solver.port_extraction`)."""
+    def port_waves(self, n: int, dft, omega, excitation: int | None = None):
+        """(a, b) of port `n` at its reference plane (`solver.port_extraction`; a lumped port's
+        power waves, with its source's spectrum when it is the `excitation`)."""
+        if self.board:
+            vs = 0.0
+            if n == excitation:
+                vs = self._source_spectrum(omega)
+                if not isinstance(dft[self.ports[n].v_probe.name], np.ndarray):
+                    import torch
+
+                    vs = torch.as_tensor(vs)
+            return self.ports[n].waves(dft, vs)
         if self.port_extraction == "modal":
             return self.modal[n].waves(dft, omega)
         return sparams.port_waves(self.ports[n], self.cal[n], dft, omega)
 
+    def _source_spectrum(self, omega) -> np.ndarray:
+        from yapnr.rf.ports import source_dtft
+
+        key = np.asarray(omega, dtype=np.float64).tobytes()
+        cache = self.__dict__.setdefault("_vs_cache", {})
+        if key not in cache:
+            cache[key] = source_dtft(self.pulse, omega, self.dt)
+        return cache[key]
+
     def wave_power(self, n: int, a, omega):
-        """½|a|² as a power (W): exact for modal waves, times the calibration's power factor
-        for V/I waves (`sparams.incident_power`)."""
-        if self.port_extraction == "modal":
+        """½|a|² as a power (W): exact for modal and lumped waves, times the calibration's
+        power factor for V/I waves (`sparams.incident_power`)."""
+        if self.port_extraction in ("modal", "lumped"):
             return 0.5 * abs(a) ** 2
         return sparams.incident_power(a, self.cal[n], omega)
+
+    # -- board models: patterns -----------------------------------------------------------------
+
+    def _pattern_setup(self) -> None:
+        """The far field's direction table (every pattern requirement's directions, and the
+        quadrature when a requirement needs it), the targets at the quadrature and the
+        assumptions' warnings (design §26.3)."""
+        from yapnr.rf.patterns import PatternRequirement, direction_table
+
+        spec = self.spec
+        reqs = [r for r in spec.requirements if isinstance(r, PatternRequirement)]
+        self.pattern_ports = {r.excitation for r in reqs if r.quantity != "efficiency"}
+        if not reqs:
+            return
+        quad = None
+        needs_quad = any(
+            r.quantity == "shape"
+            or any(isinstance(r.spec.get(k), str) for k in ("directions", "front", "back"))
+            for r in reqs
+        )
+        if needs_quad:
+            quad = self.far.quadrature(self.omega, frame=spec.frame)
+        self.table = direction_table(
+            spec,
+            None if quad is None else quad[0],
+            None if quad is None else quad[1],
+            spec.frame,
+        )
+        if self.far.image and np.any(self.table.dirs[:, 2] < -1e-9):
+            raise ValueError(
+                "over an infinite ground the far field exists above it only: every direction "
+                "of a pattern requirement needs z ≥ 0"
+            )
+        if quad is not None:
+            for name, t in spec.patterns.items():
+                q, renorm = t.normalized(quad[0], quad[1], spec.frame)
+                self.targets[name] = q
+                if renorm > 0.01:
+                    self.warnings.append(
+                        {
+                            "code": "target_renormalized",
+                            "value": renorm,
+                            "message": f"target {name!r} integrates to 4π·{1 + renorm:.3f} "
+                            "before normalization (with its floor)",
+                        }
+                    )
+                ka = float(np.max(self.omega)) / C0 * self.far.radius
+                limit = ka * ka + 2 * ka
+                peak = 4 * math.pi * float(np.max(q))
+                if peak > limit:
+                    self.warnings.append(
+                        {
+                            "code": "target_beyond_harrington",
+                            "value": peak / limit,
+                            "message": f"target {name!r} peaks at {10 * math.log10(peak):.1f} "
+                            f"dBi, above Harrington's (ka)² + 2ka = {10 * math.log10(limit):.1f} "
+                            f"dBi for the box radius {self.far.radius * 1e3:.1f} mm",
+                        }
+                    )
+        floors = {}
+        for r in reqs:
+            j = r.excitation
+            kinds = [
+                q.spec.get("kind", "realized") if q.quantity != "efficiency" else "efficiency"
+                for q in reqs
+                if q.excitation == j and q.quantity in ("gain", "efficiency")
+            ]
+            if r.quantity == "shape" or (
+                r.quantity == "gain" and r.spec.get("kind") == "directivity"
+            ):
+                floors[j] = any(k in ("realized", "gain", "efficiency") for k in kinds)
+        for j, ok in floors.items():
+            if not ok:
+                self.warnings.append(
+                    {
+                        "code": "pattern_without_gain_floor",
+                        "value": j,
+                        "message": f"port {j}: a shape or directivity requirement without a "
+                        "realized-gain or efficiency floor: lossy gray copper can buy the "
+                        "pattern by absorbing (design §26.3)",
+                    }
+                )
+
+    def far_quantities(self, dft, port: int, omega, waves) -> dict:
+        """The far-field quantities of excitation `port` (torch): F (M, D, 3) at the direction
+        table's directions, P_rad (the Huygens box's flux), P_inc, P_acc, U's factor and the
+        targets (`patterns.phi_pattern`)."""
+        import torch
+
+        from yapnr.rf.farfield import intensity_factor
+
+        a, b = waves[port]
+        p_inc = 0.5 * abs(a) ** 2
+        out = {
+            "p_inc": p_inc,
+            "p_acc": p_inc - 0.5 * abs(b) ** 2,
+            "p_rad": self.box.power(dft),
+            "u_factor": torch.as_tensor(intensity_factor(omega), dtype=torch.float64),
+            "targets": self.targets,
+            "floors": {n: t.floor_db for n, t in self.spec.patterns.items()},
+        }
+        if self.table is not None and self.table.dirs.shape[0]:
+            out["F"] = self.far.vectors(dft, omega, self.table.dirs)
+        return out
 
     def nonguided(self, dft, port: int, omega=None) -> tuple:
         """(η, P_inc) of excitation `port` from the closed box (design §25.2): the outward flux
@@ -596,14 +800,23 @@ class Problem:
     def quantities(self, dft, port: int, omega=None) -> dict:
         """Waves of every port, S_ij for excitation j = `port`, and η_j (numpy or torch)."""
         omega = self.omega if omega is None else np.asarray(omega)
-        waves = {n: self.port_waves(n, dft, omega) for n in self.ports}
+        waves = {n: self.port_waves(n, dft, omega, port) for n in self.ports}
         a_j = waves[port][0]
         out = {"waves": waves, "s": {}, "eta": {}}
         for n, (_, b) in waves.items():
             out["s"][(n, port)] = b / a_j
-        if self.lumped_probes or port in self.loss_ports:
+        if self.lumped_probes or port in self.loss_ports or self.board:
             p_inc = self.wave_power(port, a_j, omega)
-        if self.box is not None:
+        if self.board:
+            # The Huygens box lies in air around the whole board: its flux is the radiated
+            # power, η the total efficiency.
+            out["eta"][port] = self.box.power(dft) / p_inc
+            if self.table is not None and port in self.pattern_ports | {
+                r.excitation for r in self.spec.requirements if r.quantity == "efficiency"
+            }:
+                out["far"] = {port: self.far_quantities(dft, port, omega, waves)}
+                out["table"] = self.table
+        elif self.box is not None:
             out["eta"][port] = self.nonguided(dft, port, omega)[0]
         out["absorbed"] = {
             (name, port): p / p_inc for name, p in self.lumped_power(dft, omega).items()
@@ -845,7 +1058,16 @@ class Problem:
                 absorbed[f"{name}/P{jj}"] = np.asarray(v, dtype=np.float64)
             for jj, v in qty["loss"].items():
                 absorbed[f"loss{jj}"] = np.asarray(v, dtype=np.float64)
-        zc = np.stack([self.cal[k].at(omega)[0] for k in sorted(self.ports)], axis=-1)
+        if self.board:
+            zc = np.stack(
+                [
+                    np.full(freqs.size, self.ports[k].port.resistance + 0j)
+                    for k in sorted(self.ports)
+                ],
+                axis=-1,
+            )
+        else:
+            zc = np.stack([self.cal[k].at(omega)[0] for k in sorted(self.ports)], axis=-1)
         out = {"freqs": freqs, "s": s, "zc": zc, "eta": eta, "steps": steps, "s_naive": s}
         out["absorbed"] = absorbed
         if sorted(excited) == sorted(self.ports) and n > 1:
@@ -880,8 +1102,8 @@ class Problem:
         """The model's assumptions that bear on the results, quantified where a closed form
         exists (design §25.4), for the result and validation reports: on the infinite substrate
         the radiated fraction is the non-guided fraction, which includes the TM0 surface wave."""
-        out = []
-        if self.box is not None:
+        out = list(self.warnings)
+        if self.box is not None and not self.board:
             from yapnr.rf.stackup import surface_wave_share
 
             st = self.stackup
@@ -895,7 +1117,7 @@ class Problem:
                         "substrate: it includes the TM0 surface wave, closed-form share "
                         f"P_sw/(P_sp + P_sw) = {share:.2f} for a half-wave patch on this "
                         f"stackup at f_ref = {st.f_ref / 1e9:g} GHz (Jackson and Alexopoulos); "
-                        "a radiation efficiency needs a finite board (design §25.4)"
+                        "a radiation efficiency, gain or pattern needs a `board` model"
                     ),
                 }
             )
@@ -913,8 +1135,15 @@ class Problem:
                     for ax, (lo, hi) in zip((g.x, g.y, g.z), self.box.node_box)
                 ],
                 "nodes": [list(map(int, r)) for r in self.box.node_box],
-                "eta": "non-guided fraction (radiation and surface wave)",
+                "eta": (
+                    "total efficiency (radiated power over incident)"
+                    if self.board
+                    else "non-guided fraction (radiation and surface wave)"
+                ),
             }
+        if self.board:
+            box["far_field_radius_mm"] = self.far.radius * 1e3
+            box["image_ground"] = self.far.image
         return {
             "grid_cells": list(g.n),
             "cells": int(g.cells),
@@ -922,13 +1151,19 @@ class Problem:
             "substrate_cells": int(self.domain.spec.n_sub),
             "dt_ps": self.dt * 1e12,
             "courant": self.spec.grid.courant,
-            "cpml_cells": [g.pml.x_lo, g.pml.x_hi, g.pml.y_lo, g.pml.y_hi, g.pml.z_hi],
+            "cpml_cells": [g.pml.x_lo, g.pml.x_hi, g.pml.y_lo, g.pml.y_hi, g.pml.z_hi]
+            + ([g.pml.z_lo] if g.pml.z_lo else []),
+            "board": self.domain.describe() if self.board else None,
             "design_pixels": list(self.design_shape),
             "port_width_cells": {str(k): int(v) for k, v in sorted(self.widths.items())},
-            "port_zc_at_fc_ohm": {
-                str(k): [float(c.at(fc)[0][0].real), float(c.at(fc)[0][0].imag)]
-                for k, c in sorted(self.cal.items())
-            },
+            "port_zc_at_fc_ohm": (
+                {
+                    str(k): [float(c.at(fc)[0][0].real), float(c.at(fc)[0][0].imag)]
+                    for k, c in sorted(self.cal.items())
+                }
+                if not self.board
+                else {str(k): [pg.port.resistance, 0.0] for k, pg in sorted(self.ports.items())}
+            ),
             "pulse_ghz": [self.pulse.f_center / 1e9, self.pulse.f_half_width / 1e9],
             "objective_ghz": [float(f) / 1e9 for f in self.freqs],
             "decimation": self._decimation(),

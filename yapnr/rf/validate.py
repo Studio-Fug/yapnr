@@ -275,6 +275,70 @@ def power_balance(prob, rho: np.ndarray, freqs, port: int = 1, *, reference: boo
     return out
 
 
+# The far field's check (design §25.5 (c)): the quadrature's radiated power against the
+# Huygens box's flux.
+FAR_FIELD = 0.01
+
+
+def far_field_report(prob, rho: np.ndarray, freqs, port: int = 1) -> dict:
+    """The far field of a board model's design `rho` with `port` excited, at `freqs` (Hz), per
+    frequency (lists): the radiated power by the quadrature over the box's flux (`p_ff_error`
+    = P_ff/P_box − 1; the check: ≤ 1 %), the radiation and total efficiencies, the peak
+    directivity and realized gain (dBi) and their direction (θ, φ in the spec's frame, deg),
+    and the realized gain along the frame's axis (dBi)."""
+    import torch
+
+    from yapnr.rf.farfield import intensity_factor
+    from yapnr.rf.fdtd.stop import StopRule
+
+    if not getattr(prob, "board", False):
+        raise ValueError("the far field needs a board model")
+    freqs = np.asarray(freqs, dtype=np.float64)
+    omega = 2.0 * np.pi * freqs
+    prob.set_design(rho)
+    stop = StopRule(
+        tol=min(prob.tol, BALANCE_TOL),
+        f_lo=float(freqs.min()),
+        max_steps=prob.spec.solver.max_steps,
+        probes=tuple(prob.watched),
+    )
+    res = prob.sim.run(
+        prob.port_sources(port),
+        prob.port_probes + prob.box_probes,
+        omega,
+        stop,
+        decimation=prob._decimation(),
+    )
+    a, b = prob.port_waves(port, res.dft, omega, port)
+    p_inc = 0.5 * np.abs(a) ** 2
+    p_acc = p_inc - 0.5 * np.abs(b) ** 2
+    p_box = np.asarray(prob.box.power(res.dft), dtype=np.float64)
+    frame = prob.spec.frame
+    dirs, w, _, _ = prob.far.quadrature(omega, frame=frame)
+    axis = frame.directions(0.0, 0.0)[None]
+    dft = {k: torch.as_tensor(v) for k, v in res.dft.items()}
+    f = prob.far.vectors(dft, omega, np.concatenate([dirs, axis])).numpy()
+    u = intensity_factor(omega)[:, None] * (np.abs(f) ** 2).sum(-1)
+    p_ff = u[:, :-1] @ w
+    k = np.argmax(u[:, :-1], axis=1)
+    th, ph = frame.angles(dirs[k])
+    d_max = 4 * np.pi * u[np.arange(freqs.size), k] / p_box
+    return {
+        "ghz": (freqs / 1e9).tolist(),
+        "steps": int(res.steps),
+        "p_ff_error": (p_ff / p_box - 1.0).tolist(),
+        "e_rad": (p_box / p_acc).tolist(),
+        "e_tot": (p_box / p_inc).tolist(),
+        "s11_db": sparams.db(b / a).tolist(),
+        "d_max_dbi": (10 * np.log10(d_max)).tolist(),
+        "gr_max_dbi": (10 * np.log10(d_max * p_box / p_inc)).tolist(),
+        "max_direction_deg": np.degrees(np.stack([th, ph], axis=1)).tolist(),
+        "gr_axis_dbi": (10 * np.log10(4 * np.pi * u[:, -1] / p_inc)).tolist(),
+        "quadrature_points": int(w.size),
+        "image_ground": bool(prob.far.image),
+    }
+
+
 def reciprocity_error(s: np.ndarray) -> float:
     """max |S_ij − S_ji| over the sweep: the exact discrete system is reciprocal, so this
     measures the error of the port-wave extraction."""

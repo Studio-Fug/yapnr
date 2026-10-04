@@ -6,7 +6,8 @@ a diagonal-pattern design on the divider's grid (one-pixel diagonal lines every 
 the copper-edge correction's worst pattern for the time step, `edges._patterns`). Each with the
 copper-edge correction (its ε and μ factors, the extra gradient probes and the diagonal-pattern
 time-step bound) off and on and the static and modal port sources; also the Wilkinson-type
-combiner (a lumped resistor and its absorbed-power requirement) and the reactive copper sheet.
+combiner (a lumped resistor and its absorbed-power requirement), the reactive copper sheet and
+a board model with pattern requirements (design §26).
 The sha256 of (steps, values, gradients, S) is compared: numpy float64 against native float64
 on one thread with the sweeps and on three threads with 3-step wavefront passes; numpy float32
 against native float32 (equal too), and float32 against float64 within the documented bounds
@@ -61,6 +62,7 @@ class NativeIdentityTest(unittest.TestCase):
         "test_diagonal_pattern",
         "test_wilkinson_lumped_resistor",
         "test_reactive_sheet",
+        "test_board_model",
     )
 
     def setUp(self):
@@ -126,6 +128,16 @@ class NativeIdentityTest(unittest.TestCase):
     def test_reactive_sheet(self):
         """Gray copper as an inductive sheet (the sheet's branch currents)."""
         self.check(self.spec("divider", True, "mode", interpolation="reactive"), "gray")
+
+    def test_board_model(self):
+        """A board model (design §26): the CPML below the air under the board, the finite
+        substrate block, the PEC ground with a keepout, the lumped port, the copper-edge
+        correction, and every pattern term on the Huygens box's probes."""
+        from yapnr.rf.testing import tiny_board_spec
+
+        spec = tiny_board_spec(ground="keepout")
+        spec = spec.replace(solver=replace(spec.solver, edge_correction=True))
+        self.check(spec, "gray")
 
 
 if __name__ == "__main__":

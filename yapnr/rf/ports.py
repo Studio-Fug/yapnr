@@ -594,13 +594,15 @@ class LumpedPort:
 
         a = V̂_s / (2√R),   b = (2V̂ − V̂_s) / (2√R)
 
-    with the reference plane at the port. It is the fallback port and the model of lumped
-    elements; the case ports are line ports.
+    with the reference plane at the port. The case ports of the infinite-substrate model are
+    line ports; the board models (design §26) drive their ports this way. `ground` is the node
+    plane of the ground (0 in the infinite-substrate model).
     """
 
     number: int
     nodes: tuple
     resistance: float = 50.0
+    ground: int = 0
 
     def on(self, grid: Grid) -> "LumpedPortGeometry":
         return LumpedPortGeometry(self, grid)
@@ -612,19 +614,22 @@ class LumpedPortGeometry:
     def __init__(self, port: LumpedPort, grid: Grid):
         self.port = port
         self.grid = grid
-        kc = grid.k_c
+        kc, kg = grid.k_c, int(port.ground)
+        if not 0 <= kg < kc:
+            raise ValueError(f"lumped port {port.number}: the ground must lie below the copper")
         cols = [(grid.x.node(x), grid.y.node(y)) for x, y in port.nodes]
         self.columns = cols
-        idx = [grid.flat_index("ez", i, j, k)[0] for i, j in cols for k in range(kc)]
+        self.n_series = kc - kg
+        idx = [grid.flat_index("ez", i, j, k)[0] for i, j in cols for k in range(kg, kc)]
         self.index = np.array(idx)
-        dz = grid.z.primary[:kc]
+        dz = grid.z.primary[kg:kc]
         self.v_probe = Probe(f"p{port.number}_vl", "ez", self.index)
         self.v_weights = np.tile(-dz, len(cols)) / len(cols)
-        # σ_e = n L_e / (m R A_e) on every column edge (n = k_c in series, m columns).
+        # σ_e = n L_e / (m R A_e) on every column edge (n edges in series, m columns).
         vol = grid.volume("ez").reshape(-1)[self.index]
         length = np.tile(dz, len(cols))
         area = vol / length
-        n, m = kc, len(cols)
+        n, m = self.n_series, len(cols)
         self.sigma = n * length / (m * port.resistance * area)
         # J = σ_e V_s / (n L_e) is the Norton current of the source across each edge.
         self.amplitude = self.sigma / (n * length)
@@ -636,7 +641,7 @@ class LumpedPortGeometry:
     def apply(self, structure) -> None:
         """Add the port resistance to the structure (every port, excited or not)."""
         p = self.port
-        structure.add_resistor("ez", self.index, p.resistance, self.grid.k_c, len(self.columns))
+        structure.add_resistor("ez", self.index, p.resistance, self.n_series, len(self.columns))
 
     def source(self, waveform, dt: float) -> PulseSource:
         """The Thevenin source V_s(t) = waveform(t) (volts) as Norton currents."""

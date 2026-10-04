@@ -169,6 +169,74 @@ def graded_axis(
     return Axis(np.concatenate([left, core, right]))
 
 
+def segment_cells(first: float, length: float, ratio: float, max_cell: float) -> list[float]:
+    """Cells growing from `first` by `ratio` up to `max_cell` that cover `length` exactly (the
+    grown cells scaled down to fit), so that the segment's far end is a node."""
+    cells = _grow(min(first, max_cell), length, ratio, max_cell)
+    total = sum(cells)
+    return [c * length / total for c in cells]
+
+
+def breakpoint_axis(
+    core_lo: float,
+    core_hi: float,
+    pitch: float,
+    breaks_lo,
+    breaks_hi,
+    lo: float,
+    hi: float,
+    *,
+    max_cell,
+    ratio: float = 1.25,
+    n_pml_lo: int = 0,
+    n_pml_hi: int = 0,
+) -> Axis:
+    """A uniform core [core_lo, core_hi] at `pitch`, then on each side cells growing by
+    `ratio` up to `max_cell` with a node on every breakpoint (`breaks_lo` below the core,
+    `breaks_hi` above it: a board's edges), out to `lo` and `hi` (overshot by less than a
+    cell), plus the CPML cells. `max_cell` is a number or a function of the coordinate (the
+    largest cell there: finer inside a substrate). Breakpoints closer than half a pitch to the
+    core or to each other are an error (they would make tiny cells)."""
+    core = uniform_nodes(core_lo, core_hi, pitch)
+
+    def side(start: float, breaks, end: float, sign: float) -> list[float]:
+        pts = sorted((abs(b - start) for b in breaks), key=float)
+        cells: list[float] = []
+        pos = 0.0
+        last = pitch
+        for d in pts + [None]:
+            target = abs(end - start) if d is None else d
+            if d is not None and target - pos < 0.5 * pitch - 1e-12:
+                raise ValueError(
+                    f"breakpoint {start + sign * d!r} lies within half a pitch of the uniform "
+                    "core or of another breakpoint"
+                )
+            if target <= pos + 1e-12:
+                continue
+            mc = (
+                max_cell(start + sign * (pos + 0.5 * (target - pos)))
+                if callable(max_cell)
+                else max_cell
+            )
+            mc = max(mc, pitch)
+            if d is None:
+                seg = _grow(min(last * ratio, mc), target - pos, ratio, mc)
+            else:
+                seg = segment_cells(last * ratio, target - pos, ratio, mc)
+            cells += seg
+            pos += sum(seg)
+            last = seg[-1]
+        return cells
+
+    lo_cells = side(core_lo, [b for b in breaks_lo if b < core_lo - 1e-12], lo, -1.0)
+    hi_cells = side(core_hi, [b for b in breaks_hi if b > core_hi + 1e-12], hi, 1.0)
+    lo_cells += [lo_cells[-1] if lo_cells else pitch] * n_pml_lo
+    hi_cells += [hi_cells[-1] if hi_cells else pitch] * n_pml_hi
+    left = core_lo - np.cumsum(lo_cells)[::-1] if lo_cells else np.empty(0)
+    right = core_hi + np.cumsum(hi_cells) if hi_cells else np.empty(0)
+    return Axis(np.concatenate([left, core, right]))
+
+
 def substrate_z_axis(
     h: float,
     n_sub: int,
@@ -196,16 +264,18 @@ def substrate_z_axis(
 
 @dataclass(frozen=True)
 class PMLCells:
-    """Number of CPML cells on each side of the domain (none below the ground plane)."""
+    """Number of CPML cells on each side of the domain: none below the ground plane in the
+    microstrip domains (`z_lo` = 0), `z_lo` below the air under a finite board (`board`)."""
 
     x_lo: int = 10
     x_hi: int = 10
     y_lo: int = 10
     y_hi: int = 10
     z_hi: int = 8
+    z_lo: int = 0
 
     def along(self, axis: int) -> tuple[int, int]:
-        return [(self.x_lo, self.x_hi), (self.y_lo, self.y_hi), (0, self.z_hi)][axis]
+        return [(self.x_lo, self.x_hi), (self.y_lo, self.y_hi), (self.z_lo, self.z_hi)][axis]
 
 
 @dataclass(frozen=True)

@@ -177,13 +177,29 @@ def _obstacles(graph, rules, spec, comp, pose, layers, fixed_copper):
         w, h = pad.size
         corner = pad.land_corner if pad.land_corner is not None else 0.0
         obs.lands.append(Land(pad.offset, w / 2, h / 2, corner, pad.net, pad.name))
-    for track in (fixed_copper or {}).get("tracks", []):
-        net, layer, a, b, width = track
+    tracks, vias, polygons = fixed_items(fixed_copper)
+    for net, layer, a, b, width in tracks:
         if layer in lidx:
             obs.tracks.append(
                 (net, lidx[layer], pose.to_local(tuple(a)), pose.to_local(tuple(b)), float(width))
             )
-    for poly in (fixed_copper or {}).get("polygons", []):
+    for poly in polygons:
+        if poly.get("kind") == "rule_area":
+            # A block's rule area: the flags it carries bar every net's copper.
+            names = [poly.get("layer")] if poly.get("layer") else list(lidx)
+            layer_set = frozenset(lidx[n] for n in names if n in lidx)
+            outline = [pose.to_local(tuple(p)) for p in poly["outline"]]
+            if poly.get("tracks", True) or poly.get("vias", True):
+                obs.areas.append(
+                    (
+                        "block-area:%d" % len(obs.areas),
+                        outline,
+                        layer_set if poly.get("tracks", True) else frozenset(),
+                        bool(poly.get("vias", True)),
+                        frozenset(),
+                    )
+                )
+            continue
         # A fixed block's pads and solid zones (fixed.json schema 2): other nets'
         # copper keeps clear; on the surface a ball of its net is joined by it.
         if poly.get("layer") not in lidx:
@@ -195,15 +211,8 @@ def _obstacles(graph, rules, spec, comp, pose, layers, fixed_copper):
                 frozenset({lidx[poly["layer"]]}),
             )
         )
-    for via in (fixed_copper or {}).get("vias", []):
-        obs.vias.append(
-            (
-                via.get("net", ""),
-                pose.to_local(tuple(via["xy"])),
-                via["diameter_mm"],
-                via["drill_mm"],
-            )
-        )
+    for net, xy, diameter, drill in vias:
+        obs.vias.append((net, pose.to_local(tuple(xy)), diameter, drill))
     for k, spec_k in enumerate(rules.get("copper_keepouts") or []):
         name = "keepout:" + str(spec_k.get("name") or k)
         if spec_k.get("ref") and spec_k.get("rect_mm"):
@@ -244,6 +253,51 @@ def _obstacles(graph, rules, spec, comp, pose, layers, fixed_copper):
             for p in rect_polygon((0, 0, graph.outline.width, graph.outline.height))
         ]
     return obs
+
+
+def _arc_chords(net, layer, start, mid, end, width, eps=0.001):
+    """An arc as chords whose sagitta is at most ``eps``, each ``2 eps`` wider: every
+    point of the arc's copper lies inside them (fixed.json schema 2 ``arcs``)."""
+    ax, ay = start
+    bx, by = mid
+    cx, cy = end
+    d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(d) < 1e-12:
+        return [[net, layer, list(start), list(end), width]]
+    a2, b2, c2 = ax * ax + ay * ay, bx * bx + by * by, cx * cx + cy * cy
+    ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d
+    uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d
+    r = math.hypot(ax - ux, ay - uy)
+    a0, am, a1 = (math.atan2(y - uy, x - ux) for x, y in (start, mid, end))
+
+    def ccw(a, b):
+        return (b - a) % (2 * math.pi)
+
+    sweep = ccw(a0, a1) if ccw(a0, am) <= ccw(a0, a1) else -ccw(a1, a0)
+    step = 2 * math.acos(max(-1.0, 1 - eps / max(r, eps)))
+    n = max(1, int(math.ceil(abs(sweep) / step)))
+    pts = [
+        (ux + r * math.cos(a0 + sweep * k / n), uy + r * math.sin(a0 + sweep * k / n))
+        for k in range(n + 1)
+    ]
+    return [[net, layer, list(p), list(q), width + 2 * eps] for p, q in zip(pts, pts[1:])]
+
+
+def fixed_items(copper):
+    """``(tracks, vias, polygons)`` of fixed copper, schema 1 or 2: top-level tracks,
+    arcs (as chords) and vias, and every block's tracks, arcs, vias and polygons
+    (pads, solid zones, rule areas). Vias are ``(net, xy, diameter, drill)``."""
+    tracks, vias, polygons = [], [], []
+    for source in [copper or {}] + list((copper or {}).get("blocks") or []):
+        tracks += [list(t) for t in source.get("tracks", [])]
+        for arc in source.get("arcs") or []:
+            tracks += _arc_chords(*arc)
+        vias += [
+            (v.get("net", ""), v["xy"], v["diameter_mm"], v["drill_mm"])
+            for v in source.get("vias", [])
+        ]
+        polygons += list(source.get("polygons") or [])
+    return tracks, vias, polygons
 
 
 def _exits(model, pose, layers, spec):

@@ -379,6 +379,44 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(p["diagnostics"]["drops_placed"], p["diagnostics"]["drops"])
 
 
+class FixedItemsTest(unittest.TestCase):
+    def test_arcs_become_chords_within_a_micron(self):
+        from pnr.fanout.planner import _arc_chords, fixed_items
+
+        r = 1.403
+        start, mid, end = (r, 0.0), (r / math.sqrt(2), r / math.sqrt(2)), (0.0, r)
+        chords = _arc_chords("RF", "F.Cu", start, mid, end, 0.2)
+        self.assertEqual(len(chords), 21)  # a 90 degree arc of R = 1.403 mm (design 1.4)
+        for t in range(101):
+            a = math.pi / 2 * t / 100
+            p = (r * math.cos(a), r * math.sin(a))
+            near = min(segment_segment(p, p, tuple(c[2]), tuple(c[3])) for c in chords)
+            self.assertLessEqual(near, 0.001 + 1e-9)
+        tracks, vias, polygons = fixed_items(
+            dict(
+                tracks=[],
+                arcs=[["RF", "F.Cu", list(start), list(mid), list(end), 0.2]],
+                blocks=[
+                    dict(
+                        tracks=[["GND", "F.Cu", [0, 0], [1, 0], 0.2]],
+                        vias=[dict(net="GND", xy=[1, 1], diameter_mm=0.3, drill_mm=0.15)],
+                        polygons=[
+                            dict(
+                                net="GND",
+                                layer="In2.Cu",
+                                outline=[[0, 0], [1, 0], [1, 1]],
+                                kind="zone",
+                            )
+                        ],
+                    )
+                ],
+            )
+        )
+        self.assertEqual(len(tracks), 22)
+        self.assertEqual(vias, [("GND", [1, 1], 0.3, 0.15)])
+        self.assertEqual(polygons[0]["kind"], "zone")
+
+
 class BottomSitesTest(unittest.TestCase):
     def test_sites_clear_the_vias_and_reach_their_nets(self):
         # A peripheral array (rings 0-3), its inner ring alternating supply and ground.

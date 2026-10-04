@@ -147,6 +147,8 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
     """Plan, reserve and translate every declared fanout on ``grid`` (see module doc)."""
     from pnr.fanout import cached_plan
 
+    # Fixed copper given to route_board, else carried in the rules (a fixed block's).
+    fixed_copper = fixed_copper or (rules or {}).get("fixed_copper")
     out = FanoutRouting()
     layer_index = {name: i for i, name in enumerate(grid.layers)}
     clearance = grid.clearance

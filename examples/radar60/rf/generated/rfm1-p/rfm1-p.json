@@ -40,9 +40,16 @@
       "pad": [0.46, 0.4],
       "pitch": 0.64,
       "pad1_dy": 0.45,
-      "via_dx": 0.45,
-      "via_dy": 1.09,
-      "zone": [0.66, 1.35]
+      "vias": [
+        [-0.5, -1.09],
+        [0.5, -1.09],
+        [-0.58, -0.5],
+        [0.58, -0.5],
+        [0.0, -1.62]
+      ],
+      "zone": [0.66, 1.35],
+      "via_zone": [0.66, 1.65],
+      "mask": [0.78, 1.82, 0.05]
     },
     "bank_strip": 2.0,
     "pour_clear_ant": 1.0,
@@ -298,35 +305,47 @@
   },
   "loads": {
     "RXD0": {
-      "ref": "RL1",
+      "ref": "RT1",
       "centre": [-6.505, 7.0182],
       "vias": [
-        [-6.955, 6.6982],
-        [-6.055, 6.6982]
+        [-7.005, 6.6982],
+        [-6.005, 6.6982],
+        [-7.085, 7.2882],
+        [-5.925, 7.2882],
+        [-6.505, 6.1682]
       ]
     },
     "RXD5": {
-      "ref": "RL2",
+      "ref": "RT2",
       "centre": [5.205, 7.0182],
       "vias": [
-        [4.755, 6.6982],
-        [5.655, 6.6982]
+        [4.705, 6.6982],
+        [5.705, 6.6982],
+        [4.625, 7.2882],
+        [5.785, 7.2882],
+        [5.205, 6.1682]
       ]
     },
     "TXD0": {
-      "ref": "RL3",
+      "ref": "RT3",
       "centre": [9.205, 5.13],
       "vias": [
-        [8.755, 4.81],
-        [9.655, 4.81]
+        [8.705, 4.81],
+        [9.705, 4.81],
+        [8.625, 5.4],
+        [9.785, 5.4],
+        [9.205, 4.28]
       ]
     },
     "TXD4": {
-      "ref": "RL4",
+      "ref": "RT4",
       "centre": [18.573, 5.13],
       "vias": [
-        [18.123, 4.81],
-        [19.023, 4.81]
+        [18.073, 4.81],
+        [19.073, 4.81],
+        [17.993, 5.4],
+        [19.153, 5.4],
+        [18.573, 4.28]
       ]
     }
   },
@@ -583,13 +602,13 @@
     "launch": 14,
     "ring": 283,
     "runin": 44,
-    "load": 8,
+    "load": 20,
     "fence": 206,
     "isolation": 21,
     "stitch": 172,
-    "grid": 616,
-    "fill": 79,
-    "total": 1443
+    "grid": 606,
+    "fill": 75,
+    "total": 1441
   },
   "checks": [
     {
@@ -762,45 +781,67 @@
     },
     {
       "check": "G2 column congruence",
-      "reference": "RX1",
-      "window_column_frame": [-2.803, -4.2, 3.799, 4.0357],
-      "vias_in_window": 50,
+      "reference": "RX2",
+      "window_column_frame": [-3.799, -4.2, 3.799, 4.0357],
+      "declared_difference_column_frame": [
+        [-4.183, -4.21, -2.843, -3.3],
+        [-3.823, -3.3, -3.203, 4.0357]
+      ],
+      "vias_in_window": 56,
       "columns": {
-        "RX2": {
+        "RX1": {
           "copper_xor_mm2": 0.0,
           "gnd_xor_mm2": 0.0,
           "via_mismatch": 0,
-          "l2_window_mismatch": 0
+          "l2_window_mismatch": 0,
+          "open_end": true,
+          "declared_difference": {
+            "what": "second-neighbour input at -1.5 d absent (open bank end)",
+            "copper_xor_mm2": 0.9459,
+            "gnd_xor_mm2": 0.531,
+            "via_mismatch": 2
+          }
         },
         "RX3": {
           "copper_xor_mm2": 0.0,
           "gnd_xor_mm2": 0.0,
           "via_mismatch": 0,
-          "l2_window_mismatch": 0
+          "l2_window_mismatch": 0,
+          "open_end": false
         },
         "RX4": {
           "copper_xor_mm2": 0.0,
           "gnd_xor_mm2": 0.0,
           "via_mismatch": 0,
-          "l2_window_mismatch": 0
+          "l2_window_mismatch": 0,
+          "open_end": false
         },
         "TX1": {
           "copper_xor_mm2": 0.0,
           "gnd_xor_mm2": 0.0,
           "via_mismatch": 0,
-          "l2_window_mismatch": 0
+          "l2_window_mismatch": 0,
+          "open_end": false
         },
         "TX2": {
           "copper_xor_mm2": 0.0,
           "gnd_xor_mm2": 0.0,
           "via_mismatch": 0,
-          "l2_window_mismatch": 0
+          "l2_window_mismatch": 0,
+          "open_end": false
         },
         "TX3": {
           "copper_xor_mm2": 0.0,
           "gnd_xor_mm2": 0.0,
           "via_mismatch": 0,
-          "l2_window_mismatch": 0
+          "l2_window_mismatch": 0,
+          "open_end": true,
+          "declared_difference": {
+            "what": "second-neighbour input at -1.5 d absent (open bank end)",
+            "copper_xor_mm2": 0.9459,
+            "gnd_xor_mm2": 0.531,
+            "via_mismatch": 2
+          }
         }
       },
       "worst": {
@@ -815,7 +856,7 @@
       "check": "G3 unstitched GND",
       "reach_mm": 0.45,
       "raster_mm": 0.01,
-      "gnd_area_mm2": 439.212,
+      "gnd_area_mm2": 438.524,
       "unreached_pieces": [],
       "made_gap": [
         {
@@ -842,11 +883,6 @@
           "at": [-0.652, 5.216],
           "long_mm": 0.24,
           "area_mm2": 0.0066
-        },
-        {
-          "at": [5.203, 6.869],
-          "long_mm": 0.12,
-          "area_mm2": 0.005
         },
         {
           "at": [5.222, -1.275],
@@ -955,14 +991,14 @@
         "launch": 14,
         "ring": 283,
         "runin": 44,
-        "load": 8,
+        "load": 20,
         "fence": 206,
         "isolation": 21,
         "stitch": 172,
-        "grid": 616,
-        "fill": 79
+        "grid": 606,
+        "fill": 75
       },
-      "total": 1443,
+      "total": 1441,
       "merged": 47,
       "merged_detail": [
         {
@@ -1182,10 +1218,11 @@
       "dropped_optional": {
         "grid": {
           "pour edge": 373,
-          "spacing": 278,
+          "spacing": 277,
           "guard band": 178,
           "cut-out": 572,
-          "load pad": 7,
+          "load pad": 13,
+          "load zone": 5,
           "package": 204,
           "line": 140
         }
@@ -1196,7 +1233,7 @@
         "east": 0.5795
       },
       "stitch_pitch_max_mm": 0.6,
-      "fill_rounds": [55, 19, 14, 18, 26, 10],
+      "fill_rounds": [45, 20, 13, 17, 25, 9],
       "made_gap": [
         {
           "at": [-1.727, 5.282],
@@ -1224,11 +1261,6 @@
           "area_mm2": 0.0066
         },
         {
-          "at": [5.203, 6.869],
-          "long_mm": 0.12,
-          "area_mm2": 0.005
-        },
-        {
           "at": [5.222, -1.275],
           "long_mm": 0.08,
           "area_mm2": 0.0029
@@ -1252,6 +1284,46 @@
       "lattice_sites": {
         "RX": 122,
         "TX": 104
+      },
+      "ok": true
+    },
+    {
+      "check": "G7 dummy load cells",
+      "declared_vias": 5,
+      "smd_via_clear_mm": 0.1,
+      "loads": {
+        "RXD0": {
+          "ref": "RT1",
+          "vias_in_zone": 5,
+          "mismatch": 0,
+          "vias_at_lands": [],
+          "lines_under_mask": [],
+          "ok": true
+        },
+        "RXD5": {
+          "ref": "RT2",
+          "vias_in_zone": 5,
+          "mismatch": 0,
+          "vias_at_lands": [],
+          "lines_under_mask": [],
+          "ok": true
+        },
+        "TXD0": {
+          "ref": "RT3",
+          "vias_in_zone": 5,
+          "mismatch": 0,
+          "vias_at_lands": [],
+          "lines_under_mask": [],
+          "ok": true
+        },
+        "TXD4": {
+          "ref": "RT4",
+          "vias_in_zone": 5,
+          "mismatch": 0,
+          "vias_at_lands": [],
+          "lines_under_mask": [],
+          "ok": true
+        }
       },
       "ok": true
     },
@@ -1324,12 +1396,12 @@
         "0": "ee9d7c9490d0e73e0ff945ebbb814abada218ac20ff3bc57629b6f4db4798ee0",
         "1": "ee9d7c9490d0e73e0ff945ebbb814abada218ac20ff3bc57629b6f4db4798ee0"
       },
-      "outside_cutouts_sha256": "e06db183291bdc7c3ec5ab3b0e16c139330bca6ceb1461faa13f9f6e7def8fa9",
+      "outside_cutouts_sha256": "3b7386344c6875df03ebd1eac4daed3b1a26d4ab38c00fccc39c6c7c4a273f20",
       "ok": true
     }
   ],
-  "geometry_sha256": "e034031adec5bdeb83a63d7ed0b7beb7f421fabbdeaa03758487a1dc9105a74d",
-  "outside_cutouts_sha256": "e06db183291bdc7c3ec5ab3b0e16c139330bca6ceb1461faa13f9f6e7def8fa9",
+  "geometry_sha256": "9f7512367f236faac42f0959d58fd0dbf9b6daf7ec55ebf5fe56e3f5395b6b37",
+  "outside_cutouts_sha256": "3b7386344c6875df03ebd1eac4daed3b1a26d4ab38c00fccc39c6c7c4a273f20",
   "board_frame": {
     "u1_at": [26.0, 28.0],
     "phase_centres": {
@@ -1364,22 +1436,22 @@
     "board_height_min": 47.3488,
     "rx_tx_nearest_phase_centres": 11.1865,
     "dummy_loads": {
-      "RL1": {
+      "RT1": {
         "column": "RXD0",
         "centre": [19.495, 35.0182],
         "axis": "y"
       },
-      "RL2": {
+      "RT2": {
         "column": "RXD5",
         "centre": [31.205, 35.0182],
         "axis": "y"
       },
-      "RL3": {
+      "RT3": {
         "column": "TXD0",
         "centre": [35.205, 33.13],
         "axis": "y"
       },
-      "RL4": {
+      "RT4": {
         "column": "TXD4",
         "centre": [44.573, 33.13],
         "axis": "y"

@@ -126,6 +126,8 @@ class Load:
     pad2: List[Pt]  # GND pad
     vias: List[Pt]
     zone: Tuple[float, float, float, float]  # keep-clear box for the fit search
+    via_zone: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)  # its own vias only
+    mask: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)  # solder-mask island
 
 
 @dataclass
@@ -676,9 +678,21 @@ def _load(name: str, net: str, xin: float, e: float, mirror: bool, ru: Rules, id
     cen = (xin, c1[1] - pitch / 2)
     p1 = rect(c1[0] - pw / 2, c1[1] - plen / 2, c1[0] + pw / 2, c1[1] + plen / 2)
     p2 = rect(c2[0] - pw / 2, c2[1] - plen / 2, c2[0] + pw / 2, c2[1] + plen / 2)
-    vdx, vdy = float(lz["via_dx"]), float(lz["via_dy"])
-    vias = [(xin - vdx, pg - vdy), (xin + vdx, pg - vdy)]
-    return Load(name, net, f"RL{idx}", cen, p1, p2, vias, ru.load_zone(xin, e))
+    vias = [(xin + float(dx), pg + float(dy)) for dx, dy in lz["vias"]]
+    vx, vy = (float(v) for v in lz["via_zone"])
+    mx, my0, my1 = (float(v) for v in lz["mask"])
+    return Load(
+        name,
+        net,
+        f"RT{idx}",  # RT: the board's RL1/RL2 are the radome lands
+        cen,
+        p1,
+        p2,
+        vias,
+        ru.load_zone(xin, e),
+        (xin - vx, pg - vy, xin + vx, pg),
+        (xin - mx, pg - my0, xin + mx, pg - my1),
+    )
 
 
 def build(overrides: Dict | None = None) -> Macro:
@@ -821,8 +835,16 @@ def build(overrides: Dict | None = None) -> Macro:
     for n in mc.feeds:
         b = rx_ball.get(n) or tx_ball.get(n)
         mc.l3_gnd.append(circle(b, float(p["l2_cut_r"]) + margin))
-    mc.mask_open.append(rect(x_lo, half_body + 0.05, x_hi, y_hi))
-    mc.mask_open.append(rect(half_body + 0.05, -half_body + 3.9, x_hi, half_body + 0.05))
+    # the mask opening over the RF copper, without the load cells (mask-defined GND lands)
+    islands = [ld.mask for ld in mc.loads.values()]
+    for r in rects_minus(
+        [
+            (x_lo, half_body + 0.05, x_hi, y_hi),
+            (half_body + 0.05, -half_body + 3.9, x_hi, half_body + 0.05),
+        ],
+        islands,
+    ):
+        mc.mask_open.append(rect(*r))
     x_iso = 0.5 * (rx_cut[2] + tfit["cut"][0])
     mc.ports["iso_fence_x"] = dict(at=[x_iso, 0.0])
 
@@ -846,6 +868,48 @@ def build(overrides: Dict | None = None) -> Macro:
         tx_dx_bank=tfit["dx"],
     )
     return mc
+
+
+def rects_minus(rects, holes) -> List[Tuple[float, float, float, float]]:
+    """Axis-aligned rectangles minus rectangular holes, as rectangles: each rectangle is cut on
+    the holes' x and y lines and the free cells are merged along x, then along y."""
+    out = []
+    for r in rects:
+        hs = [h for h in holes if h[0] < r[2] and h[2] > r[0] and h[1] < r[3] and h[3] > r[1]]
+        if not hs:
+            out.append(tuple(r))
+            continue
+        xs = sorted({r[0], r[2]} | {min(max(v, r[0]), r[2]) for h in hs for v in (h[0], h[2])})
+        ys = sorted({r[1], r[3]} | {min(max(v, r[1]), r[3]) for h in hs for v in (h[1], h[3])})
+        rows = []
+        for y0, y1 in zip(ys, ys[1:]):
+            row, cur = [], None
+            for x0, x1 in zip(xs, xs[1:]):
+                cx, cy = 0.5 * (x0 + x1), 0.5 * (y0 + y1)
+                free = not any(h[0] < cx < h[2] and h[1] < cy < h[3] for h in hs)
+                if free and cur is not None and abs(cur[1] - x0) < 1e-12:
+                    cur[1] = x1
+                elif free:
+                    cur = [x0, x1]
+                    row.append(cur)
+                else:
+                    cur = None
+            rows.append((y0, y1, [tuple(c) for c in row]))
+        merged = []  # (x0, x1, y0, y1): extend a run of equal x-intervals upward
+        open_ = {}
+        for y0, y1, row in rows:
+            nxt = {}
+            for iv in row:
+                if iv in open_ and abs(open_[iv][3] - y0) < 1e-12:
+                    open_[iv][3] = y1
+                    nxt[iv] = open_.pop(iv)
+                else:
+                    nxt[iv] = [iv[0], iv[1], y0, y1]
+            merged += open_.values()
+            open_ = nxt
+        merged += open_.values()
+        out += [(a, c, b, d) for a, b, c, d in merged]
+    return [tuple(round(v, 6) for v in r) for r in out]
 
 
 def _c1(ld: Load) -> Pt:

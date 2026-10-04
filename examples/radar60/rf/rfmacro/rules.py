@@ -9,8 +9,10 @@ exit non-zero.
   guard_band from every cut-out; inside the cut-outs grown by guard_band the only vias are run-in
   pairs and ring sites.
 - G2 congruence: every active column's window (column frame, mirrored for TX: x within
-  ±1.4 d of the cell centre, y from Pg to the cut-out top + 1.0 mm) has the same L1 copper and L1
-  GND (XOR <= 1e-3 mm² at a 10 µm raster), the same L2 windows and the same vias (1 µm) as RX1's.
+  ±(2 d - W/2 - window_margin), symmetric, y from Pg to the cut-out top + 1.0 mm) has the same L1
+  copper and L1 GND (XOR <= 1e-3 mm² at a 10 µm raster), the same L2 windows and the same vias
+  (1 µm) as an interior column's; the one declared difference (the absent second-neighbour input
+  at an open bank end, `allow_rects`) is masked and reported with its size.
 - G3 unstitched GND: every L1 GND point of the RF region outside the package lies within
   stitch_reach (geodesic, through GND) of a GND via; pieces that are not are listed.
 - G4 fence continuity: on each feed side, from the fence start to Pg, every row point has a via
@@ -19,6 +21,8 @@ exit non-zero.
   dropped optional vias counted by reason, measured row pitches <= the declared ones.
 - G6 fits and D12: the equalizers come from the fit search (no fixed room); the other D12
   variants give the same layout outside the cut-outs (hash).
+- G7 dummy load cells: the vias in each load's zone are exactly the declared load vias (the four
+  terminations are one cell), and no via's pad comes within 0.10 mm of an SMD land.
 """
 
 from __future__ import annotations
@@ -65,6 +69,10 @@ def gnd_mask(mc, ru, g: Grid, frame=None):
         g.polygon(cut, [tf(q) for q in ((c[0], c[1]), (c[2], c[1]), (c[2], c[3]), (c[0], c[3]))])
     for poly in list(mc.antipads) + list(mc.unstitched) + list(mc.load_channels):
         g.polygon(cut, [tf(q) for q in poly])
+    # a load's GND land is soldered copper, not pour: its own five vias stitch the pour round it,
+    # and its far edge (0.5 mm from them) is not a sliver to be stitched or cut away
+    for ld in getattr(mc, "loads", {}).values():
+        g.polygon(cut, [tf(q) for q in ld.pad2])
     for path in list(mc.feeds.values()) + list(mc.runins.values()):
         g.capsules(cut, [tf(q) for q in _pts(path)], ru.lchan)
     h = ru.half
@@ -107,16 +115,42 @@ def column_frame(col) -> Tuple:
 
 
 def window_bounds(ru) -> Tuple[float, float, float, float]:
-    """Congruence window in the column frame (input on +x): from just inside the fence of the
-    input two columns back (-1.5 d + fence_offset + pad radius) to just short of the L2 window of
-    the patch two columns on (2 d - W/2 - window_margin), about ±1.4 d round the cell; y from Pg
-    to the cut-out top + 1.0 mm."""
+    """Congruence window in the column frame (input on +x), symmetric (review 2026-10-04: it was
+    clipped on the -x side): x within +-(2 d - W/2 - window_margin - 0.01), just short of the L2
+    windows of the patches two columns away on both sides, so it holds both neighbours, both
+    neighbouring inputs and the second-neighbour inputs at +-1.5 d; y from Pg to the cut-out top
+    + 1.0 mm."""
     d = D_LATTICE
-    x0 = -1.5 * d + ru.foff + ru.pad / 2 + 0.05
     x1 = 2 * d - ru.patch_w / 2 - ru.window_margin - 0.01
     y_pg = ru.p1_y - ru.lin - ru.lout
     y_top = ru.cell[3] + ru.lin + 1.0
-    return (x0, y_pg, x1, y_top)
+    return (-x1, y_pg, x1, y_top)
+
+
+def allow_rects(ru) -> List[Tuple[float, float, float, float]]:
+    """The one declared difference (column frame): at an open bank end (no column two pitches
+    away on -x) the second-neighbour input at -1.5 d is absent: its line and gap inside the
+    cut-out (x -1.5 d +- the channel half-width) and its run-in with both fence pairs below the
+    entry (x -1.5 d +- (fence_offset + pad radius)). Masked out of G2/A2 and reported apart."""
+    d = D_LATTICE
+    xa = -1.5 * d
+    y_pg = ru.p1_y - ru.lin - ru.lout
+    y_e = y_pg + ru.lout
+    y_top = ru.cell[3] + ru.lin + 1.0
+    wv = ru.foff + ru.pad / 2 + 0.01
+    return [
+        (xa - wv, y_pg - 0.01, xa + wv, y_e),
+        (xa - ru.lchan - 0.01, y_e, xa + ru.lchan + 0.01, y_top),
+    ]
+
+
+def open_end(mc, col) -> bool:
+    """True when no column (active or dummy) sits two pitches away on the column frame's -x."""
+    tf, _ = column_frame(col)
+    return not any(
+        abs(tf(c.origin)[0] + 2 * D_LATTICE) < 0.01 and abs(tf(c.origin)[1]) < 0.01
+        for c in mc.columns.values()
+    )
 
 
 def _window_scene(mc, ru, col, wb):
@@ -165,22 +199,49 @@ def _window_scene(mc, ru, col, wb):
 def congruence(mc, ru) -> Dict[str, object]:
     wb = window_bounds(ru)
     act = [n for n, c in mc.columns.items() if not c.dummy]
-    ref_name = act[0]
+    # the reference is an interior column (both second neighbours present), not RX1
+    ref_name = next((n for n in act if not open_end(mc, mc.columns[n])), act[0])
     ref = _window_scene(mc, ru, mc.columns[ref_name], wb)
+    allow = allow_rects(ru)
     out = {}
     worst = dict(copper=0.0, gnd=0.0, vias=0, windows=0)
-    for n in act[1:]:
+    for n in act:
+        if n == ref_name:
+            continue
         g, cu, gnd, vias, wins = _window_scene(mc, ru, mc.columns[n], wb)
-        a_cu = g.area(g.xor(cu, ref[1]))
-        a_g = g.area(g.xor(gnd, ref[2]))
-        vd = _via_diff(vias, ref[3])
+        masked = open_end(mc, mc.columns[n])
+        am = g.empty()
+        if masked:
+            for a in allow:
+                g.rect(am, *a)
+        x_cu, x_g = g.xor(cu, ref[1]), g.xor(gnd, ref[2])
+        a_cu, a_g = g.area(g.andnot(x_cu, am)), g.area(g.andnot(x_g, am))
+
+        def outside(vs):
+            return [
+                v
+                for v in vs
+                if not (
+                    masked and any(a[0] <= v[1] <= a[2] and a[1] <= v[0] <= a[3] for a in allow)
+                )
+            ]
+
+        vd = _via_diff(outside(vias), outside(ref[3]))
         wd = 0 if wins == ref[4] else max(1, abs(len(wins) - len(ref[4])))
         out[n] = dict(
             copper_xor_mm2=round(a_cu, 5),
             gnd_xor_mm2=round(a_g, 5),
             via_mismatch=vd,
             l2_window_mismatch=wd,
+            open_end=masked,
         )
+        if masked:
+            out[n]["declared_difference"] = dict(
+                what="second-neighbour input at -1.5 d absent (open bank end)",
+                copper_xor_mm2=round(g.area(g.and_(x_cu, am)), 4),
+                gnd_xor_mm2=round(g.area(g.and_(x_g, am)), 4),
+                via_mismatch=_via_diff(vias, ref[3]) - vd,
+            )
         worst["copper"] = max(worst["copper"], a_cu)
         worst["gnd"] = max(worst["gnd"], a_g)
         worst["vias"] = max(worst["vias"], vd)
@@ -188,6 +249,7 @@ def congruence(mc, ru) -> Dict[str, object]:
     return dict(
         reference=ref_name,
         window_column_frame=[round(v, 4) for v in wb],
+        declared_difference_column_frame=[[round(v, 4) for v in a] for a in allow],
         vias_in_window=len(ref[3]),
         columns=out,
         worst=dict(
@@ -463,6 +525,66 @@ def via_accounting(mc, ru) -> Dict[str, object]:
     )
 
 
+# ---- G7: dummy load cells ------------------------------------------------------------------
+
+
+def load_cells(mc, ru) -> Dict[str, object]:
+    """Every dummy load is the same cell: the vias in its zone are exactly its declared vias
+    (load frame: x from the run-in axis, y from Pg, within 1 um), and no via's pad comes within
+    SMD_VIA_CLEAR of either land (no via in or beside an SMD land)."""
+    from .vias import SMD_VIA_CLEAR
+
+    pr = ru.pad / 2
+    want = sorted(
+        (round(float(dy), 4), round(float(dx), 4)) for dx, dy in mc.params["dummy_load"]["vias"]
+    )
+    res, ok = {}, True
+    for n, ld in mc.loads.items():
+        z = ld.via_zone
+        xi, pg = 0.5 * (z[0] + z[2]), z[3]
+        got = sorted(
+            (round(v[0][1] - pg, 4), round(v[0][0] - xi, 4))
+            for v in mc.vias
+            if z[0] - 1e-9 <= v[0][0] <= z[2] + 1e-9 and z[1] - 1e-9 <= v[0][1] <= z[3] + 1e-9
+        )
+        diff = _via_diff(got, want)
+        lands = [_bbox4(ld.pad1), _bbox4(ld.pad2)]
+        near = [
+            [
+                round(v[0][0], 3),
+                round(v[0][1], 3),
+                v[3],
+                round(min(rect_dist(v[0], b) for b in lands) - pr, 3),
+            ]
+            for v in mc.vias
+            if min(rect_dist(v[0], b) for b in lands) < pr + SMD_VIA_CLEAR - 1e-9
+        ]
+        under = []  # line copper under the mask island (only the load's own run-in may be)
+        for nm, path in list(mc.feeds.items()) + list(mc.runins.items()):
+            if nm == n:
+                continue
+            for q, _, _ in path_samples(path, 0.02):
+                if rect_dist(q, ld.mask) < ru.lchan - 1e-9:
+                    under.append(nm)
+                    break
+        good = diff == 0 and not near and not under
+        ok = ok and good
+        res[n] = dict(
+            ref=ld.ref,
+            vias_in_zone=len(got),
+            mismatch=diff,
+            vias_at_lands=near,
+            lines_under_mask=under,
+            ok=good,
+        )
+    return dict(declared_vias=len(want), smd_via_clear_mm=SMD_VIA_CLEAR, loads=res, ok=ok)
+
+
+def _bbox4(poly) -> Tuple[float, float, float, float]:
+    xs, ys = [q[0] for q in poly], [q[1] for q in poly]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
 # ---- G6: fits and D12 ----------------------------------------------------------------------
 
 
@@ -638,6 +760,8 @@ def generator_checks(mc, ru, rx_ball, tx_ball) -> None:
     mc.checks.append(dict(check="G4 fence continuity", **g4))
     g5 = via_accounting(mc, ru)
     mc.checks.append(dict(check="G5 via accounting", **g5))
+    g7 = load_cells(mc, ru)
+    mc.checks.append(dict(check="G7 dummy load cells", **g7))
     d12 = d12_layouts(mc)
     same = len(set(d12.values())) == 1
     mc.checks.append(

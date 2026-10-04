@@ -35,6 +35,8 @@ from .geom import Path, PointIndex, SegIndex, path_samples, rect, rect_dist
 from .params import D_LATTICE, RULES
 
 Pt = Tuple[float, float]
+# via pad edge to an SMD land edge (GND land of a load): a solder-mask web, no wicking [D]
+SMD_VIA_CLEAR = 0.10
 
 
 class Placer:
@@ -60,6 +62,8 @@ class Placer:
         self.cuts = list(mc.cutouts.values())
         self.pour = [_bbox(q) for q in mc.pour[:2]]
         self.pad1 = [_bbox(ld.pad1) for ld in mc.loads.values()]
+        self.pad2 = [_bbox(ld.pad2) for ld in mc.loads.values()]
+        self.load_zones = [ld.via_zone for ld in mc.loads.values()]
 
     # ---- site rules -------------------------------------------------------------------
     def in_pour(self, q: Pt, m: float) -> bool:
@@ -86,6 +90,12 @@ class Placer:
         for r in self.pad1:
             if rect_dist(q, r) < ru.gap + pr - 1e-9:
                 return "load pad"
+        for r in self.pad2:  # no via in or beside the GND land (solder wicking)
+            if rect_dist(q, r) < SMD_VIA_CLEAR + pr - 1e-9:
+                return "load pad"
+        for z in self.load_zones:  # the load cell's own vias only (placed before this check)
+            if z[0] < q[0] < z[2] and z[1] < q[1] < z[3]:
+                return "load zone"
         if self.lines.dist(q, ru.site_min) < ru.site_min - 1e-6:
             return "line"
         return None
@@ -670,11 +680,11 @@ def place(mc, ru) -> None:
             pl.add(q, role, True)
         lattice[bank] = len(lattice_sites(mc, ru, bank))
 
-    # 3. dummy loads
+    # 3. dummy loads: the load cell's own vias (its zone is closed to every other via)
     for ld in mc.loads.values():
         for q in ld.vias:
             why = pl.site(q)
-            if why not in (None, "line"):  # the load's own run-in ends at its pad
+            if why not in (None, "line", "load zone"):  # the load's own run-in ends at its pad
                 pl.log["conflicts"].append(dict(role="load", at=_r(q), site=why))
                 continue
             pl.add(q, "load", True)

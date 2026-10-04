@@ -6,6 +6,8 @@ The macro build takes about half a minute; it is built once for the whole module
 
 from __future__ import annotations
 
+import gzip
+import json
 import math
 import os
 import sys
@@ -14,10 +16,17 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "board")
+)
+
+import rf_audit as RA  # noqa: E402
 from rfmacro import coupons  # noqa: E402
+from rfmacro import dims as dims_mod  # noqa: E402
 from rfmacro import macro as M  # noqa: E402
 from rfmacro import rules as G  # noqa: E402
-from rfmacro.geom import Path, rect  # noqa: E402
+from rfmacro.geom import Path, Seg, path_samples, rect  # noqa: E402
+from rfmacro.params import resolve  # noqa: E402
 from rfmacro.raster import Grid  # noqa: E402
 from rfmacro.vias import Placer, _plan, fence_row  # noqa: E402
 
@@ -183,15 +192,142 @@ class MacroTest(unittest.TestCase):
         self.assertEqual(ys, {0.65})
 
 
+class LoadAndWindowTest(unittest.TestCase):
+    def test_load_cells_identical_and_no_via_at_a_land(self):
+        g7 = check(macro(), "G7")
+        self.assertTrue(g7["ok"], g7)
+        for r in g7["loads"].values():
+            self.assertEqual(r["vias_in_zone"], 5)
+            self.assertEqual(r["vias_at_lands"], [])
+
+    def test_a_via_in_a_gnd_land_fails_g7(self):
+        mc = macro()
+        ld = mc.loads["TXD0"]
+        cx = sum(q[0] for q in ld.pad2) / len(ld.pad2)
+        cy = sum(q[1] for q in ld.pad2) / len(ld.pad2)
+        ru = M.Rules(mc.params, mc.dims)
+        bad = SimpleNamespace(**vars(mc))
+        bad.vias = list(mc.vias) + [((cx, cy), 0.15, 0.32, "fill")]
+        g7 = G.load_cells(bad, ru)
+        self.assertFalse(g7["ok"])
+        self.assertTrue(g7["loads"]["TXD0"]["vias_at_lands"])
+
+    def test_g2_window_is_symmetric_and_the_open_ends_declared(self):
+        g2 = check(macro(), "G2")
+        w = g2["window_column_frame"]
+        self.assertAlmostEqual(w[0], -w[2], places=6)
+        self.assertGreater(w[2], 1.5 * 2.342 + 0.1)  # holds the second-neighbour input lines
+        opened = sorted(n for n, r in g2["columns"].items() if r["open_end"])
+        self.assertEqual(opened, ["RX1", "TX3"])
+        for n in opened:
+            self.assertGreater(g2["columns"][n]["declared_difference"]["copper_xor_mm2"], 0.5)
+
+    def test_rects_minus(self):
+        r = M.rects_minus([(0, 0, 10, 10)], [(2, 2, 4, 4), (9, 4, 11, 6)])
+        self.assertAlmostEqual(sum((a[2] - a[0]) * (a[3] - a[1]) for a in r), 100 - 4 - 2)
+        for a in r:
+            self.assertFalse(a[0] < 3 < a[2] and a[1] < 3 < a[3])
+
+
+def old_macro():
+    """The pre-fix macro (fixture: rfm1-n of ab57757, filled by KiCad) in the new code's types.
+    Pg is put 0.90 mm (runin_out) before each feed enters its cut-out."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    with gzip.open(os.path.join(here, "fixtures", "old-rfm1-n.json.gz")) as fh:
+        fx = json.load(fh)
+    p = resolve({"variant": 0})
+    d = dims_mod.compute(p)
+    mc, ru = M.Macro(p, d), M.Rules(p, d)
+    om = fx["macro"]
+    mc.cutouts = {k: tuple(v) for k, v in om["cutouts"].items()}
+    mc.pour, mc.region = om["pour"], om["region"]
+    for n, f in om["feeds"].items():
+        q = Path(tuple(f["start"]), f["heading"], f["width"])
+        q.segs = [
+            Seg(
+                s["kind"],
+                tuple(s["p0"]),
+                tuple(s["p1"]),
+                s["width"],
+                tuple(s["center"]) if s["center"] else None,
+                s["radius"],
+                s["a0"],
+                s["sweep"],
+            )
+            for s in f["segs"]
+        ]
+        q.marks = {k: (tuple(v[0]), v[1]) for k, v in f["marks"].items()}
+        c = mc.cutouts[n[:2]]
+        s_e = next(
+            s
+            for pt, _, s in path_samples(q, 0.005)
+            if c[0] <= pt[0] <= c[2] and c[1] <= pt[1] <= c[3]
+        )
+        pg = next(pt for pt, _, s in path_samples(q, 0.005) if s >= s_e - ru.lout)
+        q.marks["E"], q.marks["Pg"] = (None, s_e), (pg, s_e - ru.lout)
+        mc.feeds[n] = q
+    for n, c in om["columns"].items():
+        col = M.build_column(f"COL_{n}", n, tuple(c["origin"]), c["mirror"], p, d)
+        col.dummy = False
+        mc.columns[n] = col
+    bd = fx["board"]
+    bd["vias"] = [(tuple(q), n) for q, n in bd["vias"]]
+    return mc, ru, bd
+
+
+class OldGeometryAuditTest(unittest.TestCase):
+    """Review 2026-10-04: the board audit must fail on the geometry of the owner's finding."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mc, cls.ru, cls.bd = old_macro()
+
+    def test_a1_finds_the_encroachments(self):
+        r = RA.a1(self.mc, self.ru, self.bd)
+        self.assertFalse(r["ok"])
+        lines = r["lines"]
+        for n in ("RX2", "RX3"):  # the bumps along the cut-out's south edge
+            self.assertAlmostEqual(lines[n]["span_mm"][0], 0.88, delta=0.03, msg=n)
+        self.assertAlmostEqual(lines["TX2"]["span_mm"][0], 1.49, delta=0.03)  # serpentine top
+        self.assertEqual(lines["TX1"]["contacts"], 2)  # finger beside the package corner
+        self.assertAlmostEqual(max(lines["TX1"]["span_mm"]), 0.96, delta=0.05)
+        for n in ("RX1", "RX4", "TX3"):
+            self.assertTrue(lines[n]["ok"], n)
+
+    def test_a2_a3_a4_fail(self):
+        self.assertFalse(RA.a2(self.mc, self.ru, self.bd)["ok"])
+        a3 = RA.a3(self.mc, self.ru, self.bd)
+        self.assertFalse(a3["ok"])
+        self.assertGreater(max(p["area_mm2"] for p in a3["unreached"]), 1.0)
+        self.assertFalse(RA.a4(self.mc, self.ru, self.bd)["ok"])
+
+    def test_contact_span_follows_the_boundary(self):
+        """A contact along the cut-out's side edge reads its length, not its x extent."""
+        g = Grid(0, 0, 4, 4, 0.01)
+        contact = g.empty()
+        g.rect(contact, 1.0, 1.0, 1.02, 2.0)  # 1.0 mm along the west edge of the cut-out
+        spans = RA.contact_spans(g, contact, (1.0, 0.5, 3.0, 3.0))
+        self.assertEqual(len(spans), 1)
+        self.assertAlmostEqual(spans[0], 1.0, delta=0.02)
+
+
 class CouponTest(unittest.TestCase):
     def test_new_coupons(self):
         st = coupons.build_strip()
         ids = {c["id"] for c in st.catalog}
-        for want in ("CP-T", "CP-T3", "CP-A", "CP-A-CORP", "CP-Z"):
+        for want in ("CP-T", "CP-T2", "CP-T3", "CP-A", "CP-A-CORP", "CP-Z", "_G3"):
             self.assertIn(want, ids)
         self.assertEqual(len(st.loads), 3)
         t = {c["id"]: c for c in st.catalog}
         self.assertAlmostEqual(t["CP-T"]["p0_to_p1_mm"], t["CP-T3"]["p0_to_p1_mm"], places=6)
+        self.assertAlmostEqual(t["CP-T2"]["p0_to_p1_mm"], t["CP-T3"]["p0_to_p1_mm"], places=6)
+        # the strip is stitched like the macro: what no via reaches is only small corners
+        self.assertLess(sum(m["area_mm2"] for m in t["_G3"]["made_gap"]), 0.5)
+        # every coupon load is the macro's load cell: its five vias, nothing else in its zone
+        for ld in st.loads:
+            z = ld.via_zone
+            inside = [v for v in st.vias if z[0] <= v[0][0] <= z[2] and z[1] <= v[0][1] <= z[3]]
+            self.assertEqual(len(inside), 5, ld.ref)
 
 
 if __name__ == "__main__":

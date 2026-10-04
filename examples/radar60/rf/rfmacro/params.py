@@ -127,16 +127,23 @@ DEFAULTS: Dict[str, object] = {
     "meander_r": 0.50,
     # terminated dummy columns: "both" (all four bank ends), "outer" (RX0 and TX4) or "none"
     "dummies": "both",
-    # dummy load: 50 ohm thin-film 0201 (KiCad R_0201_0603Metric land), along the run-in axis,
-    # its GND end returned by two vias [D]
+    # dummy load: 50 ohm thin-film 0201 (KiCad R_0201_0603Metric land), along the run-in axis.
+    # Every load is the same cell (review 2026-10-04: fill vias had landed in three of the four
+    # GND lands): its GND end is returned by its own five vias, given relative to (x_in, Pg), each
+    # pad edge >= 0.14 mm from either land; no other via may sit in its via zone (x_in +-
+    # via_zone[0], Pg - via_zone[1] .. Pg). `zone` is the fit search's keep-clear box. The mask
+    # island (x_in +- mask[0], Pg - mask[1] .. Pg - mask[2]) is under solder mask, the lands
+    # opening by their own size, so the GND land is mask-defined like the signal land instead
+    # of wetting into the bare pour, and the load vias are tented [D]
     "dummy_load": {
         "value": "50R 0201 thin film",
         "pad": [0.46, 0.40],
         "pitch": 0.64,
         "pad1_dy": 0.45,
-        "via_dx": 0.45,
-        "via_dy": 1.09,
+        "vias": [[-0.50, -1.09], [0.50, -1.09], [-0.58, -0.50], [0.58, -0.50], [0.0, -1.62]],
         "zone": [0.66, 1.35],
+        "via_zone": [0.66, 1.65],
+        "mask": [0.78, 1.82, 0.05],
     },
     "bank_strip": 2.0,  # cut-out to cut-out between the banks, the isolation wall in the middle [D]
     "pour_clear_ant": 1.0,  # L1 GND pour kept this far from patch copper [D]

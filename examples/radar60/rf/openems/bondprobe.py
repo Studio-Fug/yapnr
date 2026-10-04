@@ -87,9 +87,23 @@ def add(csx, pts, z_l2, z_l1):
         pr.AddBox([p["at"][0], p["at"][1], za], [p["at"][0], p["at"][1], zb])
 
 
+def sources(csx, pts, z_l2, h):
+    """`--ringdown-ns`: z-directed soft E sources across the bondply at each bank's middle and
+    end column gaps (the probe sites), 2 h wide."""
+    for p in pts:
+        if p["where"] == "bank" and p["pair"] == "bond" and p["name"].endswith(("_mid", "_end0")):
+            x, y = p["at"]
+            ex = csx.AddExcitation(f"src_{p['name']}", exc_type=0, exc_val=[0, 0, 1])
+            ex.AddBox([x - h, y - h, 0.0], [x + h, y + h, z_l2])
+
+
+MIN_WINDOW_S = 0.6e-9  # a shorter ring-down (a driven run stopped at -40 dB) gives no poles
+
+
 def ringdown(t, v, t0, fmin=54e9, fmax=72e9):
-    """Damped sinusoids of v after t0, [(f, Q, |a|/peak)] by amplitude, and the late levels
-    (dB below the peak 0.5/1/2 ns after t0)."""
+    """Damped sinusoids of v after t0, [(f, Q, |a|/peak)] by amplitude, the late levels (dB
+    below the peak 0.5/1/2 ns after t0) and the analysed window (s). No poles when the record
+    after t0 is shorter than MIN_WINDOW_S; undamped or growing poles (Q = inf) are dropped."""
     from pp_sim import matrix_pencil
 
     pk = float(np.max(np.abs(v))) or 1.0
@@ -103,12 +117,53 @@ def ringdown(t, v, t0, fmin=54e9, fmax=72e9):
         )
     sel = t > t0
     ts, vs = t[sel], v[sel]
-    if len(ts) < 60:
-        return [], late, pk
+    window = float(ts[-1] - ts[0]) if len(ts) > 1 else 0.0
+    if window < MIN_WINDOW_S:
+        return [], late, pk, window
     step = max(1, int(round((1 / (4 * 80e9)) / (t[1] - t[0]))))
     ts, vs = ts[::step][:1200], vs[::step][:1200]
     poles = matrix_pencil(ts - ts[0], vs, fmin, fmax)
-    return [(f, q, a / pk) for f, q, a in poles], late, pk
+    return [(f, q, a / pk) for f, q, a in poles if math.isfinite(q)], late, pk, window
+
+
+def ringdown_only(sim, out, pts, fc):
+    """`--ringdown-ns`: poles of every probe from the end of the sources' pulse (no port is
+    driven, so no transfer); writes OUT/probes.json, returns the summary for result.json."""
+    t_pulse = 2 * 9 / (2 * math.pi * fc)
+    summary, store = {}, {}
+    for p in pts:
+        fn = os.path.join(sim, p["name"])
+        if not os.path.exists(fn):
+            continue
+        tv = np.loadtxt(fn, comments="%")
+        if tv.ndim != 2 or len(tv) < 10:
+            continue
+        t, v = tv[:, 0], tv[:, 1]
+        poles, late, pk, window = ringdown(t, v, t_pulse + 0.05e-9)
+        summary[p["name"]] = dict(
+            at=p["at"],
+            pair=p["pair"],
+            where=p["where"],
+            peak_v=pk,
+            late_db=late,
+            window_ns=round(window * 1e9, 3),
+            poles=[
+                dict(f_ghz=round(f / 1e9, 3), q=round(q, 1), amp_rel=round(a, 5))
+                for f, q, a in poles[:12]
+            ],
+            q20_57_70=[
+                dict(f_ghz=round(f / 1e9, 3), q=round(q, 1), amp_rel=round(a, 5))
+                for f, q, a in poles
+                if 57e9 <= f <= 70e9 and q >= 20 and a >= 1e-3
+            ],
+        )
+        step = max(1, int(round(1e-12 / (t[1] - t[0]))))  # about 1 ps
+        store[p["name"]] = dict(
+            dt_s=float(t[step] - t[0]), v=[float(f"{x:.4g}") for x in v[::step]]
+        )
+    with open(os.path.join(out, "probes.json"), "w") as fh:
+        json.dump(store, fh)
+    return summary
 
 
 def analyse(sim, out, pts, port, fc):
@@ -129,7 +184,7 @@ def analyse(sim, out, pts, port, fc):
         if tv.ndim != 2 or len(tv) < 10:
             continue
         t, v = tv[:, 0], tv[:, 1]
-        poles, late, pk = ringdown(t, v, t_pulse + 0.1e-9)
+        poles, late, pk, window = ringdown(t, v, t_pulse + 0.1e-9)
         tr = 20 * np.log10(np.abs(DFT_time2freq(t, v, F_SPEC)) / np.abs(u_inc) + 1e-30)
         ib = (F_SPEC >= 57e9) & (F_SPEC <= 70e9)
         k = int(np.argmax(np.where(ib, tr, -999)))
@@ -139,6 +194,7 @@ def analyse(sim, out, pts, port, fc):
             where=p["where"],
             peak_v=pk,
             late_db=late,
+            window_ns=round(window * 1e9, 3),
             transfer_db_at={
                 f"{x / 1e9:.2f}": round(float(np.interp(x, F_SPEC, tr)), 2) for x in F_BAND
             },

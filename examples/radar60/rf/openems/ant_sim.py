@@ -24,7 +24,9 @@ Outputs OUT/result.json (S of every port, RL-10 band of the excited port, far fi
 frequency: broadside directivity and realized gain, radiation efficiency, HPBW, E- and H-plane
 cuts) and OUT/s.csv. `--probe-bond` adds plane-pair voltage probes (bondprobe.py: bondply under
 the banks, L1-L2 and L2-L3 in the open pour), their ring-down poles and port-to-probe transfers
-(result.json "probes", OUT/probes.json); probes add no mesh lines.
+(result.json "probes", OUT/probes.json); probes add no mesh lines. `--ringdown-ns T --excite
+none` drives no port: soft sources in the bondply at the banks' middle and end gaps, a run of T ns,
+and the probes' ring-down poles (the bank cavity's modes and Q) instead of S and far fields.
 """
 
 import argparse
@@ -237,7 +239,14 @@ def model(m, args):
 
         probes = bondprobe.points(m)
         bondprobe.add(csx, probes, z_l2, z_l1)
+        if getattr(args, "ringdown_ns", 0):  # no port driven: bondply sources, fixed length
+            bondprobe.sources(csx, probes, z_l2, res)
     gx, gy, gz = (np.array(grid.GetLines(dd)) for dd in "xyz")
+    if getattr(args, "ringdown_ns", 0):  # steps from a Courant step of the smallest cells
+        dmin = [float(np.min(np.diff(g))) * 1e-3 for g in (gx, gy, gz)]
+        dt = 1 / (299792458.0 * math.sqrt(sum(1 / d**2 for d in dmin)))
+        fdtd.SetNumberOfTimeSteps(int(args.ringdown_ns * 1e-9 / dt))
+        fdtd.SetEndCriteria(1e-12)
     meta = dict(
         mesh=dict(nx=len(gx), ny=len(gy), nz=len(gz)),
         cells=int(len(gx) * len(gy) * len(gz)),
@@ -281,7 +290,16 @@ def main():
     ap.add_argument("--dump-bond-f", type=float, nargs="+", default=[60.3, 62.05, 63.8])
     ap.add_argument("--mesh-ref", help="comma-separated models whose edges join the mesh template")
     ap.add_argument("--probe-bond", action="store_true", help="plane-pair probes (bondprobe.py)")
+    ap.add_argument(
+        "--ringdown-ns",
+        type=float,
+        default=0.0,
+        help="cavity ring-down: no port driven (--excite none), soft sources in the bondply at "
+        "the bank sites, this many ns, probe poles only (bondprobe.py)",
+    )
     a = ap.parse_args()
+    if a.ringdown_ns:
+        a.probe_bond = True
     m = json.load(open(a.model))
     out = os.path.abspath(a.out)
     sim = os.path.join(out, "sim")
@@ -300,6 +318,15 @@ def main():
     t0 = time.time()
     fdtd.Run(sim, cleanup=True, numThreads=a.threads)
     wall = time.time() - t0
+    if a.ringdown_ns:  # cavity ring-down: the probes' poles only
+        import bondprobe
+
+        res = dict(model=m["model"], board=m["board"], ringdown_ns=a.ringdown_ns, wall_s=wall)
+        res["meta"] = meta
+        res["probes"] = bondprobe.ringdown_only(sim, out, meta["probes"], 9.0e9)
+        json.dump(res, open(os.path.join(out, "result.json"), "w"), indent=1, default=float)
+        shutil.rmtree(sim, ignore_errors=True)
+        return
     f = np.linspace(58e9, 66e9, 321)
     pe = ports[a.excite]
     for p in list(ports.values()) + list(loads.values()):

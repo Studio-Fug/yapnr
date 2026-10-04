@@ -80,7 +80,8 @@ class RingdownTest(unittest.TestCase):
 
         v = np.exp(-(((t - 0.16e-9) / 0.05e-9) ** 2)) * np.cos(2 * math.pi * 62e9 * t)
         v = v + ds(62.3e9, 30, 0.05) + ds(66e9, 8, 0.2)
-        poles, late, _ = bondprobe.ringdown(t, v, 0.42e-9)
+        poles, late, _, window = bondprobe.ringdown(t, v, 0.42e-9)
+        self.assertGreater(window, 4e-9)
         hi = [p for p in poles if p[2] > 1e-3 and p[1] >= 20]
         self.assertEqual(len(hi), 1)
         self.assertAlmostEqual(hi[0][0] / 1e9, 62.3, delta=0.05)

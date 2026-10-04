@@ -91,6 +91,11 @@
   (constraint hole_size (min 0.2mm))
   (constraint via_diameter (min 0.4mm))
   (condition "A.Type == 'Via' && !A.intersectsCourtyard('U1') && !A.intersectsArea('RF_REGION')"))
+# The RF macro's GND stitching vias in the VOUT_PA pocket (RF uniformity, rfm1-m/n/p: four 0.15/0.32 vias) keep the RF region's fence class; after the U1 and general rules, which they override
+(rule "radar60_pocket_fence_vias"
+  (constraint hole_size (min 0.15mm))
+  (constraint via_diameter (min 0.32mm))
+  (condition "A.Type == 'Via' && A.intersectsArea('RF_POCKET') && A.hasNetclass('GND') && A.Hole <= 0.155mm"))
 # Crystal nets stay on F.Cu over the solid In1.Cu (no vias; plan 7.1)
 (rule "radar60_xtal_no_vias"
   (constraint disallow via)
@@ -126,3 +131,105 @@
 (rule "radar60_plane_in4"
   (constraint disallow track)
   (condition "A.Type == 'Track' && A.Layer == 'In4.Cu'"))
+# >>> yapnr copper_keepout (pnr.writeback: copper_keepout allow lists and exempt groups; replaced whole)
+(rule "yapnr keepout rf_region_1 F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_1') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_1 In1.Cu"
+  (layer "In1.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_1') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_1 In2.Cu"
+  (layer "In2.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_1') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_2 F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_2') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_2 In1.Cu"
+  (layer "In1.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_2') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_2 In2.Cu"
+  (layer "In2.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_2') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_3 F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_3') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_3 In1.Cu"
+  (layer "In1.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_3') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_3 In2.Cu"
+  (layer "In2.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_3') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_4 F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_4') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_4 In1.Cu"
+  (layer "In1.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_4') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_region_4 In2.Cu"
+  (layer "In2.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_region_4') && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via zone))
+(rule "yapnr keepout rf_guard_1 F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_1') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_1 In1.Cu"
+  (layer "In1.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_1') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_1 In2.Cu"
+  (layer "In2.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_1') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_2 F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_2') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_2 In1.Cu"
+  (layer "In1.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_2') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_2 In2.Cu"
+  (layer "In2.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_2') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_3 F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_3') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_3 In1.Cu"
+  (layer "In1.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_3') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_3 In2.Cu"
+  (layer "In2.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_3') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_4 F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_4') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_4 In1.Cu"
+  (layer "In1.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_4') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout rf_guard_4 In2.Cu"
+  (layer "In2.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard_4') && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')")
+  (constraint disallow track via))
+(rule "yapnr keepout flash_ep_tracks F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:flash_ep_tracks') && !A.hasNetclass('GND')")
+  (constraint disallow track))
+# <<< yapnr copper_keepout

@@ -1,97 +1,111 @@
 {
   "checks": {
-    "bottom_side_parts": ["C52", "C53", "C54", "C58", "C59", "C60", "R46"],
+    "bottom_side_parts": [
+      "C38",
+      "C52",
+      "C53",
+      "C54",
+      "C57",
+      "C58",
+      "C59",
+      "C60",
+      "C61",
+      "C62",
+      "C63",
+      "C64",
+      "R46"
+    ],
     "declared_bottom_roles": ["pa_bulk", "pa_cap", "pa_r", "rf2_cap"],
     "pin_distance": {
       "failures": [],
       "parts": {
         "flash.r_clk": {
-          "limit_mm": 3.0,
-          "mm": 2.07,
+          "limit_mm": 5.0,
+          "mm": 4.57,
           "ref": "R9",
           "role": "qspi_series"
         },
         "radio.c_apll": {
           "limit_mm": 3.5,
-          "mm": 2.25,
+          "mm": 0.93,
           "ref": "C38",
           "role": "radio_east"
         },
         "radio.c_bb[0]": {
           "limit_mm": 8.0,
-          "mm": 3.9,
+          "mm": 3.68,
           "ref": "C39",
           "role": "radio_west"
         },
         "radio.c_bb[1]": {
           "limit_mm": 8.0,
-          "mm": 2.65,
+          "mm": 5.44,
           "ref": "C40",
           "role": "radio_west"
         },
         "radio.c_bb_bulk": {
           "limit_mm": 12.0,
-          "mm": 9.31,
+          "mm": 8.3,
           "ref": "C41",
           "role": "radio_decoupling_bulk"
         },
         "radio.c_clk": {
           "limit_mm": 7.0,
-          "mm": 5.29,
+          "mm": 4.39,
           "ref": "C43",
           "role": "radio_decoupling_hf"
         },
         "radio.c_clk_bulk": {
           "limit_mm": 12.0,
-          "mm": 7.49,
+          "mm": 10.03,
           "ref": "C42",
           "role": "radio_decoupling_bulk"
         },
         "radio.c_diff": {
           "limit_mm": 7.0,
-          "mm": 4.03,
+          "mm": 6.96,
           "ref": "C44",
           "role": "radio_decoupling_hf"
         },
         "radio.c_dig[0]": {
           "limit_mm": 7.0,
-          "mm": 10.08,
+          "mm": 5.83,
           "ref": "C45",
           "role": "radio_decoupling_hf"
         },
         "radio.c_dig[1]": {
           "limit_mm": 7.0,
-          "mm": 8.35,
+          "mm": 4.33,
           "ref": "C46",
           "role": "radio_decoupling_hf"
         },
         "radio.c_dig[2]": {
           "limit_mm": 7.0,
-          "mm": 6.14,
+          "mm": 6.21,
           "ref": "C47",
           "role": "radio_decoupling_hf"
         },
         "radio.c_dig[3]": {
           "limit_mm": 7.0,
-          "mm": 9.04,
+          "mm": 2.11,
           "ref": "C48",
           "role": "radio_decoupling_hf"
         },
         "radio.c_dig_10n": {
           "limit_mm": 7.0,
-          "mm": 4.28,
+          "mm": 5.32,
           "ref": "C50",
           "role": "radio_decoupling_hf"
         },
         "radio.c_dig_2u2": {
           "limit_mm": 7.0,
-          "mm": 4.25,
+          "mm": 2.78,
           "ref": "C49",
           "role": "radio_decoupling_hf"
         },
         "radio.c_io18": {
           "limit_mm": 7.0,
-          "mm": 6.89,
+          "mm": 2.45,
           "ref": "C51",
           "role": "radio_decoupling_hf"
         },
@@ -103,31 +117,31 @@
         },
         "radio.c_pa_10u": {
           "limit_mm": 8.0,
-          "mm": 11.83,
+          "mm": 11.51,
           "ref": "C52",
           "role": "pa_bulk"
         },
         "radio.c_pa_22u": {
           "limit_mm": 8.0,
-          "mm": 7.03,
+          "mm": 8.82,
           "ref": "C53",
           "role": "pa_bulk"
         },
         "radio.c_rf1": {
           "limit_mm": 8.0,
-          "mm": 8.76,
+          "mm": 0.09,
           "ref": "C57",
           "role": "radio_west"
         },
         "radio.c_rf1_10u": {
           "limit_mm": 12.0,
-          "mm": 12.47,
+          "mm": 11.83,
           "ref": "C55",
           "role": "radio_decoupling_bulk"
         },
         "radio.c_rf1_22u": {
           "limit_mm": 12.0,
-          "mm": 12.66,
+          "mm": 12.87,
           "ref": "C56",
           "role": "radio_decoupling_bulk"
         },
@@ -139,91 +153,91 @@
         },
         "radio.c_rf2_10u": {
           "limit_mm": 8.0,
-          "mm": 11.67,
+          "mm": 7.22,
           "ref": "C58",
           "role": "pa_bulk"
         },
         "radio.c_rf2_22u": {
           "limit_mm": 8.0,
-          "mm": 11.48,
+          "mm": 10.1,
           "ref": "C59",
           "role": "pa_bulk"
         },
         "radio.c_sram": {
           "limit_mm": 7.0,
-          "mm": 6.33,
+          "mm": 1.34,
           "ref": "C61",
           "role": "radio_decoupling_hf"
         },
         "radio.c_synth": {
           "limit_mm": 3.5,
-          "mm": 3.07,
+          "mm": 0.74,
           "ref": "C62",
           "role": "radio_east"
         },
         "radio.c_vbgap": {
           "limit_mm": 3.5,
-          "mm": 3.44,
+          "mm": 1.57,
           "ref": "C63",
           "role": "radio_east"
         },
         "radio.c_vco": {
           "limit_mm": 7.0,
-          "mm": 6.04,
+          "mm": 0.41,
           "ref": "C64",
           "role": "radio_decoupling_hf"
         },
         "radio.c_vio[0]": {
           "limit_mm": 7.0,
-          "mm": 5.58,
+          "mm": 9.63,
           "ref": "C65",
           "role": "radio_decoupling_hf"
         },
         "radio.c_vio[1]": {
           "limit_mm": 7.0,
-          "mm": 6.18,
+          "mm": 7.95,
           "ref": "C66",
           "role": "radio_decoupling_hf"
         },
         "radio.c_vio[2]": {
           "limit_mm": 7.0,
-          "mm": 5.56,
+          "mm": 6.76,
           "ref": "C67",
           "role": "radio_decoupling_hf"
         },
         "radio.c_vio_10u": {
           "limit_mm": 12.0,
-          "mm": 11.05,
+          "mm": 10.42,
           "ref": "C69",
           "role": "radio_decoupling_bulk"
         },
         "radio.c_vio_2u2": {
           "limit_mm": 7.0,
-          "mm": 5.13,
+          "mm": 5.57,
           "ref": "C68",
           "role": "radio_decoupling_hf"
         },
         "radio.c_vnwa": {
           "limit_mm": 7.0,
-          "mm": 6.91,
+          "mm": 5.81,
           "ref": "C70",
           "role": "radio_decoupling_hf"
         },
         "radio.c_xm": {
           "limit_mm": 3.0,
-          "mm": 2.26,
+          "mm": 2.13,
           "ref": "C71",
           "role": "crystal_caps"
         },
         "radio.c_xp": {
           "limit_mm": 3.0,
-          "mm": 2.09,
+          "mm": 2.34,
           "ref": "C72",
           "role": "crystal_caps"
         },
         "radio.r_pa": {
           "limit_mm": 3.0,
-          "mm": 0.5,
+          "mm": 0.53,
           "ref": "R46",
           "role": "pa_decoupling"
         }
@@ -231,39 +245,39 @@
       "protection": {
         "CANH": {
           "esd": "D1",
-          "esd_mm": 3.66,
+          "esd_mm": 6.57,
           "ic": "U4",
-          "ic_mm": 8.61,
+          "ic_mm": 7.87,
           "nearest": "D1",
-          "nearest_mm": 3.66
+          "nearest_mm": 6.57
         },
         "CANL": {
           "esd": "D1",
-          "esd_mm": 4.1,
+          "esd_mm": 4.4,
           "ic": "U4",
-          "ic_mm": 9.11,
+          "ic_mm": 7.27,
           "nearest": "D1",
-          "nearest_mm": 4.1
+          "nearest_mm": 4.4
         },
         "UART_RX_J1": {
           "esd": "D2",
-          "esd_mm": 4.67,
+          "esd_mm": 3.5,
           "nearest": "D2",
-          "nearest_mm": 4.67
+          "nearest_mm": 3.5
         },
         "UART_TX_J1": {
           "esd": "D2",
-          "esd_mm": 6.24,
+          "esd_mm": 3.51,
           "nearest": "D2",
-          "nearest_mm": 6.24
+          "nearest_mm": 3.51
         },
         "VIN_5V": {
           "esd": "D3",
-          "esd_mm": 8.31,
+          "esd_mm": 6.18,
           "ic": "U5",
-          "ic_mm": 14.63,
-          "nearest": "C34",
-          "nearest_mm": 5.99
+          "ic_mm": 11.95,
+          "nearest": "D3",
+          "nearest_mm": 6.18
         }
       }
     },
@@ -272,8 +286,8 @@
     "r4_digital_pads_in_guard": [],
     "r5_radome_violations": [],
     "r5_unknown_heights": ["RFM1"],
-    "sw_to_rf_region_mm": 6.68,
-    "sw_to_xtal_mm": 11.26
+    "sw_to_rf_region_mm": 5.65,
+    "sw_to_xtal_mm": 11.66
   },
   "constraints": {
     "fixed": {
@@ -281,8 +295,6 @@
         "courtyard_y0": 0.0,
         "x": 30.0
       },
-      "J2": 0.0,
-      "J3": 0.0,
       "MH1": 0.0,
       "MH2": 0.0,
       "MH3": 0.0,
@@ -294,118 +306,214 @@
     },
     "groups": {
       "can": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 6.37,
+        "max_distance_mm": 7.46,
         "members": 11,
         "radius_mm": 7.5
       },
       "connector_esd": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 8.78,
+        "max_distance_mm": 8.34,
         "members": 2,
         "radius_mm": 12.0
       },
       "connector_tvs": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 12.95,
+        "max_distance_mm": 10.16,
         "members": 1,
         "radius_mm": 13.0
       },
       "crystal": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 9.46,
+        "max_distance_mm": 11.3,
         "members": 1,
-        "radius_mm": 9.5
+        "radius_mm": 12.5
       },
       "crystal_caps": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 7.8,
+        "max_distance_mm": 8.29,
         "members": 2,
         "radius_mm": 9.5
       },
-      "efuse": {
+      "damp_1v8": {
+        "anchor_pad": "2",
         "beyond": {},
-        "max_distance_mm": 7.88,
+        "max_distance_mm": 1.64,
+        "members": 1,
+        "radius_mm": 3.0
+      },
+      "damp_c_1v8": {
+        "anchor_pad": "2",
+        "beyond": {},
+        "max_distance_mm": 1.77,
+        "members": 1,
+        "radius_mm": 2.0
+      },
+      "damp_c_rf1": {
+        "anchor_pad": "2",
+        "beyond": {},
+        "max_distance_mm": 1.77,
+        "members": 1,
+        "radius_mm": 2.0
+      },
+      "damp_c_rf2": {
+        "anchor_pad": "2",
+        "beyond": {},
+        "max_distance_mm": 1.77,
+        "members": 1,
+        "radius_mm": 2.0
+      },
+      "damp_rf1": {
+        "anchor_pad": "2",
+        "beyond": {},
+        "max_distance_mm": 2.57,
+        "members": 1,
+        "radius_mm": 3.0
+      },
+      "damp_rf2": {
+        "anchor_pad": "2",
+        "beyond": {},
+        "max_distance_mm": 2.88,
+        "members": 1,
+        "radius_mm": 3.0
+      },
+      "efuse": {
+        "anchor_pad": null,
+        "beyond": {},
+        "max_distance_mm": 7.95,
         "members": 11,
         "radius_mm": 8.0
       },
       "efuse_caps": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 9.79,
+        "max_distance_mm": 9.98,
         "members": 4,
         "radius_mm": 10.0
       },
-      "flash": {
+      "fb_rf1": {
+        "anchor_pad": "H5",
         "beyond": {},
-        "max_distance_mm": 5.4,
+        "max_distance_mm": 11.84,
+        "members": 1,
+        "radius_mm": 12.0
+      },
+      "fb_rf2": {
+        "anchor_pad": "D2",
+        "beyond": {},
+        "max_distance_mm": 9.97,
+        "members": 2,
+        "radius_mm": 10.0
+      },
+      "flash": {
+        "anchor_pad": null,
+        "beyond": {},
+        "max_distance_mm": 5.48,
         "members": 5,
         "radius_mm": 5.5
       },
       "pmic": {
+        "anchor_pad": null,
         "beyond": {},
         "max_distance_mm": 8.49,
         "members": 4,
         "radius_mm": 8.5
       },
       "pmic_in_caps": {
+        "anchor_pad": null,
         "beyond": {},
         "max_distance_mm": 4.99,
         "members": 4,
         "radius_mm": 5.0
       },
-      "pmic_snubbers": {
-        "beyond": {},
-        "max_distance_mm": 7.44,
-        "members": 4,
-        "radius_mm": 7.5
-      },
       "pmic_vana": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 4.3,
+        "max_distance_mm": 4.68,
         "members": 1,
         "radius_mm": 5.0
       },
       "qspi_series": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 7.59,
+        "max_distance_mm": 9.98,
         "members": 1,
-        "radius_mm": 9.5
+        "radius_mm": 11.0
       },
       "radio_decoupling_bulk": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 13.83,
+        "max_distance_mm": 13.88,
         "members": 9,
         "radius_mm": 14.0
       },
       "radio_decoupling_hf": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 11.0,
+        "max_distance_mm": 10.99,
         "members": 24,
         "radius_mm": 11.0
       },
       "snb0": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 2.15,
+        "max_distance_mm": 2.25,
         "members": 1,
         "radius_mm": 2.5
       },
       "snb1": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 1.35,
+        "max_distance_mm": 2.26,
         "members": 1,
         "radius_mm": 2.5
       },
       "snb2": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 2.37,
+        "max_distance_mm": 1.9,
         "members": 1,
         "radius_mm": 2.5
       },
       "snb3": {
+        "anchor_pad": null,
         "beyond": {},
-        "max_distance_mm": 1.82,
+        "max_distance_mm": 1.77,
         "members": 1,
         "radius_mm": 2.5
+      },
+      "snb_l0": {
+        "anchor_pad": "1",
+        "beyond": {},
+        "max_distance_mm": 1.63,
+        "members": 1,
+        "radius_mm": 3.5
+      },
+      "snb_l1": {
+        "anchor_pad": "1",
+        "beyond": {},
+        "max_distance_mm": 3.21,
+        "members": 1,
+        "radius_mm": 3.5
+      },
+      "snb_l2": {
+        "anchor_pad": "1",
+        "beyond": {},
+        "max_distance_mm": 3.48,
+        "members": 1,
+        "radius_mm": 3.5
+      },
+      "snb_l3": {
+        "anchor_pad": "1",
+        "beyond": {},
+        "max_distance_mm": 2.24,
+        "members": 1,
+        "radius_mm": 3.5
       }
     },
     "regions": {
@@ -435,6 +543,16 @@
         "wrong_side": []
       },
       "flash_block": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "jtag": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "lvds_header": {
         "members": 1,
         "outside": [],
         "wrong_side": []
@@ -470,22 +588,22 @@
         "wrong_side": []
       },
       "radio_apll": {
-        "members": 1,
+        "members": 0,
         "outside": [],
         "wrong_side": []
       },
       "radio_synth": {
-        "members": 1,
+        "members": 0,
         "outside": [],
         "wrong_side": []
       },
       "radio_vbgap": {
-        "members": 1,
+        "members": 0,
         "outside": [],
         "wrong_side": []
       },
       "radio_west": {
-        "members": 3,
+        "members": 2,
         "outside": [],
         "wrong_side": []
       },
@@ -508,84 +626,170 @@
   },
   "drc": {
     "by_type": {
-      "lib_footprint_issues": 183
+      "lib_footprint_issues": 187
     },
     "examples": {
       "lib_footprint_issues": [
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_C_1u_0402'",
-          "items": ["Footprint C2"],
+          "description": "The current configuration does not include the footprint library 'Radar60_R_39k_0402'",
+          "items": ["Footprint R36"],
           "severity": "warning"
         },
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_R_100k_0402'",
-          "items": ["Footprint R52"],
+          "description": "The current configuration does not include the footprint library 'Radar60_C_22u_0805'",
+          "items": ["Footprint C24"],
           "severity": "warning"
         },
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_C_100n_0402'",
-          "items": ["Footprint C3"],
+          "description": "The current configuration does not include the footprint library 'Radar60_SMF5V0A'",
+          "items": ["Footprint D3"],
+          "severity": "warning"
+        },
+        {
+          "description": "The current configuration does not include the footprint library 'Radar60_TestPad_D1'",
+          "items": ["Footprint TP7"],
           "severity": "warning"
         },
         {
           "description": "The current configuration does not include the footprint library 'Radar60_C_10u_0603'",
-          "items": ["Footprint C55"],
+          "items": ["Footprint C42"],
           "severity": "warning"
         },
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_R_4k99_0402'",
-          "items": ["Footprint R29"],
-          "severity": "warning"
-        },
-        {
-          "description": "The current configuration does not include the footprint library 'Radar60_C_22u_0805_DNP'",
-          "items": ["Footprint C11"],
+          "description": "The current configuration does not include the footprint library 'Radar60_R_10k_0402'",
+          "items": ["Footprint R44"],
           "severity": "warning"
         }
       ]
     },
     "schematic_parity": 0,
     "unconnected_items": 432,
-    "violations": 183
+    "violations": 187
+  },
+  "fanout": {
+    "bands": {
+      "exit_south_1": {
+        "balls": ["J14", "J15", "K14", "K15", "L14", "L15", "M14", "M15"],
+        "parts": [],
+        "rect": [22.5, 19.75, 26.25, 22.25]
+      },
+      "exit_south_2": {
+        "balls": ["E15"],
+        "parts": [],
+        "rect": [27.7, 19.75, 28.2, 22.25]
+      },
+      "exit_west_1": {
+        "balls": ["P10", "P12", "P13", "R11", "R12", "R13", "R14"],
+        "parts": [],
+        "rect": [17.75, 23.85, 20.25, 26.625]
+      },
+      "exit_west_2": {
+        "balls": ["R3"],
+        "parts": [],
+        "rect": [17.75, 27.425, 20.25, 27.925]
+      }
+    },
+    "sites": {
+      "C38": {
+        "board_ref": "C38",
+        "error_mm": 0.0,
+        "ok": true,
+        "side": "bottom"
+      },
+      "C57": {
+        "board_ref": "C57",
+        "error_mm": 0.0,
+        "ok": true,
+        "side": "bottom"
+      },
+      "C61": {
+        "board_ref": "C61",
+        "error_mm": 0.0,
+        "ok": true,
+        "side": "bottom"
+      },
+      "C62": {
+        "board_ref": "C62",
+        "error_mm": 0.0,
+        "ok": true,
+        "side": "bottom"
+      },
+      "C63": {
+        "board_ref": "C63",
+        "error_mm": 0.0,
+        "ok": true,
+        "side": "bottom"
+      },
+      "C64": {
+        "board_ref": "C64",
+        "error_mm": 0.0,
+        "ok": true,
+        "side": "bottom"
+      }
+    }
   },
   "finish": {
-    "copper_keepouts": {
-      "dropped": true,
-      "engine_rule_areas": 4,
-      "max_corner_error_mm": 0.0,
-      "rf_region_pieces": 4
+    "copper_outside_macro_removed": {
+      "tracks": 0,
+      "vias": 0
     },
-    "locked_tracks_and_vias": 508,
+    "engine_keepout_rule_areas": [
+      "PNR keepout:flash_ep_tracks",
+      "PNR keepout:flash_ep_vias",
+      "PNR keepout:mh1",
+      "PNR keepout:mh2",
+      "PNR keepout:mh3",
+      "PNR keepout:mh4",
+      "PNR keepout:radome_land1",
+      "PNR keepout:radome_land2",
+      "PNR keepout:rf_guard_1",
+      "PNR keepout:rf_guard_2",
+      "PNR keepout:rf_guard_3",
+      "PNR keepout:rf_guard_4",
+      "PNR keepout:rf_region_1",
+      "PNR keepout:rf_region_2",
+      "PNR keepout:rf_region_3",
+      "PNR keepout:rf_region_4"
+    ],
     "macro": {
-      "arc": 61,
-      "columns": 7,
-      "geometry_sha256": "5ea92fa2f1016b7386784b476003efb02fc59e26d4ad8db7ad9c826a65d375b0",
-      "segment": 83,
+      "columns": 11,
+      "dummy_columns": 4,
+      "geometry_sha256": "914e39ec3020b75933c4ccefbc292fdfdaaf7187b89873bd35c501f808541ebc",
+      "loads": ["RT1", "RT2", "RT3", "RT4"],
+      "rfm1_field": "914e39ec3020b75933c4ccefbc292fdfdaaf7187b89873bd35c501f808541ebc",
+      "rfm1_field_equal": true,
       "status": "placeholder: geometry for integration only; the column fails ANT-02 RL at P1 (col-c 5.9/9.1/11.4 dB at 60.3/62.05/63.8 GHz); the joint C1 sweep (w35, t_y, inset, L) and the C2 bank solve (TX-RX isolation, coupling, phase centres, L2-L3 stitching) come before it is frozen",
-      "variant": "n",
-      "via": 364,
-      "zone": 74
+      "variant": "n"
     },
+    "macro_items": 1664,
     "outline_items": 8,
     "r1_macro_copper": {
-      "board_sha256": "9d73245c8d851c7f4058ab6da70f3b49067598ebf5997837bbd1eba0c37a0009",
+      "board_sha256": "69259e758351d21dd734701a13ed065550391e5ba8b656631dc1ca15041c75a6",
+      "copper_only_equal": true,
       "equal": true,
-      "items": [508, 508],
-      "macro_sha256": "9d73245c8d851c7f4058ab6da70f3b49067598ebf5997837bbd1eba0c37a0009"
+      "items": [
+        {
+          "copper": 1664,
+          "load_pads": 8,
+          "mask_polygons": 12
+        },
+        {
+          "copper": 1664,
+          "load_pads": 8,
+          "mask_polygons": 12
+        }
+      ],
+      "macro_sha256": "69259e758351d21dd734701a13ed065550391e5ba8b656631dc1ca15041c75a6"
     },
     "u1": {
-      "at_kicad": [56.0, 48.3],
+      "at_kicad": [56.0, 49.35],
       "orientation_deg": -90.0
-    },
-    "writeback_plane_drops_removed": {
-      "tracks": 167,
-      "vias": 167
     }
   },
   "macro": {
-    "geometry_sha256": "5ea92fa2f1016b7386784b476003efb02fc59e26d4ad8db7ad9c826a65d375b0",
+    "geometry_sha256": "914e39ec3020b75933c4ccefbc292fdfdaaf7187b89873bd35c501f808541ebc",
     "macro_frame_u1_at": [26.0, 28.0],
-    "record_sha256": "5ea92fa2f1016b7386784b476003efb02fc59e26d4ad8db7ad9c826a65d375b0",
+    "record_sha256": "914e39ec3020b75933c4ccefbc292fdfdaaf7187b89873bd35c501f808541ebc",
     "rf_ball_vs_macro_port_um": {
       "RX1": 0.0,
       "RX2": 0.0,
@@ -599,65 +803,354 @@
     "u1_at": [26.0, 28.0],
     "worst_um": 0.0
   },
+  "rf_audit": {
+    "A1_entry_and_band": {
+      "foreign_vias_in_band": [],
+      "lines": {
+        "RX1": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "RX2": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "RX3": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "RX4": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "RXD0": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "RXD5": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "TX1": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "TX2": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "TX3": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "TXD0": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        },
+        "TXD4": {
+          "contacts": 1,
+          "ok": true,
+          "span_mm": [0.6]
+        }
+      },
+      "ok": true
+    },
+    "A2_congruence": {
+      "columns": {
+        "RX1": {
+          "F.Cu GND xor_mm2": 0.0004,
+          "F.Cu copper xor_mm2": 0.0,
+          "In1.Cu GND xor_mm2": 0.0,
+          "In2.Cu GND xor_mm2": 0.0,
+          "declared_difference_mm2": {
+            "F.Cu GND": 0.5316,
+            "F.Cu copper": 0.9454,
+            "In1.Cu GND": 0.0,
+            "In2.Cu GND": 0.0
+          },
+          "open_end": true,
+          "via_mismatch": 0
+        },
+        "RX3": {
+          "F.Cu GND xor_mm2": 0.0001,
+          "F.Cu copper xor_mm2": 0.0,
+          "In1.Cu GND xor_mm2": 0.0,
+          "In2.Cu GND xor_mm2": 0.0,
+          "open_end": false,
+          "via_mismatch": 0
+        },
+        "RX4": {
+          "F.Cu GND xor_mm2": 0.0002,
+          "F.Cu copper xor_mm2": 0.0,
+          "In1.Cu GND xor_mm2": 0.0,
+          "In2.Cu GND xor_mm2": 0.0,
+          "open_end": false,
+          "via_mismatch": 0
+        },
+        "TX1": {
+          "F.Cu GND xor_mm2": 0.0002,
+          "F.Cu copper xor_mm2": 0.0,
+          "In1.Cu GND xor_mm2": 0.0,
+          "In2.Cu GND xor_mm2": 0.0,
+          "open_end": false,
+          "via_mismatch": 0
+        },
+        "TX2": {
+          "F.Cu GND xor_mm2": 0.0,
+          "F.Cu copper xor_mm2": 0.0,
+          "In1.Cu GND xor_mm2": 0.0,
+          "In2.Cu GND xor_mm2": 0.0,
+          "open_end": false,
+          "via_mismatch": 0
+        },
+        "TX3": {
+          "F.Cu GND xor_mm2": 0.0004,
+          "F.Cu copper xor_mm2": 0.0,
+          "In1.Cu GND xor_mm2": 0.0,
+          "In2.Cu GND xor_mm2": 0.0,
+          "declared_difference_mm2": {
+            "F.Cu GND": 0.5316,
+            "F.Cu copper": 0.9454,
+            "In1.Cu GND": 0.0,
+            "In2.Cu GND": 0.0
+          },
+          "open_end": true,
+          "via_mismatch": 0
+        }
+      },
+      "ok": true,
+      "reference": "RX2"
+    },
+    "A3_unstitched_gnd": {
+      "gnd_area_mm2": 438.491,
+      "ok": true,
+      "unreached": []
+    },
+    "A4_fence_continuity": {
+      "limit_mm": 0.5,
+      "ok": true,
+      "rows": {
+        "RX1.L": {
+          "max_spacing_mm": 0.497,
+          "openings": 0,
+          "over": 0
+        },
+        "RX1.R": {
+          "max_spacing_mm": 0.464,
+          "openings": 0,
+          "over": 0
+        },
+        "RX2.L": {
+          "max_spacing_mm": 0.48,
+          "openings": 0,
+          "over": 0
+        },
+        "RX2.R": {
+          "max_spacing_mm": 0.493,
+          "openings": 0,
+          "over": 0
+        },
+        "RX3.L": {
+          "max_spacing_mm": 0.493,
+          "openings": 0,
+          "over": 0
+        },
+        "RX3.R": {
+          "max_spacing_mm": 0.498,
+          "openings": 0,
+          "over": 0
+        },
+        "RX4.L": {
+          "max_spacing_mm": 0.498,
+          "openings": 0,
+          "over": 0
+        },
+        "RX4.R": {
+          "max_spacing_mm": 0.497,
+          "openings": 0,
+          "over": 0
+        },
+        "TX1.L": {
+          "max_spacing_mm": 0.46,
+          "openings": 0,
+          "over": 0
+        },
+        "TX1.R": {
+          "max_spacing_mm": 0.493,
+          "openings": 0,
+          "over": 0
+        },
+        "TX2.L": {
+          "max_spacing_mm": 0.498,
+          "openings": 0,
+          "over": 0
+        },
+        "TX2.R": {
+          "max_spacing_mm": 0.481,
+          "openings": 0,
+          "over": 0
+        },
+        "TX3.L": {
+          "max_spacing_mm": 0.48,
+          "openings": 0,
+          "over": 0
+        },
+        "TX3.R": {
+          "max_spacing_mm": 0.46,
+          "openings": 0,
+          "over": 0
+        }
+      }
+    },
+    "A5_identity": {
+      "geometry_sha256_matches": true,
+      "loads_bad": [],
+      "loads_found": 4,
+      "macro_vias_missing": 0,
+      "ok": true
+    },
+    "A6_vias_at_smd_lands": {
+      "clear_mm": 0.1,
+      "lands": 411,
+      "ok": true,
+      "vias_at_lands": []
+    },
+    "board": "radar60-reva.kicad_pcb",
+    "ok": true
+  },
   "summary": {
     "audit_failures": [],
-    "audit_pass_candidates": 12,
-    "board_sha256": "1d342ef4557043bd6c87b0f1cb227f24e34359972a43c7dac776af222c8fba43",
-    "bottom_side": ["C52", "C53", "C54", "C58", "C59", "C60", "R46"],
+    "audit_pass_candidates": 26,
+    "board_sha256": "46d45ce5154c4080721049d888c2a53856c2d0f967a5678735c280aaed3c7166",
+    "bottom_side": [
+      "C38",
+      "C52",
+      "C53",
+      "C54",
+      "C57",
+      "C58",
+      "C59",
+      "C60",
+      "C61",
+      "C62",
+      "C63",
+      "C64",
+      "R46"
+    ],
+    "bottom_sites": {
+      "C38": "C38",
+      "C57": "C57",
+      "C61": "C61",
+      "C62": "C62",
+      "C63": "C63",
+      "C64": "C64"
+    },
+    "bottom_sites_ok": true,
     "drc_by_type": {
-      "lib_footprint_issues": 183
+      "lib_footprint_issues": 187
     },
     "drc_placement_types": {},
-    "drc_violations": 183,
+    "drc_violations": 187,
+    "exit_bands": 4,
+    "exit_bands_clear": true,
+    "fanout_plan": {
+      "drops": 92,
+      "drops_placed": 84,
+      "failed": {
+        "A3": "no legal path or via site (static obstacles)",
+        "A5": "no legal path or via site (static obstacles)",
+        "A7": "no legal path or via site (static obstacles)",
+        "E13": "lost its resources to higher-priority pads",
+        "G1": "no legal path or via site (static obstacles)",
+        "G14": "lost its resources to higher-priority pads",
+        "J1": "no legal path or via site (static obstacles)",
+        "L1": "no legal path or via site (static obstacles)",
+        "L10": "lost its resources to higher-priority pads",
+        "N13": "lost its resources to higher-priority pads",
+        "N4": "lost its resources to higher-priority pads",
+        "N7": "lost its resources to higher-priority pads",
+        "P14": "no legal path or via site (static obstacles)"
+      },
+      "kinds": {
+        "dogbone": 16,
+        "drop": 84,
+        "failed": 13,
+        "skipped": 29,
+        "surface": 19
+      },
+      "signals": 40,
+      "signals_escaped": 35
+    },
     "groups_ok": true,
-    "legal": 12,
+    "legal": 26,
+    "macro_loads": ["RT1", "RT2", "RT3", "RT4"],
     "macro_status": "placeholder: geometry for integration only; the column fails ANT-02 RL at P1 (col-c 5.9/9.1/11.4 dB at 60.3/62.05/63.8 GHz); the joint C1 sweep (w35, t_y, inset, L) and the C2 bank solve (TX-RX isolation, coupling, phase centres, L2-L3 stitching) come before it is frozen",
     "macro_variant": "n",
-    "parts": 185,
+    "parts": 189,
     "pending_block_spread_mm": {},
     "pin_distance_failures": [],
     "protection_at_j1": {
       "CANH": {
         "esd": "D1",
-        "esd_mm": 3.66,
+        "esd_mm": 6.57,
         "ic": "U4",
-        "ic_mm": 8.61,
+        "ic_mm": 7.87,
         "nearest": "D1",
-        "nearest_mm": 3.66
+        "nearest_mm": 6.57
       },
       "CANL": {
         "esd": "D1",
-        "esd_mm": 4.1,
+        "esd_mm": 4.4,
         "ic": "U4",
-        "ic_mm": 9.11,
+        "ic_mm": 7.27,
         "nearest": "D1",
-        "nearest_mm": 4.1
+        "nearest_mm": 4.4
       },
       "UART_RX_J1": {
         "esd": "D2",
-        "esd_mm": 4.67,
+        "esd_mm": 3.5,
         "nearest": "D2",
-        "nearest_mm": 4.67
+        "nearest_mm": 3.5
       },
       "UART_TX_J1": {
         "esd": "D2",
-        "esd_mm": 6.24,
+        "esd_mm": 3.51,
         "nearest": "D2",
-        "nearest_mm": 6.24
+        "nearest_mm": 3.51
       },
       "VIN_5V": {
         "esd": "D3",
-        "esd_mm": 8.31,
+        "esd_mm": 6.18,
         "ic": "U5",
-        "ic_mm": 14.63,
-        "nearest": "C34",
-        "nearest_mm": 5.99
+        "ic_mm": 11.95,
+        "nearest": "D3",
+        "nearest_mm": 6.18
       }
     },
+    "r1_macro_digest_v2_equal": true,
     "regions_ok": true,
+    "rf_audit": {
+      "A1_entry_and_band": true,
+      "A2_congruence": true,
+      "A3_unstitched_gnd": true,
+      "A4_fence_continuity": true,
+      "A5_identity": true,
+      "A6_vias_at_smd_lands": true
+    },
+    "rf_audit_ok": true,
     "rf_ball_vs_macro_worst_um": 0.0,
     "starts": 32,
     "unconnected_items": 432,
-    "winner": "p002"
+    "winner": "p030"
   }
 }

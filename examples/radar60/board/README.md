@@ -22,7 +22,7 @@ committed.
 | `radar60.kicad_pro`         | Design rules of the `pcbway-adv-6l-rf` profile and the net classes (generated)                                               |
 | `radar60.kicad_dru`         | KiCad custom rules: the profile's, then the board's own (generated)                                                          |
 | `fcbga161.py`               | IWR6843 FCBGA-161 (ABL0161) ball map and KiCad footprint, from SWRS219F only                                                 |
-| `dru_selftest.py`           | Plants 20 items on the floorplan board and checks that each board rule fires, and only where it should (headless kicad-cli)  |
+| `dru_selftest.py`           | Plants 23 items on the floorplan board and checks that each board rule fires, and only where it should (headless kicad-cli)  |
 | `escape_probe.py`           | The BGA escape probe: builds the synthetic board as a regression-runner design and analyses a run                            |
 | `escape-probe-results.json` | The probe's runs (2026-10-03) and the ball-by-ball result                                                                    |
 | `integrate.py`              | Rev A integration: schematic board + RF macro + floorplan, yapnr's Monte Carlo placement, selection, DRC, renders            |
@@ -83,25 +83,36 @@ areas `RF_REGION`, `RF_POCKET` and `RF_GUARD` are drawn in `radar60.kicad_pcb`; 
 | `qspi_length`                            | ≤ 25 mm at 80 MHz                                                                                               |
 | `plane_in1`, `plane_in4`                 | no tracks on the GND planes                                                                                     |
 
-`dru_selftest.py` (KiCad 10.0.6, headless) passes all 21 planted cases; the floorplan board
+`dru_selftest.py` (KiCad 10.0.6, headless) passes all 23 planted cases; the floorplan board
 itself is clean (0 violations, 0 unconnected) under these rules.
 
 ## Constraints (`constraints.yaml`)
 
 Parts are named by atopile instance path and nets by the radio's ball (`net@<path>:<ball>`), so
 no generated designator appears; `floorplan.yaml` (`parts:`) lists the paths the schematic must
-provide. The file compiles with yapnr's compiler on `main` and on the region branch
-(`gen_board.py --compile [CHECKOUT]`): `fixed` (U1 at its pose in the RF macro's frame, J1 on
-the south edge, the four mounting-hole parts, the floorplan board's radome lands), `keepout`
-(the RF region less U1's courtyard, for placement) and `copper_keepout` (the RF region in U1's
-frame, for routing), `region` (J2, J3, PMIC block, switch nodes, Y1, the bottom-side VOUT_PA
-caps; hard; needs the region work), `side` (those two caps on the bottom), `group` (HF and bulk
-decoupling, Y1, buck inductors; hard, centre to centre), `net_class`, `diff_pair` and
-`length_match` (LVDS 2 mm group skew). `rf_macro`, `noise_keepout` and `height_limit` are
-proposed sections: the engine warns and ignores them, and the custom rules, `integrate.py`'s
-derived R4 region and the audits stand in for them. `radar60.kicad_pro` assigns the net classes
-by net-name pattern, so the custom rules' `hasNetclass()` sees the real nets on any board that
-uses it.
+provide. The file compiles with yapnr's compiler on `main` (`gen_board.py --compile
+[CHECKOUT]`). Its sections:
+
+- `fixed`: U1 at its pose in the RF macro's frame, J1 on the south edge, the four mounting-hole
+  parts, the floorplan board's radome lands;
+- `keepout`: the RF region less U1's courtyard (placement); `integrate.py prepare` adds the
+  fanout's exit bands;
+- `copper_keepout` (v1, routing): the RF region on F.Cu-In2.Cu with the macro's group exempt, the
+  R4 guard band (RF, PWR, GND and ANALOG allowed), the mounting-hole and radome-land circles, and
+  no via under the flash's exposed pad;
+- `fixed_block`: the RF macro (group `RFM1_MACRO`, anchored at U1, its In2 GND pour solid);
+- `fanout`: U1's escape plan (skipped balls, via classes, necks, drop nets, bottom sites);
+- `legalize`: `outline: exact`, `order: scarcity`, `lookahead: regions`;
+- `region` (hard): J2, J3, the PMIC block and switch nodes, Y1, the ball-anchored slots, the
+  bottom-side VOUT_PA parts; `side` (those parts on the bottom); `orientation` (the slots' parts);
+- `group` (hard): HF and bulk decoupling, Y1, the buck inductors, the blocks, and the
+  pad-anchored groups (`anchor_pad`: snubbers, rail ferrites, damping options);
+- `net_class`, `diff_pair` and `length_match` (LVDS 2 mm group skew).
+
+`rf_macro`, `noise_keepout` and `height_limit` are proposed sections: the engine warns and
+ignores them, and the custom rules, `integrate.py`'s derived R4 region and the audits stand in
+for them. `radar60.kicad_pro` assigns the net classes by net-name pattern, so the custom rules'
+`hasNetclass()` sees the real nets on any board that uses it.
 
 ## Regenerating and checking
 
@@ -170,8 +181,7 @@ hand: the fixed poses, regions and rotations are derived values in `floorplan.ya
 other pose comes from yapnr's Monte Carlo placement search and a mechanical selection.
 
 ```sh
-# A numeric Python (torch, numpy, PyYAML); ENGINE: a yapnr checkout with the region, side and
-# stackup work (the integrated gap branch merged with main).
+# A numeric Python (torch, numpy, PyYAML); ENGINE: a yapnr checkout (default: this one).
 python3 integrate.py source  --work W --ato-board BUILD/rev-a.kicad_pcb --kicad-python "$PNR_KICAD_PYTHON"
 python3 integrate.py prepare --work W --engine ENGINE --kicad-python "$PNR_KICAD_PYTHON"
 python3 integrate.py place   --work W --engine ENGINE --n0 32 --procs 4 --seed 0
@@ -181,58 +191,60 @@ python3 integrate.py render  --work W --kicad-cli "$PNR_KICAD_CLI" --renders OUT
 ```
 
 - **Source.** The floorplan board (outline, stackup, planes, rule areas, radome lands) with every
-  footprint of the build, except the RF macro placeholder RFM1: yapnr models a part as a box
-  about its origin, and the macro is neither a box nor movable, so its area enters the
-  placement as the RF region keepout (less U1's courtyard, which the macro is drawn around).
-- **Prepare.** The constraints as compiled for placement add one derived region: every movable
-  part with a pad on a guard-restricted net (a routed net outside the RF, PWR, GND and ANALOG
-  classes, as the custom rule tests it) stays out of the RF region and its 5 mm guard band (R4;
-  the engine's `noise_keepout` is only proposed). `prepare` also checks that the HF, bulk and crystal
-  sets cover each radio capacitor exactly once.
-- **Place.** `pnr.mc.halving --stop-after place`: seeded stratified and Latin-hypercube global
-  starts, each legalized and scored by the engine's routability proxy (`capacity-proxy-v1`).
+  footprint of the build but the RF macro placeholder, U1 at its fixed pose, and the RF macro
+  merged in U1's frame (`kicad_ops.merge_macro`): tracks, arcs, vias and zones as the RF track
+  wrote them with nets renamed to the schematic's; the columns, dummy columns included, and the
+  mask opening (its gaps are the loads' mask islands) as one locked footprint RFM1, its pads named
+  by port (`rx1` ... `tx3`, `rxd0` ... `txd4`); the dummy loads RT1-RT4 as locked, assembled
+  parts at the record's centres. Every macro item is in the KiCad group `RFM1_MACRO`, the
+  engine's `fixed_block`. The board's In1 GND plane is cut out of the RF region, where the
+  macro's own In1 ground is the reference.
+- **Prepare.** The fixed block's copper goes into the rules (`pnr.fixed_copper`) and its
+  footprints leave the placement graph. U1's fanout is planned as the router will plan it (U1
+  fixed, the macro's copper known): every ball that escapes on F.Cu keeps a 0.5 mm strip from
+  U1's courtyard 2.5 mm outwards free of parts (`bands.py`; a ball-anchored slot, `slot: true`,
+  may stand only in its own ball's band, and one that meets another net's band is refused by
+  name), and the parts given a bottom site lose their top-side regions (the engine fixes them at
+  their sites). Every movable part with a pad on a guard-restricted net (a routed net outside
+  the RF, PWR, GND and ANALOG classes, as the custom rule tests it) stays out of the RF region
+  and its 5 mm guard band (R4; the engine's `noise_keepout` is only proposed). `prepare` also
+  checks that the HF, bulk and crystal sets cover each radio capacitor exactly once. The plan is
+  kept by its inputs' digest (`WORK/inputs/fanout-*.json`).
+- **Place.** `pnr.mc.halving --stop-after place` (through `halving_seeded.py`, which hands each
+  worker the prepared plan instead of planning it again): seeded stratified and Latin-hypercube
+  global starts, each legalized and scored by the engine's routability proxy
+  (`capacity-proxy-v1`).
 - **Select.** Legal candidates that pass `audit.py` (R2 parts in the RF region, R4 digital pads
   in the guard band, R5 radome visibility with the [E] heights in `audit.py`, switch nodes to
-  the crystal and the RF region), then the engine's stage-0 key (proxy score, cheap score), then
-  HPWL, then id.
-- **Finish.** `pnr.writeback` of the winner without routes; then `kicad_ops.py finish`: the
-  rounded outline restored; the engine's all-layer copper-keepout rule areas checked against the
-  `RF_REGION` pieces (corners equal) and dropped, since they forbid the macro's own copper on
-  every layer; the plane drops writeback adds on its own (a via from each plane pad, which
-  ignores the macro and lands on its launches) removed; the macro merged in U1's frame (tracks,
-  arcs, vias and zones as the RF track wrote them, nets renamed to the schematic's; the column
-  patches and the mask opening as one locked footprint RFM1, pads numbered as the placeholder's);
-  zones filled. The copper digest of the macro's tracks, arcs and vias in U1's frame equals the
-  RF track's board (R1), and every RF ball lands on its macro port to 0 µm.
+  the crystal and the RF region, the pin distances), then the engine's stage-0 key (proxy score,
+  cheap score), then HPWL, then id.
+- **Finish.** `pnr.writeback` of the winner without routes (the copper keepouts become rule
+  areas and, for the ones with allow lists or the exempt macro group, custom rules appended to
+  the board's `.kicad_dru`); then `kicad_ops.py finish`: the rounded outline restored, macro
+  items, U1 and the macro's footprints locked, zones filled, and the macro digest R1 v2 (copper,
+  the loads' pads and the mask polygons in U1's frame) compared with the RF track's board. KiCad's
+  DRC, the placement audit (regions, groups measured from their anchor pads, exit bands empty,
+  bottom sites) and the RF audit A1-A6 (`rf_audit.py`) of the filled board go into
+  `reva/placement-report.json`. `finish --placement reva/placement.json` rebuilds the board bit
+  for bit.
 
-After the review fixes (2026-10-03; 32 starts, seed 0, 4 processes, 5.5 min): 12 legal, all 12
-pass the audit, winner `p002` (proxy: no unreachable branch, 2.8 overflow units; the next best
-scores 970 against 425). On the written board KiCad's DRC reports only the footprint libraries
-not being configured (183) and the 432 connections nothing has routed yet: no courtyard,
-keepout, rule-area, clearance, via or silk violation. `reva/placement-report.json` holds the
-audit, the constraint checks, the pin distances, the macro checks and the DRC summary.
+Stage 3b (2026-10-04; the RF-uniformity macro rfm1-n, 32 starts, seed 0, 4 processes, 6 min):
+26 legal (6 lost a hard group's slot or the CAN block's window), all 26 pass the audit, winner
+`p030` (proxy: 1 unreachable branch, 4.6 overflow units). The one unreachable branch is in every
+good candidate: J2's centreline ground lands (MP1-MP4 between the two signal rows) have no via
+cell at the proxy's 2 mm pitch; routing needs vias in or beside them. On the written board KiCad's
+DRC reports only the footprint libraries not being configured (187: 183 parts and the 4 macro
+loads) and the 432 connections nothing has routed yet. The macro digest R1 v2 equals the RF
+track's board (1664 copper items, 8 load pads, 12 mask polygons), every RF ball lands on its
+macro port to 0 µm, and the RF audit passes A1-A6. No part stands in an exit band; the six
+bottom sites (APLL, SYNTH, VBGAP, RF1, SRAM, VCO caps) are 0.1-1.6 mm from their balls; the
+crystal's load caps 2.1 / 2.3 mm, the QSPI clock resistor 4.6 mm (west of R12's neighbours'
+bands); each snubber resistor 1.6-3.5 mm from its inductor's switch-node pad (was 5-5.5 mm);
+switch nodes 11.7 mm from the crystal and 5.65 mm from the RF region.
 
-What the review changed in the placement inputs:
-
-- **Ball-anchored parts.** U1 is fixed, so each part the review named has a one-slot region next
-  to its ball and a fixed rotation that turns its signal pad toward it (`orientations`): the
-  APLL, VBGAP and SYNTH caps 2.25 / 3.44 / 3.07 mm from A10 / B10 / B13 (were 12.3 and 11.1 mm),
-  the crystal load caps 2.1 / 2.3 mm from B15 / C15 (6.8 / 8.6), the VOUT_PA and VIN_13RF2
-  220 nF and the PA 0 Ω 0.5-1.1 mm from their corner balls on the bottom side, the QSPI clock
-  resistor 2.1 mm from R12. U1's courtyard is 0.5 mm beyond the body (IPC-7351B least) so the
-  B-row caps fit. `audit.py` fails a candidate beyond 3.0 mm (3.5 for the B-row LDO caps).
-- **Blocks.** Hard groups for the eFuse network, the CAN and flash support parts, the PMIC input
-  caps (5 mm), snubbers (7.5 mm, each capacitor within 2.5 mm of its resistor) and VANA; regions
-  for the block anchors (flash west of U1, eFuse west of J1, CAN transceiver north-east of J1
-  behind its ESD diodes) and for the protection at J1. `audit.py` checks that on every J1 line
-  the ESD/TVS pad comes before any IC pad.
-- **J2 and J3 are fixed.** As region parts the legalizer placed them after every grouped block
-  and they lost their windows; J2 keeps the first Monte Carlo winner's pose, J3 moved to the west
-  edge to leave room for the flash.
-- **R4 by class.** The derived R4 region and the audit use the custom rule's own test: a routed
-  net outside the RF, PWR, GND and ANALOG classes.
-
-What stays open for routing (the stage-2 integration report has the numbers): the PA and RF2
-bulk caps sit 7-12 mm from their balls on the bottom side (nearer needs the BGA shadow, with
-E4); three of four snubbers are 5-5.5 mm from their switch-node copper; the RF1 220 nF is
-8.8 mm from its interior balls.
+What stays open for routing: the PA and RF2 bulk caps sit 7-12 mm from their balls on the bottom
+side (nearer needs the BGA shadow); A2/B2 (VOUT_PA) are skipped by the fanout until the RF
+macro's v2 feed (D14); the fanout plan escapes 32 of the 37 Rev A signal balls (N4, E13, G14,
+N13 and N7 lose their resources to higher-priority balls) and drops 84 of 92 plane and supply
+balls (GND A3, A5, A7, G1, J1, L1 at the RF edges and L10, and 1V2 P14, have no legal site; a
+failed P14 blocks the whole 1V2 net until partial fanout lands in the engine).

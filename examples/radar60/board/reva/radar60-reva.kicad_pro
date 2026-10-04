@@ -620,19 +620,11 @@
       },
       {
         "netclass": "XTAL",
-        "pattern": "XTAL_N"
-      },
-      {
-        "netclass": "XTAL",
         "pattern": "XTAL_P"
       },
       {
-        "netclass": "QSPI",
-        "pattern": "QSPI_D3"
-      },
-      {
-        "netclass": "QSPI",
-        "pattern": "QSPI_D2"
+        "netclass": "XTAL",
+        "pattern": "XTAL_N"
       },
       {
         "netclass": "QSPI",
@@ -644,7 +636,7 @@
       },
       {
         "netclass": "QSPI",
-        "pattern": "QSPI_CLK"
+        "pattern": "QSPI_D2"
       },
       {
         "netclass": "QSPI",
@@ -655,8 +647,12 @@
         "pattern": "QSPI_CLK_FLASH"
       },
       {
-        "netclass": "PWR",
-        "pattern": "1V0_RF1"
+        "netclass": "QSPI",
+        "pattern": "QSPI_D3"
+      },
+      {
+        "netclass": "QSPI",
+        "pattern": "QSPI_CLK"
       },
       {
         "netclass": "PWR",
@@ -664,7 +660,15 @@
       },
       {
         "netclass": "PWR",
+        "pattern": "1V0_BUCK"
+      },
+      {
+        "netclass": "PWR",
         "pattern": "1V0_SH"
+      },
+      {
+        "netclass": "PWR",
+        "pattern": "1V0_RF1"
       },
       {
         "netclass": "PWR",
@@ -672,7 +676,7 @@
       },
       {
         "netclass": "PWR",
-        "pattern": "1V0_BUCK"
+        "pattern": "1V2_BUCK"
       },
       {
         "netclass": "PWR",
@@ -680,15 +684,11 @@
       },
       {
         "netclass": "PWR",
-        "pattern": "1V2_BUCK"
+        "pattern": "1V8"
       },
       {
         "netclass": "PWR",
         "pattern": "1V8_BUCK"
-      },
-      {
-        "netclass": "PWR",
-        "pattern": "1V8"
       },
       {
         "netclass": "PWR",
@@ -708,15 +708,15 @@
       },
       {
         "netclass": "SW",
+        "pattern": "PMIC_SW_B2"
+      },
+      {
+        "netclass": "SW",
         "pattern": "PMIC_SW_B0"
       },
       {
         "netclass": "SW",
         "pattern": "PMIC_SW_B3"
-      },
-      {
-        "netclass": "SW",
-        "pattern": "PMIC_SW_B2"
       },
       {
         "netclass": "SW",
@@ -768,15 +768,15 @@
       },
       {
         "netclass": "ANALOG",
+        "pattern": "DAMP_1V0_RF1"
+      },
+      {
+        "netclass": "ANALOG",
         "pattern": "DAMP_1V8"
       },
       {
         "netclass": "ANALOG",
         "pattern": "DAMP_1V0_RF2"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "DAMP_1V0_RF1"
       },
       {
         "netclass": "ANALOG",
@@ -833,8 +833,8 @@
     "legacy_lib_list": [],
     "top_level_sheets": [
       {
-        "filename": "radar60.kicad_sch",
-        "name": "radar60",
+        "filename": "source.kicad_sch",
+        "name": "source",
         "uuid": "00000000-0000-0000-0000-000000000000"
       }
     ]

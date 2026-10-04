@@ -121,6 +121,21 @@ def apply(s: np.ndarray, corr: np.ndarray) -> np.ndarray:
     return out
 
 
+def s11_minima(f: np.ndarray, s11: np.ndarray, lo: float = BAND[0], hi: float = BAND[1]) -> list:
+    """In-band local minima of |S11| (GHz), each refined by a parabola through |S11|² at the
+    three samples around it: the "frequencies of in-band |S11| minima" of the criteria."""
+    idx = np.flatnonzero((f >= lo - 1) & (f <= hi + 1))
+    p = np.abs(s11[idx]) ** 2
+    out = []
+    for k in range(1, idx.size - 1):
+        if p[k] < p[k - 1] and p[k] <= p[k + 1]:
+            den = p[k - 1] - 2 * p[k] + p[k + 1]
+            off = 0.5 * (p[k - 1] - p[k + 1]) / den if den > 0 else 0.0
+            step = f[idx[k + 1]] - f[idx[k]]
+            out.append(round(float(f[idx[k]] + off * step) / 1e9, 4))
+    return out
+
+
 def worst(f: np.ndarray, s: np.ndarray) -> dict:
     band = (f >= BAND[0] - 1) & (f <= BAND[1] + 1)
     db = 20 * np.log10(np.maximum(np.abs(s), 1e-300))
@@ -230,6 +245,7 @@ def correct_all(out_dir: str, items=ITEMS, pred: str = PRED, roots=None) -> dict
             ],
             raw=worst(f, s),
             corrected=worst(f, sc),
+            s11_minima_ghz=s11_minima(f, s[:, 0, 0]),
         )
     from yapnr.rf.coupons import jsonfmt
 

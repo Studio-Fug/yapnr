@@ -87,18 +87,8 @@ def at(f, x, f0=5e9):
     return float(np.interp(f0, f, x))
 
 
-def minima(f, s11, lo=BAND[0], hi=BAND[1]):
-    """In-band local minima of |S11| (GHz), refined like predict.notch."""
-    m = (f >= lo) & (f <= hi)
-    idx = np.flatnonzero(m)
-    p = np.abs(s11[idx]) ** 2
-    out = []
-    for k in range(1, idx.size - 1):
-        if p[k] < p[k - 1] and p[k] <= p[k + 1]:
-            den = p[k - 1] - 2 * p[k] + p[k + 1]
-            off = 0.5 * (p[k - 1] - p[k + 1]) / den if den > 0 else 0.0
-            out.append(round(float(f[idx[k]] + off * (f[idx[k + 1]] - f[idx[k]])) / 1e9, 4))
-    return out
+def minima(f, s11):
+    return predict.s11_minima(f, s11)
 
 
 def worst(f, s):

@@ -79,7 +79,8 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^hardware/pnr/testdata/
+        # docker/palace/patches: a blank context line of a patch is a single space
+        exclude: ^(hardware/pnr/testdata/|docker/palace/patches/)
       - id: end-of-file-fixer
         exclude: ^hardware/pnr/testdata/
       - id: check-yaml

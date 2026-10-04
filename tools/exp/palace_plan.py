@@ -12,7 +12,7 @@ numbers) in the Palace image (docker/palace) on ``ranks`` MPI ranks, ``models_pe
 a VM (one by default: a model gets the VM's cores, ranks bound to them)::
 
     name = "palace-smoke"                      # the campaign name
-    image = "palace:b797ea8-x86-64-v3"         # a tag in [gcp] images, or a full reference
+    image = "palace:b797ea8-pts-x86-64-v3"     # a tag in [gcp] images, or a full reference
     ranks = 8                                  # MPI ranks per model, one per physical core
     models_per_vm = 1                          # models side by side on one VM (ranks unbound)
     packing = "core"                           # "vcpu": a rank per hardware thread
@@ -61,9 +61,9 @@ degrees of freedom, AMR refinements and solves, linear iterations, peak memory a
 reference check.
 
 ``image`` prints (``--run``: runs) the Cloud Build submit of docker/palace/cloudbuild.yaml, which
-pushes ``palace:<tag>-x86-64-v3`` (and its dependency stage, ``palace-deps:<tag>-x86-64-v3``, the
-cache of the next build) to ``[gcp] images`` in the home region, built as ``[gcp]
-image_build_service_account``. It needs an identity that may submit builds and act as that
+pushes ``palace:<tag>-x86-64-v3`` (and its dependency stages, ``palace-deps:<tag>-x86-64-v3`` and
+``...-solvers``, the cache of the next build) to ``[gcp] images`` in the home region, built as
+``[gcp] image_build_service_account``. It needs an identity that may submit builds and act as that
 account (the project owner); task VMs pull with the runner account.
 """
 
@@ -90,8 +90,10 @@ REPO = HERE.parents[1]
 DOCKER_DIR = REPO / "docker" / "palace"
 RUNNER = "palace_job.py"
 IMAGE_NAME = "palace"
-# The Palace commit of docker/palace (its cloudbuild.yaml _TAG): main after PR 962.
-DEFAULT_TAG = "b797ea8"
+# The Palace commit of docker/palace (main after PR 962) and -pts, the build with Scotch/PT-Scotch
+# in place of ParMETIS (its cloudbuild.yaml _TAG). The ParMETIS build of the validation is
+# palace:b797ea8-x86-64-v3, for evaluation only (docker/palace/README.md).
+DEFAULT_TAG = "b797ea8-pts"
 VARIANTS = ("x86-64-v3",)
 RUNTIME = {"python": "/opt/palace/venv/bin/python", "entrypoint": ""}
 BINDS = ("core", "hwthread", "none")

@@ -20,7 +20,7 @@ from yapnr.exp import plan as planning
 from yapnr.exp import testing
 from yapnr.exp.backends import gcp_batch
 
-IMAGE = "us-west4-docker.pkg.dev/example-project/images/palace:b797ea8-x86-64-v3@" + (
+IMAGE = "us-west4-docker.pkg.dev/example-project/images/palace:b797ea8-pts-x86-64-v3@" + (
     testing.DIGEST
 )
 # Palace's port-S.csv layout (two ports, as Palace writes it).
@@ -586,7 +586,7 @@ class PalacePlanTest(unittest.TestCase):
 
     def test_the_image_build_command(self):
         gcp = self.config.require_gcp()
-        argv = palace_plan.build_command(gcp, "b797ea8", None, True)
+        argv = palace_plan.build_command(gcp, palace_plan.DEFAULT_TAG, None, True)
         self.assertEqual(
             argv[argv.index("--config") + 1], str(palace_plan.DOCKER_DIR / "cloudbuild.yaml")
         )
@@ -595,7 +595,7 @@ class PalacePlanTest(unittest.TestCase):
             subs["_IMAGE"],
             "%s/palace" % gcp.images.format(region=gcp.home_region, project=gcp.project),
         )
-        self.assertEqual(subs["_TAG"], "b797ea8")
+        self.assertEqual(subs["_TAG"], "b797ea8-pts")
         self.assertIn("_YAPNR_COMMIT", subs)  # the yapnr commit, recorded as an image label
         self.assertEqual(argv[-1], "--async")
         cloudbuild = palace_plan.DOCKER_DIR / "cloudbuild.yaml"

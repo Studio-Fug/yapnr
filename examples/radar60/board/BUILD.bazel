@@ -1,0 +1,16 @@
+package(default_visibility = ["//visibility:public"])
+
+# The board integration's stdlib steps and the floorplan they read, for //tests/unit/radar60.
+# integrate.py itself runs out of Bazel (a numeric Python, KiCad's Python; README.md).
+filegroup(
+    name = "integration_sources",
+    srcs = [
+        "audit.py",
+        "bands.py",
+        "constraints.yaml",
+        "floorplan.yaml",
+        "gen_board.py",
+        "kicad_ops.py",
+        "reva/placement-report.json",
+    ],
+)

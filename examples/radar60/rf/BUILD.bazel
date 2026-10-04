@@ -1,0 +1,11 @@
+package(default_visibility = ["//visibility:public"])
+
+# The RF macro rfm1-n as generated (board and record), for //tests/unit/radar60. The generator's
+# own tests (tests/test_rfmacro.py) run with python3 from this directory (README.md).
+filegroup(
+    name = "rfm1_n",
+    srcs = [
+        "generated/rfm1-n/rfm1-n.json",
+        "generated/rfm1-n/rfm1-n.kicad_pcb",
+    ],
+)

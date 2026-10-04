@@ -1,8 +1,20 @@
+load("@yapnr_pypi//:requirements.bzl", "requirement")
 load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 
-# The radar60 example's part data, land patterns and parts lock (examples/radar60/schematic).
-# Hermetic: the generators and the lock only; no KiCad library and no atopile.
+# The radar60 example's part data, land patterns and parts lock (examples/radar60/schematic), and
+# the board integration's text and geometry steps (examples/radar60/board).
+# Hermetic: the generators, the lock, the committed RF macro board and the floorplan; no KiCad
+# library and no atopile.
 yapnr_py_tests(
     data = ["//examples/radar60/schematic:parts_sources"],
+    overrides = {
+        "test_board_integration": {
+            "data": [
+                "//examples/radar60/board:integration_sources",
+                "//examples/radar60/rf:rfm1_n",
+            ],
+            "deps": [requirement("pyyaml")],
+        },
+    },
     deps = ["//yapnr/partcache"],
 )

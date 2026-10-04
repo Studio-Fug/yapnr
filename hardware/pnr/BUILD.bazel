@@ -135,6 +135,12 @@ filegroup(
         "pnr/writeback.py",
         "pnr/stack.py",
         "pnr/via_policy.py",
+        # Rail IR drop (pnr.ir_extract under KiCad's Python, its numpy solver) and the
+        # plane_partition / ir_drop sections.
+        "pnr/ir_drop.py",
+        "pnr/ir_extract.py",
+        "pnr/power_spec.py",
+        "pnr/plane_partition.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -762,6 +768,97 @@ py_test(
         ":pnr",
         ":pnr_hier",
         ":pnr_place",
+    ],
+)
+
+# The rail IR-drop solver (pnr.ir_drop) against analytic resistances (numpy only).
+py_test(
+    name = "ir_drop_test",
+    size = "small",
+    srcs = ["tests/test_ir_drop.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_ir_drop.py",
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# A rail's copper extracted from a KiCad board and solved (pnr.ir_extract). It needs
+# KiCad's Python (pcbnew): run it there by hand (python3 -m unittest
+# tests.test_ir_extract_kicad).
+py_test(
+    name = "ir_extract_kicad_test",
+    size = "small",
+    srcs = ["tests/test_ir_extract_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_ir_extract_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# Supply rails sharing a plane layer (pnr.plane_partition): territories, widths, gaps,
+# PlaneAccess with holes, and route_board's drops inside them.
+py_test(
+    name = "plane_partition_test",
+    size = "medium",
+    srcs = ["tests/test_plane_partition.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_plane_partition.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# The partition drawn by writeback and filled by KiCad, its rails' IR drop, and the
+# checker's supply checks (rail_zones, ir_drop, unconnected). It needs KiCad's Python
+# (pcbnew): run it there by hand.
+py_test(
+    name = "plane_partition_kicad_test",
+    size = "small",
+    srcs = [
+        "regression/check_constraints.py",
+        "tests/test_plane_partition_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_plane_partition_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# Partial fanouts (the fanout entry's ``partial``): open balls, retries and bridges.
+py_test(
+    name = "fanout_partial_test",
+    size = "medium",
+    srcs = ["tests/test_fanout_partial.py"],
+    main = "tests/test_fanout_partial.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
     ],
 )
 

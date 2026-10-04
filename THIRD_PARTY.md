@@ -48,6 +48,24 @@ brought in. Update it in the same change that adds, removes or upgrades such mat
   the Batch jobs it renders against it, offline; it is data of `//yapnr/exp`, not part of the
   wheel.
 
+### Palace configuration schema
+
+- **What:** the JSON schema of [AWS Palace](https://github.com/awslabs/palace)'s configuration
+  files (`scripts/schema/config-schema.json`, schema version 2-1-0) at commit
+  `b797ea8060a52241cd9ab1176199f06af8585816` (main, 2026-10-02), the commit the Palace task image
+  builds. Palace validates every configuration against the same document at start-up.
+- **License:** Apache-2.0 (Palace's `LICENSE` and `NOTICE`, kept next to it).
+- **How:** vendored unmodified as `third_party/palace/config-schema.json` (sha256
+  `8f8dbd5588fee4cef97c0a83459ba2b721eb371af4356abd970ac301df4e4b7c`), with
+  `third_party/palace/LICENSE` (sha256
+  `09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b`) and
+  `third_party/palace/NOTICE` (sha256
+  `d4290ed64c2edd0fce1d84e3f9dfb2881240fe534def76b8cd29ed6af683e287`). `yapnr.rf.palace`
+  validates the configurations it writes against it, offline
+  ([docs/rf-palace.md](docs/rf-palace.md)); it is data of `//yapnr/rf/palace`, not part of the
+  wheel. Palace itself is never linked or imported: it runs as a separate program in its own
+  task image.
+
 ## In the container images
 
 The images `ghcr.io/studio-fug/yapnr-kicad` and `ghcr.io/studio-fug/yapnr`

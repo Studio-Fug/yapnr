@@ -1,0 +1,15 @@
+"""AWS Palace material, vendored unmodified (THIRD_PARTY.md, "Palace configuration schema").
+
+config-schema.json: Palace's scripts/schema/config-schema.json (schema 2-1-0) at awslabs/palace
+commit b797ea8060a52241cd9ab1176199f06af8585816 (2026-10-02, the commit the Palace task image
+builds); Apache-2.0, with Palace's LICENSE and NOTICE here. yapnr.rf.palace validates the
+configurations it writes against it offline.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "LICENSE",
+    "NOTICE",
+    "config-schema.json",
+])

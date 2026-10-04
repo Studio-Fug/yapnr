@@ -1,0 +1,115 @@
+{
+  "schema": "yapnr-rf-spec/1",
+  "name": "divider-osh-m",
+  "stackup": {
+    "er": 3.4417,
+    "tan_delta": 0.0088,
+    "h_mm": 0.1795,
+    "f_ref_ghz": 5.0
+  },
+  "grid": {
+    "pitch_mm": 0.1,
+    "substrate_cells": 4,
+    "air_mm": null,
+    "dz_max_mm": null,
+    "margin_mm": null,
+    "meas_cells": null,
+    "src_cells": null,
+    "pml_gap": 3,
+    "core_cells": 2,
+    "pml_cells": 10,
+    "pml_top_cells": 8,
+    "ratio": 1.25,
+    "courant": 0.95,
+    "f_max_ghz": null
+  },
+  "design_region": {
+    "x_mm": [0.0, 12.0],
+    "y_mm": [-7.5, 7.5]
+  },
+  "symmetry": "mirror_y",
+  "rules": {
+    "min_width_mm": 0.2,
+    "min_space_mm": 0.2
+  },
+  "ports": [
+    {
+      "n": 1,
+      "side": "W",
+      "at_mm": 0.0,
+      "width_cells": 4
+    },
+    {
+      "n": 2,
+      "side": "N",
+      "at_mm": 6.0,
+      "width_cells": 4
+    },
+    {
+      "n": 3,
+      "side": "S",
+      "at_mm": 6.0,
+      "width_cells": 4
+    }
+  ],
+  "bands": {
+    "pass": {
+      "lo_ghz": 4.25,
+      "hi_ghz": 5.75,
+      "points": 7
+    }
+  },
+  "requirements": [
+    {
+      "s": [1, 1],
+      "max_db": -20.0,
+      "band": "pass"
+    },
+    {
+      "s": [2, 1],
+      "min_db": -3.3,
+      "band": "pass"
+    },
+    {
+      "s": [3, 1],
+      "min_db": -3.3,
+      "band": "pass"
+    }
+  ],
+  "fixed": [],
+  "optimizer": {
+    "betas": [8.0, 16.0, 32.0, 64.0],
+    "iterations_per_beta": [25, 15, 15, 15],
+    "min_iterations": 8,
+    "budget_min": 720.0,
+    "move": 0.2,
+    "move_late": 0.05,
+    "init": 0.3,
+    "eta": 0.5,
+    "tau": 0.05,
+    "aggregate": "excitation",
+    "damping": 0.0,
+    "interpolation": "resistive",
+    "reactive_damping": 0.1,
+    "conservative": false,
+    "max_inner": 5,
+    "filter_radius_mm": null,
+    "binary_every": 5,
+    "eta_variants": [0.45, 0.55],
+    "robust_from_beta": 16.0,
+    "adaptive_move": true,
+    "adaptive_from_beta": 16.0
+  },
+  "solver": {
+    "backend": "auto",
+    "dtype": "float64",
+    "tol": 0.001,
+    "adjoint_tol": 0.001,
+    "decimation": "auto",
+    "max_steps": 200000,
+    "threads": 16,
+    "sweep_points": 101,
+    "edge_correction": true,
+    "port_source": "mode"
+  }
+}

@@ -1,0 +1,22 @@
+{
+ "schema": "yapnr-rf-forward/1",
+ "spec": "r1-osh-m-m-nom",
+ "spec_sha256": "79a3d1980ba3db9db98445827a3e894c3aaaede3cbaec112eaca4e656b364719",
+ "copper_mm": [
+  [
+   0.0,
+   9.0,
+   -0.35,
+   0.35
+  ],
+  [
+   9.0,
+   9.4,
+   -6.0,
+   6.0
+  ]
+ ],
+ "pixels": 4440,
+ "what": "R1 on M-nom",
+ "substrate": "M-nom"
+}

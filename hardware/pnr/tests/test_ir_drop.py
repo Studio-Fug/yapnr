@@ -209,12 +209,19 @@ class CoverageTest(unittest.TestCase):
     def strip(offset, h=0.1, width=0.45, length=6.0, subsample=None):
         y0, y1 = 1.0 + offset, 1.0 + offset + width
         bars = [
-            dict(ref=ref, pad="1", at=[x, (y0 + y1) / 2], layers=["In1.Cu"],
-                 polygon=rect(x - 0.05, y0, x + 0.05, y1))
+            dict(
+                ref=ref,
+                pad="1",
+                at=[x, (y0 + y1) / 2],
+                layers=["In1.Cu"],
+                polygon=rect(x - 0.05, y0, x + 0.05, y1),
+            )
             for ref, x in (("S", 0.05), ("L", length - 0.05))
         ]
         c = copper(
-            zones=[dict(layer="In1.Cu", polygons=[dict(outline=rect(0, y0, length, y1), holes=[])])],
+            zones=[
+                dict(layer="In1.Cu", polygons=[dict(outline=rect(0, y0, length, y1), holes=[])])
+            ],
             pads=bars,
         )
         kwargs = dict(sources=[0], sinks=[1], current_a=1.0, h=h, two_point=False)
@@ -238,12 +245,27 @@ class CoverageTest(unittest.TestCase):
         y0 = 1.04
         for width in (0.25, 0.33):
             c = copper(
-                zones=[dict(layer="In1.Cu", polygons=[dict(outline=rect(0, y0, 4, y0 + width), holes=[])])],
+                zones=[
+                    dict(
+                        layer="In1.Cu",
+                        polygons=[dict(outline=rect(0, y0, 4, y0 + width), holes=[])],
+                    )
+                ],
                 pads=[
-                    dict(ref="S", pad="1", at=[0.05, y0 + width / 2], layers=["In1.Cu"],
-                         polygon=rect(0.0, y0, 0.1, y0 + width)),
-                    dict(ref="L", pad="1", at=[3.95, y0 + width / 2], layers=["In1.Cu"],
-                         polygon=rect(3.9, y0, 4.0, y0 + width)),
+                    dict(
+                        ref="S",
+                        pad="1",
+                        at=[0.05, y0 + width / 2],
+                        layers=["In1.Cu"],
+                        polygon=rect(0.0, y0, 0.1, y0 + width),
+                    ),
+                    dict(
+                        ref="L",
+                        pad="1",
+                        at=[3.95, y0 + width / 2],
+                        layers=["In1.Cu"],
+                        polygon=rect(3.9, y0, 4.0, y0 + width),
+                    ),
                 ],
             )
             r = solve(c, sources=[0], sinks=[1], current_a=1.0, two_point=False)

@@ -96,8 +96,10 @@ def partition_rows(entry, pads, blocked):
     """The partition's region rows (pnr.plane_partition, numpy): here, or in the numeric
     Python PNR_PYTHON names when this one has no numpy."""
     terms = {
-        net: [dict(name="%s%d.1" % (net, n), kind="via", at=list(p), radius=0.2)
-              for n, p in enumerate(points)]
+        net: [
+            dict(name="%s%d.1" % (net, n), kind="via", at=list(p), radius=0.2)
+            for n, p in enumerate(points)
+        ]
         for net, points in pads.items()
     }
     payload = dict(entry=entry, terms=terms, blocked=[[list(c), r] for c, r in blocked], w=W, h=H)

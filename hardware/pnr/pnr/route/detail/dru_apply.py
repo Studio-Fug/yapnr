@@ -233,10 +233,11 @@ def pair_route_offenders(grid, nets, result, widths, dru: Optional[Dict]):
     from pnr.dru_rules import PAIR_RAISE_MAX_MM
 
     from .class_check import _cover
-    from .grid import Cell
 
     rules = [
-        p for p in (dru or {}).get("pair_clearances", []) if float(p["clearance_mm"]) > PAIR_RAISE_MAX_MM + 1e-9
+        p
+        for p in (dru or {}).get("pair_clearances", [])
+        if float(p["clearance_mm"]) > PAIR_RAISE_MAX_MM + 1e-9
     ]
     report = {"pairs": [], "ripped": []}
     if not rules:
@@ -285,7 +286,9 @@ def pair_route_offenders(grid, nets, result, widths, dru: Optional[Dict]):
         track = via = None
         for other, d, _gap in others:
             t = _mask_near(grid, copper(other), lambda half, d=d: d + half + w / 2 + margin)
-            v = _mask_near(grid, copper(other), lambda half, d=d: d + half + grid.via_radius + margin)
+            v = _mask_near(
+                grid, copper(other), lambda half, d=d: d + half + grid.via_radius + margin
+            )
             track = t if track is None else track | t
             via = v if via is None else via | v
         via = via.any(axis=0)[None, :, :].repeat(grid.nlayers, axis=0)
@@ -302,7 +305,8 @@ def pair_route_offenders(grid, nets, result, widths, dru: Optional[Dict]):
             for other, d, gap in others
         ]
     report["pairs"] = [
-        dict(nets=list(k), need_mm=v[0], gap_mm=round(v[1], 4)) for k, v in sorted(conflicts.items())
+        dict(nets=list(k), need_mm=v[0], gap_mm=round(v[1], 4))
+        for k, v in sorted(conflicts.items())
     ][:20]
     report["pair_count"] = len(conflicts)
     report["ripped"] = sorted(out)

@@ -691,7 +691,9 @@ def _partition(
             info["way_min_mm"] = min(narrowest)
         # One raster cell of tolerance (a strip of 2m cells reads (2m - 1) h wide).
         necked = [
-            row for row in ways if row["width_mm"] is not None and row["width_mm"] < min_w - h - 1e-9
+            row
+            for row in ways
+            if row["width_mm"] is not None and row["width_mm"] < min_w - h - 1e-9
         ]
         # Joined by the tree only at the fill width (the hard width found no way).
         info["joined_narrow"] = sorted(terminals[n][t].name for t in reached_of[n]["relaxed"])
@@ -830,9 +832,7 @@ def _connect(ctx, label0, order):
             for t in reached:
                 tree.update(int(c) for c in strict_terms[t].tolist())
             more = [np.array(sorted(tree), dtype=np.int64)] + [flat_terms[t] for t in missing]
-            path2, reached2, length2, _reach2 = _steiner(
-                np.where(passable, cost, np.inf), more, 0
-            )
+            path2, reached2, length2, _reach2 = _steiner(np.where(passable, cost, np.inf), more, 0)
             relaxed = [missing[t - 1] for t in reached2 if t > 0]
             if relaxed:
                 path = np.union1d(path, path2)

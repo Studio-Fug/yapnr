@@ -291,11 +291,9 @@ class HardWidthTest(unittest.TestCase):
         )
         _CACHE.clear()
         terms = {"A": [pad("A1", (2.0, 3.0)), pad("A2", (10.0, 3.0))]}
-        part = partition(
-            dict(self.ENTRY), width=12.0, height=6.0, terminals=terms, blocked=[]
-        )
+        part = partition(dict(self.ENTRY), width=12.0, height=6.0, terminals=terms, blocked=[])
         _core_keepouts(grid, part, 0.35, spare=[(6.0, 3.2)], spare_reach=0.8)
-        (via, allowed), = masks
+        ((via, allowed),) = masks
         self.assertEqual(allowed, {"A"})
         self.assertFalse(via[0, 32, 60])  # (6.05, 3.25): another pad's drop site
         self.assertTrue(via[0, 30, 40])  # (4.05, 3.05): on the trunk

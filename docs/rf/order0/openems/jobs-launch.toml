@@ -5,7 +5,7 @@
 # DC content (the coax ports leave the centre conductor without a DC path to ground), and the
 # run stops at 150 000 steps (7.5 ns) if the energy has not fallen by 50 dB before. Written by
 # hand; models.py writes the models/.
-name = "order0-openems-launch"
+name = "order0-openems-launch-b"
 image = "openems:0.37.0-rc3-x86-64-v4"
 threads = 8
 models_per_vm = 1

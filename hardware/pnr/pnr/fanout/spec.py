@@ -33,6 +33,7 @@ KEYS = {
     "lock",
     "bottom_sites",
     "variant",
+    "partial",
 }
 
 
@@ -237,7 +238,31 @@ def parse(entry: Dict, known_refs: Sequence[str], index: int = 0) -> Dict:
     drop_nets = _strings(entry.get("drop_nets"), where + ".drop_nets")
     if drop_nets:
         out["drop_nets"] = drop_nets
+    # A ball whose escape fails no longer blocks its net (pnr.route.detail.fanout);
+    # ``bridge`` joins a failed supply ball to an adjacent ball of its net. Only when
+    # declared: an entry without it keeps its bytes (and its plan's inputs digest).
+    partial = _partial(entry.get("partial"), where + ".partial")
+    if partial is not None:
+        out["partial"] = partial
     return out
+
+
+def _partial(value, where):
+    """``partial: true`` / ``{bridge: true}`` as ``{"bridge": bool}``; None when absent
+    or false."""
+    if value is None or value is False:
+        return None
+    if value is True:
+        return dict(bridge=False)
+    if not isinstance(value, dict):
+        raise FanoutError(where + " must be true, false or a mapping {bridge: true|false}")
+    bad = sorted(set(value) - {"bridge"})
+    if bad:
+        raise FanoutError("%s: unknown key(s) %s" % (where, ", ".join(bad)))
+    bridge = value.get("bridge", False)
+    if not isinstance(bridge, bool):
+        raise FanoutError(where + ".bridge must be a boolean")
+    return dict(bridge=bridge)
 
 
 def parse_all(raw, known_refs: Sequence[str]) -> List[Dict]:

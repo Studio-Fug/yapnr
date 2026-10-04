@@ -159,10 +159,13 @@ class BoardRoute:
     # copper written locked, {"tracks": [[net, layer, a, b]], "vias": [[net, x, y]]}.
     via_sizes: List[list] = field(default_factory=list)
     locked: dict = field(default_factory=dict)
+    # Partial fanouts only (pnr.route.detail.fanout): net -> {"REF.PAD": reason} of the
+    # balls left unconnected while their nets routed among the other terminals.
+    partial_open: dict = field(default_factory=dict)
 
     @property
     def fully_routed(self) -> bool:
-        return self.result.fully_routed
+        return self.result.fully_routed and not self.partial_open
 
     def extras(self) -> dict:
         """The ``routes.json`` keys a declared fanout adds (empty without one)."""
@@ -1065,10 +1068,18 @@ def route_board(
             for net, cells in sorted(ports.items())
         }
     if fanouts is not None:
+        if fanouts.retry:
+            # Partial fanouts: the balls handed back are escaped or open now.
+            from .fanout import resolve_partial
+
+            resolve_partial(grid, fanouts, plan)
         plan.escapes.extend(fanouts.escapes)
         for n, cells in sorted(fanouts.access.items()):
             plan.net_access.setdefault(n, []).extend(cells)
         plan.blocked_nets |= fanouts.blocked_nets
+        for n in sorted(fanouts.partial_open):
+            if n not in drop_widths and len(plan.net_access.get(n, [])) < 2:
+                plan.blocked_nets.add(n)  # nothing left to join: the net stays open
         for n, sites in sorted(fanouts.drop_failures.items()):
             plan.drop_failures.setdefault(n, []).extend(sites)
         grid.protected_escape_access.update(fanouts.protected)
@@ -1146,6 +1157,8 @@ def route_board(
         board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
     for net, sites in sorted((fanouts.failure_sites if fanouts is not None else {}).items()):
         board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
+    if fanouts is not None and fanouts.partial_open:
+        board.partial_open = {n: dict(v) for n, v in sorted(fanouts.partial_open.items())}
     if os.environ.get("PNR_LOCAL_PRESSURE") == "1":
         from .pressure import localized_pressure
 

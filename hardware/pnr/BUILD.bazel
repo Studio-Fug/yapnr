@@ -761,6 +761,20 @@ py_test(
     ],
 )
 
+# Partial fanouts (the fanout entry's ``partial``): open balls, retries and bridges.
+py_test(
+    name = "fanout_partial_test",
+    size = "medium",
+    srcs = ["tests/test_fanout_partial.py"],
+    main = "tests/test_fanout_partial.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
 py_test(
     name = "fanout_route_test",
     size = "medium",

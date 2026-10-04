@@ -600,6 +600,7 @@ fanout:
     neck_mm: 0.10 # signal tracks inside the fanout (default: the net's width)
     neck_classes: [QSPI] # classes whose own minimum width the neck may go below
     drop_nets: [1V0_PA, "VDD*"] # routed nets whose balls take a via instead of an exit
+    partial: { bridge: true } # a failed ball does not block its net (default: it does)
     lock: true # write the fanout copper locked (default)
 ```
 
@@ -618,6 +619,7 @@ fanout:
 | `neck_mm`         | The signal track width inside the fanout; the router continues at the net's own width from the exit. It narrows a signal below the fab's default track width, never below a minimum the net has of its own (a class `width_mm`, a width from `current_a`, an electrical outer width or terminal budget) unless `neck_classes` names one of its classes, never below a terminal width contract, and never widens; `fanout.check` refuses a value under `min_track_width_mm`. The validator takes each declared neck as an authorized short escape: the pad's required entry width is the neck's (`pnr.pad_entry.fanout_neck`), and the plan lists them (`diagnostics.necks`). |
 | `neck_classes`    | Net classes (or `dp_<pair>`) whose own minimum width `neck_mm` may go below (needs `neck_mm`; an unknown name is a warning). |
 | `drop_nets`       | Routed (non-plane) nets, names or globs, whose balls drop a via of their class beside the ball, as a plane ball does, instead of escaping across the array edge (no exit, no neck): a supply decoupled under the array or fed from another layer. The router takes each via as the net's terminal on the layer opposite the part and routes on from it. |
+| `partial`         | `true` or `{bridge: true}`: a ball whose escape fails (no plan, a conflict on the board, no access cell, or an access cell another fanout's tail took) no longer blocks its net, which routes among its other terminals (below). Default: the net is blocked. |
 | `lock`            | Write the fanout copper locked (default `true`), so later passes leave it alone.                                               |
 | `bottom_sites`    | `{parts, max_stub_mm, zone, rotations}`: decoupling sites under the array on the bottom side (below).                         |
 | `variant`         | A seeded permutation of the planner's tie-breaks (default 0, none).                                                            |
@@ -649,6 +651,22 @@ the drop via of a plane ball is its connection. The fanout's vias keep their cla
 (`routes.json` `via_sizes`), and its copper is written locked (`locked`). The
 route report's escape diagnostics carry a `fanout` block per fanout (escaped
 signals, drops, via sites, failures, balls without an access cell).
+
+With `partial`, a ball whose escape fails no longer blocks its net. With `bridge`,
+the router first tries a straight surface stub, at the ball's planned width, to the
+nearest adjacent ball of its net (orthogonal, then diagonal) whose escape stands,
+judged exactly against foreign pads at the larger class clearance, the escape copper
+and vias, keepouts, rule areas and the fanout's `reserved` areas; the stub is written
+with that ball's escape (locked with it). At 0.65 mm pitch with 0.32 mm lands an
+orthogonal stub keeps 0.44 mm from the side balls and a diagonal one crosses the
+interstitial site (so it fits only where no other net's via sits there). Otherwise
+the ball goes back to the board's escape planner for a second try. A ball neither
+joins stays open: its net routes among its other terminals (a net left with fewer
+than two is still blocked), the ball is a failure site, the route's `partial_open`
+names it (`{net: {"U1.P14": reason}}`, and the route is not fully routed), and the
+fanout report lists every such ball under `partial` (`{ball: {net, reason,
+outcome}}`, the outcome `bridged to P15`, `escaped by the board's escapes` or
+`open`). KiCad's DRC reports the open ball as unconnected.
 
 A plane ball that already touches fixed copper of its own net (a pour or track of
 a fixed block, `fixed_copper` `polygons`) is joined by it and gets no drop; other

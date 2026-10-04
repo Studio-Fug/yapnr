@@ -554,10 +554,12 @@ variants: a generic x86-64 build and an AVX-512 build (`-march=x86-64-v4 -mtune=
 C4D's Zen 5 cores. Cloud Build builds both on one machine and pushes them as
 `openems:<openEMS version>-x86-64` and `...-x86-64-v4`, running as `yapnr-image-build`; the
 submitter must be allowed to start builds and act as that account (the project owner). A
-regional build bills the vCPU- and GiB-minutes of the `e2-highcpu-32` machine `cloudbuild.yaml`
+regional build bills the vCPU- and GiB-minutes of the `e2-highcpu-8` machine `cloudbuild.yaml`
 asks for (in us-west4 in October 2026, $0.0018 per vCPU-minute and $0.0004 per GiB-minute: about
-$0.07 a minute, so $1.1-1.8 for a 15-25 minute build; see the Cloud Build pricing page), and the
-stored images per GiB-month like the registry caches.
+$0.018 a minute; see the Cloud Build pricing page), and the stored images per GiB-month like the
+registry caches. A new project's regional quota may refuse larger build machines
+(`FAILED_PRECONDITION ... cannot run builds of this machine type in this region`), so the file asks
+for the 8-vCPU machine; raise `machineType` and `_NJOBS` together once the quota allows.
 
 `tools/exp/openems_plan.py` does the rest. `image` prints (`--run`: submits) the build,
 `digests` lists the built tags with their digests and sizes, `plan` turns N model scripts into

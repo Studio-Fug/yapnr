@@ -43,10 +43,10 @@ substitutions:
   _IMAGE: ''
   _TAG: 0.37.0-rc3
   _OPENEMS_REF: v0.37.0-rc3
-  _NJOBS: '16'
+  _NJOBS: '8'
   _V4_FLAGS: -march=x86-64-v4 -mtune=znver4
 options:
-  machineType: E2_HIGHCPU_32
+  machineType: E2_HIGHCPU_8
   # The build account writes its logs to Cloud Logging (it has no logs bucket).
   logging: CLOUD_LOGGING_ONLY
   env:

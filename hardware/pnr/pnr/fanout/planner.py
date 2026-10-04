@@ -523,11 +523,19 @@ def _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, dige
         segments = _merge(segments)
         cls = spec["via_classes"][t.via_class]
         via_xy = None
+        existing = False
         if via is not None:
             at = land.centre if via == t.node else model.point(via)
             d, h = via_size[t.via_class]
             via_xy = xy(at)
-            vias.append([t.net, via_xy[0], via_xy[1], d, h])
+            # A fixed via of the same net already on the site (a block's stitching via,
+            # which the site check lets a via of its net share): reuse it, do not drill
+            # it again (KiCad: holes co-located).
+            existing = any(
+                net == t.net and math.dist(c, at) <= 1e-6 for net, c, _d, _h in model.obs.vias
+            )
+            if not existing:
+                vias.append([t.net, via_xy[0], via_xy[1], d, h])
         out_tracks = [[t.net, layers[la], xy(a), xy(b), t.width] for la, a, b in segments]
         tracks.extend(out_tracks)
         if t.kind == "drop":
@@ -545,6 +553,8 @@ def _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, dige
             via_site=None if via is None else model.site_kind(via),
             length_mm=round(sum(math.dist(a, b) for _, a, b in segments), 4),
         )
+        if existing:
+            row["via_existing"] = True  # the fixed via is the connection (no new hole)
         if t.kind == "signal":
             ext = segments[-1]
             direction = pose.direction_to_board(
@@ -579,6 +589,7 @@ def _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, dige
     sites = Counter(
         (r.get("via_class"), r.get("via_site")) for r in terminals.values() if r.get("via")
     )
+    reused = sum(1 for r in terminals.values() if r.get("via_existing"))
     signals = [t for t in tasks if t.kind == "signal"]
     drops = [t for t in tasks if t.kind == "drop"]
     return dict(
@@ -609,6 +620,8 @@ def _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, dige
                 repaired=assigner.report["repaired"],
             ),
             warnings=warnings,
+            # Only with a reused fixed via, so other plans keep their bytes.
+            **({"vias_reused": reused} if reused else {}),
         ),
     )
 

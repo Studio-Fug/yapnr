@@ -326,7 +326,8 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             access=access,
             pad_xy=pad_xy,
             side_layer=grid.layers[side],
-            via_xy=via,
+            # A reused fixed via (the plan's via_existing) is already on the board.
+            via_xy=None if row.get("via_existing") else via,
             segments=[(grid.layers[la], a, b) for la, a, b in segments + tail],
             width=row["width_mm"],
             widths=widths,

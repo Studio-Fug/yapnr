@@ -367,6 +367,36 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(areas["keepout:vias"], (frozenset(), True, frozenset()))
         self.assertEqual(areas["keepout:old"], (None, True, frozenset()))
 
+    def test_a_fixed_via_of_its_net_on_the_site_is_reused_not_drilled_again(self):
+        # GND vias of a fixed block on every interstitial site around the GND ball B2:
+        # the drop joins one of them and the plan drills no second hole there.
+        positions = array(3)
+        nets = {n: "GND" if n == "B2" else "S_" + n for n in positions}
+        graph = board(positions, nets)
+        sites = [(20.0 + dx, 20.0 + dy) for dx in (-0.325, 0.325) for dy in (-0.325, 0.325)]
+        fixed = dict(
+            frame="engine-mm-y-up",
+            tracks=[],
+            vias=[dict(net="GND", xy=list(p), diameter_mm=0.35, drill_mm=0.15) for p in sites],
+            polygons=[],
+        )
+        p = plan(
+            graph,
+            rules(),
+            spec(),
+            grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+            plane_nets={"GND"},
+            signal_nets={n.name for n in graph.nets if n.name != "GND"},
+            fixed_copper=fixed,
+        )
+        row = p["terminals"]["B2"]
+        self.assertEqual(row["kind"], "drop")
+        self.assertTrue(row.get("via_existing"))
+        self.assertTrue(any(math.dist(row["via"][:2], q) < 1e-6 for q in sites))
+        for _net, x, y, _d, _h in p["copper"]["vias"]:
+            self.assertTrue(all(math.dist((x, y), q) > 1e-6 for q in sites))
+        self.assertEqual(p["diagnostics"]["vias_reused"], 1)
+
     def test_a_class_keeps_its_nets_on_its_layers(self):
         positions = array(7)
         signals = {b for b in positions if ROWS.index(b[0]) in (2, 3)}

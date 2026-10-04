@@ -522,9 +522,15 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
 # Each is off unless declared, and a board without any keeps its rules.json bytes.
 #   class_clearance: maze   net class clearances in the maze router's halos and
 #                           tables, with an exact check after routing
-#                           (pnr.route.detail.router, pnr.route.detail.exact_route)
+#                           (pnr.route.detail.router, pnr.route.detail.class_check)
+#   edge: exact             the board's own Edge.Cuts outline (arcs, stroke) for
+#                           the router's edge and hole-to-edge model, kept by
+#                           writeback (pnr.board_edge)
+#   keep_outline: true      writeback keeps the source outline (no router change)
 ROUTING_SWITCHES = {
     "class_clearance": ("class_clearance", ("maze",)),
+    "edge": ("edge", ("exact",)),
+    "keep_outline": ("keep_outline", (True, False)),
 }
 
 

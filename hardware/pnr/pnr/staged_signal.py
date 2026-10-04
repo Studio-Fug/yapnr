@@ -55,6 +55,10 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         layout=json.loads(g.to_json()),
         data=dict(phase="signals", provisional=True),
     )
+    # board.edge: exact: this board's own outline for the router (pnr.board_edge).
+    from pnr.board_edge import attach_edges
+
+    attach_edges(policy, board.read_text())
     started = time.monotonic()
     result = route_board(
         g,

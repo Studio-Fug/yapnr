@@ -234,7 +234,7 @@ def layer_plan(graph: BoardGraph, rules: Optional[dict]):
 _WARNED: Set[str] = set()
 
 
-def _warn_once(warnings) -> None:
+def _warn_once(warnings, source="pnr.stack") -> None:
     """Each stack warning (pnr.stack.assess) once per process, on stderr, where the
     run's place-and-route log keeps it; the route result also carries them."""
     import sys
@@ -242,7 +242,7 @@ def _warn_once(warnings) -> None:
     for text in warnings:
         if text not in _WARNED:
             _WARNED.add(text)
-            sys.stderr.write("pnr.stack: warning: %s\n" % text)
+            sys.stderr.write("%s: warning: %s\n" % (source, text))
 
 
 # Copper thickness of one ounce per square foot (mm), the IPC-2221 unit.
@@ -323,6 +323,37 @@ def _plane_region_rects(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict
         y1 = max(r.top for r in rs)
         out.append((net, la, Rect((x0 + x1) / 2.0, (y0 + y1) / 2.0, x1 - x0, y1 - y0)))
     return out
+
+
+def _exact_edge(grid: RouteGrid, rules: Optional[dict], width: float, height: float):
+    """``board.edge: exact``: bar the cells the board's own outline forbids
+    (pnr.board_edge.block_exact_edge, ``rules["board_edges"]`` from the drivers'
+    attach_edges) and return its report; None when off. An outline that does not
+    frame the ``width`` x ``height`` placement region is left to the rectangle
+    model (reported, with a warning)."""
+    rules = rules or {}
+    if rules.get("edge") != "exact":
+        return None
+    edges = rules.get("board_edges")
+    if not edges:
+        _warn_once(
+            ["board.edge: exact without the board's outline (board_edges): rectangle"],
+            "pnr.route",
+        )
+        return {"model": "rectangle", "reason": "no board_edges in the rules"}
+    w, h = edges.get("size") or (None, None)
+    if w is None or abs(w - width) > 1e-3 or abs(h - height) > 1e-3:
+        _warn_once(
+            [
+                "board.edge: exact: the outline (%s x %s mm) does not frame the %.3f x %.3f mm "
+                "placement region: rectangle" % (w, h, width, height)
+            ],
+            "pnr.route",
+        )
+        return {"model": "rectangle", "reason": "outline size differs from the region"}
+    from pnr.board_edge import block_exact_edge
+
+    return dict(block_exact_edge(grid, rules, edges), model="exact")
 
 
 def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict]) -> None:
@@ -947,6 +978,9 @@ def route_board(
             edge + track_width_mm / 2,
             max(edge + via_radius_mm, float(extra["hole_to_edge_mm"]) + fab["via_drill_mm"] / 2),
         )
+    # board.edge: exact: the board's own outline (arcs, notches, stroke) as KiCad
+    # judges it, beside the rectangle model above (pnr.board_edge).
+    edge_report = _exact_edge(grid, rules, width, height)
     # Split planes on the inner layers become obstacles the signals route around
     # (matching the 2 mm writeback pour margin).
     _mark_plane_regions(grid, graph, rules, margin=PLANE_REGION_MARGIN_MM, stack=stack)
@@ -1089,6 +1123,8 @@ def route_board(
             plan.drop_failures.setdefault(n, []).extend(sites)
         grid.protected_escape_access.update(fanouts.protected)
         plan.diagnostics["fanout"] = fanouts.report
+    if edge_report is not None:
+        plan.diagnostics["board_edge"] = edge_report
     from pnr.stack import assess
 
     stack_warnings = list(assess(rules, getattr(graph, "stack", None))[1])

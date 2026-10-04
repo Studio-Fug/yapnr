@@ -268,6 +268,37 @@ class NetworkTest(unittest.TestCase):
         self.assertEqual(solve(c, sources=[0], sinks=[1], current_a=1.0)["status"], "pass")
 
 
+class NumericPythonTest(unittest.TestCase):
+    def test_without_numpy_the_solve_runs_in_pnr_python(self):
+        # KiCad's Python in the container image has no numpy: pnr.ir_extract hands the
+        # rails' copper to the numeric Python PNR_PYTHON names (python -m pnr.ir_drop --jobs).
+        import sys
+        import unittest.mock
+
+        from pnr.ir_extract import solve_jobs
+
+        c = copper(
+            pads=[dot("S", (0.0, 0.0)), dot("L", (5.0, 0.0))],
+            tracks=[dict(layer="F.Cu", a=[0.0, 0.0], b=[5.0, 0.0], width_mm=0.25)],
+        )
+        kwargs = dict(sources=[0], sinks=[1], current_a=1.0, two_point=False)
+        jobs = [dict(net="V", copper=c, kwargs=kwargs)]
+        env = dict(PNR_PYTHON=sys.executable, PYTHONPATH=os.pathsep.join(sys.path))
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.dict(os.environ, env), unittest.mock.patch.dict(
+                sys.modules, {"numpy": None}
+            ):
+                (got,) = solve_jobs(jobs, tmp)
+            self.assertEqual(os.listdir(tmp), [])
+        self.assertAlmostEqual(got["r_eff_mohm"], solve(c, **kwargs)["r_eff_mohm"], places=6)
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.dict(os.environ, {"PNR_PYTHON": ""}), unittest.mock.patch.dict(
+                sys.modules, {"numpy": None}
+            ):
+                with self.assertRaises(RuntimeError):
+                    solve_jobs(jobs, tmp)
+
+
 class ReportTest(unittest.TestCase):
     def test_budget_warnings_and_heatmap(self):
         c = copper(

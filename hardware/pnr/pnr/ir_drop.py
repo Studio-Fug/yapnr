@@ -775,14 +775,24 @@ def main(argv=None) -> int:
     import argparse
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("copper", help="a rail's copper JSON (pnr.ir_extract --copper-only)")
-    ap.add_argument("--source", action="append", required=True, help="REF:PAD")
-    ap.add_argument("--sink", action="append", required=True, help="REF:PAD")
-    ap.add_argument("--current", type=float, required=True)
+    ap.add_argument("copper", nargs="?", help="a rail's copper JSON (pnr.ir_extract --copper)")
+    ap.add_argument("--jobs", help="a list of {copper, kwargs} (pnr.ir_extract without numpy)")
+    ap.add_argument("--source", action="append", help="REF:PAD")
+    ap.add_argument("--sink", action="append", help="REF:PAD")
+    ap.add_argument("--current", type=float)
     ap.add_argument("--budget-mohm", type=float)
     ap.add_argument("--h", type=float, default=DEFAULT_H)
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
+    if args.jobs:
+        with open(args.jobs, encoding="utf-8") as fh:
+            jobs = json.load(fh)
+        reports = [solve(job["copper"], **job["kwargs"]) for job in jobs]
+        with open(args.out, "w", encoding="utf-8") as fh:
+            json.dump(reports, fh)
+        return 0
+    if not (args.copper and args.source and args.sink and args.current is not None):
+        ap.error("a copper file, --source, --sink and --current (or --jobs)")
     with open(args.copper, encoding="utf-8") as fh:
         copper = json.load(fh)
 

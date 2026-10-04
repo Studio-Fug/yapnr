@@ -978,6 +978,9 @@ def main():
     env["PNR_FAB_PROFILE"] = (
         args.fab_profile
     )  # routed and judged under one profile (route_case.py, writeback)
+    # The KiCad-side judge's numeric solves (pnr.ir_extract, the ir_drop check) run in this
+    # Python when KiCad's has no numpy (the container image's).
+    env["PNR_PYTHON"] = str(args.python)
     if args.initial_pool:
         if not 2 <= args.initial_starts <= 128 or not 1 <= args.initial_finalists <= min(
             args.initial_starts, 16
@@ -1008,7 +1011,9 @@ def main():
         ),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
         pnr_environment={
-            k: v for k, v in env.items() if k.startswith("PNR_") and k != "PNR_MAZE_LIB"
+            k: v
+            for k, v in env.items()
+            if k.startswith("PNR_") and k not in ("PNR_MAZE_LIB", "PNR_PYTHON")
         },
         native_maze=native,
     )

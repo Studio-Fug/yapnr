@@ -458,7 +458,7 @@ def draw_plane_regions(board, rows, rules: dict, point, full, net_code=None) -> 
             continue
         for layer, nets in nets_of.items():
             lid = copper_layer(board, layer)
-            if z.IsOnLayer(lid) and z.GetNetname() in nets and z.GetLayerSet().count() == 1:
+            if z.IsOnLayer(lid) and z.GetNetname() in nets and len(z.GetLayerSet().Seq()) == 1:
                 board.Remove(z)
                 break
     made = []

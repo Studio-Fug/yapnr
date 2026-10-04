@@ -77,10 +77,16 @@ def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True, o
                 holder = owned.get((layer, i, j))
                 if holder is not None and holder != net:
                     return False
+    # A pad that sets its own clearance or mask margin (RouteGrid.pad_keepaways).
+    keepaways = getattr(grid, "pad_keepaways", None) or {}
     for la, owner, r in grid.pad_rectangles:
         if la != layer or owner == net:
             continue
         grow = reach(owner) if classes else radius
+        if keepaways:
+            keep = keepaways.get((la, owner, r))
+            if keep is not None:
+                grow = max(grow, width / 2 + keep)
         if (
             max(a[0], b[0]) + grow < r.left
             or min(a[0], b[0]) - grow > r.right

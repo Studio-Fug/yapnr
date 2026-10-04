@@ -58,18 +58,23 @@ def _foreign_pads(grid, own_rects):
     ]
 
 
-def _clear_of_pads(pads, net, layer, a, b, width, clearance, classes=None):
+def _clear_of_pads(pads, net, layer, a, b, width, clearance, classes=None, keepaways=None):
     """``a``-``b`` of ``width`` clears every pad of another net on ``layer`` by the
     larger of the two nets' clearances (``classes``: net -> class clearance; the
-    fab ``clearance`` holds where larger or absent)."""
+    fab ``clearance`` holds where larger or absent) and of the pad's own
+    (``keepaways``: RouteGrid.pad_keepaways, a local clearance or mask margin)."""
     from pnr.writeback import _segment_distance_sq
 
     classes = classes or {}
+    keepaways = keepaways or {}
     base = clearance
     for la, owner, r in pads:
         if la != layer or owner == net:
             continue
         radius = width / 2 + max(base, classes.get(net, 0.0), classes.get(owner, 0.0))
+        keep = keepaways.get((la, owner, r)) if keepaways else None
+        if keep is not None:
+            radius = max(radius, width / 2 + keep)
         if (
             max(a[0], b[0]) + radius < r.left
             or min(a[0], b[0]) - radius > r.right
@@ -240,12 +245,13 @@ def _first_access(
             grid, net, layer, exit_xy, centre, width, areas, exact
         ):
             continue
+        keepaways = getattr(grid, "pad_keepaways", None)
         if (
-            classes
+            (classes or keepaways)
             and pads
             and math.dist(centre, exit_xy) > 1e-9
             and not _clear_of_pads(
-                pads, net, layer, exit_xy, centre, width, grid.clearance, classes
+                pads, net, layer, exit_xy, centre, width, grid.clearance, classes, keepaways
             )
         ):
             continue
@@ -335,14 +341,25 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             segments = [(layer_index[la], tuple(a), tuple(b)) for la, a, b in row["segments"]]
             via = tuple(row["via"][:2]) if row.get("via") else None
             width = row["width_mm"]
+            keepaways = getattr(grid, "pad_keepaways", None)
             clash = any(
-                not _clear_of_pads(foreign, row["net"], la, a, b, width, clearance, classes)
+                not _clear_of_pads(
+                    foreign, row["net"], la, a, b, width, clearance, classes, keepaways
+                )
                 for la, a, b in segments
             ) or (
                 via is not None
                 and any(
                     not _clear_of_pads(
-                        foreign, row["net"], la, via, via, row["via"][2], clearance, classes
+                        foreign,
+                        row["net"],
+                        la,
+                        via,
+                        via,
+                        row["via"][2],
+                        clearance,
+                        classes,
+                        keepaways,
                     )
                     for la in range(grid.nlayers)
                 )

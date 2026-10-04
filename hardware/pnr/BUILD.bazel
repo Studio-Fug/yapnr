@@ -1985,6 +1985,37 @@ py_test(
     ],
 )
 
+# Pad-local clearance and solder mask margin (a fiducial's): graph keys, grid halos,
+# the exact escape and fanout checks, and a routed board that keeps them.
+py_test(
+    name = "pad_clearance_test",
+    size = "small",
+    srcs = ["tests/test_pad_clearance.py"],
+    main = "tests/test_pad_clearance.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# The same values read from KiCad footprints by pnr.ingest (inline footprints; the
+# KiCad lane runs it, it skips without pcbnew).
+py_test(
+    name = "pad_clearance_kicad_test",
+    size = "small",
+    srcs = ["tests/test_pad_clearance_kicad.py"],
+    main = "tests/test_pad_clearance_kicad.py",
+    tags = [
+        "kicad",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 # The native kernel's parity cases on the Bazel-built library (needs a C toolchain):
 # bazel test //hardware/pnr:dense_maze_native_test //hardware/pnr:exact_route_native_test
 py_test(

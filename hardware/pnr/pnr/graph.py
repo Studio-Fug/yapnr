@@ -77,6 +77,14 @@ class Pad:
     # offset lands, and every legacy graph). The detailed grid admits filled in-pad
     # vias (fab profile 5B) only in exact lands.
     land_corner: Optional[float] = None
+    # The pad's own copper clearance (mm) where the pad or its footprint overrides
+    # the net class (KiCad's local clearance: a fiducial's 0.6 mm, say), and its own
+    # solder mask margin where set above the library default (a fiducial's 0.5 mm
+    # aperture ring; pnr.ingest). Foreign copper keeps the larger of the two away
+    # (pnr.route.detail.grid.pad_keepaway). None: not set, the net class decides,
+    # and the graph JSON carries no key.
+    clearance_mm: Optional[float] = None
+    mask_margin_mm: Optional[float] = None
 
     def __post_init__(self):
         self.offset = _fpair(self.offset)
@@ -84,6 +92,10 @@ class Pad:
         self.drill_size = _fpair(self.drill_size)
         if self.land_corner is not None:
             self.land_corner = float(self.land_corner)
+        if self.clearance_mm is not None:
+            self.clearance_mm = float(self.clearance_mm)
+        if self.mask_margin_mm is not None:
+            self.mask_margin_mm = float(self.mask_margin_mm)
 
 
 @dataclass
@@ -224,6 +236,11 @@ class BoardGraph:
                 c.pop("hull", None)
             if c.get("body") is None:
                 c.pop("body", None)
+            for p in c.get("pads", ()):
+                # Pad-local rules only where a footprint sets them (pnr.ingest).
+                for key in ("clearance_mm", "mask_margin_mm"):
+                    if p.get(key) is None:
+                        p.pop(key, None)
         if d.get("stack") is None:
             d.pop("stack", None)
         return d
@@ -261,6 +278,8 @@ class BoardGraph:
                         plated=p.get("plated"),
                         plated_land_radius=float(p.get("plated_land_radius", 0.0)),
                         land_corner=p.get("land_corner"),
+                        clearance_mm=p.get("clearance_mm"),
+                        mask_margin_mm=p.get("mask_margin_mm"),
                     )
                     for p in c.get("pads", [])
                 ],

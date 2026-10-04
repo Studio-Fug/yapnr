@@ -75,6 +75,21 @@ def _square_segment_distance_sq(x0, y0, x1, y1, a, b) -> float:
     )
 
 
+def pad_keepaway(pad) -> Optional[float]:
+    """The clearance (mm) a pad asks of foreign copper by itself (graph ``Pad``):
+    its own clearance, or its solder mask margin plus 1 µm (foreign copper inside
+    the mask aperture is exposed beside the pad: KiCad's ``solder_mask_bridge``),
+    whichever is larger. None when the pad sets neither: its net's class decides."""
+    values = []
+    clearance = getattr(pad, "clearance_mm", None)
+    if clearance is not None:
+        values.append(float(clearance))
+    margin = getattr(pad, "mask_margin_mm", None)
+    if margin is not None:
+        values.append(float(margin) + 0.001)
+    return max(values) if values else None
+
+
 @dataclass(frozen=True)
 class Cell:
     """A grid node: layer index + column/row."""
@@ -129,6 +144,11 @@ class RouteGrid:
         # Access cell per (net, pad_key) recorded during build.
         self.access: Dict[Tuple[str, str], Cell] = {}
         self.pad_rectangles = []
+        # (layer, net, Rect) of ``pad_rectangles`` -> the clearance (mm) that pad
+        # asks of foreign copper when it sets its own (add_pad ``keepaway``: a local
+        # clearance or mask margin above the fab clearance); empty on boards whose
+        # footprints set none.
+        self.pad_keepaways: Dict[tuple, float] = {}
         self.escape_segments = []
         self.escape_vias = []
         self.net_widths = {}
@@ -542,7 +562,7 @@ class RouteGrid:
             for i in range(i0, i1 + 1):
                 setter(layer, i, j)
 
-    def add_pad(self, layer: int, net: str, r: Rect) -> None:
+    def add_pad(self, layer: int, net: str, r: Rect, keepaway: Optional[float] = None) -> None:
         """Record a pad with a **two-tier clearance halo** so the pad-dense layer
         stays routable by tracks:
 
@@ -557,9 +577,17 @@ class RouteGrid:
         Reserving the whole via-width around every pad (the old behaviour) walled off
         the top layer for tracks and pushed routing to the back; the track halo is the
         tighter reservation a track actually needs. The pad's centre is its access.
+
+        ``keepaway`` is the pad's own clearance (:func:`pad_keepaway`: its local
+        clearance or mask margin, mm): both halos then use the larger of it and
+        ``clearance``, and :attr:`pad_keepaways` keeps it for the exact checks.
         """
 
         self.pad_rectangles.append((layer, net, r))
+        clearance = self.clearance
+        if keepaway is not None:
+            clearance = max(clearance, float(keepaway))
+            self.pad_keepaways[(layer, net, r)] = clearance
 
         def reserve(table, mirror, la, i, j):
             key = (la, i, j)
@@ -572,13 +600,13 @@ class RouteGrid:
         self._mark_rect(
             layer,
             r,
-            self.clearance + self.via_radius,
+            clearance + self.via_radius,
             lambda la, i, j: reserve(self.via_halo, self.pad_via_halo, la, i, j),
         )
         self._mark_rect(
             layer,
             r,
-            self.clearance + 0.5 * self.track_width,
+            clearance + 0.5 * self.track_width,
             lambda la, i, j: reserve(self.pad_net, self.pad_track_halo, la, i, j),
         )
 
@@ -681,7 +709,11 @@ class RouteGrid:
                 return extent + max(own, clearance(owner)) + 0.5 * width - half
 
             for layer, owner, r in self.pad_rectangles[pads:]:
-                self._mark_rect(layer, r, grow(owner, 0.0), halo(owner))
+                extent = grow(owner, 0.0)
+                keep = self.pad_keepaways.get((layer, owner, r))
+                if keep is not None:  # the pad's own clearance (add_pad keepaway)
+                    extent = max(extent, keep + 0.5 * width - half)
+                self._mark_rect(layer, r, extent, halo(owner))
                 self._mark_rect(layer, r, 0.0, landing(owner))
             for layer, owner, a, b in self.escape_segments[segments:]:
                 stub = 0.5 * self.net_widths.get(owner, self.track_width)
@@ -815,6 +847,8 @@ class RouteGrid:
                     )
                     if pad.plated is True and net and pad.plated_land_radius > 0:
                         g.plated_ports.append((net, (r.cx, r.cy), pad.plated_land_radius))
+                # A pad's own clearance or mask margin (a fiducial's), None: unset.
+                keepaway = pad_keepaway(pad)
                 if not net:
                     # NC/mounting pads remain foreign copper on every actual pad
                     # layer. Preserve their exact rectangles and separate track/
@@ -823,12 +857,12 @@ class RouteGrid:
                     # and wrongly seals ordinary SOT-23 pin rows. No routable net
                     # has the empty name, and no access point is created here.
                     for la in pad_layers:
-                        g.add_pad(la, "", r)
+                        g.add_pad(la, "", r, keepaway)
                     if not pad.through_hole and r.w > 0 and r.h > 0:
                         g.smd_pads.append((side, "", r, land))
                     continue
                 for la in pad_layers:
-                    g.add_pad(la, net, r)
+                    g.add_pad(la, net, r, keepaway)
                 if not pad.through_hole and r.w > 0 and r.h > 0:
                     g.smd_pads.append((side, net, r, land))
                 # Access cell on the component's side (where a same-side track meets

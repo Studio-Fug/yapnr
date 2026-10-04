@@ -270,22 +270,26 @@ def _offgrid_escape(grid, net, center, pad_xy, side, part_center):
                     or getattr(grid, "fixed_owned", {}).get((side, i, j), net) != net
                 ):
                     return False
+        keepaways = getattr(grid, "pad_keepaways", None) or {}
         for layer, owner, r in grid.pad_rectangles:
             if layer != side or owner == net:
                 continue
+            grow = radius
+            keep = keepaways.get((layer, owner, r)) if keepaways else None
+            if keep is not None:  # the pad's own clearance or mask margin
+                grow = max(radius, grid.track_width / 2 + keep)
             if (
-                max(a[0], b[0]) + radius < r.left
-                or min(a[0], b[0]) - radius > r.right
-                or max(a[1], b[1]) + radius < r.bottom
-                or min(a[1], b[1]) - radius > r.top
+                max(a[0], b[0]) + grow < r.left
+                or min(a[0], b[0]) - grow > r.right
+                or max(a[1], b[1]) + grow < r.bottom
+                or min(a[1], b[1]) - grow > r.top
             ):
                 continue
             if any(r.left <= p[0] <= r.right and r.bottom <= p[1] <= r.top for p in (a, b)):
                 return False
             corners = [(r.left, r.bottom), (r.right, r.bottom), (r.right, r.top), (r.left, r.top)]
             if any(
-                _segment_distance_sq(a, b, corners[i], corners[(i + 1) % 4])
-                < radius * radius - 1e-10
+                _segment_distance_sq(a, b, corners[i], corners[(i + 1) % 4]) < grow * grow - 1e-10
                 for i in range(4)
             ):
                 return False

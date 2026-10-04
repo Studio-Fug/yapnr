@@ -383,6 +383,10 @@ def plan(
             exit_layers = (0,) + exit_layers
         if k < 0:
             via_layers = ()
+        elif cls.get("layers") is not None:
+            keep = {layers.index(n) for n in cls["layers"] if n in layers}
+            exit_layers = tuple(la for la in exit_layers if la in keep)
+            via_layers = tuple(la for la in via_layers if la in keep)
         task = Task(
             pad=name,
             net=land.net,

@@ -102,7 +102,7 @@ def parse(entry: Dict, known_refs: Sequence[str], index: int = 0) -> Dict:
         w = "%s.via_classes.%s" % (where, cname)
         if not isinstance(spec, dict):
             raise FanoutError(w + " must be a mapping")
-        bad = sorted(set(spec) - {"diameter_mm", "drill_mm", "nets", "sites"})
+        bad = sorted(set(spec) - {"diameter_mm", "drill_mm", "nets", "sites", "layers"})
         if bad:
             raise FanoutError("%s: unknown key(s) %s" % (w, ", ".join(bad)))
         diameter = _number(spec.get("diameter_mm"), w + ".diameter_mm", positive=True)
@@ -118,9 +118,12 @@ def parse(entry: Dict, known_refs: Sequence[str], index: int = 0) -> Dict:
             raise FanoutError(w + ": the default class takes every other net (no nets)")
         if cname != "default" and not nets:
             raise FanoutError(w + ": a class names its nets (or is called default)")
-        compiled.append(
-            dict(name=cname, diameter_mm=diameter, drill_mm=drill, nets=nets, sites=sites)
-        )
+        entry_ = dict(name=cname, diameter_mm=diameter, drill_mm=drill, nets=nets, sites=sites)
+        if spec.get("layers") is not None:
+            # The only copper layers this class's nets may use (a board rule that keeps
+            # a class on the outer layers, say).
+            entry_["layers"] = _strings(spec["layers"], w + ".layers")
+        compiled.append(entry_)
     rings = entry.get("surface_rings", 2)
     if isinstance(rings, bool) or not isinstance(rings, int) or rings < 0:
         raise FanoutError(where + ".surface_rings must be a whole number >= 0")
@@ -311,6 +314,13 @@ def check(spec: Dict, rules: Dict, layers: Sequence[str]) -> List[str]:
                 raise FanoutError(
                     "%s.escape_layers: %s is not a routing layer of the stack (%s)"
                     % (where, layer, ", ".join(layers))
+                )
+    for c in spec["via_classes"]:
+        for layer in c.get("layers") or []:
+            if layer not in layers:
+                raise FanoutError(
+                    "%s.via_classes.%s.layers: %s is not a routing layer"
+                    % (where, c["name"], layer)
                 )
     for ring, names in spec["ring_layers"].items():
         for layer in names:

@@ -337,6 +337,36 @@ class PlanTest(unittest.TestCase):
                     segment_polygon(tuple(a), tuple(b), pour), w / 2 + 0.1 - 1e-6
                 )
 
+    def test_a_class_keeps_its_nets_on_its_layers(self):
+        positions = array(7)
+        signals = {b for b in positions if ROWS.index(b[0]) in (2, 3)}
+        graph = board(positions, self.nets(positions, signals))
+        sp = spec(
+            via_classes={
+                "ground": {
+                    "diameter_mm": 0.35,
+                    "drill_mm": 0.15,
+                    "nets": ["GND"],
+                    "sites": ["interstitial"],
+                },
+                "outer": {
+                    "diameter_mm": 0.4,
+                    "drill_mm": 0.2,
+                    "nets": ["S_*"],
+                    "sites": ["vacant", "outside", "interstitial"],
+                    "layers": ["F.Cu", "B.Cu"],
+                },
+            }
+        )
+        sp = __import__("pnr.fanout", fromlist=["expand_nets"]).expand_nets(
+            sp, [n.name for n in graph.nets]
+        )
+        p = run(graph, sp)
+        self.assertEqual(p["diagnostics"]["signals_escaped"], p["diagnostics"]["signals"])
+        for net, layer, *_ in p["copper"]["tracks"]:
+            if net.startswith("S_"):
+                self.assertIn(layer, ("F.Cu", "B.Cu"))
+
     def test_failed_pad_has_a_reason(self):
         positions = array(5)
         signals = {"C3", "A1"}

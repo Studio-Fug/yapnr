@@ -484,7 +484,7 @@ fanout:
 | `name`            | Unique name (default: the ref); the report and `fanout-<name>.json` use it.                                                     |
 | `pads`            | Pad names or globs to fan out (default `*`, every netted ball).                                                                |
 | `skip_pads`       | Balls the fanout leaves alone. Their lands stay obstacles.                                                                     |
-| `via_classes`     | `name: {diameter_mm, drill_mm, nets, sites}`; `sites` from `interstitial` (a lattice cell centre), `vacant` (a lattice point without a ball), `outside` (beyond the array), `in_pad` (a filled via in the ball; needs the fab profile's in-pad class). Checked against the fab rules. |
+| `via_classes`     | `name: {diameter_mm, drill_mm, nets, sites}`; `sites` from `interstitial` (a lattice cell centre), `vacant` (a lattice point without a ball), `outside` (beyond the array), `in_pad` (a filled via in the ball; needs the fab profile's in-pad class); optional `layers`, the only copper layers the class's nets may use (a board rule that keeps LVDS on the outer layers, say). Checked against the fab rules. |
 | `surface_rings`   | Balls in rings below this may escape on the surface; deeper rings need a via (default 2).                                      |
 | `escape_layers`   | Routing layers a dog-bone may change to (default: every routing layer of the stack but the surface).                           |
 | `ring_layers`     | `{ring: [layers]}`: the only exit layers of that ring (the surface included by naming it).                                     |

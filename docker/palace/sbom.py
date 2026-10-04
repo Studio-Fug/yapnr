@@ -96,11 +96,15 @@ def package(name: str, version: str, location: str, license_id: str, **extra) ->
 
 
 def git_package(name: str, src: Path, license_id: str, comment: str = "") -> Dict:
-    remote = run(["git", "-C", str(src), "config", "--get", "remote.origin.url"])
+    try:
+        remote = run(["git", "-C", str(src), "config", "--get", "remote.origin.url"])
+    except subprocess.CalledProcessError:
+        remote = ""
     commit = run(["git", "-C", str(src), "rev-parse", "HEAD"])
     files = sorted(p.name for p in src.iterdir() if p.is_file() and LICENSE_FILE.match(p.name))
     extra = {"comment": (comment + " " if comment else "") + "licence files: " + ", ".join(files)}
-    return package(name, commit, "git+%s@%s" % (remote, commit), license_id, **extra)
+    location = "git+%s@%s" % (remote, commit) if remote else ""
+    return package(name, commit, location, license_id, **extra)
 
 
 def build_components() -> List[Dict]:

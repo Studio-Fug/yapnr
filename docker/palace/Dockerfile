@@ -94,7 +94,7 @@ RUN cmake --build /src/build --target superlu_dist mumps -- -j"${NJOBS}" \
 # Scotch's ParMETIS_V3_NodeND against the ParMETIS manual's description (conformance/README.md),
 # then the checks that nothing of ParMETIS was fetched, built or installed
 COPY conformance/ /src/conformance/
-COPY provenance.py /usr/local/bin/palace-provenance
+COPY --chmod=0755 provenance.py /usr/local/bin/palace-provenance
 RUN (sh /src/conformance/run.sh /opt/palace > /src/provenance/nodend-conformance.txt 2>&1 \
      || (cat /src/provenance/nodend-conformance.txt; exit 1)) \
  && cat /src/provenance/nodend-conformance.txt
@@ -121,7 +121,7 @@ RUN cmake --build /src/build --target palace -- -j"${PALACE_NJOBS}" \
  || cmake --build /src/build --target palace -- -j2
 # Before strip: the link map and the symbols of the executable say where every ParMETIS-named
 # function in it comes from (Scotch); then the components of the build for the SBOM
-COPY sbom.py /usr/local/bin/palace-sbom
+COPY --chmod=0755 sbom.py /usr/local/bin/palace-sbom
 RUN palace-provenance binary --map /src/provenance/palace.map \
       --binary "$(ls /opt/palace/bin/palace-*.bin)" --report /src/provenance/binary.txt \
  && palace-sbom build --out /src/provenance/sbom-build.json

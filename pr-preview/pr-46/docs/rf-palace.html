@@ -795,14 +795,22 @@ therefore writes the sheets per face (<code class="docutils literal notranslate"
 <code class="docutils literal notranslate"><span class="pre">palace-sweep.json</span></code> does). Without that, its conductor loss comes out about half.</p></li>
 </ul>
 </section>
-<section id="what-the-first-runs-showed">
-<h2>7. What the first runs showed<a class="headerlink" href="#what-the-first-runs-showed" title="Link to this heading">¶</a></h2>
-<p>The validation report (<code class="docutils literal notranslate"><span class="pre">palace/validation.md</span></code> in the project notes) has the numbers; for model
-builders:</p>
+<section id="what-the-validation-showed">
+<h2>7. What the validation showed<a class="headerlink" href="#what-the-validation-showed" title="Link to this heading">¶</a></h2>
+<p>The validation report (<code class="docutils literal notranslate"><span class="pre">palace/validation.md</span></code> in the project notes) has the numbers, all solver
+predictions; for model builders:</p>
 <ul class="simple">
 <li><p><strong>Copper model.</strong> The zero-thickness sheet that openEMS also uses makes the 4-mil 50-ohm lines
 about 53 ohm with an effective permittivity about 5 % high, against 35 µm copper (the 2D solver
-agrees). Sign off with <code class="docutils literal notranslate"><span class="pre">solid</span></code> copper; keep <code class="docutils literal notranslate"><span class="pre">sheet</span></code> for comparisons with openEMS.</p></li>
+agrees; Palace with solid copper matches the 2D solver within 0.3 % in εeff and 0.6 % in Z at
+1 GHz). On the radar60 TX1 feed the copper’s thickness moves the GND-sliver notch up by about
+2.4 %: Palace with solid copper and openEMS with the copper as 35 µm PEC agree on that shift.
+Sign off with <code class="docutils literal notranslate"><span class="pre">solid</span></code> copper; keep <code class="docutils literal notranslate"><span class="pre">sheet</span></code> for comparisons with openEMS’s lossy sheet.</p></li>
+<li><p><strong>The ground is lossy too.</strong> The L2 ground carries about a quarter of the lines’ conductor loss
+(the 2D solver: 0.011 of 0.043 dB/mm at 62 GHz; openEMS: +0.007 dB/mm); on the radar60 TX1
+feed a PEC floor understates the dissipation by about 0.18 dB over 14 mm. Use the <code class="docutils literal notranslate"><span class="pre">metal</span></code> floor
+(the default of the line, feed and KiCad adapters). A zero-thickness sheet has no
+mesh-converged loss (its edge current is singular), so validate loss on solid copper.</p></li>
 <li><p><strong>Port faces.</strong> A wave port’s face must not hold a floating conductor: in its 2D mode solve the
 face’s edges are PEC, so a coplanar ground strip that does not reach one floats and the port
 picks another mode (tx12’s TX1.P0 gave Z_PV 24 ohm). <code class="docutils literal notranslate"><span class="pre">port_geometry</span></code> therefore ends a side
@@ -811,12 +819,107 @@ that has coplanar ground inside it.</p></li>
 onto the port plane by Palace; Z_PV comes out as expected.</p></li>
 <li><p><strong>Memory.</strong> About 12 kB per unknown at order 2 for a driven sweep with the reduced model, 8-10
 kB for a single solve: 1.7 M unknowns took 20-23 GB, 2.6 M ran a 32 GB VM out of memory.</p></li>
-<li><p><strong>Absorbing order.</strong> The walls are first-order absorbing (Palace has no PML). On the single
-patch, walls 0.5 λ0 instead of 0.3 λ0 away, or second-order walls, moved the |S11| dip by at
-most 0.06 GHz (0.1 %).</p></li>
-<li><p><strong>Agreement with openEMS.</strong> The TX1 sliver notch agrees within 0.2 %; the line εeff and the
-patch dip agree once openEMS’s fill-size trend is extrapolated (openEMS at 20 µm is still 3 %
-high in εeff and 1.2 % low in the patch dip).</p></li>
+<li><p><strong>Absorbing walls.</strong> First- and second-order only (no PML); see section 10 before modelling
+anything that radiates at oblique angles.</p></li>
+<li><p><strong>openEMS’s mesh.</strong> Refine z with x and y: 8 cells across the 4-mil core instead of 4 leave
+the lines’ εeff unchanged but move their impedance by 2 %, their loss by 10 % and small
+reflections by 2 dB. At 20 µm fill openEMS’s εeff is still about 3 % above Palace’s.</p></li>
+<li><p><strong>Agreement with openEMS.</strong> The TX1 sliver notch (sheet copper) agrees within 0.3 % over both
+solvers’ meshes; the line εeff and the patch’s |S11| dip agree once openEMS’s fill-size trend
+is taken into account (the patch dip is 1.2 % apart at openEMS’s finest mesh: an explained
+difference, not a pass).</p></li>
+</ul>
+</section>
+<section id="reading-the-results">
+<h2>8. Reading the results<a class="headerlink" href="#reading-the-results" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr.rf.palace.results</span></code> reads what a task leaves in the fetch store
+(<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">fetch</span> <span class="pre">&lt;cid&gt;</span></code>, then <code class="docutils literal notranslate"><span class="pre">&lt;store&gt;/fetched/&lt;cid&gt;/tasks/mc~&lt;id&gt;/summary/&lt;id&gt;/</span></code>):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">yapnr.rf.palace</span><span class="w"> </span><span class="kn">import</span> <span class="n">results</span>
+
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">post</span> <span class="ow">in</span> <span class="n">results</span><span class="o">.</span><span class="n">stage_dirs</span><span class="p">(</span><span class="n">task_dir</span><span class="p">):</span>      <span class="c1"># stage-1-palace-uniform, ..., main</span>
+    <span class="n">f</span><span class="p">,</span> <span class="n">S</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">port_s</span><span class="p">(</span><span class="n">post</span> <span class="o">+</span> <span class="s2">&quot;/port-S.csv&quot;</span><span class="p">)</span>      <span class="c1"># {(i, j): complex S}, modal (own Z_PV)</span>
+    <span class="n">f</span><span class="p">,</span> <span class="n">Z</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">port_z</span><span class="p">(</span><span class="n">post</span> <span class="o">+</span> <span class="s2">&quot;/port-Z.csv&quot;</span><span class="p">)</span>      <span class="c1"># {port: Z_PV}</span>
+    <span class="n">S50</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">to_50</span><span class="p">(</span><span class="n">S</span><span class="p">,</span> <span class="n">Z</span><span class="p">,</span> <span class="n">excite</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>              <span class="c1"># openEMS&#39;s 50-ohm port waves</span>
+    <span class="n">fn</span><span class="p">,</span> <span class="n">depth</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">notch</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">20</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">S50</span><span class="p">[(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)])),</span> <span class="mi">55</span><span class="p">,</span> <span class="mi">66</span><span class="p">)</span>
+<span class="n">cmp</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">compare</span><span class="p">((</span><span class="n">f</span><span class="p">,</span> <span class="n">S50</span><span class="p">[(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]),</span> <span class="p">(</span><span class="n">f_oems</span><span class="p">,</span> <span class="n">s21_oems</span><span class="p">),</span> <span class="p">[</span><span class="mf">60.3</span><span class="p">,</span> <span class="mf">62.05</span><span class="p">,</span> <span class="mf">63.8</span><span class="p">],</span> <span class="n">feature</span><span class="o">=</span><span class="p">(</span><span class="mi">55</span><span class="p">,</span> <span class="mi">66</span><span class="p">))</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">to_50</span></code> turns Palace’s modal S (each port matched to its own mode, power waves) into openEMS’s
+convention (50-ohm voltage waves, the lines terminated in their own impedance), so the two
+solvers’ columns compare directly.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eeff_loss(f,</span> <span class="pre">s21_short,</span> <span class="pre">s21_long,</span> <span class="pre">dl)</span></code>: εeff and loss per mm from two lines <code class="docutils literal notranslate"><span class="pre">dl</span></code> apart (the
+ports’ ends cancel); <code class="docutils literal notranslate"><span class="pre">mode_results(post)</span></code>: εeff, loss per mm and Z_PV of a BoundaryMode solve.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">notch</span></code>, <code class="docutils literal notranslate"><span class="pre">dip</span></code>, <code class="docutils literal notranslate"><span class="pre">re_peak</span></code>, <code class="docutils literal notranslate"><span class="pre">band_below</span></code>: feature frequencies (parabolic refinement);
+<code class="docutils literal notranslate"><span class="pre">deembed_lumped</span></code>: a lumped port’s S11 moved along the lead (Z0 and γ from mode solves).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">compare</span></code>: |S21| and phase differences at chosen frequencies and the notch frequencies of both;
+<code class="docutils literal notranslate"><span class="pre">ok</span></code> is |Δ|S21|| ≤ 0.5 dB and the notches within 1 %. Phase is reported, not judged: an
+absolute phase over a long feed carries both solvers’ dispersion error (see section 7).</p></li>
+</ul>
+</section>
+<section id="a-sign-off-run-step-by-step">
+<h2>9. A sign-off run, step by step<a class="headerlink" href="#a-sign-off-run-step-by-step" title="Link to this heading">¶</a></h2>
+<ol class="arabic">
+<li><p><strong>The planar document.</strong> A region of the zone-filled board, with the solid copper, the lossy
+L2 floor, the pads, and the solder mask where the board has it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">yapnr.rf.planar</span><span class="w"> </span><span class="kn">import</span> <span class="n">adapters</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">stackups</span>
+
+<span class="n">diel</span><span class="p">,</span> <span class="n">layers</span> <span class="o">=</span> <span class="n">stackups</span><span class="o">.</span><span class="n">radar60</span><span class="p">(</span><span class="s2">&quot;feed&quot;</span><span class="p">,</span> <span class="n">l1_model</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">)</span>
+<span class="n">mask</span> <span class="o">=</span> <span class="n">stackups</span><span class="o">.</span><span class="n">solder_mask</span><span class="p">(</span><span class="n">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">outline</span><span class="o">=</span><span class="n">MASK_RING</span><span class="p">)</span>   <span class="c1"># the launch runs under mask</span>
+<span class="n">doc</span> <span class="o">=</span> <span class="n">adapters</span><span class="o">.</span><span class="n">from_kicad</span><span class="p">(</span><span class="n">BOARD</span><span class="p">,</span> <span class="p">[</span><span class="n">x0</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">y0</span><span class="p">,</span> <span class="n">y1</span><span class="p">],</span> <span class="p">{</span><span class="s2">&quot;F.Cu&quot;</span><span class="p">:</span> <span class="s2">&quot;L1&quot;</span><span class="p">},</span> <span class="p">(</span><span class="n">diel</span> <span class="o">+</span> <span class="p">[</span><span class="n">mask</span><span class="p">],</span> <span class="n">layers</span><span class="p">),</span>
+                          <span class="n">frame</span><span class="o">=</span><span class="p">(</span><span class="n">kx0</span><span class="p">,</span> <span class="n">ky0</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span> <span class="n">nets</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;GND&quot;</span><span class="p">,</span> <span class="s2">&quot;RF_TX1&quot;</span><span class="p">])</span>
+<span class="n">doc</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;launch-tx1&quot;</span>
+<span class="n">doc</span><span class="p">[</span><span class="s2">&quot;ports&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="nb">dict</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;TX1.P0&quot;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;wave&quot;</span><span class="p">,</span> <span class="n">net</span><span class="o">=</span><span class="s2">&quot;RF_TX1&quot;</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s2">&quot;L1&quot;</span><span class="p">,</span> <span class="n">ref</span><span class="o">=</span><span class="s2">&quot;zmin&quot;</span><span class="p">,</span>
+                     <span class="n">at</span><span class="o">=</span><span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">],</span> <span class="nb">dir</span><span class="o">=</span><span class="s2">&quot;+x&quot;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">z0</span><span class="o">=</span><span class="mf">50.0</span><span class="p">,</span> <span class="n">excite</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="o">...</span><span class="p">]</span>
+<span class="n">model</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Check <code class="docutils literal notranslate"><span class="pre">provenance.pads_skipped</span></code> and <code class="docutils literal notranslate"><span class="pre">cleaning_xor_mm2</span></code>. A wave-port face must end inside
+coplanar ground (<code class="docutils literal notranslate"><span class="pre">port_geometry</span></code> does this; look at <code class="docutils literal notranslate"><span class="pre">mesh.json</span></code>’s <code class="docutils literal notranslate"><span class="pre">ports</span></code>). Put the walls off
+the vias (<code class="docutils literal notranslate"><span class="pre">adapters.fit_box</span></code>).</p>
+</li>
+<li><p><strong>Mesh and configurations:</strong> <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.palace</span> <span class="pre">case</span> <span class="pre">launch-tx1.json</span> <span class="pre">--out</span> <span class="pre">models/launch-tx1</span> <span class="pre">--band</span> <span class="pre">54</span> <span class="pre">70</span> <span class="pre">0.025</span> <span class="pre">--excite</span> <span class="pre">TX1.P0</span> <span class="pre">--amr-freqs</span> <span class="pre">60.3</span> <span class="pre">62.05</span> <span class="pre">63.8</span> <span class="pre">--orders</span> <span class="pre">3</span></code> (the sign-off settings of section 5; <code class="docutils literal notranslate"><span class="pre">mesh.json</span></code> estimates the unknowns).</p></li>
+<li><p><strong>The campaign:</strong> one job per model, <code class="docutils literal notranslate"><span class="pre">stages</span> <span class="pre">=</span> <span class="pre">[palace-uniform,</span> <span class="pre">palace-amr]</span></code>, <code class="docutils literal notranslate"><span class="pre">mesh_from</span></code> the
+refinement, <code class="docutils literal notranslate"><span class="pre">config</span> <span class="pre">=</span> <span class="pre">palace-sweep</span></code>; <code class="docutils literal notranslate"><span class="pre">memory_gb</span></code> from section 10. <code class="docutils literal notranslate"><span class="pre">palace_plan.py</span> <span class="pre">plan</span></code>, then
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">plan</span> <span class="pre">/</span> <span class="pre">submit</span> <span class="pre">/</span> <span class="pre">status</span> <span class="pre">/</span> <span class="pre">fetch</span></code>.</p></li>
+<li><p><strong>The comparison:</strong> both solvers at their converged settings (openEMS at 20 µm fill or finer
+with 8 cells across the 4-mil core; Palace’s refined mesh against its initial one, and order
+3), <code class="docutils literal notranslate"><span class="pre">results.compare</span></code> on the quantities that decide the sign-off. Frequencies of resonances
+and notches agree within 1 % and transmission within 0.5 dB, or the difference is explained
+(one solver still moving with its mesh, a model difference such as zero-thickness copper).
+Report the material range too: the RO4835 Dk range of the stackup (3.33–3.66) moves resonances
+by more than the solvers differ.</p></li>
+</ol>
+</section>
+<section id="sizes-memory-and-the-bank">
+<h2>10. Sizes, memory and the bank<a class="headerlink" href="#sizes-memory-and-the-bank" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Memory:</strong> about 12 kB per unknown at order 2 for a sweep with the reduced model, 8–10 kB for
+a single solve, about 8 kB at order 3. Palace counted 0–8 % more unknowns than <code class="docutils literal notranslate"><span class="pre">mesh.json</span></code>’s
+<code class="docutils literal notranslate"><span class="pre">dofs_estimate</span></code> on the validation models; one refinement step (<code class="docutils literal notranslate"><span class="pre">UpdateFraction</span></code> 0.7) added 4–6 %
+on the feed and patch models.</p></li>
+<li><p><strong>Shapes</strong> (Spot, us-west4, October 2026): <code class="docutils literal notranslate"><span class="pre">c4d-standard-16</span></code> 62 GB (up to about 4 M unknowns),
+<code class="docutils literal notranslate"><span class="pre">c4d-highmem-16</span></code> 126 GB (8 M; no template, an instance policy), <code class="docutils literal notranslate"><span class="pre">c4d-highmem-32</span></code> 252 GB
+(16 M), <code class="docutils literal notranslate"><span class="pre">c4d-highmem-48</span></code> 378 GB (25 M), <code class="docutils literal notranslate"><span class="pre">c4d-highmem-64</span></code> 504 GB (35 M) at $0.21, 0.43, 0.64
+and 0.85 an hour. Give such a job <code class="docutils literal notranslate"><span class="pre">ranks</span></code> = the shape’s cores (16 ranks on a 32-vCPU shape) and
+<code class="docutils literal notranslate"><span class="pre">memory_gb</span></code>; the plan places it (section 6).</p></li>
+<li><p><strong>Quota:</strong> the project’s Spot quota is 64 vCPUs per region, shared by every track; a 64-vCPU
+model needs a whole region to itself and waits until it is free. On-demand VMs are off in the
+owner configuration.</p></li>
+<li><p><strong>No checkpoint:</strong> a preempted Palace task starts again; refinement cannot resume. Keep a Spot
+task under one to two hours.</p></li>
+<li><p><strong>The bank</strong> (15–30 M unknowns at order 2 with finite board and radome, 180–360 GB): one
+<code class="docutils literal notranslate"><span class="pre">c4d-highmem-48/64</span></code> and a whole region’s quota for one to two hours a sweep, a
+preemption-sized risk. Measure the rank scaling (4/8/16 ranks on a feed model) first, then
+prefer smaller models that answer the same questions: a column with its divider (3–5 M), pairs
+of columns for coupling, the radome on a single column; the full bank once, at the end.</p></li>
+<li><p><strong>Absorbing walls:</strong> Palace has first- and second-order absorbing boundaries, no PML. A
+first-order wall reflects (1 − cos θ)/(1 + cos θ) of a plane wave at incidence θ: −15 dB at
+45°, −9.5 dB at 60° [closed form]. The single-patch box check (0.3 against 0.5 λ0, first against
+second order) moved its broadside |S11| dip by at most 0.06 GHz but its depth by 6–7 dB. For
+arrays and anything scanned or with a radome: walls at least λ0 from radiating copper and from
+the radome, second order, and a box study (two wall distances) on coupling, active S11 and the
+pattern before trusting them.</p></li>
 </ul>
 </section>
 </section>
@@ -884,7 +987,10 @@ high in εeff and 1.2 % low in the patch dip).</p></li>
 <li><a class="reference internal" href="#the-configurations">4. The configurations</a></li>
 <li><a class="reference internal" href="#sign-off-settings-and-validation-models">5. Sign-off settings and validation models</a></li>
 <li><a class="reference internal" href="#running-on-google-cloud">6. Running on Google Cloud</a></li>
-<li><a class="reference internal" href="#what-the-first-runs-showed">7. What the first runs showed</a></li>
+<li><a class="reference internal" href="#what-the-validation-showed">7. What the validation showed</a></li>
+<li><a class="reference internal" href="#reading-the-results">8. Reading the results</a></li>
+<li><a class="reference internal" href="#a-sign-off-run-step-by-step">9. A sign-off run, step by step</a></li>
+<li><a class="reference internal" href="#sizes-memory-and-the-bank">10. Sizes, memory and the bank</a></li>
 </ul>
 </li>
 </ul>

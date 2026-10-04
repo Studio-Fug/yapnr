@@ -29,6 +29,7 @@ KEYS = {
     "ring_layers",
     "neck_mm",
     "neck_classes",
+    "drop_nets",
     "lock",
     "bottom_sites",
     "variant",
@@ -232,6 +233,10 @@ def parse(entry: Dict, known_refs: Sequence[str], index: int = 0) -> Dict:
     )
     if neck_classes:  # only when declared: an entry without it keeps its bytes
         out["neck_classes"] = sorted(set(neck_classes))
+    # Routed nets (names or globs) whose balls drop a via instead of escaping.
+    drop_nets = _strings(entry.get("drop_nets"), where + ".drop_nets")
+    if drop_nets:
+        out["drop_nets"] = drop_nets
     return out
 
 
@@ -259,7 +264,16 @@ def expand_nets(spec: Dict, net_names: Sequence[str]) -> Dict:
         nets = sorted({n for n in net_names for p in c["nets"] if fnmatch.fnmatchcase(n, p)})
         classes.append(dict(c, nets=nets))
     out["via_classes"] = classes
+    if spec.get("drop_nets"):
+        out["drop_nets"] = sorted(
+            {n for n in net_names for p in spec["drop_nets"] if fnmatch.fnmatchcase(n, p)}
+        )
     return out
+
+
+def drops(spec: Dict, net: str) -> bool:
+    """``net`` is one of the entry's ``drop_nets`` (its balls drop a via)."""
+    return any(fnmatch.fnmatchcase(net, p) for p in spec.get("drop_nets") or ())
 
 
 def covers(spec: Dict, pad: str) -> bool:

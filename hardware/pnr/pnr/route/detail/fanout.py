@@ -305,7 +305,16 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             continue
         tail = []
         tail_width = row["width_mm"]
-        if row["kind"] == "drop" or (row["kind"] == "via_in_pad" and "exit" not in row):
+        if (row["kind"] == "drop" or (row["kind"] == "via_in_pad" and "exit" not in row)) and (
+            net in signal_nets
+        ):
+            # A drop net's ball (fanout drop_nets): its via is the net's terminal,
+            # reached on the layer opposite the part (decoupling under the array).
+            far = grid.nlayers - 1 if side == 0 else 0
+            access = Cell(far, *grid.cell_of(*via))
+            out.access.setdefault(net, []).append(access)
+            out.protected[(access.layer, access.i, access.j)] = net
+        elif row["kind"] == "drop" or (row["kind"] == "via_in_pad" and "exit" not in row):
             access = Cell(side, *grid.cell_of(*pad_xy))
         else:
             layer = layer_index[row["layer"]]

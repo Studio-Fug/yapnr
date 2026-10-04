@@ -91,7 +91,7 @@ def board(n=6):
     return g
 
 
-def setup(fanout=True):
+def setup(fanout=True, **extra):
     g = board()
     doc = {
         "schema": "v0",
@@ -117,6 +117,7 @@ def setup(fanout=True):
                         "sites": ["vacant", "outside", "interstitial"],
                     },
                 },
+                **extra,
             }
         ]
     c = compile_constraints(doc, g.refs)
@@ -269,6 +270,21 @@ class FanoutRouteTest(unittest.TestCase):
         self.assertTrue(_clear_of_pads(pad, "S", 0, (5.0, 5.0), (7.0, 5.0), 0.1, 0.1))
         classes = {"PWR": 0.15}
         self.assertFalse(_clear_of_pads(pad, "S", 0, (5.0, 5.0), (7.0, 5.0), 0.1, 0.1, classes))
+
+
+class DropNetRouteTest(unittest.TestCase):
+    def test_a_drop_nets_ball_is_routed_from_its_via(self):
+        # fanout drop_nets: the corner signal S_A1 drops a via beside its ball and
+        # the maze routes the net on from the via on the far layer (B.Cu).
+        g, c, rules = setup(drop_nets=["S_A1"])
+        self.assertEqual(rules["fanouts"][0]["drop_nets"], ["S_A1"])
+        r = route_board(g, c, rules, pitch=0.25, max_iters=6)
+        self.assertNotIn("S_A1", r.result.unrouted)
+        report = r.escape_diagnostics["fanout"]["U1"]
+        self.assertEqual(report["no_access"], [])
+        vias = [v for v in r.vias if v[0] == "S_A1"]
+        self.assertTrue(vias)
+        self.assertTrue(any(t[0] == "S_A1" and t[1] == "B.Cu" for t in r.tracks))
 
 
 if __name__ == "__main__":

@@ -527,6 +527,49 @@ class PlanTest(unittest.TestCase):
         clear = m.segment_blockers(1, (-0.65, -0.01), (0.65, -0.01), 0.1)
         self.assertEqual(clear, frozenset())
 
+    def test_drop_nets_take_a_via_instead_of_an_exit(self):
+        # A supply decoupled under the array (or fed from an inner layer) needs only
+        # a via beside each ball, even with every edge closed; no neck applies.
+        from pnr.pad_entry import terminal_required_width
+
+        positions = array(5)
+        nets = {n: "GND" for n in positions}
+        nets.update(A2="S_PA", B2="S_PA", C3="S_X")
+        graph = board(positions, nets)
+        edges = ["north", "south", "east", "west"]
+        classes = dict(
+            ground=dict(diameter_mm=0.35, drill_mm=0.15, nets=["GND"], sites=["interstitial"]),
+            supply=dict(diameter_mm=0.35, drill_mm=0.15, nets=["S_P*"], sites=["interstitial"]),
+            default=dict(diameter_mm=0.4, drill_mm=0.2, sites=["vacant", "outside"]),
+        )
+        sp = spec(drop_nets=["S_P*"], forbidden_exits=edges, neck_mm=0.1, via_classes=classes)
+        self.assertEqual(sp["drop_nets"], ["S_P*"])
+        sp = __import__("pnr.fanout", fromlist=["expand_nets"]).expand_nets(
+            sp, [n.name for n in graph.nets]
+        )
+        self.assertEqual(sp["drop_nets"], ["S_PA"])
+        r = rules()
+        r["fab"]["track_width_mm"] = 0.15
+        p = plan(
+            graph,
+            r,
+            sp,
+            grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+            plane_nets={"GND"},
+            signal_nets={"S_PA", "S_X"},
+        )
+        t = p["terminals"]
+        for name in ("A2", "B2"):
+            self.assertEqual(t[name]["kind"], "drop")
+            self.assertEqual(t[name]["width_mm"], 0.15)
+            self.assertNotIn("exit", t[name])
+        self.assertEqual(t["C3"]["kind"], "failed")  # a signal still needs an exit
+        self.assertNotIn("A2", p["diagnostics"].get("necks", {}))
+        rr = dict(r, fanouts=[sp])
+        self.assertEqual(terminal_required_width("U1", "A2", "S_PA", rr), 0.15)
+        self.assertEqual(terminal_required_width("U1", "C3", "S_X", rr), 0.1)
+        self.assertEqual(violations(p, graph), [])
+
     def test_failed_pad_has_a_reason(self):
         positions = array(5)
         signals = {"C3", "A1"}

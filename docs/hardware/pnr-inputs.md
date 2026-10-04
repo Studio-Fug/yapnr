@@ -599,6 +599,7 @@ fanout:
       - { rect: [-5.4, -0.2, -4.4, 0.2], layers: [F.Cu] }
     neck_mm: 0.10 # signal tracks inside the fanout (default: the net's width)
     neck_classes: [QSPI] # classes whose own minimum width the neck may go below
+    drop_nets: [1V0_PA, "VDD*"] # routed nets whose balls take a via instead of an exit
     lock: true # write the fanout copper locked (default)
 ```
 
@@ -616,6 +617,7 @@ fanout:
 | `reserved`        | `{rect or polygon, layers, frame}` areas no fanout copper enters (`frame`: `part`, the default, or `board`).                    |
 | `neck_mm`         | The signal track width inside the fanout; the router continues at the net's own width from the exit. It narrows a signal below the fab's default track width, never below a minimum the net has of its own (a class `width_mm`, a width from `current_a`, an electrical outer width or terminal budget) unless `neck_classes` names one of its classes, never below a terminal width contract, and never widens; `fanout.check` refuses a value under `min_track_width_mm`. The validator takes each declared neck as an authorized short escape: the pad's required entry width is the neck's (`pnr.pad_entry.fanout_neck`), and the plan lists them (`diagnostics.necks`). |
 | `neck_classes`    | Net classes (or `dp_<pair>`) whose own minimum width `neck_mm` may go below (needs `neck_mm`; an unknown name is a warning). |
+| `drop_nets`       | Routed (non-plane) nets, names or globs, whose balls drop a via of their class beside the ball, as a plane ball does, instead of escaping across the array edge (no exit, no neck): a supply decoupled under the array or fed from another layer. The router takes each via as the net's terminal on the layer opposite the part and routes on from it. |
 | `lock`            | Write the fanout copper locked (default `true`), so later passes leave it alone.                                               |
 | `bottom_sites`    | `{parts, max_stub_mm, zone, rotations}`: decoupling sites under the array on the bottom side (below).                         |
 | `variant`         | A seeded permutation of the planner's tie-breaks (default 0, none).                                                            |

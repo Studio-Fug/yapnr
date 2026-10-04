@@ -399,7 +399,9 @@ def plan(
         if land.net in plane_nets:
             kind = "drop"
         elif land.net in signal_nets:
-            kind = "signal"
+            # A drop net (``drop_nets``) takes a via beside the ball, as a plane ball
+            # does, instead of an exit: the router continues from the via.
+            kind = "drop" if _matches(land.net, spec.get("drop_nets") or ()) else "signal"
         else:
             skipped[name] = "net not routed by the grid (single pad, deferred or held out)"
             continue
@@ -474,8 +476,12 @@ def plan(
         )
         if k < 0 and (kind == "drop" or 0 not in exit_layers):
             task.failed = "no via class for net %s" % land.net
-        if kind == "drop" and model.joined(
-            Land(land.centre, land.size[0] / 2, land.size[1] / 2, land.corner or 0.0, land.net)
+        if (
+            kind == "drop"
+            and land.net in plane_nets
+            and model.joined(
+                Land(land.centre, land.size[0] / 2, land.size[1] / 2, land.corner or 0.0, land.net)
+            )
         ):
             joined[name] = land.net  # its fixed copper is its connection: no drop
             continue

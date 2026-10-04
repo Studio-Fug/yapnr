@@ -74,20 +74,21 @@ def fanout_neck(ref, number, net, rules, required=None, spec=None):
     """The width of a declared fanout neck at pad ``number`` of ``ref`` (mm), or None.
 
     A ``fanout`` entry's ``neck_mm`` narrows the escape of each signal ball it covers
-    (its ``pads``, not its ``skip_pads``; never a net of a ``plane_layer`` class)
-    below the fab's default track width, never below a minimum the net has of its
-    own: its class width, electrical outer width or terminal current budget, unless
-    one of its classes is named in the entry's ``neck_classes`` (authorized), and
-    never below a terminal width contract. A neck never widens: None when the
+    (its ``pads``, not its ``skip_pads``; never a net of a ``plane_layer`` class nor
+    one of its ``drop_nets``, which drop a via at full width) below the fab's default
+    track width, never below a minimum the net has of its own (its class width,
+    electrical outer width or terminal current budget) unless one of its classes is
+    named in the entry's ``neck_classes`` (authorized), and never below a terminal
+    width contract. A neck never widens: None when the
     result is not narrower than ``required`` (default: the width without a neck).
     ``spec`` is the entry (default: ``rules["fanouts"]``'s entry for ``ref``)."""
     if spec is None:
         spec = next((f for f in rules.get("fanouts") or () if f.get("ref") == ref), None)
     if spec is None or spec.get("neck_mm") is None or spec.get("ref") != ref:
         return None
-    from pnr.fanout.spec import covers
+    from pnr.fanout.spec import covers, drops
 
-    if not covers(spec, number):
+    if not covers(spec, number) or drops(spec, net):
         return None
     classes = [c for c in rules.get("net_classes", []) if net in c.get("nets", [])]
     if any(c.get("plane_layer") for c in classes):

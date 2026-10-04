@@ -1,0 +1,652 @@
+"""RF-uniformity checks of the macro (G1-G6), shared with the board audit.
+
+Each check appends a record to `Macro.checks` with `ok`; any `ok: false` makes `rfmacro build`
+exit non-zero.
+
+- G1 entry and band: every feed (and dummy run-in) reaches its cut-out only through its own
+  entry, straight and perpendicular, with a 0.600 mm contact (line plus both gaps); before Pg
+  its flat-cap corridor of half-width fence_offset (the via locus and the gap edge) keeps
+  guard_band from every cut-out; inside the cut-outs grown by guard_band the only vias are run-in
+  pairs and ring sites.
+- G2 congruence: every active column's window (column frame, mirrored for TX: x within
+  ±1.4 d of the cell centre, y from Pg to the cut-out top + 1.0 mm) has the same L1 copper and L1
+  GND (XOR <= 1e-3 mm² at a 10 µm raster), the same L2 windows and the same vias (1 µm) as RX1's.
+- G3 unstitched GND: every L1 GND point of the RF region outside the package lies within
+  stitch_reach (geodesic, through GND) of a GND via; pieces that are not are listed.
+- G4 fence continuity: on each feed side, from the fence start to Pg, every row point has a via
+  within fence_pitch / 2 + 0.025 (a gap of at most 0.50 mm on the row); run-in pairs present.
+- G5 via accounting: no lattice or row via was lost (conflicts), merges only within 0.10 mm,
+  dropped optional vias counted by reason, measured row pitches <= the declared ones.
+- G6 fits and D12: the equalizers come from the fit search (no fixed room); the other D12
+  variants give the same layout outside the cut-outs (hash).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+from typing import Dict, List, Optional, Tuple
+
+from .geom import Path, PointIndex, path_samples, rect_dist
+from .params import D_LATTICE, STACK
+from .raster import Grid
+
+Pt = Tuple[float, float]
+H_RASTER = 0.01
+REACH_TOL = 0.01  # raster reach is exact to within [0.452, 0.459] mm for 0.46 mm in 3 steps
+
+
+def _pts(path: Path, step: float = 0.01) -> List[Pt]:
+    out = []
+    for sg in path.segs:
+        sm = sg.sample(step)
+        out += [q for q, _ in (sm if not out else sm[1:])]
+    return out
+
+
+def _seg_runs(path: Path, step: float = 0.01) -> List[Tuple[List[Pt], float]]:
+    """Per segment: sampled centreline and half-width (the 35 ohm section differs)."""
+    return [([q for q, _ in sg.sample(step)], sg.width / 2) for sg in path.segs]
+
+
+# ---- G3: stitch reach ----------------------------------------------------------------------
+
+
+def gnd_mask(mc, ru, g: Grid, frame=None):
+    """L1 GND of the macro as the fill would make it: pour minus cut-outs, channels, anti-pads,
+    load channels, unstitched keepouts and the package body. `frame(pt)` maps U1 -> raster."""
+    tf = frame or (lambda q: q)
+    m = g.empty()
+    for poly in mc.pour[:2]:
+        g.polygon(m, [tf(q) for q in poly])
+    cut = g.empty()
+    for c in mc.cutouts.values():
+        g.polygon(cut, [tf(q) for q in ((c[0], c[1]), (c[2], c[1]), (c[2], c[3]), (c[0], c[3]))])
+    for poly in list(mc.antipads) + list(mc.unstitched) + list(mc.load_channels):
+        g.polygon(cut, [tf(q) for q in poly])
+    for path in list(mc.feeds.values()) + list(mc.runins.values()):
+        g.capsules(cut, [tf(q) for q in _pts(path)], ru.lchan)
+    h = ru.half
+    g.polygon(cut, [tf(q) for q in ((-h, -h), (h, -h), (h, h), (-h, h))])
+    return g.andnot(m, cut)
+
+
+def stitch_raster(mc, ru) -> Dict[str, object]:
+    x0, x1 = mc.region["x"]
+    y0, y1 = mc.region["y"]
+    g = Grid(x0, y0, x1, y1, H_RASTER)
+    gnd = gnd_mask(mc, ru, g)
+    seeds = g.empty()
+    g.points(seeds, [v[0] for v in mc.vias])
+    reach = float(mc.params["stitch_reach"]) + REACH_TOL
+    got = g.geodesic_reach(seeds, gnd, reach, 3)
+    bad = g.andnot(gnd, got)
+    pieces = []
+    for comp in g.components(bad):
+        if len(comp) < 4:  # under 4e-4 mm²: raster noise on a corner
+            continue
+        dsc = g.describe(comp)
+        cx, cy = dsc["at"]
+        i, j = min(comp, key=lambda t: (g.xc(t[0]) - cx) ** 2 + (g.yc(t[1]) - cy) ** 2)
+        dsc["near"] = [g.xc(i), g.yc(j)]
+        pieces.append(dsc)
+    pieces.sort(key=lambda t: -t["area_mm2"])
+    return dict(
+        gnd_area_mm2=round(g.area(gnd), 3), reached_mm2=round(g.area(got), 3), pieces=pieces
+    )
+
+
+# ---- G2: congruence -----------------------------------------------------------------------
+
+
+def column_frame(col) -> Tuple:
+    ox, oy = col.origin
+    m = -1.0 if col.mirror else 1.0
+    return (lambda q: ((q[0] - ox) * m, q[1] - oy)), m
+
+
+def window_bounds(ru) -> Tuple[float, float, float, float]:
+    """Congruence window in the column frame (input on +x): from just inside the fence of the
+    input two columns back (-1.5 d + fence_offset + pad radius) to just short of the L2 window of
+    the patch two columns on (2 d - W/2 - window_margin), about ±1.4 d round the cell; y from Pg
+    to the cut-out top + 1.0 mm."""
+    d = D_LATTICE
+    x0 = -1.5 * d + ru.foff + ru.pad / 2 + 0.05
+    x1 = 2 * d - ru.patch_w / 2 - ru.window_margin - 0.01
+    y_pg = ru.p1_y - ru.lin - ru.lout
+    y_top = ru.cell[3] + ru.lin + 1.0
+    return (x0, y_pg, x1, y_top)
+
+
+def _window_scene(mc, ru, col, wb):
+    from .macro import _place_paths
+
+    tf, _ = column_frame(col)
+    g = Grid(wb[0], wb[1], wb[2], wb[3], H_RASTER)
+    lo = (wb[0] - 1.0, wb[1] - 1.0, wb[2] + 1.0, wb[3] + 1.0)
+
+    def near(pts):
+        return any(lo[0] <= q[0] <= lo[2] and lo[1] <= q[1] <= lo[3] for q in pts)
+
+    cu = g.empty()
+    paths = list(mc.feeds.values()) + list(mc.runins.values())
+    paths += [q for c in mc.columns.values() for q in _place_paths(c)]
+    for path in paths:
+        for pts, hw in _seg_runs(path):
+            tp = [tf(q) for q in pts]
+            if near(tp):
+                g.capsules(cu, tp, hw)
+    for c in mc.columns.values():
+        for poly in c.patches:
+            tp = [tf(q) for q in poly]
+            if near(tp):
+                g.polygon(cu, tp)
+    for ld in mc.loads.values():
+        for poly in (ld.pad1, ld.pad2):
+            g.polygon(cu, [tf(q) for q in poly])
+    gnd = gnd_mask(mc, ru, g, tf)
+    vias = sorted(
+        (round(tf(v[0])[1], 4), round(tf(v[0])[0], 4))
+        for v in mc.vias
+        if wb[0] <= tf(v[0])[0] <= wb[2] and wb[1] <= tf(v[0])[1] <= wb[3]
+    )
+    wins = []
+    for c in mc.columns.values():
+        for poly in c.windows:
+            tp = [tf(q) for q in poly]
+            xs, ys = [q[0] for q in tp], [q[1] for q in tp]
+            if max(xs) < wb[0] or min(xs) > wb[2] or max(ys) < wb[1] or min(ys) > wb[3]:
+                continue
+            wins.append(tuple(round(v, 4) for v in (min(xs), min(ys), max(xs), max(ys))))
+    return g, cu, gnd, vias, sorted(wins)
+
+
+def congruence(mc, ru) -> Dict[str, object]:
+    wb = window_bounds(ru)
+    act = [n for n, c in mc.columns.items() if not c.dummy]
+    ref_name = act[0]
+    ref = _window_scene(mc, ru, mc.columns[ref_name], wb)
+    out = {}
+    worst = dict(copper=0.0, gnd=0.0, vias=0, windows=0)
+    for n in act[1:]:
+        g, cu, gnd, vias, wins = _window_scene(mc, ru, mc.columns[n], wb)
+        a_cu = g.area(g.xor(cu, ref[1]))
+        a_g = g.area(g.xor(gnd, ref[2]))
+        vd = _via_diff(vias, ref[3])
+        wd = 0 if wins == ref[4] else max(1, abs(len(wins) - len(ref[4])))
+        out[n] = dict(
+            copper_xor_mm2=round(a_cu, 5),
+            gnd_xor_mm2=round(a_g, 5),
+            via_mismatch=vd,
+            l2_window_mismatch=wd,
+        )
+        worst["copper"] = max(worst["copper"], a_cu)
+        worst["gnd"] = max(worst["gnd"], a_g)
+        worst["vias"] = max(worst["vias"], vd)
+        worst["windows"] = max(worst["windows"], wd)
+    return dict(
+        reference=ref_name,
+        window_column_frame=[round(v, 4) for v in wb],
+        vias_in_window=len(ref[3]),
+        columns=out,
+        worst=dict(
+            copper_xor_mm2=round(worst["copper"], 5),
+            gnd_xor_mm2=round(worst["gnd"], 5),
+            via_mismatch=worst["vias"],
+            l2_window_mismatch=worst["windows"],
+        ),
+    )
+
+
+def _via_diff(a: List[Tuple[float, float]], b: List[Tuple[float, float]], tol: float = 1e-3) -> int:
+    """Number of vias of either list without a partner within `tol` in the other."""
+    ib = PointIndex(0.5)
+    for y, x in b:
+        ib.add((x, y))
+    used = set()
+    miss = 0
+    for y, x in a:
+        d, j = ib.nearest((x, y), tol)
+        if j < 0 or j in used:
+            miss += 1
+        else:
+            used.add(j)
+    return miss + (len(b) - len(used))
+
+
+# ---- G1: entry and band --------------------------------------------------------------------
+
+
+def _cross_min(path: Path, upto: float, rects, half: float) -> Tuple[float, Optional[Pt]]:
+    best, at = 1e9, None
+    ts = [half * k / 5 for k in range(6)]
+    for q, h, s in path_samples(path, 0.02):
+        if s > upto + 1e-9:
+            break
+        nx, ny = -math.sin(h), math.cos(h)
+        for t in ts:
+            for sg in (1, -1):
+                pt = (q[0] + sg * t * nx, q[1] + sg * t * ny)
+                for r in rects:
+                    dd = rect_dist(pt, r)
+                    if dd < best:
+                        best, at = dd, pt
+    return best, at
+
+
+def entry_and_band(mc, ru) -> Dict[str, object]:
+    cuts = list(mc.cutouts.values())
+    res = {}
+    ok = True
+    lines = dict(mc.feeds)
+    lines.update(mc.runins)
+    for n, f in lines.items():
+        bank = "RX" if n.startswith("RX") else "TX"
+        cut = mc.cutouts[bank]
+        s_pg, s_e = f.marks["Pg"][1], f.marks["E"][1]
+        band, at = _cross_min(f, s_pg, cuts, ru.foff) if n in mc.feeds else (ru.lout, None)
+        # run-in: straight and north from Pg through E
+        straight = all(
+            sg.kind == "line" and abs(sg.p1[0] - sg.p0[0]) < 1e-9 and sg.p1[1] > sg.p0[1]
+            for sg, s0 in _segs_between(f, s_pg, f.length)
+        )
+        xin = mc.banks[bank]["inputs"][n]
+        on_axis = abs(f.marks["Pg"][0][0] - xin) < 1e-9 and abs(f.marks["E"][0][1] - cut[1]) < 1e-9
+        span = _contact_span(f, s_e, cut, ru.lchan)
+        ok_n = band >= ru.B - 1e-6 and straight and on_axis and abs(span - 2 * ru.lchan) <= 0.005
+        ok = ok and ok_n
+        res[n] = dict(
+            band_min_mm=round(band, 4),
+            at=None if at is None else [round(at[0], 3), round(at[1], 3)],
+            runin_straight=straight,
+            on_input_axis=on_axis,
+            contact_span_mm=round(span, 4),
+            ok=ok_n,
+        )
+    # vias inside the cut-outs grown by the band: run-in pairs and ring sites only
+    inside = [
+        v
+        for v in mc.vias
+        if any(rect_dist(v[0], c) < ru.B - 1e-6 for c in cuts) and v[3] not in ("runin", "ring")
+    ]
+    in_cut = [v for v in mc.vias if any(rect_dist(v[0], c) <= 1e-9 for c in cuts)]
+    ok = ok and not inside and not in_cut
+    return dict(
+        lines=res,
+        foreign_vias_in_band=[[round(v[0][0], 3), round(v[0][1], 3), v[3]] for v in inside],
+        vias_in_cutouts=len(in_cut),
+        ok=ok,
+    )
+
+
+def _segs_between(path: Path, s_a: float, s_b: float):
+    s = 0.0
+    out = []
+    for sg in path.segs:
+        if s >= s_a - 1e-9 and s + sg.length <= s_b + 1e-9:
+            out.append((sg, s))
+        s += sg.length
+    return out
+
+
+def _contact_span(path: Path, s_e: float, cut, lchan: float) -> float:
+    """Length of the cut-out boundary within lchan of the line before the entry (its copper plus
+    gap touching the cut-out), measured on all four edges."""
+    pts = [q for q, _, s in path_samples(path, 0.005) if s <= s_e + 1e-9]
+    x0, y0, x1, y1 = cut
+    tot = 0.0
+    step = 0.001
+    for a, b in (
+        ((x0, y0), (x1, y0)),
+        ((x1, y0), (x1, y1)),
+        ((x1, y1), (x0, y1)),
+        ((x0, y1), (x0, y0)),
+    ):
+        L = math.dist(a, b)
+        # coarse filter: only edge stretches near the path's bounding box
+        bx = (
+            min(q[0] for q in pts) - lchan,
+            min(q[1] for q in pts) - lchan,
+            max(q[0] for q in pts) + lchan,
+            max(q[1] for q in pts) + lchan,
+        )
+        n = int(L / step)
+        for k in range(n + 1):
+            t = k / n
+            e = (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+            if not (bx[0] <= e[0] <= bx[2] and bx[1] <= e[1] <= bx[3]):
+                continue
+            if min(math.dist(e, q) for q in pts) <= lchan + 1e-9:
+                tot += step
+    return tot
+
+
+# ---- G4: fence continuity ------------------------------------------------------------------
+
+
+def fence_rows(mc, ru, pl) -> Dict[str, List]:
+    """Fence row points per feed side (they depend on the lines only, not on the vias)."""
+    from .vias import fence_row, fence_start
+
+    out = {}
+    for n, f in mc.feeds.items():
+        s0 = fence_start(n, f, ru)
+        for side, tag in ((1, "L"), (-1, "R")):
+            out[f"{n}.{tag}"] = fence_row(f, side, s0, f.marks["Pg"][1], pl, n)
+    return out
+
+
+def fence_sequences(mc, ru, pl, bbox=None, rows=None) -> Dict[str, Dict[str, object]]:
+    """Per feed side, from the fence start to Pg: walk the fence row and take, at every row point,
+    the nearest GND via within 0.60 mm (on the row's side); consecutive distinct vias in that walk
+    are the fence's consecutive vias. Returns per row the worst spacing and every pair over the
+    limit (0.50 mm), and row points with no via within 0.60 mm (an opening)."""
+    lim = 0.50
+    out = {}
+    rows = rows or fence_rows(mc, ru, pl)
+    for key, pts in rows.items():
+        if bbox and not any(
+            q is not None and bbox[0] <= q[0] <= bbox[2] and bbox[1] <= q[1] <= bbox[3]
+            for _, q in pts
+        ):
+            continue
+        if True:
+            prev = None
+            worst, bad, holes = 0.0, [], []
+            first = True
+            for _, q in pts:
+                if q is None:
+                    prev = None
+                    continue
+                if bbox and not (bbox[0] <= q[0] <= bbox[2] and bbox[1] <= q[1] <= bbox[3]):
+                    prev = None
+                    continue
+                d, j = pl.idx.nearest(q, 0.60)
+                if j < 0:
+                    holes.append([round(q[0], 3), round(q[1], 3)])
+                    prev = None
+                    continue
+                if first and d > ru.pitch / 2 + 0.025:
+                    holes.append([round(q[0], 3), round(q[1], 3)])
+                first = False
+                if prev is not None and j != prev:
+                    dd = math.dist(pl.idx.pts[prev], pl.idx.pts[j])
+                    worst = max(worst, dd)
+                    if dd > lim + 1e-9:
+                        bad.append((prev, j, round(dd, 4)))
+                prev = j
+            out[key] = dict(worst=worst, bad=bad, holes=holes)
+    return out
+
+
+def fence_continuity(mc, ru) -> Dict[str, object]:
+    from .vias import Placer
+
+    pl = Placer(mc, ru)
+    for v in mc.vias:
+        pl.idx.add(v[0])
+    seqs = fence_sequences(mc, ru, pl)
+    res = {}
+    ok = True
+    for k, r in seqs.items():
+        pairs = [
+            dict(
+                a=[round(c, 3) for c in pl.idx.pts[i]], b=[round(c, 3) for c in pl.idx.pts[j]], mm=d
+            )
+            for i, j, d in r["bad"]
+        ]
+        res[k] = dict(
+            max_spacing_mm=round(r["worst"], 3), over_limit=pairs[:5], openings=r["holes"][:5]
+        )
+        if pairs or r["holes"]:
+            ok = False
+    # run-in pairs at E - runin_inset and E - guard_band on both sides of every input
+    si = float(mc.params["runin_inset"])
+    missing = []
+    for bank, b in mc.banks.items():
+        for n, xi in b["inputs"].items():
+            for y in (b["E"] - si, b["E"] - ru.B):
+                for x in (xi - ru.foff, xi + ru.foff):
+                    if pl.idx.nearest((x, y), 0.10)[1] < 0:
+                        missing.append([n, round(x, 3), round(y, 3)])
+    ok = ok and not missing
+    return dict(limit_mm=0.50, rows=res, runin_pairs_missing=missing, ok=ok)
+
+
+# ---- G5: via accounting --------------------------------------------------------------------
+
+
+def _row_pitch(vias: List[Pt], a: Pt, b: Pt, band: float = 0.13) -> float:
+    """Largest spacing between consecutive vias within `band` of the segment a-b."""
+    L = math.dist(a, b)
+    ux, uy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
+    ts = sorted(
+        (q[0] - a[0]) * ux + (q[1] - a[1]) * uy
+        for q in vias
+        if abs(-(q[0] - a[0]) * uy + (q[1] - a[1]) * ux) <= band
+        and -0.01 <= (q[0] - a[0]) * ux + (q[1] - a[1]) * uy <= L + 0.01
+    )
+    return max((t1 - t0 for t0, t1 in zip(ts, ts[1:])), default=0.0)
+
+
+def via_accounting(mc, ru) -> Dict[str, object]:
+    lg = mc.via_log
+    counts: Dict[str, int] = {}
+    for v in mc.vias:
+        counts[v[3]] = counts.get(v[3], 0) + 1
+    merged_far = [m for m in lg.get("merged", []) if m["d"] > 0.10 + 1e-9]
+    sp, si = float(mc.params["stitch_pitch"]), float(mc.params["stitch_inset"])
+    x_lo, x_hi = mc.region["x"]
+    y_s, y_hi = mc.region["y"]
+    pts = [v[0] for v in mc.vias]
+    pitches = dict(
+        west=_row_pitch(pts, (x_lo + si, ru.half + si), (x_lo + si, y_hi - si)),
+        north=_row_pitch(pts, (x_lo + si, y_hi - si), (x_hi - si, y_hi - si)),
+        east=_row_pitch(pts, (x_hi - si, y_s + si), (x_hi - si, y_hi - si)),
+    )
+    ok = not lg.get("conflicts") and not merged_far and max(pitches.values()) <= sp + 1e-6
+    return dict(
+        counts=counts,
+        total=len(mc.vias),
+        merged=len(lg.get("merged", [])),
+        merged_detail=lg.get("merged", [])[:20],
+        conflicts=lg.get("conflicts", []),
+        row_gaps=lg.get("row_gaps", []),
+        dropped_optional=lg.get("dropped", {}),
+        boundary_row_pitch_mm={k: round(v, 4) for k, v in pitches.items()},
+        stitch_pitch_max_mm=sp,
+        fill_rounds=lg.get("fill_rounds"),
+        made_gap=lg.get("made_gap"),
+        lattice_sites=lg.get("lattice_sites"),
+        ok=ok,
+    )
+
+
+# ---- G6: fits and D12 ----------------------------------------------------------------------
+
+
+def layout_digest(mc) -> str:
+    from .macro import outside_cutouts
+
+    o = outside_cutouts(mc)
+    o = dict(o)
+    o.pop("vias")
+    o.pop("unstitched")
+    return _sha(o)
+
+
+def outside_digest(mc) -> str:
+    from .macro import outside_cutouts
+
+    return _sha(outside_cutouts(mc))
+
+
+def _sha(o) -> str:
+    def rnd(x):
+        if isinstance(x, float):
+            return round(x, 5)
+        if isinstance(x, dict):
+            return {str(k): rnd(v) for k, v in x.items()}
+        if isinstance(x, (list, tuple)):
+            return [rnd(v) for v in x]
+        return x
+
+    return hashlib.sha256(json.dumps(rnd(o), sort_keys=True).encode()).hexdigest()
+
+
+def d12_layouts(mc) -> Dict[str, str]:
+    """Layout hash (feeds to the entries, cut-outs, loads, pour, region) of every D12 variant,
+    from the fit search alone (no via placement)."""
+    from . import macro as M
+
+    out = {}
+    for v in (-1, 0, 1):
+        ov = {k: mc.params[k] for k in mc.params if k != "variant"}
+        ov["variant"] = v
+        out[str(v)] = layout_only_digest(M, ov)
+    return out
+
+
+def layout_only_digest(M, ov) -> str:
+    from . import dims as dims_mod
+    from .params import resolve
+
+    p = resolve(ov)
+    d = dims_mod.compute(p)
+    ru = M.Rules(p, d)
+    mir = bool(p["mirror_x"])
+    dummies = M.DUMMY_SETS[str(p["dummies"])]
+    rx_ball = {n: M.ball_xy(M.RF_BALLS[n], mir) for n in M.RX_NAMES}
+    xc = sum(b[0] for b in rx_ball.values()) / 4
+    rx_in = {n: xc + (k - 1.5) * ru.d for k, n in enumerate(M.RX_NAMES)}
+    p0_y = rx_ball["RX1"][1] + float(p["launch_len"])
+    rfit = M.fit_rx(p, ru, rx_ball, rx_in, p0_y)
+    e_rx = max(p0_y + rfit["H"] + ru.lout, float(p["rx_col_y"]) + ru.p1_y - ru.lin)
+    rx_paths = M._rx_paths(rfit["spec"], rfit["rb"], e_rx, rx_ball, p0_y, ru)
+    cols = dict(rx_in)
+    if "RXD0" in dummies:
+        cols["RXD0"] = rx_in["RX1"] - ru.d
+    if "RXD5" in dummies:
+        cols["RXD5"] = rx_in["RX4"] + ru.d
+    rx_cut = ru.cut(list(cols.values()), e_rx, False)
+    rx_loads = [ru.load_zone(cols[n], e_rx) for n in ("RXD0", "RXD5") if n in cols]
+    tx_ball = {n: M.ball_xy(M.RF_BALLS[n], mir) for n in M.TX_NAMES}
+    p0_x = tx_ball["TX1"][0] + float(p["launch_len"])
+    t = M.fit_tx(p, ru, tx_ball, p0_x, rx_cut, rx_paths, rx_loads, dummies)
+    o = dict(
+        rx=[[s.kind, list(s.p0), list(s.p1)] for q in rx_paths.values() for s in q.segs],
+        tx=[[s.kind, list(s.p0), list(s.p1)] for q in t["paths"].values() for s in q.segs],
+        cuts=[rx_cut, t["cut"]],
+        cols=[cols, t["names"]],
+    )
+    return _sha(o)
+
+
+# ---- all generator checks ------------------------------------------------------------------
+
+
+def generator_checks(mc, ru, rx_ball, tx_ball) -> None:
+    p = mc.params
+    lp0 = {n: f.marks["Pg"][1] - f.marks["P0"][1] for n, f in mc.feeds.items()}
+    lp1 = {n: f.length - f.marks["P0"][1] for n, f in mc.feeds.items()}
+    for bank in (("RX1", "RX2", "RX3", "RX4"), ("TX1", "TX2", "TX3")):
+        vals = [lp1[n] for n in bank]
+        mc.checks.append(
+            dict(
+                check=f"equal length P0->P1 {bank[0][:2]}",
+                lengths_mm={n: round(lp1[n], 4) for n in bank},
+                p0_to_pg_mm={n: round(lp0[n], 4) for n in bank},
+                spread_mm=round(max(vals) - min(vals), 4),
+                limit_mm=0.036,  # 2 ps design target (0.36 mm) / 10, geometric [BD §6.2]
+                ok=max(vals) - min(vals) <= 0.036,
+            )
+        )
+    mc.checks.append(
+        dict(
+            check="ball to P1 lengths",
+            lengths_mm={n: round(f.length, 3) for n, f in mc.feeds.items()},
+        )
+    )
+    from .macro import feed_separation
+
+    sep = feed_separation(mc.feeds)
+    mc.checks.append(
+        dict(
+            check="feed corridor separation",
+            min_mm=round(sep[0], 3),
+            pair=list(sep[1][:2]) if sep[1] else None,
+            limit_mm=round(ru.smin, 3),
+            ok=sep[0] >= ru.smin - 1e-6,
+        )
+    )
+    W = mc.dims["patch"]["w"]
+    m = float(p["window_margin"])
+    gap_edge = D_LATTICE / 2 - W / 2 - m - float(p["w50"]) / 2
+    mc.checks.append(
+        dict(
+            check="column input line to L2 window edge (both sides)",
+            clearance_mm=round(gap_edge, 4),
+            limit_mm=round(STACK["h_core"] * 1.5, 4),
+            ok=gap_edge >= STACK["h_core"] * 1.5,
+        )
+    )
+    c = mc.columns["RX2"]
+    mc.checks.append(
+        dict(check="divider arms", **{k: round(v, 4) for k, v in c.arm_lengths.items()})
+    )
+    # patch clearance to the pour (the cut-out is the variant-independent cell)
+    worst = 9.0
+    for col in mc.columns.values():
+        cut = mc.cutouts["RX" if col.name.startswith("COL_RX") else "TX"]
+        for poly in col.patches:
+            for q in poly:
+                worst = min(worst, q[0] - cut[0], cut[2] - q[0], q[1] - cut[1], cut[3] - q[1])
+    mc.checks.append(
+        dict(
+            check="patch to L1 pour (cut-out edge)",
+            min_mm=round(worst, 4),
+            limit_mm=float(p["pour_clear_ant"]),
+            ok=worst >= float(p["pour_clear_ant"]) - 1e-6,
+        )
+    )
+
+    g1 = entry_and_band(mc, ru)
+    mc.checks.append(dict(check="G1 entry contact and guard band", **g1))
+    g2 = congruence(mc, ru)
+    w = g2["worst"]
+    ok2 = (
+        w["copper_xor_mm2"] <= 1e-3
+        and w["gnd_xor_mm2"] <= 1e-3
+        and w["via_mismatch"] == 0
+        and w["l2_window_mismatch"] == 0
+    )
+    mc.checks.append(dict(check="G2 column congruence", **g2, ok=ok2))
+    g3 = stitch_raster(mc, ru)
+    mc.checks.append(
+        dict(
+            check="G3 unstitched GND",
+            reach_mm=float(p["stitch_reach"]),
+            raster_mm=H_RASTER,
+            gnd_area_mm2=g3["gnd_area_mm2"],
+            unreached_pieces=[{k: v for k, v in pc.items() if k != "near"} for pc in g3["pieces"]],
+            made_gap=mc.via_log.get("made_gap"),
+            ok=not g3["pieces"],
+        )
+    )
+    g4 = fence_continuity(mc, ru)
+    mc.checks.append(dict(check="G4 fence continuity", **g4))
+    g5 = via_accounting(mc, ru)
+    mc.checks.append(dict(check="G5 via accounting", **g5))
+    d12 = d12_layouts(mc)
+    same = len(set(d12.values())) == 1
+    mc.checks.append(
+        dict(
+            check="G6 fits and D12",
+            equalizers=mc.fit,
+            band_margin_mm=min(v["band_min_mm"] for v in g1["lines"].values()),
+            layout_sha256_per_variant=d12,
+            outside_cutouts_sha256=outside_digest(mc),
+            ok=same,
+        )
+    )

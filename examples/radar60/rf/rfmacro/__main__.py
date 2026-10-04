@@ -5,7 +5,9 @@
   python -m rfmacro drc DIR/NAME.kicad_pcb       # headless KiCad DRC (YAPNR_KICAD_CLI)
   python -m rfmacro coupons [--out DIR]
 
-Run from examples/radar60/rf (the yapnr checkout on PYTHONPATH only for `xsec`).
+Run from examples/radar60/rf (the yapnr checkout on PYTHONPATH only for `xsec`). The board audit
+of a filled board is `../board/rf_audit.py` (KiCad Python); the tests are
+`python3 -m unittest discover -s tests`.
 """
 
 from __future__ import annotations

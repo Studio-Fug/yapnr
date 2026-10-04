@@ -200,13 +200,19 @@ def poly_contains(poly: Sequence[Pt], p: Pt) -> bool:
 
 
 def serpentine(
-    path: Path, extra: float, radius: float, side: int, room: float, r_min: float = 0.4
+    path: Path,
+    extra: float,
+    radius: float,
+    side: int,
+    room: float,
+    r_min: float = 0.4,
+    draw: bool = True,
 ) -> Tuple[int, float, float]:
     """Append fingers that add `extra` mm while the path keeps its heading. A finger turns 90°
     toward `side` (+1 left, -1 right), runs `a`, U-turns, runs back `a` and turns 90° back: it
     advances 4R, reaches 2R + a sideways and adds (2π − 4)R + 2a. `room` bounds 2R + a. The
     fewest fingers are used, each with the smallest radius in [r_min, radius] that fits (the
-    shortest advance). Returns (fingers, R, a)."""
+    shortest advance). Returns (fingers, R, a); `draw=False` only plans."""
     if extra <= 1e-9:
         return 0, 0.0, 0.0
     k = 2 * math.pi - 4
@@ -223,6 +229,8 @@ def serpentine(
     if best is None:
         raise ValueError(f"serpentine: {extra:.3f} mm does not fit in room {room:.3f} mm")
     n, r, a = best
+    if not draw:
+        return best
     for _ in range(n):
         path.turn(r, 90 * side)
         path.straight(a)
@@ -230,3 +238,165 @@ def serpentine(
         path.straight(a)
         path.turn(r, 90 * side)
     return best
+
+
+# ---- exact distances and spatial indices (stdlib; used by the via placement and the checks) ----
+
+
+def seg_point_dist(p: Pt, sg: Seg) -> float:
+    """Exact distance from `p` to a straight or arc centreline segment."""
+    if sg.kind == "line":
+        return seg_dist(p, sg.p0, sg.p1)
+    cx, cy = sg.center
+    phi = math.atan2(p[1] - cy, p[0] - cx)
+    if sg.sweep >= 0:
+        delta = (phi - sg.a0) % (2 * math.pi)
+        inside = delta <= sg.sweep + 1e-12
+    else:
+        delta = (sg.a0 - phi) % (2 * math.pi)
+        inside = delta <= -sg.sweep + 1e-12
+    if inside:
+        return abs(math.hypot(p[0] - cx, p[1] - cy) - sg.radius)
+    return min(math.dist(p, sg.p0), math.dist(p, sg.p1))
+
+
+def seg_bbox(sg: Seg) -> Tuple[float, float, float, float]:
+    if sg.kind == "line":
+        return (
+            min(sg.p0[0], sg.p1[0]),
+            min(sg.p0[1], sg.p1[1]),
+            max(sg.p0[0], sg.p1[0]),
+            max(sg.p0[1], sg.p1[1]),
+        )
+    cx, cy = sg.center
+    r = sg.radius
+    return (cx - r, cy - r, cx + r, cy + r)
+
+
+class SegIndex:
+    """Bucket grid of centreline segments: nearest distance from a point to a set of lines."""
+
+    def __init__(self, cell: float = 1.0):
+        self.cell = cell
+        self.items: List[Tuple[Seg, str, float]] = []  # (segment, owner, arc length at its start)
+        self.grid: dict = {}
+
+    def add_path(self, path: "Path", owner: str) -> None:
+        s = 0.0
+        for sg in path.segs:
+            self.add(sg, owner, s)
+            s += sg.length
+
+    def add(self, sg: Seg, owner: str, s0: float = 0.0) -> None:
+        i = len(self.items)
+        self.items.append((sg, owner, s0))
+        x0, y0, x1, y1 = seg_bbox(sg)
+        c = self.cell
+        for gx in range(int(math.floor(x0 / c)), int(math.floor(x1 / c)) + 1):
+            for gy in range(int(math.floor(y0 / c)), int(math.floor(y1 / c)) + 1):
+                self.grid.setdefault((gx, gy), []).append(i)
+
+    def near(self, p: Pt, r: float) -> List[int]:
+        c = self.cell
+        out = set()
+        for gx in range(int(math.floor((p[0] - r) / c)), int(math.floor((p[0] + r) / c)) + 1):
+            for gy in range(int(math.floor((p[1] - r) / c)), int(math.floor((p[1] + r) / c)) + 1):
+                out.update(self.grid.get((gx, gy), ()))
+        return sorted(out)
+
+    def dist(self, p: Pt, r: float = 2.0, skip: Optional[str] = None) -> float:
+        """Distance to the nearest indexed segment (capped at `r`); `skip` drops one owner."""
+        best = r
+        for i in self.near(p, r):
+            sg, owner, _ = self.items[i]
+            if owner == skip:
+                continue
+            d = seg_point_dist(p, sg)
+            if d < best:
+                best = d
+        return best
+
+    def dist_far(self, p: Pt, r: float, owner: str, s: float, ds: float) -> float:
+        """Distance to the nearest segment, ignoring `owner`'s segments within `ds` of arc
+        length `s` (a line's own neighbourhood; its facing legs further along still count)."""
+        best = r
+        for i in self.near(p, r):
+            sg, own, s0 = self.items[i]
+            if own == owner and s0 <= s + ds and s0 + sg.length >= s - ds:
+                continue
+            d = seg_point_dist(p, sg)
+            if d < best:
+                best = d
+        return best
+
+    def nearest(self, p: Pt, r: float = 2.0) -> Tuple[float, Optional[str]]:
+        best, who = r, None
+        for i in self.near(p, r):
+            sg, owner, _ = self.items[i]
+            d = seg_point_dist(p, sg)
+            if d < best:
+                best, who = d, owner
+        return best, who
+
+
+class PointIndex:
+    """Bucket grid of points (via centres) for spacing and coverage queries."""
+
+    def __init__(self, cell: float = 0.5):
+        self.cell = cell
+        self.pts: List[Pt] = []
+        self.grid: dict = {}
+
+    def add(self, p: Pt) -> int:
+        i = len(self.pts)
+        self.pts.append(p)
+        k = (int(math.floor(p[0] / self.cell)), int(math.floor(p[1] / self.cell)))
+        self.grid.setdefault(k, []).append(i)
+        return i
+
+    def within(self, p: Pt, r: float) -> List[int]:
+        c = self.cell
+        out = []
+        for gx in range(int(math.floor((p[0] - r) / c)), int(math.floor((p[0] + r) / c)) + 1):
+            for gy in range(int(math.floor((p[1] - r) / c)), int(math.floor((p[1] + r) / c)) + 1):
+                for i in self.grid.get((gx, gy), ()):
+                    if math.dist(p, self.pts[i]) <= r:
+                        out.append(i)
+        return out
+
+    def move(self, i: int, p: Pt) -> None:
+        old = self.pts[i]
+        k = (int(math.floor(old[0] / self.cell)), int(math.floor(old[1] / self.cell)))
+        self.grid[k].remove(i)
+        self.pts[i] = p
+        k = (int(math.floor(p[0] / self.cell)), int(math.floor(p[1] / self.cell)))
+        self.grid.setdefault(k, []).append(i)
+
+    def nearest(self, p: Pt, r: float) -> Tuple[float, int]:
+        best, who = r, -1
+        for i in self.within(p, r):
+            d = math.dist(p, self.pts[i])
+            if d < best:
+                best, who = d, i
+        return best, who
+
+
+def rect_dist(p: Pt, r: Sequence[float]) -> float:
+    """Distance from a point to an axis-aligned rectangle (x0, y0, x1, y1); 0 inside."""
+    dx = max(r[0] - p[0], 0.0, p[0] - r[2])
+    dy = max(r[1] - p[1], 0.0, p[1] - r[3])
+    return math.hypot(dx, dy)
+
+
+def path_samples(path: "Path", step: float = 0.02) -> List[Tuple[Pt, float, float]]:
+    """(point, heading, arc length) along a path, segment ends included."""
+    out: List[Tuple[Pt, float, float]] = []
+    s = 0.0
+    for sg in path.segs:
+        L = sg.length
+        n = max(1, int(math.ceil(L / step)))
+        for i in range(0 if not out else 1, n + 1):
+            q, h = _at(sg, i / n)
+            out.append((q, h, s + L * i / n))
+        s += L
+    return out

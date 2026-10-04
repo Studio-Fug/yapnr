@@ -348,8 +348,9 @@ A stage written `CONFIG@1` runs on one rank. Two things about refinement at b797
 
 - Sweep the saved mesh in a separate solve rather than trusting the refinement loop's own late
   iterations: with nonconforming refinement, the wave-port modes inside the loop drift after a
-  few refinements (line-msl-5mm at 62 GHz: Z_PV 55.9 -> 62.4 ohm and |S21| -0.47 -> -1.76 dB by
-  the fifth mesh).
+  few refinements when a zero-thickness strip crosses the port face (line-msl-5mm at 62 GHz:
+  Z_PV 55.9 -> 62.4 ohm and |S21| -0.47 -> -1.76 dB by the fifth mesh; a lossless PEC strip
+  drifts the same way). With solid copper the ports stayed put (Z_PV within 1 %).
 - A saved adapted mesh has its interior sheets split already, so a run that loads it no longer
   treats them as cracked and gives each face the whole `Impedance`. The sweep of a saved mesh
   therefore writes the sheets per face (`config.impedance_rl(..., precracked=True)`; validation's
@@ -367,7 +368,8 @@ predictions; for model builders:
   2.4 %: Palace with solid copper and openEMS with the copper as 35 µm PEC agree on that shift.
   Sign off with `solid` copper; keep `sheet` for comparisons with openEMS's lossy sheet.
 - **The ground is lossy too.** The L2 ground carries about a quarter of the lines' conductor loss
-  (the 2D solver: 0.011 of 0.043 dB/mm at 62 GHz; openEMS: +0.007 dB/mm); on the radar60 TX1
+  (at 62 GHz the 2D solver gives 0.011 of 0.043 dB/mm, Palace's mode solve 0.014, openEMS with
+  a zero-thickness strip 0.007); on the radar60 TX1
   feed a PEC floor understates the dissipation by about 0.18 dB over 14 mm. Use the `metal` floor
   (the default of the line, feed and KiCad adapters). A zero-thickness sheet has no
   mesh-converged loss (its edge current is singular), so validate loss on solid copper.

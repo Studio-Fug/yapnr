@@ -646,8 +646,9 @@ bound to them; `packing = "vcpu"` puts a rank on each hardware thread, and with
 cores). `memory_gb` decides between the highcpu and standard shapes (`yapnr exp plan`'s rule);
 the plan asks for an instance policy when none of its families has a Spot template for that
 shape (`infra/gcp` makes them for `c4d-highcpu-8`, `c4d-highcpu-16` and `c4d-standard-16`, and
-for `c4-highcpu-8` and `c4-highcpu-16` in the example's second region). Palace does not checkpoint and adaptive
-refinement cannot restart, so a preempted model starts again: keep Spot models to an hour or two.
+for `c4-highcpu-8` and `c4-highcpu-16` in the example's second region). Palace does not
+checkpoint and adaptive refinement cannot restart, so a preempted model starts again: keep Spot
+models to an hour or two.
 
 ## Testing
 

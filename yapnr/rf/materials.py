@@ -177,10 +177,40 @@ def edges_to_pixels(grid: Grid, d_gx: np.ndarray, d_gy: np.ndarray) -> np.ndarra
     return out
 
 
-class Structure:
-    """Materials of every E edge: permittivity, conductivity, the copper sheet, PEC edges."""
+def edge_average(grid: Grid, comp: str, cells: np.ndarray) -> np.ndarray:
+    """A per-cell quantity (Nx, Ny, Nz) averaged onto the edges of E component `comp`: along
+    each axis the edge does not lie inside a cell, the two cells either side weighted by their
+    halves of the edge's dual length (one cell at the domain's boundary), as the copper
+    plane's permittivity is averaged in the layered model."""
+    out = np.asarray(cells, dtype=np.float64)
+    own = "xyz".index(comp[1])
+    for a in range(3):
+        if a == own:
+            continue
+        ax = grid.axis(a)
+        lo_w, hi_w = _pair_weights(ax.primary, ax.dual)
+        shape = [1, 1, 1]
+        shape[a] = ax.n + 1
+        lo_w, hi_w = lo_w.reshape(shape), hi_w.reshape(shape)
+        pad = [(0, 0)] * 3
+        pad[a] = (1, 1)
+        padded = np.pad(out, pad)
+        sl_lo = [slice(None)] * 3
+        sl_hi = [slice(None)] * 3
+        sl_lo[a] = slice(0, ax.n + 1)
+        sl_hi[a] = slice(1, ax.n + 2)
+        out = lo_w * padded[tuple(sl_lo)] + hi_w * padded[tuple(sl_hi)]
+    return np.ascontiguousarray(out)
 
-    def __init__(self, grid: Grid, stackup: Stackup):
+
+class Structure:
+    """Materials of every E edge: permittivity, conductivity, the copper sheet, PEC edges.
+
+    `cells` (optional): (εr, σ) per cell (each broadcastable to (Nx, Ny, Nz)) instead of the
+    layered substrate below the copper plane, averaged onto the edges (`edge_average`): the
+    finite boards of `board` (a substrate block in air)."""
+
+    def __init__(self, grid: Grid, stackup: Stackup, cells=None):
         self.grid = grid
         self.stackup = stackup
         nx, ny, nz = grid.n
@@ -189,25 +219,32 @@ class Structure:
         sig_sub = stackup.sigma_sub
         self._eps: dict[str, np.ndarray] = {}
         self._sig: dict[str, np.ndarray] = {}
-        # Ez edges lie inside one layer: substrate below the copper plane.
-        ez_eps = np.full(nz, EPS0)
-        ez_sig = np.zeros(nz)
-        ez_eps[:kc] = eps_sub
-        ez_sig[:kc] = sig_sub
-        # Ex/Ey edges on node planes: substrate below, air above, thickness-weighted on k_c.
-        dzp = grid.z.primary
-        w_sub = dzp[kc - 1] / (dzp[kc - 1] + dzp[kc])
-        t_eps = np.full(nz + 1, EPS0)
-        t_sig = np.zeros(nz + 1)
-        t_eps[:kc] = eps_sub
-        t_sig[:kc] = sig_sub
-        t_eps[kc] = w_sub * eps_sub + (1.0 - w_sub) * EPS0
-        t_sig[kc] = w_sub * sig_sub
-        for comp in E_COMPONENTS:
-            shape = grid.shape(comp)
-            prof_eps, prof_sig = (ez_eps, ez_sig) if comp == "ez" else (t_eps, t_sig)
-            self._eps[comp] = np.broadcast_to(prof_eps, shape).copy()
-            self._sig[comp] = np.broadcast_to(prof_sig, shape).copy()
+        if cells is not None:
+            er_cell = np.broadcast_to(np.asarray(cells[0], dtype=np.float64), (nx, ny, nz))
+            sig_cell = np.broadcast_to(np.asarray(cells[1], dtype=np.float64), (nx, ny, nz))
+            for comp in E_COMPONENTS:
+                self._eps[comp] = EPS0 * edge_average(grid, comp, er_cell)
+                self._sig[comp] = edge_average(grid, comp, sig_cell)
+        else:
+            # Ez edges lie inside one layer: substrate below the copper plane.
+            ez_eps = np.full(nz, EPS0)
+            ez_sig = np.zeros(nz)
+            ez_eps[:kc] = eps_sub
+            ez_sig[:kc] = sig_sub
+            # Ex/Ey edges on node planes: substrate below, air above, thickness-weighted on k_c.
+            dzp = grid.z.primary
+            w_sub = dzp[kc - 1] / (dzp[kc - 1] + dzp[kc])
+            t_eps = np.full(nz + 1, EPS0)
+            t_sig = np.zeros(nz + 1)
+            t_eps[:kc] = eps_sub
+            t_sig[:kc] = sig_sub
+            t_eps[kc] = w_sub * eps_sub + (1.0 - w_sub) * EPS0
+            t_sig[kc] = w_sub * sig_sub
+            for comp in E_COMPONENTS:
+                shape = grid.shape(comp)
+                prof_eps, prof_sig = (ez_eps, ez_sig) if comp == "ez" else (t_eps, t_sig)
+                self._eps[comp] = np.broadcast_to(prof_eps, shape).copy()
+                self._sig[comp] = np.broadcast_to(prof_sig, shape).copy()
         self.sheet = {"ex": np.zeros((nx, ny + 1)), "ey": np.zeros((nx + 1, ny))}
         self.pec = {comp: np.zeros(grid.shape(comp), dtype=bool) for comp in E_COMPONENTS}
         self._extra = {comp: np.zeros(grid.shape(comp)) for comp in E_COMPONENTS}

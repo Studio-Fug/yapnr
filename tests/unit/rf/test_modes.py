@@ -9,6 +9,11 @@ only), torch float64, at 8.5, 10 and 11.5 GHz:
   |S11| −40 dB (the surface wave the source launches, read as a reflection);
 - modal source: |S21| −0.118, −0.119, −0.119 dB (within 0.001 dB of the mode's loss) and
   |S11| −63 to −68 dB; with the copper-edge correction the same agreement (Z_c 52.3–53.4 Ω).
+
+These are the V/I waves (`solver.port_extraction: vi`). The modal waves (the default since
+design §25) are orthogonal to most of the surface wave the static source launches: with it they
+read |S21| 0.020–0.033 dB below the mode's loss (the plane's 4h margin cuts the mode's lateral
+tail, design §25.1).
 """
 
 from __future__ import annotations
@@ -94,7 +99,7 @@ class ModalSourceTest(unittest.TestCase):
     """A matched line through a 9.6 mm window: |S21| against the mode's loss (module doc)."""
 
     @staticmethod
-    def thru(port_source, edge_correction=False):
+    def thru(port_source, edge_correction=False, extraction="vi"):
         from yapnr.rf import cases
         from yapnr.rf.problem import Problem
         from yapnr.rf.spec import Band, GridSpec, Port, S, SolverSpec, Spec
@@ -112,6 +117,7 @@ class ModalSourceTest(unittest.TestCase):
                 tol=1e-5,
                 edge_correction=edge_correction,
                 port_source=port_source,
+                port_extraction=extraction,
             ),
         )
         p = Problem(spec)
@@ -134,6 +140,10 @@ class ModalSourceTest(unittest.TestCase):
     def test_static_source_reads_low(self):
         s, loss = self.thru("static")
         self.assertLess((sparams.db(s[:, 1, 0]) - loss).max(), -0.05)  # measured −0.07 to −0.09
+
+    def test_modal_waves_with_the_static_source(self):
+        s, loss = self.thru("static", extraction="modal")
+        np.testing.assert_allclose(sparams.db(s[:, 1, 0]), loss, atol=0.045)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ from yapnr.rf.spec import (
     OptimizerSpec,
     Port,
     RadiatedFraction,
+    RadiationBox,
     Rules,
     S,
     SolverSpec,
@@ -58,12 +59,20 @@ GRID = GridSpec(
 )
 
 
-def tiny_spec(*, radiated: bool = False, **optimizer) -> Spec:
+def tiny_spec(*, radiated: bool = False, extraction: str = "vi", **optimizer) -> Spec:
+    """The tiny two-port (see the module doc). Its ports keep the V/I waves (`extraction`):
+    the measurement planes lie two cells from the region and three from the source, and the
+    6-cell CPML cuts the feed mode's tail, which the modal projection needs (its straight line
+    reads −15 to −18 dB modal reflection there against −40 dB on a physics-grade grid,
+    `line_spec`); the gradient tests run both."""
     reqs = [S(2, 1).at_least_db(-0.3, band="b"), S(1, 1).at_most_db(-15, band="b")]
     if radiated:
         reqs.append(RadiatedFraction(1).at_most(0.1, band="b"))
     opt = dict(betas=(8, 16, 32), iterations_per_beta=4)
     opt.update(optimizer)
+    # The closed radiation box one cell outside the 2.4 mm region (the 1.2 mm margin leaves no
+    # room for the default two cells between the box and the CPML).
+    rad = RadiationBox(clearance_cells=1) if radiated else None
     return Spec(
         name="tiny",
         stackup=StackupSpec(3.0, 0.002, 0.8, 10.0),
@@ -75,8 +84,142 @@ def tiny_spec(*, radiated: bool = False, **optimizer) -> Spec:
         rules=Rules(0.8, 0.8),
         symmetry="mirror_y",
         optimizer=OptimizerSpec(**opt),
-        solver=SolverSpec(sweep_points=11),
+        solver=SolverSpec(sweep_points=11, port_extraction=extraction),
+        radiation=rad,
     )
+
+
+def line_spec(*, port_source: str = "mode", **solver) -> Spec:
+    """A two-port on S1 with a physics-grade grid (0.3 mm pitch, the default 6h feeds, an 8 mm
+    margin), for the radiated-power and port-wave tests: about 1.4e5 cells, 16 × 16 pixels,
+    8–12 GHz, the closed radiation box at its default clearance (`straight_line`: the design
+    that continues the feed). The margin holds the feed mode's lateral tail: with the default
+    4h the modal planes miss enough of it in the CPML that an open end's reflection moves the
+    incident power by 2e-3, with 8 mm by 4e-4."""
+    return Spec(
+        name="line",
+        stackup=StackupSpec(3.55, 0.0027, 0.813, 10.0),
+        grid=GridSpec(
+            pitch_mm=0.3,
+            substrate_cells=4,
+            air_mm=5.5,
+            dz_max_mm=0.8,
+            margin_mm=8.0,
+            f_max_ghz=12.5,
+        ),
+        design_region=(0.0, 4.8, -2.4, 2.4),
+        ports=(Port(1, "W", 0.0, 6), Port(2, "E", 0.0, 6)),
+        bands={"b": Band(8.0, 12.0, 3)},
+        requirements=(
+            S(2, 1).at_least_db(-0.3, band="b"),
+            RadiatedFraction(1).at_most(0.1, band="b"),
+        ),
+        solver=SolverSpec(sweep_points=11, port_source=port_source, **solver),
+    )
+
+
+def tiny_board_spec(*, ground="board", requirements=None, **optimizer) -> Spec:
+    """A tiny board model (design §26) for the gradient and parity tests: a 6 × 6-pixel design
+    region (0.8 mm pitch) on a 9.6 × 8 mm board of εr 3, h 0.8 mm, fed by a lumped port at its
+    west edge through a fixed 0.8 mm stub; ground under the whole board ("board"), under all but
+    a keepout below the design region ("keepout"), or infinite ("infinite"); 9–11 GHz. The
+    requirements cover every pattern form (or `requirements`)."""
+    from yapnr.rf.spec import BoardSpec, GroundSpec, Rect
+
+    if ground == "infinite":
+        gspec = "infinite"
+    elif ground == "keepout":
+        gspec = GroundSpec(keepout=(Rect((2.4, 4.8), (-2.4, 2.4)),))
+    else:
+        gspec = GroundSpec()
+    board = BoardSpec(
+        x_mm=(-2.4, 7.2),
+        y_mm=(-4.0, 4.0),
+        ground=gspec,
+        air_mm=4.8,
+        max_cell_mm=1.6,
+        copper=(Rect((-1.6, 0.0), (-0.4, 0.4)),),
+        pml_cells=6,
+    )
+    if requirements is None:
+        cut = {"cut": {"theta_deg": 60, "points": 4}}
+        requirements = [
+            {"s": [1, 1], "max_db": -10, "band": "b"},
+            {"gain": 1, "min_dbi": 3.0, "directions": {"point": {"theta_deg": 0}}, "band": "b"},
+            {
+                "gain": 1,
+                "kind": "directivity",
+                "pol": "co",
+                "max_dbi": 9.0,
+                "directions": cut,
+                "band": "b",
+            },
+            {"ripple": 1, "max_db": 3.0, "directions": cut, "band": "b"},
+            {"hpbw": 1, "between_deg": [40, 120], "cut_phi_deg": 90, "band": "b"},
+            {
+                "front_to_back": 1,
+                "min_db": 6,
+                "front": {"point": {"theta_deg": 0}},
+                "back": (
+                    {"cut": {"theta_deg": 80, "points": 3}}
+                    if ground == "infinite"
+                    else {"cone": {"toward": "-z", "half_angle_deg": 30, "step_deg": 30}}
+                ),
+                "band": "b",
+            },
+            # Off the symmetry plane y = 0 (there the cross-polar field vanishes).
+            {
+                "cross_pol": 1,
+                "max_db": -10,
+                "directions": {"point": {"theta_deg": 30, "phi_deg": 45}},
+                "band": "b",
+            },
+            {"shape": 1, "target": "beam", "max_rms_db": 3.0, "band": "b"},
+            {
+                "shape": 1,
+                "target": "beam",
+                "max_rms_db": 3.0,
+                "form": "log_l2",
+                "weight": "target",
+                "band": "b",
+            },
+            {"efficiency": 1, "kind": "radiation", "min": 0.5, "band": "b"},
+            {"radiated": 1, "min": 0.3, "band": "b"},
+        ]
+    from yapnr.rf.spec import Requirement
+
+    reqs = []
+    for r in requirements:
+        reqs.extend(Requirement.from_dict(r) if isinstance(r, dict) else [r])
+    opt = dict(betas=(8, 16), iterations_per_beta=2)
+    opt.update(optimizer)
+    from yapnr.rf.patterns import parse_target
+
+    return Spec(
+        name="tiny-board",
+        stackup=StackupSpec(3.0, 0.002, 0.8, 10.0),
+        grid=GridSpec(pitch_mm=0.8, substrate_cells=2, core_cells=1, f_max_ghz=13.0),
+        design_region=(0.0, 4.8, -2.4, 2.4),
+        ports=(Port(1, kind="lumped", x_mm=(-1.6, -1.6), y_mm=(-0.4, 0.4), ohms=50.0),),
+        bands={"b": Band(9.0, 11.0, 3)},
+        requirements=tuple(reqs),
+        symmetry="mirror_y",
+        rules=Rules(0.8, 0.8),
+        optimizer=OptimizerSpec(**opt),
+        solver=SolverSpec(sweep_points=11),
+        board=board,
+        patterns={"beam": parse_target({"preset": "beam", "toward": "+z", "hpbw_deg": 80})},
+    )
+
+
+def straight_line(problem) -> np.ndarray:
+    """The design that continues port 1's feed straight across the window."""
+    ni, nj = problem.design_shape
+    rho = np.zeros((ni, nj))
+    pg = problem.ports[1]
+    j0 = problem.domain.window[2]
+    rho[:, pg.ta - j0 : pg.tb - j0] = 1.0
+    return rho
 
 
 def nominal_calibration() -> dict:

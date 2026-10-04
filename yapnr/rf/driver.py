@@ -220,7 +220,11 @@ class Optimizer:
             arrays["best_x"] = st.best_x
         if st.export_x is not None:
             arrays["export_x"] = st.export_x
-        meta = dict(st.meta(), spec_sha256=self.spec_sha)
+        meta = dict(
+            st.meta(),
+            spec_sha256=self.spec_sha,
+            port_extraction=self.problem.spec.solver.port_extraction,
+        )
         arrays["state"] = np.array(json.dumps(meta, sort_keys=True))
 
         def wc(tmp):
@@ -236,6 +240,19 @@ class Optimizer:
             meta = json.loads(str(z["state"]))
             if meta.get("spec_sha256") != self.spec_sha:
                 raise ValueError("the checkpoint belongs to a different spec")
+            # A spec's sha256 does not see `solver.port_extraction` when it sits at its
+            # ("modal") default (`_SOLVER_NEW`), so a checkpoint from before this field
+            # existed, which always ran "vi", hashes the same as one that now defaults to
+            # "modal". Check the extraction the checkpoint actually ran under explicitly
+            # (absent on a pre-field checkpoint, so "vi") against the one this run resolves to.
+            ckpt_extraction = meta.get("port_extraction", "vi")
+            run_extraction = self.problem.spec.solver.port_extraction
+            if ckpt_extraction != run_extraction:
+                raise ValueError(
+                    "the checkpoint ran with solver.port_extraction="
+                    f"{ckpt_extraction!r}, this run resolves to {run_extraction!r}; "
+                    "set solver.port_extraction explicitly to resume it"
+                )
             x = np.array(z["x"])
             best_x = np.array(z["best_x"]) if "best_x" in z else None
             export_x = np.array(z["export_x"]) if "export_x" in z else None

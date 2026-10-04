@@ -270,6 +270,262 @@ class PortGeometry:
         return (along, across) if self.axis == 0 else (across, along)
 
 
+# -- modal wave extraction (design §25.1) -----------------------------------------------------
+
+_FACE_MODES: dict = {}
+
+
+@dataclass
+class FaceMode:
+    """A line mode sampled on the E and H̄ samples of one `FluxFace` (`ModalPlane.on_face`):
+    per pair of the face the mode's E and H at the samples (physical components, the forward
+    mode along +axis), the pair's sign in (E × H)·â and the weights; `n_cross` = ∫e × h (the
+    projection's normalization), `m_cross` = ∫e × h* and `c` the factor of the face's H averaging
+    (cos KΔ/2)."""
+
+    e: list
+    h: list
+    sign: list
+    weights: list
+    n_cross: complex
+    m_cross: complex
+    c: complex
+    k: complex
+
+
+class ModalPlane:
+    """Modal waves of a line port (design §25.1): the full transverse plane at the measurement
+    node projected on the feed's discrete line mode (`modes.line_mode`, the profile the modal
+    source launches).
+
+    With E on the node plane and H̄ the mean of the two half-cell H planes either side (the
+    samples of a `FluxBox` face), a forward mode e^{iKa} gives H̄ = cos(KΔ/2) h, so
+
+        a₊ + a₋ = ∫ E × h_m / N,   c (a₊ − a₋) = ∫ e_m × H̄ / N,   N = ∫ e_m × h_m
+
+    (unconjugated cross products along the feed axis, the face's area weights, c = cos(KΔ/2)).
+    The mode is scaled to unit power (½ Re(c* ∫ e_m × h_m*) = ½) with its voltage −∫E_z dz
+    under the strip real and positive, so that P = ½|a|² and the phases follow the V/I
+    convention. Mode orthogonality removes the radiated and surface-wave fields that reach the
+    plane, which bias the V/I samples by several per cent next to a radiator (the audit,
+    docs/design §25). The waves are de-embedded to the reference plane by the phase of Re K.
+
+    The plane spans the interior (one node inside the CPML on every side, the ground to below
+    the top CPML) across the feed, cut half way to the strips of other ports on the same side.
+    """
+
+    def __init__(
+        self,
+        pg: PortGeometry,
+        stackup: Stackup,
+        dt: float,
+        *,
+        edge_correction: bool = False,
+        cpml: CPMLParams = CPMLParams(),
+        neighbours=(),
+    ):
+        grid = pg.grid
+        self.pg = pg
+        self.grid = grid
+        self.stackup = stackup
+        self.dt = float(dt)
+        self.edge_correction = bool(edge_correction)
+        self.cpml = cpml
+        a, t, s = pg.axis, pg.taxis, pg.sign
+        meas = pg.port.meas_cells
+        self.node = pg.i_ref - meas if s > 0 else pg.i_ref + meas
+        ax = grid.axis(a)
+        self.d = abs(float(ax.nodes[pg.i_ref] - ax.nodes[self.node]))
+        tx = grid.axis(t)
+        n_lo, n_hi = grid.pml.along(t)
+        lo, hi = n_lo + 1, tx.n - n_hi - 1
+        for other in neighbours:
+            if other.axis != a or other.sign != s:
+                continue
+            if other.tb <= pg.ta:
+                lo = max(lo, (other.tb + pg.ta + 1) // 2)
+            elif other.ta >= pg.tb:
+                hi = min(hi, (other.ta + pg.tb) // 2)
+        z_lo, z_hi = grid.pml.along(2)
+        self._t_range = (lo, hi)
+        self._z_range = (z_lo + (1 if z_lo else 0), grid.z.n - z_hi - 1)
+        self.box = self.plane(self.node, f"p{pg.port.number}_mode")
+        self.face = self.box.faces[0]
+        self._modes: dict = {}
+        self._face_modes: dict = {}
+
+    def plane(self, node: int, name: str):
+        """A one-face `FluxBox` on the transverse plane of this port's feed at `node` along the
+        feed axis (the same transverse extent as the measurement plane): the samples of a modal
+        projection there, e.g. where the feed crosses the radiation box (design §25.2)."""
+        from yapnr.rf.fdtd.monitors import FluxBox
+
+        a, t = self.pg.axis, self.pg.taxis
+        ranges = [None, None, None]
+        ranges[a] = (int(node), int(node))
+        ranges[t] = self._t_range
+        ranges[2] = self._z_range
+        return FluxBox(self.grid, name, tuple(ranges), faces=(("x+", "y+")[a],))
+
+    @property
+    def probes(self) -> list[Probe]:
+        return self.box.probes
+
+    def mode(self, omega: float):
+        """The line mode at ω (solved once per frequency, `modes.line_mode`), with its phase
+        and scale fixed (see the class doc)."""
+        key = round(float(omega), 3)
+        if key not in self._modes:
+            from yapnr.rf.modes import cached_line_mode, cross_section
+
+            pg = self.pg
+            if not hasattr(self, "_cs"):
+                self._cs = cross_section(
+                    self.grid,
+                    self.stackup,
+                    pg.axis,
+                    pg.ta,
+                    pg.tb,
+                    edge_correction=self.edge_correction,
+                )
+            self._modes[key] = cached_line_mode(
+                self._cs, self.stackup, float(omega), self.dt, self.cpml
+            )
+        return self._modes[key]
+
+    def on_face(self, face, omega: float) -> FaceMode:
+        """The mode at ω on the samples of `face` (a `FluxFace` normal to the feed axis, on the
+        feed's uniform pitch), unit-power scaled with the voltage phase of the class doc."""
+        key = (id(face), round(float(omega), 3))
+        if key in self._face_modes:
+            return self._face_modes[key]
+        pg, grid = self.pg, self.grid
+        a, t = pg.axis, pg.taxis
+        if face.axis != a:
+            raise ValueError("the face must be normal to the feed axis")
+        m = self.mode(omega)
+        # Once per process for the same mode and samples (bit-identical projections in every
+        # problem of the process, as `modes.cached_line_mode`).
+        h = hashlib.sha256(m.key.encode())
+        for pr in face.probes:
+            h.update(pr.comp.encode())
+            h.update(np.ascontiguousarray(pr.index).tobytes())
+        for w in face.weights:
+            h.update(np.ascontiguousarray(w, dtype=np.float64).tobytes())
+        h.update(repr((tuple(pg.centre_nodes), face.node, a)).encode())
+        gkey = h.hexdigest()
+        if gkey in _FACE_MODES:
+            self._face_modes[key] = _FACE_MODES[gkey]
+            return _FACE_MODES[gkey]
+        flip = 1.0 if a == 0 else -1.0  # the solver's frame for a line along y is left-handed
+        ax = grid.axis(a)
+        d_lo = float(ax.primary[face.node - 1])
+        d_hi = float(ax.primary[face.node])
+        if abs(d_lo - d_hi) > 1e-9 * d_hi:
+            raise ValueError("a modal face needs the feed's uniform pitch on both sides")
+        c = complex(np.cos(0.5 * m.k * d_hi))
+        es, hs, signs, ws = [], [], [], []
+        for pair in (0, 1):
+            ep = face.probes[3 * pair]
+            ii, jj, kk = grid.unravel(ep.comp, ep.index)
+            tt = (ii, jj)[t]
+            if ep.comp == "ez":
+                e = m.ez[tt, kk]
+                h = flip * m.ht[tt, kk]
+            else:
+                e = m.et[tt, kk]
+                h = flip * m.hz[tt, kk]
+            es.append(np.asarray(e, dtype=np.complex128))
+            hs.append(np.asarray(h, dtype=np.complex128))
+            signs.append(1.0 if pair == 0 else -1.0)
+            ws.append(np.asarray(face.weights[pair], dtype=np.float64))
+        n_cross = sum(s * np.sum(w * e * h) for e, h, s, w in zip(es, hs, signs, ws))
+        m_cross = sum(s * np.sum(w * e * np.conj(h)) for e, h, s, w in zip(es, hs, signs, ws))
+        # The voltage of the mode under the strip centre, ground to copper.
+        kc = grid.k_c
+        dz = grid.z.primary
+        v = 0.0
+        for tc in pg.centre_nodes:
+            v = v - np.sum(m.ez[tc, :kc] * dz[:kc]) / len(pg.centre_nodes)
+        power = float(np.real(np.conj(c) * m_cross))
+        if not power > 0 or v == 0:
+            raise ValueError(f"port {pg.port.number}: the mode carries no power on the face")
+        alpha = (abs(v) / v) / np.sqrt(power)
+        es = [alpha * e for e in es]
+        hs = [alpha * h for h in hs]
+        fm = FaceMode(
+            e=es,
+            h=hs,
+            sign=signs,
+            weights=ws,
+            n_cross=complex(alpha * alpha * n_cross),
+            m_cross=complex(abs(alpha) ** 2 * m_cross),
+            c=c,
+            k=complex(m.k),
+        )
+        self._face_modes[key] = fm
+        _FACE_MODES[gkey] = fm
+        while len(_FACE_MODES) > 4096:
+            _FACE_MODES.pop(next(iter(_FACE_MODES)))
+        return fm
+
+    @staticmethod
+    def amplitudes(face, fms, dft):
+        """(a₊, a₋) (M,) along +axis of the fields on `face` (probe DTFTs, numpy or torch),
+        `fms` the face's `FaceMode` per frequency."""
+        e_num, h_num = 0.0, 0.0
+        for pair in (0, 1):
+            e_meas = dft[face.probes[3 * pair].name]
+            h_meas = (dft[face.probes[3 * pair + 1].name] + dft[face.probes[3 * pair + 2].name]) / 2
+            hm = np.stack([fm.h[pair] * fm.weights[pair] * fm.sign[pair] for fm in fms])
+            em = np.stack([fm.e[pair] * fm.weights[pair] * fm.sign[pair] for fm in fms])
+            if not isinstance(e_meas, np.ndarray):
+                import torch
+
+                hm = torch.as_tensor(hm)
+                em = torch.as_tensor(em)
+            e_num = e_num + (e_meas * hm).sum(-1)
+            h_num = h_num + (em * h_meas).sum(-1)
+        n = np.array([fm.n_cross for fm in fms])
+        c = np.array([fm.c for fm in fms])
+        if not isinstance(e_num, np.ndarray):
+            import torch
+
+            n = torch.as_tensor(n)
+            c = torch.as_tensor(c)
+        s = e_num / n
+        d = h_num / (n * c)
+        return (s + d) / 2, (s - d) / 2
+
+    @staticmethod
+    def net_power(fms, a_plus, a_minus):
+        """The modal net power along +axis, ½ Re[(a₊ + a₋) c* (a₊ − a₋)* M] (M,)."""
+        m = np.array([np.conj(fm.c) * fm.m_cross for fm in fms])
+        s = a_plus + a_minus
+        d = a_plus - a_minus
+        if not isinstance(s, np.ndarray):
+            import torch
+
+            m = torch.as_tensor(m)
+            return 0.5 * torch.real(s * torch.conj(d) * m)
+        return 0.5 * np.real(s * np.conj(d) * m)
+
+    def face_modes(self, face, omega) -> list:
+        return [self.on_face(face, float(w)) for w in np.atleast_1d(omega)]
+
+    def waves(self, dft, omega):
+        """(a_ref, b_ref) (M,) at the reference plane, P = ½|a|² (numpy or torch)."""
+        fms = self.face_modes(self.face, omega)
+        ap, am = self.amplitudes(self.face, fms, dft)
+        inc, out = (ap, am) if self.pg.sign > 0 else (am, ap)
+        ph = np.exp(1j * np.array([fm.k.real for fm in fms]) * self.d)
+        if not isinstance(inc, np.ndarray):
+            import torch
+
+            ph = torch.as_tensor(ph)
+        return inc * ph, out / ph
+
+
 def quasi_tem_air(grid: Grid, taxis: int, ta: int, tb: int, tol: float = 1e-10):
     """Electrostatic field of the strip (nodes ta..tb on the copper plane, potential 1) over
     the ground, with ε = ε0 everywhere, on the (t, z) cross-section of the grid.
@@ -338,13 +594,15 @@ class LumpedPort:
 
         a = V̂_s / (2√R),   b = (2V̂ − V̂_s) / (2√R)
 
-    with the reference plane at the port. It is the fallback port and the model of lumped
-    elements; the case ports are line ports.
+    with the reference plane at the port. The case ports of the infinite-substrate model are
+    line ports; the board models (design §26) drive their ports this way. `ground` is the node
+    plane of the ground (0 in the infinite-substrate model).
     """
 
     number: int
     nodes: tuple
     resistance: float = 50.0
+    ground: int = 0
 
     def on(self, grid: Grid) -> "LumpedPortGeometry":
         return LumpedPortGeometry(self, grid)
@@ -356,19 +614,22 @@ class LumpedPortGeometry:
     def __init__(self, port: LumpedPort, grid: Grid):
         self.port = port
         self.grid = grid
-        kc = grid.k_c
+        kc, kg = grid.k_c, int(port.ground)
+        if not 0 <= kg < kc:
+            raise ValueError(f"lumped port {port.number}: the ground must lie below the copper")
         cols = [(grid.x.node(x), grid.y.node(y)) for x, y in port.nodes]
         self.columns = cols
-        idx = [grid.flat_index("ez", i, j, k)[0] for i, j in cols for k in range(kc)]
+        self.n_series = kc - kg
+        idx = [grid.flat_index("ez", i, j, k)[0] for i, j in cols for k in range(kg, kc)]
         self.index = np.array(idx)
-        dz = grid.z.primary[:kc]
+        dz = grid.z.primary[kg:kc]
         self.v_probe = Probe(f"p{port.number}_vl", "ez", self.index)
         self.v_weights = np.tile(-dz, len(cols)) / len(cols)
-        # σ_e = n L_e / (m R A_e) on every column edge (n = k_c in series, m columns).
+        # σ_e = n L_e / (m R A_e) on every column edge (n edges in series, m columns).
         vol = grid.volume("ez").reshape(-1)[self.index]
         length = np.tile(dz, len(cols))
         area = vol / length
-        n, m = kc, len(cols)
+        n, m = self.n_series, len(cols)
         self.sigma = n * length / (m * port.resistance * area)
         # J = σ_e V_s / (n L_e) is the Norton current of the source across each edge.
         self.amplitude = self.sigma / (n * length)
@@ -380,7 +641,7 @@ class LumpedPortGeometry:
     def apply(self, structure) -> None:
         """Add the port resistance to the structure (every port, excited or not)."""
         p = self.port
-        structure.add_resistor("ez", self.index, p.resistance, self.grid.k_c, len(self.columns))
+        structure.add_resistor("ez", self.index, p.resistance, self.n_series, len(self.columns))
 
     def source(self, waveform, dt: float) -> PulseSource:
         """The Thevenin source V_s(t) = waveform(t) (volts) as Norton currents."""

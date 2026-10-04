@@ -327,9 +327,10 @@ where it matters, give the same numbers:</p>
 </div>
 <p><strong>The default is <code class="docutils literal notranslate"><span class="pre">auto</span></code>: native float64 wherever its library loads, the numpy reference
 otherwise.</strong> Native float64 is numpy float64 bit for bit (below), so a run’s results do not
-depend on whether the library was there, only its time does: one evaluation is 13–16 times
-faster than numpy on the shared Mac (4 threads) and 38–42 times on a C4D-16, and 3.4–6.3 times
-faster than the torch float32 the cases ran on before (<a class="reference internal" href="#performance">measurements</a>). The
+depend on whether the library was there, only its time does: one evaluation is 12–17 times
+faster than numpy on the shared Mac (4 threads) and 43–62 times on a C4D-16 (16 threads), and
+4.2–8.4 times faster than the torch float32 the cases ran on before
+(<a class="reference internal" href="#performance">measurements</a>). The
 library ships in the yapnr wheel (one per platform) and so in the container image, Bazel builds
 it for <code class="docutils literal notranslate"><span class="pre">//yapnr/rf</span></code> and its tests, and a checkout builds it with one command. The first
 simulation of a process says on stderr, once, which
@@ -561,8 +562,113 @@ job can still ship a library of its own and point <code class="docutils literal 
 </section>
 <section id="performance">
 <h2>Performance<a class="headerlink" href="#performance" title="Link to this heading">¶</a></h2>
-<section id="the-default-measured-on-the-integrated-branch">
-<h3>The default, measured on the integrated branch<a class="headerlink" href="#the-default-measured-on-the-integrated-branch" title="Link to this heading">¶</a></h3>
+<section id="per-iteration-divider-and-d1-size-grids">
+<h3>Per iteration, divider and D1-size grids<a class="headerlink" href="#per-iteration-divider-and-d1-size-grids" title="Link to this heading">¶</a></h3>
+<p>One evaluation with gradients of a gray design (forward and adjoint runs, the design gradients:
+the optimizer’s cost per MMA step at the nominal design; the robust epochs pay three), on the
+divider’s round-2 grid (0.20 M cells, 12,770 steps) and the same divider at refine 2 (0.80 M
+cells, 25,532 steps: the size of the Order 0 D1 grid), round-2 settings (copper-edge correction,
+modal source), line calibrations cached, <code class="docutils literal notranslate"><span class="pre">auto</span></code> schedule, seconds. The time is a process’s
+second evaluation (another design, as the next iteration); the first evaluation of a process
+adds 0.8–1.0 s of one-time set-up (the port mode solves, the stepper’s buffers and pool).</p>
+<p>Spot <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-16</span></code> (AMD EPYC 9B45, Zen 5: 8 cores, 16 threads, 32 MiB L3), idle, the library
+CI built into the linux/amd64 wheel (gcc 13, AVX-512 sweeps), loaded from the unpacked wheel:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Grid</p></th>
+<th class="head"><p>numpy f64, 1 thread</p></th>
+<th class="head"><p>torch f32, 1 / 4 threads</p></th>
+<th class="head"><p>native f64, 1 / 4 / 8 / 16 threads</p></th>
+<th class="head"><p>native f32, 1 / 4 / 8 / 16 threads</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>divider, 0.20 M</p></td>
+<td><p>90.5</p></td>
+<td><p>29.3 / 12.4</p></td>
+<td><p>10.5 / 3.28 / 1.72 / <strong>1.47</strong></p></td>
+<td><p>7.97 / 2.57 / 1.40 / <strong>1.16</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>D1 size, 0.80 M</p></td>
+<td><p>697</p></td>
+<td><p>223 / 101</p></td>
+<td><p>95.8 / 28.8 / 17.5 / <strong>16.1</strong></p></td>
+<td><p>47.5 / 15.5 / 8.19 / <strong>6.74</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Mac mini M4, 4 threads, niced, shared with other work (load 6–28); two runs, their range:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Grid</p></th>
+<th class="head"><p>numpy f64, 1 thread</p></th>
+<th class="head"><p>torch f32, 4 threads</p></th>
+<th class="head"><p>native f64, 4 threads</p></th>
+<th class="head"><p>native f32, 4 threads</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>divider, 0.20 M</p></td>
+<td><p>68.9–92.4</p></td>
+<td><p>20.4–23.4</p></td>
+<td><p><strong>4.15–5.57</strong></p></td>
+<td><p>2.45–4.08</p></td>
+</tr>
+<tr class="row-odd"><td><p>D1 size, 0.80 M</p></td>
+<td><p>668–684</p></td>
+<td><p>126–250</p></td>
+<td><p><strong>40.0–57.5</strong></p></td>
+<td><p>18.2–24.1</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<ul class="simple">
+<li><p><strong>Native float64 on 16 threads against the cases’ former torch float32 (4 threads):</strong> 8.4
+times faster on the divider and 6.3 times on the D1-size grid, 62 and 43 times faster than
+numpy; native float32 on 16 threads 10.7 and 15 times faster than torch float32. On the Mac at
+4 threads native float64 is 4.2–6.0 times faster than torch float32 and 12–17 times faster
+than numpy.</p></li>
+<li><p><strong>Threads:</strong> on the divider 1 → 4 → 8 → 16 threads gives 3.2, 1.9 and 1.17 times (the last
+doubling is SMT); at 0.80 M cells 3.3, 1.6 and 1.09 times: from 8 threads on the grid is
+memory-bound, 0.79 ns per cell-step in float64 and 0.33 in float32 (the 8-step float32 passes
+keep more of it in cache).</p></li>
+<li><p><strong>The same bits at every thread count:</strong> on both machines and both grids every native float64
+row’s first evaluation has the numpy row’s sha256 (objective values, gradients, S), and the
+float64 objective t agrees across rows; float32 is within 4.9e-7 (divider) and 1.2e-6 (D1 size)
+of float64 in t.</p></li>
+<li><p><strong>Schedules <code class="docutils literal notranslate"><span class="pre">auto</span></code> chose:</strong> C4D sweeps for the divider (the box fits half the L3), 5-step
+passes in float64 and 8-step in float32 at 0.80 M cells; M4 7- and 8-step passes for the
+divider, 2- and 5-step passes at 0.80 M cells.</p></li>
+</ul>
+<p>The independent check of the same stage, besides the tests: the full-grid matrix of
+<code class="docutils literal notranslate"><span class="pre">test_native_identity</span></code> again with another design (random gray with exact copper and void
+pixels; the diagonal one with lines along both diagonals) on the C4D (divider, antenna,
+diagonal design × edge correction × port source, the combiner’s resistor, the reactive sheet:
+14 configurations), native float64 at 1 thread (sweeps), 16 (<code class="docutils literal notranslate"><span class="pre">auto</span></code>), 5 (2-step passes, 3 rows
+per item), 2 (7-step passes, 1 row) and 4 (1-step passes) and native float32 at 16 and 3 threads,
+each in a process of its own: all equal to numpy by bytes, and the line calibrations, computed
+separately for each backend, equal too (18 of 18). float32 against float64: objective values
+within 4.8e-6, gradients within 2.5e-5 overall and 1.1e-4 for the worst objective (the plain
+divider), cosine within 3.1e-10 of 1. End to end on the smoke grids (six-iteration optimizations
+with robust variants, adaptive moves from the epoch’s best, a radiation epoch and frequency
+continuation for the antenna; binarization, repair, export, coarse sweep, calibrations and
+re-validation, every file of the run directory compared): native float64 at 1, 3 (3-step
+passes) and 4 threads equal to numpy float64, native float32 equal to numpy float32, for the
+divider, combiner and antenna on the C4D and for all five cases on the Mac (there with the mode
+profiles pinned, see <a class="reference internal" href="#exactness">Exactness</a>). The published divider and antenna, re-exported
+from their round-2 checkpoints and re-validated on native float64 (Mac, 4 threads, calibrations
+recomputed): the same verdicts (the divider passes on all three grids; the antenna meets |S11|
+and η but not the 4 % power balance on the finer two, 4.58 and 4.70 %), byte-identical
+footprints, every check within 8.4e-5 dB (divider) and 2.5e-4 dB (antenna, η within 2e-5) of
+round 2’s torch float32 numbers, in 470 s and 351 s against 1,245 s and 668 s.</p>
+</section>
+<section id="the-integrated-branch-first-measurement">
+<h3>The integrated branch, first measurement<a class="headerlink" href="#the-integrated-branch-first-measurement" title="Link to this heading">¶</a></h3>
+<p>These evaluations are a process’s first (with its one-time set-up).</p>
 <p>One evaluation (forward and adjoint runs, gradients; the optimizer’s unit per iteration) of a
 gray design on the cases’ full grids, round-2 settings (copper-edge correction, its time step
 over the diagonal patterns, modal source), line calibrations cached, seconds. <code class="docutils literal notranslate"><span class="pre">auto</span></code> is the
@@ -946,7 +1052,8 @@ build lane and drivers in the image.</p></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#performance">Performance</a><ul>
-<li><a class="reference internal" href="#the-default-measured-on-the-integrated-branch">The default, measured on the integrated branch</a></li>
+<li><a class="reference internal" href="#per-iteration-divider-and-d1-size-grids">Per iteration, divider and D1-size grids</a></li>
+<li><a class="reference internal" href="#the-integrated-branch-first-measurement">The integrated branch, first measurement</a></li>
 <li><a class="reference internal" href="#larger-grids">Larger grids</a></li>
 </ul>
 </li>

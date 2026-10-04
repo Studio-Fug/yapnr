@@ -31,6 +31,7 @@ import ctypes
 import hashlib
 import os
 import sys
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -81,6 +82,19 @@ DTYPES = (np.dtype(np.float64), np.dtype(np.float32))
 
 _STATE = {"loaded": False, "kernel": None, "reason": "not requested", "warned": False}
 _SAID = {"loaded": False}
+# `load`, `require_or_warn` and `reset` hold this: without it, a thread asking for the kernel
+# while another thread's first `load` still runs got none (numpy, "not requested"; an error
+# with YAPNR_RF_REQUIRE_NATIVE). A forked child takes a new one.
+_LOCK = threading.RLock()
+
+
+def _new_lock_in_child() -> None:
+    global _LOCK
+    _LOCK = threading.RLock()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_new_lock_in_child)
 
 c_int32, c_int64, c_void_p = ctypes.c_int32, ctypes.c_int64, ctypes.c_void_p
 
@@ -368,32 +382,36 @@ def build_library(out_dir, compiler=None, timeout=300, extra_flags=()) -> Path:
 
 def reset() -> None:
     """Forget the loaded library (tests)."""
-    _STATE.update(loaded=False, kernel=None, reason="not requested", warned=False)
-    _SAID.update(loaded=False)
+    with _LOCK:
+        _STATE.update(loaded=False, kernel=None, reason="not requested", warned=False)
+        _SAID.update(loaded=False)
 
 
 def load() -> Kernel | None:
-    """The native kernel, or None (``status()["reason"]`` says why)."""
-    if _STATE["loaded"]:
-        return _STATE["kernel"]
-    _STATE["loaded"] = True
-    reasons = []
-    for path in _candidates():
-        if not path.is_file():
-            continue
-        try:
-            library = ctypes.CDLL(str(path))
-            abi = library.yf_abi()
-            if abi != _ABI:
-                reasons.append(f"{path}: ABI {abi}, this module needs {_ABI} (rebuild it)")
-                continue
-            _STATE["kernel"] = Kernel(library, path)
-            _STATE["reason"] = "loaded " + path.name
+    """The native kernel, or None (``status()["reason"]`` says why). Thread-safe: the first
+    call loads it, and calls from other threads meanwhile wait for that."""
+    with _LOCK:
+        if _STATE["loaded"]:
             return _STATE["kernel"]
-        except (OSError, AttributeError) as error:
-            reasons.append(f"{path}: {error}")
-    _STATE["reason"] = "; ".join(reasons) or "library not found"
-    return None
+        reasons = []
+        for path in _candidates():
+            if not path.is_file():
+                continue
+            try:
+                library = ctypes.CDLL(str(path))
+                abi = library.yf_abi()
+                if abi != _ABI:
+                    reasons.append(f"{path}: ABI {abi}, this module needs {_ABI} (rebuild it)")
+                    continue
+                _STATE["kernel"] = Kernel(library, path)
+                _STATE["reason"] = "loaded " + path.name
+                break
+            except (OSError, AttributeError) as error:
+                reasons.append(f"{path}: {error}")
+        else:
+            _STATE["reason"] = "; ".join(reasons) or "library not found"
+        _STATE["loaded"] = True
+        return _STATE["kernel"]
 
 
 def required() -> bool:
@@ -404,24 +422,27 @@ def required() -> bool:
 def require_or_warn(fallback: str = "numpy") -> Kernel | None:
     """`load`; say once on stderr which library runs, or, without one, why the `fallback`
     backend runs instead (raise RuntimeError when ``YAPNR_RF_REQUIRE_NATIVE`` is set)."""
-    kernel = load()
-    if kernel is None:
-        if required():
-            raise RuntimeError(f"yapnr.rf native FDTD required ({ENV_REQUIRE}): {_STATE['reason']}")
-        if not _STATE["warned"]:
-            _STATE["warned"] = True
-            same = " (the same float64 values, slower)" if fallback == "numpy" else ""
+    with _LOCK:
+        kernel = load()
+        if kernel is None:
+            if required():
+                raise RuntimeError(
+                    f"yapnr.rf native FDTD required ({ENV_REQUIRE}): {_STATE['reason']}"
+                )
+            if not _STATE["warned"]:
+                _STATE["warned"] = True
+                same = " (the same float64 values, slower)" if fallback == "numpy" else ""
+                sys.stderr.write(
+                    f"yapnr.rf native FDTD: {_STATE['reason']}; {fallback} backend used{same}\n"
+                )
+        elif not _SAID["loaded"]:
+            _SAID["loaded"] = True
+            what = [getattr(kernel, k, None) for k in ("isa", "compiler")]
             sys.stderr.write(
-                f"yapnr.rf native FDTD: {_STATE['reason']}; {fallback} backend used{same}\n"
+                f"yapnr.rf native FDTD: {getattr(kernel, 'path', '?')}"
+                f" ({'; '.join(str(w) for w in what if w)})\n"
             )
-    elif not _SAID["loaded"]:
-        _SAID["loaded"] = True
-        what = [getattr(kernel, k, None) for k in ("isa", "compiler")]
-        sys.stderr.write(
-            f"yapnr.rf native FDTD: {getattr(kernel, 'path', '?')}"
-            f" ({'; '.join(str(w) for w in what if w)})\n"
-        )
-    return kernel
+        return kernel
 
 
 def resolve(backend: str | None) -> str:

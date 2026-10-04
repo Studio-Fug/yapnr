@@ -29,6 +29,7 @@ import select
 import shutil
 import signal
 import tempfile
+import threading
 import unittest
 from contextlib import redirect_stderr
 from dataclasses import replace
@@ -238,6 +239,30 @@ class SelectionTest(unittest.TestCase):
             os.environ["TEST_SRCDIR"] = str(fake)
             got = list(native_kernel._candidates())
             self.assertNotIn(fake / "yapnr" / "rf" / native_kernel.library_names()[0], got)
+
+    def test_first_load_from_threads(self):
+        """Threads that ask for the kernel while another thread's first load still runs get
+        it too (before the loader's lock they got none: numpy, "not requested")."""
+        kernel = kernel_or_skip(self)
+        os.environ[native_kernel.ENV_LIB] = str(kernel.path)
+        for _ in range(5):
+            native_kernel.reset()
+            start = threading.Barrier(4)
+            got = []
+
+            def resolve():
+                start.wait()
+                got.append(native_kernel.resolve("auto"))
+
+            threads = [threading.Thread(target=resolve) for _ in range(4)]
+            err = io.StringIO()
+            with redirect_stderr(err):
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+            self.assertEqual(got, ["native"] * 4)
+            self.assertEqual(err.getvalue().count("yapnr.rf native FDTD: "), 1, err.getvalue())
 
 
 class SourceTableTest(unittest.TestCase):

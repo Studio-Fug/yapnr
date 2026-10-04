@@ -121,7 +121,8 @@ can still differ in the last bits of a modal-source run.
 - the divider and the antenna on their smoke grids;
 - 1 to 4 threads, both schedules, float64 and float32;
 - backend selection: `auto` with and without a library, the environment's overrides, the
-  fallback's one line, `YAPNR_RF_REQUIRE_NATIVE`, an installed wheel's library;
+  fallback's one line, `YAPNR_RF_REQUIRE_NATIVE`, an installed wheel's library, a first load
+  from several threads at once (each gets the library);
 - the loader's refusals (stale sources, `-ffp-contract=fast`, fast-math) and the C side's
   bounds checks (a pass longer than 32 steps, a work item larger than its scratch: error -4).
 
@@ -421,8 +422,9 @@ built only for timing: a series-fed column of two patches with its feed on a 0.1
   (error -5 when out of memory) instead of aborting inside a worker.
 - **Bazel:** the library is declared through `tools/bazel/native_cc.bzl` (buildifier lints
   `yapnr/rf`, unlike `hardware/`, and would add an unresolvable `@rules_cc` load to a direct
-  `cc_binary`). Where Bazel has no native `cc_binary` (Bazel 9) the macro declares nothing, so
-  `//yapnr/rf`, which downstream modules load, still loads; adding `rules_cc` is the fix then.
+  `cc_binary`). Where Bazel has no native `cc_binary` (Bazel 9) the macro declares an empty
+  filegroup, so `//yapnr/rf`, which downstream modules load, still loads; adding `rules_cc` is
+  the fix then.
 
 ## GPUs
 

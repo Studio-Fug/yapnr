@@ -34,7 +34,7 @@ def case_settings(name: str) -> Dict[str, Any]:
     ``MaxSize`` unknowns, so the last mesh can be up to about twice that); ``adaptive_max_samples``
     caps the adaptive sweep's full solves (Palace's default is 20); ``copper_bc`` "impedance"
     writes the copper sheets as Impedance boundaries frozen at the band centre (see
-    ``config.sheet_impedance``: Palace b797ea8 aborts a multi-rank mode solve whose cross-section
+    ``config.impedance_rl``: Palace b797ea8 aborts a multi-rank mode solve whose cross-section
     a Conductivity sheet crosses)."""
     if name.startswith("line-"):
         return dict(

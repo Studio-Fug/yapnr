@@ -210,11 +210,20 @@ class DrivenTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             config.driven(self.doc, self.rec, 54.0, 70.0, 0.5, copper_bc="lossy")
 
-    def test_sheet_impedance_thin_limit(self):
-        # a sheet much thinner than the skin depth: per face (Palace cracks an interior sheet
-        # and applies the boundary on both faces) twice its DC sheet resistance 1/(sigma t)
-        rs, ls = config.sheet_impedance(5.8e7, 1e-5, 1.0)  # 10 nm at 1 GHz (delta 2 um)
-        self.assertAlmostEqual(rs * 5.8e7 * 1e-8, 2.0, places=3)
+    def test_impedance_rl(self):
+        # a sheet much thinner than the skin depth: Palace's per-face 2/(sigma t), two faces,
+        # so the boundary as a whole is the DC sheet resistance 1/(sigma t), not inductive
+        rs, ls = config.impedance_rl(5.8e7, 1e-5, 1.0, interior=True)  # 10 nm, delta 2 um
+        self.assertAlmostEqual(rs * 5.8e7 * 1e-8, 1.0, places=3)
+        # thick: interior sheet Rs = omega Ls = Re Z, solid copper's outside 2 Re Z (one face)
+        z = config.face_impedance(5.8e7, 0.035, 62.0)
+        omega = 2 * math.pi * 62e9
+        rs, ls = config.impedance_rl(5.8e7, 0.035, 62.0, interior=True)
+        self.assertAlmostEqual(rs / z.real, 1.0, places=9)
+        self.assertAlmostEqual(omega * ls / z.real, 1.0, places=9)
+        rs, ls = config.impedance_rl(5.8e7, 0.035, 62.0, interior=False)
+        self.assertAlmostEqual(rs / z.real, 2.0, places=9)
+        self.assertAlmostEqual(omega * ls / z.real, 2.0, places=9)
 
     def test_port_face_ends_in_ground(self):
         g = model.port_geometry(self.doc)["P1"]

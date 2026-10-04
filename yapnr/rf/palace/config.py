@@ -39,33 +39,47 @@ MU0 = 4.0e-7 * math.pi
 COPPER_BCS = ("conductivity", "impedance")
 
 
-def sheet_impedance(sigma: float, thickness_mm: float, f_ghz: float) -> Tuple[float, float]:
-    """(Rs ohm/sq, Ls H/sq) of a conductor sheet at ``f_ghz``: Palace's own finite-thickness
-    surface impedance of a ``Conductivity`` boundary (the HFSS thin-trace formula, which is
-    (1 + i)/(sigma delta) once the sheet is a few skin depths thick and 2/(sigma t) when it is
-    much thinner: Palace cracks an interior sheet and applies it on both faces), frozen at one
-    frequency.
-
-    The ``impedance`` copper boundary writes these as an ``Impedance`` boundary. At b797ea8 a
-    ``Conductivity`` sheet that crosses a wave-port face (or a BoundaryMode cross-section) aborts
-    the 2D mode solve when it runs on more than one MPI rank ("Dimension mismatch for
-    MaterialPropertyCoefficient and libCEED integrator": the ranks that own none of the sheet's
-    edges get an empty coefficient), while ``Impedance`` boundaries are skipped where empty.
-    The price is Rs and Ls fixed at ``f_ghz``: Rs scales as sqrt(f), so about +/-7 % over
-    54-70 GHz around 62 GHz."""
+def face_impedance(sigma: float, thickness_mm: float, f_ghz: float) -> complex:
+    """Palace's surface impedance of one face of a ``Conductivity`` boundary (ohm/sq): the HFSS
+    finite-thickness formula, (1 + i)/(sigma delta) once the conductor is a few skin depths
+    thick and 2/(sigma t) when it is much thinner (``External`` doubles t)."""
     omega = 2.0 * math.pi * f_ghz * 1e9
     delta = cmath.sqrt(2.0 / (MU0 * sigma * omega))
     base = 1.0 / (sigma * delta)
-    z = (1.0 + 1.0j) * base
-    if thickness_mm > 0:
-        nu = thickness_mm * 1e-3 / delta
-        den = cmath.cosh(nu) - cmath.cos(nu)
-        z = (
-            base
-            * ((cmath.sinh(nu) + cmath.sin(nu)) + 1.0j * (cmath.sinh(nu) - cmath.sin(nu)))
-            / den
-        )
-    return float(z.real), float(z.imag / omega)
+    if thickness_mm <= 0:
+        return (1.0 + 1.0j) * base
+    nu = thickness_mm * 1e-3 / delta
+    den = cmath.cosh(nu) - cmath.cos(nu)
+    return base * ((cmath.sinh(nu) + cmath.sin(nu)) + 1.0j * (cmath.sinh(nu) - cmath.sin(nu))) / den
+
+
+def impedance_rl(
+    sigma: float, thickness_mm: float, f_ghz: float, interior: bool
+) -> Tuple[float, Optional[float]]:
+    """(Rs ohm/sq, Ls H/sq) of the ``Impedance`` boundary that matches a ``Conductivity`` one at
+    ``f_ghz``: copper written this way when ``copper_bc`` is "impedance".
+
+    Why: at b797ea8 a ``Conductivity`` boundary that crosses a wave-port face (or a BoundaryMode
+    cross-section) aborts the 2D mode solve on more than one MPI rank ("Dimension mismatch for
+    MaterialPropertyCoefficient and libCEED integrator": ranks that own none of its edges get an
+    empty coefficient, which ModeOperatorModel adds unconditionally); ``Impedance`` coefficients
+    are skipped where empty.
+
+    How: Palace's ``Impedance`` is a parallel R || L (|| C) per square of the whole boundary,
+    split over the two faces of a cracked interior sheet, whereas ``Conductivity`` applies its
+    impedance Z on each face. Matching the admittance, Y = faces / Z (two faces for an interior
+    sheet of thickness t, one for the outside of solid copper with Palace's External 2t), gives
+    Rs = 1 / Re Y and Ls = -1 / (omega Im Y); for thick copper Rs = omega Ls = Re Z (sheet) or
+    2 Re Z (solid). Exact at ``f_ghz`` (one-rank runs give the same n_eff and Z_PV to the
+    printed digits); elsewhere Re(1/Y) goes as 1/(1 + (f0/f)^2) instead of sqrt(f): the
+    conductor loss is about 8 % low at 54 GHz and 6 % high at 70 GHz for f0 = 62 GHz."""
+    omega = 2.0 * math.pi * f_ghz * 1e9
+    if interior:
+        y = 2.0 / face_impedance(sigma, thickness_mm, f_ghz)
+    else:
+        y = 1.0 / face_impedance(sigma, 2.0 * thickness_mm, f_ghz)
+    ls = -1.0 / (omega * y.imag) if y.imag < 0 else None
+    return 1.0 / y.real, ls
 
 
 def _groups(rec: Dict[str, Any], prefix: str) -> Dict[str, int]:
@@ -123,9 +137,11 @@ def _boundaries(
         lay = layers[key.split(":", 1)[0]]
         if lay["model"] == "pec":
             pec.append(tag)
-        elif lay["model"] == "sheet" and copper_bc == "impedance":
-            rs, ls = sheet_impedance(model.sigma_eff(lay), float(lay["t"]), float(copper_f_ghz))
-            imp.append(dict(Attributes=[tag], Rs=rs, Ls=ls))
+        elif copper_bc == "impedance":  # sheet (interior, two faces) or solid (outside, one)
+            rs, ls = impedance_rl(
+                model.sigma_eff(lay), float(lay["t"]), float(copper_f_ghz), lay["model"] == "sheet"
+            )
+            imp.append(dict(Attributes=[tag], Rs=rs, **({"Ls": ls} if ls else {})))
         elif lay["model"] == "sheet":
             cond.append(
                 dict(
@@ -135,11 +151,6 @@ def _boundaries(
                     External=False,
                 )
             )
-        elif copper_bc == "impedance":  # solid: the copper's outer surface, one-sided
-            rs, ls = sheet_impedance(
-                model.sigma_eff(lay), 2.0 * float(lay["t"]), float(copper_f_ghz)
-            )
-            imp.append(dict(Attributes=[tag], Rs=rs, Ls=ls))
         else:
             cond.append(dict(Attributes=[tag], Conductivity=model.sigma_eff(lay), External=True))
     pec += sorted(_groups(rec, "via:").values())

@@ -689,6 +689,63 @@ Python) adds it to a copy of the board and judges it with the native Oracle and
 KiCad's DRC. Balls on a net with a dedicated plane drop only on a board that
 declares its copper stack; without one the plane stage drops them.
 
+### `plane_partition` — supply rails sharing a plane layer
+
+Divides one dedicated plane layer (typed `power`) among the rails whose net classes
+name it as `plane_layer`. Without it, every rail but the one with the most pads gets
+its pads' bounding box plus 2 mm, and the boxes of rails whose balls spread over
+one package overlap. Without the section nothing changes.
+
+```yaml
+plane_partition:
+  - layer: In3.Cu
+    nets: [1V0_RF1, 1V0_RF2, 1V2, 1V8] # names or globs; each a plane net of the layer
+    order: current # by peak current, then terminal count (or: listed)
+    split_gap_mm: 0.3 # copper gap between two rails
+    min_width_mm: 1.0 # a rail's narrowest trunk
+    fill: GND # what is left (a zone over the outline at priority 0), or absent
+    core_no_vias: true # other nets' vias stay out of each trunk's core
+    terminal_reach_mm: 0.8 # a pad without a drop yet: where its drop will land
+    currents: { 1V2: 1.0 } # A; default the @pnr-current peak, else the class current_a
+    budgets_mohm: { 1V2: 12 } # widens a trunk for its IR budget (default: its ir_drop budget)
+    sources: { 1V2: { "@pmic.fb_1v2": "2" } } # the trunk's root (default: the central terminal)
+    h_mm: 0.1 # the raster
+```
+
+How it works (`pnr/plane_partition.py`, run by the router after the declared
+fanouts are planned): the layer is rasterized inside the outline less the edge
+clearance, with every other net's through copper blocked at its clearance (planned
+fanout vias, fixed vias, plated holes, mounting holes), fixed copper of other nets on
+the layer, and the `copper_keepout`s that bar pours there (except for the nets they
+allow). A rail's terminals are its planned drop vias (fanout and fixed vias) and,
+for a surface pad without one, the disc within `terminal_reach_mm` of it. First
+every rail is connected at its minimum width: a Steiner tree over its terminals
+(Dijkstra from the tree to the nearest remaining terminal; a cell costs more where
+the trunk would be narrower than it should be and inside another rail's pad disc),
+keeping `split_gap_mm` of copper from every other rail and leaving the pad discs of
+the rails still to come free. A rail left with an unreached terminal is tried first
+in turn, and the order with the fewest unreached terminals wins. Then each trunk
+widens, the higher current first, to the largest of `min_width_mm`, the IPC-2221
+internal width for its current (at the layer's copper) and `R_sq L / R_share` for
+its IR budget (`R_share` the budget less two via barrels, at least a quarter of
+it), where no other rail's copper or pad disc is. The territories then grow over
+the free cells round the board (breadth first), grown copper is carved back to keep
+the split gap, and each territory becomes polygons with holes (a hole holding only
+another net's antipad is filled: KiCad clears it). The regions replace the
+bounding boxes on that layer for every drop the router plans (`pnr.stack.
+PlaneAccess`), and `routes.json` carries them (`plane_regions`) to writeback, which
+replaces that layer's zones of those nets with one zone per region (its holes and
+priority; the fill net under them all). With `core_no_vias`, other nets' vias keep
+via radius plus clearance beyond half the minimum width of each trunk's centre line,
+so a row of vias cannot cut a rail's neck.
+
+The route's escape diagnostics carry a `plane_partition` report per layer: per rail
+its current, width (and the IPC and budget widths), tree length, terminals reached,
+the unreached ones (also failure sites; a pad's drop then fails in the drop planner,
+as a pad outside its region does), connected pieces, area, the narrowest width along
+its trunk (`core_min_mm`), and the smallest gap between rails. `ir_drop` (below)
+measures the result on the routed board.
+
 ### `ir_drop` — the DC drop of a supply rail
 
 Asks for a report of a rail's copper resistance on the routed board. It is a

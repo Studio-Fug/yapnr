@@ -162,6 +162,9 @@ class BoardRoute:
     # Partial fanouts only (pnr.route.detail.fanout): net -> {"REF.PAD": reason} of the
     # balls left unconnected while their nets routed among the other terminals.
     partial_open: dict = field(default_factory=dict)
+    # Declared plane partitions only (pnr.plane_partition): the rails' regions, as
+    # routes.json ``plane_regions`` rows for writeback.
+    plane_regions: List[dict] = field(default_factory=list)
 
     @property
     def fully_routed(self) -> bool:
@@ -174,6 +177,8 @@ class BoardRoute:
             out["via_sizes"] = self.via_sizes
         if self.locked:
             out["locked"] = self.locked
+        if self.plane_regions:
+            out["plane_regions"] = self.plane_regions
         return out
 
     def summary(self) -> str:
@@ -987,9 +992,10 @@ def route_board(
                     drop_widths[pad.net] = max(drop_widths.get(pad.net, 0.0), w)
         for n, w in drop_widths.items():
             net_width.setdefault(n, w)
+        regions = plane_regions(stack, graph.stack, pad_points(graph), width, height)
         plane_access = PlaneAccess(
             stack,
-            plane_regions(stack, graph.stack, pad_points(graph), width, height),
+            regions,
             inset=via_radius_mm,
             outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
@@ -1036,6 +1042,25 @@ def route_board(
             signal_nets=signal_nets,
             via_keepout=via_keepout,
             fixed_copper=fixed_copper,
+        )
+    partitions = []
+    if plane_access is not None and rules and rules.get("plane_partition"):
+        # Rails sharing a plane layer (pnr.plane_partition): territories from their own
+        # balls and pads (after the fanouts, whose vias are terminals or obstacles)
+        # replace the bounding-box regions on that layer for every drop below.
+        from pnr.plane_partition import for_route
+
+        partitions = for_route(
+            grid, graph, rules, stack, width, height, fixed_copper=fixed_copper, fanouts=fanouts
+        )
+        done = {p.layer for p in partitions}
+        regions = [r for r in regions if r.layer not in done]
+        regions += [r for p in partitions for r in p.regions]
+        plane_access = PlaneAccess(
+            stack,
+            regions,
+            inset=via_radius_mm,
+            outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
     plan = plan_escapes(
         grid,
@@ -1159,6 +1184,16 @@ def route_board(
         board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
     if fanouts is not None and fanouts.partial_open:
         board.partial_open = {n: dict(v) for n, v in sorted(fanouts.partial_open.items())}
+    if partitions:
+        board.plane_regions = [row for p in partitions for row in p.rows()]
+        board.escape_diagnostics["plane_partition"] = [p.report for p in partitions]
+        for p in partitions:
+            for net, info in sorted(p.report["nets"].items()):
+                sites = [tuple(t["at"]) for t in info["unreached"]]
+                if sites:  # a terminal no territory reaches is a failure site
+                    board.failure_sites[net] = sorted(
+                        set(board.failure_sites.get(net, [])) | set(sites)
+                    )
     if os.environ.get("PNR_LOCAL_PRESSURE") == "1":
         from .pressure import localized_pressure
 

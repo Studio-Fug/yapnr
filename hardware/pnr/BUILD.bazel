@@ -136,6 +136,7 @@ filegroup(
         "pnr/ir_drop.py",
         "pnr/ir_extract.py",
         "pnr/power_spec.py",
+        "pnr/plane_partition.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -790,6 +791,44 @@ py_test(
     imports = ["."],
     legacy_create_init = False,
     main = "tests/test_ir_extract_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# Supply rails sharing a plane layer (pnr.plane_partition): territories, widths, gaps,
+# PlaneAccess with holes, and route_board's drops inside them.
+py_test(
+    name = "plane_partition_test",
+    size = "medium",
+    srcs = ["tests/test_plane_partition.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_plane_partition.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# The partition drawn by writeback and filled by KiCad, and its rails' IR drop. It needs
+# KiCad's Python (pcbnew): run it there by hand.
+py_test(
+    name = "plane_partition_kicad_test",
+    size = "small",
+    srcs = ["tests/test_plane_partition_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_plane_partition_kicad.py",
     tags = [
         "kicad",
         "manual",

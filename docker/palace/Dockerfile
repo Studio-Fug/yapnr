@@ -143,7 +143,7 @@ RUN runtime-packages /opt/palace/bin /opt/palace/lib* > /src/meta/runtime-packag
  && cp -r /src/palace/test/data/regression/ref/cpw /opt/palace/share/palace/regression/ \
  && cp /src/palace/scripts/schema/config-schema.json /opt/palace/share/palace/ \
  && cp /src/palace/LICENSE /src/palace/NOTICE /opt/palace/share/palace/ \
- && for dir in /src/build/extern/*/ /src/build/extern/mumps-build/_deps/mumps-src/; do \
+ && for dir in /src/build/extern/*/ /src/build/extern/mumps-build/mumps-src/; do \
       name=$(basename "${dir}"); \
       for file in "${dir}"LICENSE* "${dir}"COPYING* "${dir}"COPYRIGHT* "${dir}"NOTICE* \
                   "${dir}"Copyright* "${dir}"LICENCE*; do \

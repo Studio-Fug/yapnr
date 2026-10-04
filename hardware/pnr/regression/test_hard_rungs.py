@@ -1,5 +1,6 @@
 """Contracts of the hard rungs (hard_rungs.py): circuits, one-dimension variants, judge rules."""
 
+import math
 import re
 import unittest
 from collections import Counter
@@ -15,6 +16,7 @@ from hard_rungs import (
     dru_text,
     hard_rungs,
     plane_layers,
+    ufbga_base,
 )
 from run import parser
 
@@ -31,6 +33,11 @@ CHECK_KINDS = {
     "align",
     "plane",
     "microvia_span",
+    "copper_digest",
+    "no_copper",
+    "via_class",
+    "escape",
+    "pad_distance",
 }
 
 
@@ -87,7 +94,9 @@ class HardRungContract(unittest.TestCase):
         # The chaser variants' base is the ladder's own 07-chaser-20 (not a hard rung).
         chaser = chaser_base()
         self.assertEqual(chaser["parts"], designs()[6]["parts"])
-        bases = {"chaser-20": chaser}
+        # The BGA rung's base (two layers) is not a hard rung either: its drops need planes.
+        bga = ufbga_base()
+        bases = {"chaser-20": chaser, "ufbga201-fanout": bga}
         for spec in self.rungs:
             dims = spec["dims"]
             if all(
@@ -102,9 +111,12 @@ class HardRungContract(unittest.TestCase):
                 ).items()
             ):
                 bases[spec["base"]] = spec
-        self.assertEqual(set(bases), {"mcu-usb-31", "quad-bank-56", "power-switch-31", "chaser-20"})
+        self.assertEqual(
+            set(bases),
+            {"mcu-usb-31", "quad-bank-56", "power-switch-31", "chaser-20", "ufbga201-fanout"},
+        )
         family = {}
-        for spec in self.rungs + [chaser]:
+        for spec in self.rungs + [chaser, bga]:
             family.setdefault(spec["base"], []).append(spec)
         for spec in self.rungs:
             base = bases[spec["base"]]
@@ -260,6 +272,92 @@ class HardRungContract(unittest.TestCase):
             self.assertNotIn("region-" + name, checks)
         for name in ("flush", "pins", "loose"):
             self.assertNotIn("align-" + name, checks)
+
+    def test_arc_block_rung(self):
+        """The fixed-copper rung: 64 arcs in one group with the U.FL connectors, the
+        digest the checker expects, keep-outs expressed to the engine and judged by
+        the tool-neutral checks, one dimension (parts) away from 4L-SGPS."""
+        from hard_rungs import ARC_GROUP, block_sha256
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+        from pnr.fixed_block import arc_center
+
+        spec = self.by_name["07-chaser-20-4L-SGPS-arcblock"]
+        block = spec["fixed_block"]
+        self.assertGreaterEqual(len(block["arcs"]), 60)
+        for net, layer, a, m, z, w in block["arcs"]:
+            (cx, cy), r, sweep = arc_center(a, m, z)
+            self.assertAlmostEqual(r, 0.25, places=9)
+            self.assertAlmostEqual(abs(sweep), math.pi / 2, places=9)
+        # Every piece of copper ends on another (no dangling end) but the two ports.
+        ends = Counter()
+        for net, layer, a, z, w in block["tracks"]:
+            ends[(net, tuple(a))] += 1
+            ends[(net, tuple(z))] += 1
+        for net, layer, a, m, z, w in block["arcs"]:
+            ends[(net, tuple(a))] += 1
+            ends[(net, tuple(z))] += 1
+        single = sorted(
+            (round(p[0], 6), round(p[1], 6))
+            for (net, p), n in ends.items()
+            if n == 1 and net == "CLOCK"
+        )
+        self.assertEqual(single, [(24.8, 22.4), (24.8, 27.6), (38.175, 22.4), (38.175, 27.6)])
+        self.assertEqual(block["sha256"], block_sha256(block, 32))
+        parent = self.by_name["07-chaser-20-4L-SGPS"]
+        self.assertEqual(
+            [k for k in spec["dims"] if spec["dims"][k] != parent["dims"][k]], ["parts"]
+        )
+        kinds = Counter(c["kind"] for c in spec["checks"])
+        self.assertEqual((kinds["copper_digest"], kinds["no_copper"]), (1, 4))
+        refs = [p["ref"] for p in spec["parts"]]
+        compiled = compile_constraints(spec["constraints"], refs)
+        self.assertEqual(compiled.fixed_blocks[0]["group"], ARC_GROUP)
+        rules = compile_routing_rules(
+            compiled, sorted({n for p in spec["parts"] for n in p["pins"].values() if n})
+        )
+        guard = [k for k in rules["copper_keepouts"] if k["name"] == "guard-west"][0]
+        self.assertEqual(guard["allowed_nets"], ["CLOCK", "GND", "VCC"])
+        self.assertIn("arcs", spec["features"])
+
+    def test_bga_block_rung(self):
+        """The BGA rung with a fixed block: its launch copper digest, ground stitching
+        vias on U1's interstitial lattice, a group rule area on F.Cu alone, keep-outs
+        the engine compiles (ground allowed in the launch, the plane nets in the
+        guards), checks that judge zones, one dimension (parts) from the 6L rung."""
+        from hard_rungs import LAUNCH_GROUP, block_sha256
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+
+        spec = self.by_name["11-ufbga201-fanout-6L-SGSGPS-block"]
+        block = spec["fixed_block"]
+        self.assertEqual(block["sha256"], block_sha256(block, 36))
+        self.assertEqual(block["rule_areas"][0]["layers"], ["F.Cu"])
+        lattice = [v for v in block["vias"] if 12 < v[1][0] < 24]
+        for _net, (x, y), d, h in lattice:  # interstitial: half a pitch off every ball
+            self.assertAlmostEqual(((x - 18) / 0.65) % 1, 0.5, places=6)
+            self.assertAlmostEqual(((y - 18) / 0.65) % 1, 0.5, places=6)
+            self.assertEqual((d, h), (0.35, 0.15))
+        self.assertEqual(len(lattice), 2)
+        u1 = spec["parts"][0]["pins"]
+        self.assertEqual((u1["E15"], u1["F15"], u1["G15"]), ("GND", "RF_OUT", "GND"))
+        parent = self.by_name["11-ufbga201-fanout-6L-SGSGPS"]
+        self.assertEqual(
+            [k for k in spec["dims"] if spec["dims"][k] != parent["dims"][k]], ["parts"]
+        )
+        refs = [p["ref"] for p in spec["parts"]]
+        compiled = compile_constraints(spec["constraints"], refs)
+        self.assertEqual(compiled.fixed_blocks[0]["group"], LAUNCH_GROUP)
+        rules = compile_routing_rules(
+            compiled, sorted({n for p in spec["parts"] for n in p["pins"].values() if n})
+        )
+        keepouts = {k["name"]: k for k in rules["copper_keepouts"]}
+        self.assertEqual(keepouts["launch"]["allowed_nets"], ["GND"])
+        self.assertIn("pours", keepouts["launch"]["items"])
+        self.assertEqual(keepouts["guard-north"]["allowed_nets"], ["GND", "VCC"])
+        self.assertEqual(rules["fanouts"][0]["skip_pads"], ["F15"])
+        launch = [c for c in spec["checks"] if c["id"] == "keepout-launch"][0]
+        self.assertIn("zones", launch["items"])
 
     def test_runner_offers_the_hard_rungs(self):
         args = parser().parse_args(["--out", "x", "--hard"])

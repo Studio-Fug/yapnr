@@ -33,6 +33,15 @@ rules = apply_rules(compile_routing_rules(c, [n.name for n in g.nets]))
 via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules, graph=g)
 if via_policy:
     rules["via_policy"] = via_policy
+# A rung's fixed block (hard_rungs, native.py make): its footprints leave the
+# placement graph and its copper rides in the rules, so every route of the loop
+# reserves it (pnr.fixed_block).
+if spec.get("fixed_block"):
+    from pnr.fixed_block import block_refs, hold_out
+
+    fixed = json.loads((root / "source-fixed.json").read_text())
+    hold_out(g, block_refs(rules.get("fixed_blocks"), fixed))
+    rules["fixed_copper"] = fixed
 # Pairs and groups are tuned against the board's own stackup (via lengths) and the
 # exact lands of their pads.
 attach_board(rules, (root / "source.kicad_pcb").read_text())
@@ -58,6 +67,9 @@ if r is None:
 routes = dict(tracks=r.tracks, vias=r.vias, unrouted=r.result.unrouted)
 if getattr(r, "via_spans", None):
     routes["via_spans"] = r.via_spans  # blind, buried and micro vias (pnr.via_policy)
+routes.update(
+    getattr(r, "extras", dict)()
+)  # a declared fanout's via sizes and locked copper (pnr.fanout)
 (root / "routes.json").write_text(json.dumps(routes, indent=2))
 (root / "pnr-report.json").write_text(
     json.dumps(

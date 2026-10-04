@@ -203,6 +203,27 @@ performance opt-in `--batched-wirelength` can be tested explicitly. All of these
 are recorded in provenance; ambient variables are still cleared, so a baseline
 invocation keeps its original algorithms.
 
+## BGA fanout rung
+
+`11-ufbga201-fanout-6L-SGSGPS` (`hard_rungs.py`, manual lane) breaks an STM32F207 in
+KiCad's stock 0.65 mm `UFBGA-201` footprint (UFBGA176+25; the ball map is KiCad's stock
+symbol for the part) out to four fixed JST SH connectors: 47 GPIO balls from rings 0-3,
+every ground and supply ball dropped to its plane. The board declares the escape as a
+`fanout` (docs/hardware/pnr-inputs.md): 0.35/0.15 mm plane vias on interstitial sites,
+0.40/0.20 mm dog-bones, no surface exit north, a reserved corridor over three east-edge
+balls. Its `via_class` and `escape` checks (`check_constraints.py`) hold the drops to
+their class and site and every listed ball to an escape.
+
+`11-ufbga201-fanout-6L-SGSGPS-block` adds a fixed block (one new dimension, `parts`):
+an RF launch from ball F15 to a U.FL connector east of the array, in one KiCad group
+with two ground stitching vias on the array's interstitial lattice beside F15 (sites
+the ground balls E15 and G15 may also choose: the plan joins them instead of drilling
+again), a ground fence and an F.Cu-only rule area at the fanout's north-east edge. A
+class keep-out over the launch lets only ground into F.Cu, In2.Cu and the supply plane
+In4.Cu (the engine cuts its VCC plane out of it), and a class guard on F.Cu lets only
+the plane nets pass beside it. Its `no_copper` checks judge zones too (`items: zones`),
+so a plane poured into the launch fails the rung.
+
 ## Length-matching scratch designs
 
 No ladder case or hard rung declares a length-match group, so

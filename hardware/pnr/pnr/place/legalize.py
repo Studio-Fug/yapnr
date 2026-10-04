@@ -187,7 +187,9 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
     resolved on. Optional relations add their keys only when the design declares
     them (``pad_edge`` when given, ``edge_bands`` for a hard ``edge_align``,
     ``regions``/``aligns`` for a ``region`` or ``align``), so every other design
-    calls the legalizer exactly as before."""
+    calls the legalizer exactly as before; so do the ``legalize:`` options
+    (:func:`pnr.place.legal_options.legalize_kwargs`)."""
+    from . import legal_options
     from .geometry import (
         hard_edge_bands,
         hard_group_edges,
@@ -210,6 +212,8 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
     if bands:
         out["edge_bands"] = bands
     out.update(legalize_kwargs(constraints, graph.components))
+    # The opt-in ``legalize:`` options (pnr.place.legal_options): {} when undeclared.
+    out.update(legal_options.legalize_kwargs(constraints, graph))
     return out
 
 
@@ -327,6 +331,75 @@ def _place_part(
     return int(r), int(c)
 
 
+def _exact_outline_box(static_edge_box, width, height):
+    """``static_edge_box`` intersected with the courtyard-in-outline box
+    (:func:`pnr.place.legal_options.outline_box`), cached per part, rotation and side
+    as ``static_edge_box`` is (``legalize: {outline: exact}``)."""
+    from .legal_options import intersect, outline_box
+
+    cache = {}
+
+    def box(comp):
+        key = (comp.ref, round(comp.rot % 360, 6), comp.side)
+        hit = cache.get(key)
+        if hit is None:
+            hit = cache[key] = intersect(static_edge_box(comp), outline_box(comp, width, height))
+        return hit
+
+    return box
+
+
+def _cached_masks(region_mask):
+    """``region_mask`` cached per part, rotation, side and slot size (a region mask is
+    static within one legalization; callers never write into it)."""
+    cache = {}
+
+    def mask(comp, bw, bh):
+        key = (comp.ref, round(comp.rot % 360, 6), comp.side, bw, bh)
+        if key not in cache:
+            cache[key] = region_mask(comp, bw, bh)
+        return cache[key]
+
+    return mask
+
+
+def _scarcity_blocks(blocks, movable, rules, bands):
+    """``legalize: {order: scarcity}``: ``blocks`` plus a block of its own for every
+    movable part held by a hard region or edge band that is in no block yet."""
+    from .legal_options import region_held
+
+    out = dict(blocks)
+    for ref in sorted(region_held(movable, rules, bands)):
+        out.setdefault(ref, {ref})
+    return out
+
+
+def _legal_held(components, rules, bands, fixed):
+    """The movable parts held by a hard region or edge band (``lookahead: regions``)."""
+    from .legal_options import region_held
+
+    return region_held([c for c in components if c.ref not in fixed], rules, bands)
+
+
+def _pad_limits(ref, edges, neighbors, by_ref):
+    """The pad-anchored hard group discs on ``ref`` against the placed ``neighbors``
+    (:func:`pnr.place.legal_options.pad_group_limits`)."""
+    from .legal_options import pad_group_limits
+
+    return pad_group_limits(ref, edges, {c.ref: c for c in neighbors}, by_ref[ref])
+
+
+def _assert_inside_outline(placed, width, height, fixed):
+    """``legalize: {outline: exact}``: the legalized parts pass the hard outline check."""
+    from .legal_options import outline_offenders
+
+    bad = outline_offenders(
+        placed, width, height, [c.ref for c in placed.components if c.ref not in fixed]
+    )
+    if bad:
+        raise LegalizationError("outline: exact left %s outside the outline" % ", ".join(bad))
+
+
 def legalize(
     graph: BoardGraph,
     width: float,
@@ -354,6 +427,10 @@ def legalize(
     side_weight: float = 3.0,
     side_retry_mm: float = 1.0,
     stack: Optional[frozenset] = None,
+    outline: Optional[str] = None,
+    order: Optional[str] = None,
+    lookahead: Optional[str] = None,
+    pad_group_edges=None,
     regions=None,
     aligns=None,
     margins: Optional[Dict[str, float]] = None,
@@ -410,6 +487,25 @@ def legalize(
     (``tol_mm``), and each aligned member's target moves onto the line. Soft ones add
     their penalty to the candidate cost. Aligned members are ordered as one block,
     and a slot that strands a later member is backtracked like a hard group's.
+
+    ``outline`` (``legalize: {outline: exact}``, :mod:`pnr.place.legal_options`; None =
+    the raster alone) bounds every slot centre so the part's courtyard stays inside the
+    ``width x height`` outline by the hard check's own test, which the raster's partial
+    last row and column do not.
+
+    ``order`` (``legalize: {order: scarcity}``; None = blocks first) makes every part
+    held by a hard region or edge band and in no block a block of its own, so it is
+    ordered with the hard-group blocks by remaining slots per area instead of after all
+    of them, and goes ahead of the active block once it has fewer free slots left than
+    every part of that block. ``lookahead`` (``legalize: {lookahead: regions}``; None = off) refuses a
+    slot that strands an unplaced part held by a hard group, region or edge band with
+    few slots left (:func:`starves` without power-first; the nearest slot is kept when
+    every tried one strands).
+
+    ``pad_group_edges`` ([(anchor, pad, member, radius)], hard groups with
+    ``anchor_pad``, :func:`pnr.place.legal_options.hard_pad_group_edges`; None = none)
+    bounds each member's centre to the radius about the placed anchor's pad (the anchor
+    is placed first) and orders the group as one block, like ``group_edges``.
 
     With hull macros (``PNR_MACRO_HULL=1``) the occupancy gains an ``inner`` plane:
     hull macros mark their inner-layer mask there, drilled parts and solid block
@@ -538,6 +634,10 @@ def legalize(
             boxes[key] = hit
         return hit
 
+    if outline == "exact":
+        # legalize: {outline: exact}: every box also keeps the courtyard in the outline.
+        static_edge_box = _exact_outline_box(static_edge_box, width, height)
+
     def edge_box(comp):
         """static_edge_box, narrowed to the part's hard align band (None when none
         applies)."""
@@ -625,6 +725,10 @@ def legalize(
             (ny - bh + 1, nx - bw + 1),
             **({} if shift is None else dict(shift=shift)),
         )
+
+    if lookahead == "regions":
+        # The look-ahead counts the slots of many region parts per slot: cache the masks.
+        region_mask = _cached_masks(region_mask)
 
     def box_label_of(comp):
         if not constrained(comp):
@@ -755,6 +859,8 @@ def legalize(
     parents = {}
     for anchor, member, radius in group_edges:
         parents.setdefault(member, set()).add(anchor)
+    for anchor, _pad, member, _radius in pad_group_edges or ():
+        parents.setdefault(member, set()).add(anchor)  # pad-anchored hard groups
 
     def limits_for(ref):
         points = {c.ref: c.pos for c in neighbors}
@@ -764,6 +870,8 @@ def legalize(
                 limits.append((*points[anchor], radius))
             if anchor == ref and member in points:
                 limits.append((*points[member], radius))
+        if pad_group_edges:
+            limits += _pad_limits(ref, pad_group_edges, neighbors, by_ref)
         return limits
 
     for ref, angle in rotations.items():
@@ -945,11 +1053,137 @@ def legalize(
             for side in occupancy:
                 occupancy[side][:] = saved[side]
 
+    # legalize: {lookahead: regions} (pnr.place.legal_options): the parts a slot may
+    # strand are those held by a hard region or edge band, besides the hard-group ones.
+    held = _legal_held(placed.components, rules, bands, fixed) if lookahead == "regions" else set()
+
+    def strands(comp, r, c, bw, bh, sides, skip=(), only=None):
+        """``legalize: {lookahead: regions}``: the first unplaced part this slot strands
+        (None when it strands none).
+
+        :func:`starves` without power-first: a greedy trial pack, on a copy of the
+        occupancy, of the unplaced parts held by a hard group, region or edge band whose
+        reach meets this slot and that keep at most ``SCARCE_SLOTS`` free slots once it
+        is taken (but those in ``skip``), in minimum-remaining-slots order, each at its
+        slot target inside its edge box and region mask, trying its turns. Everything is
+        restored afterwards. ``only`` (a part): pack it alone without taking the slot,
+        to tell whether it is stranded anyway."""
+        from .legal_options import SCARCE_SLOTS, reaches
+
+        saved = {side: occ_.copy() for side, occ_ in occupancy.items()}
+        poses = [(m, m.pos, m.rot) for m in movable] + [(comp, comp.pos, comp.rot)]
+        count = len(neighbors)
+        try:
+            pending = []
+            if only is not None:
+                pending.append((0, 0.0, only.ref, only))
+            else:
+                mark_slot(comp, r, c, bw, bh, sides)
+                comp.pos = slot_pose(comp, r, c, bw, bh)
+                neighbors.append(comp)
+                slot = (c * g, (c + bw) * g, r * g, (r + bh) * g)
+                for m in movable:
+                    limits = limits_for(m.ref)
+                    if m.ref in skip or (not limits and m.ref not in held):
+                        continue
+                    if not reaches(m, slot, limits, static_edge_box(m), rules, width, height):
+                        continue
+                    n = available(m)
+                    if n <= SCARCE_SLOTS:
+                        area = courtyard_rect(m).w * courtyard_rect(m).h
+                        pending.append((n, -area, m.ref, m))
+                pending.sort(key=lambda item: item[:3])
+            for _, _, _, m in pending:
+                sides_m = part_sides(m)
+                occ_m = np.logical_or.reduce([occupancy[side] for side in sides_m])
+                infl_m = (
+                    spreading(m)
+                    if bands or rules is not None
+                    else max(1.0, spread, float(inflation.get(m.ref, 1.0)))
+                )
+                target = target_of(m)
+                turns = (
+                    ([m.rot] if not allow_rotation or m.ref in rotations else hull_turns(m, m.rot))
+                    if is_hull(m)
+                    else [m.rot]
+                    + ([(m.rot + 90) % 360] if allow_rotation and m.ref not in rotations else [])
+                )
+                for rot in turns:
+                    m.rot = rot
+                    # PNR_COMPACT: the slot carries the copper margin and an offset
+                    # courtyard's shift, as in :func:`starves` (none with the flags off).
+                    bw_, bh_ = slot_dims(m, infl_m)
+                    shift_m = body_shift(m)
+                    try:
+                        rr, cc = _place_part(
+                            occ_m,
+                            g,
+                            bw_,
+                            bh_,
+                            target,
+                            limits_for(m.ref),
+                            free=hull_free(m, bw_, bh_, reserves=False) if is_hull(m) else None,
+                            box=edge_box(m),
+                            mask=region_mask(m, bw_, bh_),
+                            **({} if shift_m is None else dict(shift=shift_m)),
+                        )
+                    except LegalizationError:
+                        continue
+                    mark_slot(m, rr, cc, bw_, bh_, sides_m)
+                    m.pos = slot_pose(m, rr, cc, bw_, bh_)
+                    neighbors.append(m)
+                    break
+                else:
+                    return m
+            return None
+        finally:
+            del neighbors[count:]
+            for m, pos, rot in poses:
+                m.pos = pos
+                m.rot = rot
+            for side in occupancy:
+                occupancy[side][:] = saved[side]
+
+    def lookahead_slot(comp, r, c, bw, bh, sides, rotation, place_again):
+        """``legalize: {lookahead: regions}``: ``(r, c, True)`` for the first of up to
+        LOOK_AHEAD_TRIES slots at this turn (``place_again(tried)`` gives the next nearest
+        one) that strands no part; ``(r, c, False)`` for the nearest slot itself when every
+        tried one does (the search then tries the part's next turn, and keeps this slot,
+        as without the look-ahead, when no turn does better). A part that cannot be placed
+        even without this part's slot is stranded anyway (no slot of ``comp`` helps it;
+        backtracking will) and is left out of the check."""
+        from .power_first import LOOK_AHEAD_TRIES
+
+        tried = [
+            (rr, cc)
+            for rot, rr, cc, side in banned.get(comp.ref, ())
+            if rot == rotation and side == comp.side
+        ]
+        first = (r, c)
+        stuck, attempts = set(), 0
+        while attempts < LOOK_AHEAD_TRIES:
+            culprit = strands(comp, r, c, bw, bh, sides, skip=stuck)
+            if culprit is None:
+                return r, c, True
+            if strands(comp, r, c, bw, bh, sides, only=culprit) is not None:
+                stuck.add(culprit.ref)  # stranded anyway: check this slot again without it
+                continue
+            attempts += 1
+            tried.append((r, c))
+            try:
+                r, c = place_again(tried)
+            except LegalizationError:
+                break
+        return first + (False,)
+
     # Finish each electrically constrained connected block before unrelated
     # footprints consume its local escape/decoupling space. Source radii remain
     # exact; this changes ordering, never legality or fixed poses.
     adjacency = {}
     for anchor, member, _ in group_edges:
+        adjacency.setdefault(anchor, set()).add(member)
+        adjacency.setdefault(member, set()).add(anchor)
+    for anchor, _pad, member, _radius in pad_group_edges or ():
         adjacency.setdefault(anchor, set()).add(member)
         adjacency.setdefault(member, set()).add(anchor)
     if rules is not None:
@@ -972,6 +1206,25 @@ def legalize(
             pending.extend(adjacency.get(v, ()))
         for v in members:
             blocks[v] = members
+    if order == "scarcity":
+        blocks = _scarcity_blocks(blocks, movable, rules, bands)
+
+    def scarce_first(active, eligible):
+        """``order: scarcity``: a part in a block of its own (held by a region or an edge
+        band) with fewer free slots left than every eligible part of the active block goes
+        ahead of the block (minimum remaining slots across blocks); else ``active``."""
+        singles = [
+            c for c in eligible if len(blocks.get(c.ref, ())) == 1 and c.ref not in active_block
+        ]
+        if not singles:
+            return active
+        counts = {c.ref: available(c) for c in singles}
+        best = min(
+            singles,
+            key=lambda c: (counts[c.ref], -courtyard_rect(c).w * courtyard_rect(c).h, c.ref),
+        )
+        return [best] if counts[best.ref] < min(available(c) for c in active) else active
+
     active_block = set()
     trail = []  # backtracking: (state, ref, chosen slot)
     banned = {}
@@ -997,6 +1250,8 @@ def legalize(
                 root = min(grouped, key=block_rank)
                 active_block = blocks[root.ref]
                 active = [c for c in eligible if c.ref in active_block]
+        elif order == "scarcity":
+            active = scarce_first(active, eligible)
         if aid is None:
             comp = min(
                 active or eligible,
@@ -1056,6 +1311,7 @@ def legalize(
             )
             if is_hull(comp) and allow_rotation and comp.ref not in rotations:
                 turns = hull_turns(comp, original_rotation)
+            stranded = None  # lookahead: regions: the first turn's slot if every one strands
             for rotation in turns:
                 comp.rot = rotation
                 cr = courtyard_rect(comp)
@@ -1160,10 +1416,41 @@ def legalize(
                                 **box_label_of(comp),
                                 **shifted,
                             )
+                    elif lookahead == "regions":
+                        r, c, clear = lookahead_slot(
+                            comp,
+                            r,
+                            c,
+                            bw,
+                            bh,
+                            sides,
+                            rotation,
+                            lambda tried: _place_part(
+                                occ,
+                                g,
+                                bw,
+                                bh,
+                                target,
+                                limits_for(comp.ref),
+                                candidate_cost=candidate_cost,
+                                forbidden=tried,
+                                attached=attached,
+                                free=slot_free,
+                                box=edge_box(comp),
+                                mask=slot_mask,
+                                **box_label_of(comp),
+                            ),
+                        )
+                        if not clear:  # every tried slot strands a part: the next turn first
+                            stranded = stranded or (rotation, r, c, bw, bh, attached)
+                            raise LegalizationError("look-ahead: every tried slot strands a part")
                     error = None
                     break
                 except LegalizationError as exc:
                     error = exc
+            if error is not None and stranded is not None:
+                # No turn has a slot that strands nothing: the first one's nearest slot.
+                (comp.rot, r, c, bw, bh, attached), error = stranded, None
             return error, r, c, bw, bh, sides, attached, captured_fields
 
         error, r, c, bw, bh, sides, attached, captured_fields = search()
@@ -1190,7 +1477,9 @@ def legalize(
         if (
             error is not None
             and trail
-            and (group_edges or group_limits or (rules is not None and rules.hard))
+            and (
+                group_edges or group_limits or pad_group_edges or (rules is not None and rules.hard)
+            )
             and backtracks < backtrack_budget
         ):
             previous, chosen_ref, chosen_pose = trail.pop()
@@ -1287,6 +1576,9 @@ def legalize(
                 ] = True
         comp.pos = slot_pose(comp, r, c, bw, bh)
         neighbors.append(comp)
+
+    if outline == "exact":
+        _assert_inside_outline(placed, width, height, fixed)
 
     from pnr import trace as _trace
 

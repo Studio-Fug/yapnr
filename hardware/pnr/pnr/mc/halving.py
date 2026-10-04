@@ -178,7 +178,10 @@ def _load(inputs: Path, constraints_path: Path):
     from pnr.fab_profile import apply_rules
 
     rules = apply_rules(json.loads((inputs / "rules.json").read_text()))
-    return graph, constraints, rules
+    # A declared fanout's bottom-side decoupling sites become fixed poses (pnr.fanout).
+    from pnr.fanout.bottom import derive
+
+    return graph, derive(graph, constraints, rules), rules
 
 
 @functools.lru_cache(maxsize=4)

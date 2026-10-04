@@ -278,6 +278,113 @@ class LiveFanoutTest(unittest.TestCase):
 
 
 @unittest.skipUnless(importlib.util.find_spec("pcbnew") is not None, "requires KiCad")
+class LivePlaneKeepoutTest(unittest.TestCase):
+    """apply_planes (pnr.planes without --refill-only) honours plane_fallback_drops and
+    cuts its planes out of keepouts that bar their pours."""
+
+    H = 20.0
+
+    def board(self, drawn=False):
+        import pcbnew
+
+        board = pcbnew.BOARD()
+        board.SetCopperLayerCount(4)
+        edge = pcbnew.PCB_SHAPE(board)
+        edge.SetShape(pcbnew.SHAPE_T_RECT)
+        edge.SetStart(pcbnew.VECTOR2I(*to_pcb_nm(0, self.H, self.H)))
+        edge.SetEnd(pcbnew.VECTOR2I(*to_pcb_nm(20, 0, self.H)))
+        edge.SetLayer(pcbnew.Edge_Cuts)
+        board.Add(edge)
+        nets = {}
+        for name in ("GND", "SIG", "VCC"):
+            nets[name] = pcbnew.NETINFO_ITEM(board, name)
+            board.Add(nets[name])
+        fp = pcbnew.FOOTPRINT(board)
+        board.Add(fp)
+        for k, (x, y) in enumerate(((4.0, 4.0), (16.0, 16.0))):
+            pad = pcbnew.PAD(fp)
+            pad.SetNumber(str(k + 1))
+            pad.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
+            layers = pcbnew.LSET()
+            layers.AddLayer(pcbnew.F_Cu)
+            pad.SetLayerSet(layers)
+            pad.SetSize(pcbnew.VECTOR2I(500000, 500000))
+            pad.SetPosition(pcbnew.VECTOR2I(*to_pcb_nm(x, y, self.H)))
+            pad.SetNet(nets["GND"])
+            fp.Add(pad)
+        if drawn:  # a zone drawn in the source, of a net the keepout does not allow
+            z = pcbnew.ZONE(board)
+            z.SetLayer(pcbnew.In1_Cu)
+            z.SetNet(nets["VCC"])
+            z.SetZoneName("drawn")
+            outline = z.Outline()
+            outline.NewOutline()
+            for x, y in ((1, 1), (19, 1), (19, 19), (1, 19)):
+                outline.Append(pcbnew.VECTOR2I(*to_pcb_nm(x, y, self.H)))
+            board.Add(z)
+        return board
+
+    def rules(self, **kw):
+        r = {
+            "fab": {"via_diameter_mm": 0.6, "via_drill_mm": 0.3, "clearance_mm": 0.15},
+            "net_classes": [{"name": "gnd", "nets": ["GND"], "plane_layer": "In2.Cu"}],
+        }
+        r.update(kw)
+        return r
+
+    def test_plane_fallback_drops_false_adds_no_dogbone(self):
+        from pnr.writeback import apply_planes
+
+        board = self.board()
+        self.assertEqual(apply_planes(board, self.rules()), 1)
+        self.assertGreater(len(list(board.GetTracks())), 0)  # the dog-bone fallback
+        board = self.board()
+        self.assertEqual(apply_planes(board, self.rules(plane_fallback_drops=False)), 1)
+        self.assertEqual(len(list(board.GetTracks())), 0)
+        self.assertEqual(len([z for z in board.Zones() if not z.GetIsRuleArea()]), 1)
+
+    def test_a_class_keepout_cuts_the_engine_planes_and_lists_drawn_zones(self):
+        import pcbnew
+
+        from pnr.graph import BoardGraph
+        from pnr.writeback import apply_copper_keepouts, apply_planes, clip_keepout_pours
+
+        rect = [[8.0, 8.0], [12.0, 8.0], [12.0, 12.0], [8.0, 12.0]]
+        keepout = dict(
+            name="rf",
+            polygon=rect,
+            layers=["In1.Cu", "In2.Cu"],
+            items=["tracks", "vias", "pours"],
+            allow_classes=[],
+            allow_nets=["SIG"],
+            allowed_nets=["SIG"],
+            exempt_groups=["BLOCK"],
+        )
+        board = self.board(drawn=True)
+        rules = self.rules(copper_keepouts=[keepout], plane_fallback_drops=False)
+        apply_copper_keepouts(board, BoardGraph("t", components=[]), rules, self.H)
+        apply_planes(board, rules)
+        area = next(z for z in board.Zones() if z.GetZoneName() == "PNR keepout:rf")
+        self.assertFalse(area.GetDoNotAllowZoneFills())  # class mode: custom rules
+        plane = next(z for z in board.Zones() if z.GetNetname() == "GND")
+        drawn = next(z for z in board.Zones() if z.GetZoneName() == "drawn")
+        inside = pcbnew.VECTOR2I(*to_pcb_nm(10, 10, self.H))
+        self.assertFalse(plane.Outline().Contains(inside))
+        self.assertTrue(plane.Outline().Contains(pcbnew.VECTOR2I(*to_pcb_nm(5, 5, self.H))))
+        filled = pcbnew.SHAPE_POLY_SET(plane.GetFilledPolysList(pcbnew.In2_Cu))
+        filled.BooleanIntersection(area.Outline())
+        self.assertEqual(filled.OutlineCount(), 0)
+        self.assertTrue(drawn.Outline().Contains(inside))  # a drawn zone is not changed
+        report = clip_keepout_pours(board, rules, [])
+        self.assertEqual(report, dict(cut=0, drawn=["drawn (VCC) by rf"]))
+        # Without such a keepout nothing is cut.
+        board = self.board()
+        apply_planes(board, self.rules(plane_fallback_drops=False))
+        plane = next(z for z in board.Zones() if z.GetNetname() == "GND")
+        self.assertTrue(plane.Outline().Contains(inside))
+
+
+@unittest.skipUnless(importlib.util.find_spec("pcbnew") is not None, "requires KiCad")
 class LiveCopperKeepoutTest(unittest.TestCase):
     def test_all_layer_keepout_tracks_placement_and_is_idempotent(self):
         import pcbnew

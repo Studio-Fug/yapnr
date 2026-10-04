@@ -148,6 +148,7 @@ def refine_matched(
     grid_mm: float = 0.25,
     spread: float = 1.0,
     inflation: Optional[Dict[str, float]] = None,
+    outline: Optional[str] = None,
     pad_edge: Optional[Tuple[float, float]] = None,
     margins: Optional[Dict[str, float]] = None,
 ) -> BoardGraph:
@@ -192,6 +193,11 @@ def refine_matched(
             occ = np.zeros((ny, nx), dtype=bool)
             for keepout in keepouts:
                 _mark(occ, g, keepout)
+            if outline == "exact":
+                # legalize: {outline: exact}: no move into raster cells past the outline.
+                from .legal_options import mark_outside
+
+                mark_outside(occ, g, width, height)
             sides = set(occupied_sides(comp))
             for other in others:
                 infl = max(1.0, spread, float(inflation.get(other.ref, 1.0)))

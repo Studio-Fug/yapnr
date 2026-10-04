@@ -101,6 +101,7 @@ The approximate board you're targeting.
 | `layers`               | Copper layer count (2 to 32). Without a declared stack (below), inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
 | `default_clearance_mm` | Minimum courtyard-to-courtyard gap enforced in legalization, and the track pitch the lookahead router assumes.                    |
 | `sides`                | Side policy: `single` (default; every part stays on its source side, and `side_pref` is ignored) or `double` (placement chooses the side of every part nothing holds; needs 2 or more layers; see `side_pref`). |
+| `plane_fallback_drops` | `true` (default): writeback and the plane stage (`pnr.planes`) drop a via from every plane pad the router left without a through contact (dog-bone fallback). `false`: neither adds copper nobody routed; the unreached plane pads are listed on stderr (`unreached plane pads`). Use `false` for a placement-only writeback and for boards whose plane access another stage owns (a BGA fanout). |
 
 The outline is _approximate guidance_: the placer frames the parts within it. Make
 it a bit larger than the parts need — an over-tight outline forces congestion and
@@ -270,6 +271,110 @@ clearance, a mounting-hole boss, a shield footprint. Two forms:
 
 Give each keep-out a `name` so warnings and reports are legible.
 
+### `copper_keepout` — no foreign copper in an area (hard, routing)
+
+Copper keep-outs restrict tracks, vias and pours (placement ignores them; use
+`keepout` for parts). The router keeps its copper out, and writeback writes a KiCad
+rule area named `PNR keepout:<name>` so KiCad's DRC enforces the same area.
+
+```yaml
+copper_keepout:
+  - { ref: U5, rect_mm: [-3, 8, 3, 12] } # v0: every copper layer, every net
+  - name: rf_region # v1
+    polygon: [[15, 33], [30, 33], [30, 46], [15, 46]] # or rect: [x0, y0, x1, y1]
+    layers: [F.Cu, In1.Cu, In2.Cu] # default: every copper layer
+    items: [tracks, vias] # default: tracks, vias, pours
+    exempt_groups: [RFM1_MACRO] # a fixed_block's group never violates it
+  - name: rf_guard
+    rect: [10, 28, 21, 46]
+    layers: [F.Cu, In1.Cu, In2.Cu]
+    allow_classes: [RF, PWR, GND, ANALOG] # declared net_class names (or dp_<pair>)
+    allow_nets: ["VREF*"] # literal names or globs
+```
+
+- **v0** (`ref` + `rect_mm`, nothing else): a rectangle in the part's own frame that
+  follows the part (mirrored with its pads on the bottom side), on every copper
+  layer; the rule area forbids tracks, vias and fills. Unchanged.
+- **v1** (any of the keys below): the area is `polygon` or `rect` in board
+  coordinates, or `ref` + `rect_mm` in the part's frame; it needs a unique `name`.
+  - `layers` lists copper layers of the board. Tracks are barred on the listed layers
+    the router uses; vias wherever any listed layer bars them, as in KiCad (a through
+    via crosses every layer), so an inner plane layer in the list keeps vias out. A
+    cell is barred when its centre comes within half the widest track (the via
+    radius) plus half a cell diagonal of the polygon.
+  - `items` chooses what is barred: `tracks`, `vias`, `pours` (fills; writeback only).
+  - `allow_classes` / `allow_nets` exempt nets: the router bars only the other nets
+    (per-net masks the maze, its dense kernels and the escape planner all read).
+  - `exempt_groups` names `fixed_block` groups whose copper may sit in the area.
+
+A v1 keep-out without allow lists or exempt groups is a rule area with KiCad's own
+flags on its layers. With them, the rule area forbids nothing itself and writeback
+adds one custom rule per layer to the board's `.kicad_dru`, in a block between
+`# >>> yapnr copper_keepout` and `# <<< yapnr copper_keepout`:
+
+```text
+(rule "yapnr keepout rf_guard F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard') && !A.hasNetclass('RF') && ... && A.NetName != 'VREF1' && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via))
+```
+
+Only that block is replaced on a later writeback; the fab profile's generated rules
+and a hand-written file's own rules stay (the profile regenerates its rules around
+the block). Pours become `disallow zone`, which KiCad's DRC judges but its zone
+filler does not, so such a keep-out with `pours` (the default) is also cut out of
+every plane zone the engine forms (`pnr.writeback.clip_keepout_pours`) whose net it
+does not allow. A zone drawn in the source is never changed: one such a keep-out
+would flag is listed on stderr (`drawn zones inside a keepout that bars their
+pours`). A keep-out on a layer the router does not route (a dedicated plane)
+affects vias and pours only.
+
+### `fixed_block` — copper kept exactly as drawn (hard, routing)
+
+A fixed block is copper the engine must not change: an RF macro, an antenna feed, a
+matched meander. Draw it on the source board and put it in a KiCad group; the group
+may hold tracks, **arcs**, vias, zones, rule areas and footprints.
+
+```yaml
+fixed_block:
+  - name: rfm1
+    group: RFM1_MACRO # the KiCad group on the source board
+    anchor: U1 # optional; a part with a fixed pose: the frame of the digest
+    sha256: 8301dcd5... # optional: the copper digest, checked at export and validate
+    solid_layers: [In2.Cu] # its copper zones on these layers are obstacles
+    refs: [RFM1] # its footprints (also read from the group at export)
+```
+
+- **Placement.** The block's footprints are held out of the placement graph
+  (`pnr.fixed_block.hold_out`), as mounting holes are; declare a `keepout` over the
+  block so parts stay off it. Its nets keep their other pins; KiCad sees them joined
+  through the block's copper.
+- **Routing.** The copper is exported to `fixed.json` (schema 2: `arcs` and
+  `blocks`, see `pnr.fixed_block`) and reserved as copper its own nets own: other
+  nets keep their clearance from every track, arc (chords within 1 um), via, pad and
+  solid zone, its own nets may join it. A solid zone on a layer the router does not
+  route keeps foreign vias out. A net with pads in the circuit joins the block at a
+  **port**: for each connected piece of the net's block copper that no pad already
+  reaches, the free end of its tracks and arcs nearest the net's pads (a piece without
+  a free end, such as a ground rail between fence vias, joins at its nearest via). The
+  plane nets join through their planes instead. Rule areas in
+  the group bar what their flags say. The regression runner carries the copper in
+  `rules.json` (`fixed_copper`), so every route of the placement loop sees it.
+- **Writeback** keeps the group's tracks, arcs and vias (they are not preview
+  routing); zones and footprints stay where the source has them.
+- **Checks.** `pnr.fixed_copper --validate` requires the same digest (and the
+  declared one), the same lock state of every block item and the same block zones,
+  besides `fixed_copper_preserved` (which now covers arcs).
+- **Digest.** `python -m pnr.fixed_copper BOARD --digest GROUP [--anchor REF]
+  [--rename MAP.json]` prints it: every track, arc and via of the group, to the
+  nanometre, in the anchor's frame (position and orientation), with layers, widths,
+  via sizes and nets.
+
+v0 limits: the series topology of a block with two ports on one net is not imposed
+(the router joins the net's pads and the port nearest them, so the second end may be
+left as a stub); placement does not see block ports (only its footprints' absence and
+your `keepout`).
+
 ### `side_pref` — top/bottom bias (soft)
 
 Biases a set of parts toward a side. The classic use is pushing decoupling caps
@@ -314,12 +419,30 @@ Pulls members within `radius_mm` of an `anchor`, so a functional block (a
 switching regulator and its inductor + caps, a crystal and its load caps) lands
 together — shorter loops, less noise.
 
-| Key         | Meaning                                            |
-| ----------- | -------------------------------------------------- |
-| `members`   | Refs/globs to cluster.                             |
-| `anchor`    | The ref they cluster around (usually the main IC). |
-| `radius_mm` | Target radius (default ~5 mm).                     |
-| `weight`    | Penalty weight (default 2.0).                      |
+| Key          | Meaning                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| `members`    | Refs/globs to cluster.                                                                     |
+| `anchor`     | The ref they cluster around (usually the main IC).                                         |
+| `radius_mm`  | Target radius (default ~5 mm).                                                             |
+| `weight`     | Penalty weight (default 2.0).                                                              |
+| `hard`       | `true`: each member's centre must lie within `radius_mm` (a placement outside is illegal). |
+| `anchor_pad` | With `hard`: measure from the centre of this pad of the anchor, not from its origin.       |
+
+A hard group measures each member's centre from the anchor's origin. For a part that
+must sit at one pad of a bigger one (a snubber at an inductor's switch-node pad, a
+decoupling capacitor at its ball), the origin can be several millimetres from the pad
+that matters, so `anchor_pad` measures from that pad instead, at the anchor's pose,
+rotation and side (a bottom-side anchor's pads are mirrored with it). The legalizer
+places the anchor before its members and bounds each member by a disc about the pad;
+the hard check (`group_outside`) and the benchmark checker's `proximity` check
+(`anchor_pad`) measure the same point. A pad name the anchor does not have is
+refused by name. The soft pull of global placement still aims at the anchor's
+origin; the legalizer applies the pad.
+
+```yaml
+group:
+  - { members: [C31], anchor: L2, anchor_pad: "2", radius_mm: 2.5, hard: true }
+```
 
 ### `line_group` — hold parts in one rigid line (hard)
 
@@ -455,6 +578,99 @@ Both work with `board.sides: double`: a part free to take either side keeps its
 regions and aligns there, measured with its pads, anchors and body mirrored on
 the bottom (so a `pad1` anchor moves when the part flips, an `origin` never).
 
+### `fanout` — escape an area-array part (BGA, LGA)
+
+Plans every ball of a named area-array part before routing: signal balls escape
+out of the array, balls of a net with a dedicated plane get their drop via, each
+by the rules and the via classes you give. Without the section nothing changes.
+
+```yaml
+fanout:
+  - name: u1
+    ref: U1 # the part (fix it: its fanout is planned at its pose)
+    skip_pads: [B4, B6] # balls left alone (copper another input owns, RF launches)
+    via_classes: # first class naming a net wins; default takes the rest
+      ground: { diameter_mm: 0.35, drill_mm: 0.15, nets: [GND], sites: [interstitial] }
+      default: { diameter_mm: 0.40, drill_mm: 0.20, sites: [vacant, outside] }
+    surface_rings: 2 # rings 0-1 may escape on the part's own layer
+    escape_layers: [In2.Cu, B.Cu] # where a dog-bone hands a signal over
+    forbidden_exits: [north, east] # or {F.Cu: [north]}: per layer
+    reserved: # corridors kept free, in the part's frame (frame: board for absolute)
+      - { rect: [-5.4, -0.2, -4.4, 0.2], layers: [F.Cu] }
+    neck_mm: 0.10 # signal tracks inside the fanout (default: the net's width)
+    neck_classes: [QSPI] # classes whose own minimum width the neck may go below
+    drop_nets: [1V0_PA, "VDD*"] # routed nets whose balls take a via instead of an exit
+    lock: true # write the fanout copper locked (default)
+```
+
+| Key               | Meaning                                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ref`             | The part. Its lands of the most common size form the lattice (pitch per axis, rings, vacant sites); other lands are obstacles. |
+| `name`            | Unique name (default: the ref); the report and `fanout-<name>.json` use it.                                                     |
+| `pads`            | Pad names or globs to fan out (default `*`, every netted ball).                                                                |
+| `skip_pads`       | Balls the fanout leaves alone. Their lands stay obstacles.                                                                     |
+| `via_classes`     | `name: {diameter_mm, drill_mm, nets, sites}`; `sites` from `interstitial` (a lattice cell centre), `vacant` (a lattice point without a ball), `outside` (beyond the array), `in_pad` (a filled via in the ball; needs the fab profile's in-pad class); optional `layers`, the only copper layers the class's nets may use (a board rule that keeps LVDS on the outer layers, say). Checked against the fab rules. |
+| `surface_rings`   | Balls in rings below this may escape on the surface; deeper rings need a via (default 2).                                      |
+| `escape_layers`   | Routing layers a dog-bone may change to (default: every routing layer of the stack but the surface).                           |
+| `ring_layers`     | `{ring: [layers]}`: the only exit layers of that ring (the surface included by naming it).                                     |
+| `forbidden_exits` | Board compass edges of the part no escape may leave across: a list (every layer) or `{layer: [edges]}`.                        |
+| `reserved`        | `{rect or polygon, layers, frame}` areas no fanout copper enters (`frame`: `part`, the default, or `board`).                    |
+| `neck_mm`         | The signal track width inside the fanout; the router continues at the net's own width from the exit. It narrows a signal below the fab's default track width, never below a minimum the net has of its own (a class `width_mm`, a width from `current_a`, an electrical outer width or terminal budget) unless `neck_classes` names one of its classes, never below a terminal width contract, and never widens; `fanout.check` refuses a value under `min_track_width_mm`. The validator takes each declared neck as an authorized short escape: the pad's required entry width is the neck's (`pnr.pad_entry.fanout_neck`), and the plan lists them (`diagnostics.necks`). |
+| `neck_classes`    | Net classes (or `dp_<pair>`) whose own minimum width `neck_mm` may go below (needs `neck_mm`; an unknown name is a warning). |
+| `drop_nets`       | Routed (non-plane) nets, names or globs, whose balls drop a via of their class beside the ball, as a plane ball does, instead of escaping across the array edge (no exit, no neck): a supply decoupled under the array or fed from another layer. The router takes each via as the net's terminal on the layer opposite the part and routes on from it. |
+| `lock`            | Write the fanout copper locked (default `true`), so later passes leave it alone.                                               |
+| `bottom_sites`    | `{parts, max_stub_mm, zone, rotations}`: decoupling sites under the array on the bottom side (below).                         |
+| `variant`         | A seeded permutation of the planner's tie-breaks (default 0, none).                                                            |
+
+How it works (`pnr/fanout`): the lattice gives the sites; tracks run on the half
+lattice (through the channel between two balls, the interstitial sites and the
+vacant ones, orthogonal or at 45 degrees) and every object is judged on exact
+geometry against the lands, fixed copper, `copper_keepout`s (a v1 keepout bars
+only its `items` on its `layers`, and lets its allowed nets and classes through, as
+the router does), a fixed block's rule areas (tracks on their own `layers` only),
+mounting holes, reserved corridors, the outline and the fab's via, hole and edge
+rules, each with 1 µm added (the native Oracle's margin, so the engine's own gate
+accepts every planned item). All balls
+are assigned together by negotiated congestion, so signals and drops share the
+sites: most signals escaped first, then most drops, then the least length and vias.
+A ball with no legal path is reported `failed`, with its reason. At 0.65 mm pitch
+with 0.32 mm lands and 0.10/0.10 rules a 0.35/0.15 via fits an interstitial site
+and a 0.40/0.20 one does not, and one 0.10 mm track fits between two balls.
+
+The router reserves the planned copper, routes each escaped signal on from the
+first free grid cell beyond its exit, straight out or, when a part closes that
+way, turning up to 75 degrees within 2 mm (the tail keeps each foreign pad at the
+larger of the two nets' class clearances and is judged against class keepouts
+exactly, as the plan was; the fanout copper keeps other nets' vias at the largest
+class clearance), and leaves the fanned-out balls to the plan.
+A ball whose exit finds no such cell is not emitted, and its planned copper goes
+back to the maze;
+the drop via of a plane ball is its connection. The fanout's vias keep their class
+(`routes.json` `via_sizes`), and its copper is written locked (`locked`). The
+route report's escape diagnostics carry a `fanout` block per fanout (escaped
+signals, drops, via sites, failures, balls without an access cell).
+
+A plane ball that already touches fixed copper of its own net (a pour or track of
+a fixed block, `fixed_copper` `polygons`) is joined by it and gets no drop; other
+nets keep their clearance from that copper. Each pair of nets keeps the larger of
+their class clearances, as KiCad's DRC judges them, and a via class must meet the
+judge's minimum via (`min_via_diameter_mm`, else `via_diameter_mm`).
+
+`bottom_sites: {parts: [C50, C56], max_stub_mm: 0.5, zone: interior}` puts each
+listed part (in priority order) on the bottom side under the array, where every pad
+clears the fanout's vias and bottom tracks and lies within `max_stub_mm` of a
+fanout via of its net; `interior` keeps the sites inside the array's outermost
+fully vacant ring (else inside ring 2), `shadow` allows the whole array. Placement
+takes the sites as fixed bottom poses; parts no site fits are reported. Other bottom
+parts are kept out of the array by the side policy only.
+
+`python -m pnr.fanout plan GRAPH --rules RULES --out DIR` writes the plan
+(`fanout-<name>.json`: copper, every ball's terminal, diagnostics) without routing;
+`python -m pnr.fanout verify BOARD --rules RULES --out DIR --kicad-cli CLI` (KiCad's
+Python) adds it to a copy of the board and judges it with the native Oracle and
+KiCad's DRC. Balls on a net with a dedicated plane drop only on a board that
+declares its copper stack; without one the plane stage drops them.
+
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 
 These describe how nets are _routed_ rather than how parts are _placed_ — they
@@ -477,7 +693,11 @@ length_match:
 - **`net_class`** — a named width/clearance rule over a set of nets. Applied to
   the board's net settings in write-back, so **FreeRouting routes those nets at
   the given width** (e.g. power rails wider). The quality report rolls up total
-  routed length per class. A class may also set **`plane_layer`** (e.g.
+  routed length per class. A class `clearance_mm` larger than the fab's holds
+  between its nets and every other net, as KiCad's DRC judges two nets (the larger
+  of their clearances): the grid router's exact escape and drop checks against pads
+  and escape copper use it, and so does a fanout's hand-over. A class may also set
+  **`plane_layer`** (e.g.
   `In1.Cu`): its net is **poured as a copper plane** on that layer instead of
   being trace-routed — the right home for a high-fanout ground or power net on a
   multilayer board (each pad reaches it with a short via, and the router only has
@@ -569,6 +789,56 @@ unrouted, the build **fails** with the count — a partially-routed board is not
 board. (`route_max_passes = 0` lets the router run to completion; set
 `require_routed = False` only to inspect a deliberately-partial result.) `drc_gate`
 similarly turns DRC violations into a build failure.
+
+### `legalize` — legalizer options (opt-in)
+
+The legalizer snaps the global placement onto a grid of slots (0.25 mm) and packs
+the parts one by one. These options change how; each is off unless the file sets it,
+and a design without the section is legalized exactly as before.
+
+| Key         | Values                         | Meaning                                                                                        |
+| ----------- | ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `outline`   | `raster` (default), `exact`    | `exact`: every part's courtyard stays inside the outline by the test the hard check uses.      |
+| `order`     | `blocks` (default), `scarcity` | `scarcity`: a part held by a hard region or edge band competes with the hard-group blocks.     |
+| `lookahead` | `none` (default), `regions`    | `regions`: a slot that strands a held part with few slots left is refused (when another fits). |
+
+```yaml
+legalize:
+  outline: exact
+  order: scarcity
+  lookahead: regions
+```
+
+`outline: exact` matters when the outline is not a whole number of slots (a 46.3 mm
+board on the 0.25 mm grid): the slot raster then has a partial last row or column
+that reaches past the edge, and a part packed there keeps its courtyard inside the
+raster but up to a slot minus half the clearance outside the board, which the
+placement's hard check refuses (`outside_outline`). With `exact` each slot centre is
+bounded by the box in which the part's courtyard, at the tried rotation and side, lies
+inside the outline, and the legalizer checks the result with the hard check itself.
+The length-matching pass after legalization keeps off those cells too. The outline is
+the `board.outline` rectangle; rounded corners are not modelled.
+
+`order: scarcity` changes the order parts are packed in. The legalizer packs the
+parts of hard groups (and aligns) block by block, picking next the block with the
+fewest free slots per square millimetre of its parts, and only then every other part,
+fewest free slots first. A part held only by a narrow hard `region` (a connector's one
+window) therefore comes after every block and can find its window full. With
+`scarcity` each part held by a hard region or a hard `edge_align` band, and in no
+group, is a block of its own and takes its turn by the same measure, so a window part
+goes before a roomy block; and once such a part has fewer free slots left than every
+part of the block being packed (a roomy region a block is filling), it goes next.
+
+`lookahead: regions` checks each slot before taking it: a greedy trial pack of the
+parts still to place that are held by a hard group, region or edge band, can still
+reach the slot and would keep at most 64 free slots once it is taken (a part that does
+not fit even without the slot is stranded anyway and left out). When one of them no
+longer fits, the next nearest slot is tried (up to 40), then the part's other turn;
+when no turn has a slot that strands nothing, the nearest slot of the first is kept
+and backtracking deals with the part. It is
+the look-ahead of power-first placement (`PNR_POWER_FIRST=1`, which refuses regions)
+for the default flow, and costs the trial packs: it is meant for boards with narrow
+regions.
 
 ## How intent becomes a layout
 

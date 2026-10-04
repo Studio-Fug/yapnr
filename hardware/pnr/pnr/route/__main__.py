@@ -268,6 +268,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         }
         if board.via_spans:  # blind, buried and micro vias (pnr.via_policy)
             routes["via_spans"] = [list(s) for s in board.via_spans]
+        routes.update(board.extras())  # a declared fanout's via sizes and locked copper
         if board.length_report is not None:
             # Pair / group length tuning (pnr.route.detail.tune), only when declared.
             routes["length_tuning"] = board.length_report

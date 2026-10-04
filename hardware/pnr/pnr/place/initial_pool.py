@@ -1064,6 +1064,7 @@ def select_initial_placement(
             )
             if getattr(route, "via_spans", None):  # blind, buried, micro (pnr.via_policy)
                 payload["via_spans"] = route.via_spans
+            payload.update(getattr(route, "extras", dict)())  # a declared fanout's (pnr.fanout)
             (root / name / "routes.json").write_text(json.dumps(payload, indent=2))
             (root / name / "routing-result.json").write_text(
                 json.dumps(

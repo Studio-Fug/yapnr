@@ -122,6 +122,23 @@ class CapacityTests(unittest.TestCase):
         result = score(g, r, passes=1)
         self.assertEqual(result["unreachable_branches"], 1)
 
+    def test_v1_keepout_with_exempt_groups_only_is_a_barrier(self):
+        # Exempt groups exempt only fixed copper: the router bars every routed net, so
+        # the proxy does too; allowed nets keep it optimistic (not modelled).
+        g = self.fixture()
+        v1 = dict(
+            name="block",
+            polygon=[[3, -1], [5, -1], [5, 5], [3, 5]],
+            layers=["F.Cu", "B.Cu"],
+            items=["tracks", "vias"],
+            exempt_groups=["BLOCK"],
+        )
+        result = score(g, {"layers": 2, "copper_keepouts": [v1]}, passes=1)
+        self.assertEqual(result["unreachable_branches"], 1)
+        allowed = dict(v1, allowed_nets=["n0"])
+        result = score(g, {"layers": 2, "copper_keepouts": [allowed]}, passes=1)
+        self.assertEqual(result["unreachable_branches"], 0)
+
     def test_smd_body_does_not_reserve_backside(self):
         g = self.fixture()
         g.components[0].bbox = (9, 4)

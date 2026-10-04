@@ -30,13 +30,30 @@ def xy(p):
     return (p.x / 1e6, p.y / 1e6)
 
 
-def terminal_required_width(ref, number, net, rules):
+def terminal_required_width(ref, number, net, rules, neck=True):
     """The hard minimum width of a new entry at pad ``number`` of ``ref`` on ``net``
     (mm): the fab track width, the net's class widths and electrical outer width, a
     terminal current budget and a terminal width contract. Pure (no pcbnew): the
-    detailed router sizes plane drops with it, the native checks a pad with it."""
+    detailed router sizes plane drops with it, the native checks a pad with it.
+
+    A ball of a declared fanout with ``neck_mm`` (:func:`fanout_neck`) has its neck
+    width instead: the declared, authorized short escape. ``neck=False`` gives the
+    width without it (a plane drop's stub)."""
+    width = _terminal_width(
+        ref, number, net, rules, rules.get("fab", {}).get("track_width_mm", 0.2)
+    )
+    if neck and rules.get("fanouts"):
+        narrow = fanout_neck(ref, number, net, rules, required=width)
+        if narrow is not None:
+            width = narrow
+    return width
+
+
+def _terminal_width(ref, number, net, rules, base):
+    """:func:`terminal_required_width` from ``base`` (the fab track width; 0.0 for
+    the class, current and contract floor alone), without a fanout neck."""
     # widths are resolved upstream by constraints.py from source current inputs.
-    width = rules.get("fab", {}).get("track_width_mm", 0.2)
+    width = base
     for cls in rules.get("net_classes", []):
         if net in cls.get("nets", []) and cls.get("width_mm") is not None:
             width = max(width, cls["width_mm"])
@@ -51,6 +68,42 @@ def terminal_required_width(ref, number, net, rules):
     if contract:  # PNR_TERMINAL_MIN_WIDTH=1: source minimum is a hard floor
         width = max(width, contract["min_width_mm"])
     return width
+
+
+def fanout_neck(ref, number, net, rules, required=None, spec=None):
+    """The width of a declared fanout neck at pad ``number`` of ``ref`` (mm), or None.
+
+    A ``fanout`` entry's ``neck_mm`` narrows the escape of each signal ball it covers
+    (its ``pads``, not its ``skip_pads``; never a net of a ``plane_layer`` class nor
+    one of its ``drop_nets``, which drop a via at full width) below the fab's default
+    track width, never below a minimum the net has of its own (its class width,
+    electrical outer width or terminal current budget) unless one of its classes is
+    named in the entry's ``neck_classes`` (authorized), and never below a terminal
+    width contract. A neck never widens: None when the
+    result is not narrower than ``required`` (default: the width without a neck).
+    ``spec`` is the entry (default: ``rules["fanouts"]``'s entry for ``ref``)."""
+    if spec is None:
+        spec = next((f for f in rules.get("fanouts") or () if f.get("ref") == ref), None)
+    if spec is None or spec.get("neck_mm") is None or spec.get("ref") != ref:
+        return None
+    from pnr.fanout.spec import covers, drops
+
+    if not covers(spec, number) or drops(spec, net):
+        return None
+    classes = [c for c in rules.get("net_classes", []) if net in c.get("nets", [])]
+    if any(c.get("plane_layer") for c in classes):
+        return None
+    if required is None:
+        required = _terminal_width(
+            ref, number, net, rules, rules.get("fab", {}).get("track_width_mm", 0.2)
+        )
+    authorized = any(c.get("name") in (spec.get("neck_classes") or ()) for c in classes)
+    floor = 0.0 if authorized else _terminal_width(ref, number, net, rules, 0.0)
+    contract = terminal_contract(ref, number, net, rules)
+    if contract:
+        floor = max(floor, contract["min_width_mm"])
+    width = max(float(spec["neck_mm"]), floor)
+    return width if width < required - 1e-9 else None
 
 
 def terminal_contract(ref, number, net, rules):

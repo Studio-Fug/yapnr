@@ -7,7 +7,13 @@ hierarchical block synthesis with a template reused four times, current-sized po
 copper, and Monte-Carlo successive-halving search over placements.
 
 Most rungs are *variants* of two base designs (``09-mcu-usb-31`` and the ladder's
-``07-chaser-20``) that change exactly one dimension, so an effect can be attributed:
+``07-chaser-20``) that change exactly one dimension, so an effect can be attributed.
+``11-ufbga201-fanout`` breaks a 0.65 mm UFBGA176+25 out to four connectors on six
+layers through a declared ``fanout`` (pnr.fanout): interstitial plane drops, surface
+and dog-bone escapes, a reserved corridor and a per-layer forbidden exit; its
+``-block`` variant puts a fixed RF launch beside it (ground vias on the ball lattice,
+a class keep-out with the supply plane cut out, a class guard, an F.Cu-only rule
+area). The dimensions:
 
 ``stackup``
     the copper stack: number of plane layers and signal layers and their order, as a
@@ -38,6 +44,8 @@ allow. Footprints are KiCad 10 stock library parts; pin maps follow the device
 datasheets named beside each part.
 """
 
+import math
+import re
 from copy import deepcopy
 
 from designs import LIB, chaser, circuit, part, timer_parts
@@ -57,13 +65,22 @@ HARD_LIB = {
     "c_1206": "Capacitor_SMD:C_1206_3216Metric",
     "terminal_2p": "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",
     "hole_m2": "MountingHole:MountingHole_2.2mm_M2",
+    "u_fl": "Connector_Coaxial:U.FL_Hirose_U.FL-R-SMT-1_Vertical",
+    "ufbga201": "Package_BGA:UFBGA-201_10x10mm_Layout15x15_P0.65mm",
+    "jst_sh_12": "Connector_JST:JST_SH_SM12B-SRSS-TB_1x12-1MP_P1.00mm_Horizontal",
+    "c_0402": "Capacitor_SMD:C_0402_1005Metric",
+    "r_0402": "Resistor_SMD:R_0402_1005Metric",
 }
 
 
 # Pad names a footprint repeats (one net for every copy): the receptacle's eight
 # shield pads. The generator maps a name to all its pads; the connected-pad count the
 # runner asserts counts each copy.
-REPEATED_PADS = {HARD_LIB["usb_micro_b"]: {"SH": 8}}
+REPEATED_PADS = {
+    HARD_LIB["usb_micro_b"]: {"SH": 8},
+    HARD_LIB["u_fl"]: {"2": 2},
+    HARD_LIB["jst_sh_12"]: {"MP": 2},
+}
 
 
 def connected_pads(parts):
@@ -963,6 +980,565 @@ def chaser_sidelock(spec):
     )
 
 
+# ------------------------------------------------------ fixed copper (arcs)
+
+# A fixed block on the chaser (07-chaser-20-4L-SGPS-arcblock): two matched meander
+# delay lines carrying the clock to two U.FL monitor outputs (Hirose U.FL-R-SMT-1, the
+# stock footprint: pad 1 signal, both pads 2 ground), 64 locked arcs, a ground rail of
+# fence vias between them and ground vias at the outer ground pads, all one KiCad group.
+# The engine holds the connectors out of placement and joins the clock to each line's
+# free west end (its port). A copper keep-out over the block bars foreign tracks on
+# F.Cu and vias (In1.Cu listed) but not In2.Cu or B.Cu tracks; a 2 mm class guard
+# around it lets only the planes' nets and the clock cross on the signal layers.
+ARC_GROUP = "DELAY_LINES"
+ARC_NAME = "delay"
+ARC_LINES = (27.6, 22.4)  # each line's baseline y; its U.FL sits on it at x = UFL_X
+ARC_PORT_X, ARC_START_X, UFL_X = 24.8, 27.0, 39.7
+ARC_R, ARC_GAP, ARC_H, ARC_PERIODS = 0.25, 0.15, 1.8, 8  # 4 quarter arcs per period
+ARC_W, RAIL_W = 0.25, 0.4  # the clock's and the ground class's (plane_gnd) widths
+ARC_VIA = (0.6, 0.3)  # the chaser fab's via
+ARC_KEEPOUT = [26.3, 19.8, 41.75, 30.2]  # the block (F.Cu tracks, vias)
+ARC_GUARD = [24.3, 17.8, 42.0, 32.0]  # 2 mm around it, clipped at the board edge
+KICAD_PAGE_MM = 30.0  # the generator's outline offset (pnr.writeback frame_region)
+
+
+def meander(net, y0):
+    """``(tracks, arcs)`` of one line: the port lead from (ARC_PORT_X, y0), the
+    rounded square-wave of ARC_PERIODS periods (four quarter arcs each), and the lead
+    into its U.FL's pad 1."""
+    r, g, h, w = ARC_R, ARC_GAP, ARC_H, ARC_W
+    s = math.sqrt(0.5) * r
+    tracks = [[net, "F.Cu", [ARC_PORT_X, y0], [ARC_START_X, y0], w]]
+    arcs = []
+    x = ARC_START_X
+    for _ in range(ARC_PERIODS):
+        up, top = (x + r, y0 + r), (x + r, y0 + h - r)
+        a, b = (x + 2 * r, y0 + h), (x + 2 * r + g, y0 + h)
+        down, low = (x + 3 * r + g, y0 + h - r), (x + 3 * r + g, y0 + r)
+        nxt = x + 4 * r + g
+        arcs.append([net, "F.Cu", [x, y0], [x + s, y0 + r - s], list(up), w])
+        tracks.append([net, "F.Cu", list(up), list(top), w])
+        arcs.append([net, "F.Cu", list(top), [x + 2 * r - s, y0 + h - r + s], list(a), w])
+        tracks.append([net, "F.Cu", list(a), list(b), w])
+        arcs.append([net, "F.Cu", list(b), [x + 2 * r + g + s, y0 + h - r + s], list(down), w])
+        tracks.append([net, "F.Cu", list(down), list(low), w])
+        arcs.append([net, "F.Cu", list(low), [nxt - s, y0 + r - s], [nxt, y0], w])
+        tracks.append([net, "F.Cu", [nxt, y0], [nxt + g, y0], w])
+        x = nxt + g
+    tracks.append([net, "F.Cu", [x, y0], [UFL_X - 1.525, y0], w])
+    return tracks, arcs
+
+
+def arc_block():
+    """The block: footprint poses, tracks, arcs and vias (engine mm, y up)."""
+    tracks, arcs, vias = [], [], []
+    for y0 in ARC_LINES:
+        t, a = meander("CLOCK", y0)
+        tracks += t
+        arcs += a
+    top, bottom = ARC_LINES
+    rail_y = (top + bottom) / 2
+    fence = [ARC_START_X + 0.6 + 1.3 * k for k in range(8)]
+    vias += [["GND", [x, rail_y]] for x in fence]
+    # The rail joins the fence vias and the U.FLs' inner ground pads.
+    tracks.append(["GND", "F.Cu", [fence[0], rail_y], [UFL_X, rail_y], RAIL_W])
+    tracks.append(["GND", "F.Cu", [UFL_X, top - 1.475], [UFL_X, bottom + 1.475], RAIL_W])
+    for y in (top + 1.475, bottom - 1.475):  # the outer ground pads to their own vias
+        tracks.append(["GND", "F.Cu", [UFL_X, y], [UFL_X + 1.4, y], RAIL_W])
+        vias.append(["GND", [UFL_X + 1.4, y]])
+    return dict(
+        name=ARC_NAME,
+        group=ARC_GROUP,
+        footprints={"J10": [UFL_X, top, 0], "J11": [UFL_X, bottom, 0]},
+        tracks=tracks,
+        arcs=arcs,
+        vias=[[net, xy, ARC_VIA[0], ARC_VIA[1]] for net, xy in vias],
+    )
+
+
+def block_sha256(block, height, offset=KICAD_PAGE_MM):
+    """The copper digest of a generated block (``pnr.fixed_copper.block_digest`` of
+    its group without an anchor: KiCad nanometres from the outline's lower-left
+    corner, y down), computed from the generator's own coordinates."""
+    import hashlib
+
+    ox, oy = round(offset * 1e6), round((offset + height) * 1e6)
+
+    def local(p):
+        return "%d %d" % (
+            round((offset + p[0]) * 1e6) - ox,
+            round((offset + height - p[1]) * 1e6) - oy,
+        )
+
+    rows = []
+    for net, layer, a, b, w in block["tracks"]:
+        rows.append("|".join(["segment", local(a), local(b), "w %d" % round(w * 1e6), layer, net]))
+    for net, layer, a, m, b, w in block["arcs"]:
+        rows.append(
+            "|".join(["arc", local(a), local(m), local(b), "w %d" % round(w * 1e6), layer, net])
+        )
+    for net, xy, d, drill in block["vias"]:
+        rows.append(
+            "|".join(
+                [
+                    "via",
+                    local(xy),
+                    "d %d" % round(d * 1e6),
+                    "drill %d" % round(drill * 1e6),
+                    "type through",
+                    "F.Cu-B.Cu",
+                    net,
+                ]
+            )
+        )
+    rows.sort()
+    return hashlib.sha256("\n".join(rows).encode()).hexdigest()
+
+
+def rect_polygon(rect):
+    x0, y0, x1, y1 = rect
+    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+
+
+def chaser_arcblock(spec):
+    """``spec`` (the 4L-SGPS chaser) with the fixed block: its parts, the block, the
+    constraints that express it to the engine (``fixed_block``, ``copper_keepout``
+    v1, a placement ``keepout``) and the tool-neutral checks (``copper_digest``,
+    ``no_copper``)."""
+    spec = deepcopy(spec)
+    block = arc_block()
+    block["sha256"] = block_sha256(block, spec["constraints"]["board"]["outline"]["h"])
+    spec["fixed_block"] = block
+    for ref in sorted(block["footprints"]):
+        spec["parts"].append(pinned(ref, "u_fl", "U.FL clock monitor", {"1": "CLOCK", "2": "GND"}))
+    spec["expected_components"] = len(spec["parts"])
+    spec["expected_connected_pads"] = connected_pads(spec["parts"])
+    cons = spec["constraints"]
+    cons["fixed_block"] = [
+        dict(
+            name=ARC_NAME, group=ARC_GROUP, sha256=block["sha256"], refs=sorted(block["footprints"])
+        )
+    ]
+    planes = sorted(k for k, c in cons["net_class"].items() if c.get("plane_layer"))
+    x0, y0, x1, y1 = ARC_KEEPOUT
+    gx0, gy0, gx1, gy1 = ARC_GUARD
+    guards = {
+        "guard-west": [gx0, gy0, x0, gy1],
+        "guard-south": [x0, gy0, gx1, y0],
+        "guard-north": [x0, y1, gx1, gy1],
+    }
+    cons["copper_keepout"] = [
+        dict(
+            name="block",
+            rect=list(ARC_KEEPOUT),
+            layers=["F.Cu", "In1.Cu"],
+            items=["tracks", "vias"],
+            exempt_groups=[ARC_GROUP],
+        )
+    ] + [
+        dict(
+            name=name,
+            rect=rect,
+            layers=["F.Cu", "B.Cu"],
+            items=["tracks", "vias"],
+            allow_classes=planes,
+            allow_nets=["CLOCK"],
+        )
+        for name, rect in guards.items()
+    ]
+    cons["keepout"] = (cons.get("keepout") or []) + [
+        dict(name="block", polygon=rect_polygon(ARC_GUARD))
+    ]
+    spec["checks"].append(
+        dict(
+            id="block-copper",
+            kind="copper_digest",
+            group=ARC_GROUP,
+            sha256=block["sha256"],
+            engine="fixed_block",
+        )
+    )
+    spec["checks"].append(
+        dict(
+            id="keepout-block",
+            kind="no_copper",
+            polygon=rect_polygon(ARC_KEEPOUT),
+            layers=["F.Cu", "In1.Cu"],
+            items=["tracks", "vias", "pads"],
+            allow_nets=[],
+            exempt_groups=[ARC_GROUP],
+            engine="copper_keepout",
+        )
+    )
+    allowed = sorted({n for k in planes for n in cons["net_class"][k]["nets"]} | {"CLOCK"})
+    for name, rect in guards.items():
+        spec["checks"].append(
+            dict(
+                id="keepout-" + name,
+                kind="no_copper",
+                polygon=rect_polygon(rect),
+                layers=["F.Cu", "B.Cu"],
+                items=["tracks", "vias", "pads"],
+                allow_nets=allowed,
+                exempt_groups=[ARC_GROUP],
+                engine="copper_keepout",
+            )
+        )
+    spec["name"] += "-arcblock"
+    spec["description"] = (
+        spec.get("description", "")
+        + " With a fixed block: two matched meander delay lines (64 locked arcs) from the "
+        "clock to two U.FL monitor outputs, a fenced ground rail, a copper keep-out over "
+        "it and a 2 mm class guard."
+    )
+    spec["dims"]["parts"] = "arcblock"
+    spec["features"] = sorted(set(spec["features"]) | {"fixed-copper", "arcs", "copper-keepout"})
+    spec["ci"] = dict(lane="nightly", minutes=30)
+    return spec
+
+
+# ------------------------------------------------------------ BGA fanout
+
+# STM32F207IGH6 in UFBGA176+25 (ST DS6329, "UFBGA176+25 ballout"), the device KiCad's
+# stock footprint Package_BGA:UFBGA-201_10x10mm_Layout15x15_P0.65mm is drawn for: the
+# ball map of KiCad's stock symbol MCU_ST_STM32F2:STM32F207IGHx (generated from ST's
+# open pin data), row by row, columns 1-15; "-" is a vacant site (ring 4 and the centre
+# block's surround). The 25 centre balls are VSS.
+STM32F207_UFBGA176 = {
+    "A": "PE3 PE2 PE1 PE0 PB8 PB5 PG14 PG13 PB4 PB3 PD7 PC12 PA15 PA14 PA13",
+    "B": "PE4 PE5 PE6 PB9 PB7 PB6 PG15 PG12 PG11 PG10 PD6 PD0 PC11 PC10 PA12",
+    "C": "VBAT PI7 PI6 PI5 VDD RFU VDD VDD VDD PG9 PD5 PD1 PI3 PI2 PA11",
+    "D": "PC13 PI8 PI9 PI4 VSS BOOT0 VSS VSS VSS PD4 PD3 PD2 PH15 PI1 PA10",
+    "E": "PC14 PF0 PI10 PI11 - - - - - - - PH13 PH14 PI0 PA9",
+    "F": "PC15 VSS VDD PH2 - VSS VSS VSS VSS VSS - VSS VCAP_2 PC9 PA8",
+    "G": "PH0 VSS VDD PH3 - VSS VSS VSS VSS VSS - VSS VDD PC8 PC7",
+    "H": "PH1 PF2 PF1 PH4 - VSS VSS VSS VSS VSS - VSS VDD PG8 PC6",
+    "J": "NRST PF3 PF4 PH5 - VSS VSS VSS VSS VSS - VDD VDD PG7 PG6",
+    "K": "PF7 PF6 PF5 VDD - VSS VSS VSS VSS VSS - PH12 PG5 PG4 PG3",
+    "L": "PF10 PF9 PF8 REGOFF - - - - - - - PH11 PH10 PD15 PG2",
+    "M": "VSSA PC0 PC1 PC2 PC3 PB2 PG1 VSS VSS VCAP_1 PH6 PH8 PH9 PD14 PD13",
+    "N": "VREF- PA1 PA0 PA4 PC4 PF13 PG0 VDD VDD VDD PE13 PH7 PD12 PD11 PD10",
+    "P": "VREF+ PA2 PA6 PA5 PC5 PF12 PF15 PE8 PE9 PE11 PE14 PB12 PB13 PD9 PD8",
+    "R": "VDDA PA3 PA7 PB1 PB0 PF11 PF14 PE7 PE10 PE12 PE15 PB10 PB11 PB14 PB15",
+}
+BGA_ROWS = "ABCDEFGHJKLMNPR"
+BGA_SIZE = (36, 36)
+# Three east-edge balls left for a small fixed block (an RF launch, say): unconnected
+# here, their surface exits a reserved corridor in U1's frame (x east, y north).
+BGA_RESERVED_BALLS = ["E15", "F15", "G15"]
+BGA_RESERVED_RECT = [4.8, 0.3, 6.4, 2.3]
+
+
+def _bga_ring(ball):
+    r, c = BGA_ROWS.index(ball[0]), int(ball[1:]) - 1
+    return r, c, min(r, c, 14 - r, 14 - c)
+
+
+def bga_signals():
+    """``{side: [balls]}``: three GPIO balls per ring 0-3 on each side (fewer where a
+    ring has fewer), each ball on the side of its nearest package edge (corners and
+    ties left out), spread along the edge."""
+    out = {}
+    for side in ("north", "south", "west", "east"):
+        rings = {k: [] for k in range(4)}
+        for row, names in STM32F207_UFBGA176.items():
+            for col, name in enumerate(names.split()):
+                ball = row + str(col + 1)
+                if ball in BGA_RESERVED_BALLS or not re.fullmatch(r"P[A-I]\d+", name):
+                    continue
+                r, c, k = _bga_ring(ball)
+                if k > 3:
+                    continue
+                edge = dict(north=r, south=14 - r, west=c, east=14 - c)
+                if [e for e in edge if edge[e] == min(edge.values())] != [side]:
+                    continue
+                rings[k].append((c if side in ("north", "south") else r, ball))
+        balls = []
+        for k in range(4):
+            ring = sorted(rings[k])
+            n = len(ring)
+            picks = [round((i + 0.5) * n / 3 - 0.5) for i in range(3)] if n >= 3 else range(n)
+            balls += [ring[i][1] for i in picks]
+        out[side] = balls
+    return out
+
+
+def ufbga_base():
+    """A 0.65 mm UFBGA breakout: the 2-layer base of ``11-ufbga201-fanout``.
+
+    STM32F207IGH6 (UFBGA176+25) fixed at the centre; 47 GPIO balls from rings 0-3 run
+    to four 12-pin JST SH connectors fixed at the four edges (each its own side's
+    balls, in edge order); decoupling (six 100 nF, a 4.7 uF bulk), the VCAP, NRST and
+    BOOT0 parts, and a 2-pin supply header. VDD, VDDA, VREF+ and VBAT are VCC; VSS,
+    VSSA, VREF- and REGOFF (regulator on) are GND."""
+    nets = {}
+    for row, names in STM32F207_UFBGA176.items():
+        for col, name in enumerate(names.split()):
+            if name == "-":
+                continue
+            ball = row + str(col + 1)
+            net = ""
+            if name in ("VDD", "VDDA", "VREF+", "VBAT"):
+                net = "VCC"
+            elif name in ("VSS", "VSSA", "VREF-", "REGOFF"):
+                net = "GND"
+            elif name in ("VCAP_1", "VCAP_2", "NRST", "BOOT0"):
+                net = name
+            nets[ball] = net
+    sides = bga_signals()
+    for balls in sides.values():
+        for ball in balls:
+            r, c, _ = _bga_ring(ball)
+            nets[ball] = STM32F207_UFBGA176[ball[0]].split()[c]
+    parts = [pinned("U1", "ufbga201", "STM32F207IGH6", nets)]
+    order = dict(north=1, south=-1, west=1, east=-1)  # pin 1 first along the edge at its pose
+    for k, side in enumerate(("north", "south", "west", "east")):
+        balls = sorted(
+            sides[side],
+            key=lambda b: order[side]
+            * (int(b[1:]) if side in ("north", "south") else -BGA_ROWS.index(b[0])),
+        )
+        pins = {str(i + 1): "" for i in range(12)}
+        for i, ball in enumerate(balls):
+            pins[str(i + 1)] = nets[ball]
+        pins["MP"] = ""
+        parts.append(pinned("J%d" % (k + 1), "jst_sh_12", "SM12B-SRSS-TB", pins))
+    parts.append(part("J5", "connector", "3V3 input", ["VCC", "GND"]))
+    for i in range(1, 7):
+        parts.append(pinned("C%d" % i, "c_0402", "100n", ["VCC", "GND"]))
+    parts += [
+        pinned("C7", "capacitor", "4.7u", ["VCC", "GND"]),
+        pinned("C8", "c_0402", "2.2u", ["VCAP_1", "GND"]),
+        pinned("C9", "c_0402", "2.2u", ["VCAP_2", "GND"]),
+        pinned("C10", "c_0402", "100n", ["NRST", "GND"]),
+        pinned("R1", "r_0402", "10k", ["BOOT0", "GND"]),
+    ]
+    spec = circuit(
+        "11-ufbga201-fanout",
+        "STM32F207 in a 0.65 mm UFBGA176+25 broken out to four connectors: 47 GPIO balls "
+        "from rings 0-3, the ground and supply balls dropped to their planes.",
+        parts,
+        BGA_SIZE,
+    )
+    cons = spec["constraints"]
+    cons["board"]["default_clearance_mm"] = 0.2
+    # Fine-pitch rules: 0.10/0.10 mm tracks, 0.40/0.20 mm vias, 0.15 mm minimum drill.
+    cons["fab"] = dict(
+        track_width_mm=0.1,
+        clearance_mm=0.1,
+        via_diameter_mm=0.4,
+        via_drill_mm=0.2,
+        hole_clearance_mm=0.15,
+        edge_clearance_mm=0.3,
+        min_through_drill_mm=0.15,
+        via_annular_mm=0.075,
+        min_track_width_mm=0.1,
+        smd_pad_clearance_mm=0.1,
+        hole_to_hole_mm=0.25,
+        via_to_smd_pad_mm=0.1,
+        min_via_diameter_mm=0.35,
+    )
+    cons["net_class"] = {
+        "supply": dict(nets=["VCC"], width_mm=0.1),
+        "return": dict(nets=["GND"], width_mm=0.1),
+    }
+    w, h = BGA_SIZE
+    cons["fixed"] = {
+        "U1": dict(at=[w / 2, h / 2], rot=0, side="top"),
+        "J1": dict(at=[w / 2, h - 3.6], rot=0, side="top"),
+        "J2": dict(at=[w / 2, 3.6], rot=180, side="top"),
+        "J3": dict(at=[3.6, h / 2], rot=90, side="top"),
+        "J4": dict(at=[w - 3.6, h / 2], rot=270, side="top"),
+        "J5": dict(at=[2.5, 5.5], rot=0, side="top"),
+    }
+    # Escape every ball of U1: ground and supply drops 0.35/0.15 at interstitial sites,
+    # signals by the 0.40/0.20 class; no surface exit north (an antenna edge, say).
+    cons["fanout"] = [
+        dict(
+            name="u1",
+            ref="U1",
+            via_classes=dict(
+                planes=dict(
+                    diameter_mm=0.35, drill_mm=0.15, nets=["GND", "VCC"], sites=["interstitial"]
+                ),
+                default=dict(diameter_mm=0.4, drill_mm=0.2, sites=["vacant", "outside"]),
+            ),
+            surface_rings=2,
+            forbidden_exits={"F.Cu": ["north"]},
+            reserved=[dict(name="block", rect=BGA_RESERVED_RECT, layers=["F.Cu"])],
+        )
+    ]
+    spec["supply"] = dict(voltage_v=3.3, max_current_a=0.1)
+    spec = hard(spec, "ufbga201-fanout", ["bga-fanout", "fine-pitch"], "manual", 120)
+    signals = sorted(b for balls in sides.values() for b in balls)
+    spec["checks"] += [
+        dict(
+            id="fanout-plane-vias",
+            kind="via_class",
+            ref="U1",
+            nets=["GND", "VCC"],
+            diameter_mm=0.35,
+            drill_mm=0.15,
+            site="interstitial",
+            engine="fanout",
+        ),
+        dict(id="fanout-escape", kind="escape", ref="U1", pads=signals, engine="fanout"),
+    ]
+    return spec
+
+
+def ufbga_fanout():
+    """``11-ufbga201-fanout``: the base on six layers (S G S G P S), where the drops reach
+    the ground (In1, In3) and supply (In4) planes."""
+    return with_stackup(ufbga_base(), "6L-SGSGPS")
+
+
+# A fixed block on the BGA rung (11-ufbga201-fanout-6L-SGSGPS-block): an RF launch from
+# ball F15 to a U.FL connector east of the array, all one KiCad group: the feed, two
+# ground stitching vias on the array's interstitial lattice beside F15 (sites the ground
+# drops of E15 and G15 may also choose: the plan reuses them, never drills them again),
+# a ground fence along the feed and the connector's ground vias. A copper keep-out over
+# the launch bars every net but ground (its plane class) on F.Cu, In2.Cu and the
+# supply plane In4.Cu (tracks, vias and pours: the engine cuts its VCC plane out of it);
+# a class guard on F.Cu north and south of it lets only the plane nets through; a rule
+# area in the group bars tracks on F.Cu alone north-east of the array (inner-layer exits
+# stay open below it).
+LAUNCH_GROUP = "LAUNCH"
+LAUNCH_NAME = "launch"
+LAUNCH_UFL = (27.0, 19.3)  # J6's centre: pad 1 at x - 1.525, ground pads at y +- 1.475
+LAUNCH_BALL = (22.55, 19.3)  # F15 (U1 at the board centre, rot 0)
+LAUNCH_KEEPOUT = [22.95, 18.3, 28.4, 20.3]
+LAUNCH_GUARDS = {"guard-north": [22.95, 20.3, 29.0, 21.4], "guard-south": [22.95, 17.2, 29.0, 18.3]}
+LAUNCH_RULE = [22.95, 21.4, 23.9, 22.6]  # F.Cu tracks only: rows A-B's surface exits east
+LAUNCH_VIA = (0.35, 0.15)  # the fanout's plane class (via_class judges them inside U1)
+
+
+def launch_block():
+    """The launch: footprint pose, tracks, vias and rule areas (engine mm, y up)."""
+    ux, uy = LAUNCH_UFL
+    bx, by = LAUNCH_BALL
+    tracks = [["RF_OUT", "F.Cu", [bx, by], [ux - 1.525, uy], 0.2]]
+    vias = [["GND", [bx - 0.325, by + 0.325]], ["GND", [bx - 0.325, by - 0.325]]]
+    vias += [["GND", [24.6, by + 0.55]], ["GND", [24.6, by - 0.55]]]
+    vias += [["GND", [25.0, by + 1.0]], ["GND", [25.0, by - 1.0]]]
+    for y in (uy + 1.475, uy - 1.475):  # the connector's ground pads to their own vias
+        tracks.append(["GND", "F.Cu", [ux, y], [ux + 1.6, y], 0.4])
+        vias.append(["GND", [ux + 1.6, y]])
+    return dict(
+        name=LAUNCH_NAME,
+        group=LAUNCH_GROUP,
+        footprints={"J6": [ux, uy, 0]},
+        tracks=tracks,
+        arcs=[],
+        vias=[[net, xy, LAUNCH_VIA[0], LAUNCH_VIA[1]] for net, xy in vias],
+        rule_areas=[
+            dict(polygon=rect_polygon(LAUNCH_RULE), layers=["F.Cu"], tracks=True, vias=False)
+        ],
+    )
+
+
+def ufbga_block(spec):
+    """``spec`` (the 6L BGA rung) with the launch block: F15 drives it (RF_OUT), E15 and
+    G15 become ground balls beside it, the fanout skips F15 instead of reserving the
+    three balls' corridor, and the constraints and checks that express the block."""
+    spec = deepcopy(spec)
+    block = launch_block()
+    block["sha256"] = block_sha256(block, spec["constraints"]["board"]["outline"]["h"])
+    spec["fixed_block"] = block
+    u1 = spec["parts"][0]
+    u1["pins"].update(E15="GND", F15="RF_OUT", G15="GND")
+    spec["parts"].append(pinned("J6", "u_fl", "U.FL RF out", {"1": "RF_OUT", "2": "GND"}))
+    spec["expected_components"] = len(spec["parts"])
+    spec["expected_connected_pads"] = connected_pads(spec["parts"])
+    cons = spec["constraints"]
+    cons["fixed_block"] = [
+        dict(name=LAUNCH_NAME, group=LAUNCH_GROUP, sha256=block["sha256"], refs=["J6"])
+    ]
+    (fanout,) = cons["fanout"]
+    fanout.pop("reserved")
+    fanout["skip_pads"] = ["F15"]
+    planes = sorted(k for k, c in cons["net_class"].items() if c.get("plane_layer"))
+    ground = sorted(k for k in planes if "GND" in cons["net_class"][k]["nets"])
+    cons["copper_keepout"] = [
+        dict(
+            name=LAUNCH_NAME,
+            rect=list(LAUNCH_KEEPOUT),
+            layers=["F.Cu", "In2.Cu", "In4.Cu"],
+            allow_classes=ground,
+            exempt_groups=[LAUNCH_GROUP],
+        )
+    ] + [
+        dict(
+            name=name,
+            rect=rect,
+            layers=["F.Cu"],
+            items=["tracks", "vias"],
+            allow_classes=planes,
+            exempt_groups=[LAUNCH_GROUP],
+        )
+        for name, rect in sorted(LAUNCH_GUARDS.items())
+    ]
+    cons["keepout"] = (cons.get("keepout") or []) + [
+        # The launch and the array's east exits beside it (J4's courtyard starts at 29.12).
+        dict(name=LAUNCH_NAME, polygon=rect_polygon([24.1, 14.5, 29.0, 24.0]))
+    ]
+    spec["checks"] = [c for c in spec["checks"] if c["id"] != "fanout-escape"]
+    signals = sorted(b for balls in bga_signals().values() for b in balls)
+    spec["checks"] += [
+        dict(id="fanout-escape", kind="escape", ref="U1", pads=signals, engine="fanout"),
+        dict(
+            id="block-copper",
+            kind="copper_digest",
+            group=LAUNCH_GROUP,
+            sha256=block["sha256"],
+            engine="fixed_block",
+        ),
+        dict(
+            id="keepout-launch",
+            kind="no_copper",
+            polygon=rect_polygon(LAUNCH_KEEPOUT),
+            layers=["F.Cu", "In2.Cu", "In4.Cu"],
+            items=["tracks", "vias", "pads", "zones"],
+            allow_nets=["GND"],
+            exempt_groups=[LAUNCH_GROUP],
+            engine="copper_keepout",
+        ),
+        dict(
+            id="block-rule-area",
+            kind="no_copper",
+            polygon=rect_polygon(LAUNCH_RULE),
+            layers=["F.Cu"],
+            items=["tracks"],
+            allow_nets=[],
+            exempt_groups=[LAUNCH_GROUP],
+            engine="fixed_block",
+        ),
+    ]
+    for name, rect in sorted(LAUNCH_GUARDS.items()):
+        spec["checks"].append(
+            dict(
+                id="keepout-" + name,
+                kind="no_copper",
+                polygon=rect_polygon(rect),
+                layers=["F.Cu"],
+                items=["tracks", "vias", "pads"],
+                allow_nets=["GND", "VCC"],
+                exempt_groups=[LAUNCH_GROUP],
+                engine="copper_keepout",
+            )
+        )
+    spec["name"] += "-block"
+    spec["description"] = (
+        spec.get("description", "")
+        + " With a fixed block: an RF launch from F15 to a U.FL, ground stitching vias on "
+        "the array's interstitial lattice, a class keep-out over it (the supply plane cut "
+        "out), a class guard and an F.Cu-only rule area at the fanout's edge."
+    )
+    spec["dims"]["parts"] = "block"
+    spec["features"] = sorted(set(spec["features"]) | {"fixed-copper", "copper-keepout"})
+    return spec
+
+
 # --------------------------------------------------------- run configurations
 
 # yapnr's configuration per family (run.py arguments). The ladder's documented best: the
@@ -1003,7 +1579,9 @@ def hard_rungs():
     chasers += [with_via_policy(six, "blind-buried"), with_via_policy(six, "hdi")]
     chasers += [with_double_sided(base), with_double_sided(with_stackup(base, "4L-SGPS"))]
     chasers += [chaser_absolute(base), chaser_relative(base), chaser_sidelock(base)]
-    others = [quad_bank(), power_switch()]
+    chasers.append(chaser_arcblock(chasers[0]))  # on 4L-SGPS: one new dimension
+    bga = ufbga_fanout()
+    others = [quad_bank(), power_switch(), bga, ufbga_block(bga)]
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST
     return deepcopy(out + chasers + others)

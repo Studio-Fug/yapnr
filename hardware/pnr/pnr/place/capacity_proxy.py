@@ -118,7 +118,31 @@ class CapacityGraph:
                     rect.top + clearance / 2,
                     self.net_ids.get(p.net, -1),
                 )
+        layer_index = {name: k for k, name in enumerate(self.layers)}
         for v in rules.get("copper_keepouts", []):
+            if "items" in v:
+                # v1: its bounding box on its own layers when it bars tracks. One with
+                # allowed nets is not modelled (optimistic); exempt groups alone exempt
+                # only fixed copper, so it bars every routed net, as the router reads it.
+                if v.get("allowed_nets") or "tracks" not in v["items"]:
+                    continue
+                if v.get("polygon") is not None:
+                    pts = v["polygon"]
+                else:
+                    c = graph.component(v["ref"])
+                    x0, y0, x1, y1 = v["rect_mm"]
+                    pts = [
+                        footprint_point(c, x, y)
+                        for x, y in [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]
+                    ]
+                box(
+                    [layer_index[la] for la in v["layers"] if la in layer_index],
+                    min(x for x, y in pts),
+                    min(y for x, y in pts),
+                    max(x for x, y in pts),
+                    max(y for x, y in pts),
+                )
+                continue
             c = graph.component(v["ref"])
             x0, y0, x1, y1 = v["rect_mm"]
             pts = [footprint_point(c, x, y) for x, y in [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]]
@@ -129,6 +153,24 @@ class CapacityGraph:
                 max(x for x, y in pts),
                 max(y for x, y in pts),
             )
+        if rules.get("fixed_copper"):
+            # Fixed copper carried in the rules (fixed blocks): owned by its nets.
+            from pnr.fixed_block import flatten
+
+            fixed = flatten(rules["fixed_copper"])
+            for net, layer, a, b, width in fixed.get("tracks", []):
+                if layer not in layer_index:
+                    continue
+                owner = self.net_ids.get(net, -1)
+                r = (width + clearance) / 2
+                for t in np.linspace(0, 1, max(2, math.ceil(math.dist(a, b) / step) + 1)):
+                    x = a[0] + t * (b[0] - a[0])
+                    y = a[1] + t * (b[1] - a[1])
+                    box([layer_index[layer]], x - r, y - r, x + r, y + r, owner)
+            for via in fixed.get("vias", []):
+                (x, y), r = via["xy"], via["diameter_mm"] / 2 + clearance / 2
+                owner = self.net_ids.get(via.get("net"), -1)
+                box(range(len(self.layers)), x - r, y - r, x + r, y + r, owner)
         for h in rules.get("mounting_holes", []):
             # Different upstream schemas are recorded as a limitation if absent.
             xy = h.get("at", h.get("pos"))

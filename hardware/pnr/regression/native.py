@@ -65,8 +65,10 @@ def make(spec, root, library):
         if seen != set(p["pins"]):
             raise ValueError("Missing pad " + p["ref"])
         footprints.append(fp)
-    source = root / "source.kicad_pcb"
     size = spec["constraints"]["board"]["outline"]
+    if spec.get("fixed_block"):
+        add_fixed_block(b, spec, nm, size["h"])
+    source = root / "source.kicad_pcb"
     if spec.get("stackup"):
         # Plane zones the engine cannot declare itself (a second plane layer of one
         # net), on the outline frame_region stamps below.
@@ -88,6 +90,17 @@ def make(spec, root, library):
         + ")\n"
     )
     (root / "fp-lib-table").write_text(table)
+    if spec.get("fixed_block"):
+        # The block's copper as the router reads it (fixed.json schema 2): the
+        # placement graph holds its footprints out, route_case reserves the copper.
+        from pnr.fixed_copper import extract
+
+        block = spec["fixed_block"]
+        copper = extract(
+            k.LoadBoard(str(source)),
+            [dict(name=block["name"], group=block["group"], refs=sorted(block["footprints"]))],
+        )
+        (root / "source-fixed.json").write_text(json.dumps(copper, indent=2))
     graph = load(str(source))
     graph.components.sort(key=lambda c: c.ref)
     graph.nets.sort(key=lambda n: n.name)
@@ -114,6 +127,98 @@ def make(spec, root, library):
             indent=2,
         )
     )
+
+
+def add_fixed_block(b, spec, nets, height):
+    """A rung's fixed block (``spec["fixed_block"]``, hard_rungs): its footprints at
+    their poses and its tracks, arcs and vias, all locked, in one KiCad group, every
+    item with a deterministic identity. Engine mm (y up) to the generator's frame
+    (the outline is stamped at the page offset)."""
+    block = spec["fixed_block"]
+
+    def point(xy):
+        return k.VECTOR2I(
+            round((_PAGE_OFFSET_MM + xy[0]) * 1e6), round((_PAGE_OFFSET_MM + height - xy[1]) * 1e6)
+        )
+
+    def ident(item, tag):
+        item.m_Uuid.Clone(
+            k.KIID(
+                str(
+                    uuid.uuid5(
+                        uuid.NAMESPACE_URL, "splanc-regression/%s/block/%s" % (spec["name"], tag)
+                    )
+                )
+            )
+        )
+
+    group = k.PCB_GROUP(b)
+    group.SetName(block["group"])
+    ident(group, "group")
+    b.Add(group)
+    items = []
+    for ref, (x, y, rot) in sorted(block["footprints"].items()):
+        fp = b.FindFootprintByReference(ref)
+        fp.SetPosition(point((x, y)))
+        fp.SetOrientationDegrees(float(rot))
+        items.append(fp)
+    for n, (net, layer, a, z, w) in enumerate(block["tracks"]):
+        t = k.PCB_TRACK(b)
+        t.SetStart(point(a))
+        t.SetEnd(point(z))
+        t.SetWidth(round(w * 1e6))
+        t.SetLayer(b.GetLayerID(layer))
+        t.SetNet(nets[net])
+        ident(t, "track/%d" % n)
+        b.Add(t)
+        items.append(t)
+    for n, (net, layer, a, m, z, w) in enumerate(block["arcs"]):
+        t = k.PCB_ARC(b)
+        t.SetStart(point(a))
+        t.SetMid(point(m))
+        t.SetEnd(point(z))
+        t.SetWidth(round(w * 1e6))
+        t.SetLayer(b.GetLayerID(layer))
+        t.SetNet(nets[net])
+        ident(t, "arc/%d" % n)
+        b.Add(t)
+        items.append(t)
+    for n, (net, xy, diameter, drill) in enumerate(block["vias"]):
+        v = k.PCB_VIA(b)
+        v.SetPosition(point(xy))
+        v.SetViaType(k.VIATYPE_THROUGH)
+        v.SetLayerPair(k.F_Cu, k.B_Cu)
+        v.SetWidth(round(diameter * 1e6))
+        v.SetDrill(round(drill * 1e6))
+        v.SetNet(nets[net])
+        ident(v, "via/%d" % n)
+        b.Add(v)
+        items.append(v)
+    for n, area in enumerate(block.get("rule_areas") or []):
+        # A rule area of the block (its own copper is exempt only through the group's
+        # keep-outs, so it bars what its flags say on its layers for every item).
+        z = k.ZONE(b)
+        z.SetIsRuleArea(True)
+        z.SetZoneName("%s rule %d" % (block["group"], n))
+        layers = k.LSET()
+        for name in area["layers"]:
+            layers.AddLayer(b.GetLayerID(name))
+        z.SetLayerSet(layers)
+        z.SetDoNotAllowTracks(bool(area.get("tracks")))
+        z.SetDoNotAllowVias(bool(area.get("vias")))
+        z.SetDoNotAllowZoneFills(bool(area.get("pours")))
+        z.SetDoNotAllowPads(False)
+        z.SetDoNotAllowFootprints(False)
+        outline = z.Outline()
+        outline.NewOutline()
+        for xy in area["polygon"]:
+            outline.Append(point(xy))
+        ident(z, "rule/%d" % n)
+        b.Add(z)
+        items.append(z)
+    for item in items:
+        group.AddItem(item)
+        item.SetLocked(True)
 
 
 def audit(spec, root, pcb):

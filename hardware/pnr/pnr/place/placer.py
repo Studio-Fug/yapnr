@@ -371,6 +371,7 @@ def place(
             grid_mm=grid_mm,
             spread=min(spread, _LEGALIZE_SPREAD_CAP),
             inflation=inflation,
+            outline=_legal_outline(constraints),
             pad_edge=pad_edge,
             **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
         )
@@ -391,6 +392,13 @@ def place(
         )
         check_held(placed, side_plan)
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
+
+
+def _legal_outline(constraints):
+    """``legalize: {outline: ...}`` of the constraints (None when undeclared)."""
+    from .legal_options import options
+
+    return options(constraints).get("outline")
 
 
 def _side_legalization(side_plan):

@@ -336,6 +336,12 @@ def task_environment(task, toolchain, work, campaign_meta, attempt):
         if toolchain.get(name):
             for key in keys:
                 env[key] = toolchain[name]
+    live_cfg = campaign_meta.get("live")
+    if live_cfg and live_cfg.get("enabled"):
+        # The live viewer (docs/viewer.md): the engine's telemetry writer (pnr.live) picks this
+        # up on its own; LiveUploader below packs what it writes into bundles for the mirror.
+        env["PNR_LIVE_DIR"] = str(work / ".yapnr" / "live")
+        env["PNR_LIVE_CANDIDATE"] = task["id"]
     source = campaign_meta.get("source") or {}
     if source.get("commit"):
         env["YAPNR_ENGINE_REVISION"] = source["commit"]
@@ -542,6 +548,80 @@ class Checkpoints:
                 pass  # the next sync tries again
 
 
+LIVE_THIN_DROP_PREFIX = "signal_net_"  # per-net maze/grid events (pnr/route/detail/maze.py)
+
+
+class LiveUploader:
+    """Packs new live-viewer telemetry (hardware/pnr/pnr/live.py) into bundles for the store.
+
+    ``live_spec`` is the campaign's ``[live]`` config (``{"enabled", "interval_s", "mode"}``) or
+    None when the live viewer is off; every method is then a no-op, so a task's behaviour and
+    outputs are byte-identical to before this feature existed. A bundle holds the events (and the
+    boards they reference) written since the last one, as a ``tar.gz`` at
+    ``<campaign>/live/<task key>/<attempt>/<seq>.tar.gz`` (docs/cloud-experiments.md, "Live viewer
+    mirror"); ``yapnr exp live`` unpacks these into a local mirror the viewer reads. In ``"thin"``
+    mode the per-net maze events are dropped (``LIVE_THIN_DROP_PREFIX``); checkpoints, round
+    summaries and placement costs are kept either way. Namespacing bundles under the attempt
+    means a retried or preempted task's lane continues (new events keep landing after the ones
+    its last attempt sent) without seq numbers from different attempts colliding.
+    """
+
+    def __init__(self, live_spec, work, remote):
+        self.spec = live_spec
+        self.live_dir = work / ".yapnr" / "live"
+        self.remote = Path(remote)
+        self.last_sync = time.monotonic()
+        self.seq = 0
+        self.sent_events = set()
+        self.sent_boards = set()
+
+    def due(self):
+        return bool(self.spec) and time.monotonic() - self.last_sync >= self.spec["interval_s"]
+
+    def _pending(self):
+        events_dir = self.live_dir / "events"
+        if not events_dir.is_dir():
+            return []
+        return sorted(p for p in events_dir.glob("*.json") if p.name not in self.sent_events)
+
+    def sync(self):
+        """Upload one bundle of everything new since the last call; True when one was written."""
+        if not self.spec:
+            return False
+        self.last_sync = time.monotonic()
+        kept = []
+        for path in self._pending():
+            self.sent_events.add(path.name)
+            try:
+                event = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if self.spec["mode"] == "thin" and str(event.get("kind", "")).startswith(
+                LIVE_THIN_DROP_PREFIX
+            ):
+                continue
+            kept.append((path, event))
+        boards = []
+        for path, event in kept:
+            sha = event.get("board_sha256")
+            if sha and sha not in self.sent_boards:
+                board_path = self.live_dir / "boards" / (sha + ".kicad_pcb")
+                if board_path.is_file():
+                    boards.append((sha, board_path))
+                    self.sent_boards.add(sha)
+        if not kept and not boards:
+            return False
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            for path, _event in kept:
+                tar.add(str(path), arcname="events/" + path.name)
+            for sha, board_path in boards:
+                tar.add(str(board_path), arcname="boards/" + sha + ".kicad_pcb")
+        self.seq += 1
+        write_atomic(self.remote / ("%06d.tar.gz" % self.seq), buf.getvalue())
+        return True
+
+
 def _done(task, work):
     path = work / task["done"]["file"]
     if not path.is_file():
@@ -616,7 +696,7 @@ def _kill_group(proc_pid, grace):
             time.sleep(0.2)
 
 
-def run_command(argv, cwd, env, wall_s, niceness, stop, checkpoints, logs, on_gcp):
+def run_command(argv, cwd, env, wall_s, niceness, stop, checkpoints, live, logs, on_gcp):
     """Run ``argv``; returns (exit_code, timed_out, stopped_by_signal, rusage)."""
     logs.mkdir(parents=True, exist_ok=True)
 
@@ -652,6 +732,11 @@ def run_command(argv, cwd, env, wall_s, niceness, stop, checkpoints, logs, on_gc
                         checkpoints.sync()
                     except OSError:
                         pass  # the last whole generation in the store stays the checkpoint
+                if live.spec:
+                    try:
+                        live.sync()  # the last events before this attempt's lane goes quiet
+                    except OSError:
+                        pass  # the next attempt's bundles pick up where this one left off
                 _kill_group(proc.pid, KILL_GRACE_S)
                 proc.returncode = -1
                 return None, False, stop.signal, None
@@ -663,6 +748,11 @@ def run_command(argv, cwd, env, wall_s, niceness, stop, checkpoints, logs, on_gc
             if checkpoints.due():
                 try:
                     checkpoints.sync()
+                except OSError:
+                    pass  # the next sync tries again
+            if live.due():
+                try:
+                    live.sync()
                 except OSError:
                     pass  # the next sync tries again
             if time.monotonic() >= deadline:
@@ -744,6 +834,12 @@ def run_task(args, campaign, position, toolchain, stop):
         checkpoints = Checkpoints(task, work, campaign.checkpoint_dir(task_id))
         restored = checkpoints.restore()
         status(task_id, "staged", restored_checkpoint=restored)
+        live_cfg = campaign.meta.get("live")
+        live = LiveUploader(
+            live_cfg if live_cfg and live_cfg.get("enabled") else None,
+            work,
+            campaign.dir / "live" / task_key(task_id) / attempt,
+        )
         env = task_environment(task, toolchain, work, campaign.meta, attempt)
         argv = substitute(task["command"], toolchain)
         argv = with_launcher(argv, task, toolchain)
@@ -756,6 +852,7 @@ def run_task(args, campaign, position, toolchain, stop):
             args.nice,
             stop,
             checkpoints,
+            live,
             logs,
             on_gcp,
         )
@@ -773,6 +870,11 @@ def run_task(args, campaign, position, toolchain, stop):
                     checkpoints.sync()
                 except OSError:
                     pass  # the last whole generation in the store stays the checkpoint
+            if live.spec:
+                try:
+                    live.sync()
+                except OSError:
+                    pass  # the next attempt's bundles pick up where this one left off
             status(task_id, "tempfail", exit_code=code)
             return EXIT_TEMPFAIL
         if timed_out:
@@ -786,6 +888,11 @@ def run_task(args, campaign, position, toolchain, stop):
                 checkpoints.sync()
             except OSError:
                 pass  # the result below is what counts; a checkpoint only serves a resume
+        if live.spec:
+            try:
+                live.sync()  # the last events of this attempt, win or lose
+            except OSError:
+                pass  # best-effort: a missed bundle only shortens the live replay
         staging = work / ".yapnr" / "attempt"
         pruned, summary_files = collect(task, work, logs, staging)
         rss = usage.ru_maxrss if usage else None

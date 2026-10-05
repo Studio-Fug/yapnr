@@ -1,0 +1,25 @@
+# A tiny ladder rung with the live viewer mirror on (docs/cloud-experiments.md, "Live viewer
+# mirror"), sized for the first real-campaign check of that feature: four seeds of the smallest
+# ladder case, well under a dollar on gcp-batch.
+schema = "yapnr-campaign-v1"
+kind = "ladder-cell"
+name = "ladder-live"
+source = "HEAD"
+image = "edge"
+
+[matrix]
+case = ["01-connector-led-2"]
+seed = [0, 1, 2, 3]
+
+[config]
+timeout = 600
+
+[resources]
+cpus = 1
+memory_gb = 3
+max_wall_s = 1800
+
+[live]
+enabled = true
+interval_s = 30
+mode = "full"

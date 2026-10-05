@@ -36,6 +36,7 @@ py_library(
         "kinds/mc.py",
         "kinds/rf.py",
         "kinds/smoke.py",
+        "live.py",
         "plan.py",
         "prices.py",
         "spec.py",

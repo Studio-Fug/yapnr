@@ -306,7 +306,10 @@ CAMPAIGN_KEYS = {
     "placement",
     "determinism",
     "inputs",
+    "live",
 }
+LIVE_KEYS = {"enabled", "interval_s", "mode"}
+LIVE_MODES = ("thin", "full")
 PLACEMENT_KEYS = {
     "families",
     "prefer",
@@ -338,6 +341,25 @@ def runtime_errors(runtime: Any) -> List[str]:
     entrypoint = runtime.get("entrypoint", "")
     if not (isinstance(entrypoint, str) and (entrypoint == "" or entrypoint.startswith("/"))):
         errors.append("runtime.entrypoint is an absolute path in the image, or '' for none")
+    return errors
+
+
+def live_errors(live: Any) -> List[str]:
+    """``[live]``: the live viewer mirror (docs/cloud-experiments.md, "Live viewer mirror").
+
+    Off by default (``enabled = false``); when on, every task of the campaign sets
+    ``PNR_LIVE_DIR``/``PNR_LIVE_CANDIDATE`` and uploads its new telemetry every ``interval_s`` (and
+    once at the end). ``mode = "thin"`` drops the per-net maze events; ``"full"`` keeps everything.
+    """
+    if not isinstance(live, dict):
+        return ["live is a table {enabled, interval_s, mode}"]
+    errors = ["unknown live key %r" % k for k in sorted(set(live) - LIVE_KEYS)]
+    if "enabled" in live and not isinstance(live["enabled"], bool):
+        errors.append("live.enabled is a boolean")
+    if "interval_s" in live and not _number(live["interval_s"], 10, integer=True):
+        errors.append("live.interval_s is a whole number of seconds, at least 10")
+    if live.get("mode", "full") not in LIVE_MODES:
+        errors.append("live.mode must be one of %s" % ", ".join(LIVE_MODES))
     return errors
 
 
@@ -401,6 +423,8 @@ def campaign_errors(campaign: Any) -> List[str]:
             errors.append("placement.vm_vcpus is a whole number")
     if campaign.get("determinism", "seeded") not in DETERMINISM:
         errors.append("determinism must be one of %s" % ", ".join(DETERMINISM))
+    if "live" in campaign:
+        errors += live_errors(campaign["live"])
     inputs = campaign.get("inputs", [])
     if not isinstance(inputs, list):
         errors.append("inputs is an array of tables")

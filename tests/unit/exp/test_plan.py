@@ -51,6 +51,13 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(len(plan.classes), 1)
         self.assertEqual(plan.meta["image"]["ref"], "ghcr.io/studio-fug/yapnr@" + testing.DIGEST)
 
+    def test_live_defaults_off_and_is_recorded_when_set(self):
+        plan = self.plan(testing.LADDER_CAMPAIGN)
+        self.assertEqual(plan.meta["live"], {"enabled": False, "interval_s": 45, "mode": "full"})
+        with_live = testing.LADDER_CAMPAIGN + "\n[live]\nenabled = true\ninterval_s = 30\n"
+        plan = self.plan(with_live, name="live.toml", out=self.tmp / "live-plan")
+        self.assertEqual(plan.meta["live"], {"enabled": True, "interval_s": 30, "mode": "full"})
+
     def test_campaign_id_is_deterministic_and_depends_on_the_backend(self):
         a = self.plan(testing.LADDER_CAMPAIGN, out=self.tmp / "a")
         b = self.plan(testing.LADDER_CAMPAIGN, out=self.tmp / "b")

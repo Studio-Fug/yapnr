@@ -57,6 +57,7 @@ import torch
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph
 
+from . import portable_math as pm
 from .geometry import keepout_rects, occupied_sides, resolve_fixed_poses
 
 # Reproducibility ("same inputs -> same board", design §10): run torch
@@ -127,10 +128,10 @@ def length_mismatch(match_sets, pin_x, pin_y, gamma: float) -> torch.Tensor:
                 lengths.append(
                     gamma
                     * (
-                        torch.logsumexp(px / gamma, 0)
-                        + torch.logsumexp(-px / gamma, 0)
-                        + torch.logsumexp(py / gamma, 0)
-                        + torch.logsumexp(-py / gamma, 0)
+                        pm.logsumexp(px / gamma, 0)
+                        + pm.logsumexp(-px / gamma, 0)
+                        + pm.logsumexp(py / gamma, 0)
+                        + pm.logsumexp(-py / gamma, 0)
                     )
                 )
         stacked = torch.stack(lengths)
@@ -370,7 +371,7 @@ def global_place(
             raw = torch.zeros(n, 4)
             raw[:, 0] = 1.0
         else:
-            raw = torch.softmax(rot_logits / temp, dim=1)
+            raw = pm.softmax(rot_logits / temp, dim=1)
         return torch.where(rotation_fixed.unsqueeze(1), fixed_onehot, raw)
 
     # Pins: component index + the four rotated offsets (rot 0/90/180/270).
@@ -384,8 +385,7 @@ def global_place(
             pin_comp.append(idx[c.ref])
             variants = []
             for ang in ANGLES:
-                th = torch.deg2rad(torch.tensor(ang))
-                ct, st = float(torch.cos(th)), float(torch.sin(th))
+                ct, st = pm.quarter_turn(ang)
                 variants.append((ox * ct - oy * st, ox * st + oy * ct))
             pin_off4.append(variants)
     pin_comp_t = torch.tensor(pin_comp, dtype=torch.long)
@@ -474,7 +474,7 @@ def global_place(
     clearance = placement_clearance(constraints)
     # PNR_COMPACT COURTYARD: body-centre offsets per rotation (None: every part centred).
     body_off = body_offsets(graph)
-    opt = torch.optim.Adam(params, lr=lr)
+    opt = pm.Adam(params, lr=lr)
     from pnr.trace import placement_tracer
 
     # PNR_GP_POLISH (pnr.place.gp_polish): extra iterations after the main ones (none with
@@ -493,7 +493,7 @@ def global_place(
                 frozen = _freeze(
                     graph, polish, rot_probs(0.2), sided, comps, width, height, side_overlap
                 )
-                opt = torch.optim.Adam([move], lr=polish.lr(0.0))
+                opt = pm.Adam([move], lr=polish.lr(0.0))
             frac = (step - iters) / max(1, extra - 1)
             for group in opt.param_groups:
                 group["lr"] = polish.lr(frac)
@@ -527,12 +527,9 @@ def global_place(
             wl = pos.new_zeros(())
             for pins in net_pin_idx:
                 px, py = pin_x[pins], pin_y[pins]
-                wl = wl + gamma * (
-                    torch.logsumexp(px / gamma, 0)
-                    + torch.logsumexp(-px / gamma, 0)
-                    + torch.logsumexp(py / gamma, 0)
-                    + torch.logsumexp(-py / gamma, 0)
-                )
+                # One portable logsumexp per net over the four signed coordinates.
+                ext = pm.logsumexp(torch.stack((px, -px, py, -py)) / gamma, 1)
+                wl = wl + gamma * (ext[0] + ext[1] + ext[2] + ext[3])
 
         # Expected courtyard half-size (rotation-aware).
         exp_half = (p.unsqueeze(-1) * half4).sum(1)  # (n, 2)
@@ -606,10 +603,9 @@ def global_place(
             boxes = []  # (minx, maxx, miny, maxy) per plane net
             for pins in plane_pin_idx:
                 px, py = pin_x[pins], pin_y[pins]
-                maxx = gamma * torch.logsumexp(px / gamma, 0)
-                minx = -gamma * torch.logsumexp(-px / gamma, 0)
-                maxy = gamma * torch.logsumexp(py / gamma, 0)
-                miny = -gamma * torch.logsumexp(-py / gamma, 0)
+                ext = pm.logsumexp(torch.stack((px, -px, py, -py)) / gamma, 1)
+                maxx, minx = gamma * ext[0], -gamma * ext[1]
+                maxy, miny = gamma * ext[2], -gamma * ext[3]
                 boxes.append((minx, maxx, miny, maxy))
                 loss = loss + w_plane * (maxx - minx) * (maxy - miny)  # bbox area
             for a in range(len(boxes)):
@@ -745,9 +741,8 @@ def _side_terms(graph, constraints, comps, idx, side_plan, free, initial_sides, 
         init.append(SIDE_LOGIT if start == "bottom" else -SIDE_LOGIT)
     mirror = pin_off4_t.clone()
     for k, ang in enumerate(ANGLES):
-        th = torch.deg2rad(torch.tensor(ang))
         # Rotating the y-mirrored offset (ox, -oy): (ox c + oy s, ox s - oy c).
-        ct, st = float(torch.cos(th)), float(torch.sin(th))
+        ct, st = pm.quarter_turn(ang)
         r0 = pin_off4_t[:, 0, :]  # rot-0 offsets (ox, oy)
         mirror[:, k, 0] = r0[:, 0] * ct + r0[:, 1] * st
         mirror[:, k, 1] = r0[:, 0] * st - r0[:, 1] * ct
@@ -786,7 +781,7 @@ def _bottom_probability(sided, temp):
     """(n,) probability of the bottom side: free parts relaxed, the rest 0 or 1."""
     bottom = sided["current_bottom"].float()
     return bottom.index_put(
-        (sided["free_t"],), torch.sigmoid(sided["logits"] / temp), accumulate=False
+        (sided["free_t"],), pm.sigmoid(sided["logits"] / temp), accumulate=False
     )
 
 
@@ -805,10 +800,10 @@ def _side_cost(sided, bottom):
     """Expected layer changes, side preferences and source-side departures (mm)."""
     cost = bottom.new_zeros(())
     if sided["member"] is not None:
-        log_top = torch.log(torch.clamp(1.0 - bottom, min=1e-9))
-        log_bottom = torch.log(torch.clamp(bottom, min=1e-9))
+        log_top = pm.log(torch.clamp(1.0 - bottom, min=1e-9))
+        log_bottom = pm.log(torch.clamp(bottom, min=1e-9))
         member = sided["member"]
-        split = 1.0 - torch.exp(member @ log_top) - torch.exp(member @ log_bottom)
+        split = 1.0 - pm.exp(member @ log_top) - pm.exp(member @ log_bottom)
         cost = cost + sided["via_mm"] * torch.clamp(split, min=0.0).sum()
     for i, want_bottom, weight in sided["pref"]:
         cost = cost + weight * ((1.0 - bottom[i]) if want_bottom else bottom[i])

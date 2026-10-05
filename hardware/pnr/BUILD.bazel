@@ -404,6 +404,25 @@ py_test(
     ],
 )
 
+# Platform-independent global placement (pnr.place.portable_math): accuracy against torch,
+# golden bits that the Mac and the Linux CI share, and no platform math in global_place.
+py_test(
+    name = "portable_math_test",
+    size = "medium",
+    srcs = ["tests/test_portable_math.py"],
+    data = glob(["testdata/splanc_dev/*"]),
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_portable_math.py",
+    deps = [
+        ":pnr",
+        ":pnr_place",
+        requirement("numpy"),
+        requirement("pyyaml"),
+        requirement("torch"),
+    ],
+)
+
 # Phase 2 acceptance: placement MVP is legal + beats the ato-row HPWL baseline.
 py_test(
     name = "placement_test",

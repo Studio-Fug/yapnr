@@ -130,7 +130,7 @@ class IdentityTest(unittest.TestCase):
 
 
 class FlagOffPathTest(unittest.TestCase):
-    """Platform independent (CI runs no placement golden): with the flags unset the placer,
+    """Platform independent: with the flags unset the placer,
     the legalizer and the initial pool never call a compact-only function, and no part
     has an offset body, so they take their previous paths."""
 

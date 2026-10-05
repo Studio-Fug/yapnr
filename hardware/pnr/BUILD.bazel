@@ -985,6 +985,16 @@ py_test(
     deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
 )
 
+# Coupled differential pairs inside route_board (board.route_pairs: coupled,
+# pnr.route.detail.pair_route).
+py_test(
+    name = "pair_route_test",
+    size = "small",
+    srcs = ["tests/test_pair_route.py"],
+    main = "tests/test_pair_route.py",
+    deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
+)
+
 py_test(
     name = "fanout_reserve_test",
     size = "small",

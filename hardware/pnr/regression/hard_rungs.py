@@ -68,6 +68,7 @@ HARD_LIB = {
     "u_fl": "Connector_Coaxial:U.FL_Hirose_U.FL-R-SMT-1_Vertical",
     "ufbga201": "Package_BGA:UFBGA-201_10x10mm_Layout15x15_P0.65mm",
     "jst_sh_12": "Connector_JST:JST_SH_SM12B-SRSS-TB_1x12-1MP_P1.00mm_Horizontal",
+    "jst_sh_2": "Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal",
     "c_0402": "Capacitor_SMD:C_0402_1005Metric",
     "r_0402": "Resistor_SMD:R_0402_1005Metric",
     # A 1 mm fiducial with its own 0.6 mm clearance and 0.5 mm mask margin.
@@ -1935,6 +1936,71 @@ def buck_pour_rung(spec):
     return spec
 
 
+# A coupled LVDS pair on the BGA rung (11-ufbga201-fanout-6L-SGSGPS-pairs): two
+# adjacent ring-0 balls on the south edge that the base leaves unused (R13 PB11, R14
+# PB14) become LVDS_N and LVDS_P and run to a 2-pin 1.0 mm JST SH header on the south
+# edge east of J2, coupled on F.Cu from their fanout exits (board.route_pairs: coupled).
+# The west ball is N, the west pin (2, at rot 180) too: the pair never crosses itself.
+PAIRS_BALLS = {"R13": "LVDS_N", "R14": "LVDS_P"}
+PAIRS_HEADER = ("J7", (29.5, 3.6), 180)
+PAIRS_RULE = dict(name="lvds", p="LVDS_P", n="LVDS_N", width_mm=0.1, gap_mm=0.15, skew_mm=0.1)
+PAIRS_UNCOUPLED_MM = 3.0
+PAIRS_RULES = [
+    '(rule "lvds uncoupled"\n  (condition "A.inDiffPair(\'LVDS_\')")\n'
+    "  (constraint diff_pair_uncoupled (max %gmm)))" % PAIRS_UNCOUPLED_MM,
+    '(rule "lvds gap"\n  (condition "A.inDiffPair(\'LVDS_\')")\n'
+    "  (constraint diff_pair_gap (min 0.14mm) (opt 0.15mm) (max 0.16mm)))",
+]
+
+
+def ufbga_pairs(spec):
+    """``spec`` (the 6L BGA rung) with one LVDS pair from two adjacent balls to a
+    header, routed coupled on F.Cu from the fanout exits; KiCad judges its skew,
+    uncoupled length and gap (custom rules), the checks its vias (none)."""
+    spec = deepcopy(spec)
+    u1 = spec["parts"][0]
+    u1["pins"].update(PAIRS_BALLS)
+    ref, at, rot = PAIRS_HEADER
+    spec["parts"].append(
+        pinned(ref, "jst_sh_2", "LVDS out", {"1": "LVDS_P", "2": "LVDS_N", "MP": ""})
+    )
+    spec["expected_components"] = len(spec["parts"])
+    spec["expected_connected_pads"] = connected_pads(spec["parts"])
+    cons = spec["constraints"]
+    cons["fixed"][ref] = dict(at=list(at), rot=rot, side="top")
+    cons["diff_pair"] = [dict(PAIRS_RULE, layers=["F.Cu"], max_uncoupled_mm=PAIRS_UNCOUPLED_MM)]
+    cons["board"]["route_pairs"] = "coupled"
+    spec["dru_rules"] = list(PAIRS_RULES)
+    spec["checks"] += [
+        dict(
+            id="fixed-" + ref,
+            kind="fixed",
+            ref=ref,
+            at=list(at),
+            rot=rot,
+            side="top",
+            tol_mm=0.01,
+            engine="fixed",
+        ),
+        dict(
+            id="lvds-no-vias",
+            kind="net_vias",
+            nets=["LVDS_P", "LVDS_N"],
+            max=0,
+            engine="diff_pair",
+        ),
+    ]
+    spec["name"] += "-pairs"
+    spec["description"] = (
+        spec.get("description", "")
+        + " With an LVDS pair from two adjacent south balls to a 2-pin header, coupled on"
+        " F.Cu from the fanout exits: 0.10/0.15 mm, skew 0.1 mm, 3 mm uncoupled."
+    )
+    spec["dims"]["parts"] = "pairs"
+    spec["features"] = sorted(set(spec["features"]) | {"coupled-pairs", "custom-rules"})
+    return spec
+
+
 # --------------------------------------------------------- run configurations
 
 # yapnr's configuration per family (run.py arguments). The ladder's documented best: the
@@ -1979,7 +2045,13 @@ def hard_rungs():
     bga = ufbga_fanout()
     others = [quad_bank(), power_switch(), bga, ufbga_block(bga), ufbga_classes(bga)]
     buck = buck_four_layer()
-    others += [ufbga_partial(bga), ufbga_rails(bga), buck, buck_pour_rung(buck)]
+    others += [
+        ufbga_partial(bga),
+        ufbga_rails(bga),
+        ufbga_pairs(bga),
+        buck,
+        buck_pour_rung(buck),
+    ]
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST
     return deepcopy(out + chasers + others)

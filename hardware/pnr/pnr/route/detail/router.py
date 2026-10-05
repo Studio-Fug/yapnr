@@ -1010,6 +1010,15 @@ def route_board(
                 merged[n] = merged[n] & allowed if n in merged else allowed
             grid.layer_mask = merged
         dru_report["raised_clearances"] = dict(sorted(raised.items()))
+    if any(dp.get("layers") for dp in (rules or {}).get("diff_pairs") or []):
+        # diff_pair.layers: both legs of the pair stay on those layers (coupled or
+        # not), intersected with the masks above (pnr.route.detail.pair_route).
+        from .pair_route import pair_layer_masks
+
+        merged = dict(grid.layer_mask or {})
+        for n, allowed in pair_layer_masks(grid, rules).items():
+            merged[n] = merged[n] & allowed if n in merged else allowed
+        grid.layer_mask = merged
     grid.reserve_wide_pad_clearance()
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.
@@ -1222,6 +1231,27 @@ def route_board(
         # of the other nets' exits and drops planned below (their via keep-out would
         # close a ball's only way out). Only when declared.
         grid.guard_access = dict(fanouts.protected)
+    # board.route_pairs: coupled: the declared pairs routed coupled from their pads and
+    # fanout exits before any other escape (pnr.route.detail.pair_route); their nets
+    # leave the maze. Off: nothing here.
+    coupled_route = None
+    coupled_nets = set()
+    if rules and rules.get("route_pairs") == "coupled" and rules.get("diff_pairs"):
+        from .pair_route import route_pairs as route_coupled_pairs
+
+        coupled_route = route_coupled_pairs(
+            grid,
+            graph,
+            rules,
+            signal_nets=signal_nets,
+            fanouts=fanouts,
+            net_width=net_width,
+            track_width=track_width_mm,
+            blocked=set(ports)
+            | (fanouts.blocked_nets | set(fanouts.partial_open) if fanouts is not None else set()),
+        )
+        coupled_nets = set(coupled_route.nets)
+        signal_nets -= coupled_nets
     plan = plan_escapes(
         grid,
         graph,
@@ -1321,7 +1351,10 @@ def route_board(
     net_access = {
         n: cells
         for n, cells in plan.net_access.items()
-        if len(cells) >= 2 and n not in plan.blocked_nets and n not in drop_widths
+        if len(cells) >= 2
+        and n not in plan.blocked_nets
+        and n not in drop_widths
+        and n not in coupled_nets
     }
     # PNR_TRACE_DIR only: records this route inside a traced route scope (pnr.trace).
     from .trace_route import start as trace_start
@@ -1398,6 +1431,12 @@ def route_board(
         for name in sorted(deferred | plan.blocked_nets):
             result.nets[name] = RoutedNet(name)
         result.unrouted = sorted(set(result.unrouted) | deferred | plan.blocked_nets)
+    if coupled_nets:
+        from .maze import RoutedNet
+
+        # Routed coupled before the maze; their copper is emitted below.
+        for name in sorted(coupled_nets):
+            result.nets[name] = RoutedNet(name, routed=True)
 
     if os.environ.get("PNR_DIAG_UNROUTED"):
         _diag_unrouted(grid, net_access, result.unrouted, via_keepout)
@@ -1493,6 +1532,17 @@ def route_board(
     # stub + via) so the net is electrically whole from the real pad centre.
     emitted = []  # declared fanouts' escapes that were emitted
     for esc in plan.escapes:
+        if esc.net in coupled_nets:
+            # A coupled pair's fanout escape: its exit is where the pair begins
+            # (none when the pair starts at the balls themselves).
+            if (
+                esc.fanout
+                and esc.kind != "blocked"
+                and esc.net not in coupled_route.dropped_escapes
+            ):
+                _emit_escape(board, esc, grid, esc.width, span_at)
+                emitted.append(esc)
+            continue
         if esc.net in drop_widths:
             # A plane drop needs no maze route: its via reaches the plane(s).
             _emit_escape(board, esc, grid, esc.width or drop_widths[esc.net], span_at)
@@ -1516,6 +1566,9 @@ def route_board(
                 centre = grid.center_of(cell.i, cell.j)
                 w = net_width.get(net, track_width_mm)
                 board.tracks.append((net, layer, tuple(point), centre, w))
+    if coupled_route is not None:
+        board.tracks.extend(coupled_route.tracks)
+        board.escape_diagnostics["coupled_pairs"] = coupled_route.report
     if fanouts is not None:
         _fanout_extras(board, emitted, fanouts, fab)
     # Zero-length pad-to-grid stubs add no connection and become dangling items.

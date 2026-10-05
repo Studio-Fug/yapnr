@@ -42,9 +42,9 @@ length tuner then matches:
   join ``grid.escape_segments``, so every later escape, drop and maze route keeps
   clear of them; the nets leave the maze and are emitted with their fanout escapes.
 * **Fallback.** A pair that is not routed coupled (no common layer, no channel, an
-  uncoupled or skew budget it cannot meet, a terminal count other than two per
-  net, a fixed-block port) is routed as two legs, exactly as without the switch,
-  and the report says why.
+  uncoupled or skew budget it cannot meet, terminals too far apart to couple
+  within it, a terminal count other than two per net, a fixed-block port) is
+  routed as two legs, exactly as without the switch, and the report says why.
 
 The report is ``escape_diagnostics["coupled_pairs"]``: per pair ``status``
 (``coupled`` or ``legs``), ``reason``, ``layer``, the KiCad-model ``lengths_mm``,
@@ -515,6 +515,13 @@ class PairRouter:
         remaining = cap - max(lead.values())
         if remaining <= 1e-6:
             return "uncoupled_budget", dict(leads_mm=lead, max_uncoupled_mm=cap)
+        # Each leg reaches its lane within its uncoupled budget, and the lanes are
+        # one pair pitch apart: terminals farther apart than that cannot couple.
+        apart = [math.dist(end[0].point, end[1].point) for end in ends]
+        if max(apart) > 2 * remaining + width + gap + 1e-6:
+            return "terminals_apart", dict(
+                terminal_distance_mm=[round(d, 6) for d in apart], max_uncoupled_mm=cap
+            )
         failures: Dict[str, int] = {}
         attempts = 0
         terminals = {

@@ -314,7 +314,8 @@ class Fallback(unittest.TestCase):
         r = route_board(g, c, rules, pitch=0.25, max_iters=6)
         row = r.escape_diagnostics["coupled_pairs"]["pairs"]["usb"]
         self.assertEqual(row["status"], "legs")
-        self.assertEqual(row["reason"], "no_coupled_channel")
+        self.assertEqual(row["reason"], "terminals_apart")
+        self.assertEqual(row["terminal_distance_mm"], [0.65, 0.65])
         self.assertEqual(r.result.unrouted, [])
         self.assertEqual({t[1] for t in r.tracks if t[0] in ("DP", "DN")}, {"F.Cu"})
 

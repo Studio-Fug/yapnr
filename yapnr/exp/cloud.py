@@ -95,6 +95,32 @@ class Gcloud:
     def json(self, args: Sequence[str], **kwargs) -> Any:
         return self.run(list(args) + ["--format=json"], **kwargs).json()
 
+    def cat_bytes(self, url: str, *, timeout: Optional[float] = None) -> bytes:
+        """``gcloud storage cat`` as raw bytes, not text.
+
+        ``run()`` always decodes stdout as UTF-8 (every other gcloud call is text: JSON,
+        listings, describes), which corrupts an arbitrary binary object such as a live-viewer
+        bundle (``*.tar.gz``) the moment it contains a byte that is not valid UTF-8 -- gzip's
+        own magic byte (0x8b) already is not. This bypasses that decode entirely.
+        """
+        argv = self.argv(["storage", "cat", url])
+        self.calls.append(argv)
+        data, code, stderr = self._execute_binary(argv, timeout or self.timeout)
+        if code != 0:
+            raise CloudError(argv, code, stderr.decode(errors="replace"))
+        return data
+
+    def _execute_binary(self, argv: List[str], timeout: float) -> tuple:
+        if os.environ.get(NO_CLOUD_ENV):
+            raise CloudError(argv, 126, "cloud calls are disabled (%s is set)" % NO_CLOUD_ENV)
+        if shutil.which(argv[0]) is None and not Path(argv[0]).is_file():
+            raise CloudError(argv, 127, "%s not found (install the gcloud CLI)" % argv[0])
+        try:
+            done = subprocess.run(argv, capture_output=True, timeout=timeout)
+        except subprocess.TimeoutExpired as err:
+            raise CloudError(argv, 124, "timed out after %.0f s" % timeout) from err
+        return done.stdout, done.returncode, done.stderr
+
     def _execute(self, argv: List[str], timeout: float, input_text: Optional[str]) -> Result:
         if os.environ.get(NO_CLOUD_ENV):
             raise CloudError(argv, 126, "cloud calls are disabled (%s is set)" % NO_CLOUD_ENV)
@@ -146,6 +172,13 @@ class FakeCloud(Gcloud):
         self.quotas: Dict[str, Any] = {}
         self.templates: Optional[Dict[str, str]] = None
         self.handlers: List[Callable[[List[str]], Optional[Result]]] = []
+
+    def cat_bytes(self, url: str, *, timeout: Optional[float] = None) -> bytes:
+        self.calls.append(self.argv(["storage", "cat", url]))
+        hits = sorted(k for k in self.objects if fnmatch.fnmatchcase(k, url))
+        if not hits:
+            raise CloudError(["storage", "cat", url], 1, "ERROR: No URLs matched: %s" % url)
+        return b"".join(self.objects[h] for h in hits)
 
     def _execute(self, argv: List[str], timeout: float, input_text: Optional[str]) -> Result:
         args = _strip_globals(argv)

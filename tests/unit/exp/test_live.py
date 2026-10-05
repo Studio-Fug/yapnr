@@ -11,7 +11,8 @@ from pathlib import Path
 
 from yapnr.exp import live as livemod
 from yapnr.exp import task as wrapper
-from yapnr.exp.store import LocalStore
+from yapnr.exp.cloud import FakeCloud
+from yapnr.exp.store import GcsStore, LocalStore
 
 
 def event(event_id, kind, candidate="t/a", board_sha256=None, **data):
@@ -385,6 +386,65 @@ class MirrorTest(unittest.TestCase):
                 self.store, self.cid, dest, once=False, sleep=fake_sleep, say=calls.append
             )
         self.assertEqual(polls["n"], 2)
+
+
+class GcsBinaryBundleTest(unittest.TestCase):
+    """The real path a live bundle takes on GCP: uploaded by LiveUploader (a local tar.gz),
+    read back through ``GcsStore.read_bytes`` -> ``Gcloud.cat_bytes``, over FakeCloud's model
+    of ``gcloud storage cat``.
+
+    This caught a real bug (found on an actual GCP campaign, not in CI): every other test in
+    this file uses ``LocalStore``, which reads bundles straight off disk and never exercises
+    this path at all. The general ``Gcloud.run()`` always decodes stdout as UTF-8 (every other
+    gcloud call -- JSON, listings, describes -- is text), which corrupts a tar.gz the moment it
+    hits a byte that is not valid UTF-8 (gzip's own magic byte, 0x8b, already is not), raising
+    ``UnicodeDecodeError`` before ``read_bytes`` even returns. ``cat_bytes`` exists so a binary
+    object never goes through that decode.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.cloud = FakeCloud()
+        self.runs = GcsStore("example-yapnr-runs", self.cloud)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _upload_one_bundle(self, cid):
+        work = self.tmp / "work"
+        remote_prefix = "campaigns/%s/live/t~a/s1r0" % cid
+        live = wrapper.LiveUploader(
+            {"enabled": True, "interval_s": 10, "mode": "full"}, work, self.tmp / "unused"
+        )
+        write_board(live.live_dir, "d" * 64, b"a kicad_pcb board, binary-ish on purpose \x00\xff")
+        write_event(live.live_dir, "e1", "route_result", candidate="t~a", board_sha256="d" * 64)
+        live.sync()
+        local_bundle = (self.tmp / "unused" / "000001.tar.gz").read_bytes()
+        self.cloud.objects["gs://example-yapnr-runs/%s/000001.tar.gz" % remote_prefix] = (
+            local_bundle
+        )
+        return local_bundle
+
+    def test_read_bytes_round_trips_a_real_gzip_bundle_byte_for_byte(self):
+        cid = "20261005-ladder-aaaaaa"
+        raw = self._upload_one_bundle(cid)
+        fetched = self.runs.read_bytes("campaigns/%s/live/t~a/s1r0/000001.tar.gz" % cid)
+        self.assertEqual(fetched, raw)  # byte-for-byte: no UTF-8 round trip in between
+        added = livemod.unpack_bundle(fetched, self.tmp / "mirror")
+        self.assertEqual(added, {"events": 1, "boards": 1})
+
+    def test_mirror_once_over_a_real_gcs_store_unpacks_the_bundle(self):
+        """The same scenario, but through ``mirror_once`` end to end (list_bundles's glob,
+        then read_bytes, then unpack) -- what ``yapnr exp live`` actually calls."""
+        cid = "20261005-ladder-bbbbbb"
+        self._upload_one_bundle(cid)
+        dest = self.tmp / "mirror2"
+        found = livemod.mirror_once(self.runs, cid, dest, livemod.LiveState())
+        self.assertEqual(found, {"bundles": 1, "events": 1, "boards": 1})
+        events = [json.loads(p.read_text()) for p in (dest / "events").glob("*.json")]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(livemod.event_errors(events[0]), [])
 
 
 if __name__ == "__main__":

@@ -147,7 +147,10 @@ class GcsStore(Store):
         return True
 
     def read_bytes(self, rel: str) -> bytes:
-        return self.cloud.run(["storage", "cat", self.url(rel)]).stdout.encode()
+        # cat_bytes, not cloud.run(...).stdout.encode(): run() always decodes stdout as UTF-8,
+        # which corrupts arbitrary binary content (a live-viewer bundle's tar.gz, say -- gzip's
+        # own magic byte is not valid UTF-8) the moment it is not plain text.
+        return self.cloud.cat_bytes(self.url(rel))
 
     def upload(self, local: Path, rel: str, no_clobber: bool = False) -> None:
         args = ["storage", "cp", str(local), self.url(rel)]

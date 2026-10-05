@@ -55,6 +55,11 @@ def _block_board(rotate=0.0, shift=(0.0, 0.0)):
     zone = k.ZONE(b)
     zone.SetLayer(b.GetLayerID("In1.Cu"))
     zone.SetNet(nets["GND"])
+    # an outer pour's settings (pnr.plane_partition connect: solid): the clone keeps them
+    zone.SetPadConnection(k.ZONE_CONNECTION_FULL)
+    zone.SetThermalReliefGap(round(0.35 * 1e6))
+    zone.SetThermalReliefSpokeWidth(round(0.3 * 1e6))
+    zone.SetIslandRemovalMode(k.ISLAND_REMOVAL_MODE_NEVER)
     outline = zone.Outline()
     outline.NewOutline()
     for x, y in ((5, 5), (25, 5), (25, 15), (5, 15)):
@@ -157,6 +162,11 @@ class AssembleZonesAndGroup(unittest.TestCase):
         pour = next(z for z in zones if not z.GetIsRuleArea())
         self.assertEqual(pour.GetNetname(), "GND")
         self.assertTrue(pour.IsOnLayer(b.GetLayerID("In1.Cu")))
+        # its pad connection and fill settings come along (a solid outer pour stays solid)
+        self.assertEqual(pour.GetPadConnection(), k.ZONE_CONNECTION_FULL)
+        self.assertEqual(pour.GetThermalReliefGap(), round(0.35 * 1e6))
+        self.assertEqual(pour.GetThermalReliefSpokeWidth(), round(0.3 * 1e6))
+        self.assertEqual(pour.GetIslandRemovalMode(), k.ISLAND_REMOVAL_MODE_NEVER)
         area = next(z for z in zones if z.GetIsRuleArea())
         self.assertTrue(area.GetDoNotAllowTracks())
         self.assertTrue(area.IsOnLayer(b.GetLayerID("B.Cu")))

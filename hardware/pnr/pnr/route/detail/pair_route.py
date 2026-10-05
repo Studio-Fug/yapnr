@@ -5,9 +5,12 @@
 before the escape planner and the maze, instead of two independent legs that the
 length tuner then matches:
 
-* **Terminals.** At a ball a declared fanout (:mod:`.fanout`) escaped, the end of
-  its escape copper (the exit, on the escape's last layer); the escape's planar
-  length is uncoupled copper the pair already has. At any other pad, the pad centre
+* **Terminals.** At balls a declared fanout (:mod:`.fanout`) escaped, first the
+  balls themselves where both escapes are surface stubs (the stubs are dropped:
+  KiCad's ``diff_pair_gap`` judges every parallel, line-of-sight stretch of the
+  pair, so stubs parallel at the ball pitch would fail it), then the ends of the
+  escape copper (the exits, on the escapes' last layer), whose planar length is
+  uncoupled copper the pair already has. At any other pad, the pad centre
   on its own layer (any grid layer for a through-hole pad). The two ends of the pair
   are the terminals the two nets share a part on (else the nearest).
 * **Layers.** The pair runs on one layer from its terminals: one both ends reach,

@@ -10,6 +10,7 @@ filegroup(
         "audit.py",
         "bands.py",
         "constraints.yaml",
+        "explore_rank.py",
         "floorplan.yaml",
         "gen_board.py",
         "integrate.py",

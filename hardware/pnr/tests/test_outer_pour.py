@@ -208,6 +208,122 @@ class RouteTest(unittest.TestCase):
                     self.assertFalse(within and layer == "F.Cu", (net, p))
 
 
+def crossing_board():
+    """A buck row VIN, SW, GND, SW2, VIN: SW's inductor north-west, SW2's south-east, so
+    neither VIN land can reach the other on F.Cu without crossing a switch node's pour."""
+    comps = [
+        hotrod("U2", (8.0, 8.0), ["VIN", "SW", "GND", "SW2", "VIN"]),
+        two_pad("L1", (7.5, 11.5), "SW", "VOUT", size=(1.2, 1.6), pitch=2.4),
+        two_pad("L2", (8.5, 4.5), "SW2", "VOUT2", size=(1.2, 1.6), pitch=2.4),
+        two_pad("C1", (11.6, 8.0), "GND", "VIN"),
+        two_pad("J1", (18.0, 8.0), "VIN", "GND"),
+        two_pad("J2", (3.0, 12.5), "VOUT", "GND"),
+        two_pad("J3", (3.0, 3.5), "VOUT2", "GND"),
+    ]
+    pins = {}
+    for c in comps:
+        for p in c.pads:
+            pins.setdefault(p.net, []).append((c.ref, p.name))
+    nets = [Net(n, k + 1, p) for k, (n, p) in enumerate(sorted(pins.items()))]
+    g = BoardGraph("pieces", comps, nets, BoardOutline(22, 16))
+    g.stack = {
+        "layers": [
+            {"name": "F.Cu", "type": "signal", "zones": [], "copper_mm": 0.035},
+            {"name": "In1.Cu", "type": "power", "zones": [], "copper_mm": 0.035},
+            {"name": "In2.Cu", "type": "power", "zones": [], "copper_mm": 0.035},
+            {"name": "B.Cu", "type": "signal", "zones": [], "copper_mm": 0.035},
+        ]
+    }
+    return g
+
+
+def route_crossing(pieces=None):
+    from pnr.route.detail.router import route_board
+
+    g = crossing_board()
+    pour = dict(
+        POUR,
+        nets=["SW", "SW2", "GND", "VIN"],
+        region={"refs": ["U2", "L1", "L2", "C1"], "margin_mm": 0.4},
+        stitch_vias=1,
+        order="listed",
+    )
+    if pieces:
+        pour["pieces"] = pieces
+    doc = {
+        "schema": "v0",
+        "board": {"outline": {"w": 22, "h": 16}, "layers": 4},
+        "fab": dict(
+            track_width_mm=0.15,
+            clearance_mm=0.15,
+            via_diameter_mm=0.45,
+            via_drill_mm=0.2,
+            edge_clearance_mm=0.3,
+        ),
+        "fixed": {c.ref: {"at": list(c.pos), "rot": 0, "side": "top"} for c in g.components},
+        "net_class": {
+            "gnd": {"nets": ["GND"], "plane_layer": "In1.Cu"},
+            "vin": {"nets": ["VIN"], "plane_layer": "In2.Cu"},
+        },
+        "plane_partition": [pour],
+    }
+    c = compile_constraints(doc, g.refs)
+    rules = compile_routing_rules(c, [n.name for n in g.nets])
+    return g, rules, route_board(g, c, rules, max_iters=6)
+
+
+class PiecesTest(unittest.TestCase):
+    """``pieces``: plane nets whose outer pour may be several pieces, each stitched to the
+    net's plane on its own (a VIN land at each end of a buck's row whose switch nodes leave
+    on both sides)."""
+
+    def test_spec(self):
+        (entry,) = parse_partition([dict(POUR, pieces=["VIN", "GND"])])
+        self.assertEqual(entry["pieces"], ["VIN", "GND"])
+        (entry,) = parse_partition([dict(POUR, pieces="VIN")])
+        self.assertEqual(entry["pieces"], ["VIN"])
+        self.assertNotIn("pieces", parse_partition([dict(POUR)])[0])
+        with self.assertRaisesRegex(PowerSpecError, "go with a region"):
+            parse_partition([dict(layer="In2.Cu", nets=["A"], pieces=["A"])])
+        with self.assertRaisesRegex(PowerSpecError, "at least one net"):
+            parse_partition([dict(POUR, pieces=[])])
+        with self.assertRaisesRegex(PowerSpecError, "list of names"):
+            parse_partition([dict(POUR, pieces=[1])])
+
+    def test_one_piece_leaves_a_vin_land_unreached(self):
+        _g, _rules, r = route_crossing()
+        report = r.escape_diagnostics["plane_partition"][0]["nets"]
+        self.assertEqual([t["name"] for t in report["VIN"]["unreached"]], ["U2.1"])
+        self.assertIn("VIN", r.failure_sites)
+
+    def test_pieces_reach_every_land_and_each_is_stitched(self):
+        _g, rules, r = route_crossing(["VIN", "GND"])
+        self.assertEqual(rules["plane_partition"][0]["pieces"], ["VIN", "GND"])
+        report = r.escape_diagnostics["plane_partition"][0]["nets"]
+        for net in ("SW", "SW2", "GND", "VIN"):
+            self.assertEqual(report[net]["unreached"], [], net)
+        self.assertTrue(report["VIN"]["pieces"])
+        self.assertNotIn("pieces", report["SW"])
+        self.assertEqual(report["VIN"]["components"], 3)
+        pours = r.escape_diagnostics["pours"]
+        self.assertEqual(pours["VIN"]["pads"], ["C1.2", "U2.1", "U2.5"])
+        self.assertEqual(pours["VIN"]["pieces"], 3)
+        self.assertNotIn("unstitched", pours["VIN"])
+        # one stitch via in each VIN piece
+        regions = [x for x in regions_from_rows(r.extras()["plane_regions"]) if x.net == "VIN"]
+        from pnr.route.detail.pour import _inside
+
+        self.assertEqual(len(regions), 3)
+        for region in regions:
+            inside = [q for q in pours["VIN"]["stitches"] if _inside(region, q)]
+            self.assertEqual(len(inside), 1, region.outline[:2])
+        self.assertNotIn("VIN", r.failure_sites)
+        # GND's middle land is walled in by the switch nodes: its piece has no stitch,
+        # reported (diagnostics and a failure site), never silent.
+        self.assertEqual(pours["GND"]["unstitched"][0]["pads"], ["U2.3"])
+        self.assertIn(tuple(pours["GND"]["unstitched"][0]["at"]), set(r.failure_sites["GND"]))
+
+
 class IdentityTest(unittest.TestCase):
     def test_without_the_section_nothing_changes(self):
         from pnr.route.detail.router import route_board

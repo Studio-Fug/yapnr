@@ -27,6 +27,8 @@ py_library(
     imports = ["../.."],
     deps = [
         "//yapnr:package",
+        "//yapnr/rf/export",
+        "//yapnr/rf/export:report",
         requirement("numpy"),
         requirement("pyyaml"),
         requirement("torch"),
@@ -40,6 +42,22 @@ py_library(
     srcs = ["__init__.py"],
     imports = ["../.."],
     deps = ["//yapnr:package"],
+)
+
+# sparams.py + numerics.py (numpy only): split out so that //yapnr/rf/export:report (which needs
+# sparams for its forward-run report) can depend on this instead of the full :rf, which would
+# otherwise depend back on :report (cycle: :rf -> export:report -> :rf).
+py_library(
+    name = "sparams",
+    srcs = [
+        "numerics.py",
+        "sparams.py",
+    ],
+    imports = ["../.."],
+    deps = [
+        "//yapnr/rf:package",
+        requirement("numpy"),
+    ],
 )
 
 # Test helpers (a tiny spec), for tests only.

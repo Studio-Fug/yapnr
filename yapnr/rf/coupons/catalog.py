@@ -15,6 +15,7 @@ from __future__ import annotations
 import itertools
 import math
 from dataclasses import asdict, dataclass, field
+from functools import lru_cache
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -763,23 +764,64 @@ def o_reference(region: str) -> dict:
 
 
 D1_WINNER = "docs/rf/order0/predictions/D1/runs/d1-star/footprint.kicad_mod"
+# D2 never passed every check (|S11| misses -20 dB by 0.6-0.7 dB); `d2-star-sched` is the
+# nearest formulation and compute.md's recommendation absent other owner direction (see
+# docs/rf/order0/predictions/D2/README.md) -- shipped as a pre-registered |S11|-missing design.
+D2_WINNER = "docs/rf/order0/predictions/D2/runs/d2-star-sched/footprint.kicad_mod"
+# OSH Park 4-layer's minimum copper width and space (layout.RULES_OSHPARK_4L's min_track_width
+# / min_clearance, 5/5 mil): the fab rule a winner's exported copper is checked against here,
+# independent of (and in addition to) the optimizer's own grid-pitch rule.
+O_FAB_RULE_MM = 0.127
+DOCS_URL = "https://github.com/Studio-Fug/yapnr/tree/main/docs/rf/order0/predictions"
 
 
-def o_optimized(stick_id: str, footprint_path: str) -> dict:
+def _repo_root() -> str:
+    """yapnr/rf/coupons/catalog.py -> the repo root (four directories up)."""
+    import os
+
+    return os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+
+
+@lru_cache(maxsize=None)
+def o_optimized(stick_id: str, footprint_path: Optional[str]) -> dict:
     """D1 (or D2): the optimizer's own validated copper (export.contour's representation,
     the one actually re-simulated to pass D-O0-11), split into the one main body that touches
     a port (one shared net, `layout_o.optimized_pad`) and the floating islands that touch none
     (etch artefacts below the width/space rule, inert; `predict.md`'s 14 on `d1-star`), by the
-    same point-in-polygon test `export.report.footprint_of` used to build the file. Falls back
-    to the plain placeholder window when the file is not there (D2: no winner yet)."""
+    same point-in-polygon test `export.report.footprint_of` used to build the file.
+
+    `footprint_path=None` means no winner is registered yet, and the plain placeholder window
+    ships (`O_WINDOWS[stick_id]`, unchanged). Once a path *is* given it is a commitment: a
+    missing file or a missing sibling `result.json` raises rather than silently falling back to
+    the placeholder (review finding 5 -- a stale or mistyped winner path must stop the board,
+    not silently ship an empty window with no sign anything is wrong). The exported copper is
+    also re-checked against the fab width/space rule (`export.drc`, `O_FAB_RULE_MM`) with the
+    diagonal-corner fix (review finding 1); a failure is recorded (`drc_ok`, `drc_violations`)
+    rather than raised, since a known miss pending re-optimization (D1, review finding 2) still
+    needs to go on the board it already shipped on."""
+    import hashlib
     import os
 
     from yapnr.rf.export.contour import point_in_loop
+    from yapnr.rf.export.drc import check_width_space
     from yapnr.rf.export.kicad import read_footprint
 
     win = dict(O_WINDOWS[stick_id])
-    if not os.path.isfile(footprint_path):
+    if footprint_path is None:
         return win
+    if not os.path.isfile(footprint_path):
+        raise FileNotFoundError(
+            f"{stick_id}'s winner footprint is missing: {footprint_path!r} (fix the *_WINNER"
+            " path, or pass None if no design ships yet -- o_optimized refuses to silently"
+            " fall back to the placeholder window)"
+        )
+    result_path = os.path.join(os.path.dirname(footprint_path), "result.json")
+    if not os.path.isfile(result_path):
+        raise FileNotFoundError(
+            f"{stick_id}'s winner has no result.json beside it: {result_path!r}"
+        )
     rf = read_footprint(footprint_path)
     centers = [p["at"] for p in rf.pads]
     connected, floating = [], []
@@ -787,12 +829,44 @@ def o_optimized(stick_id: str, footprint_path: str) -> dict:
         (connected if any(point_in_loop(c, poly) for c in centers) else floating).append(poly)
     for p in rf.pads:
         connected.extend(p["primitives"])
+    drc = check_width_space(
+        rf.copper(),
+        (0.0, win["w"], -win["h"] / 2, win["h"] / 2),
+        O_FAB_RULE_MM,
+        O_FAB_RULE_MM,
+        O_FAB_RULE_MM,
+    )
+    with open(result_path, "rb") as fh:
+        hash8 = hashlib.sha256(fh.read()).hexdigest()[:8]
     win["islands"] = dict(
         connected=[poly.tolist() for poly in connected],
         floating=[poly.tolist() for poly in floating],
         source=footprint_path,
     )
+    win["hash8"] = hash8
+    win["drc_ok"] = drc.ok
+    win["drc_violations"] = [
+        dict(kind=v.kind, reason=v.reason, at_mm=list(v.at_mm), extent_mm=v.extent_mm)
+        for v in drc.violations
+    ]
+    win["docs_url"] = f"{DOCS_URL}/{stick_id}"
     return win
+
+
+def _winner_note(stick_id: str, win: dict) -> str:
+    """The label suffix for a demo window: the run id (the winner path's directory name), the
+    first 8 hex of its result.json sha256 (not a hand-pasted guess -- review finding 5), and the
+    fab DRC status."""
+    import os
+
+    if "islands" not in win:
+        return f" (placeholder window until {stick_id} passes)"
+    run_id = os.path.basename(os.path.dirname(win["islands"]["source"]))
+    note = f" ({run_id}, {win['hash8']}, filled)"
+    if not win["drc_ok"]:
+        n = len(win["drc_violations"])
+        note += f"; FAILS the {O_FAB_RULE_MM} mm fab DRC ({n} violation(s)): re-optimize before fab"
+    return note
 
 
 def _o_line_sticks(prefix, n0, region, dls, set_id, label, verify=None) -> List[Stick]:
@@ -989,10 +1063,18 @@ def _o_board_notes(upload: str) -> List[str]:
         "mask open over all RF copper and its keep-away, 0.2 mm dams at the pin pads; A10 is"
         " the masked line",
     ] + (
-        ["D2 window is a placeholder: the optimizer's footprint is added when D2 passes"]
+        [
+            "D2's window carries d2-star-sched (compute.md's recommendation; |S11| misses -20 dB"
+            " by 0.6-0.7 dB, the owner's call): see the D2 stick's label for its run id, hash and"
+            " fab DRC status, and docs/rf/order0/predictions/D2/README.md for the full record"
+        ]
         if upload == "W"
         else (
-            ["D1 window is a placeholder: the optimizer's footprint is added when D1 passes"]
+            [
+                "D1's window carries d1-star (the headline demo): see the D1 stick's label for its"
+                " run id, hash and fab DRC status, and docs/rf/order0/predictions/D1 for the full"
+                " record"
+            ]
             if upload == "D"
             else []
         )
@@ -1124,14 +1206,19 @@ def _board_o(st, upload: str) -> Board:
                 o_reference("W"),
             )
         )
+        import os
+
+        d2_win = o_optimized("D2", os.path.join(_repo_root(), D2_WINNER))
         s.append(
             _o_demo(
                 "D2",
-                "window",
+                "demo" if "islands" in d2_win else "window",
                 "W",
                 f"{tag} D2 opt divider",
-                "optimizer divider, thick (placeholder window until D2 passes)",
-                O_WINDOWS["D2"],
+                "optimizer divider, thick: |S21|/|S31| pass, |S11| misses -20 dB by"
+                " 0.6-0.7 dB (owner's call, compute.md's recommendation)"
+                + _winner_note("D2", d2_win),
+                d2_win,
             )
         )
         trl["W"] = dict(
@@ -1160,22 +1247,14 @@ def _board_o(st, upload: str) -> Board:
         )
         import os
 
-        _repo_root = os.path.dirname(  # yapnr/rf/coupons/catalog.py -> repo root
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        )
-        d1_win = o_optimized("D1", os.path.join(_repo_root, D1_WINNER))
+        d1_win = o_optimized("D1", os.path.join(_repo_root(), D1_WINNER))
         s.append(
             _o_demo(
                 "D1",
                 "demo" if "islands" in d1_win else "window",
                 "M",
                 f"{tag} D1 opt divider",
-                "optimizer divider, thin: the headline demo"
-                + (
-                    " (d1-star, ad20e643, filled)"
-                    if "islands" in d1_win
-                    else " (placeholder window until D1 passes)"
-                ),
+                "optimizer divider, thin: the headline demo" + _winner_note("D1", d1_win),
                 d1_win,
             )
         )

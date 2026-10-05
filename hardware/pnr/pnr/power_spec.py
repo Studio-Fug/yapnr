@@ -21,6 +21,8 @@ routing rules carry under the same names, only when declared.
         terminals: pad                  # (with region) whole lands, or reach discs
         connect: solid                  # (with region) the zones' pad connection
         stitch_vias: 4                  # (with region) vias per plane net's pour
+        pieces: [5V_SYS, GND]           # (with region) plane nets poured as pieces,
+                                        # each stitched to its plane on its own
         currents: {1V2: 1.0}            # A, else the net's @pnr-current peak or class
         budgets_mohm: {1V2: 12}         # widens a trunk for its IR budget
         sources: {1V2: {"@pmic.fb_1v2": "2"}}  # the trunk's root (else a central pad)
@@ -69,6 +71,7 @@ PARTITION_KEYS = {
     "connect",
     "stitch_vias",
     "fixed_lands",
+    "pieces",
 }
 IR_KEYS = {
     "net",
@@ -176,8 +179,12 @@ def parse_partition(raw) -> List[Dict]:
             out[-1]["neck_mm"] = _num(entry["neck_mm"], where + ".neck_mm", minimum=0.0)
         if entry.get("region") is not None:  # an outer pour (only when declared)
             out[-1].update(_outer(entry, where))
-        elif any(entry.get(k) is not None for k in ("terminals", "connect", "stitch_vias")):
-            raise PowerSpecError(where + ": terminals, connect and stitch_vias go with a region")
+        elif any(
+            entry.get(k) is not None for k in ("terminals", "connect", "stitch_vias", "pieces")
+        ):
+            raise PowerSpecError(
+                where + ": terminals, connect, stitch_vias and pieces go with a region"
+            )
         if entry.get("fixed_lands") is not None:  # only when declared
             if not isinstance(entry["fixed_lands"], bool):
                 raise PowerSpecError(where + ".fixed_lands must be a boolean")
@@ -235,6 +242,13 @@ def _outer(entry, where) -> Dict:
         if isinstance(n, bool) or not isinstance(n, int) or n < 0:
             raise PowerSpecError(where + ".stitch_vias must be a whole number, 0 or more")
         out["stitch_vias"] = n
+    if entry.get("pieces") is not None:
+        # Plane nets whose pour may be several pieces, each stitched to the net's plane on
+        # its own (pnr.plane_partition, pnr.route.detail.pour.stitch); only when declared.
+        pieces = _names(entry["pieces"], where + ".pieces")
+        if not pieces:
+            raise PowerSpecError(where + ".pieces names at least one net")
+        out["pieces"] = pieces
     return out
 
 

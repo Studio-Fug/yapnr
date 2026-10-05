@@ -8,6 +8,13 @@ Steps (each reads the previous one's files in WORK; nothing is placed by hand):
              U1's frame (columns, dummy columns, loads RT1-RT4, mask islands, feeds, vias and
              zones), every macro item in the KiCad group RFM1_MACRO (the engine's
              ``fixed_block``), the board's In1 GND plane cut out of the RF region.
+``fixblocks`` (plan R1/E2, in situ) each power-stage block of a ``--library`` whose layouts
+             were synthesized at their floorplan ``site``: the best layout's parts posed there on
+             the source board, its routed copper and outer pours drawn in as its KiCad group
+             (pnr.hier.assemble --zones --group --anchor), and the anchor's ``fixed`` pose and
+             the ``fixed_block`` entry (pnr.hier.macro.fixed_block_from_macro, pinned to the
+             group's digest) written to WORK/power-blocks.json, which prepare merges in (the
+             block's other parts held out, the site a placement keepout but for the anchor).
 ``prepare``  ingest (pnr.ingest); the fixed block's copper (pnr.fixed_copper) and its
              footprints held out of the placement graph (pnr.fixed_block.hold_out); U1's fanout
              planned with that copper (pnr.fanout): every surface exit becomes a placement
@@ -340,6 +347,15 @@ def step_prepare(a):
     )
     doc = yaml.safe_load((HERE / "constraints.yaml").read_text())
     doc.pop("rf_macro", None)  # proposed; the macro is the fixed_block
+    # The power stage's fixed blocks (fixblocks, plan R1/E2), only when that step ran.
+    pblocks = (
+        json.loads((work / "power-blocks.json").read_text())
+        if (work / "power-blocks.json").is_file()
+        else None
+    )
+    if pblocks:
+        doc.setdefault("fixed", {}).update(pblocks["fixed"])
+        doc.setdefault("fixed_block", []).extend(pblocks["fixed_block"])
     floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
     # The fixed block's copper (fixed.json schema 2) as the router exports it.
     _graph, _compiled, rules0 = _compile(a.engine, inputs / "graph-full.json", doc)
@@ -366,7 +382,46 @@ def step_prepare(a):
     from pnr.graph import BoardGraph
 
     graph = BoardGraph.from_json((inputs / "graph-full.json").read_text())
-    held = hold_out(graph, macro_refs(a.macro_variant))
+    if pblocks:
+        # Each block's site is a placement keepout but for its anchor's courtyard (a fixed
+        # part inside a keepout counts as a violation): the four strips round it, 0.5 mm off
+        # it (touching strips still counted U2 and U5 in 15 of 24 starts; no part fits 0.5 mm).
+        by_ref = {c.ref: c for c in graph.components}
+        for anchor, site in sorted(pblocks["sites"].items()):
+            c = by_ref[anchor]
+            w, h = c.courtyard if int(round(c.rot)) % 180 == 0 else c.courtyard[::-1]
+            w, h = w + 1.0, h + 1.0
+            ax0, ay0, ax1, ay1 = (
+                c.pos[0] - w / 2,
+                c.pos[1] - h / 2,
+                c.pos[0] + w / 2,
+                c.pos[1] + h / 2,
+            )
+            x0, y0, x1, y1 = site
+            strips = [
+                (x0, y0, ax0, y1),
+                (ax1, y0, x1, y1),
+                (ax0, y0, ax1, ay0),
+                (ax0, ay1, ax1, y1),
+            ]
+            for k, (p0, q0, p1, q1) in enumerate(strips):
+                if p1 - p0 > 1e-6 and q1 - q0 > 1e-6:
+                    poly = [[p0, q0], [p1, q0], [p1, q1], [p0, q1]]
+                    poly = [[round(x, 4), round(y, 4)] for x, y in poly]
+                    doc.setdefault("keepout", []).append(
+                        {"name": "%s_site_%d" % (anchor.lower(), k), "polygon": poly}
+                    )
+    held = hold_out(graph, macro_refs(a.macro_variant) + list((pblocks or {}).get("hold") or []))
+    if pblocks:
+        gone = {
+            c["address"]: c["ref"]
+            for c in json.loads((inputs / "graph-full.json").read_text())["components"]
+            if c["ref"] in set(pblocks["hold"]) and c.get("address")
+        }
+        kept = [c.address for c in graph.components if c.address]
+        (work / "pruned-selectors.json").write_text(
+            json.dumps(prune_held(doc, kept, gone), indent=1)
+        )
     (inputs / "graph.json").write_text(graph.to_json())
     graph_doc = json.loads((inputs / "graph.json").read_text())
     digital, r4 = _r4_region(doc, floorplan, graph_doc)
@@ -672,6 +727,15 @@ def placed_from_record(a, work, record):
 # ---------------------------------------------------------------- finish
 
 
+def _kept_groups(work):
+    """kicad_ops finish's extra argument: the power stage's fixed-block groups (fixblocks),
+    whose copper stays like the RF macro's; none without them."""
+    path = Path(work) / "power-blocks.json"
+    if not path.is_file():
+        return []
+    return [",".join(b["group"] for b in json.loads(path.read_text())["fixed_block"])]
+
+
 def step_finish(a):
     import audit
 
@@ -723,7 +787,8 @@ def step_finish(a):
             macro_board(a.macro_variant),
             board,
             work / "finish.json",
-        ],
+        ]
+        + _kept_groups(work),
         log=work / "finish.log",
     )
     # fp-lib-table: the board's parts (atopile's generated/cached footprints) carry synthetic
@@ -807,6 +872,167 @@ def step_finish(a):
     print(json.dumps(report["summary"], indent=1))
 
 
+def prune_held(doc, remaining, held):
+    """``doc`` without the part selectors (``@address`` globs) that match only held-out parts
+    (a fixed block's members, ``held``) and none of ``remaining``: the compiler refuses an
+    address it does not know. A group whose anchor or every member goes, a region, keepout or
+    side list left without parts, and an orientation or fixed pose of such a part go too.
+    With ``held`` a mapping (address to reference), the rails' parts (``ir_drop`` sources and
+    sinks, ``plane_partition`` sources) are named by reference instead: the fixed block's
+    footprints stay on the board those steps read. Returns the selectors dropped."""
+    import fnmatch as _fn
+
+    def held_only(sel):
+        if not isinstance(sel, str) or not sel.startswith("@"):
+            return False
+        pat = sel[1:]
+        return any(_fn.fnmatchcase(x, pat) for x in held) and not any(
+            _fn.fnmatchcase(x, pat) for x in remaining
+        )
+
+    dropped = set()
+
+    def keep(sels):
+        out = []
+        for x in sels:
+            if held_only(x):
+                dropped.add(x)
+            else:
+                out.append(x)
+        return out
+
+    groups = []
+    for g in doc.get("group") or []:
+        if held_only(g.get("anchor")):
+            dropped.add(g["anchor"])
+            continue
+        members = keep(g.get("members") or [])
+        if members:
+            groups.append(dict(g, members=members))
+    if "group" in doc:
+        doc["group"] = groups
+    for key in ("region", "keepout", "copper_keepout"):
+        rows = []
+        for r in doc.get(key) or []:
+            if "refs" in r:
+                r = dict(r, refs=keep(r["refs"]))
+                if not r["refs"]:
+                    continue
+            if held_only(r.get("ref")):
+                dropped.add(r["ref"])
+                continue
+            rows.append(r)
+        if key in doc:
+            doc[key] = rows
+    for key in ("orientation", "fixed"):
+        for sel in [x for x in doc.get(key) or {} if held_only(x)]:
+            dropped.add(sel)
+            del doc[key][sel]
+    for side, sels in list((doc.get("side") or {}).items()):
+        doc["side"][side] = keep(sels)
+    if isinstance(held, dict):
+
+        def by_ref(table):
+            out = {}
+            for sel, pads in table.items():
+                if held_only(sel):
+                    refs = [r for x, r in held.items() if _fn.fnmatchcase(x, sel[1:])]
+                    dropped.add(sel)
+                    for r in refs:
+                        out[r] = pads
+                else:
+                    out[sel] = pads
+            return out
+
+        for entry in doc.get("ir_drop") or []:
+            for key in ("sources", "sinks"):
+                if isinstance(entry.get(key), dict):
+                    entry[key] = by_ref(entry[key])
+        for entry in doc.get("plane_partition") or []:
+            for net, table in list((entry.get("sources") or {}).items()):
+                entry["sources"][net] = by_ref(table)
+    return sorted(dropped)
+
+
+def step_fixblocks(a):
+    """Plan R1/E2 in situ: see the module docstring (``fixblocks``)."""
+    work = Path(a.work)
+    if not a.library:
+        raise SystemExit("fixblocks: --library (power_block.py merge's library.json)")
+    library = json.loads(Path(a.library).read_text())
+    floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
+    stages = {b["anchor"]: b for b in floorplan["power_stage"]["blocks"]}
+    height = float(floorplan["board"]["height"])
+    sys.path[:0] = [str(Path(a.engine) / "hardware/pnr"), str(a.engine)]
+    os.environ["PNR_FAB_PROFILE"] = PROFILE
+    from pnr.graph import BoardGraph, Component
+    from pnr.hier.macro import MacroPlan, fixed_block_from_macro
+
+    board = work / "source.kicad_pcb"
+    tool = HERE / "power_block.py"
+    out = dict(fixed={}, fixed_block=[], hold=[], sites={}, blocks=[])
+    for k, (name, tier) in enumerate(sorted(library.items())):
+        rec = tier[0]  # the best layout (power_block.py rank)
+        if not rec.get("site"):
+            raise SystemExit("fixblocks: %s was not synthesized at a site" % name)
+        bdir = Path(rec["instances"][0]["dir"])
+        info = json.loads((bdir.parents[1] / "block.json").read_text())
+        fb = stages[info["stage_anchor"]]["fixed_block"]
+        anchor, addr = info["anchor"], info["addresses"]
+        a2r = {v: r for r, v in addr.items()}
+        x0, y0 = rec["site"][:2]
+        poses = {}
+        for key, (x, y, rot, side) in rec["layout"].items():
+            ref = anchor if key == "@" else a2r[key]
+            poses[ref] = [round(x0 + x, 6), round(y0 + y, 6), float(rot), side]
+        (work / ("poses-%s.json" % fb["name"])).write_text(json.dumps(poses, indent=1))
+        _run(
+            [a.kicad_python, tool, "ki-pose", "--src", board, "--dest", board]
+            + ["--poses", work / ("poses-%s.json" % fb["name"]), "--height", height],
+            log=work / ("pose-%s.log" % fb["name"]),
+        )
+        res = _run(
+            [a.kicad_python, "-m", "pnr.hier.assemble", board, "--block"]
+            + [bdir / "block.kicad_pcb", "--out", board, "--zones"]
+            + ["--group", fb["group"], "--anchor", anchor],
+            env=_env(a.engine),
+            cwd=Path(a.engine) / "hardware/pnr",
+            log=work / ("block-assemble-%s.log" % fb["name"]),
+        )
+        assembled = json.loads(res.strip().splitlines()[-1])
+        # pnr.hier.macro's record of the layout (members at their landed poses) and the bridge
+        mref = "MB%02d" % k
+        flat = BoardGraph(name="power-blocks")
+        for ref, (x, y, rot, side) in poses.items():
+            flat.components.append(
+                Component(ref, "", (x, y), rot, side, (1.0, 1.0), (1.0, 1.0), pads=[])
+            )
+        plan = MacroPlan()
+        plan.macros[mref] = dict(block=name, members={r: tuple(v) for r, v in poses.items()})
+        plan.member_of = {r: mref for r in poses}
+        fixed, entry = fixed_block_from_macro(
+            flat, plan, mref, fb["name"], fb["group"], anchor, fb.get("solid_layers")
+        )
+        key = "@" + _glob_literal(addr[anchor])
+        out["fixed"][key] = fixed
+        out["fixed_block"].append(
+            dict(
+                name=entry["name"],
+                group=entry["group"],
+                anchor=key,
+                solid_layers=entry["solid_layers"],
+                sha256=assembled["sha256"],
+            )
+        )
+        out["hold"] += entry["refs"]
+        out["sites"][anchor] = rec["site"]
+        out["blocks"].append(
+            dict(block=name, layout=rec["id"], board=str(bdir), assembled=assembled)
+        )
+    (work / "power-blocks.json").write_text(json.dumps(out, indent=1))
+    print(json.dumps(out, indent=1)[:3000])
+
+
 def _route_inputs(work):
     """The routing rules and constraints: ``block``'s (the power stage as a fixed block) when
     that step ran, else prepare's."""
@@ -817,100 +1043,90 @@ def _route_inputs(work):
 
 
 def step_block(a):
-    """Plan R1/E2: the power-stage layout the placement drew, made the fixed block PWR_STAGE.
+    """Plan R1/E2: each power-stage layout the placement drew (floorplan ``power_stage.blocks``:
+    the buck stage at U2, the eFuse stage at U5), made its fixed block (PWR_STAGE, EFUSE_STAGE).
 
-    The finished board gets the layout's routed copper and its outer pours as one KiCad group
-    (pnr.hier.assemble --zones --group --anchor; the anchor, U2, stays out of it), and the
-    routing constraints get the ``fixed`` pose of the anchor and the ``fixed_block`` entry
+    The finished board gets each layout's routed copper and its outer pours as one KiCad group
+    (pnr.hier.assemble --zones --group --anchor; the anchor stays out of it), and the routing
+    constraints get the ``fixed`` pose of each anchor and its ``fixed_block`` entry
     (pnr.hier.macro.fixed_block_from_macro, from the placed graph) pinned to the group's
     digest: WORK/constraints-route.yaml and WORK/inputs/rules-route.json."""
     work = Path(a.work)
     out_dir = Path(a.out)
     board = out_dir / (BOARD_NAME + ".kicad_pcb")
     floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
-    stage = floorplan["power_stage"]
-    fb = stage["fixed_block"]
+    stages = {b["anchor"]: b for b in floorplan["power_stage"]["blocks"]}
     placement = json.loads((out_dir / "placement.json").read_text())
-    hier = placement.get("hier") or {}
-    blocks = hier.get("blocks") or {}
-    if len(blocks) != 1:
-        raise SystemExit("block: the placement drew %d block layouts, not one" % len(blocks))
-    ((name, choice),) = blocks.items()
-    block_dir = Path(choice["native_dir"])
+    blocks = (placement.get("hier") or {}).get("blocks") or {}
+    if not blocks:
+        raise SystemExit("block: the placement drew no block layouts (place --library)")
     sys.path[:0] = [str(Path(a.engine) / "hardware/pnr"), str(a.engine)]
     os.environ["PNR_FAB_PROFILE"] = PROFILE
     from pnr.graph import BoardGraph
     from pnr.hier.macro import MacroPlan, fixed_block_from_macro
 
-    info = json.loads((block_dir.parents[1] / "block.json").read_text())
-    refs = info["block"]["refs"]
-    anchor = info["anchor"]
-    addr = info["addresses"]
     placed_json = work / "placed-from-record.json"  # finish --placement
     if not placed_json.is_file():
         sel = json.loads((work / "selection.json").read_text())
         placed_json = work / "mc" / "cand" / sel["winner"] / "placed.json"
     flat = BoardGraph.from_json(placed_json.read_text())
     by_ref = {c.ref: c for c in flat.components}
-    # The macro the placement drew, as pnr.hier.macro records it (members at their poses).
-    plan = MacroPlan()
-    plan.macros["MB00"] = dict(
-        block=name,
-        members={r: (*by_ref[r].pos, by_ref[r].rot, by_ref[r].side) for r in refs},
-    )
-    plan.member_of = {r: "MB00" for r in refs}
-    fixed, entry = fixed_block_from_macro(
-        flat, plan, "MB00", fb["name"], fb["group"], anchor, fb.get("solid_layers")
-    )
-    res = _run(
-        [
-            a.kicad_python,
-            "-m",
-            "pnr.hier.assemble",
-            board,
-            "--block",
-            block_dir / "block.kicad_pcb",
-            "--out",
-            board,
-            "--zones",
-            "--group",
-            fb["group"],
-            "--anchor",
-            anchor,
-        ],
-        env=_env(a.engine),
-        cwd=Path(a.engine) / "hardware/pnr",
-        log=work / "block-assemble.log",
-    )
-    assembled = json.loads(res.strip().splitlines()[-1])
     doc = yaml.safe_load((work / "constraints-place.yaml").read_text())
-    key = "@" + _glob_literal(addr[anchor])
-    doc.setdefault("fixed", {})[key] = dict(fixed)
-    doc.setdefault("fixed_block", []).append(
-        dict(
-            name=entry["name"],
-            group=entry["group"],
-            anchor=key,
-            solid_layers=entry["solid_layers"],
-            sha256=assembled["sha256"],
+    report = []
+    for k, (name, choice) in enumerate(sorted(blocks.items())):
+        block_dir = Path(choice["native_dir"])
+        info = json.loads((block_dir.parents[1] / "block.json").read_text())
+        fb = stages[info["stage_anchor"]]["fixed_block"]
+        refs, anchor, addr = info["block"]["refs"], info["anchor"], info["addresses"]
+        # The macro the placement drew, as pnr.hier.macro records it (members at their poses).
+        mref = "MB%02d" % k
+        plan = MacroPlan()
+        plan.macros[mref] = dict(
+            block=name,
+            members={r: (*by_ref[r].pos, by_ref[r].rot, by_ref[r].side) for r in refs},
         )
-    )
+        plan.member_of = {r: mref for r in refs}
+        fixed, entry = fixed_block_from_macro(
+            flat, plan, mref, fb["name"], fb["group"], anchor, fb.get("solid_layers")
+        )
+        res = _run(
+            [a.kicad_python, "-m", "pnr.hier.assemble", board, "--block"]
+            + [block_dir / "block.kicad_pcb", "--out", board, "--zones"]
+            + ["--group", fb["group"], "--anchor", anchor],
+            env=_env(a.engine),
+            cwd=Path(a.engine) / "hardware/pnr",
+            log=work / ("block-assemble-%s.log" % fb["name"]),
+        )
+        assembled = json.loads(res.strip().splitlines()[-1])
+        key = "@" + _glob_literal(addr[anchor])
+        doc.setdefault("fixed", {})[key] = dict(fixed)
+        doc.setdefault("fixed_block", []).append(
+            dict(
+                name=entry["name"],
+                group=entry["group"],
+                anchor=key,
+                solid_layers=entry["solid_layers"],
+                sha256=assembled["sha256"],
+            )
+        )
+        report.append(
+            dict(
+                block=name,
+                layout=choice,
+                board=str(block_dir / "block.kicad_pcb"),
+                fixed=fixed,
+                fixed_block=entry,
+                assembled=assembled,
+            )
+        )
     (work / "constraints-route.yaml").write_text(
-        "# constraints-place.yaml plus the power stage as a fixed block (integrate.py block;"
+        "# constraints-place.yaml plus the power stage's fixed blocks (integrate.py block;"
         " generated)\n" + yaml.safe_dump(doc, sort_keys=False)
     )
     rules0 = json.loads((work / "inputs" / "rules.json").read_text())
     _graph, _compiled, rules = _compile(a.engine, work / "inputs" / "graph.json", doc)
     rules["fixed_copper"] = rules0.get("fixed_copper")
     (work / "inputs" / "rules-route.json").write_text(json.dumps(rules, indent=1, sort_keys=True))
-    report = dict(
-        block=name,
-        layout=choice,
-        board=str(block_dir / "block.kicad_pcb"),
-        fixed=fixed,
-        fixed_block=entry,
-        assembled=assembled,
-    )
     (work / "block.json").write_text(json.dumps(report, indent=1, default=str))
     print(json.dumps(report, indent=1, default=str)[:3000])
 
@@ -1297,6 +1513,7 @@ def main(argv=None):
         "step",
         choices=[
             "source",
+            "fixblocks",
             "prepare",
             "place",
             "select",
@@ -1327,7 +1544,8 @@ def main(argv=None):
         help="the RF macro's D12 variant to merge (rfm1-m/-n/-p; one placement fits all three)",
     )
     ap.add_argument(
-        "--library", help="place: a power-stage block library (power_block.py library.json)"
+        "--library",
+        help="place / fixblocks: a power-stage block library (power_block.py library.json)",
     )
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--n0", type=int, default=24, help="placement starts")
@@ -1348,6 +1566,7 @@ def main(argv=None):
     sys.path.insert(0, str(HERE))
     steps = {
         "source": step_source,
+        "fixblocks": step_fixblocks,
         "prepare": step_prepare,
         "place": step_place,
         "select": step_select,

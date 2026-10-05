@@ -26,6 +26,8 @@ import power_block  # noqa: E402
 
 FLOORPLAN = yaml.safe_load((EXAMPLE / "board/floorplan.yaml").read_text())
 TOP = yaml.safe_load((EXAMPLE / "board/constraints.yaml").read_text())
+STAGE = power_block.stage_spec(FLOORPLAN)  # the buck stage at U2
+EFUSE = power_block.stage_spec(FLOORPLAN, "efuse")
 
 BLOCK = [
     "pmic.u2",
@@ -42,12 +44,6 @@ BLOCK = [
     "pmic.c_vana",
     "pmic.r_sh",
     "pmic.tp_isns",
-    "power_in.efuse",
-    "power_in.tvs",
-    "power_in.c_in_bulk",
-    "power_in.c_in_hf",
-    "power_in.c_sys_bulk",
-    "power_in.r_uv_top",
 ]
 
 
@@ -61,7 +57,7 @@ def part(ref, address, *pads):
 
 class BlockDocTest(unittest.TestCase):
     def setUp(self):
-        self.doc = power_block.block_doc(TOP, FLOORPLAN, BLOCK, 20.4, 18.4)
+        self.doc = power_block.block_doc(TOP, FLOORPLAN, BLOCK, 20.4, 18.4, STAGE)
 
     def test_board_level_relations_go(self):
         for key in ("region", "fixed_block", "fanout", "diff_pair", "length_match", "rf_macro"):
@@ -87,19 +83,34 @@ class BlockDocTest(unittest.TestCase):
         self.assertEqual((pour["terminals"], pour["connect"]), ("pad", "solid"))
         self.assertIn("5V_SYS", pour["nets"])
         self.assertIn("@pmic.u2", pour["region"]["refs"])
-        self.assertIn("@power_in.efuse", pour["region"]["refs"])
+        self.assertEqual(pour["pieces"], ["GND", "5V_SYS"])
         self.assertIn("@pmic.c_in[[]0]", pour["region"]["refs"])  # address globs are literal
         self.assertNotIn("In3.Cu", [p["layer"] for p in self.doc["plane_partition"]])
 
     def test_only_rails_inside_the_block(self):
         nets = sorted(r["net"] for r in self.doc["ir_drop"])
-        # 1V0_BUCK (L_b2 -> R_SH1), 3V3 (L_b0 to its sense pin) and 5V_SYS (the eFuse output) are
-        # inside; 1V0_SH runs to the
-        # ferrites outside, 1V0_RF1 from them to U1.
-        self.assertEqual(nets, ["1V0_BUCK", "3V3", "5V_SYS"])
+        # 1V0_BUCK (L_b2 -> R_SH1) is inside; 3V3 and 5V_SYS declare no sinks (in a block their
+        # other pads may all be capacitors), 1V0_SH runs to the ferrites outside.
+        self.assertEqual(nets, ["1V0_BUCK"])
         (buck,) = [r for r in self.doc["ir_drop"] if r["net"] == "1V0_BUCK"]
         self.assertEqual(buck["budget_mohm"], 0.5)
         self.assertEqual(buck["sources"], {"@pmic.l_b2": ["2"]})
+
+
+class SiteTest(unittest.TestCase):
+    def test_regions_move_into_the_site(self):
+        x0, y0, x1, y1 = STAGE["site"]
+        w, h = x1 - x0, y1 - y0
+        doc = power_block.block_doc(TOP, FLOORPLAN, BLOCK, w, h, STAGE, origin=(x0, y0))
+        rects = {r["name"]: r["rect"] for r in doc["region"]}
+        # pmic_switching (x >= 41, y <= 21.7) inside the site's frame; pmic_block clipped to it
+        self.assertEqual(rects["pmic_switching"], [41.0 - x0, 0.0, round(w, 4), round(h, 4)])
+        self.assertEqual(rects["pmic_block"], [0.0, 0.0, round(w, 4), round(h, 4)])
+        for r in doc["region"]:  # only the block's parts
+            for ref in r["refs"]:
+                self.assertTrue(any(power_block.fnmatch.fnmatchcase(a, ref[1:]) for a in BLOCK))
+        # without a site no region comes along
+        self.assertNotIn("region", power_block.block_doc(TOP, FLOORPLAN, BLOCK, w, h, STAGE))
 
 
 class HotLinksTest(unittest.TestCase):
@@ -119,19 +130,72 @@ class HotLinksTest(unittest.TestCase):
             part("U5", "power_in.efuse", ("5", "VIN_5V"), ("6", "5V_SYS"), ("8", "GND")),
             part("D3", "power_in.tvs", ("1", "VIN_5V"), ("2", "GND")),
         ]
-        links = power_block.hot_links(FLOORPLAN, comps)
-        got = sorted((net, src[0], dst[0][0]) for net, src, dst in links)
+        links = power_block.hot_links(FLOORPLAN, comps, STAGE)
+        links += power_block.hot_links(FLOORPLAN, comps, EFUSE)
+        got = sorted((net, src[0], tuple(dst)) for net, src, dst in links)
         self.assertEqual(
             got,
             [
-                ("5V_SYS", ("C14", "1"), "U2"),
-                ("GND", ("C14", "2"), "U2"),
-                ("GND", ("D3", "2"), "U5"),
-                ("PMIC_SW_B0", ("L1", "1"), "U2"),
-                ("PMIC_SW_B0", ("R30", "1"), "U2"),
-                ("VIN_5V", ("D3", "1"), "U5"),
+                ("5V_SYS", ("C14", "1"), (("U2", "9"),)),
+                ("5V_SYS", ("U2", "9"), (("C14", "1"),)),
+                ("GND", ("C14", "2"), (("U2", "11"),)),
+                ("GND", ("D3", "2"), (("U5", "8"),)),
+                ("GND", ("U2", "11"), (("C14", "2"),)),
+                ("GND", ("U5", "8"), (("D3", "2"),)),
+                ("PMIC_SW_B0", ("L1", "1"), (("U2", "10"),)),
+                ("PMIC_SW_B0", ("R30", "1"), (("U2", "10"),)),
+                # every IC land on a hot net must reach the loop: one link per land, to any
+                # of the loop parts' pads on it (the inductor's and the snubber's here)
+                ("PMIC_SW_B0", ("U2", "10"), (("L1", "1"), ("R30", "1"))),
+                ("VIN_5V", ("D3", "1"), (("U5", "5"),)),
+                ("VIN_5V", ("U5", "5"), (("D3", "1"),)),
             ],
         )
+
+
+class StageTest(unittest.TestCase):
+    def test_two_blocks(self):
+        self.assertEqual(
+            [b["anchor"] for b in FLOORPLAN["power_stage"]["blocks"]], ["pmic", "efuse"]
+        )
+        self.assertEqual(EFUSE["fixed_block"]["group"], "EFUSE_STAGE")
+        with self.assertRaises(SystemExit):
+            power_block.stage_spec(FLOORPLAN, "radio")
+
+
+class PruneHeldTest(unittest.TestCase):
+    def test_selectors_of_held_parts_go(self):
+        import integrate
+
+        doc = {
+            "group": [
+                {"anchor": "@pmic.u2", "members": ["@pmic.l_*"], "radius_mm": 8},
+                {"anchor": "@pmic.l_b2", "members": ["@pmic.r_sh"], "radius_mm": 4},
+                {"anchor": "@radio.u1", "members": ["@pmic.fb_rf1", "@pmic.c_in[[]0]"]},
+            ],
+            "region": [
+                {"name": "pmic_block", "refs": ["@pmic.u2", "@pmic.l_*", "@pmic.r_rst"]},
+                {"name": "sw", "refs": ["@pmic.l_*"]},
+            ],
+            "orientation": {"@pmic.l_b0": 90, "@radio.c_pa": 270},
+            "side": {"bottom": ["@pmic.c_snb0", "@radio.r_pa"]},
+        }
+        kept = ["pmic.u2", "pmic.r_rst", "pmic.fb_rf1", "radio.u1", "radio.c_pa", "radio.r_pa"]
+        held = ["pmic.l_b0", "pmic.l_b2", "pmic.r_sh", "pmic.c_in[0]", "pmic.c_snb0"]
+        dropped = integrate.prune_held(doc, kept, held)
+        self.assertEqual(
+            doc["group"],
+            [
+                {"anchor": "@pmic.u2", "members": [], "radius_mm": 8}
+                for _ in ()  # the U2 group lost every member: gone
+            ]
+            + [{"anchor": "@radio.u1", "members": ["@pmic.fb_rf1"]}],
+        )
+        self.assertEqual([r["refs"] for r in doc["region"]], [["@pmic.u2", "@pmic.r_rst"]])
+        self.assertEqual(doc["orientation"], {"@radio.c_pa": 270})
+        self.assertEqual(doc["side"], {"bottom": ["@radio.r_pa"]})
+        self.assertIn("@pmic.l_*", dropped)
+        self.assertIn("@pmic.c_in[[]0]", dropped)
 
 
 class RankTest(unittest.TestCase):

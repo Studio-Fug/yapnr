@@ -118,19 +118,33 @@ def ports(grid, poured, net_access) -> Dict[str, list]:
     return out
 
 
-def stitch(grid, poured, plane_nets, counts, plane_access=None, via_keepout=1, spacing=1.0):
+def stitch(
+    grid, poured, plane_nets, counts, plane_access=None, via_keepout=1, spacing=1.0, pieces=()
+):
     """Through vias inside each territory of a net with a dedicated plane: up to
     ``counts[net]`` sites (greedy, nearest the covered pads' centroid first, at least
     ``spacing`` mm apart) where a drop of the net may land (exact clearance tests of
-    the drop planner, and the net's plane region). Returns ``{net: [(x, y)]}``; the
-    vias are reserved on the grid and listed in ``grid.escape_vias``."""
-    from .escape import _reserve_via
-    from .joint_escape import _drop_via_clear
-
+    the drop planner, and the net's plane region). A net in ``pieces`` (an outer pour's
+    ``pieces``) gets up to ``counts[net]`` sites in each of its regions, nearest that
+    region's centre: every piece reaches the plane on its own. Returns ``{net: [(x,
+    y)]}``; the vias are reserved on the grid and listed in ``grid.escape_vias``."""
     out: Dict[str, List[Tuple[float, float]]] = {}
     for net, row in sorted(poured.items()):
         want = int(counts.get(net, 0) or 0)
         if net not in plane_nets or want <= 0 or not row["pads"]:
+            continue
+        if net in pieces:
+            chosen = []
+            for r in row["regions"]:
+                one = dict(row, regions=[r])
+                xs = [p[0] for p in r.outline]
+                ys = [p[1] for p in r.outline]
+                centre = ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
+                chosen += _stitch_sites(
+                    grid, one, net, want, centre, chosen, spacing, plane_access, via_keepout
+                )
+            if chosen:
+                out[net] = chosen
             continue
         centres = []
         for r in row["regions"]:
@@ -139,24 +153,63 @@ def stitch(grid, poured, plane_nets, counts, plane_access=None, via_keepout=1, s
             centres.append(((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2))
         cx = sum(c[0] for c in centres) / len(centres)
         cy = sum(c[1] for c in centres) / len(centres)
-        cells = sorted(
-            _cells(grid, row, net),
-            key=lambda c: (math.dist(grid.center_of(c[1], c[2]), (cx, cy)), c),
+        chosen = _stitch_sites(
+            grid, row, net, want, (cx, cy), [], spacing, plane_access, via_keepout
         )
-        chosen: List[Tuple[float, float]] = []
-        for la, i, j in cells:
-            if len(chosen) >= want:
-                break
-            q = grid.center_of(i, j)
-            if any(math.dist(q, p) < spacing - 1e-9 for p in chosen):
-                continue
-            if plane_access is not None and not plane_access.site_ok(net, q):
-                continue
-            if not _drop_via_clear(grid, net, q):
-                continue
-            chosen.append(q)
-            _reserve_via(grid, i, j, net, via_keepout)
-            grid.escape_vias.append((net, q))
         if chosen:
             out[net] = chosen
     return out
+
+
+def unstitched(graph, poured, stitched, pieces) -> Dict[str, list]:
+    """``{net: [{at, pads}]}``: the pieces of a ``pieces`` net (one region each) that no
+    stitch via reached, with the (ref, pad) pairs on them and the piece's centre: their
+    pads have no way to the net's plane (a failure site, as a plane pad without a drop)."""
+    from pnr.place.geometry import pad_rects
+
+    out: Dict[str, list] = {}
+    for net in sorted(set(pieces) & set(poured)):
+        row = poured[net]
+        at = {}
+        for comp in graph.components:
+            for name, pnet, rect in pad_rects(comp):
+                if pnet == net and (comp.ref, name) in set(row["pads"]):
+                    at[(comp.ref, name)] = (rect.cx, rect.cy)
+        for r in row["regions"]:
+            if any(_inside(r, q) for q in stitched.get(net, [])):
+                continue
+            pads = sorted(p for p, xy in at.items() if _inside(r, xy))
+            if not pads:
+                continue
+            xs = [p[0] for p in r.outline]
+            ys = [p[1] for p in r.outline]
+            centre = (round((min(xs) + max(xs)) / 2, 4), round((min(ys) + max(ys)) / 2, 4))
+            out.setdefault(net, []).append(dict(at=centre, pads=["%s.%s" % p for p in pads]))
+    return out
+
+
+def _stitch_sites(grid, row, net, want, centre, taken, spacing, plane_access, via_keepout):
+    """Up to ``want`` stitch vias in ``row``'s regions, nearest ``centre`` first, at
+    least ``spacing`` mm from each other and from ``taken``; reserved on the grid."""
+    from .escape import _reserve_via
+    from .joint_escape import _drop_via_clear
+
+    cells = sorted(
+        _cells(grid, row, net),
+        key=lambda c: (math.dist(grid.center_of(c[1], c[2]), centre), c),
+    )
+    chosen: List[Tuple[float, float]] = []
+    for la, i, j in cells:
+        if len(chosen) >= want:
+            break
+        q = grid.center_of(i, j)
+        if any(math.dist(q, p) < spacing - 1e-9 for p in list(taken) + chosen):
+            continue
+        if plane_access is not None and not plane_access.site_ok(net, q):
+            continue
+        if not _drop_via_clear(grid, net, q):
+            continue
+        chosen.append(q)
+        _reserve_via(grid, i, j, net, via_keepout)
+        grid.escape_vias.append((net, q))
+    return chosen

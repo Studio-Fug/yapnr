@@ -489,10 +489,7 @@ regions:
   # between J3 and the radio's west caps, above J2; the eFuse (and its TVS) west of J1 below J2,
   # next to J1's 5 V pins 1-2; the CAN transceiver north-east of J1, beyond its ESD diode [D].
   flash_block: { parts: [flash], rect: [8.3, 15.75, 19.3, 24.6], reason: 'QSPI within about 10 mm' }
-  # Stage 3c R1: the eFuse (with its TVS, caps and thresholds) is part of the power-stage subcell
-  # (`power_stage` below), placed as one rigid block with U2, so it has no region of its own: a
-  # region on a block member becomes a body of the block macro, and this one (west of J1) and
-  # pmic_switching (x >= 41) cannot both hold one rigid block.
+  efuse_block: { parts: [efuse], rect: [6.8, 0.4, 22.5, 7.25], reason: 'eFuse next to J1 pins 1-2' }
   can_block:
     { parts: [can_xcvr], rect: [31.6, 6.65, 38.0, 16.0], reason: 'CAN after its ESD, near J1' }
   # The switch nodes keep >= 8 mm from the crystal zone (x <= 32.4) and >= 5 mm from the RF
@@ -645,7 +642,24 @@ regions:
       rect: [31.6, 6.65, 38.5, 11.0],
       reason: 'CAN and UART ESD next to J1 pins 5-8, before the transceiver',
     }
-  # (connector_tvs: no region since stage 3c R1; D3 rides in the power-stage block at U5's input)
+  connector_tvs:
+    {
+      parts: [connector_tvs],
+      rect: [16.3, 0.4, 22.5, 7.25],
+      reason: '5 V TVS east of the eFuse IC, nearer J1 pins 1-2 than U5 (audit: protection before the IC)',
+    }
+  # Stage 3c R1 moved connector_tvs's hard group anchor from `connector` (J1, outside the
+  # fixed block) to `efuse` (inside it): that group alone does not order D3 against U5, since
+  # it only bounds D3's distance from U5, not which of the two is nearer J1. The two disjoint
+  # regions here (efuse west, connector_tvs east) do: audit.py's J1-protection-order check
+  # failed in 27/30 search starts without this (D3 found west of U5 in every legal layout
+  # inspected, e.g. stage3c/wave4/block-efuse/library.json's "@"/"power_in.tvs" positions).
+  efuse_ic:
+    {
+      parts: [efuse],
+      rect: [6.8, 0.4, 15.8, 7.25],
+      reason: 'eFuse IC west of its own TVS (see connector_tvs above)',
+    }
 
 # Fixed rotations (yapnr `orientation`, hard) for the ball-anchored parts above: pad 1 (the
 # signal side of every cap and resistor here) toward the ball. Rotation CCW in the board frame;
@@ -807,7 +821,18 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   # Blocks (review 2026-10-03; held back at integration because the legalizer stranded J2,
   # which is fixed now). Radii [D]: the anchor's courtyard half width + 0.2 mm + the members'.
   # U5's courtyard is 4.14 mm square; 11 threshold/timer parts within 5.5 mm failed 4 of 8 starts
-  efuse: { anchor: efuse, members: [efuse_parts], radius_mm: 8.0, reason: 'eFuse thresholds' }
+  # Soft since stage 3c R1 (`hard: false`): U5 is in the eFuse block (power_stage below) and its
+  # 11 threshold/timer parts would make that block too big for the strip west of J1 (15.9 x 6.55
+  # mm under J2); a hard group may not straddle a rigid block, so they ride as an attraction to
+  # it, placed flat beside it.
+  efuse:
+    {
+      anchor: efuse,
+      members: [efuse_parts],
+      radius_mm: 8.0,
+      hard: false,
+      reason: 'eFuse thresholds',
+    }
   efuse_caps: { anchor: efuse, members: [efuse_caps], radius_mm: 10.0, reason: 'eFuse in/out caps' }
   can: { anchor: can_xcvr, members: [can_parts], radius_mm: 7.5, reason: 'CAN transceiver block' }
   flash:
@@ -823,16 +848,12 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   # take the strip next to J1 (their regions bound them; these radii only order them).
   connector_esd:
     { anchor: connector, members: [connector_esd], radius_mm: 12.0, reason: 'ESD at J1' }
-  # Stage 3c R1: D3 at the eFuse input inside the power-stage block (was: anchored on J1, which
-  # a rigid block cannot carry: a hard group with members inside and outside it straddles it).
+  # Stage 3c R1: D3 at the eFuse input inside the eFuse block (was: anchored on J1, which a
+  # rigid block cannot carry: a hard group with members inside and outside it straddles it).
+  # Its region (connector_tvs above) still keeps it beside J1's 5 V pins.
   connector_tvs:
     { anchor: efuse, members: [connector_tvs], radius_mm: 6.0, reason: 'TVS at the eFuse input' }
-  # Stage 3c R1: the power-stage subcell. These two groups join U2's hard groups (inductors, input
-  # caps, snubbers, VANA, R_SH) with U5's (thresholds, in/out caps, D3) and the Kelvin TP, so
-  # pnr.hier.blocks extracts one block from them (named after U2); `power_stage` below says how
-  # it is synthesized and fixed. Radii [D]: U5's group reaches 10 mm from U5, U2's 8.5 mm.
-  power_stage:
-    { anchor: pmic, members: [efuse], radius_mm: 16.0, reason: 'one power-stage subcell (R1)' }
+  # Stage 3c R1: the Kelvin TP joins R_SH1 in the power-stage block.
   r_sh_tp: { anchor: r_sh, members: [pmic_tp], radius_mm: 4.0, reason: 'Kelvin TP at R_SH1' }
   # Stage 3c R7: R46's replacement for its old `pa_r` slot (removed above). Anchored on D2
   # (1V0_RF2), the same ball `fb_rf2` uses: no free area exists closer in, since R46 (0612) needs
@@ -862,43 +883,81 @@ radome:
 escape:
   forbidden_edges: [north, east] # the RF edges carry only RF, GND and power balls
 
-# Stage 3c R1: the power-stage subcell (power_block.py). The block is the one pnr.hier.blocks
-# extracts around `anchor` (the hard groups above); `contains` names the roles it must hold.
+# Stage 3c R1: the power-stage subcells (power_block.py). Each block is the one pnr.hier.blocks
+# extracts around its `anchor` (the hard groups above); `contains` names the roles it must hold.
 # Its layouts are synthesized on the block's own board (placement trials, then the production
 # router with the outer pours below), ranked by open hot-loop links, then the in-block IR rails,
-# then area; the winner is a library entry for the top placement (one rigid macro), and after
-# placement its copper and pours become the fixed block `fixed_block` (pnr.hier.assemble --zones
-# --group, pnr.hier.macro.fixed_block_from_macro).
+# then area; the best are a library for the top placement (one rigid macro each), and after
+# placement the drawn layout's copper and pours become its `fixed_block` (pnr.hier.assemble
+# --zones --group, pnr.hier.macro.fixed_block_from_macro).
+#
+# Two blocks, not one: U2's and U5's clusters as one rigid block (37 parts, 450-715 mm2 in the
+# synthesis) fitted no legal place in 24 of 24 top starts (wave 4: the pmic regions are 20 mm
+# wide, the strip west of J1 6.55 mm tall), so the subcell splits along its own hard-group
+# clusters: the buck stage at U2, the eFuse stage at U5 (with D3 and its in/out caps).
+#
+# In situ (`site`): each block is synthesized on a board the size of its site, with the
+# floorplan's regions on its parts moved into that frame, and fixed where it was made
+# (integrate.py fixblocks). As free-floating macros the buck stage's 6 best layouts (15-19 mm)
+# left 24 of 24 top starts without a slot: their U2/inductor bodies (pmic_switching, y <= 21.7)
+# pinned the macro so low that it met MH2's keepout in every one (window analysis, wave 4).
+# Sites [D]: the buck stage takes x 40-58 from MH2's keepout (y 3.5 + 3.25) up to
+# pmic_switching's top (y 21.7); pmic_block keeps y 21.7-26.65, x 38-53 below and x 38-40 for
+# the PMIC's other parts, and connector_esd/can_block their x <= 38.5 (with the site from x 38,
+# 0 of 24 top starts were legal: D2 found no slot in 8, the CAN and flash passives in 15). The eFuse stage takes the strip west of J1 under J2's region (efuse_block,
+# y up to J2's 6.95).
 power_stage:
-  anchor: pmic
-  contains:
-    [pmic, pmic_inductors, pmic_in_caps, pmic_snubbers, r_sh, efuse, connector_tvs, efuse_caps]
-  fixed_block: { name: pwr_stage, group: PWR_STAGE, solid_layers: [F.Cu] }
-  # The hot-rod lands (U2: 0.25 x 1.82 mm at 0.5 mm pitch; U5: 0.3 x 2.4 mm) take no track at
-  # their class clearance: one F.Cu pour per rail joins them, whole lands, solid connection
-  # (pnr-inputs.md plane_partition `region`). 1V0_BUCK (L_b2 -> R_SH1, 0.5 mOhm) pours too.
-  pours:
-    - layer: F.Cu
-      nets: [5V_SYS, VIN_5V, PMIC_SW_B0, PMIC_SW_B1, PMIC_SW_B2, PMIC_SW_B3, 1V0_BUCK, GND]
-      region:
-        {
-          parts: [pmic, pmic_inductors, pmic_in_caps, r_sh, efuse, connector_tvs, efuse_caps],
-          margin_mm: 0.5,
-        }
-      terminals: pad
-      connect: solid
-      stitch_vias: 4
-      split_gap_mm: 0.2
-      min_width_mm: 0.25
-      # a 0.05 mm raster: at the default 0.1 the 0.2-0.25 mm gaps between U2's and U5's
-      # lands left 8 of 15 5V_SYS lands unreached in the first block trial, all reached at 0.05
-      h_mm: 0.05
-  # Datasheet hot loops (LP87524 SNVSAW2B 8.2.1.2-8.2.1.4, TPS25947 layout): each part of `parts`
-  # must reach `ic`'s pads on every listed net by copper inside the block; an unreached
-  # (part pad, net) is one open hot-loop link (the first ranking key).
-  hot_loops:
-    - { ic: pmic, parts: [pmic_in_caps], nets: [5V_SYS, GND] }
-    - { ic: pmic, parts: [pmic_inductors], nets: ['PMIC_SW_B*'] }
-    - { ic: pmic, parts: [pmic_snub_r], nets: ['PMIC_SW_B*'] }
-    - { ic: efuse, parts: [efuse_caps], nets: [VIN_5V, 5V_SYS, GND] }
-    - { ic: efuse, parts: [connector_tvs], nets: [VIN_5V, GND] }
+  blocks:
+    - anchor: pmic
+      contains: [pmic, pmic_inductors, pmic_in_caps, pmic_snubbers, r_sh, pmic_tp]
+      fixed_block: { name: pwr_stage, group: PWR_STAGE, solid_layers: [F.Cu] }
+      # The hot-rod lands (0.25 x 1.82 mm at 0.5 mm pitch) take no track at their class
+      # clearance: one F.Cu pour per rail joins them, whole lands, solid connection
+      # (pnr-inputs.md plane_partition `region`). 1V0_BUCK (L_b2 -> R_SH1, 0.5 mOhm) pours too.
+      pours:
+        - layer: F.Cu
+          nets: [5V_SYS, PMIC_SW_B0, PMIC_SW_B1, PMIC_SW_B2, PMIC_SW_B3, 1V0_BUCK, GND]
+          region: { parts: [pmic, pmic_inductors, pmic_in_caps, r_sh], margin_mm: 0.5 }
+          terminals: pad
+          connect: solid
+          stitch_vias: 4
+          split_gap_mm: 0.2
+          min_width_mm: 0.25
+          # a 0.05 mm raster: at the default 0.1 the 0.2-0.25 mm gaps between U2's lands left 8
+          # of 15 5V_SYS lands unreached in the first block trial, all reached at 0.05
+          h_mm: 0.05
+          # The plane nets as pieces (yapnr PR #56), each stitched to its plane on its own: each
+          # U2 row is 5V_SYS, SW, PGND, SW, 5V_SYS and its switch nodes leave on both sides, so
+          # a 5V_SYS tree on F.Cu walled in the SW and PGND lands in 28-30 of 30 block layouts.
+          pieces: [GND, 5V_SYS]
+      # Datasheet hot loops (LP87524 SNVSAW2B 8.2.1.2-8.2.1.4): each part of `parts` must reach
+      # `ic`'s pads on every listed net by copper inside the block, and each of `ic`'s lands on
+      # such a net must reach one of the parts; an unreached one is an open hot-loop link (the
+      # first ranking key).
+      hot_loops:
+        - { ic: pmic, parts: [pmic_in_caps], nets: [5V_SYS, GND] }
+        - { ic: pmic, parts: [pmic_inductors], nets: ['PMIC_SW_B*'] }
+        - { ic: pmic, parts: [pmic_snub_r], nets: ['PMIC_SW_B*'] }
+      site: [40.0, 6.75, 58.0, 21.7]
+    - anchor: efuse
+      contains: [efuse, connector_tvs, efuse_caps]
+      fixed_block: { name: efuse_stage, group: EFUSE_STAGE, solid_layers: [F.Cu] }
+      # U5's VIN and OUT lands (0.3 x 2.4 mm, 0.2 mm apart): the same pour treatment. GND is
+      # not poured here: U5's GND pin 8 is an ordinary 0.25 x 0.6 mm land between ILM and PG,
+      # whose pour piece had no room for a stitch via in any of 30 block layouts (6 of 13 hot
+      # links open); it escapes and drops to In1 like any GND pad.
+      pours:
+        - layer: F.Cu
+          nets: [VIN_5V, 5V_SYS]
+          region: { parts: [efuse, connector_tvs, efuse_caps], margin_mm: 0.5 }
+          terminals: pad
+          connect: solid
+          stitch_vias: 2
+          split_gap_mm: 0.2
+          min_width_mm: 0.25
+          h_mm: 0.05
+          pieces: [5V_SYS]
+      hot_loops: # TPS25947 layout: CIN and the TVS at IN/GND, COUT at OUT/GND
+        - { ic: efuse, parts: [efuse_caps], nets: [VIN_5V, 5V_SYS, GND] }
+        - { ic: efuse, parts: [connector_tvs], nets: [VIN_5V, GND] }
+      site: [6.8, 0.4, 22.5, 6.95]

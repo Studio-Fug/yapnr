@@ -394,7 +394,8 @@ def constraints(fp: Floorplan):
             "members": [r for m in spec["members"] for r in refs(m)],
             "anchor": refs(spec["anchor"])[0],
             "radius_mm": spec["radius_mm"],
-            "hard": True,
+            # hard unless the floorplan says `hard: false` (stage 3c R1: the eFuse thresholds)
+            "hard": bool(spec.get("hard", True)),
             # pad-anchored (stage 3b): measured from that pad of the anchor, not its origin
             **({"anchor_pad": str(spec["anchor_pad"])} if spec.get("anchor_pad") else {}),
         }

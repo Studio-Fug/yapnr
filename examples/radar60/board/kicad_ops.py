@@ -619,7 +619,7 @@ def _group_name(item):
     return name
 
 
-def finish(placed_pcb, floorplan_pcb, macro_pcb, out_pcb, report_json):
+def finish(placed_pcb, floorplan_pcb, macro_pcb, out_pcb, report_json, keep_groups=""):
     import pcbnew
 
     report = {}
@@ -631,11 +631,13 @@ def finish(placed_pcb, floorplan_pcb, macro_pcb, out_pcb, report_json):
     u1_xy = (pos.x / 1e6, pos.y / 1e6)
     report["u1"] = {"at_kicad": u1_xy, "orientation_deg": u1.GetOrientationDegrees()}
     # Nothing is routed at this stage: copper outside the macro group (writeback's plane drops,
-    # which plane_fallback_drops: false already stops) is removed.
+    # which plane_fallback_drops: false already stops) is removed, but for the other fixed
+    # blocks' groups named in ``keep_groups`` (comma separated: the power stage's, stage 3c R1).
+    keep = {MACRO_GROUP} | {g for g in keep_groups.split(",") if g}
     removed = {"tracks": 0, "vias": 0}
     kept = 0
     for item in list(board.GetTracks()):
-        if _group_name(item) == MACRO_GROUP:
+        if _group_name(item) in keep:
             kept += 1
             continue
         removed["vias" if item.GetClass() == "PCB_VIA" else "tracks"] += 1
@@ -901,7 +903,7 @@ def main(argv):
     if cmd == "source":
         source(*argv[2:6])
     elif cmd == "finish":
-        finish(*argv[2:7])
+        finish(*argv[2:8])
     elif cmd == "poses":
         poses(*argv[2:4])
     elif cmd == "measure":

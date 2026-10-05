@@ -60,6 +60,13 @@ def _xf_zone(full, blk, zone, xf):
         nz.SetLocalClearance(zone.GetLocalClearance())
         nz.SetMinThickness(zone.GetMinThickness())
         nz.SetAssignedPriority(zone.GetAssignedPriority())
+        # How the pour joins its pads (an outer pour owning its lands is solid: thermal
+        # spokes cannot reach a hot-rod land) and what its fill keeps: as drawn.
+        nz.SetPadConnection(zone.GetPadConnection())
+        nz.SetThermalReliefGap(zone.GetThermalReliefGap())
+        nz.SetThermalReliefSpokeWidth(zone.GetThermalReliefSpokeWidth())
+        nz.SetIslandRemovalMode(zone.GetIslandRemovalMode())
+        nz.SetMinIslandArea(zone.GetMinIslandArea())
     src, outline = zone.Outline(), nz.Outline()
     for i in range(src.OutlineCount()):
         chain = src.Outline(i)

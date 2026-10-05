@@ -137,8 +137,9 @@ class MacroTest(unittest.TestCase):
         for bank in (("RX1", "RX2", "RX3", "RX4"), ("TX1", "TX2", "TX3")):
             ls = [mc.feeds[n].length - mc.feeds[n].marks["P0"][1] for n in bank]
             self.assertLess(max(ls) - min(ls), 1e-6)
-        self.assertEqual(sorted(mc.loads), ["RXD0", "RXD5", "TXD0", "TXD4"])
-        self.assertEqual(sum(1 for c in mc.columns.values() if c.dummy), 4)
+        # S1 (dummies="outer", frozen stage 3b): the open-end dummies only
+        self.assertEqual(sorted(mc.loads), ["RXD0", "TXD4"])
+        self.assertEqual(sum(1 for c in mc.columns.values() if c.dummy), 2)
 
     def test_entry_contact_is_the_runin_only(self):
         g1 = check(macro(), "G1")
@@ -183,7 +184,7 @@ class MacroTest(unittest.TestCase):
                     self.assertIn(v[3], ("runin", "ring"), v)
 
     def test_shared_row_between_close_lines(self):
-        mc = macro()
+        mc = M.build({"variant": 0, "dummies": "both"})  # S2 geometry: TX2 1.3 mm off TX3
         ru = M.Rules(mc.params, mc.dims)
         pl = Placer(mc, ru)
         f = mc.feeds["TX3"]  # TX2 runs 1.3 mm north of TX3's first leg: one row midway
@@ -202,7 +203,7 @@ class LoadAndWindowTest(unittest.TestCase):
 
     def test_a_via_in_a_gnd_land_fails_g7(self):
         mc = macro()
-        ld = mc.loads["TXD0"]
+        ld = mc.loads["TXD4"]
         cx = sum(q[0] for q in ld.pad2) / len(ld.pad2)
         cy = sum(q[1] for q in ld.pad2) / len(ld.pad2)
         ru = M.Rules(mc.params, mc.dims)
@@ -210,7 +211,7 @@ class LoadAndWindowTest(unittest.TestCase):
         bad.vias = list(mc.vias) + [((cx, cy), 0.15, 0.32, "fill")]
         g7 = G.load_cells(bad, ru)
         self.assertFalse(g7["ok"])
-        self.assertTrue(g7["loads"]["TXD0"]["vias_at_lands"])
+        self.assertTrue(g7["loads"]["TXD4"]["vias_at_lands"])
 
     def test_g2_window_is_symmetric_and_the_open_ends_declared(self):
         g2 = check(macro(), "G2")

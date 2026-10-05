@@ -3,7 +3,8 @@
   <KiCad python> openems/board_export.py BOARD.kicad_pcb OUT.json X0 Y0   (macro boards: 100 100)
 
 U1 frame: x = xk - X0, y = Y0 - yk (mm, +y north). Exports F.Cu and In1.Cu filled zone
-polygons (outline + holes), tracks and arcs (start, mid, end, width, net), pads (polygon), vias.
+polygons (outline + holes), tracks and arcs (start, mid, end, width, net), pads (polygon), vias
+(x, y, pad, drill, net).
 """
 
 import json
@@ -44,7 +45,14 @@ for z in b.Zones():
             d["fill"].append(dict(layer=name, net=z.GetNetname(), poly=polyset(ps)))
 for t in b.GetTracks():
     if t.GetClass() == "PCB_VIA":
-        d["vias"].append([*P(t.GetPosition()), tm(t.GetWidth(pcbnew.F_Cu)), tm(t.GetDrillValue())])
+        d["vias"].append(
+            [
+                *P(t.GetPosition()),
+                tm(t.GetWidth(pcbnew.F_Cu)),
+                tm(t.GetDrillValue()),
+                t.GetNetname(),
+            ]
+        )
         continue
     rec = dict(
         net=t.GetNetname(),

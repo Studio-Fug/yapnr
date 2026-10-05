@@ -22,6 +22,9 @@ copper plus lambda0/2) so that they compare with stage 2's column.
   python openems/board_ant.py BOARD.json RECORD.json OUT.json --model bank --banks RX,TX
       [--loads 50|short|open] [--sub-record REC.json] [--plot PNG]
   python openems/board_ant.py BOARD.json RECORD.json OUT.json --model cell|col0 --col TX2
+  python openems/board_ant.py ... --model bank --banks RX,TX --keep TXD0,TX1,TX2,RX3,RX4,RXD5
+      # stage 3b E3: the isolation sub-model (only these columns; the board from their cells'
+      # extent plus lambda0)
 
 Needs shapely (and matplotlib for --plot).
 
@@ -117,6 +120,7 @@ def main():
     ap.add_argument("--banks", default="TX", help="bank model: TX, RX or RX,TX")
     ap.add_argument("--loads", default="50", choices=["50", "short", "open"])
     ap.add_argument("--sub-record", help="record whose cut-outs and board edge set the board")
+    ap.add_argument("--keep", help="bank model: only these columns (comma-separated)")
     ap.add_argument("--plot")
     a = ap.parse_args()
     d = json.load(open(a.board))
@@ -133,6 +137,8 @@ def main():
     CUT = unary_union(list(cuts.values()))
     bank_cols = [c for c in cols if c[:2] in banks]
     keep = [a.col] if a.model in ("cell", "col0") else bank_cols
+    if a.keep and a.model == "bank":
+        keep = [c for c in bank_cols if c in a.keep.split(",")]
     fed = [c for c in keep if not cols[c]["dummy"]]
     dummies = [c for c in keep if cols[c]["dummy"]]
     B = {b: rec["banks"][b] for b in banks}
@@ -193,10 +199,16 @@ def main():
     if a.model == "bank":
         sc = [srec["cutouts_u1_mm"][b] for b in banks]
         top = srec["board_frame"]["board_height_min"] - srec["board_frame"]["u1_at"][1]
+        x_lo, x_hi = min(c[0] for c in sc) - LAM0, max(c[2] for c in sc) + LAM0
+        if a.keep:  # the kept columns' cells plus the cut-out margin and lambda0
+            kb = unary_union(list(nets.values())).bounds
+            kx = [kb[0], kb[2]]
+            x_lo = max(x_lo, min(kx) - 1.0 - LAM0)
+            x_hi = min(x_hi, max(kx) + 1.0 + LAM0)
         SUB = box(
-            min(c[0] for c in sc) - LAM0,
+            x_lo,
             min(c[1] for c in sc) - LAM0,
-            max(c[2] for c in sc) + LAM0,
+            x_hi,
             min(max(c[3] for c in sc) + LAM0, top),
         )
     else:
@@ -236,6 +248,8 @@ def main():
     vias, periods = [], {}
     if a.model != "col0":
         for v in d["vias"]:
+            if len(v) > 4 and v[4] != "GND":  # the PA feed's vias: south of every bank's Pg
+                continue
             pt = Point(v[0], v[1])
             if SUB.contains(pt) and (north.contains(pt) or cells.contains(pt)):
                 vias.append([v[0], v[1], v[2], v[3]])

@@ -364,6 +364,13 @@ class PointIndex:
                         out.append(i)
         return out
 
+    def pop(self) -> None:
+        """Remove the last point added."""
+        i = len(self.pts) - 1
+        p = self.pts[i]
+        self.grid[(int(math.floor(p[0] / self.cell)), int(math.floor(p[1] / self.cell)))].remove(i)
+        self.pts.pop()
+
     def move(self, i: int, p: Pt) -> None:
         old = self.pts[i]
         k = (int(math.floor(old[0] / self.cell)), int(math.floor(old[1] / self.cell)))

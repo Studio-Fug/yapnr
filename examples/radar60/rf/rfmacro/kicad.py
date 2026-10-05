@@ -98,6 +98,8 @@ def u1_balls(mc: Macro) -> List[Tuple[str, Pt, str]]:
     nets.update({b: n for n, b in RF_BALLS.items()})
     # nets the macro does not own get one name per ball: the PnR connects them, not the macro
     nets.update({b: f"EXT_{n}_{b}" for b, n in OTHER_EDGE_BALLS.items()})
+    if getattr(mc, "pa", None) is not None:  # D14: the macro owns A2/B2 (skip_pads)
+        nets.update({b: mc.pa.net for b in mc.pa.balls})
     out = []
     for name, net in sorted(nets.items()):
         r = ROWS.index(name[0])
@@ -117,6 +119,8 @@ def u1_balls(mc: Macro) -> List[Tuple[str, Pt, str]]:
 def board_text(mc: Macro, title: str) -> str:
     items: List[str] = []
     nets = ["GND"] + list(RF_BALLS) + list(mc.loads)
+    if getattr(mc, "pa", None) is not None:
+        nets.append(mc.pa.net)
     balls = u1_balls(mc)
     for _, _, n in balls:
         if n not in nets:
@@ -179,6 +183,16 @@ def board_text(mc: Macro, title: str) -> str:
     # --- dummy loads: 0201 50 ohm thin film on the run-in axis (KiCad R_0201_0603Metric land)
     for n, ld in mc.loads.items():
         items.append(load_footprint(ld, mc.params))
+    # --- D14 PA feed: the L1 copper as pads of one footprint (the DRC checks every clearance),
+    # its through vias on the PA net
+    if getattr(mc, "pa", None) is not None:
+        items.append(pa_footprint(mc.pa))
+        for i, c in enumerate(mc.pa.vias):
+            k = _k(c)
+            items.append(
+                f"\t(via (at {_n(k[0])} {_n(k[1])}) (size {_n(mc.pa.pad)}) (drill {_n(mc.pa.drill)}) "
+                f'(layers "F.Cu" "B.Cu") (net "{mc.pa.net}") (uuid "{_u("pavia", i)}"))'
+            )
     # --- vias
     for i, (xy, drill, pad, role) in enumerate(mc.vias):
         k = _k(xy)
@@ -186,8 +200,9 @@ def board_text(mc: Macro, title: str) -> str:
             f'\t(via (at {_n(k[0])} {_n(k[1])}) (size {_n(pad)}) (drill {_n(drill)}) (layers "F.Cu" "B.Cu") '
             f'(net "GND") (uuid "{_u("via", i)}"))'
         )
-    # --- zones and rule areas
-    for i, poly in enumerate(mc.pour):
+    # --- zones and rule areas (D15: the pour's zones; C's strips are many simple polygons)
+    # (overlapping zones need distinct priorities, whatever their net)
+    for i, poly in enumerate(mc.pour_zones or mc.pour):
         items.append(_zone("GND", "F.Cu", poly, f"pour{i}", prio=i))
     x0, x1 = mc.region["x"]
     y0, y1 = mc.region["y"]
@@ -197,6 +212,18 @@ def board_text(mc: Macro, title: str) -> str:
     # the board's escape layer
     for i, poly in enumerate(mc.l3_gnd):
         items.append(_zone("GND", "In2.Cu", poly, f"l3_{i}" if i else "l3", prio=i))
+    # D14: the L4 tie of the PA vias. In3.Cu is the integration's power layer; this patch stands
+    # for its 1V0 pour under the pocket so the preview's vias connect on two layers
+    if getattr(mc, "pa", None) is not None:
+        pk = mc.pa.pocket
+        g = 0.5
+        tie = [
+            (pk[0] - g, pk[1] - g),
+            (pk[2] + g, pk[1] - g),
+            (pk[2] + g, pk[3] + g),
+            (pk[0] - g, pk[3] + g),
+        ]
+        items.append(_zone(mc.pa.net, "In3.Cu", tie, "l4_pa_tie", clearance=0.15))
     for i, poly in enumerate(channel_outlines(mc)):
         items.append(_keepout(["F.Cu"], poly, f"chan{i}"))
     for i, poly in enumerate(mc.antipads):
@@ -239,9 +266,31 @@ def board_text(mc: Macro, title: str) -> str:
     return head + "\n".join(items) + "\n)\n"
 
 
+def pa_footprint(pa) -> str:
+    """D14: the PA feed's L1 copper (bar, neck, via squares and their bridges) as rectangular
+    pads of one footprint on the PA net."""
+    pads = []
+    for i, r in enumerate(pa.rects):
+        cx, cy = 0.5 * (r[0] + r[2]), 0.5 * (r[1] + r[3])
+        pads.append(
+            f'\t\t(pad "1" smd rect (at {_n(cx)} {_n(-cy)}) (size {_n(r[2] - r[0])} {_n(r[3] - r[1])}) '
+            f'(layers "F.Cu") (net "{pa.net}") (uuid "{_u("papad", i)}"))'
+        )
+    return (
+        f'\t(footprint "radar60:RFM1_PA_FEED" (layer "F.Cu") (uuid "{_u("fp", "pa")}") (at {_n(X0)} {_n(Y0)})\n'
+        f'\t\t(property "Reference" "PA1" (at 0 0) (layer "F.Fab") (hide yes) (uuid "{_u("paref")}") '
+        "(effects (font (size 0.4 0.4) (thickness 0.06))))\n"
+        f'\t\t(property "Value" "VOUT_PA feed (D14)" (at 0 0) (layer "F.Fab") (hide yes) (uuid '
+        f'"{_u("paval")}") (effects (font (size 0.4 0.4) (thickness 0.06))))\n'
+        "\t\t(attr smd exclude_from_pos_files exclude_from_bom)\n" + "\n".join(pads) + "\n\t)"
+    )
+
+
 def load_footprint(ld, p) -> str:
-    """One dummy load: pad 1 on the dummy's net toward Pg, pad 2 on GND, along the run-in."""
+    """One dummy load: pad 1 on the dummy's net toward Pg, pad 2 on GND, along the run-in.
+    `dummy_term` open: the land pattern stays, the part is not fitted (DNP, off the BOM)."""
     lz = dict(p["dummy_load"])
+    dnp = " dnp exclude_from_bom" if p.get("dummy_term") == "open" else ""
     plen, pw = (float(v) for v in lz["pad"])
     pitch = float(lz["pitch"])
     kx, ky = _k(ld.centre)
@@ -260,7 +309,7 @@ def load_footprint(ld, p) -> str:
         f'"{_u("ldval", ld.ref)}") (effects (font (size 0.4 0.4) (thickness 0.06))))\n'
         f'\t\t(property "Description" "termination of dummy column {ld.name}" (at 0 0) (layer "F.Fab") '
         f'(hide yes) (uuid "{_u("lddsc", ld.ref)}") (effects (font (size 0.4 0.4) (thickness 0.06))))\n'
-        "\t\t(attr smd)\n" + "\n".join(pads) + "\n\t)"
+        f"\t\t(attr smd{dnp})\n" + "\n".join(pads) + "\n\t)"
     )
 
 
@@ -347,6 +396,15 @@ def project_json(name: str) -> Dict:
         "via_drill": 0.15,
         "wire_width": 6,
     }
+    pwr = dict(cls)
+    pwr.update(
+        name="PWR",
+        priority=0,
+        clearance=0.15,  # [BD constraints.yaml net_class PWR]
+        track_width=0.25,
+        via_diameter=0.4,
+        via_drill=0.2,
+    )
     return {
         "board": {
             "design_settings": {
@@ -368,11 +426,11 @@ def project_json(name: str) -> Dict:
         "boards": [],
         "meta": {"filename": f"{name}.kicad_pro", "version": 3},
         "net_settings": {
-            "classes": [cls],
+            "classes": [cls, pwr],
             "meta": {"version": 4},
             "net_colors": None,
             "netclass_assignments": None,
-            "netclass_patterns": [],
+            "netclass_patterns": [{"netclass": "PWR", "pattern": "1V0_*"}],
         },
         "pcbnew": {"page_layout_descr_file": ""},
         "sheets": [],

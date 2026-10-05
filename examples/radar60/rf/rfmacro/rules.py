@@ -14,7 +14,11 @@ exit non-zero.
   (1 µm) as an interior column's; the one declared difference (the absent second-neighbour input
   at an open bank end, `allow_rects`) is masked and reported with its size.
 - G3 unstitched GND: every L1 GND point of the RF region outside the package lies within
-  stitch_reach (geodesic, through GND) of a GND via; pieces that are not are listed.
+  stitch_reach (geodesic, through GND) of a GND via where it is an edge (within edge_band of a
+  gap, cut-out or pour edge) and within stitch_dmax inside the pour (D15: A 0.45, B 0.75); every
+  point of the L2-L3 plane pair outside the cut-outs, the package and the PA island within
+  l23_dmax (straight line); pieces that are not are listed. `stitch_metrics` reports the
+  maxima, the areas beyond 0.45/0.60/0.75 mm, the vias per role and the [D] lattice cut-offs.
 - G4 fence continuity: on each feed side, from the fence start to Pg, every row point has a via
   within fence_pitch / 2 + 0.025 (a gap of at most 0.50 mm on the row); run-in pairs present.
 - G5 via accounting: no lattice or row via was lost (conflicts), merges only within 0.10 mm,
@@ -23,6 +27,10 @@ exit non-zero.
   variants give the same layout outside the cut-outs (hash).
 - G7 dummy load cells: the vias in each load's zone are exactly the declared load vias (the four
   terminations are one cell), and no via's pad comes within 0.10 mm of an SMD land.
+- G8 PA feed (D14): clearances, the vias in the pocket, the L2 anti-pads, current per via and the
+  IR drop [D] (`rfmacro.pa`).
+- G9 L2-L3 cavity (K0/K2/K1): the posts and their clearances, the ring-bounded cavity per bank
+  (`rfmacro.cavity`).
 """
 
 from __future__ import annotations
@@ -33,8 +41,10 @@ import math
 from typing import Dict, List, Optional, Tuple
 
 from .geom import Path, PointIndex, path_samples, rect_dist
-from .params import D_LATTICE, STACK
+from .params import D_LATTICE, RULES, STACK
 from .raster import Grid
+
+RULES_DRILL = RULES["via_fence"][0]
 
 Pt = Tuple[float, float]
 H_RASTER = 0.01
@@ -62,7 +72,8 @@ def gnd_mask(mc, ru, g: Grid, frame=None):
     load channels, unstitched keepouts and the package body. `frame(pt)` maps U1 -> raster."""
     tf = frame or (lambda q: q)
     m = g.empty()
-    for poly in mc.pour[:2]:
+    zones = getattr(mc, "pour_zones", None) or mc.pour[:2]
+    for poly in zones:
         g.polygon(m, [tf(q) for q in poly])
     cut = g.empty()
     for c in mc.cutouts.values():
@@ -75,21 +86,49 @@ def gnd_mask(mc, ru, g: Grid, frame=None):
         g.polygon(cut, [tf(q) for q in ld.pad2])
     for path in list(mc.feeds.values()) + list(mc.runins.values()):
         g.capsules(cut, [tf(q) for q in _pts(path)], ru.lchan)
+    if getattr(mc, "pa", None) is not None:  # D14: the PA copper and its clearance
+        from .pa import keepouts
+
+        for r in keepouts(mc.pa, float(mc.params["pa_clear"])):
+            g.polygon(
+                cut, [tf(q) for q in ((r[0], r[1]), (r[2], r[1]), (r[2], r[3]), (r[0], r[3]))]
+            )
     h = ru.half
     g.polygon(cut, [tf(q) for q in ((-h, -h), (h, -h), (h, h), (-h, h))])
     return g.andnot(m, cut)
 
 
-def stitch_raster(mc, ru) -> Dict[str, object]:
+def _grid(mc, h: float = H_RASTER, margin: float = 0.5) -> Grid:
+    """The region's raster, `margin` beyond it so its outer pour edge reads as an edge."""
     x0, x1 = mc.region["x"]
     y0, y1 = mc.region["y"]
-    g = Grid(x0, y0, x1, y1, H_RASTER)
+    return Grid(x0 - margin, y0 - margin, x1 + margin, y1 + margin, h)
+
+
+def edge_mask(g: Grid, gnd, band: float):
+    """GND pixels within `band` of a pixel that is not GND (a gap, cut-out or pour edge)."""
+    return g.and_(gnd, g.dilate([~r & g.full_row for r in gnd], band / g.h))
+
+
+def stitch_raster(mc, ru) -> Dict[str, object]:
+    """Unreached L1 GND: an edge pixel beyond stitch_reach of every via (geodesic), an interior
+    pixel beyond stitch_dmax (D15; equal for A)."""
+    p = mc.params
+    g = _grid(mc)
     gnd = gnd_mask(mc, ru, g)
     seeds = g.empty()
     g.points(seeds, [v[0] for v in mc.vias])
-    reach = float(mc.params["stitch_reach"]) + REACH_TOL
+    reach = float(p["stitch_reach"]) + REACH_TOL
+    d_int = float(p.get("stitch_dmax") or p["stitch_reach"])
+    dmax = max(d_int, float(p["stitch_reach"])) + REACH_TOL
     got = g.geodesic_reach(seeds, gnd, reach, 3)
-    bad = g.andnot(gnd, got)
+    if dmax > reach + 1e-9:
+        edge = edge_mask(g, gnd, float(p.get("edge_band", 0.30)))
+        got_d = g.geodesic_reach(seeds, gnd, dmax, 3)
+        bad = g.or_(g.andnot(edge, got), g.andnot(g.andnot(gnd, edge), got_d))
+    else:
+        edge = None
+        bad = g.andnot(gnd, got)
     pieces = []
     for comp in g.components(bad):
         if len(comp) < 4:  # under 4e-4 mm²: raster noise on a corner
@@ -98,10 +137,87 @@ def stitch_raster(mc, ru) -> Dict[str, object]:
         cx, cy = dsc["at"]
         i, j = min(comp, key=lambda t: (g.xc(t[0]) - cx) ** 2 + (g.yc(t[1]) - cy) ** 2)
         dsc["near"] = [g.xc(i), g.yc(j)]
+        at_edge = edge is None or any((edge[jj] >> ii) & 1 for ii, jj in comp)
+        dsc["limit_mm"] = float(p["stitch_reach"]) if at_edge else d_int
         pieces.append(dsc)
     pieces.sort(key=lambda t: -t["area_mm2"])
     return dict(
         gnd_area_mm2=round(g.area(gnd), 3), reached_mm2=round(g.area(got), 3), pieces=pieces
+    )
+
+
+def stitch_metrics(mc, ru) -> Dict[str, object]:
+    """D15 [D]: the L1 GND's largest geodesic distance to a via (edges and interior, bisection on
+    G3's 10 um raster), the GND area beyond 0.45 / 0.60 / 0.75 mm, the L2-L3 pair's largest
+    via-free circle, the vias per role and the [D] cut-offs of the lattice and of the largest
+    gap."""
+    from . import pour as pour_mod
+
+    p = mc.params
+    g = _grid(mc, H_RASTER)
+    gnd = gnd_mask(mc, ru, g)
+    edge = edge_mask(g, gnd, float(p["edge_band"]))
+    inner = g.andnot(gnd, edge)
+    seeds = g.empty()
+    g.points(seeds, [v[0] for v in mc.vias])
+
+    def unreached(r, dom):
+        un = g.andnot(dom, g.geodesic_reach(seeds, gnd, r, max(3, int(r / 0.15))))
+        # pieces under 4 pixels are raster noise on a corner (as G3)
+        out = g.empty()
+        for comp in g.components(un):
+            if len(comp) >= 4:
+                for i, j in comp:
+                    out[j] |= 1 << i
+        return out
+
+    beyond = {
+        f"{r:.2f}": round(g.area(unreached(r + REACH_TOL, gnd)), 4) for r in (0.45, 0.60, 0.75)
+    }
+
+    def dmax(dom):
+        if not g.count(dom):
+            return 0.0
+        lo, hi = 0.0, 2.0
+        if g.count(unreached(hi, dom)):
+            return hi
+        for _ in range(8):
+            r = 0.5 * (lo + hi)
+            if g.count(unreached(r, dom)):
+                lo = r
+            else:
+                hi = r
+        return round(hi, 3)
+
+    counts: Dict[str, int] = {}
+    for v in mc.vias:
+        counts[v[3]] = counts.get(v[3], 0) + 1
+    gap = pour_mod.largest_gap(mc, ru)
+    dr = RULES_DRILL
+    return dict(
+        mode=p["pour_mode"],
+        preset=p["d15"],
+        l1_gnd_mm2=round(g.area(gnd), 3),
+        l1_edge_mm2=round(g.area(edge), 3),
+        l1_dmax_edge_mm=dmax(edge),
+        l1_dmax_interior_mm=dmax(inner),
+        l1_area_beyond_mm2=beyond,
+        l23_largest_gap_radius_mm=gap["radius_mm"],
+        l23_largest_gap_at=gap["at"],
+        vias_by_role=counts,
+        vias_0p15_drill=sum(1 for v in mc.vias if abs(v[1] - 0.15) < 1e-6),
+        cutoff_ghz=dict(
+            lattice_l1l2=round(
+                pour_mod.lattice_cutoff_ghz(float(p["stitch_grid"]), dr, STACK["dk_core"]), 1
+            ),
+            lattice_l2l3=round(
+                pour_mod.lattice_cutoff_ghz(float(p["l23_pitch"]), dr, STACK["dk_bond"]), 1
+            ),
+            largest_gap_l2l3=round(
+                pour_mod.span_cutoff_ghz(gap["radius_mm"], dr, STACK["dk_bond"]), 1
+            ),
+            note="[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span",
+        ),
     )
 
 
@@ -132,6 +248,8 @@ def allow_rects(ru) -> List[Tuple[float, float, float, float]]:
     away on -x) the second-neighbour input at -1.5 d is absent: its line and gap inside the
     cut-out (x -1.5 d +- the channel half-width) and its run-in with both fence pairs below the
     entry (x -1.5 d +- (fence_offset + pad radius)). Masked out of G2/A2 and reported apart."""
+    if getattr(ru, "column", "corporate") == "series":
+        return []  # no in-gap input: nothing differs at an open bank end
     d = D_LATTICE
     xa = -1.5 * d
     y_pg = ru.p1_y - ru.lin - ru.lout
@@ -151,6 +269,19 @@ def open_end(mc, col) -> bool:
         abs(tf(c.origin)[0] + 2 * D_LATTICE) < 0.01 and abs(tf(c.origin)[1]) < 0.01
         for c in mc.columns.values()
     )
+
+
+def missing_neighbour(mc, col) -> bool:
+    """True when the column has no neighbour (active or dummy) one pitch away on either side:
+    with S1/S1.5 (no input-side dummy) RX4 and TX1 (S1) are edge columns by design."""
+    tf, _ = column_frame(col)
+    for s in (-1, 1):
+        if not any(
+            abs(tf(c.origin)[0] - s * D_LATTICE) < 0.01 and abs(tf(c.origin)[1]) < 0.01
+            for c in mc.columns.values()
+        ):
+            return True
+    return False
 
 
 def _window_scene(mc, ru, col, wb):
@@ -205,8 +336,20 @@ def congruence(mc, ru) -> Dict[str, object]:
     allow = allow_rects(ru)
     out = {}
     worst = dict(copper=0.0, gnd=0.0, vias=0, windows=0)
+    declared_edges = {}
     for n in act:
         if n == ref_name:
+            continue
+        if missing_neighbour(mc, mc.columns[n]):
+            # S1 / S1.5: no dummy beside this edge column; its window differs by design (the
+            # trade the owner's S1 option accepts), reported, not gated
+            g, cu, gnd, vias, wins = _window_scene(mc, ru, mc.columns[n], wb)
+            declared_edges[n] = dict(
+                what="edge column without a neighbour (dummies option)",
+                copper_xor_mm2=round(g.area(g.xor(cu, ref[1])), 4),
+                gnd_xor_mm2=round(g.area(g.xor(gnd, ref[2])), 4),
+                via_mismatch=_via_diff(vias, ref[3]),
+            )
             continue
         g, cu, gnd, vias, wins = _window_scene(mc, ru, mc.columns[n], wb)
         masked = open_end(mc, mc.columns[n])
@@ -252,6 +395,7 @@ def congruence(mc, ru) -> Dict[str, object]:
         declared_difference_column_frame=[[round(v, 4) for v in a] for a in allow],
         vias_in_window=len(ref[3]),
         columns=out,
+        edge_columns_declared=declared_edges,
         worst=dict(
             copper_xor_mm2=round(worst["copper"], 5),
             gnd_xor_mm2=round(worst["gnd"], 5),
@@ -330,9 +474,13 @@ def entry_and_band(mc, ru) -> Dict[str, object]:
     inside = [
         v
         for v in mc.vias
-        if any(rect_dist(v[0], c) < ru.B - 1e-6 for c in cuts) and v[3] not in ("runin", "ring")
+        if any(rect_dist(v[0], c) < ru.B - 1e-6 for c in cuts)
+        and v[3] not in ("runin", "ring", "post")
     ]
-    in_cut = [v for v in mc.vias if any(rect_dist(v[0], c) <= 1e-9 for c in cuts)]
+    # K2 posts are the only vias inside a cut-out (G9 checks them)
+    in_cut = [
+        v for v in mc.vias if v[3] != "post" and any(rect_dist(v[0], c) <= 1e-9 for c in cuts)
+    ]
     ok = ok and not inside and not in_cut
     return dict(
         lines=res,
@@ -653,9 +801,10 @@ def layout_only_digest(M, ov) -> str:
         cols["RXD5"] = rx_in["RX4"] + ru.d
     rx_cut = ru.cut(list(cols.values()), e_rx, False)
     rx_loads = [ru.load_zone(cols[n], e_rx) for n in ("RXD0", "RXD5") if n in cols]
+    rx_masks = [ru.load_mask(cols[n], e_rx) for n in ("RXD0", "RXD5") if n in cols]
     tx_ball = {n: M.ball_xy(M.RF_BALLS[n], mir) for n in M.TX_NAMES}
     p0_x = tx_ball["TX1"][0] + float(p["launch_len"])
-    t = M.fit_tx(p, ru, tx_ball, p0_x, rx_cut, rx_paths, rx_loads, dummies)
+    t = M.fit_tx(p, ru, tx_ball, p0_x, rx_cut, rx_paths, rx_loads, dummies, rx_masks)
     o = dict(
         rx=[[s.kind, list(s.p0), list(s.p1)] for q in rx_paths.values() for s in q.segs],
         tx=[[s.kind, list(s.p0), list(s.p1)] for q in t["paths"].values() for s in q.segs],
@@ -674,14 +823,17 @@ def generator_checks(mc, ru, rx_ball, tx_ball) -> None:
     lp1 = {n: f.length - f.marks["P0"][1] for n, f in mc.feeds.items()}
     for bank in (("RX1", "RX2", "RX3", "RX4"), ("TX1", "TX2", "TX3")):
         vals = [lp1[n] for n in bank]
+        # 2 ps design target (0.36 mm) / 10, geometric [BD §6.2]; T4 adds the owner-waived skew
+        lim = 0.036 + (ru.skew_mm if bank[0].startswith("TX") else 0.0)
         mc.checks.append(
             dict(
                 check=f"equal length P0->P1 {bank[0][:2]}",
                 lengths_mm={n: round(lp1[n], 4) for n in bank},
                 p0_to_pg_mm={n: round(lp0[n], 4) for n in bank},
                 spread_mm=round(max(vals) - min(vals), 4),
-                limit_mm=0.036,  # 2 ps design target (0.36 mm) / 10, geometric [BD §6.2]
-                ok=max(vals) - min(vals) <= 0.036,
+                limit_mm=round(lim, 4),
+                skew_budget_ps=float(p["tx_skew_budget_ps"]) if bank[0].startswith("TX") else 0.0,
+                ok=max(vals) - min(vals) <= lim + 1e-9,
             )
         )
     mc.checks.append(
@@ -745,23 +897,50 @@ def generator_checks(mc, ru, rx_ball, tx_ball) -> None:
     )
     mc.checks.append(dict(check="G2 column congruence", **g2, ok=ok2))
     g3 = stitch_raster(mc, ru)
+    from . import pour as pour_mod
+
+    l23 = pour_mod.l23_raster(mc, ru)
     mc.checks.append(
         dict(
             check="G3 unstitched GND",
+            d15=p["d15"],
+            pour_mode=p["pour_mode"],
             reach_mm=float(p["stitch_reach"]),
+            edge_band_mm=float(p["edge_band"]),
+            interior_dmax_mm=float(p["stitch_dmax"]),
+            l23_dmax_mm=float(p["l23_dmax"]),
             raster_mm=H_RASTER,
             gnd_area_mm2=g3["gnd_area_mm2"],
             unreached_pieces=[{k: v for k, v in pc.items() if k != "near"} for pc in g3["pieces"]],
             made_gap=mc.via_log.get("made_gap"),
-            ok=not g3["pieces"],
+            l23_domain_mm2=l23["domain_mm2"],
+            l23_unstitched=[{k: v for k, v in pc.items() if k != "near"} for pc in l23["pieces"]],
+            ok=not g3["pieces"] and not l23["pieces"],
         )
     )
+    mc.checks.append(dict(check="stitch metrics (D15)", **stitch_metrics(mc, ru)))
     g4 = fence_continuity(mc, ru)
     mc.checks.append(dict(check="G4 fence continuity", **g4))
     g5 = via_accounting(mc, ru)
     mc.checks.append(dict(check="G5 via accounting", **g5))
     g7 = load_cells(mc, ru)
     mc.checks.append(dict(check="G7 dummy load cells", **g7))
+    if getattr(mc, "pa", None) is not None:
+        from . import pa as pa_mod
+
+        mc.checks.append(dict(check="G8 PA feed (D14)", **pa_mod.check(mc, ru)))
+    from . import cavity as cavity_mod
+
+    mc.checks.append(dict(check="G9 L2-L3 cavity", **cavity_mod.check(mc, ru)))
+    t3 = mc.fit["tx"]["order_planarity"]
+    mc.checks.append(
+        dict(
+            check="T3 TX ball-to-column orders (L-routes on L1) [D]",
+            planar=t3["planar"],
+            crossing={k: v["crossing"] for k, v in t3["orders"].items() if v["crossing"]},
+            used="-".join(p["tx_order"]),
+        )
+    )
     d12 = d12_layouts(mc)
     same = len(set(d12.values())) == 1
     mc.checks.append(

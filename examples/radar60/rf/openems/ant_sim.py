@@ -13,13 +13,21 @@ Stack, boundaries, ports, mesh and far field follow stage 2's column model
   loads: 50 ohm lumped ports (signal pad to L2), not excited.
 - Mesh: fixed lines on every straight copper edge and window edge inside the fine box
   (1/3-2/3 pair at res/3), uniform res*1.6 fill inside it, graded x1.3 to lambda0/18 outside;
-  4 + 4 cells across the bond and the core.
+  4 + 4 cells across the bond and the core (`--nz-bond`, `--nz-core`; sign-off runs use 8 + 8,
+  palace validation). A comparison shares one mesh template (stage 3b):
+  `--mesh-ref A.json,B.json` adds the edges of the other variants' copper and windows (the union
+  of the variants' edges), and a model's own `mesh_lines` (x, y) are added as fixed lines.
 
   python3 openems/ant_sim.py MODEL.json --excite TX2.Pg --out OUT [--threads 4] [--res 0.025]
+      [--mesh-ref OTHER.json,...] [--nz-core 8 --nz-bond 8] [--fspan 54 70] [--probe-bond]
 
 Outputs OUT/result.json (S of every port, RL-10 band of the excited port, far field per band
 frequency: broadside directivity and realized gain, radiation efficiency, HPBW, E- and H-plane
-cuts) and OUT/s.csv.
+cuts) and OUT/s.csv. `--probe-bond` adds plane-pair voltage probes (bondprobe.py: bondply under
+the banks, L1-L2 and L2-L3 in the open pour), their ring-down poles and port-to-probe transfers
+(result.json "probes", OUT/probes.json); probes add no mesh lines. `--ringdown-ns T --excite
+none` drives no port: soft sources in the bondply at the banks' middle and end gaps, a run of T ns,
+and the probes' ring-down poles (the bank cavity's modes and Q) instead of S and far fields.
 """
 
 import argparse
@@ -97,13 +105,30 @@ def model(m, args):
         cu.AddPolygon(np.array(pp).T, "z", z_l1, priority=30)
     for vx, vy, dr in m["vias"]:
         pec.AddBox([vx - dr / 2, vy - dr / 2, 0.0], [vx + dr / 2, vy + dr / 2, z_l1], priority=50)
+    wall_m = getattr(args, "wall_windows", None)
+    if wall_m is not None:  # model-only bound: PEC walls L3-L2 round each window (no such via)
+        for wx0, wy0, wx1, wy1 in m["windows"]:
+            ex0, ey0, ex1, ey1 = wx0 - wall_m, wy0 - wall_m, wx1 + wall_m, wy1 + wall_m
+            for b0, b1 in (
+                ([ex0, ey0, 0.0], [ex1, ey0, z_l2]),
+                ([ex0, ey1, 0.0], [ex1, ey1, z_l2]),
+                ([ex0, ey0, 0.0], [ex0, ey1, z_l2]),
+                ([ex1, ey0, 0.0], [ex1, ey1, z_l2]),
+            ):
+                pec.AddBox(b0, b1, priority=50)
     for vx, vy, dr in m.get("shorts", []):  # shorted dummy loads: signal land to L3
         pec.AddBox([vx - dr / 2, vy - dr / 2, 0.0], [vx + dr / 2, vy + dr / 2, z_l1], priority=50)
 
     res = args.res
     fine = res / 3
     mx, my = set(), set()
-    for pp in polys:
+    edge_polys = list(polys)
+    edge_windows = list(m["windows"])
+    for ref in [r for r in (args.mesh_ref or "").split(",") if r]:
+        o = json.load(open(ref))
+        edge_polys += list(o["gnd"]) + [pp for v in o["nets"].values() for pp in v]
+        edge_windows += list(o["windows"])
+    for pp in edge_polys:
         n = len(pp)
         for i in range(n):
             (xa, ya), (xb, yb) = pp[i], pp[(i + 1) % n]
@@ -111,9 +136,16 @@ def model(m, args):
                 mx.add(round(xa, 4))
             if abs(ya - yb) < 1e-6 and abs(xa - xb) > 0.03 and by0 <= ya <= by1:
                 my.add(round(ya, 4))
-    for wx0, wy0, wx1, wy1 in m["windows"]:
+    for wx0, wy0, wx1, wy1 in edge_windows:
         mx.update(round(v, 4) for v in (wx0, wx1))
         my.update(round(v, 4) for v in (wy0, wy1))
+        if getattr(args, "wall_windows", None) is not None:
+            wm = args.wall_windows
+            mx.update(round(v, 4) for v in (wx0 - wm, wx1 + wm))
+            my.update(round(v, 4) for v in (wy0 - wm, wy1 + wm))
+    ml = m.get("mesh_lines") or {}
+    mx.update(round(v, 4) for v in ml.get("x", []))
+    my.update(round(v, 4) for v in ml.get("y", []))
     lx, ly = [], []
     for e in sorted(mx):
         lx += [e - fine, e + 2 * fine]
@@ -156,7 +188,8 @@ def model(m, args):
     ly = dedupe(ly, res / 2)
     grid.AddLine("x", lx)
     grid.AddLine("y", ly)
-    zl = list(np.linspace(0, z_l2, 5)) + list(np.linspace(z_l2, z_l1, 5))
+    zl = list(np.linspace(0, z_l2, args.nz_bond + 1))
+    zl += list(np.linspace(z_l2, z_l1, args.nz_core + 1))
     zl += [az0, az1, z_l1 + 0.3, -0.3]
     grid.AddLine("z", sorted(set(round(v, 6) for v in zl)))
     fx = np.arange(bx0, bx1, fill_x)
@@ -214,10 +247,23 @@ def model(m, args):
     if args.dump_bond:  # E at mid-bondply (L2-L3 parallel plate), frequency domain
         zb = s["h_bond"] / 2
         dump = csx.AddDump(
-            "e_bond", dump_type=10, frequency=[f * 1e9 for f in (60.3, 62.05, 63.8)], file_type=1
+            "e_bond", dump_type=10, frequency=[f * 1e9 for f in args.dump_bond_f], file_type=1
         )
         dump.AddBox([sx0, sy0, zb], [sx1, sy1, zb])
+    probes = []
+    if getattr(args, "probe_bond", False):  # plane-pair voltage probes (bondprobe.py)
+        import bondprobe
+
+        probes = bondprobe.points(m)
+        bondprobe.add(csx, probes, z_l2, z_l1)
+        if getattr(args, "ringdown_ns", 0):  # no port driven: bondply sources, fixed length
+            bondprobe.sources(csx, probes, z_l2, res)
     gx, gy, gz = (np.array(grid.GetLines(dd)) for dd in "xyz")
+    if getattr(args, "ringdown_ns", 0):  # steps from a Courant step of the smallest cells
+        dmin = [float(np.min(np.diff(g))) * 1e-3 for g in (gx, gy, gz)]
+        dt = 1 / (299792458.0 * math.sqrt(sum(1 / d**2 for d in dmin)))
+        fdtd.SetNumberOfTimeSteps(int(args.ringdown_ns * 1e-9 / dt))
+        fdtd.SetEndCriteria(1e-12)
     meta = dict(
         mesh=dict(nx=len(gx), ny=len(gy), nz=len(gz)),
         cells=int(len(gx) * len(gy) * len(gz)),
@@ -228,6 +274,7 @@ def model(m, args):
         ),
         k_rough=k_r,
         substrate_mm=[sx1 - sx0, sy1 - sy0],
+        probes=probes,
     )
     if args.setup_only:
         meta["x_lines"] = [round(float(v), 5) for v in gx]
@@ -257,7 +304,33 @@ def main():
     ap.add_argument("--end-db", type=float, default=1e-4)
     ap.add_argument("--setup-only", action="store_true")
     ap.add_argument("--dump-bond", action="store_true", help="E at mid-bondply (e_bond.h5)")
+    ap.add_argument("--dump-bond-f", type=float, nargs="+", default=[60.3, 62.05, 63.8])
+    ap.add_argument("--mesh-ref", help="comma-separated models whose edges join the mesh template")
+    ap.add_argument("--probe-bond", action="store_true", help="plane-pair probes (bondprobe.py)")
+    ap.add_argument(
+        "--ringdown-ns",
+        type=float,
+        default=0.0,
+        help="cavity ring-down: no port driven (--excite none), soft sources in the bondply at "
+        "the bank sites, this many ns, probe poles only (bondprobe.py)",
+    )
+    ap.add_argument(
+        "--wall-windows",
+        type=float,
+        help="model-only bound: PEC walls from L3 to L2 this far (mm) outside each window",
+    )
+    ap.add_argument("--nz-core", type=int, default=4, help="cells across the 4 mil core")
+    ap.add_argument("--nz-bond", type=int, default=4, help="cells across the bondply (with L2)")
+    ap.add_argument(
+        "--fspan",
+        type=float,
+        nargs=2,
+        default=[58.0, 66.0],
+        help="S-parameter span in GHz (inside the 53-71 GHz excitation)",
+    )
     a = ap.parse_args()
+    if a.ringdown_ns:
+        a.probe_bond = True
     m = json.load(open(a.model))
     out = os.path.abspath(a.out)
     sim = os.path.join(out, "sim")
@@ -276,7 +349,17 @@ def main():
     t0 = time.time()
     fdtd.Run(sim, cleanup=True, numThreads=a.threads)
     wall = time.time() - t0
-    f = np.linspace(58e9, 66e9, 321)
+    if a.ringdown_ns:  # cavity ring-down: the probes' poles only
+        import bondprobe
+
+        res = dict(model=m["model"], board=m["board"], ringdown_ns=a.ringdown_ns, wall_s=wall)
+        res["meta"] = meta
+        res["probes"] = bondprobe.ringdown_only(sim, out, meta["probes"], 9.0e9)
+        json.dump(res, open(os.path.join(out, "result.json"), "w"), indent=1, default=float)
+        shutil.rmtree(sim, ignore_errors=True)
+        return
+    f_lo, f_hi = a.fspan
+    f = np.linspace(f_lo * 1e9, f_hi * 1e9, int(round((f_hi - f_lo) * 40)) + 1)  # 25 MHz steps
     pe = ports[a.excite]
     for p in list(ports.values()) + list(loads.values()):
         p.CalcPort(sim, f, ref_impedance=50)
@@ -341,6 +424,10 @@ def main():
         header=",".join(hdr),
         fmt="%.6g",
     )
+    if a.probe_bond:  # ring-down poles and port-to-plane-pair transfers (bondprobe.py)
+        import bondprobe
+
+        res["probes"] = bondprobe.analyse(sim, out, meta["probes"], pe, 9.0e9)
     pc = m["phase_centres"][a.excite.split(".")[0]]
     theta = np.arange(-180.0, 180.5, 1.0)
     for fx in NF_F:

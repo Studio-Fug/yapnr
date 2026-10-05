@@ -13,15 +13,15 @@
     "launch_len": 1.3,
     "patch_w": 1.45,
     "patch_l": null,
-    "inset": 0.3,
-    "fullwave_l_scale": 0.967,
+    "inset": 0.325,
+    "fullwave_l_scale": 1.025,
     "fullwave_ref": "results/openems/patch-c-i30 (C0a single-patch sweep)",
     "notch": 0.1,
     "spacing": 2.9,
     "window_margin": 0.15,
     "windows": true,
-    "w35": 0.353,
-    "t_y": 0.37,
+    "w35": 0.42,
+    "t_y": 0.25,
     "in_x": 1.171,
     "p1_y": -2.3,
     "rx_col_y": 9.5,
@@ -34,7 +34,7 @@
     "guard_band": 0.85,
     "runin_out": 0.9,
     "meander_r": 0.5,
-    "dummies": "both",
+    "dummies": "outer",
     "dummy_load": {
       "value": "50R 0201 thin film",
       "pad": [0.46, 0.4],
@@ -60,7 +60,43 @@
     "fence_start": 0.25,
     "ring_inset": 0.35,
     "stitch_reach": 0.45,
-    "stitch_grid": 0.6
+    "edge_band": 0.3,
+    "d15": "A",
+    "pour_mode": "grid",
+    "stitch_grid": 0.6,
+    "stitch_dmax": 0.45,
+    "l23_pitch": 0.6,
+    "l23_dmax": 0.6,
+    "strip_margin": 0.1,
+    "dummy_term": "load",
+    "l23_cavity": "K0",
+    "post_clear": 0.6,
+    "post_line_clear": 0.45,
+    "post_pitch": 0.5,
+    "div_l_scale": 1.0,
+    "column": "corporate",
+    "ser_link_scale": 1.0,
+    "ser_link_w": 0.1,
+    "tx_eq": "T0",
+    "meander_r_nw": 0.5,
+    "tx_skew_budget_ps": 0.0,
+    "tx_order": ["TX1", "TX2", "TX3"],
+    "pa_feed": true,
+    "pa_net": "1V0_PA",
+    "pa_balls": ["A2", "B2"],
+    "pa_i_peak": 2.5,
+    "pa_i_rms": 1.0,
+    "pa_via": [0.2, 0.4],
+    "pa_vias": 4,
+    "pa_via_i_max": 1.0,
+    "pa_ir_max": 0.01,
+    "pa_clear": 0.15,
+    "pa_plating_um": 20.0,
+    "pa_copper_margin": 0.05,
+    "pa_antipad_feed_min": 0.5,
+    "pa_fence": true,
+    "pa_fence_offset": 0.31,
+    "pa_fence_pitch": 0.475
   },
   "dims": {
     "f0_target_ghz": 62.05,
@@ -72,10 +108,10 @@
     },
     "patch": {
       "w": 1.45,
-      "l": 1.1299,
+      "l": 1.1977,
       "l_nominal": 1.1899,
       "l_closed_form": 1.1684,
-      "fullwave_l_scale": 0.967,
+      "fullwave_l_scale": 1.025,
       "fullwave_ref": "results/openems/patch-c-i30 (C0a single-patch sweep)",
       "length_scale": 0.982,
       "f0_ghz": 63.0227,
@@ -84,9 +120,9 @@
       "edge_r_ohm": 326.5901,
       "g1_s": 0.001,
       "g12_s": 0.0006,
-      "inset": 0.3,
+      "inset": 0.325,
       "inset_closed_form": 0.4347,
-      "w_over_l": 1.2833,
+      "w_over_l": 1.2107,
       "efficiency": 0.9089,
       "directivity_dbi": 6.3764
     },
@@ -102,6 +138,7 @@
       "z50_gcpw": 48.834,
       "z35": 35.4174,
       "lambda_g50": 2.9379,
+      "lambda_g50_gcpw": 2.9808,
       "lambda_g35": 2.84,
       "quarter35": 0.71,
       "half50": 1.469,
@@ -110,12 +147,12 @@
     },
     "floorplan": {
       "rx_entry_y": 8.6882,
-      "tx_entry_y": 6.8,
+      "tx_entry_y": 7.01,
       "rx_col_y": 11.9882,
-      "tx_col_y": 10.1,
+      "tx_col_y": 10.31,
       "p0_rx_y": 5.2,
       "p0_tx_x": 5.2,
-      "tx_dx_bank": 3.547
+      "tx_dx_bank": 0.05
     }
   },
   "feeds": {
@@ -148,24 +185,24 @@
       "ball_to_p0_mm": 1.3
     },
     "TX1": {
-      "ball_to_p1_mm": 19.8735,
-      "p0_to_p1_mm": 18.5735,
-      "p0_to_pg_mm": 16.6735,
-      "p0_to_p1_line_loss_db": 1.379,
+      "ball_to_p1_mm": 16.5865,
+      "p0_to_p1_mm": 15.2865,
+      "p0_to_pg_mm": 13.3865,
+      "p0_to_p1_line_loss_db": 1.135,
       "ball_to_p0_mm": 1.3
     },
     "TX2": {
-      "ball_to_p1_mm": 19.8735,
-      "p0_to_p1_mm": 18.5735,
-      "p0_to_pg_mm": 16.6735,
-      "p0_to_p1_line_loss_db": 1.379,
+      "ball_to_p1_mm": 16.5865,
+      "p0_to_p1_mm": 15.2865,
+      "p0_to_pg_mm": 13.3865,
+      "p0_to_p1_line_loss_db": 1.135,
       "ball_to_p0_mm": 1.3
     },
     "TX3": {
-      "ball_to_p1_mm": 19.8735,
-      "p0_to_p1_mm": 18.5735,
-      "p0_to_pg_mm": 16.6735,
-      "p0_to_p1_line_loss_db": 1.379,
+      "ball_to_p1_mm": 16.5865,
+      "p0_to_p1_mm": 15.2865,
+      "p0_to_pg_mm": 13.3865,
+      "p0_to_p1_line_loss_db": 1.135,
       "ball_to_p0_mm": 1.3
     }
   },
@@ -176,8 +213,8 @@
       "input_side": "east",
       "dummy": true,
       "arms": {
-        "north": 0.8151,
-        "south": 2.284,
+        "north": 0.9262,
+        "south": 2.3951,
         "diff": 1.469,
         "target": 1.469
       }
@@ -188,8 +225,8 @@
       "input_side": "east",
       "dummy": false,
       "arms": {
-        "north": 0.8151,
-        "south": 2.284,
+        "north": 0.9262,
+        "south": 2.3951,
         "diff": 1.469,
         "target": 1.469
       }
@@ -200,8 +237,8 @@
       "input_side": "east",
       "dummy": false,
       "arms": {
-        "north": 0.8151,
-        "south": 2.284,
+        "north": 0.9262,
+        "south": 2.3951,
         "diff": 1.469,
         "target": 1.469
       }
@@ -212,8 +249,8 @@
       "input_side": "east",
       "dummy": false,
       "arms": {
-        "north": 0.8151,
-        "south": 2.284,
+        "north": 0.9262,
+        "south": 2.3951,
         "diff": 1.469,
         "target": 1.469
       }
@@ -224,80 +261,56 @@
       "input_side": "east",
       "dummy": false,
       "arms": {
-        "north": 0.8151,
-        "south": 2.284,
-        "diff": 1.469,
-        "target": 1.469
-      }
-    },
-    "RXD5": {
-      "phase_centre": [4.034, 11.9882],
-      "p1": [5.205, 9.6882],
-      "input_side": "east",
-      "dummy": true,
-      "arms": {
-        "north": 0.8151,
-        "south": 2.284,
-        "diff": 1.469,
-        "target": 1.469
-      }
-    },
-    "TXD0": {
-      "phase_centre": [10.376, 10.1],
-      "p1": [9.205, 7.8],
-      "input_side": "west",
-      "dummy": true,
-      "arms": {
-        "north": 0.8151,
-        "south": 2.284,
+        "north": 0.9262,
+        "south": 2.3951,
         "diff": 1.469,
         "target": 1.469
       }
     },
     "TX1": {
-      "phase_centre": [12.718, 10.1],
-      "p1": [11.547, 7.8],
+      "phase_centre": [9.221, 10.31],
+      "p1": [8.05, 8.01],
       "input_side": "west",
       "dummy": false,
       "arms": {
-        "north": 0.8151,
-        "south": 2.284,
+        "north": 0.9262,
+        "south": 2.3951,
         "diff": 1.469,
         "target": 1.469
       }
     },
     "TX2": {
-      "phase_centre": [15.06, 10.1],
-      "p1": [13.889, 7.8],
+      "phase_centre": [11.563, 10.31],
+      "p1": [10.392, 8.01],
       "input_side": "west",
       "dummy": false,
       "arms": {
-        "north": 0.8151,
-        "south": 2.284,
+        "north": 0.9262,
+        "south": 2.3951,
         "diff": 1.469,
         "target": 1.469
       }
     },
     "TX3": {
-      "phase_centre": [17.402, 10.1],
-      "p1": [16.231, 7.8],
+      "phase_centre": [13.905, 10.31],
+      "p1": [12.734, 8.01],
       "input_side": "west",
       "dummy": false,
       "arms": {
-        "north": 0.8151,
-        "south": 2.284,
+        "north": 0.9262,
+        "south": 2.3951,
         "diff": 1.469,
         "target": 1.469
       }
     },
     "TXD4": {
-      "phase_centre": [19.744, 10.1],
-      "p1": [18.573, 7.8],
+      "phase_centre": [16.247, 10.31],
+      "p1": [15.076, 8.01],
       "input_side": "west",
       "dummy": true,
       "arms": {
-        "north": 0.8151,
-        "south": 2.284,
+        "north": 0.9262,
+        "south": 2.3951,
         "diff": 1.469,
         "target": 1.469
       }
@@ -315,73 +328,49 @@
         [-6.505, 6.1682]
       ]
     },
-    "RXD5": {
-      "ref": "RT2",
-      "centre": [5.205, 7.0182],
-      "vias": [
-        [4.705, 6.6982],
-        [5.705, 6.6982],
-        [4.625, 7.2882],
-        [5.785, 7.2882],
-        [5.205, 6.1682]
-      ]
-    },
-    "TXD0": {
-      "ref": "RT3",
-      "centre": [9.205, 5.13],
-      "vias": [
-        [8.705, 4.81],
-        [9.705, 4.81],
-        [8.625, 5.4],
-        [9.785, 5.4],
-        [9.205, 4.28]
-      ]
-    },
     "TXD4": {
-      "ref": "RT4",
-      "centre": [18.573, 5.13],
+      "ref": "RT2",
+      "centre": [15.076, 5.34],
       "vias": [
-        [18.073, 4.81],
-        [19.073, 4.81],
-        [17.993, 5.4],
-        [19.153, 5.4],
-        [18.573, 4.28]
+        [14.576, 5.02],
+        [15.576, 5.02],
+        [14.496, 5.61],
+        [15.656, 5.61],
+        [15.076, 4.49]
       ]
     }
   },
   "cutouts_u1_mm": {
-    "RX": [-9.401, 8.6882, 6.205, 15.0238],
-    "TX": [8.205, 6.8, 21.469, 13.1357]
+    "RX": [-9.401, 8.6882, 3.863, 15.059],
+    "TX": [7.05, 7.01, 17.972, 13.3808]
   },
   "banks": {
     "RX": {
       "E": 8.6882,
       "Pg": 7.7882,
-      "top": 15.0238,
+      "top": 15.059,
       "mirror": false,
       "inputs": {
         "RXD0": -6.505,
         "RX1": -4.163,
         "RX2": -1.821,
         "RX3": 0.521,
-        "RX4": 2.863,
-        "RXD5": 5.205
+        "RX4": 2.863
       },
       "origin_y": 11.9882
     },
     "TX": {
-      "E": 6.8,
-      "Pg": 5.9,
-      "top": 13.1357,
+      "E": 7.01,
+      "Pg": 6.11,
+      "top": 13.3808,
       "mirror": true,
       "inputs": {
-        "TXD0": 9.205,
-        "TX1": 11.547,
-        "TX2": 13.889,
-        "TX3": 16.231,
-        "TXD4": 18.573
+        "TX1": 8.05,
+        "TX2": 10.392,
+        "TX3": 12.734,
+        "TXD4": 15.076
       },
-      "origin_y": 10.1
+      "origin_y": 10.31
     }
   },
   "fit": {
@@ -420,12 +409,13 @@
       }
     },
     "tx": {
-      "dx_bank": 3.547,
-      "E": 6.8,
+      "dx_bank": 0.05,
+      "E": 7.01,
       "equalizers": {
         "TX1": {
           "lane_fingers": 1,
           "nw_fingers": 1,
+          "nw_r": 0.5,
           "nw_a": 2.1584,
           "nw_apex_y": 5.7584
         },
@@ -439,11 +429,35 @@
         "alloc": [null, 1, "lane"]
       },
       "rejected": {
-        "paths": 450,
-        "load": 2
+        "paths": 6446,
+        "band": 16
+      },
+      "skew_budget_mm": 0.0,
+      "order_planarity": {
+        "orders": {
+          "TX1-TX2-TX3": {
+            "crossing": []
+          },
+          "TX1-TX3-TX2": {
+            "crossing": ["TX2xTX3"]
+          },
+          "TX2-TX1-TX3": {
+            "crossing": ["TX1xTX2"]
+          },
+          "TX2-TX3-TX1": {
+            "crossing": ["TX1xTX2", "TX1xTX3"]
+          },
+          "TX3-TX1-TX2": {
+            "crossing": ["TX1xTX3", "TX2xTX3"]
+          },
+          "TX3-TX2-TX1": {
+            "crossing": ["TX1xTX2", "TX1xTX3", "TX2xTX3"]
+          }
+        },
+        "planar": ["TX1-TX2-TX3"]
       }
     },
-    "dummies": ["RXD0", "RXD5", "TXD0", "TXD4"]
+    "dummies": ["RXD0", "TXD4"]
   },
   "ports": {
     "RX1.Pb": {
@@ -537,12 +551,12 @@
       "z0": 50.0
     },
     "TX1.Pg": {
-      "at": [11.547, 5.9],
+      "at": [8.05, 6.11],
       "heading_deg": 90.0,
       "z0": 50.0
     },
     "TX1.P1": {
-      "at": [11.547, 7.8],
+      "at": [8.05, 8.01],
       "heading_deg": 90.0,
       "z0": 50.0
     },
@@ -557,12 +571,12 @@
       "z0": 50.0
     },
     "TX2.Pg": {
-      "at": [13.889, 5.9],
+      "at": [10.392, 6.11],
       "heading_deg": 90.0,
       "z0": 50.0
     },
     "TX2.P1": {
-      "at": [13.889, 7.8],
+      "at": [10.392, 8.01],
       "heading_deg": 90.0,
       "z0": 50.0
     },
@@ -577,38 +591,39 @@
       "z0": 50.0
     },
     "TX3.Pg": {
-      "at": [16.231, 5.9],
+      "at": [12.734, 6.11],
       "heading_deg": 90.0,
       "z0": 50.0
     },
     "TX3.P1": {
-      "at": [16.231, 7.8],
+      "at": [12.734, 8.01],
       "heading_deg": 90.0,
       "z0": 50.0
     },
-    "iso_fence_x": {
-      "at": [7.205, 0.0]
-    },
     "vout_pa_pocket": {
-      "rect": [3.557, 5.45, 5.25, 6.2]
+      "rect": [3.563, 5.45, 5.25, 7.0]
+    },
+    "iso_fence_x": {
+      "at": [5.4565, 0.0]
     }
   },
   "region_u1_mm": {
-    "x": [-13.401, 25.469],
-    "y": [-1.3, 19.0238]
+    "x": [-13.401, 21.972],
+    "y": [-1.3, 19.059]
   },
-  "status": "placeholder: geometry for integration only; the column fails ANT-02 RL at P1 (col-c 5.9/9.1/11.4 dB at 60.3/62.05/63.8 GHz); the joint C1 sweep (w35, t_y, inset, L) and the C2 bank solve (TX-RX isolation, coupling, phase centres, L2-L3 stitching) come before it is frozen",
+  "status": "placeholder: geometry for integration only; the column's match is not converged and sits high (rf-uniform: RL-10 64.35-66 GHz at 15 um against 60.3-63.8); stage 3b's C1 retune, the D15 pour and S1/S2 choice, the L2-L3 cavity option and the PA-feed EM come before it is frozen",
   "vias": {
     "launch": 14,
-    "ring": 283,
-    "runin": 44,
-    "load": 20,
-    "fence": 206,
-    "isolation": 21,
-    "stitch": 172,
-    "grid": 606,
-    "fill": 75,
-    "total": 1441
+    "ring": 277,
+    "runin": 36,
+    "load": 10,
+    "pa_fence": 4,
+    "fence": 171,
+    "isolation": 22,
+    "stitch": 160,
+    "grid": 543,
+    "fill": 76,
+    "total": 1313
   },
   "checks": [
     {
@@ -627,22 +642,24 @@
       },
       "spread_mm": 0.0,
       "limit_mm": 0.036,
+      "skew_budget_ps": 0.0,
       "ok": true
     },
     {
       "check": "equal length P0->P1 TX",
       "lengths_mm": {
-        "TX1": 18.5735,
-        "TX2": 18.5735,
-        "TX3": 18.5735
+        "TX1": 15.2865,
+        "TX2": 15.2865,
+        "TX3": 15.2865
       },
       "p0_to_pg_mm": {
-        "TX1": 16.6735,
-        "TX2": 16.6735,
-        "TX3": 16.6735
+        "TX1": 13.3865,
+        "TX2": 13.3865,
+        "TX3": 13.3865
       },
       "spread_mm": 0.0,
       "limit_mm": 0.036,
+      "skew_budget_ps": 0.0,
       "ok": true
     },
     {
@@ -652,9 +669,9 @@
         "RX2": 6.594,
         "RX3": 6.594,
         "RX4": 6.594,
-        "TX1": 19.873,
-        "TX2": 19.873,
-        "TX3": 19.873
+        "TX1": 16.586,
+        "TX2": 16.586,
+        "TX3": 16.586
       }
     },
     {
@@ -672,8 +689,8 @@
     },
     {
       "check": "divider arms",
-      "north": 0.8151,
-      "south": 2.284,
+      "north": 0.9262,
+      "south": 2.3951,
       "diff": 1.469,
       "target": 1.469
     },
@@ -719,8 +736,8 @@
           "ok": true
         },
         "TX1": {
-          "band_min_mm": 0.9,
-          "at": [12.047, 5.9],
+          "band_min_mm": 0.8516,
+          "at": [6.782, 6.202],
           "runin_straight": true,
           "on_input_axis": true,
           "contact_span_mm": 0.601,
@@ -728,7 +745,7 @@
         },
         "TX2": {
           "band_min_mm": 0.9,
-          "at": [14.729, 5.9],
+          "at": [11.232, 6.11],
           "runin_straight": true,
           "on_input_axis": true,
           "contact_span_mm": 0.601,
@@ -736,7 +753,7 @@
         },
         "TX3": {
           "band_min_mm": 0.9,
-          "at": [16.231, 5.9],
+          "at": [12.734, 6.11],
           "runin_straight": true,
           "on_input_axis": true,
           "contact_span_mm": 0.601,
@@ -748,22 +765,6 @@
           "runin_straight": true,
           "on_input_axis": true,
           "contact_span_mm": 0.6,
-          "ok": true
-        },
-        "RXD5": {
-          "band_min_mm": 0.9,
-          "at": null,
-          "runin_straight": true,
-          "on_input_axis": true,
-          "contact_span_mm": 0.6,
-          "ok": true
-        },
-        "TXD0": {
-          "band_min_mm": 0.9,
-          "at": null,
-          "runin_straight": true,
-          "on_input_axis": true,
-          "contact_span_mm": 0.601,
           "ok": true
         },
         "TXD4": {
@@ -782,10 +783,10 @@
     {
       "check": "G2 column congruence",
       "reference": "RX2",
-      "window_column_frame": [-3.799, -4.2, 3.799, 4.0357],
+      "window_column_frame": [-3.799, -4.2, 3.799, 4.0708],
       "declared_difference_column_frame": [
         [-4.183, -4.21, -2.843, -3.3],
-        [-3.823, -3.3, -3.203, 4.0357]
+        [-3.823, -3.3, -3.203, 4.0708]
       ],
       "vias_in_window": 56,
       "columns": {
@@ -797,26 +798,12 @@
           "open_end": true,
           "declared_difference": {
             "what": "second-neighbour input at -1.5 d absent (open bank end)",
-            "copper_xor_mm2": 0.9459,
+            "copper_xor_mm2": 0.9221,
             "gnd_xor_mm2": 0.531,
             "via_mismatch": 2
           }
         },
         "RX3": {
-          "copper_xor_mm2": 0.0,
-          "gnd_xor_mm2": 0.0,
-          "via_mismatch": 0,
-          "l2_window_mismatch": 0,
-          "open_end": false
-        },
-        "RX4": {
-          "copper_xor_mm2": 0.0,
-          "gnd_xor_mm2": 0.0,
-          "via_mismatch": 0,
-          "l2_window_mismatch": 0,
-          "open_end": false
-        },
-        "TX1": {
           "copper_xor_mm2": 0.0,
           "gnd_xor_mm2": 0.0,
           "via_mismatch": 0,
@@ -838,10 +825,24 @@
           "open_end": true,
           "declared_difference": {
             "what": "second-neighbour input at -1.5 d absent (open bank end)",
-            "copper_xor_mm2": 0.9459,
+            "copper_xor_mm2": 0.9221,
             "gnd_xor_mm2": 0.531,
             "via_mismatch": 2
           }
+        }
+      },
+      "edge_columns_declared": {
+        "RX4": {
+          "what": "edge column without a neighbour (dummies option)",
+          "copper_xor_mm2": 5.154,
+          "gnd_xor_mm2": 10.9141,
+          "via_mismatch": 52
+        },
+        "TX1": {
+          "what": "edge column without a neighbour (dummies option)",
+          "copper_xor_mm2": 5.154,
+          "gnd_xor_mm2": 10.9141,
+          "via_mismatch": 55
         }
       },
       "worst": {
@@ -854,9 +855,14 @@
     },
     {
       "check": "G3 unstitched GND",
+      "d15": "A",
+      "pour_mode": "grid",
       "reach_mm": 0.45,
+      "edge_band_mm": 0.3,
+      "interior_dmax_mm": 0.45,
+      "l23_dmax_mm": 0.6,
       "raster_mm": 0.01,
-      "gnd_area_mm2": 438.524,
+      "gnd_area_mm2": 404.488,
       "unreached_pieces": [],
       "made_gap": [
         {
@@ -885,9 +891,9 @@
           "area_mm2": 0.0066
         },
         {
-          "at": [5.222, -1.275],
-          "long_mm": 0.08,
-          "area_mm2": 0.0029
+          "at": [3.971, 5.704],
+          "long_mm": 0.09,
+          "area_mm2": 0.0025
         },
         {
           "at": [0.311, 5.219],
@@ -900,12 +906,49 @@
           "area_mm2": 0.0009
         },
         {
-          "at": [13.605, 0.306],
-          "long_mm": 0.06,
-          "area_mm2": 0.0008
+          "at": [5.209, -1.29],
+          "long_mm": 0.03,
+          "area_mm2": 0.0006
         }
       ],
+      "l23_domain_mm2": 355.102,
+      "l23_unstitched": [],
       "ok": true
+    },
+    {
+      "check": "stitch metrics (D15)",
+      "mode": "grid",
+      "preset": "A",
+      "l1_gnd_mm2": 404.488,
+      "l1_edge_mm2": 87.017,
+      "l1_dmax_edge_mm": 0.461,
+      "l1_dmax_interior_mm": 0.461,
+      "l1_area_beyond_mm2": {
+        "0.45": 0.0,
+        "0.60": 0.0,
+        "0.75": 0.0
+      },
+      "l23_largest_gap_radius_mm": 0.463,
+      "l23_largest_gap_at": [-7.374, 6.427],
+      "vias_by_role": {
+        "launch": 14,
+        "ring": 277,
+        "runin": 36,
+        "load": 10,
+        "pa_fence": 4,
+        "fence": 171,
+        "isolation": 22,
+        "stitch": 160,
+        "grid": 543,
+        "fill": 76
+      },
+      "vias_0p15_drill": 1313,
+      "cutoff_ghz": {
+        "lattice_l1l2": 141.0,
+        "lattice_l2l3": 141.8,
+        "largest_gap_l2l3": 103.0,
+        "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+      }
     },
     {
       "check": "G4 fence continuity",
@@ -947,17 +990,17 @@
           "openings": []
         },
         "RX4.R": {
-          "max_spacing_mm": 0.497,
+          "max_spacing_mm": 0.5,
           "over_limit": [],
           "openings": []
         },
         "TX1.L": {
-          "max_spacing_mm": 0.46,
+          "max_spacing_mm": 0.495,
           "over_limit": [],
           "openings": []
         },
         "TX1.R": {
-          "max_spacing_mm": 0.493,
+          "max_spacing_mm": 0.472,
           "over_limit": [],
           "openings": []
         },
@@ -972,7 +1015,7 @@
           "openings": []
         },
         "TX3.L": {
-          "max_spacing_mm": 0.48,
+          "max_spacing_mm": 0.499,
           "over_limit": [],
           "openings": []
         },
@@ -989,41 +1032,42 @@
       "check": "G5 via accounting",
       "counts": {
         "launch": 14,
-        "ring": 283,
-        "runin": 44,
-        "load": 20,
-        "fence": 206,
-        "isolation": 21,
-        "stitch": 172,
-        "grid": 606,
-        "fill": 75
+        "ring": 277,
+        "runin": 36,
+        "load": 10,
+        "pa_fence": 4,
+        "fence": 171,
+        "isolation": 22,
+        "stitch": 160,
+        "grid": 543,
+        "fill": 76
       },
-      "total": 1441,
-      "merged": 47,
+      "total": 1313,
+      "merged": 39,
       "merged_detail": [
         {
           "role": "fence",
-          "at": [12.047, 5.9],
+          "at": [8.55, 6.11],
           "into": "runin",
           "d": 0.05
         },
         {
           "role": "fence",
-          "at": [14.389, 3.9],
+          "at": [10.892, 4.11],
           "into": "fence",
           "d": 0.0
         },
         {
           "role": "fence",
-          "at": [14.389, 5.9],
+          "at": [10.892, 6.11],
           "into": "runin",
           "d": 0.05
         },
         {
           "role": "grid",
-          "at": [-13.2, 8.4],
+          "at": [-13.2, 9.0],
           "into": "stitch",
-          "d": 0.0991
+          "d": 0.099
         },
         {
           "role": "grid",
@@ -1045,81 +1089,81 @@
         },
         {
           "role": "grid",
-          "at": [5.4, 0.6],
-          "into": "fence",
+          "at": [4.8, 9.0],
+          "into": "ring",
+          "d": 0.0992
+        },
+        {
+          "role": "grid",
+          "at": [4.8, 9.6],
+          "into": "ring",
+          "d": 0.091
+        },
+        {
+          "role": "grid",
+          "at": [4.8, 10.2],
+          "into": "ring",
+          "d": 0.0872
+        },
+        {
+          "role": "grid",
+          "at": [4.8, 10.8],
+          "into": "ring",
+          "d": 0.0883
+        },
+        {
+          "role": "grid",
+          "at": [4.8, 11.4],
+          "into": "ring",
           "d": 0.094
         },
         {
           "role": "grid",
-          "at": [5.4, 3.6],
+          "at": [5.4, 0.6],
           "into": "fence",
-          "d": 0.0784
+          "d": 0.0939
         },
         {
           "role": "grid",
-          "at": [5.4, 4.8],
-          "into": "fence",
-          "d": 0.0595
+          "at": [5.4, 7.2],
+          "into": "isolation",
+          "d": 0.0565
+        },
+        {
+          "role": "grid",
+          "at": [5.4, 9.0],
+          "into": "isolation",
+          "d": 0.0049
+        },
+        {
+          "role": "grid",
+          "at": [5.4, 10.8],
+          "into": "isolation",
+          "d": 0.0065
+        },
+        {
+          "role": "grid",
+          "at": [5.4, 14.4],
+          "into": "isolation",
+          "d": 0.0495
+        },
+        {
+          "role": "grid",
+          "at": [5.4, 15.6],
+          "into": "isolation",
+          "d": 0.0893
         },
         {
           "role": "grid",
           "at": [6.0, 0.6],
           "into": "fence",
-          "d": 0.0789
+          "d": 0.0791
         },
         {
           "role": "grid",
-          "at": [6.6, 7.8],
-          "into": "ring",
-          "d": 0.064
-        },
-        {
-          "role": "grid",
-          "at": [7.2, 1.8],
+          "at": [7.8, -0.6],
           "into": "fence",
-          "d": 0.0594
-        },
-        {
-          "role": "grid",
-          "at": [7.2, 6.6],
-          "into": "isolation",
-          "d": 0.0817
-        },
-        {
-          "role": "grid",
-          "at": [7.2, 7.8],
-          "into": "isolation",
-          "d": 0.0998
-        },
-        {
-          "role": "grid",
-          "at": [7.2, 8.4],
-          "into": "isolation",
-          "d": 0.0772
-        },
-        {
-          "role": "grid",
-          "at": [7.2, 10.2],
-          "into": "isolation",
-          "d": 0.0834
-        },
-        {
-          "role": "grid",
-          "at": [7.2, 12.0],
-          "into": "isolation",
-          "d": 0.0599
-        },
-        {
-          "role": "grid",
-          "at": [7.2, 13.8],
-          "into": "isolation",
-          "d": 0.057
-        },
-        {
-          "role": "grid",
-          "at": [7.2, 15.6],
-          "into": "isolation",
-          "d": 0.0771
+          "d": 0.0914
         }
       ],
       "conflicts": [],
@@ -1162,78 +1206,73 @@
         },
         {
           "row": "RX4.R",
-          "points": 1,
+          "points": 10,
           "skipped": 0,
           "first": [3.363, 7.1412]
         },
         {
           "row": "TX1.L",
-          "points": 10,
-          "skipped": 2,
-          "first": [11.4592, 5.091]
+          "points": 1,
+          "skipped": 6,
+          "first": [7.6607, 5.2879]
         },
         {
           "row": "TX1.R",
-          "points": 7,
-          "skipped": 5,
+          "points": 14,
+          "skipped": 6,
           "first": [6.6896, 2.4506]
         },
         {
           "row": "TX2.L",
-          "points": 56,
+          "points": 86,
           "skipped": 7,
-          "first": [6.1188, 1.8]
+          "first": [6.1184, 1.8]
         },
         {
           "row": "TX2.R",
           "points": 7,
           "skipped": 1,
-          "first": [14.6488, 3.9]
+          "first": [11.1518, 4.11]
         },
         {
           "row": "TX3.L",
-          "points": 35,
-          "skipped": 1,
-          "first": [15.7309, 0.5967]
+          "points": 18,
+          "skipped": 0,
+          "first": [10.3755, 0.5]
+        },
+        {
+          "row": "isolation",
+          "points": 1,
+          "skipped": 0,
+          "first": [5.4565, 6.0198]
         },
         {
           "row": "ring RX 0.35",
           "points": 1,
           "skipped": 0,
-          "first": [-8.6017, 8.3382]
-        },
-        {
-          "row": "ring RX 0.85",
-          "points": 6,
-          "skipped": 0,
-          "first": [6.924, 8.2348]
-        },
-        {
-          "row": "ring TX 0.85",
-          "points": 27,
-          "skipped": 2,
-          "first": [7.5698, 13.7005]
+          "first": [-8.602, 8.3382]
         }
       ],
       "dropped_optional": {
         "grid": {
-          "pour edge": 373,
-          "spacing": 277,
-          "guard band": 178,
-          "cut-out": 572,
-          "load pad": 13,
-          "load zone": 5,
+          "pour edge": 355,
+          "spacing": 295,
+          "guard band": 157,
+          "cut-out": 462,
+          "load pad": 8,
+          "load zone": 2,
           "package": 204,
-          "line": 140
+          "line": 125,
+          "pa feed": 9
         }
       },
       "boundary_row_pitch_mm": {
-        "west": 0.5793,
-        "north": 0.5798,
-        "east": 0.5795
+        "west": 0.58,
+        "north": 0.5799,
+        "east": 0.58
       },
       "stitch_pitch_max_mm": 0.6,
-      "fill_rounds": [45, 20, 13, 17, 25, 9],
+      "fill_rounds": [79, 13, 13, 10, 9],
       "made_gap": [
         {
           "at": [-1.727, 5.282],
@@ -1261,9 +1300,9 @@
           "area_mm2": 0.0066
         },
         {
-          "at": [5.222, -1.275],
-          "long_mm": 0.08,
-          "area_mm2": 0.0029
+          "at": [3.971, 5.704],
+          "long_mm": 0.09,
+          "area_mm2": 0.0025
         },
         {
           "at": [0.311, 5.219],
@@ -1276,14 +1315,14 @@
           "area_mm2": 0.0009
         },
         {
-          "at": [13.605, 0.306],
-          "long_mm": 0.06,
-          "area_mm2": 0.0008
+          "at": [5.209, -1.29],
+          "long_mm": 0.03,
+          "area_mm2": 0.0006
         }
       ],
       "lattice_sites": {
-        "RX": 122,
-        "TX": 104
+        "RX": 104,
+        "TX": 86
       },
       "ok": true
     },
@@ -1300,24 +1339,8 @@
           "lines_under_mask": [],
           "ok": true
         },
-        "RXD5": {
-          "ref": "RT2",
-          "vias_in_zone": 5,
-          "mismatch": 0,
-          "vias_at_lands": [],
-          "lines_under_mask": [],
-          "ok": true
-        },
-        "TXD0": {
-          "ref": "RT3",
-          "vias_in_zone": 5,
-          "mismatch": 0,
-          "vias_at_lands": [],
-          "lines_under_mask": [],
-          "ok": true
-        },
         "TXD4": {
-          "ref": "RT4",
+          "ref": "RT2",
           "vias_in_zone": 5,
           "mismatch": 0,
           "vias_at_lands": [],
@@ -1326,6 +1349,129 @@
         }
       },
       "ok": true
+    },
+    {
+      "check": "G8 PA feed (D14)",
+      "net": "1V0_PA",
+      "balls": ["A2", "B2"],
+      "vias": 4,
+      "min_to_foreign_land_mm": 0.15,
+      "min_to_gnd_via_pad_mm": 0.15,
+      "min_hole_to_hole_mm": 0.3992,
+      "min_to_rf_copper_mm": 0.71,
+      "bar_to_tx_launch_ground_mm": 0.15,
+      "copper_outside_pocket_or_package": [],
+      "vias_outside_pocket": [],
+      "l2_antipad_to_feed_centreline_mm": 0.7217,
+      "l2_antipad_radius_mm": 0.35,
+      "electrical": {
+        "sheet_mohm_per_sq": 0.4914,
+        "squares": {
+          "neck": 4.304,
+          "bar_to_outer": 0.918,
+          "outer_to_inner": 1.327
+        },
+        "via_mohm_each_l1_l4": 0.924,
+        "via_array_and_patch_mohm": 0.355,
+        "vias": 4,
+        "i_peak_per_via_a": 0.625,
+        "i_rms_per_via_a": 0.25,
+        "ir_drop_mv": {
+          "outer": 7.3,
+          "inner": 8.12
+        },
+        "neck_width_mm": 0.28,
+        "bar_width_mm": 0.49,
+        "neck_ipc2221_10c_a": 0.95,
+        "via_self_inductance_nh_each": 0.972,
+        "via_inductance_parallel_nh_no_mutual": 0.243,
+        "note": "copper at 20 C, 35 um L1, equal split between the balls; the via barrels to the L4 pour; sized for the whole 1.0 V rail (2.5 A peak, 1.0 A RMS)"
+      },
+      "limits": {
+        "clearance_mm": 0.15,
+        "via_i_max_a": 1.0,
+        "ir_max_mv": 10.0,
+        "antipad_feed_min_mm": 0.5,
+        "hole_to_hole_mm": 0.28,
+        "gnd_via_pad_r": 0.16
+      },
+      "geometry": {
+        "bar": [3.74, 3.75, 5.14, 4.24],
+        "neck": [4.86, 3.75, 5.14, 5.45],
+        "vias": [
+          [4.89, 5.45],
+          [4.89, 5.95],
+          [4.39, 5.45],
+          [4.39, 5.95]
+        ],
+        "via": [0.2, 0.4],
+        "pocket": [3.563, 5.2, 5.25, 7.0],
+        "lattice": {
+          "lattice_step_mm": 0.5,
+          "rejected_sites": {},
+          "wanted": 4
+        }
+      },
+      "failed": [],
+      "ok": true
+    },
+    {
+      "check": "G9 L2-L3 cavity",
+      "option": "K0",
+      "windows": true,
+      "posts": 0,
+      "banks": {
+        "RX": {
+          "cavity_mm": [13.964, 7.071],
+          "largest_via_free_radius_mm": 3.578,
+          "tm_modes_57_70ghz": {
+            "count": 23,
+            "lowest_ghz": 5.72,
+            "first": [
+              [10, 0, 57.21],
+              [2, 5, 57.64],
+              [10, 1, 58.32],
+              [3, 5, 59.05],
+              [7, 4, 60.39],
+              [4, 5, 60.96]
+            ]
+          },
+          "posts_inside": 0,
+          "excited": "through the L2 windows (rf-uniform: -10 to -25 dB)"
+        },
+        "TX": {
+          "cavity_mm": [11.622, 7.071],
+          "largest_via_free_radius_mm": 3.578,
+          "tm_modes_57_70ghz": {
+            "count": 18,
+            "lowest_ghz": 6.87,
+            "first": [
+              [2, 5, 58.15],
+              [7, 3, 58.86],
+              [8, 2, 59.46],
+              [3, 5, 60.14],
+              [6, 4, 61.19],
+              [9, 0, 61.87]
+            ]
+          },
+          "posts_inside": 0,
+          "excited": "through the L2 windows (rf-uniform: -10 to -25 dB)"
+        }
+      },
+      "failed": [],
+      "ok": true
+    },
+    {
+      "check": "T3 TX ball-to-column orders (L-routes on L1) [D]",
+      "planar": ["TX1-TX2-TX3"],
+      "crossing": {
+        "TX1-TX3-TX2": ["TX2xTX3"],
+        "TX2-TX1-TX3": ["TX1xTX2"],
+        "TX2-TX3-TX1": ["TX1xTX2", "TX1xTX3"],
+        "TX3-TX1-TX2": ["TX1xTX3", "TX2xTX3"],
+        "TX3-TX2-TX1": ["TX1xTX2", "TX1xTX3", "TX2xTX3"]
+      },
+      "used": "TX1-TX2-TX3"
     },
     {
       "check": "G6 fits and D12",
@@ -1365,12 +1511,13 @@
           }
         },
         "tx": {
-          "dx_bank": 3.547,
-          "E": 6.8,
+          "dx_bank": 0.05,
+          "E": 7.01,
           "equalizers": {
             "TX1": {
               "lane_fingers": 1,
               "nw_fingers": 1,
+              "nw_r": 0.5,
               "nw_a": 2.1584,
               "nw_apex_y": 5.7584
             },
@@ -1384,24 +1531,48 @@
             "alloc": [null, 1, "lane"]
           },
           "rejected": {
-            "paths": 450,
-            "load": 2
+            "paths": 6446,
+            "band": 16
+          },
+          "skew_budget_mm": 0.0,
+          "order_planarity": {
+            "orders": {
+              "TX1-TX2-TX3": {
+                "crossing": []
+              },
+              "TX1-TX3-TX2": {
+                "crossing": ["TX2xTX3"]
+              },
+              "TX2-TX1-TX3": {
+                "crossing": ["TX1xTX2"]
+              },
+              "TX2-TX3-TX1": {
+                "crossing": ["TX1xTX2", "TX1xTX3"]
+              },
+              "TX3-TX1-TX2": {
+                "crossing": ["TX1xTX3", "TX2xTX3"]
+              },
+              "TX3-TX2-TX1": {
+                "crossing": ["TX1xTX2", "TX1xTX3", "TX2xTX3"]
+              }
+            },
+            "planar": ["TX1-TX2-TX3"]
           }
         },
-        "dummies": ["RXD0", "RXD5", "TXD0", "TXD4"]
+        "dummies": ["RXD0", "TXD4"]
       },
-      "band_margin_mm": 0.9,
+      "band_margin_mm": 0.8516,
       "layout_sha256_per_variant": {
-        "-1": "ee9d7c9490d0e73e0ff945ebbb814abada218ac20ff3bc57629b6f4db4798ee0",
-        "0": "ee9d7c9490d0e73e0ff945ebbb814abada218ac20ff3bc57629b6f4db4798ee0",
-        "1": "ee9d7c9490d0e73e0ff945ebbb814abada218ac20ff3bc57629b6f4db4798ee0"
+        "-1": "dc5fc14e1c2931b383d54175d07af3455b62b55a9a86985b3930673b300241c0",
+        "0": "dc5fc14e1c2931b383d54175d07af3455b62b55a9a86985b3930673b300241c0",
+        "1": "dc5fc14e1c2931b383d54175d07af3455b62b55a9a86985b3930673b300241c0"
       },
-      "outside_cutouts_sha256": "3b7386344c6875df03ebd1eac4daed3b1a26d4ab38c00fccc39c6c7c4a273f20",
+      "outside_cutouts_sha256": "e49790dd0283be36b2d236684badf20c2e2fe6eb47c592e51cf3ecd3f9f22ba6",
       "ok": true
     }
   ],
-  "geometry_sha256": "b5b53f3d0e04b226dc3461886068edc46e44576af36f4609ca89f6129f4de087",
-  "outside_cutouts_sha256": "3b7386344c6875df03ebd1eac4daed3b1a26d4ab38c00fccc39c6c7c4a273f20",
+  "geometry_sha256": "cbcff64b0d61e474a91d1f85c6572c21a4f66e67de79caf29f9d39c7411b77f4",
+  "outside_cutouts_sha256": "e49790dd0283be36b2d236684badf20c2e2fe6eb47c592e51cf3ecd3f9f22ba6",
   "board_frame": {
     "u1_at": [26.0, 28.0],
     "phase_centres": {
@@ -1409,32 +1580,30 @@
       "RX2": [23.008, 39.9882],
       "RX3": [25.35, 39.9882],
       "RX4": [27.692, 39.9882],
-      "TX1": [38.718, 38.1],
-      "TX2": [41.06, 38.1],
-      "TX3": [43.402, 38.1]
+      "TX1": [35.221, 38.31],
+      "TX2": [37.563, 38.31],
+      "TX3": [39.905, 38.31]
     },
     "dummy_phase_centres": {
       "RXD0": [18.324, 39.9882],
-      "RXD5": [30.034, 39.9882],
-      "TXD0": [36.376, 38.1],
-      "TXD4": [45.744, 38.1]
+      "TXD4": [42.247, 38.31]
     },
-    "rx_patch_bbox": [19.941, 37.9732, 28.417, 42.0031],
-    "tx_patch_bbox": [37.993, 36.0851, 44.127, 40.1149],
-    "rx_patch_bbox_with_dummies": [17.599, 37.9732, 30.759, 42.0031],
-    "tx_patch_bbox_with_dummies": [35.651, 36.0851, 46.469, 40.1149],
+    "rx_patch_bbox": [19.941, 37.9394, 28.417, 42.037],
+    "tx_patch_bbox": [34.496, 36.2612, 40.63, 40.3588],
+    "rx_patch_bbox_with_dummies": [17.599, 37.9394, 28.417, 42.037],
+    "tx_patch_bbox_with_dummies": [34.496, 36.2612, 42.972, 40.3588],
     "l1_cutouts": {
-      "RX": [16.599, 36.6882, 32.205, 43.0238],
-      "TX": [34.205, 34.8, 47.469, 41.1357]
+      "RX": [16.599, 36.6882, 29.863, 43.059],
+      "TX": [33.05, 35.01, 43.972, 41.3808]
     },
     "entries_y": {
       "RX": 36.6882,
-      "TX": 34.8
+      "TX": 35.01
     },
-    "region_bbox": [12.599, 26.7, 51.469, 47.0238],
-    "r4_guard_x": [7.599, 56.469],
-    "board_height_min": 47.3488,
-    "rx_tx_nearest_phase_centres": 11.1865,
+    "region_bbox": [12.599, 26.7, 47.972, 47.059],
+    "r4_guard_x": [7.599, 52.972],
+    "board_height_min": 47.384,
+    "rx_tx_nearest_phase_centres": 7.7138,
     "dummy_loads": {
       "RT1": {
         "column": "RXD0",
@@ -1444,39 +1613,61 @@
         "mask_island": [18.715, 33.9682, 20.275, 35.7382]
       },
       "RT2": {
-        "column": "RXD5",
-        "centre": [31.205, 35.0182],
-        "axis": "y",
-        "via_zone": [30.545, 34.1382, 31.865, 35.7882],
-        "mask_island": [30.425, 33.9682, 31.985, 35.7382]
-      },
-      "RT3": {
-        "column": "TXD0",
-        "centre": [35.205, 33.13],
-        "axis": "y",
-        "via_zone": [34.545, 32.25, 35.865, 33.9],
-        "mask_island": [34.425, 32.08, 35.985, 33.85]
-      },
-      "RT4": {
         "column": "TXD4",
-        "centre": [44.573, 33.13],
+        "centre": [41.076, 33.34],
         "axis": "y",
-        "via_zone": [43.913, 32.25, 45.233, 33.9],
-        "mask_island": [43.793, 32.08, 45.353, 33.85]
+        "via_zone": [40.416, 32.46, 41.736, 34.11],
+        "mask_island": [40.296, 32.29, 41.856, 34.06]
       }
     },
-    "vout_pa_pocket": [29.557, 33.45, 31.25, 34.2],
+    "vout_pa_pocket": [29.563, 33.45, 31.25, 35.0],
+    "pa_feed": {
+      "net": "1V0_PA",
+      "skip_pads": ["A2", "B2"],
+      "vias": [
+        [30.89, 33.45],
+        [30.89, 33.95],
+        [30.39, 33.45],
+        [30.39, 33.95]
+      ],
+      "via_drill_pad": [0.2, 0.4],
+      "l1_copper": [
+        [29.74, 31.75, 31.14, 32.24],
+        [30.86, 31.75, 31.14, 33.45],
+        [30.64, 33.2, 31.14, 33.7],
+        [30.64, 33.7, 31.14, 34.2],
+        [30.14, 33.2, 30.64, 33.7],
+        [30.14, 33.7, 30.64, 34.2],
+        [30.64, 33.2, 31.14, 34.2],
+        [30.14, 33.2, 31.14, 33.7],
+        [30.14, 33.7, 31.14, 34.2],
+        [30.14, 33.2, 30.64, 34.2]
+      ],
+      "pocket": [29.563, 33.2, 31.25, 35.0],
+      "mask_island": [30.09, 33.2, 31.19, 34.25],
+      "antipad_radius_l2_l3_l5": 0.35,
+      "l4_tie": "In3.Cu 1V0_PA pour over the vias (integration); the macro preview draws the pocket + 0.5 mm as a stand-in",
+      "bottom_caps": "VOUT_PA caps on B.Cu at the vias, pads by the integration's decoupling audit"
+    },
+    "options": {
+      "d15": "A",
+      "dummies": "outer",
+      "dummy_term": "load",
+      "l23_cavity": "K0",
+      "column": "corporate",
+      "tx_eq": "T0"
+    },
     "in2_gnd_polygons": [
       [
         [12.599, 33.2],
-        [51.469, 33.2],
-        [51.469, 47.0238],
-        [12.599, 47.0238]
+        [47.972, 33.2],
+        [47.972, 47.059],
+        [12.599, 47.059]
       ],
       [
         [31.2, 26.7],
-        [51.469, 26.7],
-        [51.469, 33.2],
+        [47.972, 26.7],
+        [47.972, 33.2],
         [31.2, 33.2]
       ],
       [
@@ -1732,6 +1923,9 @@
     ]
   },
   "schema": "radar60-rfmacro/1",
+  "overrides": {
+    "variant": -1
+  },
   "files": {
     "pcb": "rfm1-m.kicad_pcb",
     "pro": "rfm1-m.kicad_pro",

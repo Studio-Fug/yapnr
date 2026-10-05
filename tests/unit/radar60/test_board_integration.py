@@ -46,11 +46,20 @@ class MergeMacroTest(unittest.TestCase):
         cls.text, cls.counts = kicad_ops.merge_macro(EMPTY_BOARD, macro_text(), cls.rec, U1)
 
     def test_counts_come_from_the_record(self):
-        self.assertEqual(self.counts["columns"], 11)
-        self.assertEqual(self.counts["dummy_columns"], 4)
-        self.assertEqual(self.counts["loads"], 4)
-        self.assertEqual(self.counts["mask_polygons"], 12)
-        self.assertEqual(self.counts["via"], 1441)
+        # macro v2 freeze (radar60-rf3b 727df41): the board's record carries 9 columns, 2 of
+        # them dummies (RXD0, TXD4; the RF-uniformity layout's RXD5/TXD0 are gone).
+        self.assertEqual(self.counts["columns"], 9)
+        self.assertEqual(self.counts["dummy_columns"], 2)
+        self.assertEqual(self.counts["loads"], 2)
+        self.assertEqual(self.counts["mask_polygons"], 11)
+        self.assertEqual(self.counts["via"], 1317)
+
+    def test_the_v2_pa_feed_footprint_is_recognized_not_refused(self):
+        # macro v2 freeze (radar60-rf3b 727df41) added one D14 PA-feed footprint per macro
+        # board; merge_macro counts it and drops it rather than refusing the board (its copper
+        # is a later step, see kicad_ops.PA_FEED_FOOTPRINT's comment).
+        self.assertEqual(self.counts["pa_feed_dropped"], 1)
+        self.assertNotIn(kicad_ops.PA_FEED_FOOTPRINT, self.text)
 
     def test_rfm1_carries_every_column_including_the_dummies(self):
         rfm1 = footprint(self.text, "RFM1")
@@ -63,7 +72,7 @@ class MergeMacroTest(unittest.TestCase):
             sorted(pads),
             sorted(n.lower() for n in self.rec["columns"]),
         )
-        for name in ("rxd0", "rxd5", "txd0", "txd4"):
+        for name in ("rxd0", "txd4"):
             self.assertEqual(pads[name], {"RF_" + name.upper()})
         self.assertIn("exclude_from_bom", rfm1)  # the macro copper is board-only
         field = re.search(r'\(property "geometry_sha256" "([^"]*)"', rfm1).group(1)
@@ -99,7 +108,7 @@ class MergeMacroTest(unittest.TestCase):
         )
         got = kicad_ops.macro_digest(self.text, U1, None, loads)
         self.assertEqual(want, got)
-        self.assertEqual(got[1], {"copper": 1664, "load_pads": 8, "mask_polygons": 12})
+        self.assertEqual(got[1], {"copper": 1508, "load_pads": 4, "mask_polygons": 11})
         # the copper-only digest (R1 v1) agrees too
         self.assertEqual(
             kicad_ops.copper_digest(

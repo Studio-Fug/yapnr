@@ -78,10 +78,12 @@ OTHER_EDGE_BALLS = {
 
 RX_NAMES = ["RX1", "RX2", "RX3", "RX4"]
 TX_NAMES = ["TX1", "TX2", "TX3"]
-# terminated dummy cells per `dummies` option: the bank ends beside RX1/RX4 and TX1/TX3
+# terminated dummy cells per `dummies` option: the bank ends beside RX1/RX4 and TX1/TX3 (S2
+# "both", S1 "outer": the open ends only, S1.5 "outer+txd0": S1 plus the input-side TXD0)
 DUMMY_SETS = {
     "both": ("RXD0", "RXD5", "TXD0", "TXD4"),
     "outer": ("RXD0", "TXD4"),
+    "outer+txd0": ("RXD0", "TXD0", "TXD4"),
     "none": (),
 }
 
@@ -152,6 +154,11 @@ class Macro:
     banks: Dict[str, Dict[str, object]] = field(default_factory=dict)
     unstitched: List[List[Pt]] = field(default_factory=list)  # GND made gap (cannot be stitched)
     load_channels: List[List[Pt]] = field(default_factory=list)
+    # L1 GND zones as filled (D15: the pour rectangles for A/B; for C the strips, rings, load
+    # cells and the launch ground); `pour` keeps the region's rectangles for the site rules
+    pour_zones: List[List[Pt]] = field(default_factory=list)
+    pa: Optional[object] = None  # D14 PA feed (rfmacro.pa.PAFeed)
+    posts: List[Pt] = field(default_factory=list)  # K2 L2-L3 posts (also in `vias`)
     via_log: Dict[str, object] = field(default_factory=dict)
     fit: Dict[str, object] = field(default_factory=dict)
     rows: Dict[str, object] = field(default_factory=dict)  # fence-row bookkeeping for G4
@@ -164,6 +171,64 @@ def _xf(pt: Pt, origin: Pt, mirror: bool) -> Pt:
     return (origin[0] + x, origin[1] + y)
 
 
+def series_link(p: Dict, d: Dict) -> float:
+    """Series column (RFS-4S): the lambda_g/2 link of ser_link_w on the window stack, scaled by
+    ser_link_scale (C1/D5 sweep) [D, closed form as the CP-A-SER coupon]."""
+    from . import closedform as cf
+
+    h, er = d["window"]["h_mm"], d["window"]["er_composite"]
+    w = float(p["ser_link_w"])
+    _, e = cf.ms_static(w, h, 0.035, er)
+    lg = cf.guided_wavelength(62.05e9, cf.kj_dispersion(e, w, h, er, 62.05e9))
+    return lg / 2 * float(p["ser_link_scale"])
+
+
+def build_column_series(name: str, net: str, origin: Pt, mirror: bool, p: Dict, d: Dict) -> Column:
+    """D5 alternative: a series-fed 2-patch column (RFS-4S) in the corporate cell's frame: phase
+    centre at (0, 0), the lower patch inset-fed at its south edge on the axis (x = in_x = 0) from
+    P1, a lambda_g/2 link from its north edge to the upper patch's south edge (both patches in
+    phase), one L2 window over the column."""
+    col = Column(name, net, origin, mirror)
+    W, L = d["patch"]["w"], d["patch"]["l"]
+    ins = d["patch"]["inset"]
+    nw = float(p["w50"]) / 2 + float(p["notch"])
+    m = float(p["window_margin"])
+    link = series_link(p, d)
+    s = L + link
+    y0 = -s / 2 - L / 2  # lower patch, south edge (the inset feed)
+    lo = [
+        (-W / 2, y0),
+        (-nw, y0),
+        (-nw, y0 + ins),
+        (nw, y0 + ins),
+        (nw, y0),
+        (W / 2, y0),
+        (W / 2, y0 + L),
+        (-W / 2, y0 + L),
+    ]
+    hi = rect(-W / 2, s / 2 - L / 2, W / 2, s / 2 + L / 2)
+    col.patches = [[_xf(q, origin, mirror) for q in poly] for poly in (lo, hi)]
+    if p["windows"]:
+        col.windows.append(
+            [_xf(q, origin, mirror) for q in rect(-W / 2 - m, y0 - m, W / 2 + m, s / 2 + L / 2 + m)]
+        )
+    xin = float(p["in_x"])
+    inp = Path((xin, float(p["p1_y"])), math.pi / 2, float(p["w50"]))
+    inp.straight(y0 + ins - float(p["p1_y"]))
+    lk = Path((0.0, y0 + L), math.pi / 2, float(p["ser_link_w"]))
+    lk.straight(link)
+    col.paths = [inp, lk]
+    col.arm_lengths = dict(link=link, spacing=s, input=inp.length)
+    col.p1 = _xf((xin, float(p["p1_y"])), origin, mirror)
+    return col
+
+
+def make_column(name: str, net: str, origin: Pt, mirror: bool, p: Dict, d: Dict) -> Column:
+    if p["column"] == "series":
+        return build_column_series(name, net, origin, mirror, p, d)
+    return build_column(name, net, origin, mirror, p, d)
+
+
 def build_column(name: str, net: str, origin: Pt, mirror: bool, p: Dict, d: Dict) -> Column:
     """One 2-patch corporate column in its frame (phase centre at 0,0; +y along the column;
     the input runs up the +x gap), then placed at `origin` (mirrored for a -x gap input)."""
@@ -174,8 +239,9 @@ def build_column(name: str, net: str, origin: Pt, mirror: bool, p: Dict, d: Dict
     notch = float(p["notch"])
     w50, w35 = float(p["w50"]), float(p["w35"])
     m = float(p["window_margin"])
-    lg50 = d["lines"]["lambda_g50"]
-    q35 = d["lines"]["quarter35"]
+    ks = float(p["div_l_scale"])
+    half_lg = d["lines"]["lambda_g50"] / 2 * ks  # the south arm's surplus (C1: div_l_scale)
+    q35 = d["lines"]["quarter35"] * ks
     ty = float(p["t_y"])
     xin = float(p["in_x"])
     edge = s / 2 - L / 2  # facing radiating edges at y = +-edge
@@ -219,7 +285,7 @@ def build_column(name: str, net: str, origin: Pt, mirror: bool, p: Dict, d: Dict
     # south arm: lambda_g/2 longer (electrically) to undo the 180° of the facing feeds; the
     # surplus over the straight run is a jog away from the input side
     south = Path((0.0, ty), -math.pi / 2, w50)
-    extra = lg50 / 2 - 2 * ty
+    extra = half_lg - 2 * ty
     rj = 0.20
     b = (extra - (2 * math.pi - 4) * rj) / 2
     if b < 0:
@@ -232,7 +298,7 @@ def build_column(name: str, net: str, origin: Pt, mirror: bool, p: Dict, d: Dict
         raise ValueError("no room for the south arm jog")
     south.straight(rest)
     col.arm_lengths = dict(
-        north=north.length, south=south.length, diff=south.length - north.length, target=lg50 / 2
+        north=north.length, south=south.length, diff=south.length - north.length, target=half_lg
     )
     # input: P1 (xin, p1_y) north up the gap, turn west, 50 ohm stub, then the 35 ohm lambda/4 to T
     rin = 0.30
@@ -304,6 +370,8 @@ class Rules:
         self.lout = float(p["runin_out"])
         self.lin = float(p["pour_clear_ant"])
         self.rm = float(p["meander_r"])
+        self.rm_nw = float(p["meander_r_nw"])
+        self.column = str(p["column"])
         self.half = PKG["body"] / 2
         self.d = D_LATTICE
         self.in_x = float(p["in_x"])
@@ -312,9 +380,14 @@ class Rules:
         s = float(p["spacing"])
         # the cell is variant-independent: its top is the longest D12 variant's upper patch
         l_max = d["patch"]["l"] / length_scale(p) * (1 + float(p["bracket_step"]))
-        self.cell = (-W / 2, self.p1_y, self.in_x, s / 2 + l_max / 2)
+        if self.column == "series":  # patch centres at +-(L + link)/2
+            top = l_max + series_link(p, d) / 2
+        else:
+            top = s / 2 + l_max / 2
+        self.cell = (-W / 2, self.p1_y, max(self.in_x, W / 2), top)
         lz = dict(p["dummy_load"])
         self.load = lz
+        self.skew_mm = skew_budget_mm(p, d)
         self.lchan = self.w50 / 2 + self.gap
         self.fence_start = float(p["fence_start"])
         self.rx_tail = float(p["rx_tail"])
@@ -331,6 +404,11 @@ class Rules:
             ox = xi + self.in_x if mirror else xi - self.in_x
             xs += [ox - x1c, ox - x0c] if mirror else [ox + x0c, ox + x1c]
         return (min(xs) - c, oy + y0c - c, max(xs) + c, oy + y1c + c)
+
+    def load_mask(self, xin: float, e: float) -> Tuple[float, float, float, float]:
+        mx, my0, my1 = (float(v) for v in self.load["mask"])
+        pg = e - self.lout
+        return (xin - mx, pg - my0, xin + mx, pg - my1)
 
     def load_zone(self, xin: float, e: float) -> Tuple[float, float, float, float]:
         zx, zy = self.load["zone"]
@@ -477,6 +555,13 @@ def fit_rx(p: Dict, ru: Rules, rx_ball, rx_in, p0_y: float):
 TX_ALLOCS = [(None, 0, "lane"), (None, 1, "lane"), (2, 0, "lane"), (2, 1, "lane"), (3, 0, "lane")]
 
 
+def skew_budget_mm(p: Dict, d: Dict) -> float:
+    """T4: the length a TX line may fall short of the longest, from tx_skew_budget_ps and the
+    GCPW phase velocity at 62.05 GHz (lambda_g x f0) [D]."""
+    lg = d["lines"].get("lambda_g50_gcpw") or d["lines"]["lambda_g50"]
+    return float(p["tx_skew_budget_ps"]) * 1e-12 * lg * 62.05e9
+
+
 def _tx_paths(e: float, dx_bank: float, alloc, p: Dict, ru: Rules, tx_ball, p0_x: float):
     nnw, ne1, st2 = alloc
     d = ru.d
@@ -484,9 +569,13 @@ def _tx_paths(e: float, dx_bank: float, alloc, p: Dict, ru: Rules, tx_ball, p0_x
     pg = e - ru.lout
     rtx = float(p["bend_r_tx"])
     rm = ru.rm
+    rnw = ru.rm_nw  # T2: TX1's north-west fingers
     manh = {n: (xin[n] - p0_x) + (pg - tx_ball[n][1]) for n in TX_NAMES}
     ref = max(manh.values())
+    budget = ru.skew_mm  # T4: TX1's north-west finger equalizes only to within the skew budget
     extra = {n: ref - manh[n] for n in TX_NAMES}
+    if budget > 0:  # (TX2's lane fingers keep their length: the lane's geometry stays T0's)
+        extra["TX1"] = max(0.0, extra["TX1"] - budget)
     out, info = {}, {}
     k = 2 * math.pi - 4
     lane = d - 2 * ru.foff  # finger reach in a lane between two legs (shared rows)
@@ -498,25 +587,31 @@ def _tx_paths(e: float, dx_bank: float, alloc, p: Dict, ru: Rules, tx_ball, p0_x
         if n == "TX1":
             e_east = min(ne1 * e_lane, extra[n])
             e_nw = extra[n] - e_east
-            # first finger leg's fence row `fence_start` east of the package body
-            xs = ru.half + ru.fence_start + ru.foff - rm
+            # first finger's arc starts where its inner fence row (radius |R - fence_offset|
+            # round the arc's centre) stays `fence_start` east of the package body
+            xs = ru.half + ru.fence_start + max(0.0, ru.foff - rnw)
             span = (xin[n] - rtx) - xs
-            nmax = int(span // (4 * rm) + 1e-9)
+            nmax = int(span // (4 * rnw) + 1e-9)
             info[n] = dict(lane_fingers=ne1)
             if e_nw > 1e-9:
                 if nmax < 1:
                     return None
                 nf = nnw
                 if nf is None:
-                    nf = next((m for m in range(1, nmax + 1) if (e_nw / m - k * rm) / 2 >= 0), None)
-                if nf is None or nf > nmax or (e_nw / nf - k * rm) / 2 < 0:
+                    nf = next(
+                        (m for m in range(1, nmax + 1) if (e_nw / m - k * rnw) / 2 >= 0), None
+                    )
+                if nf is None or nf > nmax or (e_nw / nf - k * rnw) / 2 < 0:
                     return None
-                a_ = (e_nw / nf - k * rm) / 2
+                a_ = (e_nw / nf - k * rnw) / 2
                 path.straight(xs - p0_x)
                 for _ in range(nf):
-                    path.turn(rm, 90).straight(a_).turn(rm, -180).straight(a_).turn(rm, 90)
+                    path.turn(rnw, 90).straight(a_).turn(rnw, -180).straight(a_).turn(rnw, 90)
                 info[n].update(
-                    nw_fingers=nf, nw_a=round(a_, 4), nw_apex_y=round(by + 2 * rm + a_, 4)
+                    nw_fingers=nf,
+                    nw_r=rnw,
+                    nw_a=round(a_, 4),
+                    nw_apex_y=round(by + 2 * rnw + a_, 4),
                 )
             if xin[n] - rtx - path.pos[0] < -1e-9:
                 return None
@@ -539,7 +634,7 @@ def _tx_paths(e: float, dx_bank: float, alloc, p: Dict, ru: Rules, tx_ball, p0_x
             return None
         path.straight(pg - path.pos[1]).mark("Pg")
         path.straight(ru.lout).mark("E").straight(ru.lin).mark("P1")
-        want = ref + (math.pi / 2 - 2) * rtx
+        want = manh[n] + extra[n] + (math.pi / 2 - 2) * rtx
         if abs((path.marks["Pg"][1] - path.marks["P0"][1]) - want) > 1e-6:
             return None
         out[n] = path
@@ -590,7 +685,9 @@ def _clear_of_loads(paths: Dict[str, Path], zones, r: float) -> bool:
     return True
 
 
-def fit_tx(p: Dict, ru: Rules, tx_ball, p0_x: float, rx_cut, rx_paths, rx_loads, dummies):
+def fit_tx(
+    p: Dict, ru: Rules, tx_ball, p0_x: float, rx_cut, rx_paths, rx_loads, dummies, rx_masks=()
+):
     """Lowest TX entry (then the smallest eastward shift) at which every equalizer fits outside
     the guard bands, the corridors keep `smin`, TX1's fence clears the package and no feed passes
     a dummy load."""
@@ -635,6 +732,10 @@ def fit_tx(p: Dict, ru: Rules, tx_ball, p0_x: float, rx_cut, rx_paths, rx_loads,
         zones = [ru.load_zone(names[n], e) for n in ("TXD0", "TXD4") if n in names] + rx_loads
         if not _clear_of_loads({**txp, **rx_paths}, zones, ru.load["zone"][0]):
             return fail("load")
+        # no other line's channel under a load's mask island (G7)
+        islands = [ru.load_mask(names[n], e) for n in ("TXD0", "TXD4") if n in names]
+        if not _clear_of_loads({**txp, **rx_paths}, islands + rx_masks, ru.lchan):
+            return fail("load mask")
         info["alloc"] = [alloc[0], alloc[1], alloc[2]]
         return dict(dx=dxb, E=e, paths=txp, info=info, xin=xin, names=names, cut=cut)
 
@@ -695,6 +796,24 @@ def _load(name: str, net: str, xin: float, e: float, mirror: bool, ru: Rules, id
     )
 
 
+def tx_order_planarity(tx_ball: Dict[str, Pt]) -> Dict[str, object]:
+    """T3 [D]: every ball-to-column order of the TX lines as L-routes on L1 (east from the ball
+    along its row, then north on its column). Lines i, j cross when i's ball lies north of j's
+    and i's column is east of j's (j's northward leg meets i's eastward leg)."""
+    import itertools
+
+    orders = {}
+    for perm in itertools.permutations(TX_NAMES):
+        col = {n: k for k, n in enumerate(perm)}  # column index west to east
+        bad = []
+        for a, b in itertools.combinations(TX_NAMES, 2):
+            ya, yb = tx_ball[a][1], tx_ball[b][1]
+            if (ya - yb) * (col[a] - col[b]) > 0:
+                bad.append(f"{a}x{b}")
+        orders["-".join(perm)] = dict(crossing=bad)
+    return dict(orders=orders, planar=[k for k, v in orders.items() if not v["crossing"]])
+
+
 def build(overrides: Dict | None = None) -> Macro:
     p = resolve(overrides)
     d = dims_mod.compute(p)
@@ -720,11 +839,20 @@ def build(overrides: Dict | None = None) -> Macro:
         rx_cols_in["RXD5"] = rx_in["RX4"] + d_l
     rx_cut = ru.cut(list(rx_cols_in.values()), e_rx, False)
     rx_loads = [ru.load_zone(rx_cols_in[n], e_rx) for n in ("RXD0", "RXD5") if n in rx_cols_in]
+    rx_masks = [ru.load_mask(rx_cols_in[n], e_rx) for n in ("RXD0", "RXD5") if n in rx_cols_in]
 
     # ---- TX bank: fit search (bank shift east, entry height, equalizer lanes) ---------------
     tx_ball = {n: ball_xy(RF_BALLS[n], mir) for n in TX_NAMES}
+    # T3: the ball-to-column order; only the nested one is planar on L1 for L-routes
+    t3 = tx_order_planarity(tx_ball)
+    order_req = "-".join(p["tx_order"])
+    if t3["orders"][order_req]["crossing"]:
+        raise ValueError(
+            f"T3: tx_order {order_req} crosses on L1 ({t3['orders'][order_req]['crossing']}); "
+            f"planar: {t3['planar']}"
+        )
     p0_x = tx_ball["TX1"][0] + float(p["launch_len"])
-    tfit = fit_tx(p, ru, tx_ball, p0_x, rx_cut, rx_paths, rx_loads, dummies)
+    tfit = fit_tx(p, ru, tx_ball, p0_x, rx_cut, rx_paths, rx_loads, dummies, rx_masks)
     e_tx = tfit["E"]
     tx_cols_in = dict(tfit["names"])
 
@@ -742,7 +870,7 @@ def build(overrides: Dict | None = None) -> Macro:
         for n in [q for q in order if q in cols_in]:
             xi = cols_in[n]
             org = (xi + ru.in_x, oy) if mirror else (xi - ru.in_x, oy)
-            col = build_column(f"COL_{n}", n, org, mirror, p, d)
+            col = make_column(f"COL_{n}", n, org, mirror, p, d)
             col.dummy = n not in RX_NAMES + TX_NAMES
             mc.columns[n] = col
             if col.dummy:
@@ -785,6 +913,8 @@ def build(overrides: Dict | None = None) -> Macro:
             E=e_tx,
             equalizers=tfit["info"],
             rejected=tfit["why_rejected"],
+            skew_budget_mm=round(ru.skew_mm, 4),
+            order_planarity=t3,
         ),
         dummies=list(dummies),
     )
@@ -835,8 +965,18 @@ def build(overrides: Dict | None = None) -> Macro:
     for n in mc.feeds:
         b = rx_ball.get(n) or tx_ball.get(n)
         mc.l3_gnd.append(circle(b, float(p["l2_cut_r"]) + margin))
-    # the mask opening over the RF copper, without the load cells (mask-defined GND lands)
+    # D14: the VOUT_PA pocket (free box between RX4's and TX1's corridors and the loads) and the
+    # PA feed in it; both depend on the lines and loads only, so they come before the vias
+    _pocket(mc, ru)
+    if p["pa_feed"]:
+        from . import pa as pa_mod
+
+        mc.pa = pa_mod.build(mc, ru)
+    # the mask opening over the RF copper, without the load cells (mask-defined GND lands) and
+    # the PA feed's copper (DC copper under mask; its vias tented)
     islands = [ld.mask for ld in mc.loads.values()]
+    if mc.pa is not None:
+        islands += [mc.pa.mask_island]
     for r in rects_minus(
         [
             (x_lo, half_body + 0.05, x_hi, y_hi),
@@ -848,12 +988,19 @@ def build(overrides: Dict | None = None) -> Macro:
     x_iso = 0.5 * (rx_cut[2] + tfit["cut"][0])
     mc.ports["iso_fence_x"] = dict(at=[x_iso, 0.0])
 
+    # ---- D15 pour zones (A/B: the pour rectangles; C: strips, rings, load cells, launch ground),
+    # K2 posts ---------------------------------------------------------------------------------
+    from . import cavity as cavity_mod
+    from . import pour as pour_mod
+
+    mc.pour_zones = pour_mod.zones(mc, ru)
+    if p["l23_cavity"] == "K2":
+        mc.posts = cavity_mod.posts(mc, ru)
+
     # ---- vias: launch first, then the lattice, loads, fences, rings, rows, grid, fill --------
     from . import vias as vias_mod
 
     vias_mod.place(mc, ru)
-
-    _pocket(mc, ru)
 
     from . import rules as rules_mod
 

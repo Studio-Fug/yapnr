@@ -112,6 +112,7 @@ def compute(p: Dict[str, object]) -> Dict[str, object]:
             z50_gcpw=gc["z0_static"],
             z35=s35["z0_static"],
             lambda_g50=lg50,
+            lambda_g50_gcpw=gc.get("lambda_g"),
             lambda_g35=lg35,
             quarter35=lg35 / 4,
             half50=lg50 / 2,

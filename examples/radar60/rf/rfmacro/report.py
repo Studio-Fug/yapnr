@@ -88,9 +88,43 @@ def _board_frame(mc: Macro) -> Dict[str, object]:
             for n, ld in mc.loads.items()
         },
         vout_pa_pocket=None if pk is None else [pk[0] + ux, pk[1] + uy, pk[2] + ux, pk[3] + uy],
+        # D14: the macro's PA feed, for merge_macro (stage 3b hand-off)
+        pa_feed=None if mc.pa is None else _pa_frame(mc, ux, uy),
+        options=dict(
+            d15=mc.params["d15"],
+            dummies=mc.params["dummies"],
+            dummy_term=mc.params["dummy_term"],
+            l23_cavity=mc.params["l23_cavity"],
+            column=mc.params["column"],
+            tx_eq=mc.params["tx_eq"],
+        ),
         # In2.Cu GND the macro owns (its L3 reference): a keepout for the BGA fanout (E4) and
         # the escape probe, which lose In2 there (review 2026-10-03)
         in2_gnd_polygons=[[[q[0] + ux, q[1] + uy] for q in poly] for poly in mc.l3_gnd],
+    )
+
+
+def _pa_frame(mc: Macro, ux: float, uy: float) -> Dict[str, object]:
+    pa = mc.pa
+    clr = float(mc.params["pa_clear"])
+
+    def r(q):
+        return [round(q[0] + ux, 4), round(q[1] + uy, 4), round(q[2] + ux, 4), round(q[3] + uy, 4)]
+
+    return dict(
+        net=pa.net,
+        skip_pads=sorted(pa.balls),  # the fanout leaves A2/B2 to the macro
+        vias=[[round(c[0] + ux, 4), round(c[1] + uy, 4)] for c in pa.vias],
+        via_drill_pad=[pa.drill, pa.pad],
+        l1_copper=[r(q) for q in pa.rects],
+        pocket=r(pa.pocket),
+        mask_island=r(pa.mask_island),
+        antipad_radius_l2_l3_l5=round(pa.pad / 2 + clr, 4),
+        l4_tie=(
+            "In3.Cu 1V0_PA pour over the vias (integration); the macro preview draws the pocket "
+            "+ 0.5 mm as a stand-in"
+        ),
+        bottom_caps="VOUT_PA caps on B.Cu at the vias, pads by the integration's decoupling audit",
     )
 
 
@@ -98,9 +132,10 @@ def _board_frame(mc: Macro) -> Dict[str, object]:
 # 2026-10-03: RL 5.9 / 9.1 / 11.4 dB at 60.3 / 62.05 / 63.8 GHz, best match at 64.0 GHz), the L
 # x0.967 calibration came from one patch, and the bank (C2) is not solved.
 STATUS = (
-    "placeholder: geometry for integration only; the column fails ANT-02 RL at P1 (col-c 5.9/9.1/"
-    "11.4 dB at 60.3/62.05/63.8 GHz); the joint C1 sweep (w35, t_y, inset, L) and the C2 bank "
-    "solve (TX-RX isolation, coupling, phase centres, L2-L3 stitching) come before it is frozen"
+    "placeholder: geometry for integration only; the column's match is not converged and sits "
+    "high (rf-uniform: RL-10 64.35-66 GHz at 15 um against 60.3-63.8); stage 3b's C1 retune, the "
+    "D15 pour and S1/S2 choice, the L2-L3 cavity option and the PA-feed EM come before it is "
+    "frozen"
 )
 
 

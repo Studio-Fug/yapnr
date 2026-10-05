@@ -56,15 +56,21 @@ DUMMY_FOOTPRINT = "radar60:COL2_DUMMY"
 LOAD_FOOTPRINT = "radar60:R_0201_0603Metric_LOAD"
 MASK_FOOTPRINT = "radar60:RFM1_MASK"
 RFM1_FOOTPRINT = "radar60:RFM1_Macro"
-# rfm1-m/-n/-p (RF uniformity, 2026-10-04): 7 active columns and 4 terminated dummies.
+# D14 PA feed (macro v2 freeze, radar60-rf3b 727df41): a board-only (exclude_from_bom,
+# exclude_from_pos_files) footprint of flat pads on 1V0_PA at the VOUT_PA pocket. merge_macro
+# recognizes it so it does not refuse the v2 macro, but does not yet merge its copper: the
+# feed's through vias, A2/B2 skip_pads and the In3 1V0 pour (board_frame.pa_feed) are a later
+# step (stage 3c consolidation, 2026-10-05; examples/radar60/rf/README.md).
+PA_FEED_FOOTPRINT = "radar60:RFM1_PA_FEED"
+# rfm1-m/-n/-p: 7 active columns and 2 terminated dummies (RXD0, TXD4). The RF-uniformity
+# layout (2026-10-04) carried 4 dummies (RXD5 and TXD0 too); the v2 freeze (radar60-rf3b
+# 727df41, 2026-10-05) dropped back to 2, confirmed against all three variants' records.
 DEFAULT_COLUMNS = (
     "RXD0",
     "RX1",
     "RX2",
     "RX3",
     "RX4",
-    "RXD5",
-    "TXD0",
     "TX1",
     "TX2",
     "TX3",
@@ -298,12 +304,15 @@ def merge_macro(text, macro_text, record, u1_xy, held=None):
 
     The macro board must carry exactly the record's columns (active ``COL2_CORPORATE`` and,
     for ``dummy: true``, ``COL2_DUMMY``), the record's loads (``R_0201_0603Metric_LOAD``, one
-    per dummy column) and one mask footprint; any other footprint is refused. ``held`` maps a
-    load reference (``RT1``) to the schematic fields :func:`load_footprint` adds."""
+    per dummy column), one mask footprint and (macro v2) one D14 PA-feed footprint
+    (``PA_FEED_FOOTPRINT``, dropped here -- not yet merged, see its module comment); any other
+    footprint is refused. ``held`` maps a load reference (``RT1``) to the schematic fields
+    :func:`load_footprint` adds."""
     nets = macro_nets(record)
     dx, dy = u1_xy[0] - MACRO_CENTRE[0], u1_xy[1] - MACRO_CENTRE[1]
     items = [macro_text[a:b] for a, b in top_items(macro_text)]
     out, columns, loads, masks, counts = [], [], [], [], {}
+    pa_feeds = 0
     for item in items:
         kind = _kind(item)
         if kind == "footprint":
@@ -316,6 +325,8 @@ def merge_macro(text, macro_text, record, u1_xy, held=None):
                 loads.append(item)
             elif fpid == MASK_FOOTPRINT:
                 masks.append(item)
+            elif fpid == PA_FEED_FOOTPRINT:
+                pa_feeds += 1  # not yet merged (module comment); just not refused
             else:
                 raise ValueError("unexpected macro footprint: " + item[:80])
             continue
@@ -350,6 +361,7 @@ def merge_macro(text, macro_text, record, u1_xy, held=None):
     counts["dummy_columns"] = sum(1 for n in want if want[n].get("dummy"))
     counts["loads"] = len(loads)
     counts["mask_polygons"] = len(children(masks[0], "fp_poly"))
+    counts["pa_feed_dropped"] = pa_feeds
     return merged, counts
 
 

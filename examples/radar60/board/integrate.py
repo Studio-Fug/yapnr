@@ -57,6 +57,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -837,11 +838,102 @@ def step_route(a):
         print("step_route: %s (continuing to check)" % status, file=sys.stderr)
 
 
+# DRC check types whose project-file default severity is "ignore": kicad-cli's --severity-all
+# does not promote these (they are excluded before severity-all ever sees them, at the
+# project's own rule_severities), so a board with real violations of these types still DRCs
+# "clean" under --severity-all alone. Wave-1 review finding #3: 9 track_not_centered_on_via,
+# 5 missing_courtyard and 1 footprint_type_mismatch were invisible this way. check reports them
+# honestly (promoted to "error" in a scratch copy of the project, never the one that ships)
+# instead of letting a "0 violations" claim quietly depend on which checks were never run.
+_DRC_IGNORED_BY_DEFAULT = (
+    "footprint_filters_mismatch",
+    "footprint_type_mismatch",
+    "missing_courtyard",
+    "track_not_centered_on_via",
+    "tuning_profile_track_geometries",
+)
+
+
+def _run_drc(kicad_cli, board, out_json, promote=()):
+    """kicad-cli pcb drc --severity-all on ``board``, optionally with the severities named in
+    ``promote`` forced to "error" first (a scratch copy of the project; ``board`` itself and its
+    checked-in project are never modified). Returns the parsed report."""
+    if promote:
+        scratch = Path(out_json).with_suffix("")
+        if scratch.exists():
+            shutil.rmtree(scratch)
+        scratch.mkdir(parents=True)
+        board = Path(board)
+        scratch_board = scratch / board.name
+        shutil.copyfile(board, scratch_board)
+        proj = json.loads(board.with_suffix(".kicad_pro").read_text())
+        rs = proj["board"]["design_settings"].setdefault("rule_severities", {})
+        for t in promote:
+            rs[t] = "error"
+        scratch_board.with_suffix(".kicad_pro").write_text(json.dumps(proj, indent=2))
+        for ext in (".kicad_dru", ".kicad_prl"):
+            src = board.with_suffix(ext)
+            if src.is_file():
+                shutil.copyfile(src, scratch_board.with_suffix(ext))
+        for extra in ("fp-lib-table", "libs"):
+            src = board.parent / extra
+            dst = scratch / extra
+            if src.is_dir():
+                if dst.exists():
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+            elif src.is_file():
+                shutil.copyfile(src, dst)
+        board = scratch_board
+    subprocess.run(
+        [
+            kicad_cli,
+            "pcb",
+            "drc",
+            "--severity-all",
+            "--format",
+            "json",
+            "--units",
+            "mm",
+            "-o",
+            str(out_json),
+            str(board),
+        ],
+        check=False,
+        capture_output=True,
+    )
+    return (
+        json.loads(Path(out_json).read_text())
+        if Path(out_json).is_file()
+        else {"violations": [], "unconnected_items": []}
+    )
+
+
+_NET_IN_BRACKETS = re.compile(r"\[([^\]]+)\]")
+
+
+def _unconnected_nets(drc_doc):
+    """Net names with at least one open pad in ``unconnected_items`` (each item's description
+    reads e.g. "Pad 1 [VIN_5V] of R42 on F.Cu"): the connectivity ground truth that QSPI/LVDS
+    completion must be judged against, not copper length (finding #1)."""
+    nets = set()
+    for v in drc_doc.get("unconnected_items", []):
+        for item in v.get("items", []):
+            m = _NET_IN_BRACKETS.search(item.get("description", ""))
+            if m:
+                nets.add(m.group(1))
+    return nets
+
+
 def step_check(a):
-    """R6: DRC on every severity, R1 (the macro's copper digest unchanged by routing), R4 (no
-    foreign copper next to the RF region), the LVDS pairs' lengths and skew, the QSPI nets'
-    lengths, and the IR-drop report per rail (route's own ir.json, when the policy declares
-    one) — all against WORK/route/candidate.kicad_pcb. Written to OUT/measure.json."""
+    """R6: a refill (independent of route's own, so check holds even if that becomes
+    conditional), DRC on every severity including the ones KiCad's project defaults exclude
+    from "severity-all" (finding #3), R1 (the macro's copper digest unchanged by routing), R4
+    (no foreign copper next to the RF region), rf_audit A1-A6 on the *routed* board (finding
+    #2: finish only audits the pre-route board), the LVDS pairs' lengths/skew and the QSPI
+    nets' lengths judged by connectivity, not copper length (finding #1), and an independent
+    IR-drop re-run on the refilled candidate (finding #2, not route's cached ir.json) — all
+    against WORK/route/candidate.kicad_pcb. Written to OUT/measure.json."""
     work = Path(a.work)
     out_dir = Path(a.out)
     route_dir = work / "route"
@@ -859,33 +951,38 @@ def step_check(a):
                 shutil.rmtree(libs_dst)
             shutil.copytree(work / "libs", libs_dst)
 
-    drc = work / "check-drc.json"
-    subprocess.run(
-        [
-            a.kicad_cli,
-            "pcb",
-            "drc",
-            "--severity-all",
-            "--format",
-            "json",
-            "--units",
-            "mm",
-            "-o",
-            str(drc),
-            str(routed),
-        ],
-        check=False,
-        capture_output=True,
+    rules_path = work / "inputs" / "rules.json"
+    policy = json.loads(rules_path.read_text()) if rules_path.is_file() else {}
+
+    # R6: an explicit refill of the candidate before anything reads its copper. route already
+    # refills once; this one is check's own, so the numbers below hold even if that changes.
+    _run(
+        [a.kicad_python, "-m", "pnr.planes", routed, "--rules", rules_path, "--refill-only"],
+        env=_env(a.engine),
+        cwd=Path(a.engine) / "hardware/pnr",
+        log=work / "check-refill.log",
     )
-    drc_doc = (
-        json.loads(drc.read_text())
-        if drc.is_file()
-        else {"violations": [], "unconnected_items": []}
-    )
+
+    drc_doc = _run_drc(a.kicad_cli, routed, work / "check-drc.json")
     import collections
 
     drc_by_type = dict(collections.Counter(v["type"] for v in drc_doc.get("violations", [])))
     unconnected = len(drc_doc.get("unconnected_items", []))
+    unconnected_nets = _unconnected_nets(drc_doc)
+
+    # Finding #3: what --severity-all alone cannot see, named rather than silently absorbed
+    # into a "0 violations" claim. Promoting checks that are already above "ignore" is a no-op,
+    # so this never double-counts the primary pass's own violations.
+    promoted_doc = _run_drc(
+        a.kicad_cli, routed, work / "check-drc-promoted.json", promote=_DRC_IGNORED_BY_DEFAULT
+    )
+    drc_ignored_by_default = {
+        t: n
+        for t, n in collections.Counter(
+            v["type"] for v in promoted_doc.get("violations", [])
+        ).items()
+        if t in _DRC_IGNORED_BY_DEFAULT
+    }
 
     floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
     graph_doc = json.loads((work / "inputs" / "graph.json").read_text())
@@ -900,7 +997,12 @@ def step_check(a):
         for n in graph_doc["nets"]
         if any(fnmatch.fnmatchcase(n["name"], g) for g in qspi_globs)
     )
-    params = {"rf_region_kicad": rf_region, "diff_pairs": diff_pairs, "nets": qspi_nets}
+    params = {
+        "rf_region_kicad": rf_region,
+        "diff_pairs": diff_pairs,
+        "nets": qspi_nets,
+        "unconnected_nets": sorted(unconnected_nets),
+    }
     params_path = work / "check-params.json"
     params_path.write_text(json.dumps(params, indent=1))
     measure = work / "measure-kicad.json"
@@ -916,14 +1018,67 @@ def step_check(a):
         ],
         log=work / "measure.log",
     )
-    out = {"drc_by_type": drc_by_type, "unconnected": unconnected}
+    out = {
+        "drc_by_type": drc_by_type,
+        "unconnected": unconnected,
+        "drc_ignored_by_default": drc_ignored_by_default,
+    }
     out.update(json.loads(measure.read_text()))
-    out["qspi_max_length_mm"] = (
-        max(v["length_mm"] for v in out["nets"].values()) if out.get("nets") else None
+    # Length among connected nets only: an open net's stub length is not a routed length, and
+    # must not set the "max length" bar artificially low (finding #1).
+    connected_lengths = [v["length_mm"] for v in out.get("nets", {}).values() if v["connected"]]
+    out["qspi_max_length_mm"] = max(connected_lengths) if connected_lengths else None
+
+    # Finding #2a: rf_audit on the routed board, not only the pre-route one step_finish checks.
+    finish_report = (
+        json.loads((work / "finish.json").read_text()) if (work / "finish.json").is_file() else {}
     )
-    ir_path = route_dir / "ir" / "ir.json"
-    if ir_path.is_file():
-        ir = json.loads(ir_path.read_text())
+    rf_routed = work / "rf-audit-routed.json"
+    if finish_report.get("u1", {}).get("at_kicad"):
+        subprocess.run(
+            [
+                a.kicad_python,
+                HERE / "rf_audit.py",
+                routed,
+                macro_board(a.macro_variant).with_suffix(".json"),
+                "--u1",
+                "%s,%s" % tuple(finish_report["u1"]["at_kicad"]),
+                "--net-prefix",
+                "RF_",
+                "--out",
+                rf_routed,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    if rf_routed.is_file():
+        out["rf_audit_routed"] = json.loads(rf_routed.read_text())
+
+    # Finding #2b: an independent IR re-run on the refilled candidate, not route's cached
+    # ir.json (which predates this step's own refill and DRC and could silently drift from it).
+    if policy.get("ir_drop"):
+        ir_dir = work / "check-ir"
+        if ir_dir.exists():
+            shutil.rmtree(ir_dir)
+        _run(
+            [
+                a.kicad_python,
+                "-m",
+                "pnr.ir_extract",
+                routed,
+                "--rules",
+                rules_path,
+                "--out",
+                ir_dir,
+            ],
+            # ir_extract's numeric solve runs here when KiCad's own Python has no numpy
+            # (pnr.staged_signal sets this same fallback for the route step's own IR run).
+            env=_env(a.engine, {"PNR_PYTHON": a.python}),
+            cwd=Path(a.engine) / "hardware/pnr",
+            log=work / "check-ir.log",
+        )
+        ir = json.loads((ir_dir / "ir.json").read_text())
         out["ir"] = {
             net: {
                 k: rep.get(k)
@@ -943,7 +1098,20 @@ def step_check(a):
     (out_dir / "measure.json").write_text(json.dumps(out, indent=1, sort_keys=True, default=str))
     print(
         json.dumps(
-            {k: out[k] for k in ("drc_by_type", "unconnected", "r1_macro")},
+            {
+                k: out[k]
+                for k in (
+                    "drc_by_type",
+                    "unconnected",
+                    "drc_ignored_by_default",
+                    "r1_macro",
+                    "nets_connected",
+                    "nets_total",
+                    "diff_pairs_connected_legs",
+                    "diff_pairs_total_legs",
+                )
+                if k in out
+            },
             indent=1,
             default=str,
         )

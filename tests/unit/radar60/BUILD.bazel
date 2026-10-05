@@ -15,6 +15,10 @@ yapnr_py_tests(
             ],
             "deps": [requirement("pyyaml")],
         },
+        "test_integrate": {
+            "data": ["//examples/radar60/board:integration_sources"],
+            "deps": [requirement("pyyaml")],
+        },
     },
     deps = ["//yapnr/partcache"],
 )

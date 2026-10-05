@@ -752,9 +752,15 @@ def measure(routed_pcb, finish_json, params_json, out_json):
     routing (R1 v2), no foreign copper next to the RF region (R4), and routed length/skew for
     the differential pairs and single nets ``params_json`` names.
 
-    ``params_json``: ``{"rf_region_kicad": [[x0,y0,x1,y1], ...], "diff_pairs": {"TX0": ["LVDS_TX0_P",
-    "LVDS_TX0_N"], ...}, "nets": ["QSPI_CLK", ...]}`` (KiCad page mm; integrate.py writes it from
-    floorplan.yaml, so this module stays floorplan-ignorant)."""
+    A net's ``connected`` flag is independent of its copper length: a net with a stub left on
+    one pad still has ``length_mm > 0`` but is not finished, so "N of M routed" must be counted
+    from ``connected``, never from a length threshold (a length-only count overstates completion
+    whenever the router leaves a partial, unconnected stub; this is the fix for finding #1 of
+    the stage3c wave-1 review). ``params_json``: ``{"rf_region_kicad": [[x0,y0,x1,y1], ...],
+    "diff_pairs": {"TX0": ["LVDS_TX0_P", "LVDS_TX0_N"], ...}, "nets": ["QSPI_CLK", ...],
+    "unconnected_nets": ["GND", ...]}`` (KiCad page mm; integrate.py writes it from
+    floorplan.yaml plus the independent DRC's own ``unconnected_items``, so this module stays
+    floorplan- and DRC-engine-ignorant: it only trusts the net names it is handed)."""
     import pcbnew
 
     finish_report = json.load(open(finish_json, encoding="utf-8"))
@@ -789,19 +795,29 @@ def measure(routed_pcb, finish_json, params_json, out_json):
     )
     pairs = params.get("diff_pairs") or {}
     singles = params.get("nets") or []
+    unconnected_nets = set(params.get("unconnected_nets") or [])
     prefixes = tuple(sorted({n[: n.rfind("_")] + "_" for pair in pairs.values() for n in pair}))
     length, vias, layers = _net_lengths(board, prefixes)
     out["diff_pairs"] = {}
     for name, (p, n) in pairs.items():
         lp, ln = length.get(p, 0.0), length.get(n, 0.0)
+        cp, cn = p not in unconnected_nets, n not in unconnected_nets
         out["diff_pairs"][name] = {
             "p": round(lp, 3),
             "n": round(ln, 3),
             "skew_mm": round(abs(lp - ln), 3),
             "vias": {p: vias.get(p, 0), n: vias.get(n, 0)},
             "layers": {p: sorted(layers.get(p, [])), n: sorted(layers.get(n, []))},
+            "connected": {p: cp, n: cn},
+            "p_connected": cp,
+            "legs_connected": int(cp) + int(cn),
         }
-    routed = [v["p"] for v in out["diff_pairs"].values() if v["p"] > 0]
+    connected_legs = sum(v["legs_connected"] for v in out["diff_pairs"].values())
+    out["diff_pairs_connected_legs"] = connected_legs
+    out["diff_pairs_total_legs"] = 2 * len(out["diff_pairs"])
+    # The group skew is meaningful only across legs that actually finished: an unconnected leg's
+    # "length" is a stub, not a routed length, and would otherwise understate or fabricate skew.
+    routed = [v["p"] for v in out["diff_pairs"].values() if v["p_connected"]]
     out["diff_pairs_group_skew_mm"] = round(max(routed) - min(routed), 3) if routed else None
     length2, vias2, layers2 = _net_lengths(board, tuple(sorted({n for n in singles})))
     out["nets"] = {
@@ -809,12 +825,30 @@ def measure(routed_pcb, finish_json, params_json, out_json):
             "length_mm": round(length2.get(n, 0.0), 3),
             "vias": vias2.get(n, 0),
             "layers": sorted(layers2.get(n, [])),
+            "connected": n not in unconnected_nets,
         }
         for n in singles
     }
+    out["nets_connected"] = sum(1 for v in out["nets"].values() if v["connected"])
+    out["nets_total"] = len(singles)
     with open(out_json, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=1, sort_keys=True)
-    print(json.dumps({k: out[k] for k in ("r1_macro", "diff_pairs_group_skew_mm")}, indent=1))
+    print(
+        json.dumps(
+            {
+                k: out[k]
+                for k in (
+                    "r1_macro",
+                    "diff_pairs_group_skew_mm",
+                    "diff_pairs_connected_legs",
+                    "diff_pairs_total_legs",
+                    "nets_connected",
+                    "nets_total",
+                )
+            },
+            indent=1,
+        )
+    )
 
 
 # ---------------------------------------------------------------- poses

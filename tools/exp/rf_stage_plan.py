@@ -13,10 +13,14 @@ file that replaces the case's spec (the case's criteria still judge it), the sta
     paths = ["yapnr"]              # what the source bundle holds (default)
 
     [defaults]                     # every job's defaults (these are the built-in ones)
-    threads = 4                    # torch and OpenMP threads; cpus (physical cores) follow
+    threads = 4                    # the FDTD threads (YAPNR_RF_THREADS); cpus (cores) follow
     memory_gb = 8
     disk_gb = 10
     max_wall_s = 14400
+    require_native = true          # YAPNR_RF_REQUIRE_NATIVE=1: no silent numpy fallback
+    # backend = "native"           # YAPNR_RF_BACKEND (auto, native, numpy, torch); unset: spec's
+    # dtype = "float64"            # YAPNR_RF_DTYPE (float64, float32); unset: the spec's
+    # env = {YAPNR_RF_TBLOCK = "auto"}   # more YAPNR_RF_* settings of the native kernel
 
     [placement]                    # optional, copied into the campaign (vm_vcpus, shape...)
     vm_vcpus = 8
@@ -50,9 +54,18 @@ never its working tree), the job bundle (the runner, the diagnostic, the spec an
 files), copies of the run directories to re-validate, the stage plan, ``campaign.toml`` and
 ``manifest.json``; then ``yapnr exp plan DIR/campaign.toml``.
 
-Every RF task runs niced in the image with ``PYTHONPATH=src``, ``OMP_NUM_THREADS`` and
-``MKL_NUM_THREADS`` at its threads and ``OPENBLAS_NUM_THREADS=1`` (docs/rf-inverse-design.md)
-and records ``out/<id>/validation.json`` (verdict: its ``ok``). A run is resumable: the run
+Every RF task runs niced in the image with ``PYTHONPATH=src``, ``OMP_NUM_THREADS``,
+``MKL_NUM_THREADS`` and ``YAPNR_RF_THREADS`` (the native FDTD pool, re-validations included) at
+its threads, ``OPENBLAS_NUM_THREADS=1`` (docs/rf-inverse-design.md) and, unless a job says
+``require_native = false``, ``YAPNR_RF_REQUIRE_NATIVE=1``: the image's native library is built
+from the C sources of the commit it was built from, and the loader refuses it for a bundle whose
+sources differ, which without this variable would run the numpy reference 12-60 times slower
+(docs/rf-solver-backends.md); the task then fails at its first simulation instead, and the
+diagnostic's ``ok`` requires the library. ``backend``, ``dtype`` and ``env`` (other
+``YAPNR_RF_*`` variables) override the spec's solver settings per job. ``--image-commit REV``
+(the image's source revision) checks before anything is uploaded that the bundle's C sources
+are that commit's (an error when a job requires native). Each task records
+``out/<id>/validation.json`` (verdict: its ``ok``). A run is resumable: the run
 directory's top-level files (``checkpoint.npz``, ``history.json``...) are synced to the store and
 restored after a Spot preemption, and the driver resumes from them. A run longer than one task
 attempt goes on over several: ``attempt_s`` (default ``max_wall_s`` less the larger of 120 s and
@@ -115,11 +128,30 @@ JOB_KEYS = {
     "end_s",
     "validate",
     "diagnostic",
+    "backend",
+    "dtype",
+    "require_native",
+    "env",
 } | set(RESOURCE_KEYS)
 # What only an optimization takes; a `validate` job re-validates the run directory's spec.
 RUN_ONLY_KEYS = ("spec", "seed", "max_iterations", "attempt_s", "end_s")
 DEFAULTS = {"threads": 4, "memory_gb": 8, "disk_gb": 10, "max_wall_s": 14400, "args": []}
 DIAGNOSTIC_RESOURCES = {"cpus": 1, "memory_gb": 2, "disk_gb": 4, "max_wall_s": 600}
+# The solver's environment (yapnr/rf/fdtd/native_kernel.py, docs/rf-solver-backends.md): the keys
+# that set some of it, and what `env` may set besides.
+BACKENDS = ("auto", "native", "numpy", "torch")
+DTYPES = ("float64", "float32", "f64", "f32")
+ENV_REQUIRE, ENV_BACKEND, ENV_DTYPE, ENV_THREADS = (
+    "YAPNR_RF_REQUIRE_NATIVE",
+    "YAPNR_RF_BACKEND",
+    "YAPNR_RF_DTYPE",
+    "YAPNR_RF_THREADS",
+)
+ENV_BY_KEY = {ENV_REQUIRE: "require_native", ENV_BACKEND: "backend", ENV_DTYPE: "dtype",
+              ENV_THREADS: "threads"}  # fmt: skip
+ENV_RE = re.compile(r"^YAPNR_RF_[A-Z0-9_]+$")
+# The native library's C sources, whose sha256 the loader compares with the library's.
+NATIVE_SOURCES = ("yapnr/rf/fdtd/native/fdtd.c", "yapnr/rf/fdtd/native/fdtd_kernels.h")
 # The engine of a bundle from before the native kernel set torch's threads to min(cap,
 # solver.threads) (yapnr/rf/fdtd/engine.py); a later engine runs native by default, whose pool
 # takes the job's threads (solver.threads, or YAPNR_RF_THREADS), and does not match.
@@ -230,7 +262,57 @@ def check_jobs(doc: Mapping[str, Any]) -> List[str]:
         args = job.get("args", [])
         if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
             errors.append("%s: args is a list of strings" % where)
+    defaults = doc.get("defaults", {})
+    known = solver_env_errors(defaults)
+    errors += ["defaults: %s" % e for e in known]
+    for n, job in enumerate(jobs):
+        if isinstance(job, dict):
+            errors += [
+                "jobs[%d]: %s" % (n, e)
+                for e in solver_env_errors(dict(defaults, **job))
+                if e not in known
+            ]
     return errors
+
+
+def solver_env_errors(merged: Mapping[str, Any]) -> List[str]:
+    """What is wrong with the solver settings (`backend`, `dtype`, `require_native`, `env`) of a
+    job merged over the defaults."""
+    errors = []
+    backend, dtype = merged.get("backend"), merged.get("dtype")
+    if backend is not None and backend not in BACKENDS:
+        errors.append("backend is one of %s" % ", ".join(BACKENDS))
+    if dtype is not None and dtype not in DTYPES:
+        errors.append("dtype is float64 or float32")
+    require = merged.get("require_native", True)
+    if not isinstance(require, bool):
+        errors.append("require_native is true or false")
+    elif require and backend in ("numpy", "torch"):
+        errors.append("backend %s does not go with require_native (set it false)" % backend)
+    env = merged.get("env", {})
+    if not isinstance(env, dict):
+        return errors + ["env is a table of YAPNR_RF_* variables"]
+    for name, value in sorted(env.items()):
+        if name in ENV_BY_KEY:
+            errors.append("env: %s is set by the key %r" % (name, ENV_BY_KEY[name]))
+        elif not ENV_RE.match(str(name)):
+            errors.append("env: %s is not a YAPNR_RF_* variable" % name)
+        elif isinstance(value, bool) or not isinstance(value, (str, int, float)):
+            errors.append("env: %s is a string or a number" % name)
+    return errors
+
+
+def solver_env(merged: Mapping[str, Any], threads: int) -> Dict[str, str]:
+    """The solver's environment of a job (its settings over the defaults, already merged)."""
+    env = {ENV_THREADS: str(threads)}
+    if merged.get("require_native", True):
+        env[ENV_REQUIRE] = "1"
+    if merged.get("backend") is not None:
+        env[ENV_BACKEND] = str(merged["backend"])
+    if merged.get("dtype") is not None:
+        env[ENV_DTYPE] = str(merged["dtype"])
+    env.update({str(k): str(v) for k, v in merged.get("env", {}).items()})
+    return env
 
 
 def stage_line(
@@ -255,7 +337,10 @@ def stage_line(
             "id": jid,
             "command": ["${PYTHON}", "job/" + DIAGNOSTIC, "--out", out, "--src", "src"],
             "inputs": inputs + [{"dest": "job", "path": "job"}],
-            "env": {"PYTHONPATH": "src", "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1"},
+            "env": dict(
+                {"PYTHONPATH": "src", "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1"},
+                **({ENV_REQUIRE: "1"} if dict(defaults, **job).get("require_native", True) else {}),
+            ),
             "resources": resources,
             "record": record,
             "verdict": {"file": record, "json_path": "ok"},
@@ -302,12 +387,15 @@ def stage_line(
         "id": jid,
         "command": command + flags,
         "inputs": inputs,
-        "env": {
-            "PYTHONPATH": "src",
-            "OMP_NUM_THREADS": str(threads),
-            "MKL_NUM_THREADS": str(threads),
-            "OPENBLAS_NUM_THREADS": "1",
-        },
+        "env": dict(
+            {
+                "PYTHONPATH": "src",
+                "OMP_NUM_THREADS": str(threads),
+                "MKL_NUM_THREADS": str(threads),
+                "OPENBLAS_NUM_THREADS": "1",
+            },
+            **solver_env(merged, threads),
+        ),
         "resources": resources,
         "record": record,
         "summary": [jid + "/result.json", jid + "/spec.json"],
@@ -374,14 +462,49 @@ def campaign_toml(doc: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def native_sources_sha256(repo: Path, commit: str) -> Optional[str]:
+    """sha256 of the native FDTD library's C sources at `commit`, as the loader computes it
+    (`native_kernel.source_sha256`); None for a commit from before the native kernel."""
+    try:
+        return hashlib.sha256(
+            b"".join(git(repo, "show", "%s:%s" % (commit, p)) for p in NATIVE_SOURCES)
+        ).hexdigest()
+    except subprocess.CalledProcessError:
+        return None
+
+
 def generate(
-    jobs_path: Path, repo: Path, commit: str, out: Path, extended: bool = True
+    jobs_path: Path,
+    repo: Path,
+    commit: str,
+    out: Path,
+    extended: bool = True,
+    image_commit: Optional[str] = None,
 ) -> Dict[str, Any]:
     doc = load_jobs(jobs_path)
     errors = check_jobs(doc)
     if errors:
         raise JobError("; ".join(errors))
     full = git(repo, "rev-parse", "--verify", "%s^{commit}" % commit).decode().strip()
+    native_sha = native_sources_sha256(repo, full)
+    defaults = dict(doc.get("defaults", {}))
+    requiring = [j["id"] for j in doc["jobs"] if dict(defaults, **j).get("require_native", True)]
+    image_sha = None
+    if image_commit is not None:
+        image_full = git(repo, "rev-parse", "--verify", "%s^{commit}" % image_commit)
+        image_sha = native_sources_sha256(repo, image_full.decode().strip())
+        if image_sha != native_sha and requiring:
+            raise JobError(
+                "the bundle's native C sources (%s) are not the image's (%s at %s), so the"
+                " image's library would be refused; jobs %s require it (build the bundle from"
+                " a commit with the image's sources, or set require_native = false)"
+                % (
+                    (native_sha or "none")[:12],
+                    (image_sha or "none")[:12],
+                    image_commit,
+                    ", ".join(requiring),
+                )
+            )
     paths = list(doc.get("paths", ["yapnr"]))
     out.mkdir(parents=True, exist_ok=True)
     bundle = source_bundle(repo, full, paths, out / "bundles" / ("src-%s.tar.gz" % full[:12]))
@@ -391,7 +514,6 @@ def generate(
     (job_dir / "specs").mkdir(parents=True)
     for name in (RUNNER, DIAGNOSTIC):
         shutil.copyfile(HERE / name, job_dir / name)
-    defaults = dict(doc.get("defaults", {}))
     cap = thread_cap(repo, full)
     warnings, lines, resolved = [], [], []
     runs_dir = out / "runs"
@@ -444,6 +566,10 @@ def generate(
         "source_bundle": bundle,
         "uncommitted_changes_left_out": bool(dirty.strip()),
         "engine_thread_cap": cap,
+        "native_sources_sha256": native_sha,
+        "image_commit": image_commit,
+        "image_native_sources_sha256": image_sha,
+        "require_native": requiring,
         "resumable": extended,
         "jobs": resolved,
         "warnings": warnings,
@@ -459,6 +585,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--commit", default="HEAD", help="the committed revision to archive")
     ap.add_argument("--out", type=Path, required=True, help="the campaign directory to write")
     ap.add_argument(
+        "--image-commit",
+        help="the image's source revision: refuse a bundle whose native C sources differ from"
+        " it while a job requires the native library",
+    )
+    ap.add_argument(
         "--plain-lines",
         dest="extended",
         action="store_false",
@@ -466,7 +597,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     args = ap.parse_args(argv)
     try:
-        manifest = generate(args.jobs, args.repo, args.commit, args.out, args.extended)
+        manifest = generate(
+            args.jobs, args.repo, args.commit, args.out, args.extended, args.image_commit
+        )
     except (JobError, OSError, subprocess.SubprocessError) as err:
         print("rf_stage_plan: %s" % err, file=sys.stderr)
         return 2

@@ -51,10 +51,15 @@ yapnr_py_tests(
             "deps": ["//yapnr/rf:testing"],
             "size": "medium",
         },
+        "test_board": {
+            "deps": ["//yapnr/rf:testing"],
+            "size": "medium",
+        },
         "test_dtft": _SLOW,
         "test_kicad_cli": {"tags": ["kicad"]},
         "test_lumped_ports": {"size": "medium"},
         "test_microstrip": _SLOW,
+        "test_modal_ports": _SLOW_TESTING,
         "test_modes": _SLOW,
         # The native kernel against numpy, on the library Bazel builds (//yapnr/rf carries it):
         # the tests pick their own thread counts (up to 3 and 4; no YAPNR_RF_THREADS), so they
@@ -65,7 +70,7 @@ yapnr_py_tests(
             _SLOW_TESTING,
             env = _NATIVE_ENV,
             # One shard per test method (1-2 min each on CI).
-            shard_count = 5,
+            shard_count = 6,
             tags = ["cpu:3"],
         ),
         "test_native_kernel": dict(
@@ -73,10 +78,12 @@ yapnr_py_tests(
             env = _NATIVE_ENV,
             tags = ["cpu:4"],
         ),
+        "test_pattern_gradients": _SLOW_TESTING,
+        "test_pattern_spec": {"deps": ["//yapnr/rf:testing"]},
         "test_pipeline_gradient": _SLOW_TESTING,
         "test_pipeline_gradient_options": _SLOW_TESTING,
         "test_ports": _SLOW,
-        "test_power_balance": {"size": "medium"},
+        "test_power_balance": _SLOW_TESTING,
         "test_sheet": {"size": "medium"},
         "test_tiny_design": _SLOW_TESTING,
         "test_tiny_design_options": _SLOW_TESTING,
@@ -110,6 +117,7 @@ py_test(
 # bit-identical to numpy (test_native_identity). The numpy reference of the finite-difference
 # gradient checks, by hand:
 #   bazel test //tests/unit/rf:test_adjoint_gradients_numpy //tests/unit/rf:test_pipeline_gradient_numpy
+#   bazel test //tests/unit/rf:test_pattern_gradients_numpy
 [
     py_test(
         name = name + "_numpy",
@@ -129,6 +137,7 @@ py_test(
     )
     for name in [
         "test_adjoint_gradients",
+        "test_pattern_gradients",
         "test_pipeline_gradient",
         "test_pipeline_gradient_options",
     ]

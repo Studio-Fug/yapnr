@@ -64,7 +64,7 @@ def fit_record(res: FitResult, d: Data, p: Predictor, session_dir: str, serial=N
     tot = res.sigma_total
     params = {}
     for n in res.names:
-        q = stackups.PARAMS[n]
+        q = stackups.param(n, st)
         params[n] = dict(
             value=_r(res.value[n]),
             sigma=_r(tot[n], 3),
@@ -160,7 +160,7 @@ def rf_adapter(res: FitResult, d: Data, p: Predictor) -> dict:
     f = np.array([F_PRODUCT])
     m = p.model(v, f)
     eps = float(m.line(fam).eps_eff[0])
-    famd = families.FAMILIES[fam]
+    famd = families.get(fam, d.stackup)
     h = v["pp1.h"]
     w = famd.w - 2 * v["L1.etch"]
 

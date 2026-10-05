@@ -7,8 +7,10 @@
 - The port-wave power ½ Re(V Î*) differs from the Poynting flux through the feed cross-section
   by a few per cent (2.7–6 % at 8–12 GHz, the V/I definition of a dispersive quasi-TEM line);
   the calibration's power factor brings it within 1.3 %.
-- A radiated-power box with its feed windows (|y − y_p| ≤ w/2 + 2h, z ≤ 3h) sees 0.6–1.4 % of
-  the power of a matched straight line; larger windows do not reduce it (design target 1 %).
+- The closed radiation box (design §25.2), its feed faces separated modally, finds no
+  non-guided power in a matched straight line driven by the modal source (below 1e-3 of the
+  incident power) and the same non-guided fraction of a gray design whatever its size (to the
+  feed's own loss inside it).
 - Random gray 3-ports are passive: eig(I − SᴴS) ≥ −1e-3.
 """
 
@@ -120,29 +122,33 @@ class ClosedBoxTest(unittest.TestCase):
         self.assertLess(err.max(), 0.02, err)  # measured 0.5 %, 0.15 %, 1.3 % (8, 10, 12 GHz)
 
 
-class FeedWindowTest(unittest.TestCase):
-    def test_matched_line_leaks_little_through_the_box(self):
-        dom = two_port(width=6.0e-3)
-        g = dom.grid
-        p1, p2 = dom.ports
-        gd = np.zeros(dom.design_shape)
-        i0, i1, j0, j1 = dom.window
-        gd[:, p1.ta - j0 : p1.tb - j0] = S1.g_max
-        dt = 0.95 * g.courant_dt()
-        sim = Simulation(g, dom.structure(gd), dt=dt, dtype=np.float64)
-        kc = g.k_c
-        box = dom.radiation_box(0.0, float(g.z.nodes[kc + 8] - S1.h))
-        self.assertEqual(box.node_box, ((i0, i1), (j0, j1), (kc, kc + 8)))
-        res = sim.run(
-            p1.mode_sources(GaussianPulse.for_band(8e9, 12e9), dt),
-            p1.probes + box.probes,
-            OMEGA,
-            StopRule(tol=1e-6, f_lo=8e9),
-        )
-        v, i = p1.voltage(res.dft), p1.current(res.dft)
-        net = 0.5 * np.real(v * np.conj(i))
-        leak = np.abs(box.power(res.dft)) / net
-        self.assertLess(leak.max(), 0.02, leak)  # measured 0.6 %, 1.0 %, 1.4 % (8, 10, 12 GHz)
+class ClosedRadiationBoxTest(unittest.TestCase):
+    """`Problem.nonguided` on a straight two-port with the modal source (`testing.line_spec`)."""
+
+    @classmethod
+    def setUpClass(cls):
+        from yapnr.rf.problem import Problem
+        from yapnr.rf.spec import RadiationBox
+        from yapnr.rf.testing import line_spec, straight_line
+
+        spec = line_spec()
+        cls.p = Problem(spec)
+        cls.big = Problem(spec.replace(radiation=RadiationBox(height_mm=4.0)))
+        cls.line = straight_line(cls.p)
+        cls.gray = np.random.default_rng(3).uniform(0.3, 0.7, cls.p.design_shape)
+
+    def eta(self, p, rho):
+        return p.evaluate(rho, gradients=False).eta[1]
+
+    def test_matched_line_has_no_nonguided_power(self):
+        eta = self.eta(self.p, self.line)
+        self.assertLess(np.abs(eta).max(), 1e-3, eta)
+
+    def test_box_height_does_not_matter(self):
+        self.assertGreater(self.big.box.node_box[2][1], self.p.box.node_box[2][1])
+        a, b = self.eta(self.p, self.gray), self.eta(self.big, self.gray)
+        self.assertGreater(a.min(), 0.0)
+        np.testing.assert_allclose(a, b, atol=1e-4)
 
 
 class PassivityTest(unittest.TestCase):

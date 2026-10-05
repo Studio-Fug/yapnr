@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pnr.place.geometry import pad_rects
 from pnr.writeback import _segment_distance_sq
 
-from .grid import Cell
+from .grid import Cell, far_twins, pad_layer
 from .joint_access import select_joint
 from .keyhole import elbows, length
 
@@ -484,6 +484,7 @@ def enumerate_drops(
     max_options=8,
     site_ok=None,
     span=None,
+    reuse=None,
 ):
     """Plane-drop exits for a surface pad of a net with a dedicated plane.
 
@@ -497,8 +498,47 @@ def enumerate_drops(
     shared by several nets, a partial plane zone: pnr.stack.PlaneAccess).
     ``span`` (pnr.via_policy.Span): the drop is that blind or micro via, checked
     and reserved on its own grid layers; None: a through via.
+
+    ``reuse`` ``(vias, reach)``: the pad may instead join an existing via of its net
+    (a declared fanout's, which reaches the planes) by a stub on its own layer, where
+    the via's edge is within ``reach`` of the land (a fanout's ``bottom_sites`` part
+    and its ``max_stub_mm``). Those options come first: they drill nothing.
     """
     options = []
+    if reuse:
+        vias, within = reuse
+        found = []
+        for q in sorted(set(tuple(v) for v in vias)):
+            if rect is not None:
+                gap = math.hypot(
+                    max(abs(q[0] - rect.cx) - rect.w / 2, 0.0),
+                    max(abs(q[1] - rect.cy) - rect.h / 2, 0.0),
+                )
+            else:
+                gap = math.dist(q, pad_xy)
+            if gap - grid.via_radius > within + 1e-9:
+                continue
+            i, j = grid.cell_of(*q)
+            for path in sorted(elbows(pad_xy, q), key=lambda p: (length(p), len(p), p)):
+                if all(
+                    _segment_clear(grid, net, side, a, b, width) for a, b in zip(path, path[1:])
+                ):
+                    trunk = tuple((side, a, b, width) for a, b in zip(path, path[1:]))
+                    found.append(
+                        _make_option(
+                            grid,
+                            net,
+                            pad_xy,
+                            side,
+                            Cell(side, i, j),
+                            trunk,
+                            (),
+                            "reuse",
+                            via_keepout,
+                        )
+                    )
+                    break
+        options += sorted(found, key=lambda c: (c.cost, c.access_key, c.segments))[:max_options]
     spans = () if span is None else (span,)
     radius = None if span is None else span.radius
     ci, cj = grid.cell_of(*pad_xy)
@@ -705,6 +745,7 @@ def plan_joint_escapes(
     plane_access=None,
     drop_span=None,
     skip_pads=None,
+    drop_reuse=None,
 ):
     """Choose every terminal's exit jointly. ``drop_widths`` (net -> entry width)
     names the nets with a dedicated plane: each of their surface pads becomes a
@@ -715,7 +756,9 @@ def plan_joint_escapes(
     ``plane_access`` (:class:`pnr.stack.PlaneAccess`) keeps its via inside the
     net's own plane fill. ``drop_span(net, side)``, when given, is the drop via's
     span from the pad's grid layer (pnr.via_policy.Span; None: through).
-    ``skip_pads`` ((ref, pad) pairs) get no exit here: a declared fanout holds them."""
+    ``skip_pads`` ((ref, pad) pairs) get no exit here: a declared fanout holds them.
+    ``drop_reuse`` ((ref, pad) -> reach mm): those plane pads may also drop by a stub
+    to a planned via of their net (``enumerate_drops`` ``reuse``)."""
     from .escape import Escape, EscapePlan
 
     drop_widths = drop_widths or {}
@@ -729,10 +772,14 @@ def plan_joint_escapes(
         if plane_access is not None and plane_access.constrained(net):
             site_tests[net] = lambda q, net=net: plane_access.site_ok(net, q)
     for comp in sorted(graph.components, key=lambda c: c.ref):
-        side = grid.side_layer(comp.side)
+        twins = far_twins(comp)
         for index, ((name, net, rect), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
             if skip_pads and (comp.ref, name) in skip_pads:
                 continue
+            if index in twins:
+                continue  # a far-side land beside a near one: that one is the access
+            # The pad's own layer: a far-side land escapes on the opposite outer layer.
+            side = pad_layer(grid, comp, pad)
             if net in drop_widths and net not in net_names:
                 if pad.through_hole:
                     continue  # the plated barrel already reaches every plane
@@ -755,6 +802,16 @@ def plan_joint_escapes(
                     max_options=max(1, max_options // 2),
                     site_ok=_drop_site_test(grid, plane_access, net, span, site_tests.get(net)),
                     span=span,
+                    **(
+                        {
+                            "reuse": (
+                                [v for n, v in grid.escape_vias if n == net],
+                                drop_reuse[(comp.ref, name)],
+                            )
+                        }
+                        if drop_reuse and (comp.ref, name) in drop_reuse
+                        else {}
+                    ),
                 )
                 continue
             if net not in net_names:
@@ -774,6 +831,16 @@ def plan_joint_escapes(
                 reach=dogbone_reach,
                 max_options=max_options,
             )
+    guard = getattr(grid, "guard_access", None)
+    if guard:
+        # plane_partition protect_fanouts: a declared fanout's planned access cells
+        # (route_board sets grid.guard_access for this plan) stay free of every other
+        # net's exit and drop, whose via keep-out would close them.
+        for key, cs in options.items():
+            net = terminals[key][0]
+            options[key] = [
+                c for c in cs if not any(guard.get(cell, net) != net for cell in c.occupied)
+            ]
     bounds = {
         k: (
             min(c.bounds[0] for c in cs),

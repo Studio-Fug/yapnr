@@ -10,6 +10,7 @@ from hard_rungs import (
     HARD_LIB,
     REPEATED_PADS,
     STACKUPS,
+    buck_pour,
     chaser_base,
     connected_pads,
     derived_checks,
@@ -100,7 +101,9 @@ class HardRungContract(unittest.TestCase):
         self.assertEqual(chaser["parts"], designs()[6]["parts"])
         # The BGA rung's base (two layers) is not a hard rung either: its drops need planes.
         bga = ufbga_base()
-        bases = {"chaser-20": chaser, "ufbga201-fanout": bga}
+        # Nor is the buck stage's (its hot-rod stage is drawn on four layers).
+        buck = buck_pour()
+        bases = {"chaser-20": chaser, "ufbga201-fanout": bga, "buck-vqfnhr": buck}
         for spec in self.rungs:
             dims = spec["dims"]
             if all(
@@ -117,10 +120,17 @@ class HardRungContract(unittest.TestCase):
                 bases[spec["base"]] = spec
         self.assertEqual(
             set(bases),
-            {"mcu-usb-31", "quad-bank-56", "power-switch-31", "chaser-20", "ufbga201-fanout"},
+            {
+                "mcu-usb-31",
+                "quad-bank-56",
+                "power-switch-31",
+                "chaser-20",
+                "ufbga201-fanout",
+                "buck-vqfnhr",
+            },
         )
         family = {}
-        for spec in self.rungs + [chaser, bga]:
+        for spec in self.rungs + [chaser, bga, buck]:
             family.setdefault(spec["base"], []).append(spec)
         for spec in self.rungs:
             base = bases[spec["base"]]
@@ -154,7 +164,12 @@ class HardRungContract(unittest.TestCase):
                 # A partitioned plane layer (plane_partition) carries several rails,
                 # each in a class of its own naming the layer, and a rail_zones check
                 # in place of the one-net plane check.
-                parts = spec["constraints"].get("plane_partition") or []
+                # (An outer pour, a partition with a region, is on a signal layer.)
+                parts = [
+                    p
+                    for p in spec["constraints"].get("plane_partition") or []
+                    if not p.get("region")
+                ]
                 shared = sum(len(p["nets"]) - 1 for p in parts)
                 self.assertEqual(len(planes), len(first) + shared)
                 self.assertEqual(
@@ -359,6 +374,44 @@ class HardRungContract(unittest.TestCase):
         self.assertEqual(classes["clk"]["clearance_mm"], 0.2)
         self.assertEqual(classes["plane_vcc"]["clearance_mm"], 0.12)
 
+    def test_bga_pairs_rung(self):
+        """The BGA rung with a coupled LVDS pair: two adjacent unused south balls to a
+        header, the engine switch and pair keys, the judge's rules (skew, uncoupled
+        length, gap) and the no-via check, one dimension (parts) from the 6L rung."""
+        from hard_rungs import PAIRS_BALLS, PAIRS_HEADER
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+
+        spec = self.by_name["11-ufbga201-fanout-6L-SGSGPS-pairs"]
+        parent = self.by_name["11-ufbga201-fanout-6L-SGSGPS"]
+        self.assertEqual(
+            [k for k in spec["dims"] if spec["dims"][k] != parent["dims"][k]], ["parts"]
+        )
+        u1, base = spec["parts"][0]["pins"], parent["parts"][0]["pins"]
+        for ball, net in PAIRS_BALLS.items():
+            self.assertEqual((base[ball], u1[ball]), ("", net))
+        self.assertEqual(spec["constraints"]["fixed"][PAIRS_HEADER[0]]["rot"], 180)
+        text = dru_text(spec)
+        self.assertIn("A.inDiffPair('LVDS_')", text)
+        self.assertIn("diff_pair_uncoupled (max 3mm)", text)
+        self.assertIn("skew (max 0.1mm)", text)
+        (check,) = [c for c in spec["checks"] if c["kind"] == "net_vias"]
+        self.assertEqual((check["nets"], check["max"]), (["LVDS_P", "LVDS_N"], 0))
+        refs = [p["ref"] for p in spec["parts"]]
+        compiled = compile_constraints(spec["constraints"], refs)
+        nets = sorted({n for p in spec["parts"] for n in p["pins"].values() if n})
+        rules = compile_routing_rules(compiled, nets)
+        self.assertEqual(rules["route_pairs"], "coupled")
+        (pair,) = rules["diff_pairs"]
+        self.assertEqual((pair["layers"], pair["max_uncoupled_mm"]), (["F.Cu"], 3.0))
+        self.assertNotIn(
+            "route_pairs",
+            compile_routing_rules(
+                compile_constraints(parent["constraints"], [p["ref"] for p in parent["parts"]]),
+                sorted({n for p in parent["parts"] for n in p["pins"].values() if n}),
+            ),
+        )
+
     def test_bga_block_rung(self):
         """The BGA rung with a fixed block: its launch copper digest, ground stitching
         vias on U1's interstitial lattice, a group rule area on F.Cu alone, keep-outs
@@ -440,11 +493,30 @@ class HardRungContract(unittest.TestCase):
         (part,) = rules["plane_partition"]
         self.assertEqual(part["nets"], ["VDD", "VDDA", "VBAT"])
         self.assertEqual(part["fill"], "GND")
+        self.assertTrue(part["protect_fanouts"])
         self.assertEqual([e["net"] for e in rules["ir_drop"]], ["VDD", "VDDA", "VBAT"])
         balls = [e for e in rules["ir_drop"] if e["net"] == "VDDA"][0]["sinks"]
         self.assertEqual(sorted(balls), ["U1:P1", "U1:R1"])
         classes = [x for x in rules["net_classes"] if x.get("plane_layer") == part["layer"]]
         self.assertEqual(sorted(n for x in classes for n in x["nets"]), ["VBAT", "VDD", "VDDA"])
+
+    def test_buck_pour_rung(self):
+        from pnr.constraints import compile_constraints, compile_routing_rules
+
+        pour = self.by_name["11-buck-vqfnhr-4L-SGPS-pour"]
+        plain = self.by_name["11-buck-vqfnhr-4L-SGPS"]
+        self.assertEqual(nets_of(pour), nets_of(plain))
+        self.assertNotIn("plane_partition", plain["constraints"])
+        refs = [p["ref"] for p in pour["parts"]]
+        c = compile_constraints(pour["constraints"], refs)
+        nets = sorted({n for p in pour["parts"] for n in p["pins"].values() if n})
+        (entry,) = compile_routing_rules(c, nets)["plane_partition"]
+        self.assertEqual(entry["layer"], "F.Cu")
+        self.assertEqual(entry["nets"], ["VIN", "SW", "GND"])
+        self.assertEqual(entry["region"]["refs"], ["U1", "L1", "C1"])
+        self.assertEqual((entry["terminals"], entry["connect"]), ("pad", "solid"))
+        for ref in ("U1", "L1", "C1"):
+            self.assertIn(ref, pour["constraints"]["fixed"])
 
     def test_runner_offers_the_hard_rungs(self):
         args = parser().parse_args(["--out", "x", "--hard"])

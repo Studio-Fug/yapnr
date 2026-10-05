@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from pnr.graph import BoardGraph
 
 from ...place.geometry import pad_rects
-from .grid import Cell, RouteGrid
+from .grid import Cell, RouteGrid, far_twins, pad_layer
 
 # Directions to try a dog-bone stub, ordered so "outward" (away from the part
 # centre) is preferred — filled per-pad from the pad→centre vector.
@@ -138,6 +138,7 @@ def plan_escapes(
     plane_access=None,
     drop_span=None,
     skip_pads=None,
+    drop_reuse=None,
 ) -> EscapePlan:
     """Plan a legal escape for every pad of the routable ``net_names``.
 
@@ -156,6 +157,8 @@ def plan_escapes(
     plane fill. ``drop_span(net, side)`` gives a drop's blind or micro via span
     under the grid's via model (None: a through via). ``skip_pads`` ((ref, pad)
     pairs) are left alone: a declared fanout (:mod:`.fanout`) holds them.
+    ``drop_reuse`` ((ref, pad) -> reach, joint only): a plane pad that may drop by a
+    stub to a planned via of its net (a fanout's bottom site).
     """
     if joint:
         from .joint_escape import plan_joint_escapes
@@ -177,6 +180,7 @@ def plan_escapes(
             plane_access=plane_access,
             drop_span=drop_span,
             **({"skip_pads": skip_pads} if skip_pads else {}),
+            **({"drop_reuse": drop_reuse} if drop_reuse else {}),
         )
     plan = EscapePlan()
     plan.diagnostics = {"model": "legacy-sequential", "complete": None}
@@ -184,11 +188,15 @@ def plan_escapes(
     # Reserve cells taken by an escape via's keep-out, keyed to the owning net so the
     # maze (which reads grid.pad_net) treats them as that net's copper.
     for comp in graph.components:
-        side = grid.side_layer(comp.side)
         cx_part, cy_part = comp.pos
-        for name, net, r in pad_rects(comp):
+        twins = far_twins(comp)
+        for k, ((name, net, r), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
             if net not in net_names or (skip_pads and (comp.ref, name) in skip_pads):
                 continue
+            if k in twins:
+                continue  # a far-side land beside a near one: that one is the access
+            # The pad's own layer: a far-side land escapes on the opposite outer layer.
+            side = pad_layer(grid, comp, pad)
             ci, cj = grid.cell_of(r.cx, r.cy)
             center = Cell(side, ci, cj)
             esc = _plan_one(

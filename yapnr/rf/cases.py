@@ -313,7 +313,7 @@ def antenna(scale: str = "full") -> Spec:
             ports=(Port(1, "W", 0.0, 4),),
             bands={"main": Band(9.85, 10.15, 2)},
             requirements=reqs,
-            radiation=RadiationBox(offset_mm=1.6, height_mm=4.0),
+            radiation=RadiationBox(),
             optimizer=replace(_SMOKE_OPT, seed="star", adaptive_move=True, reference_ohm=50.0),
             solver=replace(_SMOKE_SOLVER, **solver),
         )
@@ -331,7 +331,7 @@ def antenna(scale: str = "full") -> Spec:
         # at 50 Ω) and its −10 dB edge moved up by 0.9 and 1.3 % on the finer grids.
         bands={"main": Band(9.65, 10.35, 5)},
         requirements=reqs,
-        radiation=RadiationBox(offset_mm=2.4, height_mm=8.0),
+        radiation=RadiationBox(),
         optimizer=OptimizerSpec(
             betas=(8, 16, 32, 64),
             iterations_per_beta=15,
@@ -367,7 +367,7 @@ def antenna_patch_reference(scale: str = "full") -> Spec:
             ports=(Port(1, "W", 0.0, 4),),
             bands={"main": Band(9.7, 10.3, 2)},
             requirements=reqs,
-            radiation=RadiationBox(offset_mm=1.6, height_mm=4.0),
+            radiation=RadiationBox(),
             optimizer=replace(_SMOKE_OPT, seed="patch"),
             solver=_SMOKE_SOLVER,
         )
@@ -381,7 +381,7 @@ def antenna_patch_reference(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0),),
         bands={"main": Band(9.8, 10.2, 4)},
         requirements=reqs,
-        radiation=RadiationBox(offset_mm=2.4, height_mm=8.0),
+        radiation=RadiationBox(),
         # The seed is a working patch to refine: β starts at 16, where its inset slots stay void
         # (at β = 8 they blurred into lossy gray and the first step closed them; at β = 32 every
         # pixel saturated and nothing moved). Conservative MMA with a 0.05 move: plain MMA left
@@ -560,8 +560,9 @@ class Check:
     kind: "s_max" / "s_min" (|S_ij| in dB against `limit`), "imbalance" (||S_ij| − |S_kl||
       in dB ≤ `limit`, `ports` = (i, j, k, l)), "eta_min" (radiated fraction of port j ≥
       `limit`), "passivity" (min eig(I − SᴴS) ≥ `limit`, every frequency), "balance" (the
-      power balance error of port j, `validate.power_balance`, |error| ≤ `limit`, at the
-      `at_ghz` frequencies).
+      closed-box identity residual of port j, `validate.power_balance`, |error| ≤ `limit`, at
+      the `at_ghz` frequencies), "incident" (the port's incident power against a run with an
+      empty design region, |incident_error| ≤ `limit`, at the `at_ghz` frequencies).
     ghz: the inclusive band the check applies to (None: every frequency), or `at_ghz`: the
       exact frequencies.
     """
@@ -586,10 +587,11 @@ class Check:
         maps a port to `validate.power_balance`'s report (for "balance")."""
         from yapnr.rf.sparams import db, passivity_margin
 
-        if self.kind == "balance":
+        if self.kind in ("balance", "incident"):
             if not balance or self.ports[0] not in balance:
                 raise ValueError(f"check {self.name}: no power balance")
-            err = np.abs(np.asarray(balance[self.ports[0]]["error"], dtype=np.float64))
+            key = "error" if self.kind == "balance" else "incident_error"
+            err = np.abs(np.asarray(balance[self.ports[0]][key], dtype=np.float64))
             worst = float(np.max(err))
             return {
                 "name": self.name,
@@ -638,15 +640,15 @@ class Check:
 # (`sparams`) and the 6h feeds the divider's margin is +0.02 to +0.05.
 PASSIVITY = -1e-3
 
-# Power balance of radiators (design §11.3, `validate.power_balance`): the port's net input
-# power against the flux out of a box closed by the ground, the other ports' power and the
-# dissipation inside it, within 4 % (round 1: 2 %). The box leaves a window where the feed
-# crosses it; on the antenna's grid the window's blind area limits the balance to about 2–3.5 %
-# for radiators near the feed (the closed-form patch: −1.9 % at its resonance, −3.5 % at
-# 10.35 GHz; a smaller window counts the line's guided fringe, −4.9 and −10.5 %, a larger one
-# misses more radiation, −3.6 and −5.4 %). The error is negative (the box finds less power than
-# the port), i.e. on the safe side for the radiated fraction (docs/decisions.md, round 2).
-BALANCE = 0.04
+# The radiated-power checks of radiators (design §25.5, `validate.power_balance`), which
+# replace round 2's 4 % power balance: the closed-box identity (η + |Γ|² + the other ports +
+# the dissipation inside the box = 1 on the faces) within 0.5 %, and the port's incident power
+# against a run with an empty design region within 1e-3. The 4 % balance compared the windowed
+# box with the V/I port 7 mm upstream: its 4–5 % failures on the finer grids were the sum of
+# the port's contamination by the antenna's radiation (−5.2..+2.0 %), the feed window (−3..−7
+# %) and the feed loss between them (−1 %), not an energy error (the audit, design §25).
+BALANCE = 0.005
+INCIDENT = 1e-3
 
 
 def _divider_checks(r11, t, imb=None):
@@ -721,7 +723,8 @@ CRITERIA = {
         level: [
             Check("|S11| max dB", "s_max", (1, 1), -10.0, (9.7, 10.3)),
             Check("eta min", "eta_min", (1,), 0.70, (9.7, 10.3)),
-            Check("power balance", "balance", (1,), BALANCE, at_ghz=(9.7, 10.0, 10.3)),
+            Check("box identity", "balance", (1,), BALANCE, at_ghz=(9.7, 10.0, 10.3)),
+            Check("incident power", "incident", (1,), INCIDENT, at_ghz=(9.7, 10.0, 10.3)),
             Check("passivity", "passivity", limit=PASSIVITY),
         ]
         for level in ("coarse", "fine")

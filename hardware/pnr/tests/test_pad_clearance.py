@@ -222,6 +222,67 @@ class FarSideLandTest(unittest.TestCase):
         self.assertLess(min(crossing), 0.875)
 
 
+def far_only_board(far=True):
+    """U2 (top) whose pad 1 (net B) is a land on B.Cu only (``far_side``), and TP3 on
+    the bottom side: net B joins two B.Cu lands."""
+    u2 = Component(
+        ref="U2",
+        footprint="test:U2",
+        pos=(12.0, 3.0),
+        rot=0.0,
+        side="top",
+        courtyard=(1.2, 1.2),
+        bbox=(1.2, 1.2),
+        pads=[Pad(name="1", net="B", offset=(0.0, 0.0), size=(0.6, 0.6), far_side=far or None)],
+    )
+    tp3 = _part("TP3", 4.0, 3.0, "B")
+    tp3.side = "bottom"
+    nets = [Net(name="B", code=1, pins=[("TP3", "1"), ("U2", "1")])]
+    return BoardGraph(name="far-only", components=[tp3, u2], nets=nets)
+
+
+class FarSideOnlyPadTest(unittest.TestCase):
+    """A pad number whose only land is on the far side is reached on that layer: its
+    access, its escape and the router's layer rules all take the land's own layer."""
+
+    def test_access_and_route_on_the_lands_layer(self):
+        g = far_only_board()
+        grid = RouteGrid.from_graph(
+            g, 20, 6, pitch=0.25, clearance=0.1, track_width=0.15, via_radius=0.2
+        )
+        self.assertEqual(grid.access[("B", "U2.1")].layer, 1)
+        self.assertEqual({c.layer for c in grid.net_access(g, "B")}, {1})
+        board = route_board(g, _constraints(), _rules(), pitch=0.25)
+        self.assertEqual(board.result.unrouted, [])
+        layers = {layer for net, layer, _a, _b, _w in board.tracks if net == "B"}
+        self.assertEqual(layers, {"B.Cu"})
+        self.assertEqual([v for v in board.vias if v[0] == "B"], [])
+        # Read on the part's side (no key), the same net needs a layer change.
+        legacy = route_board(far_only_board(False), _constraints(), _rules(), pitch=0.25)
+        self.assertTrue(
+            [v for v in legacy.vias if v[0] == "B"]
+            or {la for n, la, *_ in legacy.tracks if n == "B"} != {"B.Cu"}
+        )
+
+    def test_a_no_via_rule_keeps_the_net_on_the_lands_layer(self):
+        from pnr.route.detail.dru_apply import layer_masks
+
+        g = far_only_board()
+        grid = RouteGrid.from_graph(
+            g, 20, 6, pitch=0.25, clearance=0.1, track_width=0.15, via_radius=0.2
+        )
+        masks, report = layer_masks(grid, g, {"no_via": ["B"]})
+        self.assertEqual(masks, {"B": frozenset({1})})
+        self.assertEqual(report["no_via"], ["B"])
+
+    def test_a_thermal_land_is_not_planned_twice(self):
+        from pnr.route.detail.grid import far_twins
+
+        u1 = thermal_land_board().component("U1")
+        self.assertEqual(far_twins(u1), {1})
+        self.assertEqual(far_twins(far_only_board().component("U2")), set())
+
+
 class RouteTest(unittest.TestCase):
     def test_route_keeps_the_fiducial_clearance(self):
         board = route_board(fiducial_board(True), _constraints(), _rules(), pitch=0.25)

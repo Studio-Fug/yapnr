@@ -19,6 +19,15 @@ is centred there; with PNR_MACRO_HULL=1 the macro also carries a per-side
 occupancy hull (``Component.hull``, :mod:`pnr.place.hull`) so parts and other
 blocks can nest into its free space. :meth:`MacroPlan.expand` stays rigid in
 both cases (members are posed from the recorded frame origin).
+
+E2 (the hier -> fixed_block bridge): :func:`fixed_block_from_macro` turns one
+placed, expanded macro into the ``fixed`` and ``fixed_block`` constraint entries
+(pnr-inputs.md, pnr.fixed_block) that make its chosen layout permanent -- one
+member keeps an ordinary placed pose (the macro's own, pinned), every other
+member becomes a held-out ref riding fixed on it. Pairing this with
+``pnr.hier.assemble --group --anchor [--zones]`` turns the macro's *copper*
+(tracks, vias and, opted in, zones) into that group's drawn copper on the full
+board, with the digest the ``fixed_block`` pins.
 """
 
 from __future__ import annotations
@@ -441,3 +450,56 @@ def collapse(
         i for i in rules.get("plane_access_intents", []) if i.get("ref") not in plan.member_of
     ]
     return macro_graph, con, place_rules, plan
+
+
+def fixed_block_from_macro(
+    flat: BoardGraph,
+    plan: "MacroPlan",
+    mref: str,
+    name: str,
+    group: str,
+    anchor: str,
+    solid_layers: Optional[List[str]] = None,
+) -> Tuple[dict, dict]:
+    """The ``fixed`` and ``fixed_block`` constraint entries (pnr.constraints,
+    pnr-inputs.md) that make macro ``mref``'s chosen layout permanent, read from
+    its placed and expanded graph ``flat`` (:meth:`MacroPlan.expand`'s output).
+
+    ``anchor`` must be one of the macro's members; it keeps an ordinary placed
+    pose there, returned as a ``fixed`` entry (``at``/``rot``/``side``) so later
+    placement passes leave it, and with it the whole macro, where it landed. Every
+    other member becomes a ``fixed_block`` ref: held out of placement
+    (``pnr.fixed_block.hold_out``) and reserved as copper only, riding fixed on
+    the anchor. ``name`` and ``group`` are the fixed_block's own name and the
+    KiCad group its copper must be drawn into (:func:`pnr.hier.assemble`'s
+    ``--group NAME --anchor ANCHOR``); ``solid_layers`` names the copper zones
+    that become routing obstacles for other nets.
+
+    This derives the two constraint dicts only; it does not touch ``flat`` or
+    any board file. A caller merges them into the top board's source yaml
+    (``fixed`` and ``fixed_block`` tables) before the next placement/routing
+    pass, and pins the ``sha256`` that ``pnr.hier.assemble --group`` reports
+    once the chosen layout is final.
+
+    Raises ``ValueError`` when ``mref`` is not a collapsed macro of ``plan`` or
+    ``anchor`` is not one of its members.
+    """
+    if mref not in plan.macros:
+        raise ValueError(f"{mref!r} is not a collapsed macro of this plan")
+    members = sorted(plan.macros[mref]["members"])
+    if anchor not in members:
+        raise ValueError(
+            f"fixed_block anchor {anchor!r} is not a member of macro {mref} "
+            f"(block {plan.macros[mref]['block']}); its members are {members}"
+        )
+    by_ref = {c.ref: c for c in flat.components}
+    a = by_ref[anchor]
+    fixed = dict(at=[round(a.pos[0], 6), round(a.pos[1], 6)], rot=float(a.rot), side=a.side)
+    block = dict(
+        name=name,
+        group=group,
+        anchor=anchor,
+        refs=[r for r in members if r != anchor],
+        solid_layers=list(solid_layers or []),
+    )
+    return fixed, block

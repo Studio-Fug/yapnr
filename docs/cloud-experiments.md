@@ -163,9 +163,10 @@ tofu apply bootstrap.plan
 
 The plan creates 80 resources for the example's two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
 APIs, the VPC, both buckets, the service accounts and grants, the registry caches and the
-`images` repositories for [task images](#task-images-openems), the Spot templates (C4D in
-`us-west4`; C4 in `northamerica-northeast1`, which has no C4D: `region_template_shapes`), the
-budget and the guard functions.
+`images` repositories for task images ([openEMS](#task-images-openems),
+[Palace](#task-images-palace)), the Spot templates (C4D in `us-west4`; C4 in
+`northamerica-northeast1`, which has no C4D: `region_template_shapes`), the budget and the guard
+functions.
 
 The project's `default` network allows SSH from anywhere and gives VMs external IPs; yapnr jobs
 never use it, so delete it, and with it any way a hand-written job could land there:
@@ -559,11 +560,17 @@ CASE --out out/<id>` with the spec, the criteria, `optimizer.seed` or `solver.th
 (or that command itself for a job with nothing to replace and `attempt_s = 0`) on as many cores as
 it has threads, with `OMP_NUM_THREADS` and `MKL_NUM_THREADS` at that number and
 `OPENBLAS_NUM_THREADS=1`. Cores are physical, two vCPUs each on SMT shapes: one 4-thread run fills
-a `c4d-highcpu-8`. The solver runs its native kernel by default, on the job's threads, from the
-image's yapnr wheel when the bundle's C sources are the ones that library was built from
-(otherwise the numpy reference, said in the task's log; set `YAPNR_RF_REQUIRE_NATIVE=1` to stop
-instead; [solver backends](rf-solver-backends.md)); a bundle from before the native kernel runs
-torch on at most 4 threads, and the generator warns above that.
+a `c4d-highcpu-8`. The solver runs its native kernel by default, on the job's threads (`YAPNR_RF_THREADS`,
+re-validations included), from the image's yapnr wheel when the bundle's C sources are the ones
+that library was built from ([solver backends](rf-solver-backends.md)). Every line sets
+`YAPNR_RF_REQUIRE_NATIVE=1` unless its job says `require_native = false`: a bundle whose C
+sources differ from the image's would otherwise run the numpy reference, 12–60 times slower, with
+one line in the task's log; with it the task fails at its first simulation and the diagnostic
+job's `ok` is false. `--image-commit REV` (the image's source revision, its
+`org.opencontainers.image.revision`) refuses such a bundle before anything is uploaded, and the
+manifest records both sources' sha256. A job's `backend`, `dtype` and `env` (other `YAPNR_RF_*`
+variables, such as `YAPNR_RF_TBLOCK`) set the solver's environment over its spec. A bundle from
+before the native kernel runs torch on at most 4 threads, and the generator warns above that.
 The record is `out/<id>/validation.json` (the verdict is its `ok`), the run directory is the
 checkpoint, and the cases runner resumes from it; `--max-iterations` counts the iterations of one
 attempt, so an attempt resumed mid-loop may run that many again. A run longer than `max_wall_s`
@@ -645,6 +652,94 @@ instance template runs from an instance policy. A model with its own `threads` b
 class of its own (its own Batch job and VMs, still `models_per_vm` to a VM of `vm_vcpus`), so
 keep one thread count per jobs file to fill the VMs. openEMS runs do not checkpoint, so a
 preempted model starts again.
+
+### Task images (Palace)
+
+[AWS Palace](https://github.com/awslabs/palace) (Apache-2.0) is the finite-element solver that
+checks openEMS's FDTD results: driven, eigenmode, electrostatic, magnetostatic and 2D
+boundary-mode problems, lumped and wave ports, conductivity and impedance boundaries, adaptive
+mesh refinement and adaptive frequency sweeps, all MPI-parallel. Palace publishes no public
+container image, so [`docker/palace`](https://github.com/Studio-Fug/yapnr/tree/main/docker/palace)
+builds its CMake superbuild at a pinned `main` commit (one with fixes for several boundary
+attributes that share a material entry, after release v0.18.1) on Ubuntu 24.04 with OpenMPI and
+OpenBLAS: SuperLU_DIST and MUMPS, ARPACK for the wave-port mode solves and eigenmodes, GSLIB and
+LIBXSMM; no SLEPc, STRUMPACK, SUNDIALS (transient) or GPU. The image adds Palace's
+coplanar-waveguide example and its regression references, and a Python 3.12 with gmsh, numpy and
+shapely, so a task can mesh its model before the solve. There is one variant,
+`palace:<commit7>-pts-x86-64-v3` (AVX2), because a second one doubles the build while the hot
+kernels pick AVX-512 at run time anyway (OpenBLAS, LIBXSMM).
+
+The image has no ParMETIS, which Palace's superbuild always links but whose licence allows
+evaluation use only outside non-profit research and forbids redistribution: `docker/palace/patches`
+builds Scotch/PT-Scotch (CeCILL-C) in its place and keeps the orderings parallel. SuperLU_DIST's
+parallel ordering (`ColumnOrdering: "ParMETIS"`) calls Scotch's ParMETIS-compatible library, MUMPS
+calls PT-Scotch (`ColumnOrdering: "PTScotch"`), and the default stays SuperLU_DIST with serial
+METIS. The build proves the absence (the superbuild, the installed files and symbols, Palace's link
+map, a conformance test of the ordering against the ParMETIS manual, an SPDX bill of materials and
+syft's scan of the image) and fails otherwise; the image's README has the details. The earlier
+build with ParMETIS, `palace:b797ea8-x86-64-v3`, is kept for evaluation (comparisons) only.
+
+Cloud Build builds it on the 8-vCPU machine the regional quota allows, in a 3-hour budget (the
+default timeout is 10 minutes); a build without its caches takes about 25 minutes (14 for the
+dependencies, 5 for Palace), about $0.45, and one with both dependency stages cached about 7
+minutes (October 2026). The dependency stages are pushed as
+`palace-deps:<tag>-x86-64-v3-solvers` (the ordering libraries and the direct solvers) and
+`palace-deps:<tag>-x86-64-v3` before Palace compiles and are read back with `--cache-from`, so a
+build that fails in MFEM or Palace, or a change to the runtime stage, does not rebuild the
+dependencies. `tools/exp/palace_plan.py` works
+like `openems_plan.py` (both use `tools/exp/image_tasks.py`); the jobs format is in its docstring:
+
+```sh
+python3 tools/exp/palace_plan.py image --run                      # about 30 minutes
+python3 tools/exp/palace_plan.py plan models.toml --out <dir>      # pins the image's digest
+yapnr exp plan <dir>/campaign.toml --backend gcp-batch
+yapnr exp submit <cid> && yapnr exp status <cid>      # again until every task is done
+yapnr exp fetch <cid>                                 # logs, records, Palace's tables
+python3 tools/exp/palace_plan.py collect <cid> --dest <tree>       # <tree>/runs/<model>/...
+```
+
+A job names a Palace configuration (`config`, a path in the task: an input, or the image's
+`/opt/palace/share/palace/examples/...`), optional overrides (`set = {"Solver.Order" = 3}`, for the
+campaign or per job), an optional `prepare` script that meshes the model and writes the
+configuration into `{out}` first, optional `stages` (configurations solved first, each into
+`out/<id>/stage-<k>-<name>` with `k` its place in the list, `CONFIG@1` on one rank; a stage
+listed twice is refused) with `mesh_from` naming the stage whose saved adapted mesh the main
+configuration solves (refinement, then a sweep of the refined mesh, in one task), and an optional
+`reference` directory whose `port-S.csv` the result must match. Each task
+runs the job bundle's `palace_job.py`: it reads the configuration
+(Palace's relaxed JSON: comments, trailing commas, integer ranges), applies the overrides, moves
+the output to `out/<id>/postpro` and makes the mesh path absolute (`out/<id>/config.json`), checks
+it with `palace --dry-run`, then solves with `mpirun -np <ranks>` from the configuration's
+directory. OpenMPI runs as root there (Batch's container user) without cross-memory attach (no
+ptrace in the container), over shared memory (its `ob1` layer with the `vader` transport, not UCX
+or libfabric: one VM, no RDMA) on the 1 GiB of `/dev/shm` the task containers get. The record,
+`out/<id>.job.json` (its verdict is `ok`: the solve exited 0 and matched the reference), keeps the
+stage that failed, wall and CPU time, the CPU, and Palace's own numbers from `palace.json` and its
+log: degrees of freedom and mesh elements, the AMR refinements and the unknowns of each solve,
+linear solves and iterations, timers, peak memory per rank and summed over the ranks. It is
+written when the task starts (`failed` is `running`), after every stage and at the end, so a task
+killed at its time limit or preempted still leaves the stages it finished.
+
+The smoke campaign (2026-10-04) ran Palace's coplanar-waveguide example from the image, a driven
+sweep over 7 frequencies with four wave ports, on 8 ranks of a `c4d-highcpu-16`: 117,764 degrees
+of freedom, 34 s of solve, 224 MB peak per rank, and its S-parameters matched Palace's regression
+reference to a complex difference of 6e-8 (the task used 51 s of the VM, which started 37 s
+after scheduling).
+
+A model gets a VM: `ranks` MPI ranks on as many physical cores (`vm_vcpus` is twice that on C4D),
+bound to them; `packing = "vcpu"` puts a rank on each hardware thread, and with
+`models_per_vm` above one the ranks are left unbound (two `mpirun`s would bind to the same
+cores). `memory_gb` decides between the highcpu and standard shapes (`yapnr exp plan`'s rule);
+the plan asks for an instance policy when none of its families has a Spot template for that
+shape (`infra/gcp` makes them for `c4d-highcpu-8`, `c4d-highcpu-16` and `c4d-standard-16`, and
+for `c4-highcpu-8` and `c4-highcpu-16` in the example's second region). A job may set its own
+`ranks` or `memory_gb`: `yapnr exp` gives each such resource class its own shape, and the plan
+checks every job, so one that needs a shape without a template (56 GB: `c4d-highmem-16`; 16
+ranks: a 32-vCPU shape) turns the campaign to instance policies instead of being refused at
+submit. A job with fewer ranks than the campaign still reserves the campaign's cores (a
+rank-scaling run gets the VM to itself rather than sharing it with another job bound to the same
+cores). Palace does not checkpoint and adaptive refinement cannot restart, so a preempted model
+starts again: keep Spot models to an hour or two.
 
 ## Testing
 

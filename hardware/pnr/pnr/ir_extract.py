@@ -13,6 +13,11 @@ thickness and depth per layer (the board file's ``(stackup ...)`` block). Fixed-
 copper is ordinary copper here, so a macro's feed counts. Then
 :func:`pnr.ir_drop.solve` gives the rail's report; ``ir.json`` holds every rail's.
 
+``sinks: all`` (the default) is every pad of the rail but its sources, less the pads
+that draw no DC current (a capacitor's: a footprint whose reference is ``C`` and a
+number, or whose library footprint is a capacitor's) and the pads ``exclude`` names;
+the report lists what it left out (``excluded_no_load``).
+
     python -m pnr.ir_extract board.kicad_pcb --rules rules.json --out DIR [--heatmaps]
 
 The exit status is 0 unless an entry with ``hard: true`` fails or is open.
@@ -98,6 +103,22 @@ def _pad_polygon(pad, lid, frame):
     return rings[0] if rings else None
 
 
+def _no_load(fp) -> bool:
+    """A capacitor's footprint (no DC load): reference ``C<n>``, or a capacitor's
+    library footprint (``Capacitor_*`` libraries, ``C_*``/``CP_*`` names)."""
+    import re
+
+    if re.match(r"^C[0-9]", fp.GetReference() or ""):
+        return True
+    try:
+        fpid = fp.GetFPID()
+        lib = str(fpid.GetLibNickname())
+        name = str(fpid.GetLibItemName())
+    except Exception:  # pragma: no cover - version shim
+        return False
+    return lib.startswith("Capacitor") or name.startswith(("C_", "CP_"))
+
+
 def extract(board, net: str, path: Optional[str] = None) -> Dict:
     """The copper of ``net`` (the :mod:`pnr.ir_drop` input), graph frame."""
     import pcbnew
@@ -170,6 +191,7 @@ def extract(board, net: str, path: Optional[str] = None) -> Dict:
     pads = []
     for fp in board.GetFootprints():
         address = _atopile_address(fp)
+        no_load = _no_load(fp)
         for pad in fp.Pads():
             if pad.GetNetCode() != code:
                 continue
@@ -190,6 +212,8 @@ def extract(board, net: str, path: Optional[str] = None) -> Dict:
             )
             if pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH:
                 row["drill_mm"] = _nm(min(pad.GetDrillSize().x, pad.GetDrillSize().y))
+            if no_load:
+                row["no_load"] = True
             pads.append(row)
     return dict(net=net, layers=layers, zones=zones, tracks=tracks, arcs=arcs, vias=vias, pads=pads)
 
@@ -234,8 +258,19 @@ def report(board, rules: Dict, out_dir: Path, path: Optional[str] = None, heatma
         net = entry["net"]
         copper = extract(board, net, path)
         sources = _terminals(copper, entry, "sources")
+        excluded = []
         if entry.get("sinks", "all") == "all":
-            sinks = [k for k in range(len(copper["pads"])) if k not in sources]
+            skip = set(_terminals(copper, entry, "exclude")) if entry.get("exclude") else set()
+            sinks = []
+            for k, p in enumerate(copper["pads"]):
+                if k in sources:
+                    continue
+                if p.get("no_load") or k in skip:  # no DC load: not a sink
+                    excluded.append("%s.%s" % (p["ref"], p["pad"]))
+                    continue
+                sinks.append(k)
+            if not sinks:
+                raise ValueError("ir_drop %s: no sink left (every other pad draws no load)" % net)
         else:
             sinks = _terminals(copper, entry, "sinks")
         current = rail_current(rules, net, entry.get("current_a"))
@@ -253,6 +288,8 @@ def report(board, rules: Dict, out_dir: Path, path: Optional[str] = None, heatma
             two_point=entry.get("two_point", True),
             heatmap=str(out_dir / ("ir-" + net.replace("/", "_"))) if heatmaps else None,
         )
+        if excluded:
+            kwargs["excluded"] = sorted(set(excluded))
         jobs.append(dict(net=net, copper=copper, kwargs=kwargs, hard=bool(entry.get("hard"))))
     for job, rep in zip(jobs, solve_jobs(jobs, out_dir)):
         copper = job["copper"]

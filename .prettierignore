@@ -6,6 +6,20 @@ docs/animations/
 # Written by `python -m yapnr.rf.coupons generate|expected` and the 2D table tool; regenerated, not
 # edited (their own formats, see yapnr/rf/coupons/jsonfmt.py).
 examples/rf-coupons/JLC*/
+examples/rf-coupons/order0/O0-*/
 yapnr/rf/coupons/data/
+# Written by `python -m yapnr.rf.order0 write` (jsonfmt, KiCad footprints, stage-plan job files).
+docs/rf/order0/inputs/
+docs/rf/order0/predictions/run0b/
+# Copied from the compute stage's fetched runs (part2/collect.py) byte for byte: the label carries
+# the sha256 of each result.json, so the files keep the solver's own formatting.
+docs/rf/order0/predictions/compute-index.json
+docs/rf/order0/predictions/references/
+docs/rf/order0/predictions/D1/runs/
+docs/rf/order0/predictions/D1/variants/
+docs/rf/order0/predictions/D1/selection.json
+docs/rf/order0/predictions/D2/runs/
+docs/rf/order0/predictions/D2/variants/
+docs/rf/order0/predictions/D2/selection.json
 # Written by the tests (YAPNR_UPDATE_GOLDEN=1, tests/unit/exp) and compared byte for byte.
 tests/unit/exp/golden/

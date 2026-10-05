@@ -131,13 +131,14 @@ def family_line(
     mode: str = "",
     roughness: str = "huray",
     dispersion: bool = True,
+    stackup_id: str = "",
 ) -> Line:
     """γ(f) and Zc(f) of a family (or one mode of a pair) at parameter values v.
 
     C(f) = C(F_REF) [1 + Σ_r q_r (ε_r(f)/Dk_r − 1)] is the first-order filling-factor expansion
     around the 2D solve (exact at F_REF); L = μ0 ε0 / C0. Geometric dispersion of the L1 lines
     scales L and C by √D(f) each (εeff by D, Zc unchanged), D from Kirschning-Jansen."""
-    fam = families.FAMILIES[fam_id]
+    fam = families.get(fam_id, stackup_id or None)
     f = np.asarray(f, float)
     w = 2 * math.pi * f
     out = tables[fam_id](v)
@@ -152,7 +153,8 @@ def family_line(
     L = MU0 * EPS0 / c0
     if dispersion and fam.kind == "outer":
         w_e = fam.w - 2 * v["L1.etch"]
-        d = np.sqrt(kj_ratio(w_e, v["pp1.h"], v["pp.dk"], f))
+        h_kj, er_kj = fam.dispersion_substrate(v)
+        d = np.sqrt(kj_ratio(w_e, h_kj, er_kj, f))
     else:
         d = np.ones_like(f)
     # conductor: skin-effect surface impedance with roughness, blended with DC
@@ -299,6 +301,29 @@ def open_end_extension(w: float, h: float, er: float, eps_eff: float) -> float:
     return h * x1 * x3 * x5 / x4
 
 
+def tee_offsets(
+    z_main: float, eps_main: float, z_branch: float, eps_branch: float, h_mm: float, f_hz: float
+) -> Tuple[float, float]:
+    """Reference-plane displacements (mm) of a symmetric microstrip T-junction: Hammerstad's
+    model [Hammerstad75] in the form of the Qucs MTEE (qucsator `mstee.cpp`). `d_main` runs from
+    the branch's centre line to the main arms' reference planes, `d_branch` from the main line's
+    centre line to the branch's; measured from the centre lines, each arm is electrically shorter
+    by its displacement. D = η0 h / (Z sqrt(εeff)) is a line's parallel-plate width and
+    fp = 0.4 Z / h (GHz, h in mm) the main line's first higher-order mode. The turns ratio and the
+    junction susceptance are left out: neither moves a stub's notch (a shunt short) or a ring's
+    (a transmission zero). Z and εeff from the 2D tables; est. (closed form)."""
+    d_m = ETA0 * h_mm / (z_main * math.sqrt(eps_main))
+    d_b = ETA0 * h_mm / (z_branch * math.sqrt(eps_branch))
+    fp = 0.4e9 * z_main / h_mm
+    r = z_main / z_branch
+    q = (f_hz / fp) ** 2
+    d_main = 0.055 * d_b * r * (1 - 2 * r * q)
+    d_branch = d_m * (
+        0.5 - r * (0.05 + 0.7 * math.exp(-1.6 * r) + 0.25 * r * q - 0.17 * math.log(r))
+    )
+    return d_main, d_branch
+
+
 def via_inductance(h_mm: float, d_mm: float) -> float:
     """Goldfarb-Pucel inductance (H) of a via of diameter d through height h [Goldfarb91]."""
     h, r = h_mm * 1e-3, 0.5 * d_mm * 1e-3
@@ -349,15 +374,22 @@ class Model:
         key = (fam, mode)
         if key not in self._lines:
             self._lines[key] = family_line(
-                fam, self.v, self.f, self.tables, mode, roughness=self.roughness
+                fam,
+                self.v,
+                self.f,
+                self.tables,
+                mode,
+                roughness=self.roughness,
+                stackup_id=self.st.id,
             )
         return self._lines[key]
 
     def abcd(self, el: Sequence) -> np.ndarray:
         """ABCD of one element: ("line", fam, mm), ("shunt_c", farads), ("series_l", henries),
-        ("junction", name) (a shunt C nuisance parameter in pF, 0 if absent), ("stub", fam,
+        ("shunt_rl", ohms, henries), ("junction", name) (a shunt C nuisance parameter in pF, 0 if absent), ("stub", fam,
         mm, "open"|"short"), ("coupled", fam, mm), ("ring", fam, radius_mm, gap_mm) (gap
-        coupled), ("ring2", fam, radius_mm, arc_fraction) (directly fed)."""
+        coupled), ("ring2", fam, radius_mm, arc_fraction[, junction_mm]) (directly fed; each
+        arc shortened by the feeds' T-junction displacement at both ends)."""
         kind = el[0]
         n = len(self.f)
         if kind == "line":
@@ -366,6 +398,9 @@ class Model:
             return abcd_shunt(1j * self.w * el[1])
         if kind == "series_l":
             return abcd_series(1j * self.w * el[1])
+        if kind == "shunt_rl":
+            # ("shunt_rl", ohms, henries): a shunt resistor with its series inductance
+            return abcd_shunt(1.0 / (el[1] + 1j * self.w * el[2]))
         if kind == "conn":
             # ("conn", fam, stick, port): a connection nuisance of the fit (fit.Predictor)
             dl = self.v.get(f"conn.{el[2]}.{el[3]}.dl", 0.0)
@@ -382,7 +417,7 @@ class Model:
         if kind == "ring":
             return self.ring_abcd(el[1], el[2], el[3])
         if kind == "ring2":
-            return self.ring2_abcd(el[1], el[2], el[3])
+            return self.ring2_abcd(el[1], el[2], el[3], el[4] if len(el) > 4 else 0.0)
         raise ValueError(f"unknown element {el!r}")
 
     def stub_admittance(self, fam: str, length_mm: float, end: str) -> np.ndarray:
@@ -414,7 +449,7 @@ class Model:
         return m
 
     def gap_abcd(self, fam: str, gap_mm: float) -> np.ndarray:
-        f = families.FAMILIES[fam]
+        f = families.get(fam, self.st.id)
         h = self.v["pp1.h"] if f.kind == "outer" else 0.5 * (self.v["pp3.h"] + self.v["core.h"])
         er = self.v["pp.dk"]
         cs, cp = gap_capacitances(f.w, h, gap_mm, er)
@@ -423,16 +458,20 @@ class Model:
             abcd_shunt(1j * self.w * cp), abcd_series(1 / y_s), abcd_shunt(1j * self.w * cp)
         )
 
-    def ring2_abcd(self, fam: str, radius_mm: float, arc_frac: float = 0.25) -> np.ndarray:
+    def ring2_abcd(
+        self, fam: str, radius_mm: float, arc_frac: float = 0.25, junction_mm: float = 0.0
+    ) -> np.ndarray:
         """Directly fed ring: two arcs of the ring's centre line in parallel (Y-parameters
         added), the shorter `arc_frac` of the circumference. With the feeds a quarter turn apart
         the transmission vanishes where the circumference is a whole number of wavelengths, so
-        the notches sit at the ring resonances [Wolff71, Chang04] however lossy the ring; the
-        two T-junctions are not modelled (est.)."""
+        the notches sit at the ring resonances [Wolff71, Chang04] however lossy the ring. Each
+        arc is shortened by the feeds' T-junction displacement `junction_mm` at both ends
+        (`tee_offsets`, the ring the main line; est.: the feeds meet the ring at 45°)."""
         c = 2 * math.pi * radius_mm
         line = self.line(fam)
-        y = abcd_to_y(abcd_line(line, arc_frac * c)) + abcd_to_y(
-            abcd_line(line, (1 - arc_frac) * c)
+        dj = 2 * junction_mm
+        y = abcd_to_y(abcd_line(line, arc_frac * c - dj)) + abcd_to_y(
+            abcd_line(line, (1 - arc_frac) * c - dj)
         )
         return y_to_abcd(y)
 

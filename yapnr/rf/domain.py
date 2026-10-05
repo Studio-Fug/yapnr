@@ -25,6 +25,48 @@ from yapnr.rf.ports import LinePort, PortGeometry
 from yapnr.rf.stackup import Stackup
 
 
+def check_inside_cpml(grid: Grid, node_box, cells: int = 2) -> None:
+    """Raise unless every face of `node_box` lies at least `cells` cells from the CPML (the
+    faces on the domain's outer boundary, z = 0 on a PEC ground, excepted)."""
+    for a, (lo, hi) in enumerate(node_box):
+        n_lo, n_hi = grid.pml.along(a)
+        n = grid.axis(a).n
+        if (lo > 0 or n_lo > 0) and lo < n_lo + cells:
+            raise ValueError(
+                f"the radiation box comes within {lo - n_lo} cells of the {'xyz'[a]}-low CPML "
+                f"(at least {cells}): more margin or air"
+            )
+        if hi > n - n_hi - cells:
+            raise ValueError(
+                f"the radiation box comes within {n - n_hi - hi} cells of the {'xyz'[a]}-high "
+                f"CPML (at least {cells}): more margin or air"
+            )
+
+
+@dataclass
+class ClosedBox:
+    """A closed flux box and, per line port, the face its feed crosses (design §25.2), and the
+    full transverse planes at those faces' nodes (`planes`, port → one-face `FluxBox`, set by
+    `Problem`: the guided wave's modal projection needs the whole cross-section of the mode,
+    which extends beyond the box)."""
+
+    box: FluxBox
+    feeds: dict = field(default_factory=dict)
+    planes: dict = field(default_factory=dict)
+
+    @property
+    def probes(self):
+        return self.box.probes + [p for n in sorted(self.planes) for p in self.planes[n].probes]
+
+    @property
+    def node_box(self):
+        return self.box.node_box
+
+    def power(self, dft):
+        """Outward Poynting flux through the closed box (M,)."""
+        return self.box.power(dft)
+
+
 @dataclass(frozen=True)
 class PortSpec:
     """A line port on an edge of the design region: side W/E/S/N, transverse centre (m)."""
@@ -179,41 +221,52 @@ class Domain:
 
     def radiation_box(
         self,
-        offset: float,
-        height: float,
         *,
+        clearance: int = 2,
+        offset: float | None = None,
+        height: float | None = None,
         name: str = "rad",
-        window_margin: float | None = None,
-        window_height: float | None = None,
-        from_ground: bool = False,
-    ) -> FluxBox:
-        """The radiated-power box of design §5.6: the four side faces from the copper plane up
-        and the top face, `offset` beyond the design region and `height` above the copper
-        (both snapped to grid nodes). Where a feed crosses a side face, a window
-        |t − t_feed| ≤ w/2 + window_margin (default 2h), z ≤ window_height (default 3h above
-        the ground) is left out. `from_ground` extends the side faces down to the ground plane
-        (a box closed by the ground, which also counts power guided away in the substrate)."""
+    ) -> "ClosedBox":
+        """The radiated-power box (design §25.2): closed by the ground (faces x−, x+, y−, y+ and
+        z+ from z = 0; the PEC ground carries no flux), without feed windows, enclosing the
+        design region by `clearance` cells on every side and above the copper; `offset` (m)
+        beyond the design region and `height` (m) above the copper move the faces out further
+        (snapped to the nearest node). Every face lies at least two cells from the CPML. The
+        faces the feeds cross are listed per port (`ClosedBox.feeds`): there the guided wave
+        is separated modally (`ports.ModalPlane`), and everything else that leaves the box is
+        the non-guided power (radiation and, on the infinite substrate, the surface wave)."""
         g = self.grid
-        h = self.spec.stackup.h
+        c = int(clearance)
+        if c < 1:
+            raise ValueError("the radiation box needs a clearance of at least one cell")
+        i0, i1, j0, j1 = self.window
         x0, x1, y0, y1 = self.spec.design
-        margin = 2.0 * h if window_margin is None else window_margin
-        top_z = 3.0 * h if window_height is None else window_height
-        box = (
-            (g.x.nearest_node(x0 - offset), g.x.nearest_node(x1 + offset)),
-            (g.y.nearest_node(y0 - offset), g.y.nearest_node(y1 + offset)),
-            (0 if from_ground else g.k_c, g.z.nearest_node(h + height)),
-        )
-        windows = []
+        kc = g.k_c
+        h = self.spec.stackup.h
+        lo_x, hi_x, lo_y, hi_y, top = i0 - c, i1 + c, j0 - c, j1 + c, kc + c
+        if offset is not None:
+            lo_x = min(lo_x, g.x.nearest_node(x0 - offset))
+            hi_x = max(hi_x, g.x.nearest_node(x1 + offset))
+            lo_y = min(lo_y, g.y.nearest_node(y0 - offset))
+            hi_y = max(hi_y, g.y.nearest_node(y1 + offset))
+        if height is not None:
+            top = max(top, g.z.nearest_node(h + height))
+        node_box = ((lo_x, hi_x), (lo_y, hi_y), (0, top))
+        check_inside_cpml(g, node_box)
+        box = FluxBox(g, name, node_box, faces=("x-", "x+", "y-", "y+", "z+"))
+        tags = {"W": "x-", "E": "x+", "S": "y-", "N": "y+"}
+        feeds = {}
         for p in self.ports:
-            half = 0.5 * p.width + margin
-            centre = p.port.center
-            if p.axis == 0:
-                xf = g.x.nodes[box[0][0] if p.sign > 0 else box[0][1]]
-                windows.append(((xf - 1e-9, xf + 1e-9), (centre - half, centre + half), (0, top_z)))
-            else:
-                yf = g.y.nodes[box[1][0] if p.sign > 0 else box[1][1]]
-                windows.append(((centre - half, centre + half), (yf - 1e-9, yf + 1e-9), (0, top_z)))
-        return FluxBox(g, name, box, faces=("x-", "x+", "y-", "y+", "z+"), windows=windows)
+            tag = tags[p.port.side]
+            face = box.faces[["x-", "x+", "y-", "y+", "z+"].index(tag)]
+            outside = face.node > p.i_src + 1 if p.sign > 0 else face.node < p.i_src - 1
+            if not outside:
+                raise ValueError(
+                    f"port {p.port.number}: the radiation box must leave the port's source "
+                    "outside (a smaller offset or longer feeds)"
+                )
+            feeds[p.port.number] = face
+        return ClosedBox(box, feeds)
 
     def window_pixels(self, full: np.ndarray) -> np.ndarray:
         """The design-window part (…, ni, nj) of a whole-plane pixel array (…, Nx, Ny)."""

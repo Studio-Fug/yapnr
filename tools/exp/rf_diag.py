@@ -11,7 +11,8 @@ the loader's status, which names the image's wheel library when it was built fro
 C sources, or why not), and the exit code and head of ``python -m yapnr.rf.cases --help``.
 ``ok`` is true when numpy, torch and PyYAML import, the sources compile, ``yapnr.rf.cases``
 comes from the bundle and its help exits 0; Pillow (the animations) and the native library are
-reported, not required.
+reported, not required, except that ``YAPNR_RF_REQUIRE_NATIVE=1`` (which ``rf_stage_plan``
+sets by default) makes ``ok`` require the native library.
 
 Written by tools/exp/rf_stage_plan.py into the job bundle of an ``mc-eval`` stage plan.
 """
@@ -31,6 +32,7 @@ from pathlib import Path
 REQUIRED = ("numpy", "torch", "yaml")
 OPTIONAL = ("PIL",)
 HELP_TIMEOUT_S = 300
+NOT_SET = ("", "0", "false", "no")  # YAPNR_RF_REQUIRE_NATIVE values that do not require it
 
 
 def _module(name):
@@ -125,12 +127,17 @@ def main(argv=None) -> int:
         }
     except (OSError, subprocess.SubprocessError) as err:
         report["cases_help"] = {"exit_code": None, "error": str(err)}
+    # With YAPNR_RF_REQUIRE_NATIVE (rf_stage_plan sets it unless a job opts out), a library the
+    # loader refuses fails the diagnostic, as it would fail the campaign's runs.
+    required = os.environ.get("YAPNR_RF_REQUIRE_NATIVE", "").strip().lower() not in NOT_SET
+    report["native_required"] = required
     report["ok"] = bool(
         all(report["modules"][name]["ok"] for name in REQUIRED)
         and not report["compile"]["failures"]
         and report["compile"]["files"] > 0
         and report.get("from_bundle")
         and report["cases_help"].get("exit_code") == 0
+        and (report["native"].get("loaded") or not required)
     )
     (out / "diag.json").write_text(json.dumps(report, indent=1, sort_keys=True) + "\n")
     print(json.dumps({"ok": report["ok"]}))

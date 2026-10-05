@@ -39,6 +39,8 @@ def port_pads(problem) -> list[tuple[int, slice, slice]]:
     i0, _, j0, _ = dom.window
     depth = PAD_DEPTH * problem.refine
     out = []
+    if getattr(problem, "board", False):
+        return out  # lumped ports: no footprint pads (board models, design §26)
     for pg in dom.ports:
         along = (
             slice(pg.i_ref, pg.i_ref + depth) if pg.sign > 0 else slice(pg.i_ref - depth, pg.i_ref)
@@ -201,7 +203,11 @@ def footprint_of(problem, binary: np.ndarray, *, name: str | None = None) -> tup
         islands=shapes,
         description=descr,
         seed=sha,
-        rule_areas=rule_areas(spec, port_only, problem.domain.spec.margin * 1e3),
+        rule_areas=(
+            []
+            if getattr(problem, "board", False)
+            else rule_areas(spec, port_only, problem.domain.spec.margin * 1e3)
+        ),
         fab_rects=fab,
     )
     return fp, [p for p, _ in shapes]
@@ -298,6 +304,18 @@ def export_design(problem, opt, final: dict, out_dir: str, *, sweep: bool = True
             "steps": {str(k): v for k, v in sw["steps"].items()},
         }
         log(f"coarse sweep: passivity margin {sweep_json['passivity_margin_min']:.2e}")
+    far = None
+    if getattr(problem, "board", False):
+        from yapnr.rf.validate import FAR_FIELD, far_field_report
+
+        excited = sorted({r.excitation for r in spec.requirements})
+        far = {str(j): far_field_report(problem, binary, problem.freqs, j) for j in excited}
+        for j, rep in far.items():
+            worst = float(np.max(np.abs(rep["p_ff_error"])))
+            rep["p_ff_ok"] = worst <= FAR_FIELD
+            log(
+                f"far field (port {j}): |P_ff/P_box - 1| ≤ {worst:.2e}, D_max {rep['d_max_dbi']} dBi"
+            )
     st = opt.state
     result = {
         "schema": RESULT_SCHEMA,
@@ -327,6 +345,7 @@ def export_design(problem, opt, final: dict, out_dir: str, *, sweep: bool = True
             "repair": repaired,
         },
         "drc": drc.to_json(),
+        "far_field": far,
         "provenance": provenance(problem),
         "wall_s": {"optimization": st.wall_s, "export": time.perf_counter() - t0},
     }

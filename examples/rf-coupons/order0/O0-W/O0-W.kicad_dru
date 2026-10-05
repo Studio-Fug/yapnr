@@ -1,0 +1,60 @@
+(version 1)
+(rule "MB1: mouse-bite holes inside the tabs (OSH Park tab pattern)"
+	(constraint physical_hole_clearance (min 0.005mm))
+	(condition "A.memberOfFootprint('MB1') && B.Layer == 'Edge.Cuts'"))
+(rule "MO_B01: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_B01')")
+	(severity ignore))
+(rule "MO_B02: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_B02')")
+	(severity ignore))
+(rule "MO_B03: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_B03')")
+	(severity ignore))
+(rule "MO_B04: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_B04')")
+	(severity ignore))
+(rule "MO_B05L: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_B05L')")
+	(severity ignore))
+(rule "MO_B05R: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_B05R')")
+	(severity ignore))
+(rule "MO_R1t_1: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_R1t_1')")
+	(severity ignore))
+(rule "MO_R1t_2: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_R1t_2')")
+	(severity ignore))
+(rule "MO_R1t_3: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_R1t_3')")
+	(severity ignore))
+(rule "MO_R1t_W: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_R1t_W')")
+	(severity ignore))
+(rule "MO_D2_1: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_D2_1')")
+	(severity ignore))
+(rule "MO_D2_2: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_D2_2')")
+	(severity ignore))
+(rule "MO_D2_3: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_D2_3')")
+	(severity ignore))
+(rule "MO_D2_W: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_D2_W')")
+	(severity ignore))

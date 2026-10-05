@@ -5,10 +5,11 @@ The coupon boards of the [design](../../docs/design/rf-fab-coupons.md), generate
 user guide is [docs/rf-fab-coupons.md](../../docs/rf-fab-coupons.md). Do not edit these files:
 change the generator and regenerate them.
 
-| Directory                         | Board | Stackup                       | Panel (mm) |
-| --------------------------------- | ----- | ----------------------------- | ---------- |
-| [JLC04161H-7628](JLC04161H-7628/) | A     | 4 layers, L1 GCPW, microstrip | 176 × 182  |
-| [JLC06161H-7628](JLC06161H-7628/) | B     | 6 layers, L3 stripline        | 134 × 189  |
+| Directory                           | Board | Stackup                       | Panel (mm)    |
+| ----------------------------------- | ----- | ----------------------------- | ------------- |
+| [JLC04161H-7628](JLC04161H-7628/)   | A     | 4 layers, L1 GCPW, microstrip | 176 × 182     |
+| [JLC06161H-2116C](JLC06161H-2116C/) | B     | 6 layers, L3 stripline        | 224 × 120     |
+| [order0](order0/README.md)          | O     | OSH Park 4 layers, Order 0    | three uploads |
 
 Each directory holds:
 

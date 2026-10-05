@@ -1,0 +1,36 @@
+"""yapnr.rf.palace: AWS Palace (3D FEM) models from planar documents (docs/rf-palace.md).
+
+The configuration writer and the schema check are stdlib only and read the vendored Palace
+schema (//third_party/palace); the results readers (results.py) need numpy. The Gmsh builder
+imports gmsh lazily: it runs in the FEA environment and in the Palace task image, never under
+Bazel.
+"""
+
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "palace",
+    srcs = glob(
+        ["*.py"],
+        exclude = ["__main__.py"],
+    ),
+    data = ["//third_party/palace:config-schema.json"],
+    imports = ["../../.."],
+    deps = [
+        "//yapnr:package",
+        "//yapnr/rf:package",
+        "//yapnr/rf/planar",
+        requirement("numpy"),
+    ],
+)
+
+# bazel run //yapnr/rf/palace:cli -- validate CONFIG.json  (python -m yapnr.rf.palace)
+py_binary(
+    name = "cli",
+    srcs = ["__main__.py"],
+    main = "__main__.py",
+    deps = [":palace"],
+)

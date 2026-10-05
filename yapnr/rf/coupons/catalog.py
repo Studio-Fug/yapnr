@@ -763,7 +763,10 @@ def o_reference(region: str) -> dict:
     )
 
 
-D1_WINNER = "docs/rf/order0/predictions/D1/runs/d1-star/footprint.kicad_mod"
+D1_WINNER = "docs/rf/order0/predictions/D1-d1c/runs/d1-star/footprint.kicad_mod"
+# Superseded 2026-10-05 (part 5): the old D1/runs/d1-star footprint (label ad20e643) reproduced
+# two 0.100 mm corner-gap violations under PR #53's fixed exact DRC. D1-d1c/runs/d1-star (label
+# 7e070ca8) is the re-optimized, DRC-clean replacement (same spec/criteria/selection rule).
 # D2 never passed every check (|S11| misses -20 dB by 0.6-0.7 dB); `d2-star-sched` is the
 # nearest formulation and compute.md's recommendation absent other owner direction (see
 # docs/rf/order0/predictions/D2/README.md) -- shipped as a pre-registered |S11|-missing design.

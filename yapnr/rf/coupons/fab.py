@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import json
 import os
+import plistlib
 import shutil
 import subprocess
 import tempfile
 import zipfile
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from yapnr.rf.coupons import catalog, families, layout, models, stackups
@@ -23,10 +25,46 @@ KICAD_CLI_ENV = ("YAPNR_KICAD_CLI", "PNR_KICAD_CLI")
 TIMEOUT_S = 600
 
 
+def _app_bundle(path: Path) -> Optional[Path]:
+    for q in (path, *path.parents):
+        if q.suffix == ".app":
+            return q
+    return None
+
+
+def _background_only(bundle: Path) -> bool:
+    try:
+        info = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
+    except (OSError, ValueError):
+        return False
+    return any(
+        value is True or str(value).strip().lower() in ("1", "yes", "true")
+        for value in (info.get("LSBackgroundOnly"), info.get("LSUIElement"))
+    )
+
+
+def _refuse_gui(path: Path) -> None:
+    """Reject a program of the GUI KiCad, or of any app bundle that isn't background-only
+    (DEVELOPERS.md#kicad; the same rule `yapnr.frontends.atopile.kicad.refuse_gui` applies):
+    DRC and the fab package must never run the GUI build, which can pop a window or write to
+    the user's own KiCad settings mid-pipeline."""
+    for q in (path, path.resolve()):
+        if "KiCad.app" in q.parts or str(q).startswith("/Applications/KiCad/"):
+            raise ValueError(f"refusing the GUI KiCad program {path} (DEVELOPERS.md#kicad)")
+        bundle = _app_bundle(q)
+        if bundle is not None and not _background_only(bundle):
+            raise ValueError(f"refusing {path}: {bundle.name} is not a background-only app bundle")
+
+
 def kicad_cli() -> Optional[str]:
+    """The headless kicad-cli from `YAPNR_KICAD_CLI`/`PNR_KICAD_CLI`, or None when neither is
+    set or executable. Guarded against the GUI KiCad bundle (`_refuse_gui`): a path into
+    `KiCad.app` or any app bundle that isn't background-only is refused rather than silently
+    used to DRC and fab-package a real OSH Park order."""
     for k in KICAD_CLI_ENV:
         p = os.environ.get(k)
         if p and os.access(p, os.X_OK):
+            _refuse_gui(Path(p))
             return p
     return None
 

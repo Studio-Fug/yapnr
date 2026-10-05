@@ -522,5 +522,5 @@ ae0098ff4d86478ed317b707ca72cc0262aed5d6f1071614d1220de5c048ea25  ./predictions/
 f7be4fa13f120c96c6a139de4e38be9dc89e4e1002abef69d0ff7984ffd7d776  ./predictions/run0b/r1-m-eq-loss-corrected.s3p
 b74b0b3c23028c084d730f979297ebb48befe968f83598340155f8873786caf7  ./predictions/run0b/r1-m-eq.s3p
 c74f1c862695db8910d0f24d3a9825973d0ce6cb093d89998a3a7e597caa1f9d  ./predictions/run0b/run0b.json
-68533cfed3ca7a7de58a331fc3b926f3dd42c50bd86affd36948fcf4865ce752  ./preregistration.md
+46a839da9fe47da1a161058b51a27a8c2de28e081001715ac3add8bcec8989d3  ./preregistration.md
 d53b507358fd53933b6056a32e5a43edfb7008268fedd7ad3fe059d3a37338a9  ./README.md

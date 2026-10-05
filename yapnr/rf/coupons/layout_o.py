@@ -800,12 +800,21 @@ def tag_stick(wr: Writer, pl: Placed, info: Dict[str, str]):
     over a copper fill: design §6, review F7) with the tag text under it; the microsection
     lines (M, M0.7,
     M1.4, M-MK side by side with their L1 ground at the keep-away, a cut mark across); two
-    4-wire meanders on L1 (0.20 x 200 mm, 0.50 x 250 mm) with test-point holes."""
+    4-wire meanders on L1 (0.20 x 200 mm, 0.50 x 250 mm) with test-point holes.
+
+    When `geometry["lines"]` and `["meanders"]` are both empty (the small O0-D/O0-W label stick:
+    the QR to the docs page, no microsection duty), only the QR and its tag text are drawn."""
     s = pl.stick
     g = s.geometry
     _, gnd = _nets(wr, s)
     hh = s.height / 2
-    wr.stick_zones(pl, gnd, layers=wr.layers[1:])
+    small = not g.get("lines") and not g.get("meanders")
+    if not small:
+        # the full tag+xsec stick's ground plane, for the microsection lines' reference; the
+        # small label stick below has no controlled-impedance duty and so no need of one (an
+        # inner-layer zone with nothing else of its net anywhere is KiCad DRC's "isolated
+        # copper" warning, review of this change).
+        wr.stick_zones(pl, gnd, layers=wr.layers[1:])
     # 1. the QR
     mods = qr.matrix(g["url"])
     n = len(mods)
@@ -842,6 +851,10 @@ def tag_stick(wr: Writer, pl: Placed, info: Dict[str, str]):
     lines = [info.get("title", ""), info.get("stackup", ""), info.get("git", "")]
     for k, t in enumerate(x for x in lines if x):
         _text(wr, pl, t, x0, y0 + side + 0.9 + 1.8 * k, (s.id, "tag", k), size=1.0)
+    if small:
+        # the small label stick: QR and tag text only (O0-D's and O0-W's D1/D2 docs link).
+        _copy_box(wr, pl, x0 + side / 2, y0 + side / 2, ("box", s.id), s.id)
+        return
     # 2. the microsection lines
     xs0 = x0 + side + 2.0
     xlen = 16.0

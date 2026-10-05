@@ -121,6 +121,15 @@ How the rows are applied (decided before any measurement; none of these changes 
   nearest, `d2-star-sched`, reaches −19.3 to −19.4 dB and passes its \|S21\|, \|S31\| validation
   limits, [D2](predictions/D2/README.md)). If it ships, it is judged by the same rows, labelled a
   design that missed its \|S11\| spec.
+  - **Owner default (recorded by the main loop, 2026-10-04):** `d2-star-sched` ships on O0-W as
+    this pre-registered near-miss unless the owner says otherwise. It passes \|S21\|/\|S31\| on
+    every grid and substrate it was validated on (coarse/fine/finer, W-eq/W-nom; EM528 passes
+    outright) and misses only \|S11\| — by 0.6-0.7 dB against the −20 dB spec, −19.3 to −19.4 dB
+    measured. The board carries its run id, the first 8 hex of its `result.json` sha256, and its
+    fab-DRC status in silkscreen (the D2 stick's label; `catalog.o_optimized`), plus a QR label
+    stick to this page. This default is a placeholder for the owner's own sign-off, not a
+    substitute for it: the row above ("ships only as the owner decides") is the binding text
+    until the owner confirms or overrides it.
 - Criteria are never changed after data arrive; if one must be, results are reported against
   both versions.
 

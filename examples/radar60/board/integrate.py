@@ -25,7 +25,9 @@ Steps (each reads the previous one's files in WORK; nothing is placed by hand):
              then HPWL, then id. Every candidate's audit and rank go to WORK/selection.json.
 ``finish``   pnr.writeback of the winner (placement only, no routes; the copper keepouts as
              rule areas and custom rules), then kicad_ops.py finish (outline, locks, zone fill,
-             macro digest R1 v2), the project and custom rules beside it, KiCad's DRC, the
+             macro digest R1 v2), the project and custom rules beside it, an fp-lib-table
+             extracted from the finished board's own footprints (pnr.library_table, so
+             independent DRC resolves the synthetic Radar60_* lib nicknames), KiCad's DRC, the
              placement audit and the RF audit (rf_audit.py A1-A6) of the final board, and its
              report.
 ``render``   kicad-cli pcb render: top, angled and bottom views (labelled with --label-python,
@@ -672,6 +674,26 @@ def step_finish(a):
             work / "finish.json",
         ],
         log=work / "finish.log",
+    )
+    # fp-lib-table: the board's parts (atopile's generated/cached footprints) carry synthetic
+    # lib nicknames (Radar60_*) with no checked-in source library, so independent DRC fails
+    # lib_footprint_issues on every one unless the project's fp-lib-table knows them. Extracted
+    # from the board's own copper (pnr.library_table.extract_footprints), so it matches exactly.
+    _run(
+        [
+            a.kicad_python,
+            "-m",
+            "pnr.library_table",
+            "--from-board",
+            board,
+            "--libs-dir",
+            work / "libs",
+            "--out",
+            out_dir / "fp-lib-table",
+        ],
+        env=_env(a.engine),
+        cwd=Path(a.engine) / "hardware/pnr",
+        log=work / "fp-lib-table.log",
     )
     drc = work / "drc.json"
     subprocess.run(

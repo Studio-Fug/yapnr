@@ -131,6 +131,37 @@ class LiveUploaderTest(unittest.TestCase):
         self.assertTrue((self.remote / "s1r0" / "000001.tar.gz").is_file())
         self.assertTrue((self.remote / "s1r1" / "000001.tar.gz").is_file())
 
+    def test_a_failed_write_does_not_lose_the_pending_events(self):
+        """If write_atomic raises, the next sync() must see the same events as still
+        pending (review finding: sent_events/seq were updated before the write, so a
+        failure silently dropped them even though the docstring promises a retry)."""
+        live = self.uploader()
+        write_event(live.live_dir, "e1", "phase_start")
+        orig_write_atomic = wrapper.write_atomic
+        calls = {"n": 0}
+
+        def flaky(path, data):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OSError("simulated upload failure")
+            return orig_write_atomic(path, data)
+
+        wrapper.write_atomic = flaky
+        try:
+            with self.assertRaises(OSError):
+                live.sync()
+            self.assertEqual(live.seq, 0)
+            self.assertEqual(live.sent_events, set())
+            # The retry (same event still pending) now succeeds and is actually sent.
+            self.assertTrue(live.sync())
+        finally:
+            wrapper.write_atomic = orig_write_atomic
+        self.assertTrue((self.remote / "000001.tar.gz").is_file())
+        added = livemod.unpack_bundle(
+            (self.remote / "000001.tar.gz").read_bytes(), self.tmp / "out"
+        )
+        self.assertEqual(added, {"events": 1, "boards": 0})
+
 
 class EventSchemaTest(unittest.TestCase):
     def test_valid_event_has_no_errors(self):
@@ -198,6 +229,21 @@ class UnpackBundleTest(unittest.TestCase):
         second = livemod.unpack_bundle(data, self.dest)
         self.assertEqual(first, {"events": 1, "boards": 0})
         self.assertEqual(second, {"events": 0, "boards": 0})
+
+    def test_source_host_path_is_stripped_not_just_board(self):
+        """``source`` carries the uploading host's absolute path (hardware/pnr/pnr/live.py);
+        it must not survive into the mirror, which other people may later share."""
+        sha = "c" * 64
+        write_board(self.live.live_dir, sha, b"the board")
+        (self.live.live_dir / "events").mkdir(parents=True, exist_ok=True)
+        raw = event("e1", "candidate_complete", board_sha256=sha)
+        raw["source"] = "~someone/private/board.kicad_pcb"
+        (self.live.live_dir / "events" / "e1.json").write_text(json.dumps(raw))
+        self.live.sync()
+        livemod.unpack_bundle((self.remote / "000001.tar.gz").read_bytes(), self.dest)
+        written = json.loads((self.dest / "events" / "e1.json").read_text())
+        self.assertNotIn("source", written)
+        self.assertNotIn("someone", json.dumps(written))
 
     def test_a_malformed_event_in_the_bundle_is_skipped_not_fatal(self):
         import io
@@ -288,6 +334,29 @@ class MirrorTest(unittest.TestCase):
         state = livemod.LiveState({"t~a/s1r0": 1})  # t~a not fetched yet, t~b neither
         found = livemod.mirror_once(self.store, self.cid, dest, state)
         self.assertEqual(found["bundles"], 2)
+
+    def test_mirror_once_skips_a_corrupt_bundle_and_keeps_going(self):
+        """A truncated/corrupt bundle must not wedge the mirror loop forever (review
+        finding: an uncaught tarfile error previously meant every later poll re-hit the
+        same bad bundle with nothing ever advancing)."""
+        self.write_bundle("t~a", "s1r0", 1, [("e1", "phase_start")])
+        path = self.base / "t~a" / "s1r0" / "000002.tar.gz"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"not a valid tar.gz at all")
+        self.write_bundle("t~a", "s1r0", 3, [("e2", "phase_complete")])
+        dest = self.tmp / "mirror"
+        state = livemod.LiveState()
+        messages = []
+        found = livemod.mirror_once(self.store, self.cid, dest, state, say=messages.append)
+        # The good bundles (seq 1 and 3) are unpacked; the corrupt one (seq 2) is skipped,
+        # warned about, and still advances state so it is never retried.
+        self.assertEqual(found, {"bundles": 2, "events": 2, "boards": 0})
+        self.assertEqual(state.next_seq("t~a", "s1r0"), 4)
+        self.assertTrue(any("skipping unreadable bundle" in m for m in messages))
+        # A second poll, state reloaded from disk, does not choke on the bad bundle again.
+        reloaded = livemod.LiveState.load(dest)
+        found_again = livemod.mirror_once(self.store, self.cid, dest, reloaded)
+        self.assertEqual(found_again, {"bundles": 0, "events": 0, "boards": 0})
 
     def test_mirror_say_and_once(self):
         self.write_bundle("t~a", "s1r0", 1, [("e1", "phase_start")])

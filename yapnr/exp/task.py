@@ -590,35 +590,41 @@ class LiveUploader:
             return False
         self.last_sync = time.monotonic()
         kept = []
+        kept_names = []
         for path in self._pending():
-            self.sent_events.add(path.name)
             try:
                 event = json.loads(path.read_text())
             except (OSError, ValueError):
+                # Unreadable now; leave it out of sent_events so a later, complete write
+                # of this file is retried instead of silently dropped.
                 continue
+            kept_names.append(path.name)
             if self.spec["mode"] == "thin" and str(event.get("kind", "")).startswith(
                 LIVE_THIN_DROP_PREFIX
             ):
                 continue
             kept.append((path, event))
-        boards = []
+        new_boards = []
         for path, event in kept:
             sha = event.get("board_sha256")
             if sha and sha not in self.sent_boards:
                 board_path = self.live_dir / "boards" / (sha + ".kicad_pcb")
                 if board_path.is_file():
-                    boards.append((sha, board_path))
-                    self.sent_boards.add(sha)
-        if not kept and not boards:
+                    new_boards.append((sha, board_path))
+        if not kept_names and not new_boards:
             return False
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w:gz") as tar:
             for path, _event in kept:
                 tar.add(str(path), arcname="events/" + path.name)
-            for sha, board_path in boards:
+            for sha, board_path in new_boards:
                 tar.add(str(board_path), arcname="boards/" + sha + ".kicad_pcb")
+        # Only record what was sent, and bump seq, once the write has actually succeeded;
+        # on failure the next sync() sees these same files/boards as still-pending and retries.
+        write_atomic(self.remote / ("%06d.tar.gz" % (self.seq + 1)), buf.getvalue())
         self.seq += 1
-        write_atomic(self.remote / ("%06d.tar.gz" % self.seq), buf.getvalue())
+        self.sent_events.update(kept_names)
+        self.sent_boards.update(sha for sha, _ in new_boards)
         return True
 
 

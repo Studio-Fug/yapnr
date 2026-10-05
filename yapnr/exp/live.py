@@ -26,6 +26,7 @@ import os
 import re
 import tarfile
 import time
+import zlib
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -101,6 +102,9 @@ def unpack_bundle(data: bytes, dest: Path) -> Dict[str, int]:
             sha = event.get("board_sha256")
             if sha:
                 event["board"] = str((boards_dir / (sha + ".kicad_pcb")).resolve())
+            # "source" is the uploading host's absolute path to the original board file; it is
+            # meaningless (and, off GCP, potentially a user home path) once mirrored elsewhere.
+            event.pop("source", None)
             _write_atomic(target, json.dumps(event, separators=(",", ":"), default=str).encode())
             added["events"] += 1
     return added
@@ -149,8 +153,21 @@ def list_bundles(runs: Store, cid: str) -> List[Tuple[str, str, int, str]]:
     return out
 
 
-def mirror_once(runs: Store, cid: str, dest: Path, state: LiveState) -> Dict[str, int]:
-    """Fetch and unpack every bundle not yet in ``state``; returns bundle/event/board counts."""
+def mirror_once(
+    runs: Store,
+    cid: str,
+    dest: Path,
+    state: LiveState,
+    *,
+    say: Optional[Callable[[str], None]] = None,
+) -> Dict[str, int]:
+    """Fetch and unpack every bundle not yet in ``state``; returns bundle/event/board counts.
+
+    A bundle that fails to read or unpack (truncated upload, interrupted write that still
+    happened to match the ``*.tar.gz`` glob) is skipped with a warning rather than raised: state
+    still advances past it, so one bad bundle cannot wedge the mirror loop on every later poll.
+    """
+    say = say or (lambda _msg: None)
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
     by_lane: Dict[Tuple[str, str], List[Tuple[int, str]]] = {}
@@ -162,7 +179,13 @@ def mirror_once(runs: Store, cid: str, dest: Path, state: LiveState) -> Dict[str
         for seq, path in sorted(items):
             if seq < next_seq:
                 continue
-            added = unpack_bundle(runs.read_bytes(path), dest)
+            try:
+                added = unpack_bundle(runs.read_bytes(path), dest)
+            except (tarfile.TarError, EOFError, OSError, zlib.error) as error:
+                say("live: skipping unreadable bundle %s: %s" % (path, error))
+                state.advance(lane_task_key, attempt, seq + 1)
+                state.save(dest)
+                continue
             counts["bundles"] += 1
             counts["events"] += added["events"]
             counts["boards"] += added["boards"]
@@ -187,7 +210,7 @@ def mirror(
     state = LiveState.load(dest)
     total = {"polls": 0, "bundles": 0, "events": 0, "boards": 0}
     while True:
-        found = mirror_once(runs, cid, dest, state)
+        found = mirror_once(runs, cid, dest, state, say=say)
         total["polls"] += 1
         for key in ("bundles", "events", "boards"):
             total[key] += found[key]

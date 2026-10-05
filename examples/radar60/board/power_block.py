@@ -206,8 +206,10 @@ def block_doc(top_doc, floorplan, addresses, width, height, stage):
     rails = []
     power = floorplan.get("power") or {}
     for net, rail in (power.get("rails") or {}).items():
+        # only a rail with declared sinks, all inside (without, ir_extract takes every other
+        # pad of the net, and in a block that may be only capacitors: no load at all)
         parts = list(rail.get("sources") or {}) + list(rail.get("sinks") or {})
-        if not parts or not all(inside(a) for a in parts):
+        if not rail.get("sinks") or not all(inside(a) for a in parts):
             continue
         entry = {
             "net": net,

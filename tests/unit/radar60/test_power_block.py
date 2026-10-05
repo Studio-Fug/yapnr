@@ -89,9 +89,9 @@ class BlockDocTest(unittest.TestCase):
 
     def test_only_rails_inside_the_block(self):
         nets = sorted(r["net"] for r in self.doc["ir_drop"])
-        # 1V0_BUCK (L_b2 -> R_SH1) and 3V3 (L_b0 to its sense pin) are inside; 5V_SYS starts
-        # at the eFuse (the other block), 1V0_SH runs to the ferrites outside.
-        self.assertEqual(nets, ["1V0_BUCK", "3V3"])
+        # 1V0_BUCK (L_b2 -> R_SH1) is inside; 3V3 and 5V_SYS declare no sinks (in a block their
+        # other pads may all be capacitors), 1V0_SH runs to the ferrites outside.
+        self.assertEqual(nets, ["1V0_BUCK"])
         (buck,) = [r for r in self.doc["ir_drop"] if r["net"] == "1V0_BUCK"]
         self.assertEqual(buck["budget_mohm"], 0.5)
         self.assertEqual(buck["sources"], {"@pmic.l_b2": ["2"]})

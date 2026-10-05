@@ -118,7 +118,7 @@ class OptimizedWinnerTest(unittest.TestCase):
         self.assertNotIn("islands", win)
         self.assertEqual(win, catalog.O_WINDOWS["D1"])
 
-    def test_d1_hash_matches_its_result_json_and_fails_fab_drc(self):
+    def test_d1_hash_matches_its_result_json_and_passes_fab_drc(self):
         import hashlib
         import os
 
@@ -130,9 +130,11 @@ class OptimizedWinnerTest(unittest.TestCase):
         with open(result, "rb") as fh:
             want = hashlib.sha256(fh.read()).hexdigest()[:8]
         self.assertEqual(win["hash8"], want)
-        # review finding 1: two 0.100 mm island-to-body gaps the raster-only check missed.
-        self.assertFalse(win["drc_ok"])
-        self.assertEqual({v["reason"] for v in win["drc_violations"]}, {"corner"})
+        # part 5: D1 was re-optimized under PR #53's fixed corner-gap DRC (the old D1/runs/d1-star
+        # export, label ad20e643, had the two 0.100 mm island-to-body gaps review finding 1 found;
+        # D1-d1c/runs/d1-star, label 7e070ca8, is the DRC-clean replacement).
+        self.assertTrue(win["drc_ok"])
+        self.assertEqual(win["drc_violations"], [])
 
     def test_d2_hash_matches_its_result_json_and_passes_fab_drc(self):
         import hashlib
@@ -193,9 +195,9 @@ class CatalogTest(unittest.TestCase):
         for u, sid in (("W", "D2"), ("D", "D1")):
             self.assertNotIn("placeholder", catalog.board(FR, u).stick(sid).geometry)
         self.assertNotIn("placeholder", m.stick("R1").geometry)
-        # D1 ships with a known fab-DRC miss (review finding 1/2: re-optimization pending);
-        # D2's near-miss design has no such width/space violation.
-        self.assertFalse(d.stick("D1").geometry["window"]["drc_ok"])
+        # part 5: D1 was re-optimized under the fixed corner-gap DRC (label 7e070ca8) and is now
+        # DRC-clean, same as D2's near-miss design.
+        self.assertTrue(d.stick("D1").geometry["window"]["drc_ok"])
         self.assertTrue(w.stick("D2").geometry["window"]["drc_ok"])
         self.assertEqual(len(d.stick("D1").geometry["window"]["hash8"]), 8)
         self.assertEqual(len(w.stick("D2").geometry["window"]["hash8"]), 8)

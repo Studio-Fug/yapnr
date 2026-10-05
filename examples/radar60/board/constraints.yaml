@@ -70,7 +70,6 @@ orientation:
   '@radio.c_xp': 0
   '@radio.c_xm': 270
   '@radio.c_pa': 270
-  '@radio.r_pa': 0
   '@radio.c_rf2': 180
   '@flash.r_clk': 180
 keepout:
@@ -354,6 +353,11 @@ copper_keepout:
     layers: [F.Cu]
     items: [tracks]
     allow_classes: [GND]
+  - name: y1_digital
+    rect: [28.9, 15.45, 32.9, 20]
+    layers: [In2.Cu, B.Cu]
+    items: [tracks, vias]
+    allow_classes: [GND, XTAL]
 fixed_block:
   - name: rfm1
     group: RFM1_MACRO
@@ -511,11 +515,6 @@ region:
     rect: [30.05, 29.4, 31.2, 31.85]
     hard: true
     reason: 'VOUT_PA 220 nF at A2/B2'
-  - name: pa_r
-    refs: ['@radio.r_pa']
-    rect: [28.6, 31.85, 30.95, 33.2]
-    hard: true
-    reason: 'PA 0 ohm between D2 and B2'
   - name: rf2_cap
     refs: ['@radio.c_rf2']
     rect: [26.1, 31.85, 28.6, 33.2]
@@ -545,7 +544,6 @@ side:
   bottom:
     [
       '@radio.c_pa',
-      '@radio.r_pa',
       '@radio.c_rf2',
       '@radio.c_pa_10u',
       '@radio.c_pa_22u',
@@ -718,6 +716,11 @@ group:
     anchor: '@pmic.r_sh'
     radius_mm: 4
     hard: true
+  - members: ['@radio.r_pa']
+    anchor: '@radio.u1'
+    radius_mm: 11
+    hard: true
+    anchor_pad: D2
 net_class:
   RF:
     nets: ['RF_RX*', 'RF_TX*']
@@ -834,42 +837,6 @@ length_match:
         LVDS_FRCLK_N,
       ]
     tolerance_mm: 2
-plane_partition:
-  - layer: In3.Cu
-    nets: ['1V0_RF1', '1V0_RF2', '1V0_PA', '1V2', '1V8', '5V_SYS', '1V0_SH']
-    order: listed
-    fixed_lands: true
-    fill: GND
-    split_gap_mm: 0.3
-    min_width_mm: 1
-    currents:
-      '1V0_RF1': 2.5
-      '1V0_RF2': 2.5
-      '1V2': 1
-      '1V8': 0.85
-      '5V_SYS': 1.5
-      '1V0_SH': 2.5
-    budgets_mohm:
-      '1V0_RF1': 4
-      '1V0_RF2': 4
-      '1V2': 12
-      '1V8': 21
-      '5V_SYS': 33
-    sources:
-      '1V0_RF1':
-        '@pmic.fb_rf1': '2'
-      '1V0_RF2':
-        '@pmic.fb_rf2_a': '2'
-      '1V0_PA':
-        '@radio.r_pa': '2'
-      '1V2':
-        '@pmic.fb_1v2': '2'
-      '1V8':
-        '@pmic.fb_1v8': '2'
-      '5V_SYS':
-        '@power_in.efuse': '6'
-      '1V0_SH':
-        '@pmic.r_sh': '2'
 ir_drop:
   - net: '1V0_RF1'
     sources:
@@ -955,6 +922,48 @@ ir_drop:
 pour:
   - layer: B.Cu
     net: GND
+    connect: solid
+plane_partition:
+  - layer: In3.Cu
+    nets: ['1V0_RF1', '1V0_RF2', '1V0_PA', '1V2', '1V8', '5V_SYS', '1V0_SH']
+    order: listed
+    fixed_lands: true
+    fill: GND
+    split_gap_mm: 0.3
+    min_width_mm: 1
+    currents:
+      '1V0_RF1': 2.5
+      '1V0_RF2': 2.5
+      '1V2': 1
+      '1V8': 0.85
+      '5V_SYS': 1.5
+      '1V0_SH': 2.5
+    budgets_mohm:
+      '1V0_RF1': 4
+      '1V0_RF2': 4
+      '1V2': 12
+      '1V8': 21
+      '5V_SYS': 33
+    sources:
+      '1V0_RF1':
+        '@pmic.fb_rf1': '2'
+      '1V0_RF2':
+        '@pmic.fb_rf2_a': '2'
+      '1V0_PA':
+        '@radio.r_pa': '2'
+      '1V2':
+        '@pmic.fb_1v2': '2'
+      '1V8':
+        '@pmic.fb_1v8': '2'
+      '5V_SYS':
+        '@power_in.efuse': '6'
+      '1V0_SH':
+        '@pmic.r_sh': '2'
+  - layer: F.Cu
+    nets: [GND]
+    region:
+      refs: ['@flash.u3']
+    terminals: pad
     connect: solid
 rf_macro:
   ref: '@rf_macro.rfm1'

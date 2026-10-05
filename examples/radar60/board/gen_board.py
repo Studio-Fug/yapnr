@@ -198,6 +198,20 @@ def copper_keepouts(fp):
                 "allow_classes": ["GND"],
             }
         )
+    ck = d.get("crystal_keepout")
+    if ck:
+        # Stage 3c R9: no digital copper under Y1 on In2.Cu/B.Cu (I2C/CAN/FRAME_START route
+        # elsewhere); GND still floods there and XTAL_* is exempt even though its own via class
+        # never puts it on these layers, so the rule stays correct if that class ever changes.
+        out.append(
+            {
+                "name": "y1_digital",
+                "rect": list(ck["rect"]),
+                "layers": list(ck["layers"]),
+                "items": ["tracks", "vias"],
+                "allow_classes": list(ck.get("allow_classes") or []),
+            }
+        )
     return out
 
 
@@ -289,6 +303,24 @@ def pour_sections(d):
     source of truth for its defaults, so this stays a direct copy, not a reinterpretation."""
     pour = d.get("pour")
     return {"pour": [dict(p) for p in pour]} if pour else {}
+
+
+def flash_ep_pour_entry(d):
+    """Stage 3c R9: one ``plane_partition`` entry (the E1 ``region`` mechanism, local to U3's
+    courtyard) that floods U3's exposed pad with GND and reaches its edge, instead of relying on
+    the maze to route a track into the keepout-narrowed area around it (wave 1: 0 escape
+    candidates). ``None`` without a declared ``flash_ep.pour``. Constraints() merges this into
+    the same ``plane_partition`` list ``power_sections`` builds (both own that key)."""
+    pour = (d.get("flash_ep") or {}).get("pour")
+    if not pour:
+        return None
+    return {
+        "layer": pour.get("layer", "F.Cu"),
+        "nets": [pour["net"]],
+        "region": {"refs": ["@" + d["parts"]["flash"]]},
+        "terminals": "pad",
+        "connect": pour.get("connect", "thermal"),
+    }
 
 
 def constraints(fp: Floorplan):
@@ -386,6 +418,10 @@ def constraints(fp: Floorplan):
     }
     cx, cy = u1["at"]
     copper_keepout = copper_keepouts(fp)
+    _power = power_sections(d)
+    _plane_partition = (_power.get("plane_partition") or []) + (
+        [flash_ep_pp] if (flash_ep_pp := flash_ep_pour_entry(d)) else []
+    )
     # Placement keepout: the RF region less U1's courtyard (the macro is drawn around U1, whose
     # courtyard reaches into it; yapnr would count the fixed U1 as a keepout violation).
     half = u1["courtyard_mm"] / 2
@@ -447,8 +483,11 @@ def constraints(fp: Floorplan):
         "length_match": [
             {"name": "lvds", "nets": lvds_nets, "tolerance_mm": lv["group_skew_mm"]},
         ],
-        **power_sections(d),
+        # power_sections and flash_ep_pour_entry both contribute to plane_partition: merged
+        # explicitly so the second does not clobber the first (dict-literal ** would).
+        **{k: v for k, v in _power.items() if k != "plane_partition"},
         **pour_sections(d),
+        **({"plane_partition": _plane_partition} if _plane_partition else {}),
         # Proposed sections (plan 3.4, 7.3): the current engine warns and ignores them.
         "rf_macro": {
             "ref": "@" + fp.part("rf_macro"),

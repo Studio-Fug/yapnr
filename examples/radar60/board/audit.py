@@ -330,7 +330,15 @@ def checks(parts, floorplan, footprint_of=None):
 # east of the package, the nearest area outside the BGA shadow, see floorplan pa_bulk).
 PIN_LIMITS = [
     # (role, limit mm, hard)
-    ("pa_decoupling", 3.0, True),
+    # pa_decoupling split (stage 3c R7): the two 220 nF caps still sit in their tight corner
+    # slots (pa_cap, rf2_cap; floorplan regions), so their 3 mm hard limit is unchanged. R46
+    # (pa_r) does not: the owner's Q1 default (WFCP0612, ~3.8 x 4.4 mm) does not fit inside 3 mm
+    # of C2/D2 at all (nor anywhere in the BGA shadow -- see floorplan `groups.r46`), so its
+    # limit widens to the group's own radius and is reported, not hard, pending the R2
+    # power-chain track's re-derived 1V0_RF2 -> 1V0_PA resistance against the 4 mOhm budget.
+    ("pa_cap", 3.0, True),
+    ("rf2_cap", 3.0, True),
+    ("pa_r", 11.0, False),
     ("crystal_caps", 3.0, True),
     # stage 3b: west of the R12 neighbours' exit bands (floorplan qspi_series), about 4.5 mm
     ("qspi_series", 5.0, True),

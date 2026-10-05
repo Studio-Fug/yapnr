@@ -153,8 +153,6 @@
 	(gr_text "xtal_cap_n" (at 58.5 56.2 0) (layer "User.1") (uuid "2e0d0d7b-d493-5a02-9d39-aa70a4ddc872") (effects (font (size 0.6 0.6) (thickness 0.12)) (justify left)))
 	(gr_rect (start 60.05 45.5) (end 61.2 47.95) (stroke (width 0.1) (type dash)) (fill no) (layer "User.1") (uuid "b3524661-6a70-52c0-ad5a-e61c79518ecc"))
 	(gr_text "pa_cap" (at 60.35 46.4 0) (layer "User.1") (uuid "7c082738-8ec4-576e-a3cc-2b7341787007") (effects (font (size 0.6 0.6) (thickness 0.12)) (justify left)))
-	(gr_rect (start 58.6 44.15) (end 60.95 45.5) (stroke (width 0.1) (type dash)) (fill no) (layer "User.1") (uuid "0dbbb24e-4853-5de1-b96b-beeca3602255"))
-	(gr_text "pa_r" (at 58.9 45.05 0) (layer "User.1") (uuid "bf8dc271-5017-5f69-a717-2374eddffc42") (effects (font (size 0.6 0.6) (thickness 0.12)) (justify left)))
 	(gr_rect (start 56.1 44.15) (end 58.6 45.5) (stroke (width 0.1) (type dash)) (fill no) (layer "User.1") (uuid "48bb92cc-4b85-5210-9efc-d2eddab14e6a"))
 	(gr_text "rf2_cap" (at 56.4 45.05 0) (layer "User.1") (uuid "4c4f40f4-a3a7-5dbe-b0dc-d7c44147abe9") (effects (font (size 0.6 0.6) (thickness 0.12)) (justify left)))
 	(gr_rect (start 61.4 50.75) (end 67.5 57.85) (stroke (width 0.1) (type dash)) (fill no) (layer "User.1") (uuid "4c4fd6f4-4595-5a73-b2f8-e07b8d767310"))

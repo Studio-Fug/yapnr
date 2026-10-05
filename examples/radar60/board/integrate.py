@@ -498,6 +498,13 @@ def _records(work):
     return [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
 
 
+def _top_candidates(legal, top_n):
+    """The legal, audit-passing candidates to write, in the same rank order ``step_select``
+    already sorted ``legal`` into, capped at ``top_n`` (stage 3c R7: route more than one
+    placement, not just the single stage-0 winner)."""
+    return [r for r in legal if r.get("audit_pass")][: max(1, int(top_n or 1))]
+
+
 def step_select(a):
     import audit
 
@@ -554,16 +561,36 @@ def step_select(a):
     (work / "selection.json").write_text(json.dumps(sel, indent=1))
     if winner:
         write_placement(a, work, recs, winner, sel)
+    # --top-n > 1 (stage 3c R7): every legal, audit-passing candidate up to N, ranked the same
+    # way as the winner, each into its own subdirectory so a later wave can route more than one
+    # and compare -- not just the single best by this stage-0 proxy.
+    top_n = max(1, int(getattr(a, "top_n", 1) or 1))
+    passing = _top_candidates(legal, top_n)
+    top_dir = Path(a.out) / "candidates"
+    written = []
+    for r in passing:
+        d = top_dir / ("rank%d" % r["rank"])
+        write_placement(a, work, recs, r["id"], sel, out_dir=d)
+        written.append({"rank": r["rank"], "id": r["id"], "dir": str(d)})
+    if written:
+        top_dir.mkdir(parents=True, exist_ok=True)
+        (top_dir / "index.json").write_text(
+            json.dumps(
+                {"requested": top_n, "written": written, "available": len(passing)}, indent=1
+            )
+        )
     print(
         json.dumps({k: v for k, v in sel.items() if k != "candidates"}, indent=1),
         "\n",
         json.dumps(sel["candidates"][:5], indent=1),
     )
+    if written:
+        print("top-%d candidates: %s" % (top_n, json.dumps(written, indent=1)))
     if not winner:
         raise SystemExit("no candidate passes the audit")
 
 
-def write_placement(a, work, recs, winner, sel):
+def write_placement(a, work, recs, winner, sel, out_dir=None):
     """The winner's poses, by atopile address (board-only parts by reference), and where they
     came from: the record ``finish --placement`` rebuilds the board from."""
     graph = json.loads((work / "inputs" / "graph.json").read_text())
@@ -608,8 +635,9 @@ def write_placement(a, work, recs, winner, sel):
             key[ref]: pose for ref, pose in sorted(rec["poses"].items(), key=lambda kv: key[kv[0]])
         },
     }
-    Path(a.out).mkdir(parents=True, exist_ok=True)
-    (Path(a.out) / "placement.json").write_text(json.dumps(out, indent=1) + "\n")
+    out_dir = Path(out_dir) if out_dir is not None else Path(a.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "placement.json").write_text(json.dumps(out, indent=1) + "\n")
 
 
 def _engine_id(engine):
@@ -1305,6 +1333,13 @@ def main(argv=None):
     ap.add_argument("--n0", type=int, default=24, help="placement starts")
     ap.add_argument("--procs", type=int, default=4)
     ap.add_argument("--iters", type=int, default=600)
+    ap.add_argument(
+        "--top-n",
+        type=int,
+        default=1,
+        help="select: write this many legal, audit-passing candidates (ranked), not just the "
+        "winner, each to OUT/candidates/rankN/placement.json",
+    )
     ap.add_argument(
         "--route-iters", type=int, default=12, help="route: pnr.staged_signal max_iters"
     )

@@ -113,8 +113,8 @@ power:
       current_a: 2.5
       budget_mohm: 0.5
 
-# R8: a GND flood on B.Cu, the fallback for the bottom-site decoupling caps (pa_cap, pa_r,
-# rf2_cap, pa_bulk, the QSPI/xtal series parts) and the connectors (J1/J3), whose GND pads the
+# R8: a GND flood on B.Cu, the fallback for the bottom-site decoupling caps (pa_cap, rf2_cap,
+# pa_bulk, the QSPI/xtal series parts) and the connectors (J1/J3), whose GND pads the
 # fanout plan does not escape to an inner plane the way a top-side pad is. `connect: solid`
 # (not the thermal default): wave 2's first try at the default left 2 bottom-site caps
 # (C38.2, C63.2) with only 1 of the 2 spokes a thermal pad needs (`starved_thermal`) -- small
@@ -154,8 +154,10 @@ parts:
       radio.c_rf2,
     ]
   radio_decoupling_bulk: ['radio.c_*_10u', 'radio.c_*_22u', 'radio.c_*_bulk'] # 0603/0805 bulk
-  # the 0402 VOUT_PA / VIN_13RF2 caps and the 0 ohm PA feed (ISK Rev D R1), at the corner balls
-  # A2/B2 and C2/D2 (see regions.pa_corner)
+  # the 0402 VOUT_PA / VIN_13RF2 caps and the PA feed resistor, at the corner balls A2/B2 and
+  # C2/D2 (see regions.pa_corner). audit.py's PIN_LIMITS checks the three roles below instead
+  # (pa_cap, rf2_cap, pa_r) since stage 3c R7: pa_r's limit split off from this list's 3 mm once
+  # R46 stopped fitting it (groups.r46).
   pa_decoupling: [radio.c_pa, radio.c_rf2, radio.r_pa]
   # Pin-anchored sets (review 2026-10-03): U1 is fixed, so a region next to the balls a part
   # serves bounds its pad-to-ball distance; audit.py measures it (pin_distance).
@@ -355,7 +357,8 @@ rf:
     - [31.2, 26.7, 31.25, 33.2] # the sliver between the package edge and the pocket's east side
   # macro's VOUT_PA pocket (y from 33.45; 1.69 x 0.75 mm, between RX4's corridor, TX1's and RL2's
   # load cell): no part fits (an 0402 courtyard is 1.91 x 1.01 mm), so the VOUT_PA / VIN_13RF2
-  # parts stay on the bottom side (pa_cap, pa_r, rf2_cap); down to the package edge
+  # parts stay on the bottom side (pa_cap, rf2_cap); down to the package edge. R46 (pa_r) no
+  # longer does (stage 3c R7): see its `groups.r46` entry below.
   pocket: [29.557, 33.2, 31.25, 34.2]
   # R4 (plan 7.5): no digital net within 5 mm of RF copper on F.Cu-In2.Cu. A rectangular 5 mm
   # band around the region, without the package body (the radio's own balls and escapes) and
@@ -374,6 +377,17 @@ rf:
 noise: # plan 3.4 noise budget and 7.5 R4
   sw_to_crystal_mm: 8.0
   sw_to_rf_mm: 5.0
+
+# Stage 3c R9: no digital copper under Y1 on In2.Cu or B.Cu -- I2C, CAN and FRAME_START route
+# under the crystal region today (wave 1-3 boards), coupling into the 40 MHz load; the crystal's
+# own net (XTAL_*) never reaches these layers anyway (`fanout.via_classes.xtal.layers: [F.Cu]`),
+# so GND is the only other thing allowed. x 28.9-32.9 brackets the crystal placement region
+# (28.4-33.0) tightened by the 0.25 mm legalizer grid and clearance on each side [D]; y extends
+# 0.3 mm past the region's own y 15.75-19.7 so a track cannot slip in at the region's edge.
+crystal_keepout:
+  rect: [28.9, 15.45, 32.9, 20.0]
+  layers: [In2.Cu, B.Cu]
+  allow_classes: [GND, XTAL]
 
 # U1's escape plan (yapnr `fanout`; stage 3a trial 2's entry, fanout track T1 variant A with the
 # review fixes). integrate.py plans it before placement (U1 fixed, with the macro's copper) and
@@ -430,7 +444,12 @@ fanout:
 
 # The flash's exposed pad (Macronix PM2257 rev. 1.4, drawing 6110-3401: 3.40 x 4.00 mm, GND or
 # floating): no vias or traces under it. A copper keepout in U3's frame (integrate.py, routing).
-flash_ep: { rect_mm: [-1.7, -2.0, 1.7, 2.0] }
+# Stage 3c R9: GND reaches it by a solid F.Cu pour instead (the keepout above already allows a
+# GND track there, but a thin maze track into U3's own courtyard is exactly the geometry that
+# failed in wave 1 -- U3.9 had 0 escape candidates; a local plane_partition `region` pour, same
+# mechanism as the power stage's hot-rod lands (E1), floods U3's land and reaches its edge
+# instead, with the EP's own via keepout above still barring a stitch via under it).
+flash_ep: { rect_mm: [-1.7, -2.0, 1.7, 2.0], pour: { net: GND, connect: solid } }
 
 # Legalizer options (yapnr `legalize`, opt-in): the outline is not a whole number of 0.25 mm
 # slots (47.35 mm), and J2, J3 and the ball-anchored slots are window parts (stage 3a: 27/32
@@ -560,14 +579,11 @@ regions:
       side: bottom,
       reason: 'VOUT_PA 220 nF at A2/B2',
     }
-  pa_r:
-    {
-      parts: [pa_r],
-      slot: true,
-      rect: [28.6, 31.85, 30.95, 33.2],
-      side: bottom,
-      reason: 'PA 0 ohm between D2 and B2',
-    }
+  # R46 (radio.r_pa, role pa_r) had its bottom-side slot here (2.35 x 1.35 mm) while it was an
+  # 0 ohm 0402. Stage 3c R7: the owner's Q1 default (WFCP0612 1 mOhm, ~3.8 x 4.4 mm courtyard,
+  # same family as R_SH1) does not fit this pocket, or any area inside U1's BGA shadow (about
+  # 3.2 mm2 total free there against ~17 mm2 needed) -- removed; see `groups.r46` below for its
+  # replacement (no atopile here to apply Q1's footprint swap itself; flagged in r2-place.md).
   rf2_cap:
     {
       parts: [rf2_cap],
@@ -641,7 +657,6 @@ orientations:
   xtal_cap_p: 0
   xtal_cap_n: 270
   pa_cap: 270
-  pa_r: 0
   rf2_cap: 180
   qspi_series: 180
 
@@ -819,6 +834,21 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   power_stage:
     { anchor: pmic, members: [efuse], radius_mm: 16.0, reason: 'one power-stage subcell (R1)' }
   r_sh_tp: { anchor: r_sh, members: [pmic_tp], radius_mm: 4.0, reason: 'Kelvin TP at R_SH1' }
+  # Stage 3c R7: R46's replacement for its old `pa_r` slot (removed above). Anchored on D2
+  # (1V0_RF2), the same ball `fb_rf2` uses: no free area exists closer in, since R46 (0612) needs
+  # about 17 mm2 and the nearest free strips outside U1's BGA shadow hold about 8 mm2 each within
+  # 8 mm (review 2026-10-03, `pa_bulk`'s own derivation); found mechanically by the 32-start
+  # re-place (pnr-direction.md: no hand-picked slot), not by a hand-derived rect. The resulting
+  # 1V0_RF2 -> 1V0_PA feed resistance is for the R2/power-chain track to re-derive against the
+  # 4 mOhm 1V0_RF2 budget once this lands; flagged, not assumed, in r2-place.md.
+  r46:
+    {
+      anchor: radio,
+      anchor_pad: D2,
+      members: [pa_r],
+      radius_mm: 11.0,
+      reason: 'R46 (0612) needs free area outside the BGA shadow; stay as close to C2/D2 as a legal start allows',
+    }
 
 # Radome visibility (plan 5.2, R5): no part above a 30 degree line from the nearest patch edge,
 # i.e. a part of height h stays >= h / tan(30 deg) = 1.73 h from the patch copper.

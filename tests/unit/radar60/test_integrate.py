@@ -70,6 +70,39 @@ class UnconnectedNetsTest(unittest.TestCase):
         self.assertEqual(nets, {"QSPI_CS_N", "QSPI_D3"})
 
 
+class TopCandidatesTest(unittest.TestCase):
+    """Stage 3c R7: ``--top-n`` writes more than one placement for routing, not just the
+    single stage-0 winner `select` already picked."""
+
+    LEGAL = [
+        {"id": "a", "rank": 1, "audit_pass": True},
+        {"id": "b", "rank": 2, "audit_pass": True},
+        {"id": "c", "rank": 3, "audit_pass": False},  # legal but failed the audit: never written
+        {"id": "d", "rank": 4, "audit_pass": True},
+    ]
+
+    def test_caps_at_top_n_in_rank_order(self):
+        self.assertEqual([r["id"] for r in integrate._top_candidates(self.LEGAL, 2)], ["a", "b"])
+
+    def test_skips_audit_failures_even_within_the_cap(self):
+        # rank 3 failed the audit; the 4th slot in a top-4 request is rank 4 ("d"), not "c".
+        self.assertEqual(
+            [r["id"] for r in integrate._top_candidates(self.LEGAL, 4)], ["a", "b", "d"]
+        )
+
+    def test_fewer_passing_candidates_than_requested_is_not_an_error(self):
+        self.assertEqual(
+            [r["id"] for r in integrate._top_candidates(self.LEGAL, 100)], ["a", "b", "d"]
+        )
+
+    def test_top_n_zero_or_none_still_writes_the_winner(self):
+        self.assertEqual([r["id"] for r in integrate._top_candidates(self.LEGAL, 0)], ["a"])
+        self.assertEqual([r["id"] for r in integrate._top_candidates(self.LEGAL, None)], ["a"])
+
+    def test_no_passing_candidates_is_empty(self):
+        self.assertEqual(integrate._top_candidates([{"id": "x", "audit_pass": False}], 4), [])
+
+
 class DrcIgnoredByDefaultTest(unittest.TestCase):
     def test_pins_the_five_types_the_review_found_hidden(self):
         self.assertEqual(

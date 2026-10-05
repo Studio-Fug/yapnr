@@ -174,10 +174,42 @@ class DRCTest(unittest.TestCase):
         m[2:18, 2:18] = True
         m[9, 2:12] = False
         cases["slot"] = (m, "space")
+        m = np.zeros((n, n), bool)
+        m[2:9, 2:9] = True
+        m[10:18, 10:18] = True  # one pixel offset diagonally: corners ~0.42 mm apart at 0.6 mm
+        cases["diagonal gap"] = (m, "space")
         for name, (m, kind) in cases.items():
             r = self._check(m)
             self.assertFalse(r.ok, name)
             self.assertIn(kind, {v.kind for v in r.violations}, name)
+
+    def test_diagonal_corner_gap_is_a_space_violation(self):
+        """The raster opening alone misses a gap whose narrowest point is a diagonally offset
+        corner against a corner: each shape's rasterized boundary insets toward its own
+        interior by up to half a raster step in both axes, and near a diagonal corner the two
+        insets compound enough that a real sub-minimum gap can survive the opening with no
+        residue at all. The exact segment-distance check (`_corner_violations`) closes this."""
+        sq_a = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+        sq_b = [(1.1, 1.1), (2.1, 1.1), (2.1, 2.1), (1.1, 2.1)]  # corners ~0.141 mm apart
+        r = check_width_space(
+            [sq_a, sq_b],
+            bbox_mm=(-0.5, 2.6, -0.5, 2.6),
+            pitch_mm=0.1,
+            min_width_mm=0.0,
+            min_space_mm=0.2,
+            sub=8,
+        )
+        self.assertFalse(r.ok)
+        kinds = {(v.kind, v.reason) for v in r.violations}
+        self.assertIn(("space", "corner"), kinds)
+
+    def test_touching_polygons_are_not_a_corner_violation(self):
+        # Two squares sharing a corner (distance 0) are a width neck, not a missing space.
+        sq_a = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+        sq_b = [(1.0, 1.0), (2.0, 1.0), (2.0, 2.0), (1.0, 2.0)]
+        from yapnr.rf.export.drc import _corner_violations
+
+        self.assertEqual(_corner_violations([sq_a, sq_b], 0.2), [])
 
 
 def _footprint():

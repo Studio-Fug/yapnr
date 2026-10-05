@@ -13,6 +13,18 @@ connected part of the removed copper (the residue) is a width violation when
 
 Space violations are the same tests on the void (gaps, slots and enclosed holes). Clearance to
 copper outside the footprint is KiCad's job.
+
+The raster test alone misses one shape of space violation: two separate copper regions whose
+closest approach is a corner pinched against a corner (or an edge), diagonally. Point sampling
+insets the rasterized boundary of each shape toward its interior by up to half a raster step in
+each axis, so near a diagonal corner the two insets compound and the morphological opening sees
+a gap that looks wider than it is — wide enough, in the minimal case, that a real sub-minimum
+gap survives the opening with no residue at all, and the check reports no violation. A dedicated
+exact check closes this: for every pair of distinct input polygons, the true (resolution
+independent) minimum distance between their boundaries is computed by segment-segment distance
+over all edge pairs, and a "corner" violation is raised when that distance is positive but under
+`min_space_mm`. Two polygons meant to touch or overlap (distance 0, e.g. a net merged with
+itself) are left alone — they are not a gap at all.
 """
 
 from __future__ import annotations
@@ -107,6 +119,95 @@ def _residue_violations(mask, opened, radius, kind, xs, ys) -> list[Violation]:
     return out
 
 
+def _point_seg_dist(px, py, ax, ay, bx, by) -> tuple[float, float, float]:
+    """Distance from point `p` to segment `ab`, and the closest point on `ab`."""
+    dx, dy = bx - ax, by - ay
+    length2 = dx * dx + dy * dy
+    t = 0.0 if length2 == 0.0 else ((px - ax) * dx + (py - ay) * dy) / length2
+    t = max(0.0, min(1.0, t))
+    cx, cy = ax + t * dx, ay + t * dy
+    return math.hypot(px - cx, py - cy), cx, cy
+
+
+def _segments_cross(ax, ay, bx, by, cx, cy, dx, dy) -> bool:
+    """True when open segments `ab` and `cd` intersect or touch (orientation test)."""
+
+    def cross(ox, oy, px, py, qx, qy):
+        return (px - ox) * (qy - oy) - (py - oy) * (qx - ox)
+
+    d1 = cross(cx, cy, dx, dy, ax, ay)
+    d2 = cross(cx, cy, dx, dy, bx, by)
+    d3 = cross(ax, ay, bx, by, cx, cy)
+    d4 = cross(ax, ay, bx, by, dx, dy)
+    if ((d1 > 0) != (d2 > 0) or d1 == 0 or d2 == 0) and (
+        (d3 > 0) != (d4 > 0) or d3 == 0 or d4 == 0
+    ):
+        # Full general-position crossing, plus the collinear/touching edge cases.
+        if d1 == 0 and d2 == 0 and d3 == 0 and d4 == 0:
+            return (
+                min(ax, bx) <= max(cx, dx)
+                and min(cx, dx) <= max(ax, bx)
+                and min(ay, by) <= max(cy, dy)
+                and min(cy, dy) <= max(ay, by)
+            )
+        return True
+    return False
+
+
+def _seg_seg_dist(a, b, c, d) -> tuple[float, float, float, float, float]:
+    """Exact minimum distance between segments `ab` and `cd`, and the midpoint of the closest
+    points (0.0 when they cross or touch): for non-crossing segments the minimum is always
+    attained at an endpoint of one against the other segment, so the four endpoint-to-segment
+    distances suffice."""
+    ax, ay = a
+    bx, by = b
+    cx, cy = c
+    dx, dy = d
+    if _segments_cross(ax, ay, bx, by, cx, cy, dx, dy):
+        return 0.0, ax, ay, ax, ay
+    candidates = [
+        _point_seg_dist(ax, ay, cx, cy, dx, dy) + (ax, ay),
+        _point_seg_dist(bx, by, cx, cy, dx, dy) + (bx, by),
+        _point_seg_dist(cx, cy, ax, ay, bx, by) + (cx, cy),
+        _point_seg_dist(dx, dy, ax, ay, bx, by) + (dx, dy),
+    ]
+    dist, px, py, qx, qy = min(candidates, key=lambda t: t[0])
+    return dist, px, py, qx, qy
+
+
+def _corner_violations(polygons, min_space_mm: float) -> list[Violation]:
+    """Exact (non-raster) space violations the morphological opening can miss: two distinct
+    polygons whose boundaries come closer than `min_space_mm` at a point, such as a diagonally
+    offset corner-to-corner pinch (see module docstring)."""
+    out = []
+    n = len(polygons)
+    eps = 1e-9
+    for i in range(n):
+        pi = [tuple(p) for p in polygons[i]]
+        for j in range(i + 1, n):
+            pj = [tuple(p) for p in polygons[j]]
+            best = None
+            for ai in range(len(pi)):
+                a, b = pi[ai], pi[(ai + 1) % len(pi)]
+                for aj in range(len(pj)):
+                    c, d = pj[aj], pj[(aj + 1) % len(pj)]
+                    dist, px, py, qx, qy = _seg_seg_dist(a, b, c, d)
+                    if best is None or dist < best[0]:
+                        best = (dist, px, py, qx, qy)
+                    if dist <= eps:
+                        break
+                if best is not None and best[0] <= eps:
+                    break
+            if best is None:
+                continue
+            dist, px, py, qx, qy = best
+            if eps < dist < min_space_mm:
+                at = (0.5 * (px + qx), 0.5 * (py + qy))
+                box = (min(px, qx), max(px, qx), min(py, qy), max(py, qy))
+                out.append(Violation("space", "corner", at, dist, box))
+    return out
+
+
 def check_width_space(
     polygons,
     bbox_mm: tuple[float, float, float, float],
@@ -135,4 +236,5 @@ def check_width_space(
         void = ~copper
         opened = _opening(void, radius)
         result.violations += _residue_violations(void, opened, radius, "space", xs, ys)
+        result.violations += _corner_violations(polygons, min_space_mm)
     return result

@@ -215,6 +215,9 @@ class AssembleZonesAndGroup(unittest.TestCase):
         existing = k.PCB_GROUP(full)
         existing.SetName("POWER_STAGE")
         full.Add(existing)
+        # KiCad drops an empty group on save/reload; give it a member so the
+        # collision this test means to set up actually round-trips to disk.
+        existing.AddItem(full.FindFootprintByReference("U1"))
         dup_full = _save(full, self.tmp.name, "full-dup.kicad_pcb")
         proc = self._run_expect_failure(dup_full, out, "--group", "POWER_STAGE")
         self.assertNotEqual(proc.returncode, 0)

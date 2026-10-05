@@ -205,9 +205,17 @@ def python_task(
 
 
 def write_store_campaign(
-    store: Path, tasks: List[Dict[str, Any]], submission: int = 1, cid: str = CID
+    store: Path,
+    tasks: List[Dict[str, Any]],
+    submission: int = 1,
+    cid: str = CID,
+    live: Optional[Mapping[str, Any]] = None,
 ) -> Path:
-    """The files of one campaign and one submission (all tasks) in a store directory."""
+    """The files of one campaign and one submission (all tasks) in a store directory.
+
+    ``live``: the campaign's ``[live]`` config (``yapnr.exp.plan``'s ``meta["live"]`` shape),
+    when a test needs the live-viewer mirror on; omitted, a task behaves as without this feature.
+    """
     from yapnr.exp import plan as planning
 
     base = Path(store) / "campaigns" / cid
@@ -218,6 +226,8 @@ def write_store_campaign(
         "task_hashes": {t["id"]: spec.spec_hash(t) for t in tasks},
         "source": {"commit": "f" * 40, "dirty": False},
     }
+    if live is not None:
+        meta["live"] = dict(live)
     (base / "campaign.json").write_text(json.dumps(meta))
     (base / "tasks.jsonl").write_text(
         "".join(spec.canonical_json(t).decode() + "\n" for t in tasks)

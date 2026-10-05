@@ -108,6 +108,7 @@ on the Mac wants about 16,000 s, above `ladder-sweep.toml`'s 7,200 s and the exa
 | `yapnr exp status PLAN [--json]`                                                    | no                                                     |
 | `yapnr exp logs PLAN [TASK]`                                                        | no                                                     |
 | `yapnr exp fetch PLAN [--full] [--into DIR] [--from DIR]`                           | no (egress is billed)                                  |
+| `yapnr exp live PLAN [--out DIR] [--interval S] [--once]`                           | no (polls the store)                                   |
 | `yapnr exp cancel PLAN [--submission N] [--dry-run]`                                | yes                                                    |
 | `yapnr exp doctor --backend B`                                                      | no                                                     |
 | `yapnr exp prices [--refresh] [--family F]`                                         | no (Billing Catalog read)                              |
@@ -117,6 +118,44 @@ on the Mac wants about 16,000 s, above `ladder-sweep.toml`'s 7,200 s and the exa
 `PLAN` is the plan directory `plan` printed, or the campaign id. `submit --dry-run` on `gcp-batch`
 prints every `gcloud` call it would make (all with `--impersonate-service-account=yapnr-submit@...`)
 without making any.
+
+## Live viewer mirror
+
+The [live viewer](viewer.md) reads a local directory a running experiment writes telemetry into
+(`PNR_LIVE_DIR`); a campaign's tasks run elsewhere, so `[live]` in the campaign file has every
+task upload its telemetry to the runs store, and `yapnr exp live` mirrors it back to a local
+directory the viewer reads unchanged. Off by default (no `[live]` section): a task's behaviour
+and outputs are then byte-identical to a campaign without this feature.
+
+```toml
+[live]
+enabled = true
+interval_s = 45     # at least 10; how often a task uploads (and once more at the end)
+mode = "full"       # "thin" drops the per-net maze events; keeps checkpoints, round summaries,
+                     # placement costs
+```
+
+With `[live]` on, every task sets `PNR_LIVE_DIR` to a scratch directory and `PNR_LIVE_CANDIDATE`
+to its own task id, so the engine's telemetry writer (`pnr.live`, unaware of any of this) runs as
+it would locally; the wrapper's `LiveUploader` packs the new events (and the boards they
+reference) written since the last upload into a `tar.gz` at
+`campaigns/<cid>/live/<task key>/<attempt>/<seq>.tar.gz` in the runs store, every `interval_s` and
+once more when the task ends. Bundles are namespaced by attempt, so a preempted or retried task's
+lane keeps going (its next attempt's bundles continue the sequence a fresh attempt's events need,
+without colliding with the seq numbers an earlier attempt already sent).
+
+```sh
+yapnr exp live <plan>                           # polls forever; Ctrl-C to stop
+yapnr exp live <plan> --out runs/live --once     # one poll, for scripting
+```
+
+mirrors every new bundle of the campaign into one shared live directory's `events/` and `boards/`
+(idempotent: an event or board already on disk is left alone, and boards are content-addressed so
+the same board from two tasks never collides), printing the `bazel run //:viewer -- --root`
+command to run. Because every task's events carry its own `candidate` (its task id), the viewer's
+existing lane grouping gives each task its own lane with no further bookkeeping; progress is
+saved after every bundle, so an interrupted mirror resumes where it left off. Only the store is
+read; nothing is written back to the campaign.
 
 ## Google Cloud bootstrap
 
@@ -748,7 +787,10 @@ Everything above is tested offline and for free: `bazel test //tests/unit/exp/..
 planning; golden Batch JSON validated against the vendored
 [Batch v1 discovery document](https://github.com/Studio-Fug/yapnr/tree/main/third_party/googleapis);
 the exact `gcloud` calls of a dry-run submit; golden `sbatch` scripts with `bash -n` and
-shellcheck; fetch and ladder assembly; prices and calibration; the budget guard), and the manual
+shellcheck; fetch and ladder assembly; prices and calibration; the budget guard; the live-viewer
+mirror's packing, unpacking, path rewriting and idempotence, and an end-to-end run of the local
+backend with `[live]` on whose mirrored events validate against `pnr-live-event-v1` and are read
+back into a lane by the viewer itself), and the manual
 `bazel test //infra/gcp:tofu_check` (see [infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)).
 The test process cannot reach a cloud: real `gcloud` calls are disabled while
 `YAPNR_EXP_NO_CLOUD` is set.

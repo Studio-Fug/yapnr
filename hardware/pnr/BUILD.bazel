@@ -41,6 +41,9 @@ filegroup(
         "pnr/ingest.py",
         # PNR_COMPACT / PNR_SHRINK switches (stdlib; pnr.plane_intent reads them).
         "pnr/compact_flags.py",
+        # The live-viewer telemetry writer (stdlib only; PNR_LIVE_DIR). yapnr/exp's live-viewer
+        # mirror test drives it directly, the same way a cloud task's environment does.
+        "pnr/live.py",
         "pnr/source_footprints.py",
         "pnr/library_table.py",
         "pnr/planes.py",

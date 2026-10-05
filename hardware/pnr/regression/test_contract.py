@@ -29,6 +29,7 @@ from run import (
     measure_summary,
     new_result,
     parser,
+    scrubbed_suite_env,
     sources_digest,
 )
 
@@ -877,6 +878,38 @@ class LadderResultsContract(unittest.TestCase):
         self.assertEqual((info["platform"], info["kicad"]), ("linux-aarch64", "10.0.6"))
         self.assertNotIn(tmp, json.dumps(info))
         self.assertEqual(entry["fab_profile"], "legacy")  # no .kicad_dru: the run's profile
+
+
+class SuiteEnvScrubbing(unittest.TestCase):
+    """An operator's ambient PNR_* switches must not silently change the suite, but
+    PNR_LIVE_* (telemetry the yapnr exp wrapper sets so a task reports to the live
+    viewer, hardware/pnr/pnr/live.py) is not a suite switch and must survive (review
+    finding: ladder-cell tasks previously emitted no live events because this filter
+    deleted PNR_LIVE_DIR/PNR_LIVE_CANDIDATE before run.py ever launched a case)."""
+
+    def test_live_vars_pass_ambient_switches_are_stripped(self):
+        base = {
+            "PATH": "/usr/bin",
+            "PNR_LIVE_DIR": "/scratch/live",
+            "PNR_LIVE_CANDIDATE": "task-7",
+            "PNR_LIVE_ITERATION": "3",
+            "PNR_LOCAL_PRESSURE": "0",  # ambient copy; overridden below like run.py does
+            "PNR_JOINT_ACCESS": "1",
+            "PNR_PACKED_MAZE": "1",  # an ambient switch that must NOT leak into the suite
+        }
+        env = scrubbed_suite_env(base, PNR_LOCAL_PRESSURE="1")
+        self.assertEqual(env["PNR_LIVE_DIR"], "/scratch/live")
+        self.assertEqual(env["PNR_LIVE_CANDIDATE"], "task-7")
+        self.assertEqual(env["PNR_LIVE_ITERATION"], "3")
+        self.assertEqual(env["PNR_LOCAL_PRESSURE"], "1")  # override wins
+        self.assertEqual(env["PNR_JOINT_ACCESS"], "1")
+        self.assertNotIn("PNR_PACKED_MAZE", env)
+        self.assertEqual(env["PATH"], "/usr/bin")
+
+    def test_no_live_vars_is_unaffected(self):
+        env = scrubbed_suite_env({"PATH": "/usr/bin", "PNR_SHRINK": "1"}, PNR_LOCAL_PRESSURE="1")
+        self.assertNotIn("PNR_SHRINK", env)
+        self.assertEqual(env["PNR_LOCAL_PRESSURE"], "1")
 
 
 if __name__ == "__main__":

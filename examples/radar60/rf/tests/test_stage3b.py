@@ -138,7 +138,7 @@ class DummyTest(unittest.TestCase):
             resolve({"dummy_term": "short"})
 
     def test_s1_has_the_open_end_dummies_only_and_a_shorter_tx_path(self):
-        s1, s2 = build(dummies="outer"), build()
+        s1, s2 = build(dummies="outer"), build(dummies="both")
         self.assertEqual(sorted(s1.loads), ["RXD0", "TXD4"])
         self.assertEqual(failed(s1), [])
         lt = check(s1, "equal length P0->P1 TX")["lengths_mm"]["TX1"]
@@ -192,7 +192,8 @@ class ColumnTest(unittest.TestCase):
         self.assertAlmostEqual(c0.arm_lengths["diff"], c0.arm_lengths["target"], delta=0.02)
 
     def test_series_column_needs_no_declared_difference(self):
-        mc = build(column="series")
+        # S2 dummies: under S1 the series column leaves a G4 fence gap (an untaken option)
+        mc = build(column="series", dummies="both")
         self.assertEqual(failed(mc), [])
         g2 = check(mc, "G2")
         self.assertEqual(g2["declared_difference_column_frame"], [])
@@ -225,7 +226,8 @@ class TxOptionTest(unittest.TestCase):
             self.assertTrue(tuple(pr["a"]) in lattice or tuple(pr["b"]) in lattice, pr)
 
     def test_t4_equalizes_within_the_skew_budget(self):
-        mc = build(tx_skew_budget_ps=7.9)
+        # S2 dummies: T4 is the fallback if S1 is vetoed (under S1 it leaves a G4 fence gap)
+        mc = build(tx_skew_budget_ps=7.9, dummies="both")
         self.assertEqual(failed(mc), [])
         eq = check(mc, "equal length P0->P1 TX")
         self.assertGreater(eq["spread_mm"], 0.5)

@@ -9,7 +9,11 @@ and the 0.65 mm pitch in TI's data sheet [TI-DS].
 
 Status: **placeholder, not signed off.** The dimensions are starting values for the openEMS
 sweeps; the evidence label of every number is "analytical estimate" or "solver prediction"
-(PNR-05), never "measured". The column frozen into `rfm1-n` fails ANT-02's return loss at its
+(PNR-05), never "measured". **Macro v2 (stage 3b freeze, 2026-10-05)**: the column is the C1
+rule's pick (L x1.025, inset 0.325, w35 0.42, t_y 0.25; openEMS 20 um embedded centre column,
+worst in-band |S11| -6.5 dB, -7.2 dB Palace-referred), so ANT-02's return loss is a preregistered
+miss, and TX1's PA-island coupling (-33.5 dB, rule -40 dB) is an open warning; see the notes'
+`stage3b-rf/freeze.md`. Before v2 the column frozen into `rfm1-n` failed ANT-02's return loss at its
 input (openEMS `col-c`: RL 5.9 / 9.1 / 11.4 dB at 60.3 / 62.05 / 63.8 GHz, best match at 64.0
 GHz), its length calibration (L x0.967) came from a single patch, and the bank (C2: TX-RX
 isolation, adjacent-column coupling, phase centres, the L2-L3 parallel plate) is not solved.
@@ -309,7 +313,7 @@ mm), TX2's serpentine top (1.48 mm) and TX1's second contact.
 | Board height, at least    | 46.3                          | 47.349                                                                                                                                                                        |
 | VOUT_PA pocket            | 29.56-31.25 x 33.2-35.0       | 29.557-31.250 x 33.450-34.200; from the package edge (y 33.2) it holds the D14 PA feed's four 0.20/0.40 vias (`board_frame.pa_feed`); the VOUT_PA caps are on the bottom side |
 
-`../board/floorplan.yaml` follows this frame (board 60 x 47.35 mm, `gen_board.py --check
+`../board/floorplan.yaml` follows this frame (board 60 x 47.40 mm, `gen_board.py --check
 --macro` passes for rfm1-m/n/p); the placed board in `../board/reva/` is still the old macro's.
 The board integration (`../board/kicad_ops.merge_macro`) still expects the seven corporate
 columns only: it has to take the four `radar60:COL2_DUMMY` footprints, the four

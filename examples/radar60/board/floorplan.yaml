@@ -15,7 +15,9 @@ board:
   # beyond the RX cut-out, which holds the RXD0/RXD5 dummy columns and sits 0.20 mm further north
   # for the RX lines' 0.40 mm tail), and copper keeps 0.3 mm from the edge: the record's
   # board_frame.board_height_min is 47.349 [D]. Was 46.3 (review 2026-10-03).
-  height: 47.35
+  # 47.40 (RF macro v2 freeze, stage 3b, 2026-10-05): the retuned column (L x1.025) moves the
+  # region's north end to y 47.059; board_frame.board_height_min is 47.384 [D].
+  height: 47.40
   corner_radius: 1.0
   copper_layers: 6
   profile: pcbway-adv-6l-rf # yapnr/fab/data/profiles
@@ -205,8 +207,8 @@ mounting_holes: # 4 x M2.5, plated, GND (plan 5.1; the schematic's MountingHole_
   drill: 2.7
   pad: 5.4
   keepout_diameter: 6.5
-  # 3.5 mm from each corner of the 60 x 47.35 mm outline
-  at: [[3.5, 3.5], [56.5, 3.5], [3.5, 43.85], [56.5, 43.85]]
+  # 3.5 mm from each corner of the 60 x 47.40 mm outline
+  at: [[3.5, 3.5], [56.5, 3.5], [3.5, 43.9], [56.5, 43.9]]
 
 radome_lands: # standoff lands for the north-only test radome (plan 5.4, review) [D]
   diameter: 3.0
@@ -217,35 +219,37 @@ rf:
   macro_ref: RFM1 # reference of the RF macro footprint (generated in U1's frame, plan 6)
   # The RF track's macro (examples/radar60/rf, rfm1-n): the RF-uniformity layout of 2026-10-04
   # (guard band, straight run-ins, terminated dummy columns at all four bank ends, the TX bank
-  # 3.55 mm further east). These values are the record's board_frame, and
+  # 3.55 mm further east), frozen as macro v2 in stage 3b (2026-10-05: S1 dummies at the open
+  # ends only, the TX bank 3.5 mm back west, the D14 PA feed and fence, the C1 column pick).
+  # These values are the record's board_frame, and
   # `gen_board.py --macro` checks them against it (and against the D12 siblings rfm1-m/-p).
   macro_record: ../rf/generated/rfm1-n/rfm1-n.json
   patches: # patch copper extents with the dummy columns, for the radome rule (plan 5.2 had rx 21.0-29.7 x 35.2-39.6)
-    rx: [17.599, 37.963, 30.759, 42.014]
-    tx: [35.651, 36.075, 46.469, 40.125]
+    rx: [17.599, 37.928, 28.417, 42.048]
+    tx: [34.496, 36.25, 42.972, 40.37]
   # RF region (plan 5.2): (a) the RX fan, (b) the TX feeds and bank, plus a 5 mm ground margin
-  # beyond the cut-outs (west of RX, east of TX: the macro's own pour, x 12.599-51.469); the
+  # beyond the cut-outs (west of RX, east of TX: the macro's own pour, x 12.599-47.972); the
   # TX side starts at the macro's pour edge (y 26.7, U1 y -1.3); the VOUT_PA pocket is cut out
   # of it down to the package edge. `gen_board.py --macro` checks that every macro item outside
   # the package body lies in the region or the pocket.
   region: # [x0, y0, x1, y1] rectangles whose union is the region minus the pocket
-    - [12.599, 33.2, 29.557, 47.35] # RX fan and the west ground margin
-    - [29.557, 34.2, 31.25, 47.35] # above the pocket
-    - [31.25, 26.7, 51.469, 47.35] # TX launches, feeds, bank and the east ground margin
+    - [12.599, 33.2, 29.563, 47.4] # RX fan and the west ground margin
+    - [29.563, 35.0, 31.25, 47.4] # above the pocket
+    - [31.25, 26.7, 47.972, 47.4] # TX launches, feeds, bank and the east ground margin
     - [31.2, 26.7, 31.25, 33.2] # the sliver between the package edge and the pocket's east side
-  # macro's VOUT_PA pocket (y from 33.45; 1.69 x 0.75 mm, between RX4's corridor, TX1's and RL2's
+  # macro's VOUT_PA pocket (y from 33.45; 1.69 x 1.55 mm in macro v2, was 0.75, between RX4's corridor, TX1's and RL2's
   # load cell): no part fits (an 0402 courtyard is 1.91 x 1.01 mm), so the VOUT_PA / VIN_13RF2
   # parts stay on the bottom side (pa_cap, pa_r, rf2_cap); down to the package edge
-  pocket: [29.557, 33.2, 31.25, 34.2]
+  pocket: [29.563, 33.2, 31.25, 35.0]
   # R4 (plan 7.5): no digital net within 5 mm of RF copper on F.Cu-In2.Cu. A rectangular 5 mm
   # band around the region, without the package body (the radio's own balls and escapes) and
   # without the region itself; the RF audit (E6) measures the exact distance.
   guard_mm: 5.0
   guard: # [x0, y0, x1, y1]
-    - [7.599, 28.2, 12.599, 47.35] # west of the ground margin
+    - [7.599, 28.2, 12.599, 47.4] # west of the ground margin
     - [12.599, 28.2, 20.8, 33.2] # south of the RX fan, west of the package
-    - [31.2, 21.7, 56.469, 26.7] # south of the TX region, east of the package
-    - [51.469, 26.7, 56.469, 47.35] # east of the TX bank
+    - [31.2, 21.7, 52.972, 26.7] # south of the TX region, east of the package
+    - [47.972, 26.7, 52.972, 47.4] # east of the TX bank
   fence_via: { drill: 0.15, diameter: 0.32, min_pitch: 0.45 } # RFS-5; 11 mil hole to hole
 
 noise: # plan 3.4 noise budget and 7.5 R4
@@ -351,8 +355,8 @@ regions:
     }
   # The load capacitors straight below B15/C15 (SWRS219F 7.12.2: as close as possible): a cap
   # centre at y <= 21.08 puts its pad about 2.4 mm from the balls (review 2026-10-03) [D].
-  # The macro's VOUT_PA pocket (1.69 x 0.75 mm since the RF-uniformity layout, 2026-10-04; it
-  # was 1.69 x 1.55) holds no 0402 courtyard (1.91 x 1.01 mm), and a 0.5 mm courtyard would not
+  # The macro's VOUT_PA pocket (1.69 x 1.55 mm in macro v2, 2026-10-05; 1.69 x 0.75 in the
+  # RF-uniformity layout) holds no 0402 courtyard (1.91 x 1.01 mm), and a 0.5 mm courtyard would not
   # either (1.86 mm wide against 1.69 mm). Plan 5.2's double-sided branch: the caps and the 0 ohm
   # PA feed go on the bottom side under the VOUT_PA / VIN_13RF2 corner (balls A2, B2, C2, D2 at
   # x 28.6-30.55, y 31.9), outside the RF region [D] (integration and review, 2026-10-03).

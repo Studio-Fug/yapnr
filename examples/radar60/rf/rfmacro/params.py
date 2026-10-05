@@ -92,15 +92,21 @@ DEFAULTS: Dict[str, object] = {
     # mechanical pick of the single-patch sweep L x0.967, inset {0.30, 0.38, 0.45} by |S11| at
     # 62.05 GHz is inset 0.30 (RL >= 10 dB 60.90-62.80 GHz, -26.9 dB at 61.9 GHz)
     # [results/openems/patch-c-i30]. None restores the closed form.
-    "inset": 0.30,
-    "fullwave_l_scale": 0.967,  # drawn L = closed-form L x this (1.0: closed form only)
+    # Macro v2 freeze (stage 3b, 2026-10-05): the embedded centre column's pick by the plan's C1
+    # rule ("full band out of reach: maximize the minimum in-band RL with the band centred"),
+    # point cell-c1b-6 (20 um, K0): L x1.025, inset 0.325, w35 0.42, t_y 0.25 -> worst in-band
+    # |S11| -6.5 dB (openEMS frame) / -7.2 dB (Palace-referred), RL-10 band centre 62.63 GHz
+    # Palace-referred; ANT-02's RL (and 60.3 GHz gain, 4.8 dBi) miss is preregistered
+    # (stage3b-rf/freeze.md). The single-patch values above are history.
+    "inset": 0.325,
+    "fullwave_l_scale": 1.025,  # drawn L = closed-form L x this (1.0: closed form only)
     "fullwave_ref": "results/openems/patch-c-i30 (C0a single-patch sweep)",
     "notch": 0.10,  # inset slot width beside the feed [D]
     "spacing": 2.90,  # patch centre spacing along the column, ~0.6 lambda0 [BD §6.2]
     "window_margin": 0.15,  # L2 window beyond the patch outline [D], swept (RFS-6)
     "windows": True,  # D4: L2 windows under the radiators (False: patches over solid L2)
-    "w35": 0.353,  # 35.4 ohm lambda/4 on 4 mil [BD board_calc]
-    "t_y": 0.37,  # T-junction offset from the column centre toward the upper patch [D]
+    "w35": 0.42,  # 35 ohm lambda/4 width; 0.353 (closed form) -> 0.42 by the C1 pick (cell-c1b-6)
+    "t_y": 0.25,  # T-junction offset toward the upper patch; 0.37 -> 0.25 by the C1 pick
     "in_x": None,  # input line x in column frame; None: d/2 (centre of the east gap)
     "p1_y": -2.30,  # column input plane P1, column frame [BD §5.3: P1 2.3 mm below centre]
     # floorplan (U1 frame) [BD §5.3]

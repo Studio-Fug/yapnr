@@ -26,31 +26,38 @@ demo's fourth edge), so every launch edge is a clean milled edge. Every port is 
 142-0701-851 edge-launch SMA. Costs are OSH Park's standard 4-layer price, $10 per square inch of
 the bounding rectangle, for 3 copies.
 
-| Upload   | Contents                                                                             | Size                         | Cost | SMAs per copy |
-| -------- | ------------------------------------------------------------------------------------ | ---------------------------- | ---- | ------------- |
-| **O0-M** | the thin-microstrip (region M) coupons, R1, A16, A04R, the tag                       | 120.1 × 144.3 mm, 26.9 sq in | $269 | 33            |
-| **O0-W** | the thick-microstrip (region W) calibration set, R1t, D2 (`d2-star-sched`), QR B15   | 54.0 × 158.7 mm, 13.3 sq in  | $133 | 16            |
-| **O0-D** | the D1 window, an R1 copy, a thru, a 9 mm and a 30 mm line (uploaded when D1 passes) | 90.6 × 51.5 mm, 7.2 sq in    | $72  | 12            |
+| Upload   | Contents                                                                                                                          | Size                         | Cost   | SMAs per copy |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------ | ------------- |
+| **O0-M** | the thin-microstrip (region M) coupons, R1, A16, A04R, the tag                                                                    | 120.1 × 144.3 mm, 26.9 sq in | $269   | 33            |
+| **O0-W** | the thick-microstrip (region W) calibration set, R1t, D2 (`d2-star-sched`), QR B15                                                | 54.0 × 158.7 mm, 13.3 sq in  | $133   | 16            |
+| **O0-D** | the D1 window (`d1-star`, re-optimized under the fixed corner-gap DRC), an R1 copy, a thru, a 9 mm and a 30 mm line, QR stick A15 | 118.2 × 50.0 mm, 9.16 sq in  | $91.57 | 12            |
 
 O0-W carries D2's nearest miss, `d2-star-sched` (label `03b7d938`), as a pre-registered design
 that misses its spec, by the owner default recorded in the
 [pre-registration](preregistration.md) (the owner confirms or overrides it before the release),
 and the small QR stick B15 to [predictions/D2](predictions/D2/README.md). Its Gerber zip's sha256
-is in [fab/O0-W.sha256](fab/O0-W.sha256). O0-D grows to about 118 × 50 mm, 9.2 sq in, with its own
-QR stick A15 when it is regenerated with the re-optimized D1.
+is in [fab/O0-W.sha256](fab/O0-W.sha256).
 
-D1 passed (`d1-star`, label `O0 D1 divider-osh-m ad20e643`). `catalog.o_optimized` now merges
-its validated copper (`export.contour`'s own representation) into O0-D's window as one custom
-pad (the main body, one net) plus the 14 floating etch islands as separate netless F.Cu fills
-(`layout_o.optimized_pad`); regenerate with `python -m yapnr.rf.coupons generate --stackup
-OSHPARK-4L-FR408HR --upload D --out <dir>`. The merge is mechanically correct (ports, nets,
-orientation; all 15 polygons equal the footprint's vertex for vertex) but the regenerated board is
-**not yet KiCad-DRC clean**: two 0.127 mm netclass clearance violations between the main pad and
-the two mirror-image floating islands next to it (actual 0.100 mm, corner to corner). The gap is
-in the validated footprint itself, not made by the merge: the raster width/space check
-(`export.drc`) that passed it does not see a gap between two diagonally offset corners. It needs
-an owner call (see the PR description) before upload, so the checked-in
-`examples/rf-coupons/order0/O0-D/` still carries the placeholder window.
+D1 passed (`d1-star`, label `O0 D1 divider-osh-m 7e070ca8`, superseding part 2's `ad20e643`):
+the part 2 export reproduced two 0.100 mm corner-gap violations against OSH Park's 0.127 mm rule
+under PR #53's fixed exact-corner-gap DRC, so D1 was re-optimized from the same four
+formulations under that fixed checker ([predictions/D1-d1c](predictions/D1-d1c/README.md));
+`d1-star` is again the only formulation that passes coarse/fine/finer, now with a DRC-clean
+export (134 repaired pixels, 24 floating islands, vs 30/14 under the old checker). O0-D is
+regenerated with `YAPNR_KICAD_CLI=<headless kicad-cli> python -m yapnr.rf.coupons generate
+--stackup OSHPARK-4L-FR408HR --upload D --out examples/rf-coupons/order0/O0-D`: KiCad DRC 0
+violations, 0 unconnected (10.0.6); `yapnr fab build` 0 errors (2 pre-existing informational
+warnings: merged non-plated drill file, stackup thickness, the same pattern O0-W's build has).
+Its Gerber zip's sha256 is in [fab/O0-D.sha256](fab/O0-D.sha256).
+
+Three solvers now carry a prediction for this D1: yapnr.rf's own FDTD (pass, −20.77 dB finer
+\|S11\|, 0.282 dB margin), an independent openEMS 0.37 run (43 µm nominal FR408HR copper, 0.05 mm
+mesh; predicts a 2.6-3.1 dB **miss** of the −20 dB \|S11\| spec, essentially unchanged from part
+2's finding on the old export), and Palace (FEM), **not run** for D1 or R1 this round — this
+workflow's separate $8 GCP cap left too little margin after the resubmission and validation
+campaigns, and Palace also needs a new divider-shaped planar adapter; open item for a follow-up.
+Details, campaign ids and the three-solver table are in
+[predictions/D1-d1c/README.md](predictions/D1-d1c/README.md).
 
 The KiCad projects, catalogues and DRC results are in
 [examples/rf-coupons/order0/](../../../examples/rf-coupons/order0/README.md).
@@ -60,7 +67,7 @@ the sticks held by tabs with three mouse-bite holes each side](images/O0-M.png)
 
 ![O0-W: the W calibration set, R1t, the QR stick B15 and D2 (d2-star-sched) in its window](images/O0-W.png)
 
-![O0-D: the empty D1 window, R1, and the thru and lines, turned 90°](images/O0-D.png)
+![O0-D: the filled D1 window (`d1-star`, 7e070ca8), R1, the thru and lines, and QR stick A15, turned 90°](images/O0-D.png)
 
 ### Cross-sections
 
@@ -102,11 +109,12 @@ with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.
 
 ### O0-D sticks
 
-| Stick         | Structure                                                                 | Size (mm)       | What it determines                                                   |
-| ------------- | ------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
-| D1            | window for the optimizer's thin divider (12 × 15 mm), feeds and keep-away | 29 × 41         | **placeholder** until D1 passes: the headline demo                   |
-| R1            | a copy of O0-M's R1                                                       | 30 × 38         | D1 and a reference on one lot                                        |
-| A01, A20, A04 | thru and lines ΔL 9 and 30 mm                                             | 20, 29, 50 × 12 | this lot's εeff, loss and relative Z0 (the 9 mm line covers 5-6 GHz) |
+| Stick         | Structure                                                                                   | Size (mm)       | What it determines                                                   |
+| ------------- | ------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
+| D1            | the optimizer's thin divider (12 × 15 mm, `d1-star`, label `7e070ca8`), feeds and keep-away | 29 × 41         | the headline demo (passes yapnr.rf, misses openEMS)                  |
+| A15           | small QR label stick to [predictions/D1-d1c](predictions/D1-d1c/README.md)                  | 25 × 25         | this page                                                            |
+| R1            | a copy of O0-M's R1                                                                         | 30 × 38         | D1 and a reference on one lot                                        |
+| A01, A20, A04 | thru and lines ΔL 9 and 30 mm                                                               | 20, 29, 50 × 12 | this lot's εeff, loss and relative Z0 (the 9 mm line covers 5-6 GHz) |
 
 ### The demos and their references
 

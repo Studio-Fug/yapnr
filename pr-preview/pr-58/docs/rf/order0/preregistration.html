@@ -361,14 +361,22 @@ and the rule that picked the shipped run.</p></li>
 <li><p><strong>An independent 3D prediction</strong> (openEMS 0.37, <a class="reference internal" href="predictions/openems/README.html"><span class="std std-doc">predictions/openems/</span></a>):
 D1 and R1 with 43 µm copper on the nominal FR408HR stack at two meshes, the 0.40 mm line, and
 the sticks A01 and A04 with the Cinch launches as the tier-1 calibration sees them, with the
-comparison against the optimizer’s FDTD stated as found: the two agree on |S21| within
-0.09 dB, but openEMS predicts D1’s worst |S11| at −17.4 dB (0.05 mm mesh) and −18.2 dB
-(0.025 mm), a miss of the −20 dB spec, against yapnr.rf’s −20.9 dB, with the in-band minimum
-about 10 % higher in frequency. That competing prediction is registered as it stands.</p></li>
+comparison against the optimizer’s FDTD stated as found. This was originally run against part
+2’s D1 export (−17.4/−18.2 dB |S11| at 0.05/0.025 mm, a miss, against yapnr.rf’s −20.9 dB);
+that export was superseded 2026-10-05 by <code class="docutils literal notranslate"><span class="pre">d1-star</span></code> re-optimized under PR #53’s fixed
+corner-gap DRC (label <code class="docutils literal notranslate"><span class="pre">7e070ca8</span></code>, <a class="reference internal" href="predictions/D1-d1c/README.html"><span class="std std-doc">predictions/D1-d1c</span></a>), and
+openEMS was re-run against the new export (0.05 mm mesh only; the 0.025 mm convergence pair
+was not repeated, budget permitting): the two solvers still agree on |S21| within about
+0.11 dB, but openEMS again predicts a miss of the −20 dB spec (−17.10 dB raw, a 2.6-3.1 dB
+loss-corrected gap) against yapnr.rf’s pass (−20.77 dB finer), essentially the same
+disagreement as on the old export. A third solver, Palace (independent FEM), has <strong>not been
+run</strong> for D1 or R1 in either round — an open item, not silently dropped. All three solvers’
+predictions are registered as they stand, misses included.</p></li>
 <li><p><strong>The criteria</strong> (below) and the analysis order.</p></li>
 </ol>
 <p>D1 and D2 carry the first 8 hex digits of the sha256 of their <code class="docutils literal notranslate"><span class="pre">result.json</span></code> in silkscreen, which
-ties the physical part to its prediction.</p>
+ties the physical part to its prediction (D1: <code class="docutils literal notranslate"><span class="pre">7e070ca8</span></code>, superseding part 2’s <code class="docutils literal notranslate"><span class="pre">ad20e643</span></code> after
+the corner-gap DRC fix; D2: <code class="docutils literal notranslate"><span class="pre">03b7d938</span></code>).</p>
 </section>
 <section id="proof-that-the-predictions-came-first">
 <h2>Proof that the predictions came first<a class="headerlink" href="#proof-that-the-predictions-came-first" title="Link to this heading">¶</a></h2>

@@ -863,6 +863,10 @@ power_stage:
       # a 0.05 mm raster: at the default 0.1 the 0.2-0.25 mm gaps between U2's and U5's
       # lands left 8 of 15 5V_SYS lands unreached in the first block trial, all reached at 0.05
       h_mm: 0.05
+      # The plane nets as pieces (yapnr PR #56), each stitched to its plane on its own: each
+      # U2 row is 5V_SYS, SW, PGND, SW, 5V_SYS and its switch nodes leave on both sides, so a
+      # 5V_SYS tree on F.Cu walled in the SW and PGND lands in 28-30 of 30 block layouts.
+      pieces: [GND, 5V_SYS]
   # Datasheet hot loops (LP87524 SNVSAW2B 8.2.1.2-8.2.1.4, TPS25947 layout): each part of `parts`
   # must reach `ic`'s pads on every listed net by copper inside the block; an unreached
   # (part pad, net) is one open hot-loop link (the first ranking key).

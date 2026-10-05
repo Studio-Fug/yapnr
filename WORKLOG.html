@@ -221,6 +221,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/fab-and-ordering.html">Fab bundles and staged orders</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -507,6 +508,15 @@ alone does not split the core’s and the 7628’s εr (use board A’s fit as <
 re-checked with an independent finite-volume solver (within 0.1 Ω) and IPC-2141A (stripline
 50.5 Ω); recovery re-run with another seed, a wrong nominal stackup and a worse lab. Open: the
 SMA part, the panel fee, a mask-off stick on board B.</p></li>
+<li><p><strong>Palace, the second RF solver</strong> (#46, branch <code class="docutils literal notranslate"><span class="pre">claude/palace</span></code>; guide
+<a class="reference internal" href="docs/rf-palace.html"><span class="std std-doc">docs/rf-palace.md</span></a>, image <code class="docutils literal notranslate"><span class="pre">docker/palace</span></code>): planar documents
+(<code class="docutils literal notranslate"><span class="pre">yapnr.rf.planar</span></code>: lines, the radar60 patch and feed models, KiCad regions with footprint pads;
+lossy <code class="docutils literal notranslate"><span class="pre">metal</span></code> floor; solder mask over solid copper), the Gmsh builder, configurations checked
+against Palace’s schema, the validated sign-off settings (<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.palace</span> <span class="pre">case</span></code>),
+<code class="docutils literal notranslate"><span class="pre">yapnr.rf.palace.results</span></code>, and <code class="docutils literal notranslate"><span class="pre">palace_plan.py</span></code>/<code class="docutils literal notranslate"><span class="pre">palace_job.py</span></code> campaigns with stages. Validated
+against openEMS and the 2D cross-section solver on the radar60 lines, single patch and TX1
+feed; two reviews’ fixes in. Open: Palace issues to report upstream, a rank-scaling run before
+the bank model, the image’s ParMETIS licence (owner).</p></li>
 </ul>
 </section>
 <section id="next">

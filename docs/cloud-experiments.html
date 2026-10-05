@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Architecture" href="architecture.html"><link rel="prev" title="RF fab-model test coupons" href="rf-fab-coupons.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Architecture" href="architecture.html"><link rel="prev" title="Palace models: planar structures, meshes and configurations" href="rf-palace.html">
         <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
         <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
@@ -221,6 +221,7 @@
 <li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Fab bundles and staged orders</a></li>
 <li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -504,9 +505,10 @@ tofu<span class="w"> </span>apply<span class="w"> </span>bootstrap.plan
 </div>
 <p>The plan creates 80 resources for the example’s two regions (<a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp">infra/gcp</a>):
 APIs, the VPC, both buckets, the service accounts and grants, the registry caches and the
-<code class="docutils literal notranslate"><span class="pre">images</span></code> repositories for <a class="reference internal" href="#task-images-openems">task images</a>, the Spot templates (C4D in
-<code class="docutils literal notranslate"><span class="pre">us-west4</span></code>; C4 in <code class="docutils literal notranslate"><span class="pre">northamerica-northeast1</span></code>, which has no C4D: <code class="docutils literal notranslate"><span class="pre">region_template_shapes</span></code>), the
-budget and the guard functions.</p>
+<code class="docutils literal notranslate"><span class="pre">images</span></code> repositories for task images (<a class="reference internal" href="#task-images-openems">openEMS</a>,
+<a class="reference internal" href="#task-images-palace">Palace</a>), the Spot templates (C4D in <code class="docutils literal notranslate"><span class="pre">us-west4</span></code>; C4 in
+<code class="docutils literal notranslate"><span class="pre">northamerica-northeast1</span></code>, which has no C4D: <code class="docutils literal notranslate"><span class="pre">region_template_shapes</span></code>), the budget and the guard
+functions.</p>
 <p>The project’s <code class="docutils literal notranslate"><span class="pre">default</span></code> network allows SSH from anywhere and gives VMs external IPs; yapnr jobs
 never use it, so delete it, and with it any way a hand-written job could land there:</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>list<span class="w"> </span>--filter<span class="o">=</span><span class="s2">&quot;network=default&quot;</span><span class="w"> </span>--format<span class="o">=</span><span class="s2">&quot;value(name)&quot;</span><span class="w"> </span><span class="se">\</span>
@@ -980,6 +982,88 @@ class of its own (its own Batch job and VMs, still <code class="docutils literal
 keep one thread count per jobs file to fill the VMs. openEMS runs do not checkpoint, so a
 preempted model starts again.</p>
 </section>
+<section id="task-images-palace">
+<h3>Task images (Palace)<a class="headerlink" href="#task-images-palace" title="Link to this heading">¶</a></h3>
+<p><a class="reference external" href="https://github.com/awslabs/palace">AWS Palace</a> (Apache-2.0) is the finite-element solver that
+checks openEMS’s FDTD results: driven, eigenmode, electrostatic, magnetostatic and 2D
+boundary-mode problems, lumped and wave ports, conductivity and impedance boundaries, adaptive
+mesh refinement and adaptive frequency sweeps, all MPI-parallel. Palace publishes no public
+container image, so <a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/docker/palace"><code class="docutils literal notranslate"><span class="pre">docker/palace</span></code></a>
+builds its CMake superbuild at a pinned <code class="docutils literal notranslate"><span class="pre">main</span></code> commit (one with fixes for several boundary
+attributes that share a material entry, after release v0.18.1) on Ubuntu 24.04 with OpenMPI and
+OpenBLAS: SuperLU_DIST and MUMPS, ARPACK for the wave-port mode solves and eigenmodes, GSLIB and
+LIBXSMM; no SLEPc, STRUMPACK, SUNDIALS (transient) or GPU. The image adds Palace’s
+coplanar-waveguide example and its regression references, and a Python 3.12 with gmsh, numpy and
+shapely, so a task can mesh its model before the solve. There is one variant,
+<code class="docutils literal notranslate"><span class="pre">palace:&lt;commit7&gt;-pts-x86-64-v3</span></code> (AVX2), because a second one doubles the build while the hot
+kernels pick AVX-512 at run time anyway (OpenBLAS, LIBXSMM).</p>
+<p>The image has no ParMETIS, which Palace’s superbuild always links but whose licence allows
+evaluation use only outside non-profit research and forbids redistribution: <code class="docutils literal notranslate"><span class="pre">docker/palace/patches</span></code>
+builds Scotch/PT-Scotch (CeCILL-C) in its place and keeps the orderings parallel. SuperLU_DIST’s
+parallel ordering (<code class="docutils literal notranslate"><span class="pre">ColumnOrdering:</span> <span class="pre">&quot;ParMETIS&quot;</span></code>) calls Scotch’s ParMETIS-compatible library, MUMPS
+calls PT-Scotch (<code class="docutils literal notranslate"><span class="pre">ColumnOrdering:</span> <span class="pre">&quot;PTScotch&quot;</span></code>), and the default stays SuperLU_DIST with serial
+METIS. The build proves the absence (the superbuild, the installed files and symbols, Palace’s link
+map, a conformance test of the ordering against the ParMETIS manual, an SPDX bill of materials and
+syft’s scan of the image) and fails otherwise; the image’s README has the details. The earlier
+build with ParMETIS, <code class="docutils literal notranslate"><span class="pre">palace:b797ea8-x86-64-v3</span></code>, is kept for evaluation (comparisons) only.</p>
+<p>Cloud Build builds it on the 8-vCPU machine the regional quota allows, in a 3-hour budget (the
+default timeout is 10 minutes); a build without its caches takes about 25 minutes (14 for the
+dependencies, 5 for Palace), about $0.45, and one with both dependency stages cached about 7
+minutes (October 2026). The dependency stages are pushed as
+<code class="docutils literal notranslate"><span class="pre">palace-deps:&lt;tag&gt;-x86-64-v3-solvers</span></code> (the ordering libraries and the direct solvers) and
+<code class="docutils literal notranslate"><span class="pre">palace-deps:&lt;tag&gt;-x86-64-v3</span></code> before Palace compiles and are read back with <code class="docutils literal notranslate"><span class="pre">--cache-from</span></code>, so a
+build that fails in MFEM or Palace, or a change to the runtime stage, does not rebuild the
+dependencies. <code class="docutils literal notranslate"><span class="pre">tools/exp/palace_plan.py</span></code> works
+like <code class="docutils literal notranslate"><span class="pre">openems_plan.py</span></code> (both use <code class="docutils literal notranslate"><span class="pre">tools/exp/image_tasks.py</span></code>); the jobs format is in its docstring:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/exp/palace_plan.py<span class="w"> </span>image<span class="w"> </span>--run<span class="w">                      </span><span class="c1"># about 30 minutes</span>
+python3<span class="w"> </span>tools/exp/palace_plan.py<span class="w"> </span>plan<span class="w"> </span>models.toml<span class="w"> </span>--out<span class="w"> </span>&lt;dir&gt;<span class="w">      </span><span class="c1"># pins the image&#39;s digest</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>&lt;dir&gt;/campaign.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch
+yapnr<span class="w"> </span>exp<span class="w"> </span>submit<span class="w"> </span>&lt;cid&gt;<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>yapnr<span class="w"> </span>exp<span class="w"> </span>status<span class="w"> </span>&lt;cid&gt;<span class="w">      </span><span class="c1"># again until every task is done</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>fetch<span class="w"> </span>&lt;cid&gt;<span class="w">                                 </span><span class="c1"># logs, records, Palace&#39;s tables</span>
+python3<span class="w"> </span>tools/exp/palace_plan.py<span class="w"> </span>collect<span class="w"> </span>&lt;cid&gt;<span class="w"> </span>--dest<span class="w"> </span>&lt;tree&gt;<span class="w">       </span><span class="c1"># &lt;tree&gt;/runs/&lt;model&gt;/...</span>
+</pre></div>
+</div>
+<p>A job names a Palace configuration (<code class="docutils literal notranslate"><span class="pre">config</span></code>, a path in the task: an input, or the image’s
+<code class="docutils literal notranslate"><span class="pre">/opt/palace/share/palace/examples/...</span></code>), optional overrides (<code class="docutils literal notranslate"><span class="pre">set</span> <span class="pre">=</span> <span class="pre">{&quot;Solver.Order&quot;</span> <span class="pre">=</span> <span class="pre">3}</span></code>, for the
+campaign or per job), an optional <code class="docutils literal notranslate"><span class="pre">prepare</span></code> script that meshes the model and writes the
+configuration into <code class="docutils literal notranslate"><span class="pre">{out}</span></code> first, optional <code class="docutils literal notranslate"><span class="pre">stages</span></code> (configurations solved first, each into
+<code class="docutils literal notranslate"><span class="pre">out/&lt;id&gt;/stage-&lt;k&gt;-&lt;name&gt;</span></code> with <code class="docutils literal notranslate"><span class="pre">k</span></code> its place in the list, <code class="docutils literal notranslate"><span class="pre">CONFIG&#64;1</span></code> on one rank; a stage
+listed twice is refused) with <code class="docutils literal notranslate"><span class="pre">mesh_from</span></code> naming the stage whose saved adapted mesh the main
+configuration solves (refinement, then a sweep of the refined mesh, in one task), and an optional
+<code class="docutils literal notranslate"><span class="pre">reference</span></code> directory whose <code class="docutils literal notranslate"><span class="pre">port-S.csv</span></code> the result must match. Each task
+runs the job bundle’s <code class="docutils literal notranslate"><span class="pre">palace_job.py</span></code>: it reads the configuration
+(Palace’s relaxed JSON: comments, trailing commas, integer ranges), applies the overrides, moves
+the output to <code class="docutils literal notranslate"><span class="pre">out/&lt;id&gt;/postpro</span></code> and makes the mesh path absolute (<code class="docutils literal notranslate"><span class="pre">out/&lt;id&gt;/config.json</span></code>), checks
+it with <code class="docutils literal notranslate"><span class="pre">palace</span> <span class="pre">--dry-run</span></code>, then solves with <code class="docutils literal notranslate"><span class="pre">mpirun</span> <span class="pre">-np</span> <span class="pre">&lt;ranks&gt;</span></code> from the configuration’s
+directory. OpenMPI runs as root there (Batch’s container user) without cross-memory attach (no
+ptrace in the container), over shared memory (its <code class="docutils literal notranslate"><span class="pre">ob1</span></code> layer with the <code class="docutils literal notranslate"><span class="pre">vader</span></code> transport, not UCX
+or libfabric: one VM, no RDMA) on the 1 GiB of <code class="docutils literal notranslate"><span class="pre">/dev/shm</span></code> the task containers get. The record,
+<code class="docutils literal notranslate"><span class="pre">out/&lt;id&gt;.job.json</span></code> (its verdict is <code class="docutils literal notranslate"><span class="pre">ok</span></code>: the solve exited 0 and matched the reference), keeps the
+stage that failed, wall and CPU time, the CPU, and Palace’s own numbers from <code class="docutils literal notranslate"><span class="pre">palace.json</span></code> and its
+log: degrees of freedom and mesh elements, the AMR refinements and the unknowns of each solve,
+linear solves and iterations, timers, peak memory per rank and summed over the ranks. It is
+written when the task starts (<code class="docutils literal notranslate"><span class="pre">failed</span></code> is <code class="docutils literal notranslate"><span class="pre">running</span></code>), after every stage and at the end, so a task
+killed at its time limit or preempted still leaves the stages it finished.</p>
+<p>The smoke campaign (2026-10-04) ran Palace’s coplanar-waveguide example from the image, a driven
+sweep over 7 frequencies with four wave ports, on 8 ranks of a <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-16</span></code>: 117,764 degrees
+of freedom, 34 s of solve, 224 MB peak per rank, and its S-parameters matched Palace’s regression
+reference to a complex difference of 6e-8 (the task used 51 s of the VM, which started 37 s
+after scheduling).</p>
+<p>A model gets a VM: <code class="docutils literal notranslate"><span class="pre">ranks</span></code> MPI ranks on as many physical cores (<code class="docutils literal notranslate"><span class="pre">vm_vcpus</span></code> is twice that on C4D),
+bound to them; <code class="docutils literal notranslate"><span class="pre">packing</span> <span class="pre">=</span> <span class="pre">&quot;vcpu&quot;</span></code> puts a rank on each hardware thread, and with
+<code class="docutils literal notranslate"><span class="pre">models_per_vm</span></code> above one the ranks are left unbound (two <code class="docutils literal notranslate"><span class="pre">mpirun</span></code>s would bind to the same
+cores). <code class="docutils literal notranslate"><span class="pre">memory_gb</span></code> decides between the highcpu and standard shapes (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">plan</span></code>’s rule);
+the plan asks for an instance policy when none of its families has a Spot template for that
+shape (<code class="docutils literal notranslate"><span class="pre">infra/gcp</span></code> makes them for <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-8</span></code>, <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-16</span></code> and <code class="docutils literal notranslate"><span class="pre">c4d-standard-16</span></code>, and
+for <code class="docutils literal notranslate"><span class="pre">c4-highcpu-8</span></code> and <code class="docutils literal notranslate"><span class="pre">c4-highcpu-16</span></code> in the example’s second region). A job may set its own
+<code class="docutils literal notranslate"><span class="pre">ranks</span></code> or <code class="docutils literal notranslate"><span class="pre">memory_gb</span></code>: <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code> gives each such resource class its own shape, and the plan
+checks every job, so one that needs a shape without a template (56 GB: <code class="docutils literal notranslate"><span class="pre">c4d-highmem-16</span></code>; 16
+ranks: a 32-vCPU shape) turns the campaign to instance policies instead of being refused at
+submit. A job with fewer ranks than the campaign still reserves the campaign’s cores (a
+rank-scaling run gets the VM to itself rather than sharing it with another job bound to the same
+cores). Palace does not checkpoint and adaptive refinement cannot restart, so a preempted model
+starts again: keep Spot models to an hour or two.</p>
+</section>
 </section>
 <section id="testing">
 <h2>Testing<a class="headerlink" href="#testing" title="Link to this heading">¶</a></h2>
@@ -1057,14 +1141,14 @@ cancel and <code class="docutils literal notranslate"><span class="pre">submit</
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="rf-fab-coupons.html">
+          <a class="prev-page" href="rf-palace.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">RF fab-model test coupons</div>
+                <div class="title">Palace models: planar structures, meshes and configurations</div>
                 
               </div>
             </a>
@@ -1128,6 +1212,7 @@ cancel and <code class="docutils literal notranslate"><span class="pre">submit</
 </ul>
 </li>
 <li><a class="reference internal" href="#task-images-openems">Task images (openEMS)</a></li>
+<li><a class="reference internal" href="#task-images-palace">Task images (Palace)</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#testing">Testing</a></li>

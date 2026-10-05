@@ -699,6 +699,15 @@ def placed_from_record(a, work, record):
 # ---------------------------------------------------------------- finish
 
 
+def _kept_groups(work):
+    """kicad_ops finish's extra argument: the power stage's fixed-block groups (fixblocks),
+    whose copper stays like the RF macro's; none without them."""
+    path = Path(work) / "power-blocks.json"
+    if not path.is_file():
+        return []
+    return [",".join(b["group"] for b in json.loads(path.read_text())["fixed_block"])]
+
+
 def step_finish(a):
     import audit
 
@@ -750,7 +759,8 @@ def step_finish(a):
             macro_board(a.macro_variant),
             board,
             work / "finish.json",
-        ],
+        ]
+        + _kept_groups(work),
         log=work / "finish.log",
     )
     # fp-lib-table: the board's parts (atopile's generated/cached footprints) carry synthetic

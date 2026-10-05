@@ -645,7 +645,7 @@ group:
     anchor_pad: D2
   - members: ['@pmic.r_sh']
     anchor: '@pmic.l_b2'
-    radius_mm: 2
+    radius_mm: 4
     hard: true
     anchor_pad: '2'
   - members: ['@pmic.r_damp_rf1']

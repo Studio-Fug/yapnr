@@ -386,14 +386,17 @@ def step_ki_strip(a):
 
     keep = set(json.loads(Path(a.keep_refs).read_text()))
     board = pcbnew.LoadBoard(str(a.src))
-    for g in list(board.Groups()):
+    # Read every item before mutating: this SWIG build returns raw pointers from the board's
+    # collections once one has changed (pnr.hier.subpcb does the same).
+    footprints = [(fp.GetReference(), fp) for fp in board.GetFootprints()]
+    groups, tracks, zones = list(board.Groups()), list(board.GetTracks()), list(board.Zones())
+    for g in groups:  # ungroup first: a group's members are deleted below on their own
+        g.RemoveAll()
         board.Remove(g)
-    for t in list(board.GetTracks()):
-        board.Remove(t)
-    for z in list(board.Zones()):
-        board.Remove(z)
+    for item in tracks + zones:
+        board.Delete(item)
     present = set()
-    for ref, fp in [(fp.GetReference(), fp) for fp in board.GetFootprints()]:
+    for ref, fp in footprints:
         if ref in keep:
             present.add(ref)
         else:

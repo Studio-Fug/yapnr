@@ -725,14 +725,19 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   # R_SH (R_SH1, the 2.5 A Kelvin current-sense shunt feeding 1V0_SH from the buck; not R46,
   # which is radio.r_pa on 1V0_RF2 -> 1V0_PA): close to L_b2:2 so the 0.5 mOhm 1V0_BUCK/1V0_SH
   # budgets (plan stage 3c owner Q2) aren't spent on copper before the sense point (plan stage
-  # 3c R2; no anchor existed, and the un-anchored placement put it 17.3 mm away).
+  # 3c R2; no anchor existed, and the un-anchored placement put it 17.3 mm away). The radius is
+  # to R_SH1's centre: L_b2:2 sits 1.23 mm inside the IHLP-1616's courtyard (pad x 1.89, edge
+  # 3.115), so with 0.2 mm courtyard clearance and R_SH1's 1.9 mm half width beside it the
+  # nearest centre is 3.32 mm away; 2.0 left no legal slot (stage 3c R1 block trials: "R_SH1:
+  # no free slot inside hard group radius"). 4.0 is that plus a 0.25 mm slot and rotation play:
+  # the pads then face each other across about 0.8 mm of copper [D].
   r_sh:
     {
       anchor: l_b2,
       anchor_pad: '2',
       members: [r_sh],
-      radius_mm: 2.0,
-      reason: '1V0_BUCK -> R_SH within 2 mm of L_b2:2',
+      radius_mm: 4.0,
+      reason: '1V0_BUCK -> R_SH1 beside L_b2:2 (about 0.8 mm copper gap)',
     }
   # The damping options (ANA#17A, DNP) at their ferrite's rail pad, each capacitor at its
   # resistor's damping pad (pad 2) [D]
@@ -855,6 +860,9 @@ power_stage:
       stitch_vias: 4
       split_gap_mm: 0.2
       min_width_mm: 0.25
+      # a 0.05 mm raster: at the default 0.1 the 0.2-0.25 mm gaps between U2's and U5's
+      # lands left 8 of 15 5V_SYS lands unreached in the first block trial, all reached at 0.05
+      h_mm: 0.05
   # Datasheet hot loops (LP87524 SNVSAW2B 8.2.1.2-8.2.1.4, TPS25947 layout): each part of `parts`
   # must reach `ic`'s pads on every listed net by copper inside the block; an unreached
   # (part pad, net) is one open hot-loop link (the first ranking key).

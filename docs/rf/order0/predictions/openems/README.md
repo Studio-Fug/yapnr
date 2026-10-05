@@ -1,5 +1,8 @@
 # openEMS predictions (D-O0-13a), as found
 
+> **D1 rows below are for part 2's superseded D1 export (`ad20e643`).** The shipped D1
+> (`7e070ca8`) has its own openEMS result in [D1-d1c](../D1-d1c/README.md); R1's rows still apply.
+
 The independent 3D prediction of D1 and R1 (43 µm copper on the nominal FR408HR stack, two
 meshes; models and method in [../../openems/](../../openems/README.md)), loss-corrected like the
 yapnr.rf arm, and its comparison with yapnr.rf ([comparison.json](comparison.json)). The launch

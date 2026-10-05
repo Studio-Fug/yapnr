@@ -343,9 +343,9 @@ the bounding rectangle, for 3 copies.</p>
 <td><p>16</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>O0-D</strong></p></td>
-<td><p>the D1 window, an R1 copy, a thru, a 9 mm and a 30 mm line (uploaded when D1 passes)</p></td>
-<td><p>90.6 × 51.5 mm, 7.2 sq in</p></td>
-<td><p>$72</p></td>
+<td><p>the D1 window (<code class="docutils literal notranslate"><span class="pre">d1-star</span></code>, re-optimized under the fixed corner-gap DRC), an R1 copy, a thru, a 9 mm and a 30 mm line, QR stick A15</p></td>
+<td><p>118.2 × 50.0 mm, 9.16 sq in</p></td>
+<td><p>$91.57</p></td>
 <td><p>12</p></td>
 </tr>
 </tbody>
@@ -355,24 +355,32 @@ the bounding rectangle, for 3 copies.</p>
 that misses its spec, by the owner default recorded in the
 <a class="reference internal" href="preregistration.html"><span class="std std-doc">pre-registration</span></a> (the owner confirms or overrides it before the release),
 and the small QR stick B15 to <a class="reference internal" href="predictions/D2/README.html"><span class="std std-doc">predictions/D2</span></a>. Its Gerber zip’s sha256
-is in <a class="reference internal" href="#fab/O0-W.sha256"><span class="xref myst">fab/O0-W.sha256</span></a>. O0-D grows to about 118 × 50 mm, 9.2 sq in, with its own
-QR stick A15 when it is regenerated with the re-optimized D1.</p>
-<p>D1 passed (<code class="docutils literal notranslate"><span class="pre">d1-star</span></code>, label <code class="docutils literal notranslate"><span class="pre">O0</span> <span class="pre">D1</span> <span class="pre">divider-osh-m</span> <span class="pre">ad20e643</span></code>). <code class="docutils literal notranslate"><span class="pre">catalog.o_optimized</span></code> now merges
-its validated copper (<code class="docutils literal notranslate"><span class="pre">export.contour</span></code>’s own representation) into O0-D’s window as one custom
-pad (the main body, one net) plus the 14 floating etch islands as separate netless F.Cu fills
-(<code class="docutils literal notranslate"><span class="pre">layout_o.optimized_pad</span></code>); regenerate with <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.coupons</span> <span class="pre">generate</span> <span class="pre">--stackup</span> <span class="pre">OSHPARK-4L-FR408HR</span> <span class="pre">--upload</span> <span class="pre">D</span> <span class="pre">--out</span> <span class="pre">&lt;dir&gt;</span></code>. The merge is mechanically correct (ports, nets,
-orientation; all 15 polygons equal the footprint’s vertex for vertex) but the regenerated board is
-<strong>not yet KiCad-DRC clean</strong>: two 0.127 mm netclass clearance violations between the main pad and
-the two mirror-image floating islands next to it (actual 0.100 mm, corner to corner). The gap is
-in the validated footprint itself, not made by the merge: the raster width/space check
-(<code class="docutils literal notranslate"><span class="pre">export.drc</span></code>) that passed it does not see a gap between two diagonally offset corners. It needs
-an owner call (see the PR description) before upload, so the checked-in
-<code class="docutils literal notranslate"><span class="pre">examples/rf-coupons/order0/O0-D/</span></code> still carries the placeholder window.</p>
+is in <a class="reference internal" href="#fab/O0-W.sha256"><span class="xref myst">fab/O0-W.sha256</span></a>.</p>
+<p>D1 passed (<code class="docutils literal notranslate"><span class="pre">d1-star</span></code>, label <code class="docutils literal notranslate"><span class="pre">O0</span> <span class="pre">D1</span> <span class="pre">divider-osh-m</span> <span class="pre">7e070ca8</span></code>, superseding part 2’s <code class="docutils literal notranslate"><span class="pre">ad20e643</span></code>):
+the part 2 export reproduced two 0.100 mm corner-gap violations against OSH Park’s 0.127 mm rule
+under PR #53’s fixed exact-corner-gap DRC, so D1 was re-optimized from the same four
+formulations under that fixed checker (<a class="reference internal" href="predictions/D1-d1c/README.html"><span class="std std-doc">predictions/D1-d1c</span></a>);
+<code class="docutils literal notranslate"><span class="pre">d1-star</span></code> is again the only formulation that passes coarse/fine/finer, now with a DRC-clean
+export (134 repaired pixels, 24 floating islands, vs 30/14 under the old checker). O0-D is
+regenerated with <code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_CLI=&lt;headless</span> <span class="pre">kicad-cli&gt;</span> <span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.coupons</span> <span class="pre">generate</span> <span class="pre">--stackup</span> <span class="pre">OSHPARK-4L-FR408HR</span> <span class="pre">--upload</span> <span class="pre">D</span> <span class="pre">--out</span> <span class="pre">examples/rf-coupons/order0/O0-D</span></code>: KiCad DRC 0
+violations, 0 unconnected (10.0.6); <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">build</span></code> 0 errors (2 pre-existing informational
+warnings: merged non-plated drill file, stackup thickness, the same pattern O0-W’s build has).
+Its Gerber zip’s sha256 is in <a class="reference internal" href="#fab/O0-D.sha256"><span class="xref myst">fab/O0-D.sha256</span></a>.</p>
+<p>Two solvers carry a prediction for this D1, compared like for like on nominal FR408HR: yapnr.rf’s
+own FDTD on M-nom puts it at the −20 dB |S11| spec line (−19.70 / −20.02 / −20.05 dB coarse /
+fine / finer; it passes the selection criteria with a 0.282 dB margin, and −20.77 dB on its M-eq
+design substrate), and an independent openEMS 0.37 run (43 µm copper, 0.05 mm mesh) predicts a
+2.9 dB <strong>miss</strong> (−17.10 dB), essentially part 2’s finding on the old export; the two agree on
+|S21| within 0.14 dB. A third, Palace (FEM), was <strong>not run</strong> for D1 or R1 this round: this
+workflow’s separate $8 GCP cap left too little margin after the resubmission and validation
+campaigns, and Palace also needs a new divider-shaped planar adapter; open item for a follow-up.
+Details, campaign ids and the three-solver table are in
+<a class="reference internal" href="predictions/D1-d1c/README.html"><span class="std std-doc">predictions/D1-d1c/README.md</span></a>.</p>
 <p>The KiCad projects, catalogues and DRC results are in
 <a class="reference internal" href="#../../../examples/rf-coupons/order0/README.md"><span class="xref myst">examples/rf-coupons/order0/</span></a>.</p>
 <p><img alt="O0-M, the top copper, mask openings (light) and silkscreen as KiCad renders them: one outline,the sticks held by tabs with three mouse-bite holes each side" src="../../../images/O0-M.png" /></p>
 <p><img alt="O0-W: the W calibration set, R1t, the QR stick B15 and D2 (d2-star-sched) in its window" src="../../../images/O0-W.png" /></p>
-<p><img alt="O0-D: the empty D1 window, R1, and the thru and lines, turned 90°" src="../../../images/O0-D.png" /></p>
+<p><img alt="O0-D: the filled D1 window (, 7e070ca8), R1, the thru and lines, and QR stick A15, turned 90°" src="../../../images/O0-D.png" /></p>
 <section id="cross-sections">
 <h3>Cross-sections<a class="headerlink" href="#cross-sections" title="Link to this heading">¶</a></h3>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -542,16 +550,21 @@ with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.
 </thead>
 <tbody>
 <tr class="row-even"><td><p>D1</p></td>
-<td><p>window for the optimizer’s thin divider (12 × 15 mm), feeds and keep-away</p></td>
+<td><p>the optimizer’s thin divider (12 × 15 mm, <code class="docutils literal notranslate"><span class="pre">d1-star</span></code>, label <code class="docutils literal notranslate"><span class="pre">7e070ca8</span></code>), feeds and keep-away</p></td>
 <td><p>29 × 41</p></td>
-<td><p><strong>placeholder</strong> until D1 passes: the headline demo</p></td>
+<td><p>the headline demo (at the spec line on yapnr.rf, misses on openEMS)</p></td>
 </tr>
-<tr class="row-odd"><td><p>R1</p></td>
+<tr class="row-odd"><td><p>A15</p></td>
+<td><p>small QR label stick to <a class="reference internal" href="predictions/D1-d1c/README.html"><span class="std std-doc">predictions/D1-d1c</span></a></p></td>
+<td><p>25 × 25</p></td>
+<td><p>this page</p></td>
+</tr>
+<tr class="row-even"><td><p>R1</p></td>
 <td><p>a copy of O0-M’s R1</p></td>
 <td><p>30 × 38</p></td>
 <td><p>D1 and a reference on one lot</p></td>
 </tr>
-<tr class="row-even"><td><p>A01, A20, A04</p></td>
+<tr class="row-odd"><td><p>A01, A20, A04</p></td>
 <td><p>thru and lines ΔL 9 and 30 mm</p></td>
 <td><p>20, 29, 50 × 12</p></td>
 <td><p>this lot’s εeff, loss and relative Z0 (the 9 mm line covers 5-6 GHz)</p></td>

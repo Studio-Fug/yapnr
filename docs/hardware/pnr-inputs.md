@@ -720,6 +720,7 @@ plane_partition:
     sources: { 1V2: { "@pmic.fb_1v2": "2" } } # the trunk's root (default: the central terminal)
     h_mm: 0.1 # the raster
     protect_fanouts: true # declared fanouts' access cells stay open (default false)
+    fixed_lands: true # own-net fixed pads and zones on the layer are terminals (default false)
 ```
 
 How it works (`pnr/plane_partition.py`, run by the router after the declared
@@ -751,6 +752,12 @@ replaces that layer's zones of those nets with one zone per region (its holes an
 priority; the fill net under them all). With `core_no_vias`, other nets' vias keep
 via radius plus clearance beyond half the minimum width of each trunk's centre line,
 so a row of vias cannot cut a rail's neck.
+
+A fixed block's vias count where their copper is: a through via of a rail is one of
+its terminals (a macro's feed vias, say), another net's blocks it, and a blind, buried
+or micro via whose span misses the layer does neither. With `fixed_lands: true` a
+fixed block's own-net pads and zones on the layer (a macro's tie on the plane layer)
+are land terminals too, by their outlines.
 
 With `protect_fanouts: true` the plane machinery leaves a declared fanout's planned
 access cells (where each ball's tail meets the maze) open: no other net's exit or

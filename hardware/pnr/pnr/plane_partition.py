@@ -80,12 +80,17 @@ class Terminal:
     at: Tuple[float, float]
     radius: float
     size: Optional[Tuple[float, float]] = None
+    # A land given by its outline instead (a fixed block's pad or zone of the net on
+    # the layer, ``fixed_lands``): the cells inside it.
+    outline: Optional[List[Tuple[float, float]]] = None
 
     def key(self) -> dict:
-        """The terminal for the inputs digest (``size`` only for a land)."""
+        """The terminal for the inputs digest (``size`` / ``outline`` only when set)."""
         out = dict(name=self.name, kind=self.kind, at=self.at, radius=self.radius)
         if self.size is not None:
             out["size"] = self.size
+        if self.outline is not None:
+            out["outline"] = [list(p) for p in self.outline]
         return out
 
 
@@ -1072,12 +1077,15 @@ def _width_check(g, mine, n, terms, cells_of, exempt, root, min_w, h):
 
 
 def _land(g, t):
-    """The cells of a land terminal: centres inside its rectangle (at least the
-    centre's cell)."""
-    w, h = t.size
-    x, y = t.at
-    ring = [(x - w / 2, y - h / 2), (x + w / 2, y - h / 2), (x + w / 2, y + h / 2)]
-    ring.append((x - w / 2, y + h / 2))
+    """The cells of a land terminal: centres inside its rectangle or outline (at
+    least the centre's cell)."""
+    if t.outline is not None:
+        ring = list(t.outline)
+    else:
+        w, h = t.size
+        x, y = t.at
+        ring = [(x - w / 2, y - h / 2), (x + w / 2, y - h / 2), (x + w / 2, y + h / 2)]
+        ring.append((x - w / 2, y + h / 2))
     out = g.polygon([ring])
     if not out.any():
         i, j = g.cell(t.at)
@@ -1184,6 +1192,52 @@ def _gap_min(grown, count, h):
 # --------------------------------------------------------- the router's inputs
 
 
+def fixed_vias_on(copper, layer):
+    """``[(net, xy, diameter)]``: the fixed copper's vias (top level and every
+    block's) whose copper is on ``layer``: through vias, and blind, buried or micro
+    ones whose span (``layers``) holds it. A via outside its span neither joins nor
+    blocks the layer."""
+    import re
+
+    def _copper_order(name):  # F.Cu, In1.Cu .. InN.Cu, B.Cu
+        if name == "F.Cu":
+            return 0
+        if name == "B.Cu":
+            return 10**6
+        match = re.fullmatch(r"In(\d+)\.Cu", name)
+        if not match:
+            raise ValueError("not a copper layer name: %r" % name)
+        return int(match.group(1))
+
+    out = []
+    at = _copper_order(layer)
+    for source in [copper or {}] + list((copper or {}).get("blocks") or []):
+        for v in source.get("vias", []):
+            span = v.get("layers")
+            if span and len(span) == 2:
+                top, bottom = sorted(_copper_order(n) for n in span)
+                if not top <= at <= bottom:
+                    continue
+            out.append((v.get("net", ""), v["xy"], v["diameter_mm"]))
+    return out
+
+
+def _fixed_lands(polygons, layer, terms):
+    """Own-net fixed pads and zones on ``layer`` (``fixed_lands: true``): land
+    terminals by their outlines."""
+    out = []
+    for k, poly in enumerate(polygons):
+        net = poly.get("net")
+        if poly.get("kind") in ("pad", "zone") and poly.get("layer") == layer and net in terms:
+            ring = [tuple(p) for p in poly["outline"]]
+            xs, ys = [p[0] for p in ring], [p[1] for p in ring]
+            at = ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
+            half = max(max(xs) - min(xs), max(ys) - min(ys)) / 2
+            name = "fixed %s %d" % (poly.get("kind"), k)
+            out.append((net, Terminal(name, "land", at, half, None, ring)))
+    return out
+
+
 def for_route(
     grid, graph, rules, stack, width, height, *, fixed_copper=None, fanouts=None, outer=False
 ):
@@ -1247,14 +1301,17 @@ def for_route(
                 terms[net].append(Terminal("via %.3f,%.3f" % p, "via", tuple(p), d / 2))
             else:
                 blocked.append((tuple(p), d / 2 + gap_to(net)))
-        _t, fixed_vias, polygons = fixed_items(fixed_copper) if fixed_copper else ((), [], [])
-        for net, xy, d, _drill in fixed_vias:
+        _t, _v, polygons = fixed_items(fixed_copper) if fixed_copper else ((), [], [])
+        for net, xy, d in fixed_vias_on(fixed_copper, layer) if fixed_copper else ():
             if net in terms:
                 terms[net].append(
                     Terminal("fixed via %.3f,%.3f" % tuple(xy), "via", tuple(xy), d / 2)
                 )
             else:
                 blocked.append((tuple(xy), d / 2 + gap_to(net)))
+        if entry.get("fixed_lands"):
+            for net, t in _fixed_lands(polygons, layer, terms):
+                terms[net].append(t)
         skip = getattr(fanouts, "skip_pads", set()) if fanouts is not None else set()
         reach = float(entry.get("terminal_reach_mm", 0.8))
         for comp in graph.components:
@@ -1462,8 +1519,8 @@ def _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanout
         if grid.layers[la] == layer and net not in terms:
             w = grid.net_widths.get(net, grid.track_width)
             blocked += _capsule_discs(a, b, w / 2 + gap_to(net), h / 2)
-    tracks, fixed_vias, polygons = fixed_items(fixed_copper) if fixed_copper else ((), [], [])
-    for net, xy, d, _drill in fixed_vias:
+    tracks, _v, polygons = fixed_items(fixed_copper) if fixed_copper else ((), [], [])
+    for net, xy, d in fixed_vias_on(fixed_copper, layer) if fixed_copper else ():
         if net in terms:
             if inside(xy):
                 terms[net].append(
@@ -1471,6 +1528,10 @@ def _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanout
                 )
         else:
             blocked.append((tuple(xy), d / 2 + gap_to(net)))
+    if entry.get("fixed_lands"):
+        for net, t in _fixed_lands(polygons, layer, terms):
+            if inside(t.at):
+                terms[net].append(t)
     for net, tlayer, a, b, w in tracks:
         if tlayer == layer and net not in terms:
             blocked += _capsule_discs(tuple(a), tuple(b), w / 2 + gap_to(net), h / 2)

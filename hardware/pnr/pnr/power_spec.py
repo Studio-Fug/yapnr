@@ -16,6 +16,7 @@ routing rules carry under the same names, only when declared.
         terminal_reach_mm: 0.8          # a pad's drop lands within this of it
         neck_mm: 0                      # a trunk may narrow this close to its terminals
         protect_fanouts: true           # declared fanouts' access cells stay open
+        fixed_lands: true               # own-net fixed pads/zones on the layer join
         region: {refs: [U2, L1], margin_mm: 0.5}  # an outer pour inside a region
         terminals: pad                  # (with region) whole lands, or reach discs
         connect: solid                  # (with region) the zones' pad connection
@@ -67,6 +68,7 @@ PARTITION_KEYS = {
     "terminals",
     "connect",
     "stitch_vias",
+    "fixed_lands",
 }
 IR_KEYS = {
     "net",
@@ -176,6 +178,11 @@ def parse_partition(raw) -> List[Dict]:
             out[-1].update(_outer(entry, where))
         elif any(entry.get(k) is not None for k in ("terminals", "connect", "stitch_vias")):
             raise PowerSpecError(where + ": terminals, connect and stitch_vias go with a region")
+        if entry.get("fixed_lands") is not None:  # only when declared
+            if not isinstance(entry["fixed_lands"], bool):
+                raise PowerSpecError(where + ".fixed_lands must be a boolean")
+            if entry["fixed_lands"]:
+                out[-1]["fixed_lands"] = True
         if entry.get("protect_fanouts") is not None:  # only when declared
             if not isinstance(entry["protect_fanouts"], bool):
                 raise PowerSpecError(where + ".protect_fanouts must be a boolean")

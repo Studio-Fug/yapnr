@@ -515,5 +515,84 @@ class RouteTest(unittest.TestCase):
         self.assertNotIn("plane_partition", r.escape_diagnostics)
 
 
+class FixedTerminalsTest(unittest.TestCase):
+    """E3: a fixed block's through vias of a rail are partition terminals (a blind via
+    whose span misses the layer neither joins nor blocks it), and with fixed_lands
+    its own-net pads and zones on the layer are land terminals."""
+
+    def test_fixed_vias_on_honours_spans(self):
+        from pnr.plane_partition import fixed_vias_on
+
+        copper = dict(
+            frame="engine-mm-y-up",
+            vias=[dict(net="V1", xy=[1, 1], diameter_mm=0.4, drill_mm=0.2, type="through")],
+            blocks=[
+                dict(
+                    vias=[
+                        dict(
+                            net="X",
+                            xy=[2, 2],
+                            diameter_mm=0.3,
+                            drill_mm=0.1,
+                            type="blind",
+                            layers=["F.Cu", "In1.Cu"],
+                        )
+                    ]
+                )
+            ],
+        )
+        self.assertEqual([v[0] for v in fixed_vias_on(copper, "In2.Cu")], ["V1"])
+        self.assertEqual([v[0] for v in fixed_vias_on(copper, "In1.Cu")], ["V1", "X"])
+
+    def route(self, fixed_lands):
+        from pnr.route.detail.router import route_board
+
+        g, c, rules = RouteTest.setup()
+        rules["plane_partition"][0].update({"fixed_lands": True} if fixed_lands else {})
+        tie = [[11.0, 1.0], [13.0, 1.0], [13.0, 2.0], [11.0, 2.0]]
+        rules["fixed_copper"] = dict(
+            frame="engine-mm-y-up",
+            tracks=[],
+            vias=[],
+            blocks=[
+                dict(
+                    name="macro",
+                    tracks=[],
+                    vias=[
+                        dict(
+                            net="V1", xy=[12.0, 1.5], diameter_mm=0.4, drill_mm=0.2, type="through"
+                        ),
+                        dict(
+                            net="S",
+                            xy=[10.0, 6.0],
+                            diameter_mm=0.3,
+                            drill_mm=0.1,
+                            type="blind",
+                            layers=["F.Cu", "In1.Cu"],
+                        ),
+                    ],
+                    polygons=[dict(net="V1", layer="In2.Cu", outline=tie, kind="zone")],
+                )
+            ],
+        )
+        return route_board(g, c, rules, max_iters=2)
+
+    def test_the_rails_land_on_their_fixed_copper(self):
+        r = self.route(False)
+        report = r.escape_diagnostics["plane_partition"][0]["nets"]["V1"]
+        self.assertEqual(report["terminals"], 4)  # three drops' pads and the fixed via
+        self.assertEqual(report["unreached"], [])
+        regions = regions_from_rows(r.extras()["plane_regions"])
+        self.assertTrue(any(inside(reg, (12.0, 1.5)) for reg in regions if reg.net == "V1"))
+        r = self.route(True)
+        report = r.escape_diagnostics["plane_partition"][0]["nets"]["V1"]
+        self.assertEqual(report["terminals"], 5)  # and the macro's In2 tie
+        self.assertEqual(report["unreached"], [])
+        regions = regions_from_rows(r.extras()["plane_regions"])
+        mine = [reg for reg in regions if reg.net == "V1"]
+        for p in ((11.2, 1.2), (12.8, 1.8)):
+            self.assertTrue(any(inside(reg, p) for reg in mine), p)
+
+
 if __name__ == "__main__":
     unittest.main()

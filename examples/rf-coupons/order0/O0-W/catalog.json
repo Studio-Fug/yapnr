@@ -281,7 +281,7 @@
     },
     {
       "id": "D2",
-      "kind": "window",
+      "kind": "demo",
       "family": "W",
       "trl": "W",
       "length": 40.0,
@@ -291,7 +291,7 @@
       "tier": "core",
       "fitted": false,
       "ports": 3,
-      "determines": "optimizer divider, thick (placeholder window until D2 passes)",
+      "determines": "optimizer divider, thick: |S21|/|S31| pass, |S11| misses -20 dB by 0.6-0.7 dB (owner's call, compute.md's recommendation) (d2-star-sched, 03b7d938, filled)",
       "label": "O0-W D2 opt divider",
       "geometry": {
         "region": "W",
@@ -313,6 +313,415 @@
               10.0
             ]
           ],
+          "islands": {
+            "connected": [
+              [
+                [
+                  -9.0,
+                  1.5
+                ],
+                [
+                  -9.0,
+                  2.0
+                ],
+                [
+                  -8.0,
+                  2.0
+                ],
+                [
+                  -8.0,
+                  2.5
+                ],
+                [
+                  -7.5,
+                  2.5
+                ],
+                [
+                  -7.5,
+                  3.0
+                ],
+                [
+                  -6.5,
+                  3.0
+                ],
+                [
+                  -6.5,
+                  2.5
+                ],
+                [
+                  -5.0,
+                  2.5
+                ],
+                [
+                  -5.0,
+                  3.0
+                ],
+                [
+                  -3.5,
+                  3.0
+                ],
+                [
+                  -3.5,
+                  2.5
+                ],
+                [
+                  -3.0,
+                  2.5
+                ],
+                [
+                  -3.0,
+                  2.0
+                ],
+                [
+                  -1.5,
+                  2.0
+                ],
+                [
+                  -1.5,
+                  4.5
+                ],
+                [
+                  -2.0,
+                  4.5
+                ],
+                [
+                  -2.0,
+                  6.5
+                ],
+                [
+                  -2.5,
+                  6.5
+                ],
+                [
+                  -2.5,
+                  7.5
+                ],
+                [
+                  -2.0,
+                  7.5
+                ],
+                [
+                  -2.0,
+                  11.0
+                ],
+                [
+                  -1.5,
+                  11.0
+                ],
+                [
+                  -1.5,
+                  12.0
+                ],
+                [
+                  2.0,
+                  12.0
+                ],
+                [
+                  2.0,
+                  11.0
+                ],
+                [
+                  2.5,
+                  11.0
+                ],
+                [
+                  2.5,
+                  10.0
+                ],
+                [
+                  1.5,
+                  10.0
+                ],
+                [
+                  1.5,
+                  6.5
+                ],
+                [
+                  0.5,
+                  6.5
+                ],
+                [
+                  0.5,
+                  5.5
+                ],
+                [
+                  1.0,
+                  5.5
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.5,
+                  1.0
+                ],
+                [
+                  1.5,
+                  -1.0
+                ],
+                [
+                  1.0,
+                  -1.0
+                ],
+                [
+                  1.0,
+                  -5.5
+                ],
+                [
+                  0.5,
+                  -5.5
+                ],
+                [
+                  0.5,
+                  -6.5
+                ],
+                [
+                  1.5,
+                  -6.5
+                ],
+                [
+                  1.5,
+                  -10.0
+                ],
+                [
+                  2.5,
+                  -10.0
+                ],
+                [
+                  2.5,
+                  -11.0
+                ],
+                [
+                  2.0,
+                  -11.0
+                ],
+                [
+                  2.0,
+                  -12.0
+                ],
+                [
+                  -1.5,
+                  -12.0
+                ],
+                [
+                  -1.5,
+                  -11.0
+                ],
+                [
+                  -2.0,
+                  -11.0
+                ],
+                [
+                  -2.0,
+                  -7.5
+                ],
+                [
+                  -2.5,
+                  -7.5
+                ],
+                [
+                  -2.5,
+                  -6.5
+                ],
+                [
+                  -2.0,
+                  -6.5
+                ],
+                [
+                  -2.0,
+                  -4.5
+                ],
+                [
+                  -1.5,
+                  -4.5
+                ],
+                [
+                  -1.5,
+                  -2.0
+                ],
+                [
+                  -3.0,
+                  -2.0
+                ],
+                [
+                  -3.0,
+                  -2.5
+                ],
+                [
+                  -3.5,
+                  -2.5
+                ],
+                [
+                  -3.5,
+                  -3.0
+                ],
+                [
+                  -5.0,
+                  -3.0
+                ],
+                [
+                  -5.0,
+                  -2.5
+                ],
+                [
+                  -6.5,
+                  -2.5
+                ],
+                [
+                  -6.5,
+                  -3.0
+                ],
+                [
+                  -7.5,
+                  -3.0
+                ],
+                [
+                  -7.5,
+                  -2.5
+                ],
+                [
+                  -8.0,
+                  -2.5
+                ],
+                [
+                  -8.0,
+                  -2.0
+                ],
+                [
+                  -9.0,
+                  -2.0
+                ],
+                [
+                  -9.0,
+                  -1.5
+                ],
+                [
+                  -10.0,
+                  -1.5
+                ],
+                [
+                  -10.0,
+                  1.5
+                ]
+              ]
+            ],
+            "floating": [
+              [
+                [
+                  -3.0,
+                  5.5
+                ],
+                [
+                  -3.0,
+                  4.5
+                ],
+                [
+                  -4.0,
+                  4.5
+                ],
+                [
+                  -4.0,
+                  5.5
+                ]
+              ],
+              [
+                [
+                  -3.0,
+                  -4.5
+                ],
+                [
+                  -3.0,
+                  -5.5
+                ],
+                [
+                  -4.0,
+                  -5.5
+                ],
+                [
+                  -4.0,
+                  -4.5
+                ]
+              ],
+              [
+                [
+                  3.5,
+                  7.5
+                ],
+                [
+                  3.5,
+                  6.5
+                ],
+                [
+                  2.5,
+                  6.5
+                ],
+                [
+                  2.5,
+                  7.5
+                ]
+              ],
+              [
+                [
+                  3.5,
+                  -6.5
+                ],
+                [
+                  3.5,
+                  -7.5
+                ],
+                [
+                  2.5,
+                  -7.5
+                ],
+                [
+                  2.5,
+                  -6.5
+                ]
+              ],
+              [
+                [
+                  10.0,
+                  7.0
+                ],
+                [
+                  10.0,
+                  6.0
+                ],
+                [
+                  9.0,
+                  6.0
+                ],
+                [
+                  9.0,
+                  7.0
+                ]
+              ],
+              [
+                [
+                  10.0,
+                  -6.0
+                ],
+                [
+                  10.0,
+                  -7.0
+                ],
+                [
+                  9.0,
+                  -7.0
+                ],
+                [
+                  9.0,
+                  -6.0
+                ]
+              ]
+            ],
+            "source": "docs/rf/order0/predictions/D2/runs/d2-star-sched/footprint.kicad_mod"
+          },
+          "hash8": "03b7d938",
+          "drc_ok": true,
+          "drc_violations": [],
+          "docs_url": "https://github.com/Studio-Fug/yapnr/tree/main/docs/rf/order0/predictions/D2",
           "x0": 14.0,
           "feed": 4.0
         },
@@ -334,8 +743,30 @@
           }
         ],
         "stick_w": 16.0,
-        "placeholder": true,
         "rot": 270
+      },
+      "generated": true,
+      "rp_mm": []
+    },
+    {
+      "id": "B15",
+      "kind": "tag",
+      "family": "",
+      "trl": "",
+      "length": 25.0,
+      "height": 25.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": false,
+      "ports": 0,
+      "determines": "the docs page (QR) for this board's optimizer winner",
+      "label": "O0-W B15 QR DOCS",
+      "geometry": {
+        "region": "M",
+        "lines": [],
+        "meanders": [],
+        "url": "https://github.com/Studio-Fug/yapnr/tree/main/docs/rf/order0/predictions/D2"
       },
       "generated": true,
       "rp_mm": []
@@ -345,38 +776,38 @@
     "OSH Park 4 layer, FR408HR (EM528 alternate covered by the same tables); 3 copies; frameless single outline, 2.54 mm milled slots, OSH Park's mouse-bite tab pattern on the sticks' long sides only",
     "edge SMA: Cinch 142-0701-851 on every port (custom footprint from Cinch's drawing); the launches are 2D-designed (launch.py), not 3D-tuned",
     "mask open over all RF copper and its keep-away, 0.2 mm dams at the pin pads; A10 is the masked line",
-    "D2 window is a placeholder: the optimizer's footprint is added when D2 passes"
+    "D2's window carries d2-star-sched (compute.md's recommendation; |S11| misses -20 dB by 0.6-0.7 dB, the owner's call): see the D2 stick's label for its run id, hash and fab DRC status, and docs/rf/order0/predictions/D2/README.md for the full record"
   ],
   "panel_mm": [
-    57.54,
-    131.16
+    54.0,
+    158.7
   ],
-  "panel_sq_in": 11.7,
+  "panel_sq_in": 13.28,
   "revision": "A",
   "placement": {
     "B01": {
-      "x": 36.54,
-      "y": 72.62,
+      "x": 0.0,
+      "y": 100.16,
       "rot": 0
     },
     "B02": {
-      "x": 32.54,
-      "y": 35.54,
+      "x": 0.0,
+      "y": 63.08,
       "rot": 0
     },
     "B03": {
-      "x": 0.0,
-      "y": 72.62,
+      "x": 18.54,
+      "y": 35.54,
       "rot": 0
     },
     "B04": {
-      "x": 2.54,
-      "y": 54.08,
+      "x": 0.0,
+      "y": 81.62,
       "rot": 0
     },
     "B05": {
-      "x": 0.0,
-      "y": 35.54,
+      "x": 24.0,
+      "y": 100.16,
       "rot": 0
     },
     "R1t": {
@@ -385,10 +816,15 @@
       "rot": 90
     },
     "D2": {
-      "x": 4.54,
-      "y": 91.16,
+      "x": 0.0,
+      "y": 118.7,
       "rot": 270
+    },
+    "B15": {
+      "x": 27.54,
+      "y": 54.08,
+      "rot": 0
     }
   },
-  "tabs": 15
+  "tabs": 16
 }

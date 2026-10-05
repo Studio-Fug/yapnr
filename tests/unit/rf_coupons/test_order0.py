@@ -184,8 +184,11 @@ class CatalogTest(unittest.TestCase):
         # D2 (d2-star-sched, a near-miss) and D1 (d1-star) both carry real exported copper now
         # (catalog.o_optimized's winner paths), so neither window is a placeholder any more.
         self.assertEqual(w.stick("D2").kind, "demo")
+        # B15: the small QR label stick to D2's docs page (this workflow; O0-D's and O0-W's
+        # panels had no docs link at all before -- only O0-M's A15 carried one).
+        self.assertIn("B15", [s.id for s in w.sticks])
         d = catalog.board(FR, "D")
-        self.assertEqual(sorted(s.id for s in d.sticks), ["A01", "A04", "A20", "D1", "R1"])
+        self.assertEqual(sorted(s.id for s in d.sticks), ["A01", "A04", "A15", "A20", "D1", "R1"])
         self.assertEqual(d.trl["M"]["dl"], [0.0, 9.0, 30.0])  # review M2: O0-D's own lines
         for u, sid in (("W", "D2"), ("D", "D1")):
             self.assertNotIn("placeholder", catalog.board(FR, u).stick(sid).geometry)
@@ -277,8 +280,11 @@ class PanelTest(unittest.TestCase):
 
     def test_size_and_cost(self):
         """Near the design's estimates (§16.7) at $10 per square inch: O0-M 24.2 sq in grows by
-        tabs off the launch edges (review F5) and two per stick (F4); O0-D by its 9 mm line."""
-        limits = {"M": 27.5, "W": 12.6, "D": 7.5}
+        tabs off the launch edges (review F5) and two per stick (F4); O0-D by its 9 mm line.
+        O0-D and O0-W grow again (this workflow, ~9.1 / ~13.1 sq in) for the small QR label
+        stick to the docs page (`catalog._label_stick`, 25 x 25 mm) that neither board carried
+        before -- a few extra dollars of fab cost, not re-budgeted elsewhere."""
+        limits = {"M": 27.5, "W": 13.5, "D": 9.5}
         for u, p in self.panels.items():
             self.assertLess(p.sq_in, limits[u], u)
 

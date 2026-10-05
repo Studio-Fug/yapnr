@@ -775,6 +775,29 @@ O_FAB_RULE_MM = 0.127
 DOCS_URL = "https://github.com/Studio-Fug/yapnr/tree/main/docs/rf/order0/predictions"
 
 
+def _label_stick(sid: str, tag: str, url: str) -> Stick:
+    """A small QR label stick (`layout_o.tag_stick` with no microsection/meander duty): the
+    docs-page QR for a board whose panel has no room for A15's full tag+xsec stick (O0-D,
+    O0-W). 25 x 25 mm: a 75-character GitHub URL's QR (version 3, level M: 37 modules, 18.0 mm
+    side, `x0=1.0` origin) needs 19 mm of that for the code itself, then the longest tag line
+    (`"yapnr Order 0 rev <rev> O0-<upload>"`, ~24 chars at label_width's 0.92 mm/char) needs
+    about 24.6 mm of width and the three stacked tag lines above the code need about 23.5 mm of
+    height -- checked against the panel-size regression test and a rendered KiCad DRC (no
+    F.SilkS/F.Cu overlap with a neighbour)."""
+    return Stick(
+        sid,
+        "tag",
+        "",
+        "",
+        25.0,
+        25.0,
+        ports=0,
+        determines="the docs page (QR) for this board's optimizer winner",
+        label=f"{tag} {sid} QR DOCS",
+        geometry=dict(region="M", lines=[], meanders=[], url=url),
+    )
+
+
 def _repo_root() -> str:
     """yapnr/rf/coupons/catalog.py -> the repo root (four directories up)."""
     import os
@@ -841,7 +864,11 @@ def o_optimized(stick_id: str, footprint_path: Optional[str]) -> dict:
     win["islands"] = dict(
         connected=[poly.tolist() for poly in connected],
         floating=[poly.tolist() for poly in floating],
-        source=footprint_path,
+        # repo-relative, not the absolute path `o_optimized` was called with: an absolute
+        # machine path baked into a committed catalog.json trips the privacy scan (and is not
+        # reproducible across checkouts) -- review of this change, caught by prek on O0-W's
+        # first real (non-placeholder) catalog.json commit.
+        source=os.path.relpath(footprint_path, _repo_root()),
     )
     win["hash8"] = hash8
     win["drc_ok"] = drc.ok
@@ -1221,6 +1248,7 @@ def _board_o(st, upload: str) -> Board:
                 d2_win,
             )
         )
+        s.append(_label_stick("B15", tag, d2_win.get("docs_url", f"{DOCS_URL}/D2")))
         trl["W"] = dict(
             family="W",
             dl=list(O_TRL_W),
@@ -1258,6 +1286,7 @@ def _board_o(st, upload: str) -> Board:
                 d1_win,
             )
         )
+        s.append(_label_stick("A15", tag, d1_win.get("docs_url", f"{DOCS_URL}/D1")))
         trl["M"] = dict(
             family="M",
             dl=list(O_TRL_D),

@@ -384,11 +384,13 @@ def step_prepare(a):
     graph = BoardGraph.from_json((inputs / "graph-full.json").read_text())
     if pblocks:
         # Each block's site is a placement keepout but for its anchor's courtyard (a fixed
-        # part inside a keepout counts as a violation): the four strips round it.
+        # part inside a keepout counts as a violation): the four strips round it, 0.5 mm off
+        # it (touching strips still counted U2 and U5 in 15 of 24 starts; no part fits 0.5 mm).
         by_ref = {c.ref: c for c in graph.components}
         for anchor, site in sorted(pblocks["sites"].items()):
             c = by_ref[anchor]
             w, h = c.courtyard if int(round(c.rot)) % 180 == 0 else c.courtyard[::-1]
+            w, h = w + 1.0, h + 1.0
             ax0, ay0, ax1, ay1 = (
                 c.pos[0] - w / 2,
                 c.pos[1] - h / 2,

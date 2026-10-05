@@ -44,7 +44,7 @@ memory_gb = 3
 max_wall_s = 900
 """
 
-LIVE_CAMPAIGN = CAMPAIGN + '\n[live]\nenabled = true\ninterval_s = 2\nmode = "full"\n'
+LIVE_CAMPAIGN = CAMPAIGN + '\n[live]\nenabled = true\ninterval_s = 10\nmode = "full"\n'
 
 
 @unittest.skipUnless(

@@ -1,0 +1,769 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="The live viewer" href="viewer.html"><link rel="prev" title="yapnr documentation" href="index.html">
+        <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Container images - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul class="current">
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/containers.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/containers.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="container-images">
+<h1>Container images<a class="headerlink" href="#container-images" title="Link to this heading">¶</a></h1>
+<p>People who only want to run yapnr need Docker and nothing else: the image bundles KiCad 10
+(<code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code> and the <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code> Python module), CPython 3.11 with numpy and CPU-only torch, and yapnr
+itself. Bazel is only for contributors (see <a class="reference internal" href="../DEVELOPERS.html"><span class="std std-doc">DEVELOPERS.md</span></a>).</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Image</p></th>
+<th class="head"><p>What</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code></p></td>
+<td><p>the yapnr command line, on top of the KiCad base</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr-kicad</span></code></p></td>
+<td><p>Ubuntu 24.04 with KiCad 10 from the KiCad team’s PPA, headless</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Both are built natively for <strong>linux/amd64</strong> and <strong>linux/arm64</strong> (Apple Silicon runs the arm64
+image without emulation), run as an unprivileged user (UID 1000), and carry an SBOM, build
+provenance and a GitHub attestation.</p>
+<blockquote>
+<div><p><strong>Status:</strong> the images are built and smoke-tested on every pull request that changes what goes
+into them, and <code class="docutils literal notranslate"><span class="pre">edge</span></code> is published from <code class="docutils literal notranslate"><span class="pre">main</span></code> whenever a merge changes it. The engine commands
+(<code class="docutils literal notranslate"><span class="pre">init</span></code>, <code class="docutils literal notranslate"><span class="pre">import</span></code>, <code class="docutils literal notranslate"><span class="pre">run</span></code>, <code class="docutils literal notranslate"><span class="pre">export</span></code>, the viewer) arrive with the migration pull requests; until
+then the image runs <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">--version</span></code> and <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">doctor</span></code>. The examples below that need those
+commands are marked as planned.</p>
+</div></blockquote>
+<section id="tags">
+<h2>Tags<a class="headerlink" href="#tags" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code>:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tag</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">X.Y.Z</span></code></p></td>
+<td><p>a release; never changes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">X.Y</span></code></p></td>
+<td><p>the newest patch release of <code class="docutils literal notranslate"><span class="pre">X.Y</span></code>: <strong>pin this</strong> (or a digest)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">latest</span></code></p></td>
+<td><p>the newest stable release</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">X.Y.Z-rc.N</span></code></p></td>
+<td><p>a release candidate</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">edge</span></code></p></td>
+<td><p>the newest image build of <code class="docutils literal notranslate"><span class="pre">main</span></code> (versions below)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sha-&lt;7&gt;</span></code></p></td>
+<td><p>the image of one <code class="docutils literal notranslate"><span class="pre">main</span></code> commit that changed the image (see below)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">X</span></code></p></td>
+<td><p>from 1.0 on: the newest release of major version <code class="docutils literal notranslate"><span class="pre">X</span></code> (never published while 0.x)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">edge</span></code> and <code class="docutils literal notranslate"><span class="pre">sha-&lt;7&gt;</span></code> are published only for the <code class="docutils literal notranslate"><span class="pre">main</span></code> commits that change what goes into an image
+(the code, the Dockerfiles, the locks, the notices); a documentation-only merge publishes nothing,
+so <code class="docutils literal notranslate"><span class="pre">edge</span></code> stays on the last image build. Their version is <code class="docutils literal notranslate"><span class="pre">X.Y.(Z+1).devN+g&lt;sha&gt;</span></code> after the
+release <code class="docutils literal notranslate"><span class="pre">vX.Y.Z</span></code>, <code class="docutils literal notranslate"><span class="pre">X.Y.Zrc(K+1).devN+g&lt;sha&gt;</span></code> after the release candidate <code class="docutils literal notranslate"><span class="pre">vX.Y.Z-rc.K</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">0.0.0.devN+g&lt;sha&gt;</span></code> before the first release.</p>
+<p>Pin <code class="docutils literal notranslate"><span class="pre">X.Y</span></code>, or a digest (<code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr&#64;sha256:...</span></code>) for reproducible runs. Results can
+change between minor versions (see <a class="reference internal" href="releases.html"><span class="std std-doc">releases</span></a>). They also differ between platforms
+(operating system and architecture, for example the arm64 image and a Mac): the same inputs and
+seed give a different board, of the same quality on average, because the torch builds round a few
+float operations differently (<a class="reference internal" href="decisions.html"><span class="std std-doc">decisions</span></a>). Compare runs on one platform. The KiCad
+version is part of the image, not of the tag: a KiCad patch update ships as a yapnr patch release.
+The image label <code class="docutils literal notranslate"><span class="pre">io.github.studio-fug.yapnr.kicad.version</span></code> and the release notes name it.</p>
+<p><code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr-kicad</span></code> is tagged <code class="docutils literal notranslate"><span class="pre">&lt;KiCad</span> <span class="pre">version&gt;-&lt;N&gt;</span></code> (for example <code class="docutils literal notranslate"><span class="pre">10.0.6-1</span></code>; <code class="docutils literal notranslate"><span class="pre">N</span></code>
+counts rebuilds of one KiCad version, and such a tag is never overwritten), plus the moving
+<code class="docutils literal notranslate"><span class="pre">10.0.6</span></code> and <code class="docutils literal notranslate"><span class="pre">10.0</span></code>. <code class="docutils literal notranslate"><span class="pre">10.0.6-1-src</span></code> holds the source packages of that KiCad build (see
+<a class="reference internal" href="#licenses-and-source">Licenses and source</a>). The base is rebuilt under a new <code class="docutils literal notranslate"><span class="pre">N</span></code> for Ubuntu
+security updates (see <a class="reference internal" href="releases.html#maintaining-the-images"><span class="std std-ref">releases</span></a>).</p>
+</section>
+<section id="quick-start">
+<h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/studio-fug/yapnr:edge<span class="w">          </span><span class="c1"># a release tag such as 0.1 once one exists</span>
+
+docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$IMG</span><span class="s2">&quot;</span><span class="w"> </span>doctor<span class="w">              </span><span class="c1"># the toolchain report (the default command)</span>
+docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$IMG</span><span class="s2">&quot;</span><span class="w"> </span>--version
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">doctor</span></code> prints the yapnr version and the source revision the image was built from, the Python,
+numpy and torch versions, and the KiCad CLI and KiCad Python the image is configured with.</p>
+<section id="working-on-a-project">
+<h3>Working on a project<a class="headerlink" href="#working-on-a-project" title="Link to this heading">¶</a></h3>
+<p>The project directory is bind-mounted at <code class="docutils literal notranslate"><span class="pre">/project</span></code>, the image’s working directory. On Linux,
+run as your own user so that new files belong to you:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-u<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">&quot;</span>:/project<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$IMG</span><span class="s2">&quot;</span><span class="w"> </span>doctor
+</pre></div>
+</div>
+<p>Planned (the commands arrive with PR3d to PR3f; the store defaults to <code class="docutils literal notranslate"><span class="pre">/project/.yapnr</span></code>):</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="nv">U</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">&quot;</span>
+docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-u<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$U</span><span class="s2">&quot;</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">&quot;</span>:/project<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$IMG</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>init<span class="w"> </span>--frontend<span class="w"> </span>kicad<span class="w"> </span>--from-kicad<span class="w"> </span>design/board.kicad_pro
+docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-u<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$U</span><span class="s2">&quot;</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">&quot;</span>:/project<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$IMG</span><span class="s2">&quot;</span><span class="w"> </span>import<span class="w"> </span>kicad<span class="w"> </span>design/board.kicad_pro
+
+<span class="c1"># A long run in its own container: detached by Docker, in the foreground inside it.</span>
+docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span>--name<span class="w"> </span>yapnr-run<span class="w"> </span>-u<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$U</span><span class="s2">&quot;</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">&quot;</span>:/project<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--cpus<span class="w"> </span><span class="m">6</span><span class="w"> </span>--memory<span class="w"> </span>12g<span class="w"> </span>--shm-size<span class="w"> </span>1g<span class="w"> </span>--pids-limit<span class="w"> </span><span class="m">4096</span><span class="w"> </span>-e<span class="w"> </span><span class="nv">OMP_NUM_THREADS</span><span class="o">=</span><span class="m">6</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--stop-timeout<span class="w"> </span><span class="m">120</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$IMG</span><span class="s2">&quot;</span><span class="w"> </span>run<span class="w"> </span>experiments/default.toml
+docker<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>yapnr-run
+docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>yapnr-run<span class="w"> </span>yapnr<span class="w"> </span>stop<span class="w"> </span>&lt;run-id&gt;<span class="w">     </span><span class="c1"># in the container that owns the run</span>
+
+<span class="c1"># The best candidate as a standalone KiCad project, with its DRC report.</span>
+docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-u<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$U</span><span class="s2">&quot;</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">&quot;</span>:/project<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$IMG</span><span class="s2">&quot;</span><span class="w"> </span><span class="nb">export</span><span class="w"> </span>kicad<span class="w"> </span>&lt;run-id&gt;:best<span class="w"> </span>-o<span class="w"> </span>out/board
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">stop</span></code> identifies processes by PID and start time, so it must run in the PID namespace of the
+run: use <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">exec</span></code> into the container that owns it.</p>
+</section>
+<section id="the-viewer-planned-pr4a">
+<h3>The viewer (planned, PR4a)<a class="headerlink" href="#the-viewer-planned-pr4a" title="Link to this heading">¶</a></h3>
+<p>The viewer serves the project store over HTTP on port 8781. It has no authentication: publish it on
+the loopback interface only, and use an SSH tunnel (<code class="docutils literal notranslate"><span class="pre">ssh</span> <span class="pre">-L</span> <span class="pre">8781:127.0.0.1:8781</span> <span class="pre">&lt;host&gt;</span></code>) or an
+authenticating reverse proxy for remote access. Never publish the port on all host interfaces.</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span>--name<span class="w"> </span>yapnr-viewer<span class="w"> </span>-u<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$U</span><span class="s2">&quot;</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">&quot;</span>:/project<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-p<span class="w"> </span><span class="m">127</span>.0.0.1:8781:8781<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$IMG</span><span class="s2">&quot;</span><span class="w"> </span>viewer<span class="w"> </span>--listen<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span>--port<span class="w"> </span><span class="m">8781</span>
+docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>yapnr-viewer<span class="w"> </span>yapnr<span class="w"> </span>run<span class="w"> </span>--detach<span class="w"> </span>experiments/default.toml<span class="w">   </span><span class="c1"># controls see this run</span>
+</pre></div>
+</div>
+</section>
+<section id="docker-compose">
+<h3>Docker Compose<a class="headerlink" href="#docker-compose" title="Link to this heading">¶</a></h3>
+<p>A <code class="docutils literal notranslate"><span class="pre">compose.yaml</span></code> next to the project (planned services marked; <code class="docutils literal notranslate"><span class="pre">doctor</span></code> works today):</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># YAPNR_UID=$(id -u) YAPNR_GID=$(id -g) docker compose run --rm doctor</span>
+<span class="c1"># YAPNR_UID=$(id -u) YAPNR_GID=$(id -g) docker compose up -d viewer      (planned, PR4a)</span>
+<span class="c1"># docker compose exec viewer yapnr run --detach experiments/default.toml</span>
+<span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">yapnr</span>
+<span class="nt">x-yapnr</span><span class="p">:</span><span class="w"> </span><span class="nl">&amp;yapnr</span>
+<span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/studio-fug/yapnr:${YAPNR_TAG:-edge}</span>
+<span class="w">  </span><span class="nt">user</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;${YAPNR_UID:-1000}:${YAPNR_GID:-1000}&#39;</span>
+<span class="w">  </span><span class="nt">volumes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&#39;./:/project&#39;</span><span class="p p-Indicator">]</span>
+<span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">doctor</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">&lt;&lt;</span><span class="p">:</span><span class="w"> </span><span class="nv">*yapnr</span>
+<span class="w">    </span><span class="nt">profiles</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tools</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">doctor</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">viewer</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">&lt;&lt;</span><span class="p">:</span><span class="w"> </span><span class="nv">*yapnr</span>
+<span class="w">    </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">viewer</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">--listen</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.0.0.0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">--port</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&#39;8781&#39;</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&#39;127.0.0.1:8781:8781&#39;</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">shm_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1g</span>
+<span class="w">    </span><span class="nt">stop_grace_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2m</span>
+<span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+<span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">test</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">[</span>
+<span class="w">          </span><span class="s">&#39;CMD&#39;</span><span class="p p-Indicator">,</span>
+<span class="w">          </span><span class="s">&#39;python&#39;</span><span class="p p-Indicator">,</span>
+<span class="w">          </span><span class="s">&#39;-c&#39;</span><span class="p p-Indicator">,</span>
+<span class="w">          </span><span class="s">&quot;import</span><span class="nv"> </span><span class="s">urllib.request</span><span class="nv"> </span><span class="s">as</span><span class="nv"> </span><span class="s">u;</span><span class="nv"> </span><span class="s">u.urlopen(&#39;http://127.0.0.1:8781/&#39;,</span><span class="nv"> </span><span class="s">timeout=3)&quot;</span><span class="p p-Indicator">,</span>
+<span class="w">        </span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
+<span class="w">  </span><span class="nt">batch</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">&lt;&lt;</span><span class="p">:</span><span class="w"> </span><span class="nv">*yapnr</span>
+<span class="w">    </span><span class="nt">profiles</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">batch</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">run</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">experiments/default.toml</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">shm_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1g</span>
+<span class="w">    </span><span class="nt">cpus</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6</span>
+<span class="w">    </span><span class="nt">mem_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12g</span>
+<span class="w">    </span><span class="nt">pids_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span>
+<span class="w">    </span><span class="nt">environment</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> OMP_NUM_THREADS</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;6&#39;</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">stop_grace_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2m</span>
+</pre></div>
+</div>
+<p>Compose cannot see the shell’s <code class="docutils literal notranslate"><span class="pre">UID</span></code> and <code class="docutils literal notranslate"><span class="pre">GID</span></code> (they are not exported, and <code class="docutils literal notranslate"><span class="pre">UID</span></code> is read-only in
+bash), hence <code class="docutils literal notranslate"><span class="pre">YAPNR_UID</span></code> and <code class="docutils literal notranslate"><span class="pre">YAPNR_GID</span></code>; a <code class="docutils literal notranslate"><span class="pre">.env</span></code> file next to <code class="docutils literal notranslate"><span class="pre">compose.yaml</span></code> works as well. The
+image defines no <code class="docutils literal notranslate"><span class="pre">HEALTHCHECK</span></code>, because it would mark every <code class="docutils literal notranslate"><span class="pre">run</span></code> or <code class="docutils literal notranslate"><span class="pre">doctor</span></code> container unhealthy;
+the viewer service brings its own.</p>
+</section>
+</section>
+<section id="users-file-ownership-and-permissions">
+<h2>Users, file ownership and permissions<a class="headerlink" href="#users-file-ownership-and-permissions" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>The image runs as <code class="docutils literal notranslate"><span class="pre">yapnr</span></code>, UID/GID 1000, with <code class="docutils literal notranslate"><span class="pre">HOME=/var/lib/yapnr</span></code>. Nothing needs root, and
+there is no <code class="docutils literal notranslate"><span class="pre">sudo</span></code>.</p></li>
+<li><p><strong>Any UID works.</strong> The entrypoint goes through <code class="docutils literal notranslate"><span class="pre">yapnr-kicad-env</span></code>, which gives a UID without a
+writable <code class="docutils literal notranslate"><span class="pre">HOME</span></code> a private one under <code class="docutils literal notranslate"><span class="pre">/tmp</span></code> and seeds KiCad’s global library tables there. The
+same holds for <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">exec</span> <span class="pre">&lt;container&gt;</span> <span class="pre">yapnr</span> <span class="pre">...</span></code>: <code class="docutils literal notranslate"><span class="pre">/usr/local/bin/yapnr</span></code> is the wrapper.</p></li>
+<li><p><strong>Linux hosts:</strong> pass <code class="docutils literal notranslate"><span class="pre">-u</span> <span class="pre">&quot;$(id</span> <span class="pre">-u):$(id</span> <span class="pre">-g)&quot;</span></code> so that files written to the project belong to
+you rather than to UID 1000.</p></li>
+<li><p><strong>macOS:</strong> Docker Desktop and OrbStack map ownership through their file sharing: files the
+container writes belong to your macOS user, and <code class="docutils literal notranslate"><span class="pre">-u</span></code> is not needed. The same holds for colima
+with virtiofs mounts (<code class="docutils literal notranslate"><span class="pre">colima</span> <span class="pre">start</span> <span class="pre">--vm-type</span> <span class="pre">vz</span> <span class="pre">--mount-type</span> <span class="pre">virtiofs</span></code>; checked with colima on
+2026-09-29: containers running as UID 1000 and 4242 both wrote to a project owned by the macOS
+user, and the files belonged to that user). colima’s sshfs and 9p mounts behave differently:
+there, write a test file first, and pass <code class="docutils literal notranslate"><span class="pre">-u</span> <span class="pre">&quot;$(id</span> <span class="pre">-u):$(id</span> <span class="pre">-g)&quot;</span></code> if it fails or lands with the
+wrong owner.</p></li>
+<li><p><strong>Rootless Podman:</strong> <code class="docutils literal notranslate"><span class="pre">--userns=keep-id</span></code>. <strong>SELinux hosts:</strong> add <code class="docutils literal notranslate"><span class="pre">:Z</span></code> to the bind mount
+(<code class="docutils literal notranslate"><span class="pre">-v</span> <span class="pre">&quot;$PWD&quot;:/project:Z</span></code>).</p></li>
+<li><p><strong>Read-only root file system:</strong> supported: <code class="docutils literal notranslate"><span class="pre">--read-only</span> <span class="pre">--tmpfs</span> <span class="pre">/tmp</span></code>.</p></li>
+</ul>
+</section>
+<section id="resources">
+<h2>Resources<a class="headerlink" href="#resources" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Shared memory.</strong> torch and the worker pools use <code class="docutils literal notranslate"><span class="pre">/dev/shm</span></code>, and Docker’s default is 64 MB:
+pass <code class="docutils literal notranslate"><span class="pre">--shm-size</span> <span class="pre">1g</span></code> for real runs.</p></li>
+<li><p><strong>CPU and memory.</strong> Limit a run with <code class="docutils literal notranslate"><span class="pre">--cpus</span></code> and <code class="docutils literal notranslate"><span class="pre">--memory</span></code>, and set <code class="docutils literal notranslate"><span class="pre">OMP_NUM_THREADS</span></code> to the
+same CPU count so torch does not oversubscribe. <code class="docutils literal notranslate"><span class="pre">--pids-limit</span> <span class="pre">4096</span></code> bounds the worker pools.</p></li>
+<li><p><strong>Stopping.</strong> <code class="docutils literal notranslate"><span class="pre">tini</span></code> is PID 1 and forwards signals, so <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">stop</span></code> asks yapnr to stop
+gracefully. Give it time: <code class="docutils literal notranslate"><span class="pre">--stop-timeout</span></code> (or compose’s <code class="docutils literal notranslate"><span class="pre">stop_grace_period</span></code>) at least as long
+as the longest worker timeout.</p></li>
+<li><p><strong>Store size.</strong> A project store can grow large. On macOS, bind mounts are slower than Docker
+volumes: for heavy runs, set <code class="docutils literal notranslate"><span class="pre">YAPNR_STORE=/store</span></code> with a named volume mounted there, and move
+results in and out with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">pack</span></code> and <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">unpack</span></code> (planned).</p></li>
+<li><p><strong>Nothing GUI-bound.</strong> There is no X or Wayland session and <code class="docutils literal notranslate"><span class="pre">DISPLAY</span></code> is never set; <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code>
+and <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code> run headless.</p></li>
+</ul>
+</section>
+<section id="apple-silicon">
+<h2>Apple Silicon<a class="headerlink" href="#apple-silicon" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Use the native <strong>arm64</strong> image (the default on an Apple Silicon host). It runs under Docker
+Desktop, colima, OrbStack or Podman without emulation.</p></li>
+<li><p>An amd64-only image, such as the official <code class="docutils literal notranslate"><span class="pre">kicad/kicad</span></code> image (its <code class="docutils literal notranslate"><span class="pre">9.0</span></code> and <code class="docutils literal notranslate"><span class="pre">10.0</span></code> tags are
+amd64-only, checked 2026-09-29; the planned CI KiCad lane of PR6a runs it), needs emulation:
+enable Rosetta (Docker Desktop: on by default from macOS 14.1; colima:
+<code class="docutils literal notranslate"><span class="pre">colima</span> <span class="pre">start</span> <span class="pre">--vm-type</span> <span class="pre">vz</span> <span class="pre">--vz-rosetta</span></code>). Rosetta costs about 20%; QEMU without it was measured
+six to eight times slower on KiCad work.</p></li>
+<li><p>Docker Desktop and colima run a VM with a fixed memory size: give it more than the run’s
+<code class="docutils literal notranslate"><span class="pre">--memory</span></code> plus the viewer. The Mac itself must stay awake during long runs (for example
+<code class="docutils literal notranslate"><span class="pre">caffeinate</span> <span class="pre">-i</span></code> around the session); keep-awake inside the container does nothing.</p></li>
+<li><p>Windows: Docker Desktop with WSL2 runs the linux/amd64 image. There is no native Windows support.</p></li>
+</ul>
+</section>
+<section id="what-is-inside">
+<h2>What is inside<a class="headerlink" href="#what-is-inside" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>What</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/usr/local/bin/yapnr</span></code></p></td>
+<td><p>the command line (the entrypoint, through <code class="docutils literal notranslate"><span class="pre">yapnr-kicad-env</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/opt/venv</span></code></p></td>
+<td><p>the controller: CPython 3.11 with the runtime lock (numpy, torch, …) and the yapnr wheel, whose <code class="docutils literal notranslate"><span class="pre">yapnr/rf/libyapnr_fdtd.so</span></code> is the RF solver’s native kernel (<a class="reference internal" href="rf-solver-backends.html"><span class="std std-doc">solver backends</span></a>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/opt/python</span></code></p></td>
+<td><p>that CPython, from python-build-standalone (installed by uv)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/usr/bin/kicad-cli</span></code></p></td>
+<td><p>KiCad’s command line</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/usr/bin/python3</span></code></p></td>
+<td><p>KiCad’s Python 3.12 with <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code>, for KiCad-side workers</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/usr/share/kicad/</span></code></p></td>
+<td><p>footprints, symbols and templates (no 3D models)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/etc/yapnr/kicad-seed/</span></code></p></td>
+<td><p>the global library tables every user starts from</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">LICENSE</span></code>, <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code>, <code class="docutils literal notranslate"><span class="pre">SOURCES</span></code> and <code class="docutils literal notranslate"><span class="pre">licenses/</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/project</span></code></p></td>
+<td><p>the working directory; mount the project here</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The controller Python and KiCad’s Python are separate on purpose: the controller runs Bazel’s
+exact interpreter and wheel versions (the runtime locks are pinned to <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code>), and
+KiCad-side code runs under KiCad’s own Python without torch. (KiCad’s Python cannot import
+<code class="docutils literal notranslate"><span class="pre">yapnr</span></code> from <code class="docutils literal notranslate"><span class="pre">/opt/venv</span></code> yet; the KiCad-side workers of PR6a get their own import path, with only
+yapnr’s pure-Python modules on it, and a smoke check.) <code class="docutils literal notranslate"><span class="pre">/opt/venv/bin</span></code> comes before
+<code class="docutils literal notranslate"><span class="pre">/usr/bin</span></code> on <code class="docutils literal notranslate"><span class="pre">PATH</span></code>, so a plain <code class="docutils literal notranslate"><span class="pre">python3</span></code> in the image is the controller; yapnr finds KiCad through
+these environment variables, which the image sets:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_CLI</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/usr/bin/kicad-cli</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_PYTHON</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/usr/bin/python3</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">YAPNR_SOURCE_REVISION</span></code></p></td>
+<td><p>the yapnr commit the image was built from</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">KICAD10_FOOTPRINT_DIR</span></code>, <code class="docutils literal notranslate"><span class="pre">KICAD10_SYMBOL_DIR</span></code>, …</p></td>
+<td><p>the stock libraries under <code class="docutils literal notranslate"><span class="pre">/usr/share/kicad</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>3D models</strong> are not included (<code class="docutils literal notranslate"><span class="pre">kicad-packages3d</span></code> is 3.3 GB installed). For
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">export</span> <span class="pre">kicad</span> <span class="pre">--with-3d</span></code> or GLB export, mount a host 3D library read-only:
+<code class="docutils literal notranslate"><span class="pre">-v</span> <span class="pre">/path/to/3dmodels:/usr/share/kicad/3dmodels:ro</span></code>.</p>
+<p>Sizes (linux/arm64): the KiCad base is about 1.6 GB unpacked, a 390 MB download; the yapnr image
+adds about 0.67 GB (CPython 0.12 GB, the runtime 0.55 GB), 2.3 GB unpacked and a 570 MB download in
+all. On linux/amd64 the CPU torch build is larger.</p>
+</section>
+<section id="verifying-an-image">
+<h2>Verifying an image<a class="headerlink" href="#verifying-an-image" title="Link to this heading">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/studio-fug/yapnr:0.1.0<span class="w"> </span>-R<span class="w"> </span>Studio-Fug/yapnr
+docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/studio-fug/yapnr:0.1.0<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{json .SBOM}}&#39;</span>
+docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/studio-fug/yapnr:0.1.0<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{json .Provenance}}&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="licenses-and-source">
+<h2>Licenses and source<a class="headerlink" href="#licenses-and-source" title="Link to this heading">¶</a></h2>
+<p>yapnr is <code class="docutils literal notranslate"><span class="pre">AGPL-3.0-or-later</span></code>; the image records its exact source (<code class="docutils literal notranslate"><span class="pre">YAPNR_SOURCE_REVISION</span></code>, the
+<code class="docutils literal notranslate"><span class="pre">org.opencontainers.image.revision</span></code> label), and release source archives are attached to each GitHub
+release. KiCad is <code class="docutils literal notranslate"><span class="pre">GPL-3.0-or-later</span></code> and its libraries are <code class="docutils literal notranslate"><span class="pre">CC-BY-SA-4.0</span></code> with the KiCad library
+exception; the image label <code class="docutils literal notranslate"><span class="pre">org.opencontainers.image.licenses</span></code> names the three.
+<a class="reference internal" href="../THIRD_PARTY.html"><span class="std std-doc">THIRD_PARTY.md</span></a> lists everything the images redistribute, including the native
+libraries inside the numpy and torch wheels and the libraries in the bundled CPython;
+<code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/SOURCES</span></code> in the image says where each part’s source is,
+<code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/licenses/</span></code> holds the license texts that are not elsewhere in the image, and
+<code class="docutils literal notranslate"><span class="pre">/usr/share/doc/&lt;package&gt;/copyright</span></code> holds the Ubuntu packages’ license texts.</p>
+<p>The KiCad team’s PPA deletes superseded builds, so pointing at it would not keep the corresponding
+source available. Every published base tag therefore has a companion image with the complete source
+packages of its KiCad build, for linux/amd64 and linux/arm64, which is never deleted. CI publishes
+it before the base tag, and a later run publishes it if it is ever missing:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>kicad-src<span class="w"> </span>ghcr.io/studio-fug/yapnr-kicad:10.0.6-1-src<span class="w"> </span>none
+docker<span class="w"> </span>cp<span class="w"> </span>kicad-src:/src<span class="w"> </span>./kicad-src<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>docker<span class="w"> </span>rm<span class="w"> </span>kicad-src
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">SOURCES</span></code> also names Launchpad’s snapshot of the PPA at the build time and the source files on
+Launchpad. The Ubuntu packages come from the archive state recorded at build time in
+<code class="docutils literal notranslate"><span class="pre">/etc/yapnr/ubuntu-snapshot</span></code> (a <a class="reference external" href="https://snapshot.ubuntu.com/">snapshot.ubuntu.com</a> ID, taken right
+after <code class="docutils literal notranslate"><span class="pre">apt-get</span> <span class="pre">update</span></code>, with every package upgraded to that state); <code class="docutils literal notranslate"><span class="pre">SOURCES</span></code> lists the exact source
+package versions, each of which Launchpad keeps at
+<code class="docutils literal notranslate"><span class="pre">https://launchpad.net/ubuntu/+source/&lt;package&gt;/&lt;version&gt;</span></code>:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--entrypoint<span class="w"> </span>cat<span class="w"> </span>ghcr.io/studio-fug/yapnr-kicad:10.0.6-1<span class="w"> </span>/usr/share/doc/yapnr/SOURCES
+</pre></div>
+</div>
+</section>
+<section id="building-the-images-locally">
+<h2>Building the images locally<a class="headerlink" href="#building-the-images-locally" title="Link to this heading">¶</a></h2>
+<p>Contributors with Docker and Bazel can build both images for their own architecture, load them into
+Docker and smoke-test them:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>tools/image/build_local.sh<span class="w">                         </span><span class="c1"># yapnr-kicad:local, then yapnr:local</span>
+tools/image/build_local.sh<span class="w"> </span>--base<span class="w"> </span>ghcr.io/studio-fug/yapnr-kicad:10.0.6-1<span class="w">   </span><span class="c1"># reuse the base</span>
+</pre></div>
+</div>
+<p>Each image is a few GB; remove them afterwards (<code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">image</span> <span class="pre">rm</span> <span class="pre">yapnr:local</span> <span class="pre">yapnr-kicad:local</span></code>).
+The pieces:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/Dockerfile</span></code>: the base. Its tag is <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/TAG</span></code>; any change to the
+directory needs a new tag. CI refuses to overwrite a published one: every run compares
+<code class="docutils literal notranslate"><span class="pre">tools/image/base_context.sh</span></code> with the published base’s <code class="docutils literal notranslate"><span class="pre">io.github.studio-fug.yapnr.kicad.context</span></code>
+label.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code>: the application image. The yapnr wheel comes from Bazel
+(<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">build</span> <span class="pre">//release:wheel.dist</span> <span class="pre">--stamp</span> <span class="pre">--embed_label=&lt;version&gt;</span></code>) through the named build
+context <code class="docutils literal notranslate"><span class="pre">dist</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/runtime-{arm64,amd64}.lock</span></code>: the hashed runtime locks, regenerated with
+<code class="docutils literal notranslate"><span class="pre">tools/image/update_runtime_locks.sh</span></code> after a runtime pin changes in <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code>
+(<code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_images.py</span></code> checks they agree).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tools/image/smoke_image.sh</span></code>: the smoke test CI runs on both architectures: <code class="docutils literal notranslate"><span class="pre">doctor</span> <span class="pre">--json</span></code>
+(Python 3.11, the numpy and torch pins, KiCad configured, the source revision),
+<code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">version</span></code>, and <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code> loading a footprint through the seeded library table, saving a
+board and running <code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">pcb</span> <span class="pre">drc</span></code> on it; as UID 1000, as an arbitrary UID, and with a
+read-only root file system; and the notices, license texts and recorded Ubuntu snapshot.</p></li>
+</ul>
+<p>CI: <code class="docutils literal notranslate"><span class="pre">.github/workflows/image.yaml</span></code> (see <a class="reference internal" href="releases.html#what-the-workflows-do"><span class="std std-ref">releases</span></a>).</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="viewer.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">The live viewer</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Home</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Container images</a><ul>
+<li><a class="reference internal" href="#tags">Tags</a></li>
+<li><a class="reference internal" href="#quick-start">Quick start</a><ul>
+<li><a class="reference internal" href="#working-on-a-project">Working on a project</a></li>
+<li><a class="reference internal" href="#the-viewer-planned-pr4a">The viewer (planned, PR4a)</a></li>
+<li><a class="reference internal" href="#docker-compose">Docker Compose</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#users-file-ownership-and-permissions">Users, file ownership and permissions</a></li>
+<li><a class="reference internal" href="#resources">Resources</a></li>
+<li><a class="reference internal" href="#apple-silicon">Apple Silicon</a></li>
+<li><a class="reference internal" href="#what-is-inside">What is inside</a></li>
+<li><a class="reference internal" href="#verifying-an-image">Verifying an image</a></li>
+<li><a class="reference internal" href="#licenses-and-source">Licenses and source</a></li>
+<li><a class="reference internal" href="#building-the-images-locally">Building the images locally</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

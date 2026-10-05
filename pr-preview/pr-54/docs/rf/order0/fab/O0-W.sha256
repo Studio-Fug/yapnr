@@ -1,0 +1,7 @@
+# O0-W fab bundle (D2 = d2-star-sched, hash8 03b7d938; QR stick B15), built from the board
+# committed on claude/order0-d1c (generator commit ee9da3f, silkscreen "gen ee9da3f") with:
+#   yapnr fab build examples/rf-coupons/order0/O0-W/O0-W.kicad_pcb \
+#     --vendor oshpark --profile oshpark-4l --stackup oshpark-4l-fr408hr --service standard
+# Rebuilds of the same board reorder Gerber flashes (same geometry, different bytes): the
+# release order0-prereg-o0-w attaches this exact zip; upload that zip, not a rebuild.
+3696fc607e69993aa0072fd569a187e39b28502723170e1b6364947e8a967a67  O0-W-oshpark-gerbers.zip

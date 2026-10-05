@@ -368,6 +368,8 @@ def form_planes(
     board.BuildConnectivity()
     added = 0
     left = []
+    # Declared pours (pnr.pour): their net's pads on their layer are the pour's.
+    poured = [(e["net"], copper_layer(board, e["layer"])) for e in (rules or {}).get("pours") or []]
     for net in sorted(stack.plane_nets):
         code = codes.get(net)
         if code is None:
@@ -378,6 +380,7 @@ def form_planes(
             for pad in fp.Pads()
             if pad.GetNetCode() == code
             and pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
+            and not any(n == net and pad.IsOnLayer(lid) for n, lid in poured)
             and not _has_through_access(board, pad)
         ]
         if unreached and (rules or {}).get("plane_fallback_drops", True) is False:

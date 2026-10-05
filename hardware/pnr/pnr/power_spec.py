@@ -238,6 +238,47 @@ def _outer(entry, where) -> Dict:
     return out
 
 
+POUR_KEYS = {"layer", "net", "stitch", "connect", "clearance_mm", "min_width_mm"}
+
+
+def parse_pour(raw) -> List[Dict]:
+    """The ``pour`` list, validated: ``[{layer, net, stitch, connect, clearance_mm,
+    min_width_mm}]`` (pnr.pour)."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise PowerSpecError("pour must be a list of entries")
+    out = []
+    seen = set()
+    for k, entry in enumerate(raw):
+        where = "pour[%d]" % k
+        if not isinstance(entry, dict):
+            raise PowerSpecError(where + " must be a mapping")
+        bad = sorted(set(entry) - POUR_KEYS)
+        if bad:
+            raise PowerSpecError("%s: unknown key(s) %s" % (where, ", ".join(bad)))
+        layer, net = entry.get("layer"), entry.get("net")
+        if layer not in ("F.Cu", "B.Cu"):
+            raise PowerSpecError(where + ".layer is an outer layer (F.Cu or B.Cu)")
+        if not isinstance(net, str) or not net:
+            raise PowerSpecError(where + ".net names the pour's net")
+        if (layer, net) in seen:
+            raise PowerSpecError(where + ": one entry per layer and net")
+        seen.add((layer, net))
+        stitch = entry.get("stitch", True)
+        if not isinstance(stitch, bool):
+            raise PowerSpecError(where + ".stitch must be a boolean")
+        connect = entry.get("connect", "thermal")
+        if connect not in ("solid", "thermal"):
+            raise PowerSpecError(where + ".connect must be solid or thermal")
+        row = dict(layer=layer, net=net, stitch=stitch, connect=connect)
+        for key in ("clearance_mm", "min_width_mm"):
+            if entry.get(key) is not None:
+                row[key] = _num(entry[key], "%s.%s" % (where, key), True)
+        out.append(row)
+    return out
+
+
 def parse_ir_drop(raw) -> List[Dict]:
     """The ``ir_drop`` list, validated."""
     if raw is None:

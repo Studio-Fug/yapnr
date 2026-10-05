@@ -260,6 +260,9 @@ class CompiledConstraints:
     # reports (``ir_drop:``), pnr.power_spec; empty when not declared.
     plane_partitions: List[Dict] = field(default_factory=list)
     ir_drop: List[Dict] = field(default_factory=list)
+    # Outer-layer pours whose pads count as connected after the refill (``pour:``,
+    # pnr.power_spec / pnr.pour); empty when not declared.
+    pours: List[Dict] = field(default_factory=list)
 
     @property
     def hard(self) -> List[Constraint]:
@@ -532,6 +535,10 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             else {}
         ),
         **({"ir_drop": [dict(e) for e in compiled.ir_drop]} if compiled.ir_drop else {}),
+        # Declared only (pnr.pour): outer-layer pours whose pads the router leaves to them.
+        **(
+            {"pours": [dict(e) for e in compiled.pours]} if getattr(compiled, "pours", None) else {}
+        ),
     }
 
 
@@ -1184,6 +1191,7 @@ def compile_constraints(
         "fanout",
         "plane_partition",
         "ir_drop",
+        "pour",
     }
     for key in doc:
         if key not in known_keys:
@@ -1597,13 +1605,14 @@ def compile_constraints(
 
     # plane_partition / ir_drop: supply rails on a shared plane layer and their IR
     # reports (pnr.power_spec), validated here; the router and pnr.ir_extract use them.
-    partitions, ir_drop = [], []
-    if doc.get("plane_partition") is not None or doc.get("ir_drop") is not None:
-        from pnr.power_spec import PowerSpecError, parse_ir_drop, parse_partition
+    partitions, ir_drop, pours = [], [], []
+    if any(doc.get(k) is not None for k in ("plane_partition", "ir_drop", "pour")):
+        from pnr.power_spec import PowerSpecError, parse_ir_drop, parse_partition, parse_pour
 
         try:
             partitions = parse_partition(doc.get("plane_partition"))
             ir_drop = parse_ir_drop(doc.get("ir_drop"))
+            pours = parse_pour(doc.get("pour"))
         except PowerSpecError as error:
             raise ConstraintError(str(error)) from None
 
@@ -1626,6 +1635,7 @@ def compile_constraints(
         routing=_parse_routing(doc.get("board") or {}),
         plane_partitions=partitions,
         ir_drop=ir_drop,
+        pours=pours,
     )
 
 

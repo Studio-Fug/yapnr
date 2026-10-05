@@ -1206,6 +1206,14 @@ def route_board(
         from .pour import covered as poured_pads
 
         escape_skip |= poured_pads(poured)
+    pour_pads = set()
+    if rules and rules.get("pours"):
+        # Declared pours (pnr.pour): their net's pads on their layer join after the
+        # refill; no escape or plane drop is planned for them.
+        from pnr.pour import pads as declared_pour_pads
+
+        pour_pads = declared_pour_pads(grid, graph, rules["pours"])
+        escape_skip |= pour_pads
     guarded = fanouts is not None and any(
         e.get("protect_fanouts") for e in (rules or {}).get("plane_partition") or []
     )
@@ -1231,9 +1239,11 @@ def route_board(
         drop_pad_width=pad_drop_width,
         plane_access=plane_access,
         drop_span=drop_span,
-        **({"skip_pads": escape_skip} if fanouts is not None or poured else {}),
+        **({"skip_pads": escape_skip} if fanouts is not None or escape_skip else {}),
         **({"drop_reuse": _bottom_site_reuse(graph, rules)} if fanouts is not None else {}),
     )
+    if pour_pads:
+        plan.diagnostics["pour_pads"] = sorted("%s.%s" % p for p in pour_pads)
     if poured:
         from .escape import Escape
         from .grid import Cell as _Cell

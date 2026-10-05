@@ -809,6 +809,35 @@ as a pad outside its region does), connected pieces, area, the narrowest width a
 its trunk (`core_min_mm`), and the smallest gap between rails. `ir_drop` (below)
 measures the result on the routed board.
 
+### `pour` — an outer-layer pour whose pads count as connected after the refill
+
+A net poured on an outer layer (a GND flood on B.Cu, the fallback for bottom-side
+decoupling caps under an array and for connector returns) joins that net's pads on
+the layer itself: the router plans no escape and no plane drop for them (the escape
+diagnostics list them as `pour_pads`), and writeback's fallback drops leave them
+alone.
+
+```yaml
+pour:
+  - layer: B.Cu # an outer layer
+    net: GND
+    stitch: true # stitch islands with pads to the net's other zones (default true)
+    connect: thermal # the zone's pad connection: solid or thermal (default)
+    clearance_mm: 0.2 # default: the fab clearance
+    min_width_mm: 0.15 # default: the fab track width
+```
+
+`pnr.planes` (KiCad's Python; both the planes and the refill steps run it) draws the
+pour over the outline where the board has no zone of that name yet, at priority 0 so
+every other zone of the layer fills first, fills it, and judges it after the fill
+(`pnr/pour.py`): each filled island that holds a pad of the net but no via or plated
+hole of it gets a through via at the site nearest its pads where the via's land lies
+inside the island, it clears every other net's copper on every layer by the
+clearance, and another zone of the net (its plane) fills there; then the board is
+refilled. An island without such a site is reported (`planes: pours {...}`, a
+warning per island). KiCad's DRC remains the judge of what is connected. Without the
+section nothing changes.
+
 ### `ir_drop` — the DC drop of a supply rail
 
 Asks for a report of a rail's copper resistance on the routed board. It is a

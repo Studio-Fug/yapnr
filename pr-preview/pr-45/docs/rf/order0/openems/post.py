@@ -3,7 +3,10 @@
 
     python3 post.py RUNS_DIR --out DIR
 
-RUNS_DIR holds one directory per run (``<model>-p<n>``, each with ``result.json``). For every
+RUNS_DIR holds one directory per run (``<model>-p<n>``, each with ``result.json`` or, for the
+larger models, the gzipped ``result.json.gz`` committed instead to stay under the repo's 600 KB
+file-size check — this is intermediate raw evidence; the registered artifacts are the Touchstone
+files this script writes). For every
 model the S-matrix is S = B A⁻¹ from the waves of all its excitations; a run that was not made
 is taken from the model's symmetry (SYMMETRY: the port permutation that maps the model onto
 itself, D1/R1 mirror P2 and P3, the lines and sticks swap P1 and P2). The S-matrix is then
@@ -16,6 +19,7 @@ Standard library and numpy only (it runs on the Mac or in the openEMS image).
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import math
 import os
@@ -32,7 +36,8 @@ SYMMETRY = {
 
 
 def load(path: str) -> dict:
-    with open(path, encoding="utf-8") as fh:
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8") as fh:
         r = json.load(fh)
     f = np.asarray(r["f_hz"])
     ports = {}
@@ -123,7 +128,9 @@ def collect(runs_dir: str) -> dict:
     for d in sorted(os.listdir(runs_dir)):
         p = os.path.join(runs_dir, d, "result.json")
         if not os.path.isfile(p):
-            continue
+            p += ".gz"
+            if not os.path.isfile(p):
+                continue
         r = load(p)
         model = r["raw"]["model"]
         if r["raw"].get("kind") == "msl":  # one model at several meshes: d1-r05, d1-r025

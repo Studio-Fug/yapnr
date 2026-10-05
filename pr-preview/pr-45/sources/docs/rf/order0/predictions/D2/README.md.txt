@@ -1,11 +1,21 @@
 # D2: the optimizer's thick divider
 
-**Compute stage, 2026-10-04 (drafts).** No formulation passes (8 in two waves,
-[runs/](runs/), [selection.json](selection.json); wave 2: [inputs/wave2/](../../inputs/wave2/)).
-The nearest misses fail only the coarse-grid \|S21\| limit (−3.40 dB), by 0.012 dB at 5.75 GHz,
-and pass fine and finer; R1t reaches −3.549 dB on the same substrate. Whether O0-W carries the
-nearest miss (`d2-star-sched`, re-validated on W-eq, W-nom and W-eq-em528 in
-[variants/](variants/)) as a pre-registered failing design is the owner's decision.
+**Compute stage, 2026-10-04 (corrected on review).** No formulation meets the −20 dB \|S11\|
+production spec (8 formulations in two waves, [runs/](runs/), [selection.json](selection.json);
+wave 2: [inputs/wave2/](../../inputs/wave2/)); the nearest, `d2-star-sched`, reaches worst
+\|S11\| ≈ −19.3 to −19.4 dB (coarse/fine/finer), a 0.6–0.7 dB miss.
+
+**\|S21\|/\|S31\| validation, corrected:** an earlier draft of this page checked `d2-star-sched`
+against −3.40 dB (coarse) / −3.55 dB (fine, finer), figures with no recorded decision behind
+them, and reported a 0.012 dB miss at the coarse grid. The design's §4.4 fixed validation limits
+are actually **−3.45 dB (coarse) / −3.6 dB (fine, finer)**, unchanged by D-O0-11 (which sets only
+the −3.4/−3.5 dB production spec, not this separate validation margin). Against the plan's own
+limits, `d2-star-sched` **passes** \|S21\|/\|S31\| at every grid (coarse −3.412, fine −3.397,
+finer −3.394 dB, all above −3.45/−3.6 respectively). So D2's only real miss is \|S11\|, not
+\|S21\|; R1t reaches −3.549 dB on the same substrate. Whether O0-W carries `d2-star-sched`
+(re-validated on W-eq, W-nom and W-eq-em528 in [variants/](variants/)) as a pre-registered
+\|S11\|-missing design is the owner's decision; recorded here as `compute.md`'s recommendation
+absent other owner direction.
 
 Region W (L1 over B.Cu, inner layers removed), window 20 × 24 mm, ports W / N / S, 4.25-5.75 GHz
 (Order 0 design §4.4). Its specs (one per formulation), criteria and substrate are in

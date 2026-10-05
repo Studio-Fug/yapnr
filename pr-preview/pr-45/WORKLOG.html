@@ -221,6 +221,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/fab-and-ordering.html">Fab bundles and staged orders</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -297,16 +298,35 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-04 (RF round 2 with the native FDTD kernel on <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>, merged
-with <code class="docutils literal notranslate"><span class="pre">main</span></code>; the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the engine’s fixes for
-them on <code class="docutils literal notranslate"><span class="pre">claude/gap-fixes</span></code>, with <code class="docutils literal notranslate"><span class="pre">claude/gap-constraints</span></code> merged; the gloss port’s review fixes on
-<code class="docutils literal notranslate"><span class="pre">claude/gloss-port</span></code>). Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on
-<code class="docutils literal notranslate"><span class="pre">claude/fab-order</span></code>. Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile
-toolchain and the privacy-scan trailer rule merged; line groups, hard board edges, the
-hierarchical ladder driver and their animations on <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>.</p>
+<p>Last updated: 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
+<code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>). Earlier the same day: RF round 2 with the native FDTD kernel
+on <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>, merged with <code class="docutils literal notranslate"><span class="pre">main</span></code>; the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the
+engine’s fixes for them on <code class="docutils literal notranslate"><span class="pre">claude/gap-fixes</span></code>, with <code class="docutils literal notranslate"><span class="pre">claude/gap-constraints</span></code> merged; the gloss
+port’s review fixes on <code class="docutils literal notranslate"><span class="pre">claude/gloss-port</span></code>. Before that, 2026-10-02: fab outputs and staged
+ordering, F2, F1 and O1, on <code class="docutils literal notranslate"><span class="pre">claude/fab-order</span></code>. Before that, 2026-09-30: PR4, #10, the ladder
+animations, the atopile toolchain and the privacy-scan trailer rule merged; line groups, hard
+board edges, the hierarchical ladder driver and their animations on
+<code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>.</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul>
+<li><p><strong>Routing engine for radar60 Rev A, stage 3b</strong> (#49, branch <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>;
+all opt-in, byte-identical where undeclared). Router: pad-local clearance and mask margin (data),
+<code class="docutils literal notranslate"><span class="pre">board.class_clearance:</span> <span class="pre">maze</span> <span class="pre">|</span> <span class="pre">repair</span></code>, <code class="docutils literal notranslate"><span class="pre">board.dru_routing</span></code> (a board’s <code class="docutils literal notranslate"><span class="pre">.kicad_dru</span></code> where it
+constrains routing; the rest listed as unmodelled), <code class="docutils literal notranslate"><span class="pre">board.edge:</span> <span class="pre">exact</span></code>, and SMD lands on the
+far side of their footprint (<code class="docutils literal notranslate"><span class="pre">Pad.far_side</span></code>). Power: partial fanouts (the fanout’s
+<code class="docutils literal notranslate"><span class="pre">partial</span></code>: bridge, retry), <code class="docutils literal notranslate"><span class="pre">plane_partition</span></code> (connected per-rail territories on a power
+layer; trees only where a zone of the minimum width fills, foreign copper at the pair’s class
+clearance) and <code class="docutils literal notranslate"><span class="pre">ir_drop</span></code>
+(a resistive network per rail on the refilled board; <code class="docutils literal notranslate"><span class="pre">unsolved</span></code> when CG stops short; the solve
+runs in <code class="docutils literal notranslate"><span class="pre">PNR_PYTHON</span></code> where KiCad’s Python has no numpy). New hard rungs <code class="docutils literal notranslate"><span class="pre">11-ufbga201-...-classes</span></code>,
+<code class="docutils literal notranslate"><span class="pre">-partial</span></code> (run.py excuses a spec’s <code class="docutils literal notranslate"><span class="pre">designed_open</span></code> pads, held exact by its <code class="docutils literal notranslate"><span class="pre">unconnected</span></code>
+check) and <code class="docutils literal notranslate"><span class="pre">-rails</span></code>. Identity regression against <code class="docutils literal notranslate"><span class="pre">main</span></code> (GCP C4D, <code class="docutils literal notranslate"><span class="pre">--compact</span> <span class="pre">--gloss</span></code>, 78
+shared cells): placed, routes and rules identical in all; boards identical modulo segment
+direction in 77, the 78th (<code class="docutils literal notranslate"><span class="pre">-block</span></code> s1) differs after the gloss stage only (its pre-gloss
+board is identical; KiCad’s dangling check on a 0.035 mm segment depends on the direction the
+gloss writes); 78/78 same verdict. Next: the radar trial’s open items (the U2 power stage
+escapes, LVDS as coupled pairs (A8), 1V2/1V8 delivery, the PA corner with macro v2).</p></li>
 <li><p><strong>RF microstrip inverse design</strong> (#29, branch <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>; design
 <a class="reference internal" href="docs/design/rf-topology-optimization.html"><span class="std std-doc">docs/design/rf-topology-optimization.md</span></a>, guide
 <a class="reference internal" href="docs/rf-inverse-design.html"><span class="std std-doc">docs/rf-inverse-design.md</span></a>, choices in
@@ -496,14 +516,28 @@ FR408HR (EM528 shares them), coupon predictions on both substrates; board B move
 JLC06161H-2116C with a mask-off tie line. All DRC-clean; <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">check</span></code> 0 errors. Next: D1/D2
 copper and the R1/R1t FDTD predictions (#29 round 2), the fab bundles, the pre-registration
 release, the capture tooling (WP7).</p></li>
-<li><p><strong>Order 0 part 2, setup</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/order0-p2</span></code>, main + <code class="docutils literal notranslate"><span class="pre">claude/order0</span></code>): RF stage plans
+<li><p><strong>Order 0 part 2</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/order0-p2</span></code>, main + <code class="docutils literal notranslate"><span class="pre">claude/order0</span></code>): RF stage plans
 require the native FDTD library and pass <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code>, backend, dtype and <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_*</span></code>
 per job, <code class="docutils literal notranslate"><span class="pre">--image-commit</span></code> refuses a bundle whose C sources are not the image’s (PR #30 review
 follow-up); <code class="docutils literal notranslate"><span class="pre">yapnr.rf.coupons.equivalent</span></code> (2D thickness-equivalent substrates of regions M and
 W on FR408HR and EM528, matched to the coupon model’s line at 5 GHz); <code class="docutils literal notranslate"><span class="pre">yapnr.rf.order0</span></code> (D1/D2
 specs in four formulations, the selection rule, criteria, forward-run directories of R1/R1t and
 of run 0b’s loss lines, the loss correction and D-O0-11); <a class="reference internal" href="docs/rf/order0/demos.html"><span class="std std-doc">docs/rf/order0/demos.md</span></a>
-and the generated <a class="reference internal" href="#docs/rf/order0/inputs/"><span class="xref myst">inputs</span></a>. Run 0b on GCP Batch (C4, Montreal).</p></li>
+and the generated <a class="reference internal" href="#docs/rf/order0/inputs/"><span class="xref myst">inputs</span></a>. Run 0b and the D1/D2 compute stage on GCP
+Batch (C4 Montreal, C4D us-west4); <code class="docutils literal notranslate"><span class="pre">d1-star</span></code> passes all three validation grids and is merged
+into O0-D’s window (<code class="docutils literal notranslate"><span class="pre">catalog.o_optimized</span></code>, one real DRC clearance call left for the owner); no
+D2 formulation passes (closest miss 0.012 dB). openEMS-vs-yapnr.rf predictions collected
+(D-O0-13a); pre-registration bundle and manifest in <code class="docutils literal notranslate"><span class="pre">docs/rf/order0/</span></code>. Open: the D1 island/DRC
+and D2 near-miss decisions, the release/OpenTimestamps step (owner).</p></li>
+<li><p><strong>Palace, the second RF solver</strong> (#46, branch <code class="docutils literal notranslate"><span class="pre">claude/palace</span></code>; guide
+<a class="reference internal" href="docs/rf-palace.html"><span class="std std-doc">docs/rf-palace.md</span></a>, image <code class="docutils literal notranslate"><span class="pre">docker/palace</span></code>): planar documents
+(<code class="docutils literal notranslate"><span class="pre">yapnr.rf.planar</span></code>: lines, the radar60 patch and feed models, KiCad regions with footprint pads;
+lossy <code class="docutils literal notranslate"><span class="pre">metal</span></code> floor; solder mask over solid copper), the Gmsh builder, configurations checked
+against Palace’s schema, the validated sign-off settings (<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.palace</span> <span class="pre">case</span></code>),
+<code class="docutils literal notranslate"><span class="pre">yapnr.rf.palace.results</span></code>, and <code class="docutils literal notranslate"><span class="pre">palace_plan.py</span></code>/<code class="docutils literal notranslate"><span class="pre">palace_job.py</span></code> campaigns with stages. Validated
+against openEMS and the 2D cross-section solver on the radar60 lines, single patch and TX1
+feed; two reviews’ fixes in. Open: Palace issues to report upstream, a rank-scaling run before
+the bank model, the image’s ParMETIS licence (owner).</p></li>
 </ul>
 </section>
 <section id="next">

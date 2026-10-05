@@ -221,6 +221,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../fab-and-ordering.html">Fab bundles and staged orders</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../releases.html">Releases and versioning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -295,12 +296,21 @@
         <article role="main" id="furo-main-content">
           <section id="d2-the-optimizer-s-thick-divider">
 <h1>D2: the optimizer’s thick divider<a class="headerlink" href="#d2-the-optimizer-s-thick-divider" title="Link to this heading">¶</a></h1>
-<p><strong>Compute stage, 2026-10-04 (drafts).</strong> No formulation passes (8 in two waves,
-<a class="reference internal" href="#runs/"><span class="xref myst">runs/</span></a>, <a class="reference internal" href="#selection.json"><span class="xref myst">selection.json</span></a>; wave 2: <a class="reference internal" href="#../../inputs/wave2/"><span class="xref myst">inputs/wave2/</span></a>).
-The nearest misses fail only the coarse-grid |S21| limit (−3.40 dB), by 0.012 dB at 5.75 GHz,
-and pass fine and finer; R1t reaches −3.549 dB on the same substrate. Whether O0-W carries the
-nearest miss (<code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>, re-validated on W-eq, W-nom and W-eq-em528 in
-<a class="reference internal" href="#variants/"><span class="xref myst">variants/</span></a>) as a pre-registered failing design is the owner’s decision.</p>
+<p><strong>Compute stage, 2026-10-04 (corrected on review).</strong> No formulation meets the −20 dB |S11|
+production spec (8 formulations in two waves, <a class="reference internal" href="#runs/"><span class="xref myst">runs/</span></a>, <a class="reference internal" href="#selection.json"><span class="xref myst">selection.json</span></a>;
+wave 2: <a class="reference internal" href="#../../inputs/wave2/"><span class="xref myst">inputs/wave2/</span></a>); the nearest, <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>, reaches worst
+|S11| ≈ −19.3 to −19.4 dB (coarse/fine/finer), a 0.6–0.7 dB miss.</p>
+<p><strong>|S21|/|S31| validation, corrected:</strong> an earlier draft of this page checked <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>
+against −3.40 dB (coarse) / −3.55 dB (fine, finer), figures with no recorded decision behind
+them, and reported a 0.012 dB miss at the coarse grid. The design’s §4.4 fixed validation limits
+are actually <strong>−3.45 dB (coarse) / −3.6 dB (fine, finer)</strong>, unchanged by D-O0-11 (which sets only
+the −3.4/−3.5 dB production spec, not this separate validation margin). Against the plan’s own
+limits, <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code> <strong>passes</strong> |S21|/|S31| at every grid (coarse −3.412, fine −3.397,
+finer −3.394 dB, all above −3.45/−3.6 respectively). So D2’s only real miss is |S11|, not
+|S21|; R1t reaches −3.549 dB on the same substrate. Whether O0-W carries <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>
+(re-validated on W-eq, W-nom and W-eq-em528 in <a class="reference internal" href="#variants/"><span class="xref myst">variants/</span></a>) as a pre-registered
+|S11|-missing design is the owner’s decision; recorded here as <code class="docutils literal notranslate"><span class="pre">compute.md</span></code>’s recommendation
+absent other owner direction.</p>
 <p>Region W (L1 over B.Cu, inner layers removed), window 20 × 24 mm, ports W / N / S, 4.25-5.75 GHz
 (Order 0 design §4.4). Its specs (one per formulation), criteria and substrate are in
 <a class="reference internal" href="#../../inputs/"><span class="xref myst">inputs/</span></a> and explained in <a class="reference internal" href="../../demos.html"><span class="std std-doc">demos</span></a>. If D2 ships, this directory

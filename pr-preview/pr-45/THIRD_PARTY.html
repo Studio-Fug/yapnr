@@ -221,6 +221,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/fab-and-ordering.html">Fab bundles and staged orders</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -345,6 +346,26 @@ description of the Batch REST API, as mirrored by
 <code class="docutils literal notranslate"><span class="pre">110244b02140866ee37d17fa7449436a377ec3b85a481fbb208f4c87964382de</span></code>). <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code> validates
 the Batch jobs it renders against it, offline; it is data of <code class="docutils literal notranslate"><span class="pre">//yapnr/exp</span></code>, not part of the
 wheel.</p></li>
+</ul>
+</section>
+<section id="palace-configuration-schema">
+<h3>Palace configuration schema<a class="headerlink" href="#palace-configuration-schema" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>What:</strong> the JSON schema of <a class="reference external" href="https://github.com/awslabs/palace">AWS Palace</a>’s configuration
+files (<code class="docutils literal notranslate"><span class="pre">scripts/schema/config-schema.json</span></code>, schema version 2-1-0) at commit
+<code class="docutils literal notranslate"><span class="pre">b797ea8060a52241cd9ab1176199f06af8585816</span></code> (main, 2026-10-02), the commit the Palace task image
+builds. Palace validates every configuration against the same document at start-up.</p></li>
+<li><p><strong>License:</strong> Apache-2.0 (Palace’s <code class="docutils literal notranslate"><span class="pre">LICENSE</span></code> and <code class="docutils literal notranslate"><span class="pre">NOTICE</span></code>, kept next to it).</p></li>
+<li><p><strong>How:</strong> vendored unmodified as <code class="docutils literal notranslate"><span class="pre">third_party/palace/config-schema.json</span></code> (sha256
+<code class="docutils literal notranslate"><span class="pre">8f8dbd5588fee4cef97c0a83459ba2b721eb371af4356abd970ac301df4e4b7c</span></code>), with
+<code class="docutils literal notranslate"><span class="pre">third_party/palace/LICENSE</span></code> (sha256
+<code class="docutils literal notranslate"><span class="pre">09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b</span></code>) and
+<code class="docutils literal notranslate"><span class="pre">third_party/palace/NOTICE</span></code> (sha256
+<code class="docutils literal notranslate"><span class="pre">d4290ed64c2edd0fce1d84e3f9dfb2881240fe534def76b8cd29ed6af683e287</span></code>). <code class="docutils literal notranslate"><span class="pre">yapnr.rf.palace</span></code>
+validates the configurations it writes against it, offline
+(<a class="reference internal" href="docs/rf-palace.html"><span class="std std-doc">docs/rf-palace.md</span></a>); it is data of <code class="docutils literal notranslate"><span class="pre">//yapnr/rf/palace</span></code>, not part of the
+wheel. Palace itself is never linked or imported: it runs as a separate program in its own
+task image.</p></li>
 </ul>
 </section>
 </section>
@@ -509,6 +530,7 @@ of the wheel or the container images.</p></li>
 <li><a class="reference internal" href="#elkjs">elkjs</a></li>
 <li><a class="reference internal" href="#three-js">three.js</a></li>
 <li><a class="reference internal" href="#google-api-discovery-documents">Google API discovery documents</a></li>
+<li><a class="reference internal" href="#palace-configuration-schema">Palace configuration schema</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#in-the-container-images">In the container images</a></li>

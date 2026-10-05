@@ -39,6 +39,9 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
   pre-registered predictions and the measurement procedure.
 - [Cloud and HPC experiments](cloud-experiments.md): `yapnr exp` campaigns on a local pool, Google
   Cloud Batch (Spot VMs) or a Slurm allocation, with cost guards; the owner's bootstrap runbook.
+- [Palace models](rf-palace.md): one solver-neutral description of layered RF structures, its
+  adapters (generated lines, the radar60 patch and feeds, KiCad board regions), the Gmsh mesher and
+  the Palace configurations, checked against Palace's own schema.
 - [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
   CD4017B LED chaser, with an animation of each board's place and route.
 - [Constraints and hierarchy](constraints-and-hierarchy.md): a line of LEDs, parts held on the
@@ -79,6 +82,7 @@ rf-solver-backends
 fab-and-ordering
 releases
 rf-fab-coupons
+rf-palace
 cloud-experiments
 ```
 

@@ -485,6 +485,11 @@ class RungConsistency(unittest.TestCase):
                 self.assertEqual(layers, no_tracks)
                 if spec["constraints"].get("plane_partition"):
                     (part,) = spec["constraints"]["plane_partition"]
+                    if part.get("region"):
+                        # An outer pour (stage 3c E1): its layer stays a signal layer
+                        # elsewhere, not a dedicated plane, so it carries no entry here.
+                        self.assertNotIn(part["layer"], (layer for layer, _ in stack.dedicated))
+                        continue
                     self.assertEqual(
                         [n for layer, n in stack.dedicated if layer == part["layer"]],
                         part["nets"],

@@ -410,6 +410,16 @@ def step_prepare(a):
                         {"name": "%s_site_%d" % (anchor.lower(), k), "polygon": poly}
                     )
     held = hold_out(graph, macro_refs(a.macro_variant) + list((pblocks or {}).get("hold") or []))
+    if pblocks:
+        gone = {
+            c["address"]: c["ref"]
+            for c in json.loads((inputs / "graph-full.json").read_text())["components"]
+            if c["ref"] in set(pblocks["hold"]) and c.get("address")
+        }
+        kept = [c.address for c in graph.components if c.address]
+        (work / "pruned-selectors.json").write_text(
+            json.dumps(prune_held(doc, kept, gone), indent=1)
+        )
     (inputs / "graph.json").write_text(graph.to_json())
     graph_doc = json.loads((inputs / "graph.json").read_text())
     digital, r4 = _r4_region(doc, floorplan, graph_doc)
@@ -820,6 +830,88 @@ def step_finish(a):
     report["summary"]["board_sha256"] = hashlib.sha256(board.read_bytes()).hexdigest()
     (out_dir / "placement-report.json").write_text(json.dumps(report, indent=1, sort_keys=True))
     print(json.dumps(report["summary"], indent=1))
+
+
+def prune_held(doc, remaining, held):
+    """``doc`` without the part selectors (``@address`` globs) that match only held-out parts
+    (a fixed block's members, ``held``) and none of ``remaining``: the compiler refuses an
+    address it does not know. A group whose anchor or every member goes, a region, keepout or
+    side list left without parts, and an orientation or fixed pose of such a part go too.
+    With ``held`` a mapping (address to reference), the rails' parts (``ir_drop`` sources and
+    sinks, ``plane_partition`` sources) are named by reference instead: the fixed block's
+    footprints stay on the board those steps read. Returns the selectors dropped."""
+    import fnmatch as _fn
+
+    def held_only(sel):
+        if not isinstance(sel, str) or not sel.startswith("@"):
+            return False
+        pat = sel[1:]
+        return any(_fn.fnmatchcase(x, pat) for x in held) and not any(
+            _fn.fnmatchcase(x, pat) for x in remaining
+        )
+
+    dropped = set()
+
+    def keep(sels):
+        out = []
+        for x in sels:
+            if held_only(x):
+                dropped.add(x)
+            else:
+                out.append(x)
+        return out
+
+    groups = []
+    for g in doc.get("group") or []:
+        if held_only(g.get("anchor")):
+            dropped.add(g["anchor"])
+            continue
+        members = keep(g.get("members") or [])
+        if members:
+            groups.append(dict(g, members=members))
+    if "group" in doc:
+        doc["group"] = groups
+    for key in ("region", "keepout", "copper_keepout"):
+        rows = []
+        for r in doc.get(key) or []:
+            if "refs" in r:
+                r = dict(r, refs=keep(r["refs"]))
+                if not r["refs"]:
+                    continue
+            if held_only(r.get("ref")):
+                dropped.add(r["ref"])
+                continue
+            rows.append(r)
+        if key in doc:
+            doc[key] = rows
+    for key in ("orientation", "fixed"):
+        for sel in [x for x in doc.get(key) or {} if held_only(x)]:
+            dropped.add(sel)
+            del doc[key][sel]
+    for side, sels in list((doc.get("side") or {}).items()):
+        doc["side"][side] = keep(sels)
+    if isinstance(held, dict):
+
+        def by_ref(table):
+            out = {}
+            for sel, pads in table.items():
+                if held_only(sel):
+                    refs = [r for x, r in held.items() if _fn.fnmatchcase(x, sel[1:])]
+                    dropped.add(sel)
+                    for r in refs:
+                        out[r] = pads
+                else:
+                    out[sel] = pads
+            return out
+
+        for entry in doc.get("ir_drop") or []:
+            for key in ("sources", "sinks"):
+                if isinstance(entry.get(key), dict):
+                    entry[key] = by_ref(entry[key])
+        for entry in doc.get("plane_partition") or []:
+            for net, table in list((entry.get("sources") or {}).items()):
+                entry["sources"][net] = by_ref(table)
+    return sorted(dropped)
 
 
 def step_fixblocks(a):

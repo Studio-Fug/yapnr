@@ -163,6 +163,41 @@ class StageTest(unittest.TestCase):
             power_block.stage_spec(FLOORPLAN, "radio")
 
 
+class PruneHeldTest(unittest.TestCase):
+    def test_selectors_of_held_parts_go(self):
+        import integrate
+
+        doc = {
+            "group": [
+                {"anchor": "@pmic.u2", "members": ["@pmic.l_*"], "radius_mm": 8},
+                {"anchor": "@pmic.l_b2", "members": ["@pmic.r_sh"], "radius_mm": 4},
+                {"anchor": "@radio.u1", "members": ["@pmic.fb_rf1", "@pmic.c_in[[]0]"]},
+            ],
+            "region": [
+                {"name": "pmic_block", "refs": ["@pmic.u2", "@pmic.l_*", "@pmic.r_rst"]},
+                {"name": "sw", "refs": ["@pmic.l_*"]},
+            ],
+            "orientation": {"@pmic.l_b0": 90, "@radio.c_pa": 270},
+            "side": {"bottom": ["@pmic.c_snb0", "@radio.r_pa"]},
+        }
+        kept = ["pmic.u2", "pmic.r_rst", "pmic.fb_rf1", "radio.u1", "radio.c_pa", "radio.r_pa"]
+        held = ["pmic.l_b0", "pmic.l_b2", "pmic.r_sh", "pmic.c_in[0]", "pmic.c_snb0"]
+        dropped = integrate.prune_held(doc, kept, held)
+        self.assertEqual(
+            doc["group"],
+            [
+                {"anchor": "@pmic.u2", "members": [], "radius_mm": 8}
+                for _ in ()  # the U2 group lost every member: gone
+            ]
+            + [{"anchor": "@radio.u1", "members": ["@pmic.fb_rf1"]}],
+        )
+        self.assertEqual([r["refs"] for r in doc["region"]], [["@pmic.u2", "@pmic.r_rst"]])
+        self.assertEqual(doc["orientation"], {"@radio.c_pa": 270})
+        self.assertEqual(doc["side"], {"bottom": ["@radio.r_pa"]})
+        self.assertIn("@pmic.l_*", dropped)
+        self.assertIn("@pmic.c_in[[]0]", dropped)
+
+
 class RankTest(unittest.TestCase):
     def rec(self, **kw):
         base = dict(

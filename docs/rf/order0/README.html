@@ -337,9 +337,9 @@ the bounding rectangle, for 3 copies.</p>
 <td><p>33</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>O0-W</strong></p></td>
-<td><p>the thick-microstrip (region W) calibration set, R1t, the D2 window</p></td>
-<td><p>57.5 × 131.2 mm, 11.7 sq in</p></td>
-<td><p>$117</p></td>
+<td><p>the thick-microstrip (region W) calibration set, R1t, D2 (<code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>), QR B15</p></td>
+<td><p>54.0 × 158.7 mm, 13.3 sq in</p></td>
+<td><p>$133</p></td>
 <td><p>16</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>O0-D</strong></p></td>
@@ -351,9 +351,12 @@ the bounding rectangle, for 3 copies.</p>
 </tbody>
 </table>
 </div>
-<p>The D2 window is a placeholder: <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">check</span></code> refuses O0-W (<code class="docutils literal notranslate"><span class="pre">FAB-PLACEHOLDER</span></code>) until D2
-passes, or the owner decides to ship it empty or as a registered miss (outside this repo, see
-the PR description).</p>
+<p>O0-W carries D2’s nearest miss, <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code> (label <code class="docutils literal notranslate"><span class="pre">03b7d938</span></code>), as a pre-registered design
+that misses its spec, by the owner default recorded in the
+<a class="reference internal" href="preregistration.html"><span class="std std-doc">pre-registration</span></a> (the owner confirms or overrides it before the release),
+and the small QR stick B15 to <a class="reference internal" href="predictions/D2/README.html"><span class="std std-doc">predictions/D2</span></a>. Its Gerber zip’s sha256
+is in <a class="reference internal" href="#fab/O0-W.sha256"><span class="xref myst">fab/O0-W.sha256</span></a>. O0-D grows to about 118 × 50 mm, 9.2 sq in, with its own
+QR stick A15 when it is regenerated with the re-optimized D1.</p>
 <p>D1 passed (<code class="docutils literal notranslate"><span class="pre">d1-star</span></code>, label <code class="docutils literal notranslate"><span class="pre">O0</span> <span class="pre">D1</span> <span class="pre">divider-osh-m</span> <span class="pre">ad20e643</span></code>). <code class="docutils literal notranslate"><span class="pre">catalog.o_optimized</span></code> now merges
 its validated copper (<code class="docutils literal notranslate"><span class="pre">export.contour</span></code>’s own representation) into O0-D’s window as one custom
 pad (the main body, one net) plus the 14 floating etch islands as separate netless F.Cu fills
@@ -368,7 +371,7 @@ an owner call (see the PR description) before upload, so the checked-in
 <p>The KiCad projects, catalogues and DRC results are in
 <a class="reference internal" href="#../../../examples/rf-coupons/order0/README.md"><span class="xref myst">examples/rf-coupons/order0/</span></a>.</p>
 <p><img alt="O0-M, the top copper, mask openings (light) and silkscreen as KiCad renders them: one outline,the sticks held by tabs with three mouse-bite holes each side" src="../../../images/O0-M.png" /></p>
-<p><img alt="O0-W: the W calibration set, R1t and the empty D2 window" src="../../../images/O0-W.png" /></p>
+<p><img alt="O0-W: the W calibration set, R1t, the QR stick B15 and D2 (d2-star-sched) in its window" src="../../../images/O0-W.png" /></p>
 <p><img alt="O0-D: the empty D1 window, R1, and the thru and lines, turned 90°" src="../../../images/O0-D.png" /></p>
 <section id="cross-sections">
 <h3>Cross-sections<a class="headerlink" href="#cross-sections" title="Link to this heading">¶</a></h3>
@@ -513,9 +516,14 @@ with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.
 <td><p>the reference for D2</p></td>
 </tr>
 <tr class="row-odd"><td><p>D2</p></td>
-<td><p>window for the optimizer’s thick divider (20 × 24 mm), its feeds and keep-away</p></td>
+<td><p>the optimizer’s thick divider <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code> (20 × 24 mm window), feeds, keep-away</p></td>
 <td><p>40 × 52</p></td>
-<td><p><strong>placeholder</strong> until D2 passes validation</p></td>
+<td><p>D2: a pre-registered miss of its spec (owner default)</p></td>
+</tr>
+<tr class="row-even"><td><p>B15</p></td>
+<td><p>QR to predictions/D2 and the tag text</p></td>
+<td><p>25 × 25</p></td>
+<td><p>this page</p></td>
 </tr>
 </tbody>
 </table>

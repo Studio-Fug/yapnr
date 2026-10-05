@@ -424,7 +424,7 @@ not ship on Order 0; their rows are kept as written.</p>
 post-fit prediction (stackup fitted from the coupons), and against the spec. The instrument
 floor is drawn on every transmission plot.</p>
 <p>How the rows are applied (decided before any measurement; none of these changes a limit):</p>
-<ul class="simple">
+<ul>
 <li><p><strong>The prediction compared</strong> is the loss-corrected one (<a class="reference internal" href="#predictions/corrected/summary.json"><span class="xref myst">predictions/corrected/</span></a>):
 the solver’s |S21|, |S31| with the conductor loss it does not model added from the coupon
 model, per substrate. “Meets spec” uses −3.4 dB (run 0b, D-O0-11: the corrected R1 reaches
@@ -441,7 +441,33 @@ instrument floor).</p></li>
 <li><p><strong>D2</strong> ships only as the owner decides (no D2 formulation meets the −20 dB |S11| spec; the
 nearest, <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>, reaches −19.3 to −19.4 dB and passes its |S21|, |S31| validation
 limits, <a class="reference internal" href="predictions/D2/README.html"><span class="std std-doc">D2</span></a>). If it ships, it is judged by the same rows, labelled a
-design that missed its |S11| spec.</p></li>
+design that missed its spec (see below: |S11|, and loss-corrected |S21| on FR408HR).</p>
+<ul>
+<li><p><strong>Owner default (recorded by the main loop, 2026-10-04):</strong> <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code> ships on O0-W as
+this pre-registered near-miss unless the owner says otherwise. What its predictions say
+(yapnr.rf only; no independent solver has run on D2) [S]:</p>
+<ul class="simple">
+<li><p>|S11|: −19.3 to −19.4 dB on W-eq and W-nom (coarse/fine/finer), a 0.6-0.7 dB miss of the
+−20 dB spec; −19.9 to −20.1 dB on W-eq-em528.</p></li>
+<li><p>|S21| = |S31|, raw: inside the design’s validation limits (−3.45 dB coarse, −3.6 dB
+fine/finer) everywhere, but the committed in-job criteria (<a class="reference internal" href="#inputs/criteria/d2.json"><span class="xref myst">inputs/criteria/d2.json</span></a>:
+−3.40 dB coarse) fail on the coarse grid: −3.4117 dB (W-eq), −3.4205 dB (W-eq, wide pulse),
+−3.4334 dB (W-nom). Both versions are reported.</p></li>
+<li><p>|S21| = |S31|, loss-corrected (the prediction “meets spec” uses): −3.43 to −3.45 dB on
+W-eq and W-nom, a 0.03-0.05 dB miss of the −3.4 dB spec; −3.35 to −3.36 dB on W-eq-em528
+(<a class="reference internal" href="#predictions/corrected/summary.json"><span class="xref myst">predictions/corrected/</span></a>).</p></li>
+</ul>
+<p>So on FR408HR D2 is predicted to miss the spec on |S11| and, by a smaller margin, on
+loss-corrected |S21|/|S31|; it is judged by the same rows and labelled a design that
+missed its spec, not only its |S11| spec. The board carries the first 8 hex of its
+<code class="docutils literal notranslate"><span class="pre">result.json</span></code> sha256 (<code class="docutils literal notranslate"><span class="pre">03b7d938</span></code>, back silkscreen “O0-W D2 03b7d938”) and a QR label stick
+(B15) to its predictions page; its run id and fab-DRC status are in O0-W’s <code class="docutils literal notranslate"><span class="pre">catalog.json</span></code>
+(<code class="docutils literal notranslate"><span class="pre">catalog.o_optimized</span></code>), not in silkscreen. This default is
+a placeholder for the owner’s own sign-off, not a substitute for it: the row above (“ships
+only as the owner decides”) is the binding text until the owner confirms or overrides it.</p>
+</li>
+</ul>
+</li>
 <li><p>Criteria are never changed after data arrive; if one must be, results are reported against
 both versions.</p></li>
 </ul>

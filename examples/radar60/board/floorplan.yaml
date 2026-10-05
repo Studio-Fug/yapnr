@@ -94,6 +94,13 @@ power:
       current_a: 2.5
       budget_mohm: 0.5
 
+# R8: a GND flood on B.Cu, the fallback for the bottom-site decoupling caps (pa_cap, pa_r,
+# rf2_cap, pa_bulk, the QSPI/xtal series parts) and the connectors (J1/J3), whose GND pads the
+# fanout plan does not escape to an inner plane the way a top-side pad is. Defaults (stitch,
+# connect: thermal, clearance/width) match the fab profile (pnr-inputs.md "pour"); without this
+# section nothing changes, so it is additive to today's routing.
+pour: [{ layer: B.Cu, net: GND }]
+
 # Instance paths (atopile addresses) of the parts this file constrains: the interface to the
 # schematic track (examples/radar60/schematic, elec/src). Change a path here if the source names
 # it differently; every generated file follows. Globs match within the address.

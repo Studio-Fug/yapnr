@@ -298,6 +298,14 @@ class GeneratedConstraintsTest(unittest.TestCase):
         self.assertFalse(self.doc["board"]["plane_fallback_drops"])
         self.assertEqual(self.doc["legalize"]["order"], "scarcity")
 
+    def test_pour_section_is_the_bcu_gnd_fallback(self):
+        """R8/E6: floorplan.yaml's ``pour`` (a B.Cu GND flood, the fallback for bottom-side
+        parts the fanout plan does not escape to an inner plane) reaches constraints.yaml
+        field-for-field (gen_board.pour_sections). The engine side -- that this compiles to
+        the ``pours`` key pnr.planes/pnr.pour/the router read -- is verified directly against
+        pnr.power_spec.parse_pour, not hermetically (this file's contract is no engine)."""
+        self.assertEqual(self.doc["pour"], [{"layer": "B.Cu", "net": "GND"}])
+
     def test_slots_clear_the_planned_exit_bands(self):
         """The ball-anchored slots against the exit bands of the committed placement's plan
         (reva/placement-report.json carries them; skipped before a placement exists)."""

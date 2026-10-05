@@ -920,6 +920,9 @@ ir_drop:
     budget_mohm: 0.5
     temperature_c: 60
     two_point: false
+pour:
+  - layer: B.Cu
+    net: GND
 rf_macro:
   ref: '@rf_macro.rfm1'
   frame: '@radio.u1'

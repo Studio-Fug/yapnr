@@ -274,6 +274,15 @@ def power_sections(d):
     return out
 
 
+def pour_sections(d):
+    """``pour`` (plan R8/E6) from floorplan ``pour``: an outer-layer flood whose pads count as
+    connected after the refill (the fallback for bottom-side parts the fanout plan does not
+    escape to an inner plane). Passed through field-for-field; floorplan.yaml is the only
+    source of truth for its defaults, so this stays a direct copy, not a reinterpretation."""
+    pour = d.get("pour")
+    return {"pour": [dict(p) for p in pour]} if pour else {}
+
+
 def constraints(fp: Floorplan):
     """The yapnr constraint document (a dict; written with comments by :func:`constraints_text`)."""
     d = fp.doc
@@ -431,6 +440,7 @@ def constraints(fp: Floorplan):
             {"name": "lvds", "nets": lvds_nets, "tolerance_mm": lv["group_skew_mm"]},
         ],
         **power_sections(d),
+        **pour_sections(d),
         # Proposed sections (plan 3.4, 7.3): the current engine warns and ignores them.
         "rf_macro": {
             "ref": "@" + fp.part("rf_macro"),

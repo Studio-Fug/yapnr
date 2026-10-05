@@ -918,12 +918,15 @@ def normalize(segs, *, pinned=None, pin_points=(), covers_disc=None):
             or any(point_segment_distance(p, far[0], far[1]) > TOL for p in interior)
         ):
             continue
-        keep = live[min(members)]
-        a, b = (
-            (far[0], far[1])
-            if math.dist(keep.a, far[0]) <= math.dist(keep.a, far[1])
-            else (far[1], far[0])
-        )
+        # far is sorted (two elements), so (far[0], far[1]) is already the canonical,
+        # geometry-only direction: picking it does not depend on which member survives as
+        # `keep`. (`keep` itself is chosen by _seg_key, not by member id: KiCad assigns each
+        # segment a fresh random uuid per process, and `s.id` is that uuid, so choosing `keep`
+        # by `min(members)` or orienting a/b from `keep.a` -- as this used to -- made the
+        # surviving segment's drawn direction depend on it, differing between two processes
+        # given the same copper.)
+        keep = live[min(members, key=lambda sid: _seg_key(live[sid]))]
+        a, b = far[0], far[1]
         live[keep.id] = Seg(keep.id, a, b, keep.width, keep.locked, keep.frozen)
         modify[keep.id] = (a, b)
         for sid in sorted(members):

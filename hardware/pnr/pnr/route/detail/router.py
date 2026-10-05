@@ -13,6 +13,7 @@ Pure Python on the graph — no pcbnew. Deterministic under the grid's fixed ord
 
 from __future__ import annotations
 
+import fnmatch
 import math
 import os
 from dataclasses import dataclass, field
@@ -1183,7 +1184,7 @@ def route_board(
     # Outer pours (plane_partition entries with a region, pnr.route.detail.pour): the
     # territories are claimed on their layer, the pads they join need no escape or
     # drop, and a plane net's pour gets its stitching vias. Only when declared.
-    poured, stitched, outer_parts = {}, {}, []
+    poured, stitched, outer_parts, pieces = {}, {}, [], set()
     if rules and any(e.get("region") for e in rules.get("plane_partition") or []):
         from pnr.plane_partition import for_route as outer_route
 
@@ -1207,8 +1208,16 @@ def route_board(
             if e.get("region"):
                 for n in e["nets"]:
                     counts[n] = int(e.get("stitch_vias", 1))
+                    if any(fnmatch.fnmatchcase(n, p) for p in e.get("pieces") or ()):
+                        pieces.add(n)
         stitched = stitch_pours(
-            grid, poured, set(drop_widths), counts, plane_access, via_keepout=via_keepout
+            grid,
+            poured,
+            set(drop_widths),
+            counts,
+            plane_access,
+            via_keepout=via_keepout,
+            **({"pieces": pieces} if pieces else {}),
         )
     escape_skip = set(fanouts.skip_pads) if fanouts is not None else set()
     if poured:
@@ -1304,6 +1313,18 @@ def route_board(
             )
             for net, row in sorted(poured.items())
         }
+        if pieces:
+            # A piece no stitch reached: its pads have no way to the net's plane, a
+            # failure site like a plane pad without a drop (outer pour ``pieces`` only).
+            from .pour import unstitched as unstitched_pieces
+
+            for net, rows in unstitched_pieces(graph, poured, stitched, pieces).items():
+                plan.diagnostics["pours"][net]["unstitched"] = rows
+                plan.drop_failures[net] = sorted(
+                    set(plan.drop_failures.get(net, [])) | {tuple(x["at"]) for x in rows}
+                )
+        for net in sorted(pieces & set(poured)):
+            plan.diagnostics["pours"][net]["pieces"] = len(poured[net]["regions"])
     if guarded:
         grid.guard_access = None
     # PNR_COMPACT DROPS: the drops are planned and reserved; the maze's predicates never

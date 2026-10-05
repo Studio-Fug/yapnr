@@ -807,6 +807,7 @@ plane_partition:
     terminals: pad # whole lands (default reach: discs as on a plane layer)
     connect: solid # the zones' pad connection (or thermal; default: the zone's)
     stitch_vias: 4 # through vias into each pour of a net with a dedicated plane (default 1)
+    pieces: [5V_SYS, GND] # plane nets poured as pieces, each stitched on its own (default none)
     split_gap_mm: 0.2
     min_width_mm: 0.25
 ```
@@ -835,6 +836,17 @@ the pads a territory covers, gives a net whose other pads still route one access
 in its territory (the maze joins them to the pour), and drills `stitch_vias` through
 vias inside each pour of a net with a dedicated plane, at sites where a drop of that
 net may land. The escape diagnostics list each pour's pads and stitches (`pours`).
+
+With `pieces` (names or globs of the entry's nets that have a dedicated plane) such a
+net's pour need not be one piece on the layer: a row like a buck's VIN, SW, PGND, SW,
+VIN, whose switch nodes leave on both sides, cannot join its two VIN lands on the outer
+layer without crossing a switch node. The partition then grows no tree for that net:
+every terminal keeps its own land (and what the growth gives it), every piece that holds
+one becomes a zone, and the router drills up to `stitch_vias` through vias in each
+piece (nearest its centre), so each reaches the net's plane on its own. A piece no
+stitch fits in (walled in by the other rails) is listed under the pour's `unstitched`
+in the escape diagnostics and is a failure site of its net, like a plane pad without a
+drop. Without the key nothing changes.
 
 The route's escape diagnostics carry a `plane_partition` report per layer: per rail
 its current, width (and the IPC and budget widths), tree length, terminals reached,

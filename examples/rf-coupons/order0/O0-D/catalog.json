@@ -1395,7 +1395,7 @@
           "hash8": "7e070ca8",
           "drc_ok": true,
           "drc_violations": [],
-          "docs_url": "https://github.com/Studio-Fug/yapnr/tree/main/docs/rf/order0/predictions/D1",
+          "docs_url": "https://github.com/Studio-Fug/yapnr/tree/main/docs/rf/order0/predictions/D1-d1c",
           "x0": 13.0,
           "feed": 3.0
         },
@@ -1440,7 +1440,7 @@
         "region": "M",
         "lines": [],
         "meanders": [],
-        "url": "https://github.com/Studio-Fug/yapnr/tree/main/docs/rf/order0/predictions/D1"
+        "url": "https://github.com/Studio-Fug/yapnr/tree/main/docs/rf/order0/predictions/D1-d1c"
       },
       "generated": true,
       "rp_mm": []
@@ -1450,7 +1450,7 @@
     "OSH Park 4 layer, FR408HR (EM528 alternate covered by the same tables); 3 copies; frameless single outline, 2.54 mm milled slots, OSH Park's mouse-bite tab pattern on the sticks' long sides only",
     "edge SMA: Cinch 142-0701-851 on every port (custom footprint from Cinch's drawing); the launches are 2D-designed (launch.py), not 3D-tuned",
     "mask open over all RF copper and its keep-away, 0.2 mm dams at the pin pads; A10 is the masked line",
-    "D1's window carries d1-star (the headline demo): see the D1 stick's label for its run id, hash and fab DRC status, and docs/rf/order0/predictions/D1 for the full record"
+    "D1's window carries d1-star (the headline demo): see the D1 stick's label for its run id, hash and fab DRC status, and docs/rf/order0/predictions/D1-d1c for the full record"
   ],
   "panel_mm": [
     118.16,

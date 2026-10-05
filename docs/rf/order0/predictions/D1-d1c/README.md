@@ -46,9 +46,17 @@ worst-case fine/finer margin; ties within 0.05 dB broken by fewest repaired pixe
 | run         | ok                     | coarse \|S11\|/\|S21\| (dB) | fine           | finer          | fine/finer margin (dB) | repaired px | DRC             |
 | ----------- | ---------------------- | --------------------------- | -------------- | -------------- | ---------------------- | ----------- | --------------- |
 | `d1-base`   | fail                   | -7.46 / -4.16               | -7.57 / -4.16  | -7.59 / -4.15  | -7.428                 | 239         | **fails** (new) |
-| `d1-robust` | inconclusive (timeout) | —                           | —              | —              | —                      | —           | —               |
+| `d1-robust` | fail (coarse; timeout) | -0.19 / -65.6               | — (timeout)    | — (timeout)    | —                      | 373         | **fails**       |
 | `d1-star`   | **pass**               | -20.38 / -3.26              | -20.77 / -3.27 | -20.77 / -3.26 | **0.282**              | 134         | ok              |
 | `d1-sched`  | fail                   | -8.60 / -3.97               | -8.74 / -3.97  | -8.77 / -3.96  | -6.259                 | 328         | **fails** (new) |
+
+`d1-robust` timed out before its fine/finer re-validation, but its exported design (iteration 60)
+had already been simulated on the coarse grid [S] (`result.json` in the fetched task,
+`~/yapnr-runs/fetched/20261005-mceval-451407/tasks/mc~d1-robust/`): worst \|S11\| −0.19 dB and
+\|S21\| −57 to −66 dB over 4.25-5.75 GHz (worst −65.6 dB; essentially no transmission),
+and its export DRC fails (one 0.2 mm corner gap). It cannot pass the coarse check, so the rule
+could not have picked it whatever its fine/finer results; the outcome does not depend on the
+timeout.
 
 `d1-star` is the only run that passes on all three grids, so it ships without a tie-break — the
 same formulation part 2 shipped, now with a clean footprint export under the fixed DRC (the
@@ -91,7 +99,7 @@ forward check (not re-optimized): M-nom \|S11\| -21.74 dB / \|S21\| -3.282 dB, M
 part 2's numbers (-21.64 / -19.69 dB), consistent with run-to-run solver noise rather than any
 real change.
 
-## openEMS (independent 3D FEM-free FDTD, 43 µm PEC copper, nominal FR408HR)
+## openEMS (independent 3D FDTD, 43 µm PEC copper, nominal FR408HR)
 
 Campaign `20261005-mceval-5bb031` (order0-openems-d1-new-r05): the new D1 only, at 0.05 mm, P1
 and P2 excited (P3 by mirror symmetry, `post.py`), exact end criteria — same method as part 2's
@@ -105,21 +113,30 @@ validation (see "Budget" below), and Palace — the independent _second_ solver,
 openEMS — was prioritized for the remaining headroom instead of a convergence check on the
 solver already run.
 
-|                                 | raw \|S11\| max (dB) | raw \|S21\|/\|S31\| min (dB) | loss-corrected \|S21\|/\|S31\| (dB) [D] |
-| ------------------------------- | -------------------- | ---------------------------- | --------------------------------------- |
-| New D1 (this campaign)          | -17.10               | -3.217 / -3.213              | -3.329 / -3.325                         |
-| Old D1 (part 2, for comparison) | -17.42               | -3.210 / -3.206              | -3.322 / -3.317                         |
-| yapnr.rf (new D1, M-eq, finer)  | -20.77               | -3.263 / -3.263              | n/a (see part 2's method)               |
+|                                                                                 | raw \|S11\| max (dB)     | raw \|S21\|/\|S31\| min (dB) | loss-corrected \|S21\|/\|S31\| (dB) [D] |
+| ------------------------------------------------------------------------------- | ------------------------ | ---------------------------- | --------------------------------------- |
+| New D1 (this campaign)                                                          | -17.10                   | -3.217 / -3.213              | -3.329 / -3.325                         |
+| Old D1 (part 2, for comparison)                                                 | -17.42                   | -3.210 / -3.206              | -3.322 / -3.317                         |
+| yapnr.rf (new D1, **M-nom**, coarse / fine / finer): like for like with openEMS | -19.70 / -20.02 / -20.05 | -3.273 / -3.276 / -3.277     | n/a (see part 2's method)               |
+| yapnr.rf (new D1, M-eq, finer): the design substrate, not like for like         | -20.77                   | -3.263 / -3.263              | n/a                                     |
 
 The loss correction [D] reuses part 2's Δα/ratio from the 0.40 mm M line (unaffected by D1's
 export change, since it is a property of the substrate and the solver's own line, not of D1's
 footprint): +0.112 dB of additional loss on \|S21\|/\|S31\|, the same offset part 2 derived and
-applied. **openEMS again predicts that D1 does not meet the -20 dB \|S11\| spec** (a 2.6-3.1 dB
-miss here, vs 2.7-3.3 dB on the old export — essentially the same gap) while yapnr.rf predicts a
-clean pass; the two agree on transmission (\|ΔS21\| 0.11 dB raw). This is registered as a design
-that **passes yapnr.rf but misses on openEMS**, exactly part 2's finding, now confirmed to carry
-over to the DRC-fixed export (the repair's 134 changed pixels did not change the match/mismatch
-picture). D1's 14-islands-became-24-islands floating-copper suspect from part 2's note is
+applied.
+
+**Like for like** (openEMS on nominal FR408HR with 43 µm copper against yapnr.rf's M-nom
+re-validation, the same nominal substrate; both raw) [D]: openEMS's worst \|S11\| is −17.10 dB,
+a **2.9 dB miss** of the −20 dB spec; yapnr.rf's M-nom result is −19.70 / −20.02 / −20.05 dB
+(coarse / fine / finer), i.e. **at the spec line, not a clean pass** (0.30 dB over it on the
+coarse grid, 0.02-0.05 dB under it on fine/finer). The two solvers differ by 2.6-3.0 dB in worst
+\|S11\|, and openEMS puts the in-band \|S11\| minimum at 5.42 GHz against yapnr.rf's
+4.83-4.85 GHz (about 12 % higher). They agree on transmission to 0.13-0.14 dB (max \|ΔS21\| over
+the band, raw, per frequency). The M-eq row (−20.77 dB) is yapnr.rf on its in-job design
+substrate and is shown for reference only; part 2's 2.7-3.5 dB "gap" was quoted against M-eq.
+This is registered as a design that **is marginal on yapnr.rf at nominal and misses on
+openEMS**, essentially part 2's finding carried over to the DRC-fixed export (the repair's 134
+changed pixels did not change the picture). D1's floating-copper suspect from part 2's note is
 unchanged (more floating islands after this repair, not fewer).
 
 ## Palace (independent 3D FEM): not run
@@ -137,7 +154,8 @@ comparison in this round**; this is an open item for a follow-up with its own bu
 
 - `runs/d1-star/`, `runs/d1-base/`, `runs/d1-sched/`: spec, `result.json`, `validation.json`,
   footprint and (for `d1-star`) the re-validation Touchstone files and optimizer history, from
-  `20261005-mceval-451407`. `d1-robust` is not included (no result: timeout).
+  `20261005-mceval-451407`. `d1-robust`'s files are not included (timed out; its coarse
+  result is quoted above from the fetched task).
 - `variants/d1-star-{m-eq,m-nom,m-eq-em528}/`: the 3-substrate re-validation, from
   `20261005-mceval-c70352`.
 - `openems/d1-new-openems-r05.s3p`: the raw (not loss-corrected) S-matrix of the new D1 at

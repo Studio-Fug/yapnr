@@ -64,16 +64,17 @@ each upload:
    D1 and R1 with 43 µm copper on the nominal FR408HR stack at two meshes, the 0.40 mm line, and
    the sticks A01 and A04 with the Cinch launches as the tier-1 calibration sees them, with the
    comparison against the optimizer's FDTD stated as found. This was originally run against part
-   2's D1 export (−17.4/−18.2 dB \|S11\| at 0.05/0.025 mm, a miss, against yapnr.rf's −20.9 dB);
+   2's D1 export (−17.4/−18.2 dB \|S11\| at 0.05/0.025 mm, a miss, against yapnr.rf's −20.9 dB on M-eq);
    that export was superseded 2026-10-05 by `d1-star` re-optimized under PR #53's fixed
    corner-gap DRC (label `7e070ca8`, [predictions/D1-d1c](predictions/D1-d1c/README.md)), and
    openEMS was re-run against the new export (0.05 mm mesh only; the 0.025 mm convergence pair
-   was not repeated, budget permitting): the two solvers still agree on \|S21\| within about
-   0.11 dB, but openEMS again predicts a miss of the −20 dB spec (−17.10 dB raw, a 2.6-3.1 dB
-   loss-corrected gap) against yapnr.rf's pass (−20.77 dB finer), essentially the same
-   disagreement as on the old export. A third solver, Palace (independent FEM), has **not been
-   run** for D1 or R1 in either round — an open item, not silently dropped. All three solvers'
-   predictions are registered as they stand, misses included.
+   was not repeated, for budget). Like for like, against yapnr.rf on the same nominal substrate
+   (M-nom): the two agree on \|S21\| within 0.14 dB, but openEMS predicts a 2.9 dB miss of the
+   −20 dB \|S11\| spec (−17.10 dB) while yapnr.rf puts D1 at the spec line (−19.70 / −20.02 /
+   −20.05 dB coarse / fine / finer; −20.77 dB on its M-eq design substrate), a 2.6-3.0 dB
+   disagreement, essentially the same as on the old export. A third solver, Palace (independent
+   FEM), has **not been run** for D1 or R1 in either round: an open item, not silently dropped.
+   Both solvers' predictions are registered as they stand, misses included.
 6. **The criteria** (below) and the analysis order.
 
 D1 and D2 carry the first 8 hex digits of the sha256 of their `result.json` in silkscreen, which

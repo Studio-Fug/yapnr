@@ -1,9 +1,9 @@
-ed547daa9d750fea5331207a09751bdd931abaf66b710638f0b5260517ac4000  ./BUILD.bazel
+61033af677f4d7df77d5864f27385c7c43b88623379cc8ce6219da9c8e6ad77c  ./BUILD.bazel
 31c0c27856dd69319f9db266220c4127196cf51c0e83960d973e97184394ace0  ./demos.md
-ba0797b04c536feb71cc82ff870a5c911461a2a0e9a30406d42f365079b6f302  ./fab/O0-D.sha256
+70a6efe278fef50539cbeef7cdd19940e2d3c36772a08548eced0136adae2757  ./fab/O0-D.sha256
 b28cfa3d235a107330ea5ac60ab6d40d4d69703ea6cf5558216e0ddd98d0ebf2  ./fab/O0-M.sha256
 c093aac8b01aad580336ae39f37b4b7916fcd5f1b34c0f348d8cbccb505fbcde  ./fab/O0-W.sha256
-d0151a620fd4bdad8f6828d8fe6f4b2eeffa9208336d85917ab9492f8cebfb25  ./images/O0-D.png
+e80061e17806524a3429f883eeb0420c59cb7dc5f40c35722c97f01a9a40f9b6  ./images/O0-D.png
 45a3b8d83abdf0d363b5c8a8e5100b4f025b9910a57d572b03031a4436780be4  ./images/O0-M.png
 afbeac17d06415bafacdc4724755fda5abf05543bdf2a0d01371902413c27fca  ./images/O0-W.png
 01dbb660e2a3e34e706653a3eb8dfe735a866448b932ae0a1484a47c9b95c43b  ./inputs/compute-m.toml
@@ -261,7 +261,7 @@ a76273cbc9ba3033ae68ad9df67e0bdf59140a4019f51f3ba8948f214fa18a84  ./predictions/
 6acfe1c478edbdc8914e9d2462d5ee4fb2edfabf429327739c0e94ab44fdd649  ./predictions/coupons/O0-W/fr408hr/lines.csv
 9870c3564235e6949bfc0324866f947aa00b1850c7c679363f4d0934437caebe  ./predictions/coupons/O0-W/fr408hr/scalars.json
 570be9f6f95baa2f1fe85c709330ad8cfd16b76e628da9368317a48014d9b237  ./predictions/D1-d1c/openems/d1-new-openems-r05.s3p
-4d7aa95327fbbef868ae20fd6b3b9be773f2a554271149f80709c5f84269603d  ./predictions/D1-d1c/README.md
+ed3ad57669c6c19f908b63c705e04ef8cddac312cc3c2435d8db00f4b281c0c1  ./predictions/D1-d1c/README.md
 76ba887b0316e98383186756e176e76e9f3135ed5a79d006e38029bee485191f  ./predictions/D1-d1c/runs/d1-base/footprint.kicad_mod
 6708575ad5796d02884a3405e7c575f19af0dd7be13c3e9d3341b7cbee3e8bcc  ./predictions/D1-d1c/runs/d1-base/result.json
 309a29a853c1c261169dd9bfe3bdc5a8842cc73f847d8cbe8e77905a15173b84  ./predictions/D1-d1c/runs/d1-base/spec.json
@@ -286,7 +286,7 @@ f0990cbe45693014b339e2d89bc18c7f783adb59a6fe5d32f7de5b0469d90ffa  ./predictions/
 9339ed6c2dcf6be469431e36489e3f54b849a23664b1246aac9929ada24e1eb0  ./predictions/D1-d1c/variants/d1-star-m-eq/validation.json
 d11889d1a8e3352452450f842016d89d0c990ef5a364b1e103420b2e5a5c75b7  ./predictions/D1-d1c/variants/d1-star-m-nom/spec.json
 6ffa3a7dc483a032e7ae97c63f812b0c87daf912b8e4679a0e2957a3460e177e  ./predictions/D1-d1c/variants/d1-star-m-nom/validation.json
-30b24af883fcf59c0df1e8221f5027e4ca7fea2f41eb8859af5786ac63bd5822  ./predictions/D1/README.md
+178e32633c4b80782562c9c3234dee27fbb3a2ca71e6b014286f04b801029dc8  ./predictions/D1/README.md
 7b6e37246399936a1450601bd11ebb358f3442883b18fe6708c5ae415c84474f  ./predictions/D1/runs/d1-base/coarse_dense.s3p
 5fc2fa93eaa69a8067d499c35b4d6b9dd8320a6fd7b9253c04c8d4c5419d41cc  ./predictions/D1/runs/d1-base/fine.s3p
 9165bdec3326cdb418f5cb9f3af9b225a91d4181d92584a55f6487bc02d0bf47  ./predictions/D1/runs/d1-base/finer.s3p
@@ -506,7 +506,7 @@ e4f412556b0e088781488cdf15fa5fab4c87732ca62ca2e3086bb35de9d33259  ./predictions/
 65069b313701829ec8730ee08382616931888583ba94ec01aaf017a4747c1f78  ./predictions/openems/d1-openems-r05-loss-corrected.s3p
 61170ddb4b8bdb1f0b2332c89a1031ae3eaa71530285f7bc0dc049a52c69d891  ./predictions/openems/r1-openems-r025-loss-corrected.s3p
 7a2b7e5c222dfe3c0ee40199ad02ea514e678001a96a5c63152dcb09abe9359c  ./predictions/openems/r1-openems-r05-loss-corrected.s3p
-4a3cecdd27e659735c6d9d2dd2223fabd3b36c2479de0f4657447bdfe98e262e  ./predictions/openems/README.md
+89f5cb91497bd25e1ba9187cae1280907373058a4ccf45341452c62095aaff07  ./predictions/openems/README.md
 f7edddddb0a8644456ea09712e46bd6dcbad4e85a1a91a9f2776c61b29f7aff7  ./predictions/predict-index.json
 5e8f1800815e20bebc929c8f82f60567c11ede18d2daecc97ff031bc6f24f2ea  ./predictions/README.md
 da2da86783925cdbc67e31ff7745f7eb8ed14a35e433d2b1681b18bffe3e7979  ./predictions/references/line-w-w300-l20/coarse_dense.s2p
@@ -551,5 +551,5 @@ ae0098ff4d86478ed317b707ca72cc0262aed5d6f1071614d1220de5c048ea25  ./predictions/
 f7be4fa13f120c96c6a139de4e38be9dc89e4e1002abef69d0ff7984ffd7d776  ./predictions/run0b/r1-m-eq-loss-corrected.s3p
 b74b0b3c23028c084d730f979297ebb48befe968f83598340155f8873786caf7  ./predictions/run0b/r1-m-eq.s3p
 c74f1c862695db8910d0f24d3a9825973d0ce6cb093d89998a3a7e597caa1f9d  ./predictions/run0b/run0b.json
-6755503b1480eeb46eee9d7d6dabf82f76d0fd7a77c7d7b607d2a89780f80630  ./preregistration.md
-0b56c6ea54c1418974bf6c7f8888f1c541a48328b56e034dec3bc9c8a2f4e6ab  ./README.md
+4007143c7b6031348739fc741c813b9c546e129791280dcabf8f463299a515d3  ./preregistration.md
+ba97ca5bc3466710728a63cbd1dc80b83006dc9b61b9523bfc3e13dbf5e03992  ./README.md

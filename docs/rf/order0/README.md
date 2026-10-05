@@ -50,10 +50,12 @@ violations, 0 unconnected (10.0.6); `yapnr fab build` 0 errors (2 pre-existing i
 warnings: merged non-plated drill file, stackup thickness, the same pattern O0-W's build has).
 Its Gerber zip's sha256 is in [fab/O0-D.sha256](fab/O0-D.sha256).
 
-Three solvers now carry a prediction for this D1: yapnr.rf's own FDTD (pass, −20.77 dB finer
-\|S11\|, 0.282 dB margin), an independent openEMS 0.37 run (43 µm nominal FR408HR copper, 0.05 mm
-mesh; predicts a 2.6-3.1 dB **miss** of the −20 dB \|S11\| spec, essentially unchanged from part
-2's finding on the old export), and Palace (FEM), **not run** for D1 or R1 this round — this
+Two solvers carry a prediction for this D1, compared like for like on nominal FR408HR: yapnr.rf's
+own FDTD on M-nom puts it at the −20 dB \|S11\| spec line (−19.70 / −20.02 / −20.05 dB coarse /
+fine / finer; it passes the selection criteria with a 0.282 dB margin, and −20.77 dB on its M-eq
+design substrate), and an independent openEMS 0.37 run (43 µm copper, 0.05 mm mesh) predicts a
+2.9 dB **miss** (−17.10 dB), essentially part 2's finding on the old export; the two agree on
+\|S21\| within 0.14 dB. A third, Palace (FEM), was **not run** for D1 or R1 this round: this
 workflow's separate $8 GCP cap left too little margin after the resubmission and validation
 campaigns, and Palace also needs a new divider-shaped planar adapter; open item for a follow-up.
 Details, campaign ids and the three-solver table are in
@@ -111,7 +113,7 @@ with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.
 
 | Stick         | Structure                                                                                   | Size (mm)       | What it determines                                                   |
 | ------------- | ------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
-| D1            | the optimizer's thin divider (12 × 15 mm, `d1-star`, label `7e070ca8`), feeds and keep-away | 29 × 41         | the headline demo (passes yapnr.rf, misses openEMS)                  |
+| D1            | the optimizer's thin divider (12 × 15 mm, `d1-star`, label `7e070ca8`), feeds and keep-away | 29 × 41         | the headline demo (at the spec line on yapnr.rf, misses on openEMS)  |
 | A15           | small QR label stick to [predictions/D1-d1c](predictions/D1-d1c/README.md)                  | 25 × 25         | this page                                                            |
 | R1            | a copy of O0-M's R1                                                                         | 30 × 38         | D1 and a reference on one lot                                        |
 | A01, A20, A04 | thru and lines ΔL 9 and 30 mm                                                               | 20, 29, 50 × 12 | this lot's εeff, loss and relative Z0 (the 9 mm line covers 5-6 GHz) |

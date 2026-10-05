@@ -58,6 +58,14 @@ tree, like tools/exp/rf_stage_plan.py), so a branch another session is still edi
 was last committed; the manifest's ``uncommitted_changes_left_out`` says whether ``paths`` had
 any. ``seed_from`` is copied from disk as it stands (never through git), since it is usually a
 local "prepare once" run's output, not checked in.
+
+``yapnr exp plan``'s own campaign id is a hash of the campaign *file* (name, kind, image,
+``config.stage_plan``'s path string) and the resolved commit, never of ``stage.jsonl``'s own
+content -- so re-running this generator against the same jobs file and commit after a job-bundle
+or ``pnr_explore_job.py`` fix reuses the earlier plan directory, whose tasks already carry
+``_DONE`` markers (a fail is still a result) and so will not be resubmitted. Change ``name`` (or
+pass a different commit) to force a fresh id when the fix needs the same tasks to actually run
+again.
 """
 
 from __future__ import annotations

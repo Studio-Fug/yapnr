@@ -14,6 +14,8 @@ py_library(
         "openems_plan.py",
         "palace_job.py",
         "palace_plan.py",
+        "pnr_explore_job.py",
+        "pnr_explore_plan.py",
         "rf_diag.py",
         "rf_job.py",
         "rf_stage_plan.py",
@@ -51,5 +53,16 @@ py_binary(
     name = "rf_stage_plan",
     srcs = ["rf_stage_plan.py"],
     main = "rf_stage_plan.py",
+    deps = [":exp_lib"],
+)
+
+# `bazel run //tools/exp:pnr_explore_plan -- JOBS.toml --repo CHECKOUT --out DIR`: N placement
+# seeds and/or candidate placements of any `integrate.py`-shaped board driver into one mc-eval
+# campaign (docs/cloud-experiments.md, "Any command as a task"); pnr_explore_job.py is the
+# runner the job bundle ships and every task runs.
+py_binary(
+    name = "pnr_explore_plan",
+    srcs = ["pnr_explore_plan.py"],
+    main = "pnr_explore_plan.py",
     deps = [":exp_lib"],
 )

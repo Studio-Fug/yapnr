@@ -591,6 +591,36 @@ image's Python, the native FDTD library the bundle would run (or why none), and
 branch or image. `--plain-lines` leaves the three optional keys and the attempts out, for a
 `yapnr` whose `mc-eval` refuses them.
 
+#### PnR exploration
+
+`tools/exp/pnr_explore_plan.py` writes such a campaign for a board example's own
+`integrate.py`-shaped driver (a script with one positional `step` argument, run once per step:
+`source`, `prepare`, `place`, `select`, `finish`, `route`, `check`...): N placement seeds and/or
+candidate placements, each a task that chains the driver's steps through the job bundle's
+`pnr_explore_job.py`. Not radar60-specific -- the driver, its steps and resources all come from
+the jobs file; `examples/radar60/board/explore_jobs.toml` is one board's own.
+
+```sh
+python3 tools/exp/pnr_explore_plan.py examples/radar60/board/explore_jobs.toml --repo . --out <dir>
+yapnr exp plan <dir>/campaign.toml --backend gcp-batch
+```
+
+A seed task runs `place --seed N ...`, `select --top-n 1` and `finish`; a candidate task runs
+`finish --placement <its bundled placement.json>` instead; both then run the jobs file's own
+`post_steps` (`route`, `check`, say). `{work}`/`{cwd}` in a jobs file's `common_args` or a step's
+own arguments are substituted with the task's absolute work directory and process cwd: some
+drivers run each step with its subprocess `cwd` pinned to `--engine`, so a relative
+`--work`/`--out`/`--engine` would otherwise resolve against the wrong directory (and, for
+`--engine`, can silently break the driver's own relative `PYTHONPATH`). `seed_from` names a
+local snapshot (an earlier `source`+`prepare` run, say, for a driver whose first step needs
+something a Batch VM cannot fetch) copied into every task's work directory first. `--collect`
+globs copy files (the routed board) into the task's own output; `--embed KEY=PATH` folds a JSON
+file (a `check` step's report) straight into the task's record, so `yapnr exp fetch`'s `mc-eval`
+assembly hands every task's full report to a board's own ranking table (DRC, opens, IR...) with
+no second parse of the fetched tree (`examples/radar60/board/explore_rank.py`). The campaign id
+hashes the campaign file and commit, never `stage.jsonl`'s own content, so a fix to the job
+bundle needs a new `name` (or commit) to force a fresh id and re-run already-`_DONE` tasks.
+
 ### Task images (openEMS)
 
 A campaign runs in the yapnr image unless `image` names another one by its full reference. Batch

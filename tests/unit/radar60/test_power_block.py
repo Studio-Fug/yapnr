@@ -104,7 +104,7 @@ class SiteTest(unittest.TestCase):
         doc = power_block.block_doc(TOP, FLOORPLAN, BLOCK, w, h, STAGE, origin=(x0, y0))
         rects = {r["name"]: r["rect"] for r in doc["region"]}
         # pmic_switching (x >= 41, y <= 21.7) inside the site's frame; pmic_block clipped to it
-        self.assertEqual(rects["pmic_switching"], [3.0, 0.0, round(w, 4), round(h, 4)])
+        self.assertEqual(rects["pmic_switching"], [41.0 - x0, 0.0, round(w, 4), round(h, 4)])
         self.assertEqual(rects["pmic_block"], [0.0, 0.0, round(w, 4), round(h, 4)])
         for r in doc["region"]:  # only the block's parts
             for ref in r["refs"]:

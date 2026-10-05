@@ -855,9 +855,10 @@ escape:
 # (integrate.py fixblocks). As free-floating macros the buck stage's 6 best layouts (15-19 mm)
 # left 24 of 24 top starts without a slot: their U2/inductor bodies (pmic_switching, y <= 21.7)
 # pinned the macro so low that it met MH2's keepout in every one (window analysis, wave 4).
-# Sites [D]: the buck stage takes pmic_block's width (x 38-58) from MH2's keepout (y 3.5 + 3.25)
-# up to pmic_switching's top (y 21.7); pmic_block keeps y 21.7-26.65 and x 38-53 below for the
-# PMIC's other parts. The eFuse stage takes the strip west of J1 under J2's region (efuse_block,
+# Sites [D]: the buck stage takes x 40-58 from MH2's keepout (y 3.5 + 3.25) up to
+# pmic_switching's top (y 21.7); pmic_block keeps y 21.7-26.65, x 38-53 below and x 38-40 for
+# the PMIC's other parts, and connector_esd/can_block their x <= 38.5 (with the site from x 38,
+# 0 of 24 top starts were legal: D2 found no slot in 8, the CAN and flash passives in 15). The eFuse stage takes the strip west of J1 under J2's region (efuse_block,
 # y up to J2's 6.95).
 power_stage:
   blocks:
@@ -891,7 +892,7 @@ power_stage:
         - { ic: pmic, parts: [pmic_in_caps], nets: [5V_SYS, GND] }
         - { ic: pmic, parts: [pmic_inductors], nets: ['PMIC_SW_B*'] }
         - { ic: pmic, parts: [pmic_snub_r], nets: ['PMIC_SW_B*'] }
-      site: [38.0, 6.75, 58.0, 21.7]
+      site: [40.0, 6.75, 58.0, 21.7]
     - anchor: efuse
       contains: [efuse, connector_tvs, efuse_caps]
       fixed_block: { name: efuse_stage, group: EFUSE_STAGE, solid_layers: [F.Cu] }

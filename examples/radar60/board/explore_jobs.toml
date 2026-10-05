@@ -21,7 +21,7 @@ image = "edge"
 cpus = 2
 memory_gb = 4
 disk_gb = 8
-max_wall_s = 1200
+max_wall_s = 1800
 work_dir = "work"
 # A local `source` + `prepare` pass (see the module docstring above); not committed -- run it
 # once per inputs change and point this at the result (examples/radar60/board/reva/prepared by

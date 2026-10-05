@@ -466,11 +466,6 @@ region:
     rect: [8.3, 15.75, 19.3, 24.6]
     hard: true
     reason: 'QSPI within about 10 mm'
-  - name: efuse_block
-    refs: ['@power_in.efuse']
-    rect: [6.8, 0.4, 22.5, 7.25]
-    hard: true
-    reason: 'eFuse next to J1 pins 1-2'
   - name: can_block
     refs: ['@can.u4']
     rect: [31.6, 6.65, 38, 16]
@@ -546,11 +541,6 @@ region:
     rect: [31.6, 6.65, 38.5, 11]
     hard: true
     reason: 'CAN and UART ESD next to J1 pins 5-8, before the transceiver'
-  - name: connector_tvs
-    refs: ['@power_in.tvs']
-    rect: [12, 0.4, 22.5, 7.25]
-    hard: true
-    reason: '5 V TVS next to J1 pins 1-2'
 side:
   bottom:
     [
@@ -717,8 +707,16 @@ group:
     radius_mm: 12
     hard: true
   - members: ['@power_in.tvs']
-    anchor: '@j1'
-    radius_mm: 13
+    anchor: '@power_in.efuse'
+    radius_mm: 6
+    hard: true
+  - members: ['@power_in.efuse']
+    anchor: '@pmic.u2'
+    radius_mm: 16
+    hard: true
+  - members: ['@pmic.tp_isns']
+    anchor: '@pmic.r_sh'
+    radius_mm: 4
     hard: true
 net_class:
   RF:
@@ -774,6 +772,21 @@ net_class:
   rail_1v0_rf2:
     nets: ['1V0_RF2']
     plane_layer: In3.Cu
+  rail_1v0_pa:
+    nets: ['1V0_PA']
+    plane_layer: In3.Cu
+  rail_1v2:
+    nets: ['1V2']
+    plane_layer: In3.Cu
+  rail_1v8:
+    nets: ['1V8']
+    plane_layer: In3.Cu
+  rail_5v_sys:
+    nets: ['5V_SYS']
+    plane_layer: In3.Cu
+  rail_1v0_sh:
+    nets: ['1V0_SH']
+    plane_layer: In3.Cu
 diff_pair:
   - name: lvds_tx0
     p: LVDS_TX0_P
@@ -823,21 +836,40 @@ length_match:
     tolerance_mm: 2
 plane_partition:
   - layer: In3.Cu
-    nets: ['1V0_RF1', '1V0_RF2']
+    nets: ['1V0_RF1', '1V0_RF2', '1V0_PA', '1V2', '1V8', '5V_SYS', '1V0_SH']
+    order: listed
+    fixed_lands: true
     fill: GND
     split_gap_mm: 0.3
     min_width_mm: 1
     currents:
       '1V0_RF1': 2.5
       '1V0_RF2': 2.5
+      '1V2': 1
+      '1V8': 0.85
+      '5V_SYS': 1.5
+      '1V0_SH': 2.5
     budgets_mohm:
       '1V0_RF1': 4
       '1V0_RF2': 4
+      '1V2': 12
+      '1V8': 21
+      '5V_SYS': 33
     sources:
       '1V0_RF1':
         '@pmic.fb_rf1': '2'
       '1V0_RF2':
         '@pmic.fb_rf2_a': '2'
+      '1V0_PA':
+        '@radio.r_pa': '2'
+      '1V2':
+        '@pmic.fb_1v2': '2'
+      '1V8':
+        '@pmic.fb_1v8': '2'
+      '5V_SYS':
+        '@power_in.efuse': '6'
+      '1V0_SH':
+        '@pmic.r_sh': '2'
 ir_drop:
   - net: '1V0_RF1'
     sources:

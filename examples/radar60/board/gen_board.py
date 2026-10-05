@@ -248,11 +248,19 @@ def power_sections(d):
             {
                 "layer": power["layer"],
                 "nets": list(part["nets"]),
+                # stage 3c R3: the plan's order (listed) and fixed-block lands, only when declared
+                **({"order": part["order"]} if part.get("order") else {}),
+                **({"fixed_lands": True} if part.get("fixed_lands") else {}),
                 "fill": part["fill"],
                 "split_gap_mm": part["split_gap_mm"],
                 "min_width_mm": part["min_width_mm"],
                 "currents": {n: rails[n]["current_a"] for n in part["nets"] if n in rails},
-                "budgets_mohm": {n: rails[n]["budget_mohm"] for n in part["nets"] if n in rails},
+                # a rail in `no_budget` keeps its ir_drop report but does not widen its trunk
+                "budgets_mohm": {
+                    n: rails[n]["budget_mohm"]
+                    for n in part["nets"]
+                    if n in rails and n not in (part.get("no_budget") or ())
+                },
                 "sources": {
                     n: {"@" + _glob_literal(a): str(pad) for a, pad in src.items()}
                     for n, src in part["sources"].items()

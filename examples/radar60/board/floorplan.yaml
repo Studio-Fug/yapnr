@@ -37,12 +37,31 @@ board:
 # (design 2.7: copper only, source pad -> sinks, at the annotated peak, 60 C) [D].
 power:
   layer: In3.Cu
+  # Stage 3c R3: In3 typed power, partitioned by current in the plan's order (1V0_RF1, then
+  # 1V0_RF2 with 1V0_PA, 1V2, 1V8, 5V_SYS, 1V0_SH; 3V3_RADIO_IO stays a trace at 0.2 A against
+  # 165 mOhm). `order: listed` keeps that order; `fixed_lands`: a fixed block's own-net pads and
+  # zones on In3 (the RF macro's 1V0_PA tie, the power stage's drops) are the rails' terminals.
   partition:
-    nets: [1V0_RF1, 1V0_RF2]
+    nets: [1V0_RF1, 1V0_RF2, 1V0_PA, 1V2, 1V8, 5V_SYS, 1V0_SH]
+    order: listed
     fill: GND
     split_gap_mm: 0.3
     min_width_mm: 1.0
-    sources: { 1V0_RF1: { pmic.fb_rf1: '2' }, 1V0_RF2: { pmic.fb_rf2_a: '2' } }
+    fixed_lands: true
+    # Owner Q2 default (local sensing): 1V0_SH's 0.5 mOhm stays in its ir_drop report, as a
+    # quantified warning, but does not size its In3 trunk (R_sq L / 0.5 mOhm would claim most of
+    # In3 over the ~20 mm to the ferrites) [D].
+    no_budget: [1V0_SH]
+    sources:
+      {
+        1V0_RF1: { pmic.fb_rf1: '2' },
+        1V0_RF2: { pmic.fb_rf2_a: '2' },
+        1V0_PA: { radio.r_pa: '2' },
+        1V2: { pmic.fb_1v2: '2' },
+        1V8: { pmic.fb_1v8: '2' },
+        5V_SYS: { power_in.efuse: '6' },
+        1V0_SH: { pmic.r_sh: '2' },
+      }
   temperature_c: 60
   rails:
     1V0_RF1:
@@ -238,6 +257,7 @@ parts:
   l_b1: pmic.l_b1
   l_b2: pmic.l_b2
   l_b3: pmic.l_b3
+  pmic_tp: pmic.tp_isns # TP1, the Kelvin sense pads across R_SH1
   r_sh: pmic.r_sh # R_SH1, the 2.5 A Kelvin current-sense shunt (1V0_BUCK -> 1V0_SH). Not R46:
   # R46 is radio.r_pa, the separate 1V0_RF2 -> 1V0_PA feed resistor (stage3c owner Q1), a
   # different part on a different rail (review 2026-10-05, stage3c wave-1 finding #4).
@@ -450,7 +470,10 @@ regions:
   # between J3 and the radio's west caps, above J2; the eFuse (and its TVS) west of J1 below J2,
   # next to J1's 5 V pins 1-2; the CAN transceiver north-east of J1, beyond its ESD diode [D].
   flash_block: { parts: [flash], rect: [8.3, 15.75, 19.3, 24.6], reason: 'QSPI within about 10 mm' }
-  efuse_block: { parts: [efuse], rect: [6.8, 0.4, 22.5, 7.25], reason: 'eFuse next to J1 pins 1-2' }
+  # Stage 3c R1: the eFuse (with its TVS, caps and thresholds) is part of the power-stage subcell
+  # (`power_stage` below), placed as one rigid block with U2, so it has no region of its own: a
+  # region on a block member becomes a body of the block macro, and this one (west of J1) and
+  # pmic_switching (x >= 41) cannot both hold one rigid block.
   can_block:
     { parts: [can_xcvr], rect: [31.6, 6.65, 38.0, 16.0], reason: 'CAN after its ESD, near J1' }
   # The switch nodes keep >= 8 mm from the crystal zone (x <= 32.4) and >= 5 mm from the RF
@@ -606,8 +629,7 @@ regions:
       rect: [31.6, 6.65, 38.5, 11.0],
       reason: 'CAN and UART ESD next to J1 pins 5-8, before the transceiver',
     }
-  connector_tvs:
-    { parts: [connector_tvs], rect: [12.0, 0.4, 22.5, 7.25], reason: '5 V TVS next to J1 pins 1-2' }
+  # (connector_tvs: no region since stage 3c R1; D3 rides in the power-stage block at U5's input)
 
 # Fixed rotations (yapnr `orientation`, hard) for the ball-anchored parts above: pad 1 (the
 # signal side of every cap and resistor here) toward the ball. Rotation CCW in the board frame;
@@ -781,8 +803,17 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   # take the strip next to J1 (their regions bound them; these radii only order them).
   connector_esd:
     { anchor: connector, members: [connector_esd], radius_mm: 12.0, reason: 'ESD at J1' }
+  # Stage 3c R1: D3 at the eFuse input inside the power-stage block (was: anchored on J1, which
+  # a rigid block cannot carry: a hard group with members inside and outside it straddles it).
   connector_tvs:
-    { anchor: connector, members: [connector_tvs], radius_mm: 13.0, reason: 'TVS at J1' }
+    { anchor: efuse, members: [connector_tvs], radius_mm: 6.0, reason: 'TVS at the eFuse input' }
+  # Stage 3c R1: the power-stage subcell. These two groups join U2's hard groups (inductors, input
+  # caps, snubbers, VANA, R_SH) with U5's (thresholds, in/out caps, D3) and the Kelvin TP, so
+  # pnr.hier.blocks extracts one block from them (named after U2); `power_stage` below says how
+  # it is synthesized and fixed. Radii [D]: U5's group reaches 10 mm from U5, U2's 8.5 mm.
+  power_stage:
+    { anchor: pmic, members: [efuse], radius_mm: 16.0, reason: 'one power-stage subcell (R1)' }
+  r_sh_tp: { anchor: r_sh, members: [pmic_tp], radius_mm: 4.0, reason: 'Kelvin TP at R_SH1' }
 
 # Radome visibility (plan 5.2, R5): no part above a 30 degree line from the nearest patch edge,
 # i.e. a part of height h stays >= h / tan(30 deg) = 1.73 h from the patch copper.
@@ -795,3 +826,41 @@ radome:
 # Probe and documentation only: where U1's signal escapes may leave the package (plan 7.2).
 escape:
   forbidden_edges: [north, east] # the RF edges carry only RF, GND and power balls
+
+# Stage 3c R1: the power-stage subcell (power_block.py). The block is the one pnr.hier.blocks
+# extracts around `anchor` (the hard groups above); `contains` names the roles it must hold.
+# Its layouts are synthesized on the block's own board (placement trials, then the production
+# router with the outer pours below), ranked by open hot-loop links, then the in-block IR rails,
+# then area; the winner is a library entry for the top placement (one rigid macro), and after
+# placement its copper and pours become the fixed block `fixed_block` (pnr.hier.assemble --zones
+# --group, pnr.hier.macro.fixed_block_from_macro).
+power_stage:
+  anchor: pmic
+  contains:
+    [pmic, pmic_inductors, pmic_in_caps, pmic_snubbers, r_sh, efuse, connector_tvs, efuse_caps]
+  fixed_block: { name: pwr_stage, group: PWR_STAGE, solid_layers: [F.Cu] }
+  # The hot-rod lands (U2: 0.25 x 1.82 mm at 0.5 mm pitch; U5: 0.3 x 2.4 mm) take no track at
+  # their class clearance: one F.Cu pour per rail joins them, whole lands, solid connection
+  # (pnr-inputs.md plane_partition `region`). 1V0_BUCK (L_b2 -> R_SH1, 0.5 mOhm) pours too.
+  pours:
+    - layer: F.Cu
+      nets: [5V_SYS, VIN_5V, PMIC_SW_B0, PMIC_SW_B1, PMIC_SW_B2, PMIC_SW_B3, 1V0_BUCK, GND]
+      region:
+        {
+          parts: [pmic, pmic_inductors, pmic_in_caps, r_sh, efuse, connector_tvs, efuse_caps],
+          margin_mm: 0.5,
+        }
+      terminals: pad
+      connect: solid
+      stitch_vias: 4
+      split_gap_mm: 0.2
+      min_width_mm: 0.25
+  # Datasheet hot loops (LP87524 SNVSAW2B 8.2.1.2-8.2.1.4, TPS25947 layout): each part of `parts`
+  # must reach `ic`'s pads on every listed net by copper inside the block; an unreached
+  # (part pad, net) is one open hot-loop link (the first ranking key).
+  hot_loops:
+    - { ic: pmic, parts: [pmic_in_caps], nets: [5V_SYS, GND] }
+    - { ic: pmic, parts: [pmic_inductors], nets: ['PMIC_SW_B*'] }
+    - { ic: pmic, parts: [pmic_snub_r], nets: ['PMIC_SW_B*'] }
+    - { ic: efuse, parts: [efuse_caps], nets: [VIN_5V, 5V_SYS, GND] }
+    - { ic: efuse, parts: [connector_tvs], nets: [VIN_5V, GND] }

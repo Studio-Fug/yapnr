@@ -4,6 +4,7 @@ collects files and embeds JSON records into the result."""
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import textwrap
@@ -186,6 +187,36 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 1)
         record = json.loads((out / "result.json").read_text())
         self.assertFalse(record["ok"])
+
+    def test_work_placeholder_is_substituted_with_the_absolute_work_dir(self):
+        # A driver whose subprocess cwd is pinned elsewhere (--engine, say) sees "{work}" as the
+        # absolute --work-dir, not the (possibly relative) string this task was given.
+        previous = Path.cwd()
+        try:
+            os.chdir(self.root)
+            code = pnr_explore_job.main(
+                [
+                    "--driver",
+                    str(self.driver),
+                    "--python",
+                    sys.executable,
+                    "--work-dir",
+                    "relwork",
+                    "--common",
+                    json.dumps(["--work", "{work}", "--out", "{work}/board"]),
+                    "--step",
+                    json.dumps(["finish", "--placement", "{work}/token"]),
+                    "--out",
+                    "out/s2",
+                ]
+            )
+        finally:
+            os.chdir(previous)
+        self.assertEqual(code, 0)
+        record = json.loads((self.root / "out" / "s2" / "result.json").read_text())
+        self.assertTrue(record["ok"])
+        marker = (self.root / "relwork" / "finish.marker").read_text()
+        self.assertEqual(marker, str((self.root / "relwork").resolve()) + "/token")
 
 
 if __name__ == "__main__":

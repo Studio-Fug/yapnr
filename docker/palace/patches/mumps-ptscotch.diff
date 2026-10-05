@@ -1,0 +1,34 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e4aca6f..0c1a576 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -78,7 +78,13 @@ endif()
+ set(ORDERING_LIBS)
+ set(ORDERING_DEFS pord)
+ 
+-if(scotch)
++if(scotch AND ptscotch)
++  # PT-Scotch: parallel analysis (ICNTL(28)=2, ICNTL(29)=1); the graph MUMPS hands it is built
++  # in the same edge order on every run (DETERMINISTIC_PARALLEL_GRAPH, MUMPS INSTALL)
++  find_package(Scotch COMPONENTS ESMUMPS PTScotch REQUIRED)
++  list(APPEND ORDERING_DEFS scotch ptscotch DETERMINISTIC_PARALLEL_GRAPH)
++  list(APPEND ORDERING_LIBS Scotch::Scotch)
++elseif(scotch)
+   find_package(Scotch COMPONENTS ESMUMPS REQUIRED)
+   list(APPEND ORDERING_DEFS scotch)
+   list(APPEND ORDERING_LIBS Scotch::Scotch)
+diff --git a/options.cmake b/options.cmake
+index 798d0d0..aac6585 100644
+--- a/options.cmake
++++ b/options.cmake
+@@ -16,6 +16,10 @@ if(MUMPS_UPSTREAM_VERSION VERSION_LESS 5.7 AND NOT MUMPS_scalapack)
+ endif()
+ 
+ option(scotch "use Scotch orderings")
++option(ptscotch "use PT-Scotch parallel orderings (needs scotch)")
++if(ptscotch AND NOT (scotch AND MUMPS_parallel))
++  message(FATAL_ERROR "ptscotch requires scotch=on and MUMPS_parallel=on")
++endif()
+ 
+ option(parmetis "use parallel METIS ordering")
+ option(metis "use sequential METIS ordering")

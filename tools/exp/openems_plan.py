@@ -70,9 +70,27 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 try:
-    import tomllib
-except ImportError:  # Python < 3.11: JSON job files only
-    tomllib = None  # type: ignore[assignment]
+    from tools.exp import image_tasks
+except (
+    ImportError
+):  # run as a script: python3 tools/exp/openems_plan.py (its directory on the path)
+    import image_tasks  # type: ignore[no-redef]
+
+# The solver-independent parts (owner config, Cloud Build, digests, pinning, inputs, TOML, the
+# fetched layout) live in image_tasks.py; their names stay importable from here.
+JobError = image_tasks.JobError
+owner_config = image_tasks.owner_config
+gcloud_argv = image_tasks.gcloud_argv
+images_repo = image_tasks.images_repo
+resolve_image = image_tasks.resolve_image
+load_jobs = image_tasks.load_jobs
+copy_input = image_tasks.copy_input
+toml_value = image_tasks.toml_value
+task_key = image_tasks.task_key
+_positive = image_tasks.positive
+ID_RE = image_tasks.ID_RE
+NAME_RE = image_tasks.NAME_RE
+DIGEST_RE = image_tasks.DIGEST_RE
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -82,10 +100,6 @@ IMAGE_NAME = "openems"
 DEFAULT_TAG = "0.37.0-rc3"
 VARIANTS = ("x86-64", "x86-64-v4")
 RUNTIME = {"python": "/opt/openEMS/venv/bin/python", "entrypoint": ""}
-ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$")
-DEST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$")
-NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
-DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 # openems_job.py --engine (openEMS's own names) and --openems-option K[=V].
 ENGINES = ("basic", "sse", "sse-compressed", "multithreaded", "fastest")
 OPTION_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*(=[^\s]+)?$")
@@ -137,131 +151,21 @@ DEFAULTS = {
 # Instance templates exist for these vCPU counts (infra/gcp: C4D in template_shapes, C4 in a
 # region's region_template_shapes); others run from an instance policy.
 TEMPLATE_VCPUS = (8, 16)
-SKIP_NAMES = ("__pycache__", ".git", ".DS_Store")
-GCLOUD_TIMEOUT_S = 120
-
-
-class JobError(ValueError):
-    pass
-
-
-# --- the owner configuration (yapnr.exp.config), only where a command needs it
-
-
-def owner_config(path: Optional[str]):
-    sys.path.insert(0, str(REPO))
-    from yapnr.exp import config as cloud_config
-
-    return cloud_config.load(path)
-
-
-def gcloud_argv(gcp, configuration: Optional[str]) -> List[str]:
-    argv = [gcp.gcloud]
-    configuration = configuration or gcp.gcloud_configuration
-    if configuration:
-        argv += ["--configuration", configuration]
-    return argv + ["--project", gcp.project]
-
-
-def images_repo(gcp, region: Optional[str] = None) -> str:
-    return gcp.images.format(region=region or gcp.home_region, project=gcp.project)
 
 
 # --- image: the Cloud Build of docker/openems
 
 
 def build_command(gcp, tag: str, configuration: Optional[str], asynchronous: bool) -> List[str]:
-    build_account = "projects/%s/serviceAccounts/%s" % (
-        gcp.project,
-        gcp.account(gcp.image_build_service_account),
-    )
-    argv = gcloud_argv(gcp, configuration) + [
-        "builds",
-        "submit",
-        str(DOCKER_DIR),
-        "--config",
-        str(DOCKER_DIR / "cloudbuild.yaml"),
-        "--region",
-        gcp.home_region,
-        "--service-account",
-        build_account,
-        "--gcs-source-staging-dir",
-        "gs://%s/cloudbuild/source" % gcp.inputs_bucket,
-        "--substitutions",
-        "_IMAGE=%s/%s,_TAG=%s" % (images_repo(gcp), IMAGE_NAME, tag),
-    ]
-    return argv + (["--async"] if asynchronous else [])
+    return image_tasks.build_command(gcp, DOCKER_DIR, IMAGE_NAME, tag, configuration, asynchronous)
 
 
 def digests(gcp, tag: str, configuration: Optional[str]) -> Dict[str, Dict[str, Any]]:
     """{variant: {ref, digest, size_bytes}} of the built tags, from Artifact Registry."""
-    repo = "%s/%s" % (images_repo(gcp), IMAGE_NAME)
-    argv = gcloud_argv(gcp, configuration) + [
-        "artifacts",
-        "docker",
-        "images",
-        "list",
-        repo,
-        "--include-tags",
-        "--format=json",
-    ]
-    done = subprocess.run(argv, capture_output=True, text=True, timeout=GCLOUD_TIMEOUT_S)
-    if done.returncode != 0:
-        raise JobError("gcloud artifacts docker images list: %s" % done.stderr.strip()[-400:])
-    out = {}
-    for item in json.loads(done.stdout or "[]"):
-        tags = item.get("tags") or []
-        tags = tags.split(",") if isinstance(tags, str) else tags
-        for variant in VARIANTS:
-            if "%s-%s" % (tag, variant) in tags:
-                out[variant] = {
-                    "ref": "%s:%s-%s@%s" % (repo, tag, variant, item.get("version")),
-                    "digest": item.get("version"),
-                    "size_bytes": int((item.get("metadata") or {}).get("imageSizeBytes", 0) or 0),
-                    "created": item.get("createTime"),
-                }
-    return out
-
-
-def resolve_image(text: str, gcp, digest: Optional[str], offline: bool, configuration) -> str:
-    """The campaign's image: a full reference, pinned by digest unless offline."""
-    ref = text if "/" in text else "%s/%s" % (images_repo(gcp), text)
-    if "@" in ref:
-        return ref
-    if digest:
-        if not DIGEST_RE.match(digest):
-            raise JobError("%r is not a sha256 digest" % digest)
-        return "%s@%s" % (ref, digest)
-    if offline:
-        return ref
-    argv = gcloud_argv(gcp, configuration) + [
-        "artifacts",
-        "docker",
-        "images",
-        "describe",
-        ref,
-        "--format=value(image_summary.digest)",
-    ]
-    done = subprocess.run(argv, capture_output=True, text=True, timeout=GCLOUD_TIMEOUT_S)
-    found = done.stdout.strip()
-    if done.returncode != 0 or not DIGEST_RE.match(found):
-        raise JobError("cannot resolve %s: %s" % (ref, done.stderr.strip()[-400:]))
-    return "%s@%s" % (ref, found)
+    return image_tasks.digests(gcp, IMAGE_NAME, tag, VARIANTS, configuration)
 
 
 # --- plan: N models -> one mc-eval campaign
-
-
-def load_jobs(path: Path) -> Dict[str, Any]:
-    if path.suffix == ".json":
-        return json.loads(path.read_text())
-    if tomllib is None:
-        raise JobError("TOML job files need Python 3.11 or later")
-    return tomllib.loads(path.read_text())
-
-
-def _positive(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
 
 
 def _check_openems(where: str, item: Mapping[str, Any]) -> List[str]:
@@ -290,16 +194,7 @@ def check_jobs(doc: Mapping[str, Any]) -> List[str]:
         errors.append("packing is 'core' or 'vcpu'")
     if doc.get("visibility", "public") not in ("public", "private"):
         errors.append("visibility is 'public' or 'private'")
-    inputs = doc.get("inputs", {})
-    if not isinstance(inputs, dict) or not all(
-        isinstance(k, str) and DEST_RE.match(k) and isinstance(v, str) for k, v in inputs.items()
-    ):
-        errors.append("inputs maps a name to a directory")
-    elif "job" in inputs or "out" in inputs:
-        errors.append("inputs may not be named 'job' or 'out'")
-    env = doc.get("env", {})
-    if not isinstance(env, dict) or not all(isinstance(v, str) for v in env.values()):
-        errors.append("env maps names to strings")
+    errors += image_tasks.check_inputs_env(doc)
     jobs = doc.get("jobs")
     if not isinstance(jobs, list) or not jobs:
         return errors + ["jobs is a non-empty list"]
@@ -326,12 +221,6 @@ def check_jobs(doc: Mapping[str, Any]) -> List[str]:
                 errors.append("%s: %s is a positive number" % (where, key))
         errors += _check_openems(where + ": ", job)
     return errors
-
-
-def copy_input(src: Path, dest: Path) -> None:
-    if not src.is_dir():
-        raise JobError("input %s is not a directory" % src)
-    shutil.copytree(src, dest, ignore=shutil.ignore_patterns(*SKIP_NAMES, "*.pyc"))
 
 
 def placement(doc: Mapping[str, Any]) -> Dict[str, Any]:
@@ -389,36 +278,10 @@ def stage_line(job: Mapping[str, Any], doc: Mapping[str, Any]) -> Dict[str, Any]
     }
 
 
-def toml_value(value: Any) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return repr(value)
-    if isinstance(value, str):
-        return json.dumps(value)
-    if isinstance(value, list):
-        return "[" + ", ".join(toml_value(v) for v in value) + "]"
-    raise JobError("cannot write %r to TOML" % (value,))
-
-
 def campaign_toml(doc: Mapping[str, Any], image: str) -> str:
-    lines = [
-        "# Written by tools/exp/openems_plan.py; plan it with `yapnr exp plan`.",
-        'schema = "yapnr-campaign-v1"',
-        'kind = "mc-eval"',
-        "name = %s" % toml_value(doc["name"]),
-        'source = "none"  # the models and scripts come as inputs of the stage plan',
-        "image = %s" % toml_value(image),
-        "visibility = %s" % toml_value(doc["visibility"]),
-        'determinism = "seeded"',
-        "",
-        "# The openEMS image is not a yapnr image: its interpreter, no KiCad launcher.",
-        "[runtime]",
-    ]
-    lines += ["%s = %s" % (k, toml_value(v)) for k, v in sorted(RUNTIME.items())]
-    lines += ["", "[config]", 'stage_plan = "stage.jsonl"', "", "[placement]"]
-    lines += ["%s = %s" % (k, toml_value(v)) for k, v in sorted(placement(doc).items())]
-    return "\n".join(lines) + "\n"
+    return image_tasks.campaign_toml(
+        doc, image, RUNTIME, placement(doc), "openems_plan.py", "openEMS"
+    )
 
 
 def generate(jobs_path: Path, out: Path, image: str) -> Dict[str, Any]:
@@ -454,10 +317,6 @@ def generate(jobs_path: Path, out: Path, image: str) -> Dict[str, Any]:
 
 
 # --- collect: fetched results -> the local runs layout
-
-
-def task_key(task_id: str) -> str:
-    return task_id.replace("/", "~")
 
 
 def collect(

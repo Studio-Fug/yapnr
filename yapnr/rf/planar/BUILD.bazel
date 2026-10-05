@@ -1,0 +1,21 @@
+"""yapnr.rf.planar: the solver-neutral layered planar structure (yapnr-planar-v1), its adapters
+and the geometry cleaner (docs/rf-palace.md).
+
+The document model, the stackups, the generated lines and fit_box are stdlib only. The cleaner
+and the other adapters import shapely lazily and the KiCad adapter yapnr.fab.board: they run in
+the FEA environment (and the Palace task image), not under Bazel, like the coupons' 2D solver.
+"""
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "planar",
+    srcs = glob(["*.py"]),
+    imports = ["../../.."],
+    deps = [
+        "//yapnr:package",
+        "//yapnr/rf:package",
+    ],
+)

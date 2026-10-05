@@ -14,17 +14,17 @@ connected part of the removed copper (the residue) is a width violation when
 Space violations are the same tests on the void (gaps, slots and enclosed holes). Clearance to
 copper outside the footprint is KiCad's job.
 
-The raster test alone misses one shape of space violation: two separate copper regions whose
-closest approach is a corner pinched against a corner (or an edge), diagonally. Point sampling
-insets the rasterized boundary of each shape toward its interior by up to half a raster step in
-each axis, so near a diagonal corner the two insets compound and the morphological opening sees
-a gap that looks wider than it is — wide enough, in the minimal case, that a real sub-minimum
-gap survives the opening with no residue at all, and the check reports no violation. A dedicated
-exact check closes this: for every pair of distinct input polygons, the true (resolution
-independent) minimum distance between their boundaries is computed by segment-segment distance
-over all edge pairs, and a "corner" violation is raised when that distance is positive but under
-`min_space_mm`. Two polygons meant to touch or overlap (distance 0, e.g. a net merged with
-itself) are left alone — they are not a gap at all.
+The opening of the void cannot see one shape of space violation at any resolution: two
+separate copper regions whose closest approach is a convex corner against a corner (or an
+edge), diagonally. Around such a pinch the void opens out on both sides, so disks of the space
+rule's diameter still cover every void point near it, and the opening leaves no residue even
+when the corners are well under the rule apart (two unit squares 0.1 mm apart corner to corner
+pass a 0.2 mm rule). A dedicated exact check closes this: the input polygons are grouped into
+connected copper (polygons that touch, overlap or nest are one piece), and for every pair of
+distinct pieces the true minimum distance between their boundaries (segment to segment over
+all edge pairs) raises a "corner" violation when it is under `min_space_mm`. Not covered: a
+pinch between two parts of one connected piece (a notch whose mouth is a corner against a
+corner); KiCad's clearance check does not flag that either (same net).
 """
 
 from __future__ import annotations
@@ -175,37 +175,72 @@ def _seg_seg_dist(a, b, c, d) -> tuple[float, float, float, float, float]:
     return dist, px, py, qx, qy
 
 
+def _point_in_poly(x, y, poly) -> bool:
+    inside = False
+    n = len(poly)
+    for k in range(n):
+        (ax, ay), (bx, by) = poly[k], poly[(k + 1) % n]
+        if (ay > y) != (by > y) and x < ax + (y - ay) * (bx - ax) / (by - ay):
+            inside = not inside
+    return inside
+
+
+def _poly_dist(pi, pj, eps) -> tuple[float, float, float, float, float]:
+    """Minimum boundary distance of two polygons and the closest points (stops at contact)."""
+    best = None
+    for ai in range(len(pi)):
+        a, b = pi[ai], pi[(ai + 1) % len(pi)]
+        for aj in range(len(pj)):
+            c, d = pj[aj], pj[(aj + 1) % len(pj)]
+            cand = _seg_seg_dist(a, b, c, d)
+            if best is None or cand[0] < best[0]:
+                best = cand
+            if best[0] <= eps:
+                return best
+    return best
+
+
 def _corner_violations(polygons, min_space_mm: float) -> list[Violation]:
-    """Exact (non-raster) space violations the morphological opening can miss: two distinct
-    polygons whose boundaries come closer than `min_space_mm` at a point, such as a diagonally
-    offset corner-to-corner pinch (see module docstring)."""
-    out = []
-    n = len(polygons)
+    """Exact (non-raster) space violations the morphological opening misses: two distinct
+    pieces of connected copper whose boundaries come closer than `min_space_mm`, such as a
+    diagonally offset corner-to-corner pinch (see module docstring). Polygons that touch,
+    overlap or nest are one piece (a pad primitive inside the body is not a gap)."""
     eps = 1e-9
+    polys = [[tuple(map(float, p)) for p in poly] for poly in polygons]
+    polys = [p for p in polys if len(p) >= 2]
+    n = len(polys)
+    parent = list(range(n))
+
+    def find(k):
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    close = []
     for i in range(n):
-        pi = [tuple(p) for p in polygons[i]]
         for j in range(i + 1, n):
-            pj = [tuple(p) for p in polygons[j]]
-            best = None
-            for ai in range(len(pi)):
-                a, b = pi[ai], pi[(ai + 1) % len(pi)]
-                for aj in range(len(pj)):
-                    c, d = pj[aj], pj[(aj + 1) % len(pj)]
-                    dist, px, py, qx, qy = _seg_seg_dist(a, b, c, d)
-                    if best is None or dist < best[0]:
-                        best = (dist, px, py, qx, qy)
-                    if dist <= eps:
-                        break
-                if best is not None and best[0] <= eps:
-                    break
+            best = _poly_dist(polys[i], polys[j], eps)
             if best is None:
                 continue
-            dist, px, py, qx, qy = best
-            if eps < dist < min_space_mm:
-                at = (0.5 * (px + qx), 0.5 * (py + qy))
-                box = (min(px, qx), max(px, qx), min(py, qy), max(py, qy))
-                out.append(Violation("space", "corner", at, dist, box))
-    return out
+            nested = best[0] > eps and (
+                _point_in_poly(*polys[i][0], polys[j]) or _point_in_poly(*polys[j][0], polys[i])
+            )
+            if best[0] <= eps or nested:
+                parent[find(i)] = find(j)
+            elif best[0] < min_space_mm:
+                close.append((i, j, best))
+    seen = {}
+    for i, j, (dist, px, py, qx, qy) in close:
+        key = tuple(sorted((find(i), find(j))))
+        if key[0] == key[1]:
+            continue
+        at = (0.5 * (px + qx), 0.5 * (py + qy))
+        box = (min(px, qx), max(px, qx), min(py, qy), max(py, qy))
+        v = Violation("space", "corner", at, dist, box)
+        if key not in seen or dist < seen[key].extent_mm:
+            seen[key] = v
+    return list(seen.values())
 
 
 def check_width_space(

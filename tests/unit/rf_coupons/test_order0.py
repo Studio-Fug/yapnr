@@ -387,6 +387,16 @@ class PanelTest(unittest.TestCase):
             b = catalog.board(FR, u)
             text, panel = layout.board_text(FR, b, "A", dict(title="t", git="g"))
             back = re.findall(r'\(gr_text "([^"]*)" \(at [^)]*\) \(layer "B\.SilkS"\)', text)
+            # finding 5: an optimizer winner's hash label (8 hex of its result.json sha256)
+            hashes = {t for t in back if re.fullmatch(r"[0-9a-f]{8}", t)}
+            back = [t for t in back if t not in hashes]
+            want = {
+                s.geometry["window"]["hash8"]
+                for s in b.sticks
+                if s.kind == "demo" and "hash8" in s.geometry.get("window", {})
+            }
+            self.assertEqual(hashes, want, u)
+            self.assertEqual(len(want), 0 if u == "M" else 1, u)
             ids = {s.id for s in b.sticks}
             self.assertEqual({t.split(" ", 1)[1] for t in back}, ids, u)
             self.assertTrue(all(t.startswith(f"O0-{u} ") for t in back), u)

@@ -211,6 +211,20 @@ class DRCTest(unittest.TestCase):
 
         self.assertEqual(_corner_violations([sq_a, sq_b], 0.2), [])
 
+    def test_nested_and_bridged_polygons_are_one_piece(self):
+        # A pad primitive inside the body, or two polygons joined through a third, is one
+        # piece of copper: their boundaries come close but there is no gap to etch.
+        from yapnr.rf.export.drc import _corner_violations
+
+        sq = lambda x0, y0, x1, y1: [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]  # noqa: E731
+        self.assertEqual(_corner_violations([sq(0, 0, 3, 3), sq(0.05, 1, 1, 2)], 0.2), [])
+        bridged = [sq(0, 0, 1, 1), sq(1.1, 0, 2, 1), sq(0.5, 0, 1.5, 1)]
+        self.assertEqual(_corner_violations(bridged, 0.2), [])
+        d = 0.1 / 2**0.5
+        island = [sq(0, 0, 3, 3), sq(0.05, 1, 1, 2), sq(3 + d, 3 + d, 4, 4)]
+        (v,) = _corner_violations(island, 0.2)
+        self.assertAlmostEqual(v.extent_mm, 0.1, places=9)
+
 
 def _footprint():
     sq = lambda x0, y0, s: np.array(  # noqa: E731

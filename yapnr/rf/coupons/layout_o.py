@@ -707,6 +707,18 @@ def demo_stick(wr: Writer, pl: Placed):
     _ticks(wr, pl, [catalog.LAUNCH_MM], ("rpW", s.id))
     _ticks_y(wr, pl, [-H / 2 + catalog.LAUNCH_MM, H / 2 - catalog.LAUNCH_MM], ("rpNS", s.id))
     _copy_box(wr, pl, xw + ww / 2, -2.0, ("box", s.id), s.id, y_text=1.6)  # under the window
+    if win.get("hash8"):
+        # the optimizer winner's label: the first 8 hex of its result.json sha256, on the back
+        # under the window (via-free, behind the ground: clear of SILK_RF), below the stick id
+        wr.text(
+            win["hash8"],
+            pl.p(xw + ww / 2, 3.0),
+            (s.id, "hash8"),
+            size=1.0,
+            layer="B.SilkS",
+            angle=pl.angle,
+            justify="mirror",
+        )
 
 
 def _window_x(lf: float) -> float:

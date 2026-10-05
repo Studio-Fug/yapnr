@@ -33,8 +33,8 @@
         },
         "corrected": {
           "s11_max_db": -20.899,
-          "s21_min_db": -3.251,
-          "s31_min_db": -3.251
+          "s21_min_db": -3.3059,
+          "s31_min_db": -3.3059
         },
         "s11_minima_ghz": [4.9326]
       },
@@ -52,7 +52,7 @@
         "s11_minima_ghz": [5.481],
         "vs_yapnr_corrected": {
           "max_abs_ds11": 0.0586,
-          "max_abs_ds21_db": 0.0793,
+          "max_abs_ds21_db": 0.0834,
           "s11_minima_ghz": [[4.9326], [5.481]],
           "max_imbalance_db": [0.0, 0.0058]
         }
@@ -71,7 +71,7 @@
         "s11_minima_ghz": [5.4027],
         "vs_yapnr_corrected": {
           "max_abs_ds11": 0.0524,
-          "max_abs_ds21_db": 0.07,
+          "max_abs_ds21_db": 0.071,
           "s11_minima_ghz": [[4.9326], [5.4027]],
           "max_imbalance_db": [0.0, 0.0066]
         }
@@ -86,8 +86,8 @@
         },
         "corrected": {
           "s11_max_db": -21.341,
-          "s21_min_db": -3.2391,
-          "s31_min_db": -3.2391
+          "s21_min_db": -3.2851,
+          "s31_min_db": -3.2851
         },
         "s11_minima_ghz": [5.0445]
       },
@@ -105,7 +105,7 @@
         "s11_minima_ghz": [5.1468],
         "vs_yapnr_corrected": {
           "max_abs_ds11": 0.0417,
-          "max_abs_ds21_db": 0.0642,
+          "max_abs_ds21_db": 0.0243,
           "s11_minima_ghz": [[5.0445], [5.1467]],
           "max_imbalance_db": [0.0, 0.0041]
         }
@@ -124,7 +124,7 @@
         "s11_minima_ghz": [5.1103],
         "vs_yapnr_corrected": {
           "max_abs_ds11": 0.0363,
-          "max_abs_ds21_db": 0.0636,
+          "max_abs_ds21_db": 0.0169,
           "s11_minima_ghz": [[5.0445], [5.1103]],
           "max_imbalance_db": [0.0, 0.0044]
         }

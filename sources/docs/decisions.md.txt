@@ -960,6 +960,35 @@ The native FDTD kernel (branch `claude/rf-kernels`, merged into #29;
   the last bits of a modal-source run (not in the steppers); real-arithmetic products in the
   solve might close that, not tried (it would move every published number in the last bits).
 
+The corrected radiation box and pattern requirements (branch `claude/rf-pattern`,
+[design](design/rf-topology-optimization.md) §25–§26, [guide](rf-inverse-design.md)); the owner
+reviews these with the pull request:
+
+- **Modal port waves are the default** (`solver.port_extraction: modal`): the V/I samples read
+  an antenna's own radiation by up to 5 %. `port_extraction` is left out of the hash at its
+  default like the other later solver options, so the circuit cases keep their hashes (their
+  S-parameters move by about 1e-4); `vi` stays available. The tiny test spec keeps `vi`: its
+  grid is too small for the modal planes.
+- **The radiation box is closed, without feed windows,** its feed faces separated modally on the
+  whole transverse plane; `window_margin_mm` and `window_height_mm` are an error (nulls still
+  load, so round 2's run directories do), `clearance_cells` (2) replaces the old default offset
+  and height. The antenna presets change hash; the published `docs/rf/antenna/spec.json` stays
+  the round-2 run's spec.
+- **On the infinite substrate η is reported as the non-guided fraction,** with the closed-form
+  surface-wave share as a quantified assumption in the reports, and pattern requirements are
+  refused there.
+- **The 4 % power balance is replaced** by the incident-power check (1e-3) and the closed-box
+  identity (0.5 %), and on boards the far field's power check (1 %); these runs use tol 1e-4.
+- **Board models have lumped ports only, one ground layer, no vias and no copper-edge
+  correction on the ground's edges;** a board design's KiCad footprint has its copper without
+  port pads or rule areas. The closed-form seeds and `reference_ohm` need line ports.
+- **Each direction of a pattern requirement is its own term of the minimax** (null filling
+  rather than averaging); realized gain is the default gain; `shape` offers the forward
+  Kullback–Leibler divergence and the log-L2 error, both read through one `max_rms_db`.
+- **Not re-validated in this change:** the five published cases (the divider, combiner,
+  diplexer and bank move by about 1e-4; the antenna's numbers are round 2's), and the demos
+  (`docs/rf/antenna-beam`, `docs/rf/antenna-omni-5g8`) are specs that have not been run.
+
 The gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`,
 [design](design/gloss.md)); owner decisions of 2026-09-30 (in Splanc) and 2026-10-02:
 

@@ -314,6 +314,12 @@ three-channel bank, also a refined stub filter, does not meet its criteria: the 
 still leak (channel A at port 3 −9.8 dB and channel B at port 4 −11.4 dB against −12 dB on the finer
 grids). The results and the reasons are <a class="reference internal" href="#end-to-end-cases">below</a>; what the numbers are worth is in
 <a class="reference internal" href="#accuracy">accuracy</a>.</p>
+<p>Since then the radiated fraction is measured by a closed box with modal port waves (the 4 %
+power-balance failures were the old box’s and the V/I port’s bookkeeping, not an energy error;
+design §25), and antennas can be specified by their far field on a finite board: gain, beam
+width, front-to-back ratio, cross-polarization, efficiency and a target radiation density
+(<a class="reference internal" href="#antennas-the-radiated-fraction-boards-and-patterns">antennas</a>). The published antenna’s
+numbers below were measured before that change and have not been re-validated.</p>
 <section id="a-spec">
 <h2>A spec<a class="headerlink" href="#a-spec" title="Link to this heading">¶</a></h2>
 <p>A spec is YAML or JSON (<code class="docutils literal notranslate"><span class="pre">yapnr-rf-spec/1</span></code>, lengths in mm, frequencies in GHz):</p>
@@ -341,18 +347,28 @@ grids). The results and the reasons are <a class="reference internal" href="#end
 <li><p><strong>Ports</strong> are line ports: a feed strip enters the design region on side <code class="docutils literal notranslate"><span class="pre">W</span></code>, <code class="docutils literal notranslate"><span class="pre">E</span></code>, <code class="docutils literal notranslate"><span class="pre">S</span></code> or <code class="docutils literal notranslate"><span class="pre">N</span></code>
 at <code class="docutils literal notranslate"><span class="pre">at_mm</span></code> (the transverse position of its centre) and runs into the absorbing boundary.
 <code class="docutils literal notranslate"><span class="pre">width_cells:</span> <span class="pre">auto</span></code> picks the whole number of cells whose calibrated impedance is closest to
-50 Ω.</p></li>
+50 Ω. Their waves come from the feed’s mode (<code class="docutils literal notranslate"><span class="pre">solver.port_extraction:</span> <span class="pre">modal</span></code>, the default;
+<code class="docutils literal notranslate"><span class="pre">vi</span></code> keeps the voltage and current samples, <a class="reference internal" href="#accuracy">accuracy</a>). On a board model the
+ports are lumped (<code class="docutils literal notranslate"><span class="pre">{n:</span> <span class="pre">1,</span> <span class="pre">kind:</span> <span class="pre">lumped,</span> <span class="pre">x_mm:</span> <span class="pre">[a,</span> <span class="pre">b],</span> <span class="pre">y_mm:</span> <span class="pre">[c,</span> <span class="pre">d],</span> <span class="pre">ohms:</span> <span class="pre">50}</span></code>,
+<a class="reference internal" href="#antennas-the-radiated-fraction-boards-and-patterns">below</a>).</p></li>
 <li><p><strong>Requirements:</strong> <code class="docutils literal notranslate"><span class="pre">max_db</span></code>, <code class="docutils literal notranslate"><span class="pre">min_db</span></code>, <code class="docutils literal notranslate"><span class="pre">between_db:</span> <span class="pre">[lo,</span> <span class="pre">hi]</span></code>, piecewise-linear masks
 <code class="docutils literal notranslate"><span class="pre">mask_db:</span> <span class="pre">[[f,</span> <span class="pre">dB],</span> <span class="pre">...]</span></code> (upper) and <code class="docutils literal notranslate"><span class="pre">min_mask_db</span></code> (lower), <code class="docutils literal notranslate"><span class="pre">phase_deg</span></code> with <code class="docutils literal notranslate"><span class="pre">tol_deg</span></code>
 (engineering e^{+jωt} convention), <code class="docutils literal notranslate"><span class="pre">{radiated:</span> <span class="pre">j,</span> <span class="pre">min:</span> <span class="pre">η}</span></code> for the fraction of the power
-incident at port j that leaves through a box above the board, <code class="docutils literal notranslate"><span class="pre">{absorbed:</span> <span class="pre">j,</span> <span class="pre">element:</span> <span class="pre">R1,</span> <span class="pre">min:</span> <span class="pre">a}</span></code> for the fraction a lumped resistor dissipates, and <code class="docutils literal notranslate"><span class="pre">{loss:</span> <span class="pre">j,</span> <span class="pre">max:</span> <span class="pre">l}</span></code> for the
+incident at port j that leaves a closed box around the design region other than along the
+feeds (on a board model: the radiated power, the total efficiency), <code class="docutils literal notranslate"><span class="pre">{absorbed:</span> <span class="pre">j,</span> <span class="pre">element:</span> <span class="pre">R1,</span> <span class="pre">min:</span> <span class="pre">a}</span></code> for the fraction a lumped resistor dissipates, and <code class="docutils literal notranslate"><span class="pre">{loss:</span> <span class="pre">j,</span> <span class="pre">max:</span> <span class="pre">l}</span></code> for the
 fraction that leaves neither through a port nor into a lumped resistor (radiation and the
-copper’s and substrate’s dissipation, gray copper’s included). Every requirement names a band
-and may set its <code class="docutils literal notranslate"><span class="pre">scale</span></code> (the normalization of its violation).</p></li>
+copper’s and substrate’s dissipation, gray copper’s included). On a board model also the
+pattern requirements: <code class="docutils literal notranslate"><span class="pre">gain</span></code>, <code class="docutils literal notranslate"><span class="pre">ripple</span></code>, <code class="docutils literal notranslate"><span class="pre">hpbw</span></code>, <code class="docutils literal notranslate"><span class="pre">front_to_back</span></code>, <code class="docutils literal notranslate"><span class="pre">cross_pol</span></code>, <code class="docutils literal notranslate"><span class="pre">shape</span></code> and
+<code class="docutils literal notranslate"><span class="pre">efficiency</span></code> (<a class="reference internal" href="#antennas-the-radiated-fraction-boards-and-patterns">below</a>). Every requirement
+names a band and may set its <code class="docutils literal notranslate"><span class="pre">scale</span></code> (the normalization of its violation).</p></li>
 <li><p><strong>Optional sections:</strong> <code class="docutils literal notranslate"><span class="pre">fixed</span></code> (rectangles of fixed copper or keepout), <code class="docutils literal notranslate"><span class="pre">lumped</span></code> (resistors
 across a gap, such as a Wilkinson divider’s isolation resistor: the body rectangle stays void
-and carries the resistance between two copper pads), <code class="docutils literal notranslate"><span class="pre">radiation</span></code> (the box’s offset and
-height), <code class="docutils literal notranslate"><span class="pre">solver</span></code> (backend, precision, tolerances, <code class="docutils literal notranslate"><span class="pre">edge_correction</span></code> and <code class="docutils literal notranslate"><span class="pre">port_source:</span> <span class="pre">mode</span></code>, <a class="reference internal" href="#accuracy">accuracy</a>) and <code class="docutils literal notranslate"><span class="pre">optimizer</span></code>: the β schedule, iteration caps, budget, move
+and carries the resistance between two copper pads), <code class="docutils literal notranslate"><span class="pre">radiation</span></code> (the radiated-power box:
+<code class="docutils literal notranslate"><span class="pre">clearance_cells</span></code>, default 2, and optionally <code class="docutils literal notranslate"><span class="pre">offset_mm</span></code> and <code class="docutils literal notranslate"><span class="pre">height_mm</span></code>; the feed-window keys
+of round 2 are an error), <code class="docutils literal notranslate"><span class="pre">board</span></code>, <code class="docutils literal notranslate"><span class="pre">far_field</span></code> and <code class="docutils literal notranslate"><span class="pre">patterns</span></code> (a board model and its pattern
+targets, <a class="reference internal" href="#antennas-the-radiated-fraction-boards-and-patterns">below</a>), <code class="docutils literal notranslate"><span class="pre">solver</span></code> (backend,
+precision, tolerances, <code class="docutils literal notranslate"><span class="pre">edge_correction</span></code>, <code class="docutils literal notranslate"><span class="pre">port_source:</span> <span class="pre">mode</span></code> and <code class="docutils literal notranslate"><span class="pre">port_extraction</span></code>,
+<a class="reference internal" href="#accuracy">accuracy</a>) and <code class="docutils literal notranslate"><span class="pre">optimizer</span></code>: the β schedule, iteration caps, budget, move
 limits, <code class="docutils literal notranslate"><span class="pre">conservative</span></code> (CCSA steps that never raise t), <code class="docutils literal notranslate"><span class="pre">adaptive_move</span></code> (steps that raise t
 by more than <code class="docutils literal notranslate"><span class="pre">trust_slack</span></code> are refused and retried with half the move; <code class="docutils literal notranslate"><span class="pre">trust_reference:</span> <span class="pre">best</span></code> measures the slack from the β epoch’s best t with a slack shrinking as β grows, so that
 accepted steps cannot creep upward one slack at a time), <code class="docutils literal notranslate"><span class="pre">seed</span></code> (<code class="docutils literal notranslate"><span class="pre">star</span></code>,
@@ -376,6 +392,107 @@ continuation). Binarized designs are always judged by the spec at its own freque
 <span class="n">lost</span> <span class="o">=</span> <span class="n">Loss</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">at_most</span><span class="p">(</span><span class="mf">0.08</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="s2">&quot;pass&quot;</span><span class="p">)</span>  <span class="c1"># radiated and dissipated outside resistors</span>
 </pre></div>
 </div>
+</section>
+<section id="antennas-the-radiated-fraction-boards-and-patterns">
+<h2>Antennas: the radiated fraction, boards and patterns<a class="headerlink" href="#antennas-the-radiated-fraction-boards-and-patterns" title="Link to this heading">¶</a></h2>
+<p><strong>The radiated fraction.</strong> <code class="docutils literal notranslate"><span class="pre">{radiated:</span> <span class="pre">j,</span> <span class="pre">min:</span> <span class="pre">η}</span></code> is measured by a box closed by the ground
+around the design region (<code class="docutils literal notranslate"><span class="pre">radiation:</span> <span class="pre">{clearance_cells:</span> <span class="pre">2}</span></code>): the power leaving it, plus the
+guided waves the feeds carry in and out (separated by projecting on their modes), over the
+incident power. It does not depend on the box’s size beyond the feed’s own loss inside it. On
+the infinite substrate of the default model this is the <strong>non-guided fraction</strong>: the
+substrate’s surface wave never leaves any closed surface, so it counts as radiated (0.27 of a
+half-wave patch’s power on S2 at 10 GHz by the closed form; the result and validation reports
+state it under <code class="docutils literal notranslate"><span class="pre">assumptions</span></code>). The validator checks it against the closed box’s discrete
+Poynting identity (0.5 %) and the port’s incident power against a run with an empty design
+region (1e-3). Design §25 has the audit that led here.</p>
+<p><strong>Board models.</strong> A <code class="docutils literal notranslate"><span class="pre">board</span></code> section puts the whole board in the simulation: a substrate block of
+the board’s outline and <code class="docutils literal notranslate"><span class="pre">thickness_mm</span></code>, a ground on the plane <code class="docutils literal notranslate"><span class="pre">stackup.h_mm</span></code> below the copper
+(its outline less <code class="docutils literal notranslate"><span class="pre">keepout</span></code> rectangles) or <code class="docutils literal notranslate"><span class="pre">ground:</span> <span class="pre">infinite</span></code> (a PEC floor under everything),
+air on every side and absorbing boundaries beyond. Its ports are lumped: Ez columns from the
+ground to the copper on the grid nodes inside the port’s rectangle, each standing on ground.
+<code class="docutils literal notranslate"><span class="pre">board.copper</span></code> adds fixed top copper outside the design region, such as the feed from a port at
+the board’s edge. A closed box in air around the board then measures the radiated power
+exactly, <code class="docutils literal notranslate"><span class="pre">radiated</span></code> becomes the total efficiency, and the box’s fields give the far field.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># The 5.8 GHz printed omni antenna (docs/rf/antenna-omni-5g8/spec.json, abridged)</span>
+<span class="nt">stackup</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> er</span><span class="p">:</span><span class="w"> </span><span class="nv">4.3</span><span class="p p-Indicator">,</span><span class="nt"> tan_delta</span><span class="p">:</span><span class="w"> </span><span class="nv">0.02</span><span class="p p-Indicator">,</span><span class="nt"> h_mm</span><span class="p">:</span><span class="w"> </span><span class="nv">0.246</span><span class="p p-Indicator">,</span><span class="nt"> f_ref_ghz</span><span class="p">:</span><span class="w"> </span><span class="nv">5.8</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="c1"># L1 over L2</span>
+<span class="nt">grid</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> pitch_mm</span><span class="p">:</span><span class="w"> </span><span class="nv">0.25</span><span class="p p-Indicator">,</span><span class="nt"> substrate_cells</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="nt">design_region</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> x_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">-14.5</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">14.5</span><span class="p p-Indicator">],</span><span class="nt"> y_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0.5</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">13.5</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="c1"># the ground clearance</span>
+<span class="nt">symmetry</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mirror_x</span>
+<span class="nt">ports</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> n</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> kind</span><span class="p">:</span><span class="w"> </span><span class="nv">lumped</span><span class="p p-Indicator">,</span><span class="nt"> x_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">-0.25</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.25</span><span class="p p-Indicator">],</span><span class="nt"> y_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">],</span><span class="nt"> ohms</span><span class="p">:</span><span class="w"> </span><span class="nv">50</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="nt">board</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">x_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">-15</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">15</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">y_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">-46</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">14</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">thickness_mm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.6</span>
+<span class="w">  </span><span class="nt">ground</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> x_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">-15</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">15</span><span class="p p-Indicator">],</span><span class="nt"> y_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">-46</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="c1"># or keepout: [{x_mm, y_mm}, ...]</span>
+<span class="w">  </span><span class="nt">copper</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt"> x_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">-0.25</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.25</span><span class="p p-Indicator">],</span><span class="nt"> y_mm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">-0.5</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.5</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}]</span>
+<span class="nt">far_field</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> frame</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> axis</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;+y&#39;</span><span class="p p-Indicator">,</span><span class="nt"> zero</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;+x&#39;</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="c1"># θ from +y, φ from +x</span>
+<span class="nt">patterns</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">omni</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> preset</span><span class="p">:</span><span class="w"> </span><span class="nv">omni</span><span class="p p-Indicator">,</span><span class="nt"> axis</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;+y&#39;</span><span class="p p-Indicator">,</span><span class="nt"> hpbw_deg</span><span class="p">:</span><span class="w"> </span><span class="nv">90</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="nt">requirements</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> s</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">],</span><span class="nt"> max_db</span><span class="p">:</span><span class="w"> </span><span class="nv">-12</span><span class="p p-Indicator">,</span><span class="nt"> band</span><span class="p">:</span><span class="w"> </span><span class="nv">match</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> gain</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> min_dbi</span><span class="p">:</span><span class="w"> </span><span class="nv">-1</span><span class="p p-Indicator">,</span><span class="nt"> directions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cut</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> theta_deg</span><span class="p">:</span><span class="w"> </span><span class="nv">90</span><span class="p p-Indicator">,</span><span class="nt"> points</span><span class="p">:</span><span class="w"> </span><span class="nv">12</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">},</span><span class="nt"> band</span><span class="p">:</span><span class="w"> </span><span class="nv">pattern</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> ripple</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> max_db</span><span class="p">:</span><span class="w"> </span><span class="nv">5</span><span class="p p-Indicator">,</span><span class="nt"> directions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cut</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> theta_deg</span><span class="p">:</span><span class="w"> </span><span class="nv">90</span><span class="p p-Indicator">,</span><span class="nt"> points</span><span class="p">:</span><span class="w"> </span><span class="nv">36</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">},</span><span class="nt"> band</span><span class="p">:</span><span class="w"> </span><span class="nv">pattern</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> radiated</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> min</span><span class="p">:</span><span class="w"> </span><span class="nv">0.6</span><span class="p p-Indicator">,</span><span class="nt"> band</span><span class="p">:</span><span class="w"> </span><span class="nv">pattern</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> shape</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> target</span><span class="p">:</span><span class="w"> </span><span class="nv">omni</span><span class="p p-Indicator">,</span><span class="nt"> max_rms_db</span><span class="p">:</span><span class="w"> </span><span class="nv">3</span><span class="p p-Indicator">,</span><span class="nt"> band</span><span class="p">:</span><span class="w"> </span><span class="nv">pattern</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</pre></div>
+</div>
+<p><strong>Pattern requirements</strong> (each names the excited port, a band, and directions in
+<code class="docutils literal notranslate"><span class="pre">far_field.frame</span></code> or its own <code class="docutils literal notranslate"><span class="pre">frame</span></code>):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Requirement</p></th>
+<th class="head"><p>Bounds</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">{gain:</span> <span class="pre">j,</span> <span class="pre">min_dbi</span> <span class="pre">|</span> <span class="pre">max_dbi</span> <span class="pre">|</span> <span class="pre">min_mask_dbi</span> <span class="pre">|</span> <span class="pre">max_mask_dbi,</span> <span class="pre">directions,</span> <span class="pre">kind,</span> <span class="pre">pol}</span></code></p></td>
+<td><p>realized gain (default), <code class="docutils literal notranslate"><span class="pre">gain</span></code> or <code class="docutils literal notranslate"><span class="pre">directivity</span></code>, in every direction; masks are <code class="docutils literal notranslate"><span class="pre">[[angle,</span> <span class="pre">dBi],</span> <span class="pre">…]</span></code> along a cut</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">{ripple:</span> <span class="pre">j,</span> <span class="pre">max_db,</span> <span class="pre">directions}</span></code></p></td>
+<td><p>the spread (smooth max − smooth min) of the level over the directions</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">{hpbw:</span> <span class="pre">j,</span> <span class="pre">between_deg:</span> <span class="pre">[b1,</span> <span class="pre">b2],</span> <span class="pre">cut_phi_deg,</span> <span class="pre">boresight_theta_deg}</span></code></p></td>
+<td><p>the half-power beam width along a cut, at least b1 and at most b2</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">{front_to_back:</span> <span class="pre">j,</span> <span class="pre">min_db,</span> <span class="pre">front,</span> <span class="pre">back}</span></code></p></td>
+<td><p>the level in <code class="docutils literal notranslate"><span class="pre">front</span></code> over the largest in <code class="docutils literal notranslate"><span class="pre">back</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">{cross_pol:</span> <span class="pre">j,</span> <span class="pre">max_db,</span> <span class="pre">directions,</span> <span class="pre">reference_phi_deg}</span></code></p></td>
+<td><p>cross- over co-polar level (Ludwig-3 about the reference azimuth)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">{shape:</span> <span class="pre">j,</span> <span class="pre">target,</span> <span class="pre">max_rms_db,</span> <span class="pre">form:</span> <span class="pre">kl</span> <span class="pre">|</span> <span class="pre">log_l2,</span> <span class="pre">weight:</span> <span class="pre">uniform</span> <span class="pre">|</span> <span class="pre">target}</span></code></p></td>
+<td><p>the pattern against a target density: Kullback–Leibler divergence or mean square dB error, either read as an RMS dB error</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">{efficiency:</span> <span class="pre">j,</span> <span class="pre">kind:</span> <span class="pre">radiation</span> <span class="pre">|</span> <span class="pre">total,</span> <span class="pre">min}</span></code></p></td>
+<td><p>radiated over accepted (<code class="docutils literal notranslate"><span class="pre">radiation</span></code>) or incident (<code class="docutils literal notranslate"><span class="pre">total</span></code>) power</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">max_rms_db</span></code> reads as an RMS dB error (both forms) only for small deviations from the target; it
+under-penalizes excess radiation where the target density sits at its <code class="docutils literal notranslate"><span class="pre">floor_db</span></code>, since the error
+there is bounded by the floor rather than growing with the excess. Add <code class="docutils literal notranslate"><span class="pre">form:</span> <span class="pre">log_l2,</span> <span class="pre">weight:</span> <span class="pre">uniform</span></code> when sidelobe or off-axis radiation also needs suppressing, not just the shape’s bulk.</p>
+<p><code class="docutils literal notranslate"><span class="pre">pol</span></code> is <code class="docutils literal notranslate"><span class="pre">total</span></code> (default), <code class="docutils literal notranslate"><span class="pre">co</span></code>, <code class="docutils literal notranslate"><span class="pre">cross</span></code> (Ludwig-3), <code class="docutils literal notranslate"><span class="pre">theta</span></code>, <code class="docutils literal notranslate"><span class="pre">phi</span></code>, <code class="docutils literal notranslate"><span class="pre">rhcp</span></code> or <code class="docutils literal notranslate"><span class="pre">lhcp</span></code> (IEEE
+sense). Directions: <code class="docutils literal notranslate"><span class="pre">{point:</span> <span class="pre">{theta_deg,</span> <span class="pre">phi_deg}}</span></code>, <code class="docutils literal notranslate"><span class="pre">{cut:</span> <span class="pre">{theta_deg:</span> <span class="pre">90,</span> <span class="pre">points:</span> <span class="pre">12}}</span></code> (a
+conical cut), <code class="docutils literal notranslate"><span class="pre">{cut:</span> <span class="pre">{phi_deg:</span> <span class="pre">0,</span> <span class="pre">theta_deg:</span> <span class="pre">[-90,</span> <span class="pre">90],</span> <span class="pre">step_deg:</span> <span class="pre">5}}</span></code> (an elevation cut;
+negative θ is the far side), <code class="docutils literal notranslate"><span class="pre">{cone:</span> <span class="pre">{toward:</span> <span class="pre">&quot;-z&quot;,</span> <span class="pre">half_angle_deg:</span> <span class="pre">60,</span> <span class="pre">step_deg:</span> <span class="pre">15}}</span></code>,
+<code class="docutils literal notranslate"><span class="pre">upper</span></code> and <code class="docutils literal notranslate"><span class="pre">sphere</span></code>. Targets: <code class="docutils literal notranslate"><span class="pre">{preset:</span> <span class="pre">beam,</span> <span class="pre">toward,</span> <span class="pre">hpbw_deg:</span> <span class="pre">h</span> <span class="pre">or</span> <span class="pre">[h_E,</span> <span class="pre">h_H],</span> <span class="pre">e_plane_phi_deg,</span> <span class="pre">back_db}</span></code> (broadside, endfire or a fan beam), <code class="docutils literal notranslate"><span class="pre">{preset:</span> <span class="pre">omni,</span> <span class="pre">axis,</span> <span class="pre">hpbw_deg:</span> <span class="pre">h</span> <span class="pre">or</span> <span class="pre">&quot;dipole&quot;,</span> <span class="pre">tilt_deg}</span></code>, a <code class="docutils literal notranslate"><span class="pre">{grid:</span> <span class="pre">{theta_deg,</span> <span class="pre">phi_deg,</span> <span class="pre">dbi}}</span></code> table or <code class="docutils literal notranslate"><span class="pre">{sh:</span> <span class="pre">{lmax,</span> <span class="pre">coef}}</span></code>
+(real spherical harmonics of the power density); each is floored at <code class="docutils literal notranslate"><span class="pre">floor_db</span></code> (−20 dB below
+its peak) and normalized to 4π.</p>
+<p>Each direction is a separate term of the minimax, so the optimizer raises the worst direction
+(it fills an omni pattern’s nulls) rather than the average. Realized gain is the default
+because directivity and shape alone can be bought with lossy gray copper; the problem warns
+when a shape or directivity requirement has no gain or efficiency floor on its port, when a
+target peaks above what a box of its size can radiate (Harrington’s (ka)² + 2ka), and when a
+grid or harmonic target does not integrate to 4π. Over an infinite ground the far field exists
+above it only. Every term has an exact adjoint gradient (the far field is a linear map of the
+box’s fields), at a cost of about 0.2–1 s per evaluation against tens of seconds of FDTD.
+<code class="docutils literal notranslate"><span class="pre">result.json</span></code> reports per port the peak directivity and realized gain, their direction, the
+efficiencies and the far field’s power check (<code class="docutils literal notranslate"><span class="pre">far_field</span></code>). Design §26 has the method and its
+measurements. Not yet: several ground layers, vias, the ground as a design layer, and port
+pads in a board design’s KiCad footprint.</p>
 </section>
 <section id="running-a-design">
 <h2>Running a design<a class="headerlink" href="#running-a-design" title="Link to this heading">¶</a></h2>
@@ -814,9 +931,10 @@ the grids agree to 0.4–0.5 %: the minima move to 9.98 and 10.98 GHz at half th
 remaining half per cent is more than the plain patch’s 0.13 % and the 0.1–0.3 % of a stub with
 two-cell gaps, slots or holes, and its cause is not established. Over the band η is 0.83–0.87
 on the optimization grid and 0.82–0.86 on the finer ones.</p>
-<p><strong>Power balance.</strong> The error (the box’s flux plus the dissipation inside, against the port’s net
-power) is −3.6, −4.6 and −4.7 % at 9.7 GHz on the three grids and −0.9 to −1.8 % at 10.0 and
-10.3 GHz, so the case fails the 4 % check on the fine and finer grids (round 2’s criterion,
+<p><strong>Power balance (round 2’s check, since replaced).</strong> The error (the box’s flux plus the
+dissipation inside, against the port’s net power) is −3.6, −4.6 and −4.7 % at 9.7 GHz on the
+three grids and −0.9 to −1.8 % at 10.0 and 10.3 GHz, so the case fails the 4 % check on the
+fine and finer grids (round 2’s criterion,
 not relaxed further; round 1’s was 2 %). A study (design §24.7) found the solver’s energy
 accounting exact (a box without a feed window closes to 0.04 %): the error is the difference
 between the power entering through the feed window and the port’s net power from its V/I
@@ -824,9 +942,14 @@ waves. It converges (1 % from the coarse grid to half its pitch, 0.1 % from ther
 and does not track the window’s size; with the box closed at the V/I plane it changes sign
 across the band (−2.9 to +1.8 %), so neither η nor |S11| is shown to read low, and the cause
 (likely the radiator’s near field at the port’s V/I samples) is not established. η exceeds
-0.7 by 0.12 or more on every grid, more than twice the imbalance. The run took 109 minutes (60
-iterations, three designs each, about 110 s per iteration on 4 threads); the re-validation
-took 16 minutes (3 threads, line calibrations cached).</p>
+0.7 by 0.12 or more on every grid, more than twice the imbalance. The cause has since been
+found (design §25): the port’s V/I waves read the antenna’s own radiation, the feed window
+dropped the power leaving backwards through it, and the feed’s loss between port and box added
+in; with modal waves and a closed box the identity holds to 3e-4 and η on the optimization grid
+is 0.90, 0.92 and 0.89 at 9.7, 10.0 and 10.3 GHz (a non-guided fraction, which includes the
+substrate’s surface wave). The table above is round 2’s and has not been re-run. The run
+took 109 minutes (60 iterations, three designs each, about 110 s per iteration on 4 threads);
+the re-validation took 16 minutes (3 threads, line calibrations cached).</p>
 <p>How the formulation was found (design §22 has every attempt; <a class="reference internal" href="decisions.html"><span class="std std-doc">decisions</span></a>):</p>
 <ul class="simple">
 <li><p><strong>Uniform starts</strong> (transparent, gray, a plate) grew copper along the window’s edges or one
@@ -1301,6 +1424,15 @@ the magnitude with it inflated every |S| by up to 0.15 dB and produced non-passi
 (the earlier −0.01 passivity tolerance). The feed between the measurement and the reference
 plane (6h, about 5 mm on S1) is now de-embedded in phase only; its true loss (about 0.01 dB)
 makes the reported |S| that much low.</p></li>
+<li><p><strong>Port waves next to a radiator (<code class="docutils literal notranslate"><span class="pre">solver.port_extraction</span></code>).</strong> The V/I samples 6h behind the
+reference plane also see the design’s radiated and surface-wave fields: next to the antenna
+the incident power they report moved by −5.2 to +2.0 % with the design and the frequency, and
+the closed-form patch’s match null read −26.1 dB where the guided wave’s is −21.8 dB.
+<code class="docutils literal notranslate"><span class="pre">port_extraction:</span> <span class="pre">modal</span></code> (the default) projects the whole transverse plane on the feed’s
+discrete mode, which is orthogonal to those fields: the incident power then moves by 2–3e-4
+with the design (the antenna against an empty design region, an open end), and on circuits
+the two agree to about 1e-4. The plane must hold the mode’s lateral tail: with a 4h margin on
+S1 an open end moved the incident power by 2e-3, with 8 mm by 4e-4 (design §25.1).</p></li>
 <li><p><strong>The excited port’s incident wave (<code class="docutils literal notranslate"><span class="pre">solver.port_source</span></code>).</strong> The default source, J = n̂ × H
 of the strip’s static field in air, also launches the substrate’s TM0 surface wave, which
 reaches the V/I samples: the excited port’s incident wave reads up to 1.5–2 % off at 8–12 GHz
@@ -1350,7 +1482,13 @@ its pitch (design §24.2).</p></li>
 <section id="limitations">
 <h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>One copper layer over a solid ground; no vias, no finite board or ground edges.</p></li>
+<li><p>One copper layer over a solid ground; no vias. A board model (<code class="docutils literal notranslate"><span class="pre">board</span></code>) has a finite board and
+one ground layer with keepouts, lumped ports only, and no copper-edge correction on the
+ground’s edges; its KiCad export carries the copper without port pads or rule areas.</p></li>
+<li><p>On the infinite substrate the radiated fraction is the non-guided fraction: it includes the
+substrate’s surface wave (0.27 of a half-wave patch’s power on S2 at 10 GHz by Jackson and
+Alexopoulos’s closed form, which the reports state). Radiation efficiency, gain and patterns
+need a board model.</p></li>
 <li><p>The copper is a zero-thickness sheet: without <code class="docutils literal notranslate"><span class="pre">solver.edge_correction</span></code> the strip impedance
 on coarse grids is a few per cent low and edges act about half a cell larger than their
 pixels; with it lines, stubs and the patch agree with a grid three times finer to 0.13–0.22 %,
@@ -1371,11 +1509,9 @@ near-threshold pixels that the binary design loses (the three-channel bank, desi
 <li><p>The width and space repair at export can change a design that relies on features under the
 rules (one-pixel slots, corner contacts): the antenna’s second run met its objectives before
 the repair and missed by 3 dB after it; the dilated variant in the epigraph prevents that.</p></li>
-<li><p>The antenna’s power balance closes to 1–4.7 % over 9.7–10.3 GHz (worst at the lower band
-edge, on the finer grids): the solver’s energy accounting is exact, but the port’s wave
-power and the flux through the feed window differ by that much, with a sign that changes
-across the band, so the radiated fraction and |S11| carry an uncertainty of that order (cause
-not established; design §24.7).</p></li>
+<li><p>The published antenna’s numbers come from round 2’s windowed box and V/I waves (its 4.6–4.7 %
+power-balance failures were that bookkeeping, design §25); the case has not been re-validated
+with the closed box and modal waves.</p></li>
 <li><p>Lumped elements are resistors across a gap (<code class="docutils literal notranslate"><span class="pre">lumped</span></code>); no capacitors, inductors or vias. No
 external solver cross-check.</p></li>
 <li><p>The footprint’s rule areas keep other copper out of the simulated margin (no pour, vias or
@@ -1442,6 +1578,7 @@ on the next layer is assumed and named in the footprint, not enforced.</p></li>
             <ul>
 <li><a class="reference internal" href="#">RF inverse design</a><ul>
 <li><a class="reference internal" href="#a-spec">A spec</a></li>
+<li><a class="reference internal" href="#antennas-the-radiated-fraction-boards-and-patterns">Antennas: the radiated fraction, boards and patterns</a></li>
 <li><a class="reference internal" href="#running-a-design">Running a design</a></li>
 <li><a class="reference internal" href="#end-to-end-cases">End-to-end cases</a><ul>
 <li><a class="reference internal" href="#a-power-divider">(a) Power divider</a></li>

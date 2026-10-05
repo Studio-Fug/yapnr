@@ -778,6 +778,11 @@ either side of the face (normal averaging), for example on a z face:</p>
 </div>
 <p>Power carried by surface waves in the substrate does not reach B and counts as lost, which is
 conservative for a finite board. A near-to-far transform for pattern targets is future work.</p>
+<p><strong>Superseded (§25):</strong> the window and the open bottom made this box drop 3–7 % of the input
+power and count part of the guided wave; on S2 the TM0 surface wave carries 95 % of its power in
+the air, so the box counts it as radiation rather than as lost. The box is now closed by the
+ground, without windows, and the feeds’ guided waves are separated modally (§25.2); pattern
+targets need a finite board (§26).</p>
 </section>
 <section id="dissipation-and-power-balance">
 <h3>5.7 Dissipation and power balance<a class="headerlink" href="#dissipation-and-power-balance" title="Link to this heading">¶</a></h3>
@@ -3184,6 +3189,353 @@ copper and is the exported design on every grid (<code class="docutils literal n
 2.4–15.8 minutes, finer 7.7–39 minutes per case.</p>
 </section>
 </section>
+<section id="the-radiation-box-corrected">
+<h2>25. The radiation box, corrected<a class="headerlink" href="#the-radiation-box-corrected" title="Link to this heading">¶</a></h2>
+<p>The owner asked (2026-10-04) whether the radiation box’s parameterization makes sense. It did
+not: an audit (rftopo/pattern <code class="docutils literal notranslate"><span class="pre">audit.md</span></code>, numbers labelled [S] there) found the solver’s discrete
+Poynting accounting exact (a closed box without a window: flux plus dissipation zero to 1e-4),
+but the radiated fraction off by 4–10 % through four modelling choices that partly cancelled:
+the port’s V/I waves read the antenna’s own radiation (the incident power −5.2..+2.0 % off),
+the feed window dropped 3–6 % of the input power leaving backwards through it and counted
+1–1.6 % of the guided wave, the open bottom dropped the substrate’s 2–4 %, and the 4 % balance
+compared the window’s flux with a port 7 mm upstream (0.8–3.5 % of feed loss in between). The
+round-2 balance failures on the finer grids (4.6 and 4.7 %) are the sum of these terms, not an
+energy error. The box’s four knobs (offset, height, window margin and height) were the wrong
+ones: closed and modal, the result does not depend on the box (§25.2).</p>
+<section id="modal-port-waves-ports-modalplane-solver-port-extraction">
+<h3>25.1 Modal port waves (<code class="docutils literal notranslate"><span class="pre">ports.ModalPlane</span></code>, <code class="docutils literal notranslate"><span class="pre">solver.port_extraction</span></code>)<a class="headerlink" href="#modal-port-waves-ports-modalplane-solver-port-extraction" title="Link to this heading">¶</a></h3>
+<p>A line port’s waves come from projecting the transverse plane at its measurement node (the V/I
+node nearer the reference plane, <code class="docutils literal notranslate"><span class="pre">meas_cells</span></code> behind it) on the feed’s discrete line mode
+(<code class="docutils literal notranslate"><span class="pre">modes.line_mode</span></code>, the profile the modal source launches). The plane is a one-face <code class="docutils literal notranslate"><span class="pre">FluxBox</span></code>:
+E on the node plane and H̄, the mean of the two half-cell H planes, at the same edge centres.
+A forward mode e^{iKa} gives H̄ = c h with c = cos(KΔ/2), so with unconjugated cross products
+along the feed axis and the face’s area weights</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>a₊ + a₋ = ∫ E × h_m / N,    c (a₊ − a₋) = ∫ e_m × H̄ / N,    N = ∫ e_m × h_m
+P_net = ½ Re[(a₊ + a₋) (c (a₊ − a₋))* M],   M = ∫ e_m × h_m*
+</pre></div>
+</div>
+<p>The mode is scaled to unit power (½ Re(c* M) = ½), so P_inc = ½|a|² needs no power factor or
+Z_c, and its voltage −∫E_z dz under the strip is made real and positive, so the phases follow
+the V/I convention. Mode orthogonality removes the radiated and surface-wave fields reaching the
+plane. The waves are de-embedded to the reference plane by the phase of Re K (as before, §5.4).
+For a line along y the solver’s mode frame is left-handed (H → −H, <code class="docutils literal notranslate"><span class="pre">modes</span></code>); the projection
+uses the physical components. The plane spans the interior (one node inside the CPML, the
+ground to below the top CPML), cut half way to the strips of other ports on the same side.</p>
+<p>Modes are solved per frequency once per process, keyed by the cross-section’s content
+(<code class="docutils literal notranslate"><span class="pre">modes.cached_line_mode</span></code>), and the face projections likewise: the solve’s numpy complex
+arithmetic is not reproducible to the last bit between calls (§21.2), and the native/numpy
+identity tests compare problems built in the same process. A solve costs 0.15 s per frequency
+on the antenna’s R1 cross-section.</p>
+<p>The default is <code class="docutils literal notranslate"><span class="pre">&quot;modal&quot;</span></code>; <code class="docutils literal notranslate"><span class="pre">&quot;vi&quot;</span></code> keeps round 2’s waves. <code class="docutils literal notranslate"><span class="pre">port_extraction</span></code> joins the solver keys
+omitted from the hash at their default (<code class="docutils literal notranslate"><span class="pre">_SOLVER_NEW</span></code>), so the circuit cases’ hashes do not
+change; there the two agree to about 1e-4 (the audit). The adjoint needs nothing new: the
+waves are linear functionals of the plane’s probes, whose adjoint sources fill the plane.</p>
+<p>Measured [S] (native float64, rftopo/pattern):</p>
+<ul class="simple">
+<li><p>The closed-form inset patch on the antenna’s grid at R1, 10.25 GHz: modal |S11| −21.8 dB
+against V/I −26.1 dB (audit: −21.6 / −26.0).</p></li>
+<li><p>The incident power with the design against an empty design region (an open end, |Γ| ≈ 1) at
+9.7, 10.0, 10.3 GHz: modal +3e-4 (round-2 antenna) and ±2e-4 (patch); V/I −0.6..−2.0 % and
+−2.3..−3.8 %.</p></li>
+<li><p>A straight two-port on S1 (<code class="docutils literal notranslate"><span class="pre">testing.line_spec</span></code>): modal |S11| below −45 dB, |S21| within
+0.05 dB of V/I, |S21 − S12| 2e-4 on a gray design. With the default 4h margin the modal
+planes miss the feed mode’s lateral tail in the CPML and an open end moves the incident power
+by up to 2e-3; with 8 mm, 4e-4. On the tiny test grid (2-cell feeds, 6-cell CPML) the modal
+waves are not usable (its straight line reads −15 to −18 dB), so <code class="docutils literal notranslate"><span class="pre">testing.tiny_spec</span></code> keeps
+<code class="docutils literal notranslate"><span class="pre">&quot;vi&quot;</span></code> and the gradient tests run both.</p></li>
+</ul>
+</section>
+<section id="the-closed-box-domain-radiation-box-problem-nonguided">
+<h3>25.2 The closed box (<code class="docutils literal notranslate"><span class="pre">Domain.radiation_box</span></code>, <code class="docutils literal notranslate"><span class="pre">Problem.nonguided</span></code>)<a class="headerlink" href="#the-closed-box-domain-radiation-box-problem-nonguided" title="Link to this heading">¶</a></h3>
+<p>Faces x−, x+, y−, y+ and z+ from the ground (the PEC carries no flux), no windows. Where a feed
+crosses a face, the guided wave is separated by the modal projection on the whole transverse
+plane at that face’s node (<code class="docutils literal notranslate"><span class="pre">ClosedBox.planes</span></code>, one more probe plane per port):</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>η = [Φ_out(box) + Σ_p s_p P_net,mode(face_p)] / P_inc,mode(face_j)
+</pre></div>
+</div>
+<p>with s_p the port’s inward sign. Because the closed box’s flux is minus the dissipation inside
+it (exactly, for the scheme), η = 1 − Σ|S_ij|² − P_diss/P_inc at the faces, whatever the box’s
+size: the guided mode’s part that passes beside or above the box (5 % above a top two cells
+over the copper on the antenna’s grid) is counted where it enters. A first version projected on
+the box’s face alone and lost that part (η 0.914 against 0.918 for the patch); the full plane
+gives 0.920 at R1 and 10.25 GHz (audit 0.918–0.919). Its dependence on the box is the feed’s
+own loss inside it (0.12 %/mm), and a matched straight line driven by the modal source reads
+|η| ≤ 2e-4.</p>
+</section>
+<section id="the-spec-radiationbox">
+<h3>25.3 The spec (<code class="docutils literal notranslate"><span class="pre">RadiationBox</span></code>)<a class="headerlink" href="#the-spec-radiationbox" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">radiation:</span> <span class="pre">{clearance_cells:</span> <span class="pre">2}</span></code> (the default, written <code class="docutils literal notranslate"><span class="pre">{}</span></code>): the box encloses the design
+region by that many cells (times <code class="docutils literal notranslate"><span class="pre">refine</span></code>) on every side and above the copper, at least two
+cells from the CPML (an error otherwise, naming the margin or air to add). <code class="docutils literal notranslate"><span class="pre">offset_mm</span></code> and
+<code class="docutils literal notranslate"><span class="pre">height_mm</span></code> stay as optional placement and move η by at most the feed loss. The window keys
+are removed: a non-null <code class="docutils literal notranslate"><span class="pre">window_margin_mm</span></code> or <code class="docutils literal notranslate"><span class="pre">window_height_mm</span></code> is an error citing this
+section; round 2’s files with nulls still load. The antenna presets use <code class="docutils literal notranslate"><span class="pre">RadiationBox()</span></code>. The
+published <code class="docutils literal notranslate"><span class="pre">docs/rf/antenna/spec.json</span></code> is round 2’s run directory’s spec and stays as it was
+run; it still loads (as an offset and height box).</p>
+</section>
+<section id="what-means-on-the-infinite-substrate">
+<h3>25.4 What η means on the infinite substrate<a class="headerlink" href="#what-means-on-the-infinite-substrate" title="Link to this heading">¶</a></h3>
+<p>The substrate extends into the CPML, so every closed surface crosses it and the TM0 surface
+wave never leaves: no measurement near the antenna separates it from radiation. η is therefore
+the <strong>non-guided fraction</strong>, radiation and surface wave together, and the problem reports it so
+(<code class="docutils literal notranslate"><span class="pre">describe()[&quot;radiation_box&quot;][&quot;eta&quot;]</span></code>) with a quantified assumption (<code class="docutils literal notranslate"><span class="pre">Problem.assumptions</span></code>, in
+<code class="docutils literal notranslate"><span class="pre">result.json</span></code> and <code class="docutils literal notranslate"><span class="pre">validation.json</span></code>): the surface wave’s share of a half-wave patch’s power,
+P_sw/(P_sp + P_sw) = 1 − e_hed by Jackson and Alexopoulos’s closed form [32]
+(<code class="docutils literal notranslate"><span class="pre">stackup.surface_wave_share</span></code>), 0.27 on S2 at 10 GHz. An earlier openEMS comparison on a finite
+50 × 42 mm board (radiation efficiency 0.82–0.85 against η 0.94–0.95) used a far-field script
+that passed the NF2FF phase centre in millimetres where openEMS reads metres, which flipped two
+faces’ equivalent currents; it is withdrawn (audit erratum, 2026-10-04) and not replaced here —
+a board-model comparison with corrected far-field numbers is an open item (§26.6). Radiation
+efficiency, gain and patterns need a board model (§26); the spec refuses pattern requirements
+without one.</p>
+</section>
+<section id="the-validator-s-checks-validate-power-balance">
+<h3>25.5 The validator’s checks (<code class="docutils literal notranslate"><span class="pre">validate.power_balance</span></code>)<a class="headerlink" href="#the-validator-s-checks-validate-power-balance" title="Link to this heading">¶</a></h3>
+<p>Round 2’s 4 % balance is replaced (<code class="docutils literal notranslate"><span class="pre">cases.CRITERIA[&quot;antenna&quot;]</span></code>):</p>
+<ul class="simple">
+<li><p><strong>incident</strong> (≤ 1e-3): the port’s incident power with the design against a second run with an
+empty design region (<code class="docutils literal notranslate"><span class="pre">incident_error</span></code>): the incident wave does not depend on the design, so
+this measures what the extraction mistakes for it;</p></li>
+<li><p><strong>balance</strong> (≤ 0.5 %): the closed-box identity η + |Γ|² + the other ports + the dissipation
+inside the box − 1, from the modal amplitudes on the faces (<code class="docutils literal notranslate"><span class="pre">error</span></code>; the report also splits the
+flux by face);</p></li>
+<li><p><strong>far field</strong> (≤ 1 %, board models, §26): the quadrature’s radiated power against the Huygens
+box’s flux (<code class="docutils literal notranslate"><span class="pre">validate.far_field_report</span></code>).</p></li>
+</ul>
+<p>These runs use <code class="docutils literal notranslate"><span class="pre">tol</span></code> 1e-4 (<code class="docutils literal notranslate"><span class="pre">BALANCE_TOL</span></code>; at 1e-3 a resonant design keeps up to 0.3 % of
+truncation in the identity). Measured on the round-2 antenna at R1, 9.7–10.3 GHz: incident
+3e-4, identity ≤ 3e-4, η 0.904, 0.925, 0.892; the closed-form patch: incident ≤ 2e-4, identity
+≤ 1.3e-3 (at 9.7 GHz, |Γ|² 0.41). <strong>The published cases are not re-validated in this change</strong>:
+the divider, combiner, diplexer and bank move by about 1e-4 (the audit) and keep their hashes;
+the antenna’s <code class="docutils literal notranslate"><span class="pre">validation.json</span></code> was made with the round-2 box and V/I waves.</p>
+</section>
+</section>
+<section id="board-models-the-far-field-and-pattern-requirements">
+<h2>26. Board models, the far field and pattern requirements<a class="headerlink" href="#board-models-the-far-field-and-pattern-requirements" title="Link to this heading">¶</a></h2>
+<section id="board-models-board-boarddomain">
+<h3>26.1 Board models (<code class="docutils literal notranslate"><span class="pre">board</span></code>, <code class="docutils literal notranslate"><span class="pre">BoardDomain</span></code>)<a class="headerlink" href="#board-models-board-boarddomain" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">board.ground</span></code></p></th>
+<th class="head"><p>substrate</p></th>
+<th class="head"><p>ground</p></th>
+<th class="head"><p>Huygens box</p></th>
+<th class="head"><p>far field</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>(no <code class="docutils literal notranslate"><span class="pre">board</span></code>)</p></td>
+<td><p>infinite, into the CPML</p></td>
+<td><p>PEC floor z = 0</p></td>
+<td><p>none (§25.4)</p></td>
+<td><p>none; η the non-guided fraction</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;infinite&quot;</span></code></p></td>
+<td><p>a block of the board outline</p></td>
+<td><p>PEC floor</p></td>
+<td><p>five faces in air from z = 0</p></td>
+<td><p>image theory, upper half space</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">{x_mm,</span> <span class="pre">y_mm,</span> <span class="pre">keepout}</span></code></p></td>
+<td><p>a block, <code class="docutils literal notranslate"><span class="pre">thickness_mm</span></code> deep</p></td>
+<td><p>PEC sheet on z = 0, the outline less keepouts</p></td>
+<td><p>six faces in air around the board</p></td>
+<td><p>free space, full sphere</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The copper is at z = h (<code class="docutils literal notranslate"><span class="pre">stackup.h_mm</span></code>, the copper-to-ground height the lines are calibrated
+with), the ground at z = 0, and a free board’s block reaches <code class="docutils literal notranslate"><span class="pre">thickness_mm</span></code> − h below the ground
+(the 5.8 GHz board: L1 over L2 at 0.246 mm, 1.6 mm thick). The lateral axes are uniform at the
+design pitch over the design region, the ports and <code class="docutils literal notranslate"><span class="pre">board.copper</span></code> (fixed top copper, such as
+the feed from a port at the board’s edge), then graded with nodes on the board’s, the ground’s
+and the keepouts’ edges (<code class="docutils literal notranslate"><span class="pre">mesh.breakpoint_axis</span></code>; finer inside the block, at most λ_d/15), then
+<code class="docutils literal notranslate"><span class="pre">air_mm</span></code> (default λ0/4) to the CPML. The z axis has the substrate cells between ground and
+copper, graded cells below the ground and in the air, and CPML at both ends for a free board
+(<code class="docutils literal notranslate"><span class="pre">PMLCells.z_lo</span></code>: the engine’s and the native kernel’s CPML code already handled both ends of
+every axis). Materials come per cell and are averaged onto the edges like the copper plane’s
+interface (<code class="docutils literal notranslate"><span class="pre">materials.edge_average</span></code>, which reproduces the layered model to rounding); the ground
+is PEC on its plane’s Ex and Ey edges next to a ground pixel (openEMS’s convention). A board’s
+edges must be at least half a pitch from the uniform core or on its pitch grid.</p>
+<p>Ports are lumped (<code class="docutils literal notranslate"><span class="pre">ports[].kind:</span> <span class="pre">&quot;lumped&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">x_mm</span></code> × <code class="docutils literal notranslate"><span class="pre">y_mm</span></code> a rectangle of nodes, <code class="docutils literal notranslate"><span class="pre">ohms</span></code>
+default 50): Ez columns from the ground’s plane to the copper (<code class="docutils literal notranslate"><span class="pre">LumpedPort.ground</span></code>), each
+standing on a ground pixel (checked), with a = V̂_s/(2√R), b = (2V̂ − V̂_s)/(2√R) and P_inc =
+½|a|² (§5.5). A line port’s feed into the CPML would cross the Huygens box. The port’s own
+reactance (the column’s current) is part of the model, as in openEMS’s lumped port; across
+S2’s 1.524 mm it is of order j10–15 Ω at 10 GHz (an estimate). Line ports are refused on a board
+and lumped ports without one; the closed-form seeds and <code class="docutils literal notranslate"><span class="pre">reference_ohm</span></code> need line ports. In the
+material grid the pixels around a port’s columns inside the window are fixed copper.</p>
+<p>Not modelled: several ground layers and vias, the copper-edge correction on the ground’s edges
+(a keepout’s edge then acts about half a pixel larger: 0.15 mm on a 14 mm clearance, under 1 %
+on a monopole’s resonance), and the ground as a design layer (the gradient formula is the same
+on any sheet plane; later). The KiCad export of a board design carries the window’s copper as
+netless islands, without port pads or rule areas.</p>
+</section>
+<section id="the-transform-farfield-farfield">
+<h3>26.2 The transform (<code class="docutils literal notranslate"><span class="pre">farfield.FarField</span></code>)<a class="headerlink" href="#the-transform-farfield-farfield" title="Link to this heading">¶</a></h3>
+<p>The Huygens box’s own samples (a <code class="docutils literal notranslate"><span class="pre">FluxBox</span></code>: E and H̄ collocated at the Yee edge centres, the
+flux’s area weights) give the equivalent currents, J = n̂ × H̄ and M = −n̂ × E per face pair
+(module doc). With r̂ the direction and the internal e^{−iωt} convention:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>N = Σ A c_J J e^{−ik r̂·r},   L = Σ A M e^{−ik r̂·r},   F = η0 N_⊥ − r̂ × L
+E_far = ik e^{ikr}/(4πr) F,   U = k²/(32π² η0) |F|²
+</pre></div>
+</div>
+<p>c_J = 2/(e^{−ik_nΔ⁻/2} + e^{ik_nΔ⁺/2}) undoes H̄’s averaging over the face’s two half cells for
+the component the far field picks (k_n = k r̂·n̂); with the image ground the top face’s image has
+the mirrored offsets, c_J(−k_n). Images: J → (−J_x, −J_y, J_z), M → (M_x, M_y, −M_z) at −z, so
+e^{−ikwz} becomes −2i sin(kwz) for J_x, J_y, M_z and 2 cos(kwz) for J_z, M_x, M_y. Each face
+pair’s samples form a tensor grid, so a face costs two matrix products per frequency (torch
+complex128, differentiable).</p>
+<p>Quantities per excitation j, frequency and direction: P<em>rad = P_box (exact, the box lies in
+air), D = 4πU/P_rad, G = 4πU/P_acc, G_r = 4πU/P_inc, e_rad = P_rad/P_acc, e_tot = P_rad/P_inc
+(P_acc = P_inc − ½|b_j|²). In a board model <code class="docutils literal notranslate"><span class="pre">radiated</span></code> is e_tot. The quadrature
+(<code class="docutils literal notranslate"><span class="pre">sphere_quadrature</span></code>): Gauss–Legendre in cos θ with n</em>θ = ⌈k<em>max a⌉ + 10 nodes (a the radius of
+the sphere around the box) and 2n</em>θ uniform φ, the upper hemisphere over an image ground.
+<code class="docutils literal notranslate"><span class="pre">Frame(axis,</span> <span class="pre">zero)</span></code> sets the polar axis and φ = 0; polarization: θ, φ, Ludwig-3 co and cross
+about <code class="docutils literal notranslate"><span class="pre">reference_phi_deg</span></code>, and circular, IEEE RHCP = (θ̂ − jφ̂)/√2 in e^{+jωt}, internally
+ê_R = (θ̂ + iφ̂)/√2 (pinned by the crossed-dipole test).</p>
+<p>Measured: analytic point sources sampled on a ±λ/4 box (V1, <code class="docutils literal notranslate"><span class="pre">test_farfield</span></code>): the transform’s F
+within 7.9e-4 of the exact far field at λ/40 cells and 3.2e-3 at λ/20 (second order; c_J
+changes the analytic case’s error little, its residual is the faces’ quadrature at their rims);
+a dipole’s D 1.5009 by the 338-point quadrature, P_ff and the box’s flux within 2e-4 and 1e-3 of
+the closed form; images to 2e-3. FDTD (V2, <code class="docutils literal notranslate"><span class="pre">test_board</span></code>; a lumped column of 2 mm at 3 GHz,
+1 mm pitch): the pattern within 0.002 dB (free space) and 0.012 dB (on an infinite ground) of
+sin²θ over 10–170°, D(90°) from the box’s flux 1.5003 and 3.002; P_ff/P_box − 1 = −6e-3 with the
+box at 0.1 λ (two cells off the board, where the element’s reactive near field, ten times its
+far field, must cancel on the box), −4e-4 at 0.2 λ and +7e-5 at 0.33 λ. Cost: the transform and
+its gradient for one excitation take 0.17 s on the 50 × 42 mm demo (146k box samples, 88
+directions) and 1.1 s on the 5.8 GHz board (195k samples, 498 directions with the quadrature),
+4 threads, against tens of seconds per FDTD run.</p>
+</section>
+<section id="pattern-requirements-patterns">
+<h3>26.3 Pattern requirements (<code class="docutils literal notranslate"><span class="pre">patterns</span></code>)<a class="headerlink" href="#pattern-requirements-patterns" title="Link to this heading">¶</a></h3>
+<p>Requirements per excitation port, over a band, in <code class="docutils literal notranslate"><span class="pre">far_field.frame</span></code> (or a requirement’s own
+<code class="docutils literal notranslate"><span class="pre">frame</span></code>); each gives one normalized violation per frequency and direction, every one a term of
+the excitation’s smooth maximum (§9), so the epigraph raises the worst direction (null filling
+for an omni antenna), not the average:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>form</p></th>
+<th class="head"><p>x</p></th>
+<th class="head"><p>φ</p></th>
+<th class="head"><p>s</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">{gain:</span> <span class="pre">j,</span> <span class="pre">kind:</span> <span class="pre">realized|gain|directivity,</span> <span class="pre">pol,</span> <span class="pre">min_dbi|max_dbi|min_mask_dbi|max_mask_dbi,</span> <span class="pre">directions}</span></code></p></td>
+<td><p>10 log10 G_r, G or D (default realized; masks in the set’s angle)</p></td>
+<td><p>(L − x)/s or (x − L)/s per direction</p></td>
+<td><p>1 dB</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">{ripple:</span> <span class="pre">j,</span> <span class="pre">max_db,</span> <span class="pre">directions}</span></code></p></td>
+<td><p>smooth max − smooth min (log-sum-exp, τ 0.2 dB)</p></td>
+<td><p>(R − L)/s</p></td>
+<td><p>1 dB</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">{hpbw:</span> <span class="pre">j,</span> <span class="pre">cut_phi_deg,</span> <span class="pre">boresight_theta_deg,</span> <span class="pre">between_deg:</span> <span class="pre">[b1,</span> <span class="pre">b2]}</span></code></p></td>
+<td><p>x at θ_b ± b1/2 and ± b2/2 against x(boresight) − 3 dB</p></td>
+<td><p>four terms</p></td>
+<td><p>1 dB</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">{front_to_back:</span> <span class="pre">j,</span> <span class="pre">min_db,</span> <span class="pre">front,</span> <span class="pre">back}</span></code></p></td>
+<td><p>x(front) − smooth max over back</p></td>
+<td><p>(L − FB)/s</p></td>
+<td><p>1 dB</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">{cross_pol:</span> <span class="pre">j,</span> <span class="pre">max_db,</span> <span class="pre">directions,</span> <span class="pre">reference_phi_deg}</span></code></p></td>
+<td><p>10 log10(U_x/U_co)</p></td>
+<td><p>(x − L)/s</p></td>
+<td><p>3 dB</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">{shape:</span> <span class="pre">j,</span> <span class="pre">target,</span> <span class="pre">max_rms_db,</span> <span class="pre">form:</span> <span class="pre">kl|log_l2,</span> <span class="pre">weight}</span></code></p></td>
+<td><p>KL(q‖p) or the weighted mean square dB error</p></td>
+<td><p>KL/KL_tol − 1, KL_tol = (rms/4.343)²/2; or MSE/rms² − 1</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">{efficiency:</span> <span class="pre">j,</span> <span class="pre">kind:</span> <span class="pre">radiation|total,</span> <span class="pre">min}</span></code></p></td>
+<td><p>e_rad or e_tot</p></td>
+<td><p>(L − e)/s</p></td>
+<td><p>0.1</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Directions: <code class="docutils literal notranslate"><span class="pre">{point}</span></code>, conical and elevation <code class="docutils literal notranslate"><span class="pre">{cut}</span></code>s (negative θ the far side), <code class="docutils literal notranslate"><span class="pre">{cone}</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&quot;upper&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;sphere&quot;</span></code> (the quadrature). Targets (<code class="docutils literal notranslate"><span class="pre">patterns:</span> <span class="pre">{name:</span> <span class="pre">…}</span></code>): a θ–φ grid in dBi
+(bilinear, periodic in φ), real orthonormal spherical harmonics of the power density, or the
+presets <code class="docutils literal notranslate"><span class="pre">beam</span></code> (cos^q of the angle from <code class="docutils literal notranslate"><span class="pre">toward</span></code>, q = ln ½/ln cos(hpbw/2), separate E- and
+H-plane widths, a <code class="docutils literal notranslate"><span class="pre">back_db</span></code> level) and <code class="docutils literal notranslate"><span class="pre">omni</span></code> (cos^q of the elevation about <code class="docutils literal notranslate"><span class="pre">axis</span></code>, or sin²θ for
+<code class="docutils literal notranslate"><span class="pre">&quot;dipole&quot;</span></code>, with <code class="docutils literal notranslate"><span class="pre">tilt_deg</span></code>); floored at <code class="docutils literal notranslate"><span class="pre">floor_db</span></code> (−20 dB) below the peak and normalized by the
+quadrature to ∮ D_t dΩ = 4π. KL (forward, mode-covering) depends on the shape only and does not
+fight the efficiency terms; log-L2 with <code class="docutils literal notranslate"><span class="pre">weight:</span> <span class="pre">target</span></code> shapes a main lobe without chasing
+nulls. Warnings (<code class="docutils literal notranslate"><span class="pre">Problem.assumptions</span></code>): a grid or harmonics target that integrates more than
+1 % off 4π, a target peak above Harrington’s (ka)² + 2ka [33] for the box radius, and a shape or
+directivity requirement without a realized-gain or efficiency floor on the same excitation
+(lossy gray copper can buy a pattern by absorbing). Over an infinite ground every direction
+needs z ≥ 0. The radiation epoch objective (§22) still grows the radiator at β 8; the pattern
+terms act in the spec epochs.</p>
+</section>
+<section id="adjoint-and-checks">
+<h3>26.4 Adjoint and checks<a class="headerlink" href="#adjoint-and-checks" title="Link to this heading">¶</a></h3>
+<p>Every term is a fixed linear map of the box’s DTFTs (the transform) followed by smooth
+functions, so <code class="docutils literal notranslate"><span class="pre">adjoint.wirtinger</span></code> differentiates it and <code class="docutils literal notranslate"><span class="pre">adjoint_sources</span></code> puts the gradient on
+the box’s E samples and both H half planes: pattern terms in the excitation’s group cost no
+extra adjoint run. Finite-difference checks (<code class="docutils literal notranslate"><span class="pre">test_pattern_gradients</span></code>, float64, exact runs,
+<code class="docutils literal notranslate"><span class="pre">aggregate:</span> <span class="pre">none</span></code> so that each requirement is checked alone): every form on a free board and
+over an image ground, every polarization and gain kind and both mask kinds on a board with a
+ground keepout, and the group’s smooth maximum: 1e-12–3e-9 relative. (A cross-pol term on the
+symmetry plane of a mirror-symmetric design is identically −∞ dB and has no derivative; the
+test samples off it.) The board model’s numpy and native float64 runs are bit-identical
+(<code class="docutils literal notranslate"><span class="pre">test_native_identity.test_board_model</span></code>, with the copper-edge correction).</p>
+</section>
+<section id="demos-specs-only">
+<h3>26.5 Demos (specs only)<a class="headerlink" href="#demos-specs-only" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">docs/rf/antenna-beam/spec.json</span></code> (S2, 50 × 42 mm board, the design region 18 × 18 mm, a lumped
+port at the board’s west edge through a fixed 3.2 mm feed: broadside realized gain ≥ 6.5 dBi,
+HPBW 55–90° in both planes, front-to-back ≥ 15 dB, cross-pol ≤ −15 dB in a 30° cone, e_rad ≥ 0.8,
+|S11| ≤ −10 dB over 9.7–10.3 GHz; 0.66 M cells) and <code class="docutils literal notranslate"><span class="pre">docs/rf/antenna-omni-5g8/spec.json</span></code> (the
+transceiver’s 30 × 60 × 1.6 mm FR-4 board, ground on L2 under y &lt; 0, the 14 mm clearance as the
+design region at 0.25 mm pitch, frame axis +y: realized gain ≥ −1 dBi at 12 azimuths, ripple ≤
+5 dB over 36, e_tot ≥ 0.6, an omni shape, |S11| ≤ −12 dB over 5.70–5.90 GHz; 1.05 M cells,
+Δt 0.315 ps). They load, build and evaluate; they have not been run, and their limits are the
+design’s first guesses.</p>
+</section>
+<section id="open-items-adversarial-review-of-c2caac2-dbda1b7">
+<h3>26.6 Open items (adversarial review of c2caac2..dbda1b7)<a class="headerlink" href="#open-items-adversarial-review-of-c2caac2-dbda1b7" title="Link to this heading">¶</a></h3>
+<p>Tracked here rather than fixed in this round, with the evidence that raised each one:</p>
+<ul class="simple">
+<li><p><strong>Board-model resonance against openEMS disagrees by ~3 %, cause unknown.</strong> yapnr’s board model
+(§26.1) resonates at 10.21–10.22 GHz (R1/R2); a corrected openEMS run (coordinates rounded to
+the mesh, §25.4’s erratum) gives 9.92 GHz. The round-2 antenna’s board-model minimum (10.91–
+10.95 GHz) also falls outside its 9.7–10.3 GHz design band, where openEMS gives 10.28 GHz.
+Suspects: the lumped-port column, averaging the substrate block’s edges, and the ground sitting
+on a node plane. No board-model number in this design doc should be read as agreeing with
+openEMS until this is resolved.</p></li>
+<li><p><strong>The default antenna objective (no board model) still optimizes η as the non-guided
+fraction</strong> (§25.4), which includes the TM0 surface wave (about 0.27 of a patch’s radiated power
+[D]): nothing stops the optimizer from raising η by launching more surface wave rather than
+more radiation. A tighter objective — the flux through the box’s air faces alone, as a lower
+bound, or requiring a board model for the final antenna epochs — is not implemented here.</p></li>
+<li><p><strong>The Huygens box’s clearance is in cells, not wavelengths.</strong> The default (<code class="docutils literal notranslate"><span class="pre">clearance_cells:</span> <span class="pre">2</span></code>)
+can put a face inside the reactive near field on a graded, fine mesh (about 0.01 λ from a thin
+monopole tip on demo B’s grid). <code class="docutils literal notranslate"><span class="pre">P_ff/P_box</span></code> has only been checked on the V2 validation geometry
+(0.6 % at 0.1 λ) and the patch, not on either new demo.</p></li>
+<li><p><strong>The omni board model is one ground layer, no feed cable, and a ground sized to the demo’s own
+board (30 × 46 mm, about 0.9 λ at 5.8 GHz), which sets most of the pattern.</strong> A real 4-layer
+board needs the keepout on every ground layer, a common-mode feed current is not modelled, and
+<code class="docutils literal notranslate"><span class="pre">board</span></code> must match the real transceiver board for the gain/pattern numbers to mean anything
+there.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">shape</span></code> requirements with <code class="docutils literal notranslate"><span class="pre">form:</span> <span class="pre">max_rms_db</span></code></strong> are an RMS dB error only for small deviations
+and under-penalize excess radiation where the target sits at its floor; the guide should say so
+and point to <code class="docutils literal notranslate"><span class="pre">log_l2</span></code> with <code class="docutils literal notranslate"><span class="pre">weight:</span> <span class="pre">uniform</span></code> when sidelobe or off-axis radiation also needs
+suppressing.</p></li>
+<li><p>Demos A and B (§26.5) have not been run; their numeric limits are first guesses.</p></li>
+</ul>
+</section>
+</section>
 <section id="references">
 <h2>References<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
@@ -3252,13 +3604,20 @@ microstrip antenna design by topology optimization with enhanced bandwidth,” a
 (2026): density-based TO of microstrip antennas by FDTD, σ = 10^(9ρ̃ − 4), a uniform start
 of 0.7, GCMMA, and the objective log(D₁₁ D₂₁ / D₁ₚ) whose received-energy term “enforces
 the design material to be less lossy” (read for round 2).</p></li>
+<li><p>D. R. Jackson, N. G. Alexopoulos, “Simple approximate formulas for input resistance,
+bandwidth, and efficiency of a resonant rectangular patch,” IEEE Trans. Antennas Propag.
+39(3), 407–410 (1991).</p></li>
+<li><p>R. F. Harrington, “On the gain and beamwidth of directional antennas,” IRE Trans. Antennas
+Propag. 6(3), 219–225 (1958).</p></li>
 </ol>
 <p>[28–30] are cited from memory for round 2 (the web-search quota was used up); the corner
 exponent was recomputed here (§21.1). The paper [1] was read in full, including §5.2 and
 App. A. The adaptation to microstrip rests on [2–11] and on Meep’s public adjoint filters (for
 conventions only). [12–15] are cited for the nonlinear response of metallic designs to
 conductivity; their specific interpolations were not re-read for this design (the web-search
-quota ran out), and nothing here depends on them.</p>
+quota ran out), and nothing here depends on them. [32] and [33] are cited from memory for §25
+and §26: [32]’s space-wave efficiency formula is the one the audit’s <code class="docutils literal notranslate"><span class="pre">jackson.py</span></code> coded and
+checked against its Q factors; [33] is used only for a warning.</p>
 </section>
 </section>
 
@@ -3423,6 +3782,23 @@ quota ran out), and nothing here depends on them.</p>
 <li><a class="reference internal" href="#seeds-keepouts-and-generated-geometry">24.6 Seeds, keepouts and generated geometry</a></li>
 <li><a class="reference internal" href="#the-antenna-s-criteria-and-power-balance">24.7 The antenna’s criteria and power balance</a></li>
 <li><a class="reference internal" href="#results-after-the-fixes">24.8 Results after the fixes</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-radiation-box-corrected">25. The radiation box, corrected</a><ul>
+<li><a class="reference internal" href="#modal-port-waves-ports-modalplane-solver-port-extraction">25.1 Modal port waves (<code class="docutils literal notranslate"><span class="pre">ports.ModalPlane</span></code>, <code class="docutils literal notranslate"><span class="pre">solver.port_extraction</span></code>)</a></li>
+<li><a class="reference internal" href="#the-closed-box-domain-radiation-box-problem-nonguided">25.2 The closed box (<code class="docutils literal notranslate"><span class="pre">Domain.radiation_box</span></code>, <code class="docutils literal notranslate"><span class="pre">Problem.nonguided</span></code>)</a></li>
+<li><a class="reference internal" href="#the-spec-radiationbox">25.3 The spec (<code class="docutils literal notranslate"><span class="pre">RadiationBox</span></code>)</a></li>
+<li><a class="reference internal" href="#what-means-on-the-infinite-substrate">25.4 What η means on the infinite substrate</a></li>
+<li><a class="reference internal" href="#the-validator-s-checks-validate-power-balance">25.5 The validator’s checks (<code class="docutils literal notranslate"><span class="pre">validate.power_balance</span></code>)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#board-models-the-far-field-and-pattern-requirements">26. Board models, the far field and pattern requirements</a><ul>
+<li><a class="reference internal" href="#board-models-board-boarddomain">26.1 Board models (<code class="docutils literal notranslate"><span class="pre">board</span></code>, <code class="docutils literal notranslate"><span class="pre">BoardDomain</span></code>)</a></li>
+<li><a class="reference internal" href="#the-transform-farfield-farfield">26.2 The transform (<code class="docutils literal notranslate"><span class="pre">farfield.FarField</span></code>)</a></li>
+<li><a class="reference internal" href="#pattern-requirements-patterns">26.3 Pattern requirements (<code class="docutils literal notranslate"><span class="pre">patterns</span></code>)</a></li>
+<li><a class="reference internal" href="#adjoint-and-checks">26.4 Adjoint and checks</a></li>
+<li><a class="reference internal" href="#demos-specs-only">26.5 Demos (specs only)</a></li>
+<li><a class="reference internal" href="#open-items-adversarial-review-of-c2caac2-dbda1b7">26.6 Open items (adversarial review of c2caac2..dbda1b7)</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#references">References</a></li>

@@ -923,6 +923,7 @@ ir_drop:
 pour:
   - layer: B.Cu
     net: GND
+    connect: solid
 rf_macro:
   ref: '@rf_macro.rfm1'
   frame: '@radio.u1'

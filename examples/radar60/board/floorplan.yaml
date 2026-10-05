@@ -96,10 +96,14 @@ power:
 
 # R8: a GND flood on B.Cu, the fallback for the bottom-site decoupling caps (pa_cap, pa_r,
 # rf2_cap, pa_bulk, the QSPI/xtal series parts) and the connectors (J1/J3), whose GND pads the
-# fanout plan does not escape to an inner plane the way a top-side pad is. Defaults (stitch,
-# connect: thermal, clearance/width) match the fab profile (pnr-inputs.md "pour"); without this
-# section nothing changes, so it is additive to today's routing.
-pour: [{ layer: B.Cu, net: GND }]
+# fanout plan does not escape to an inner plane the way a top-side pad is. `connect: solid`
+# (not the thermal default): wave 2's first try at the default left 2 bottom-site caps
+# (C38.2, C63.2) with only 1 of the 2 spokes a thermal pad needs (`starved_thermal`) -- small
+# SMD GND pads on a flood with no reflow-isolation requirement, so a full connection is the
+# correct fix, not a loosened limit. stitch/clearance/width still match the fab profile
+# (pnr-inputs.md "pour"); without this section nothing changes, so it is additive to today's
+# routing.
+pour: [{ layer: B.Cu, net: GND, connect: solid }]
 
 # Instance paths (atopile addresses) of the parts this file constrains: the interface to the
 # schematic track (examples/radar60/schematic, elec/src). Change a path here if the source names

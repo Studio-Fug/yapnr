@@ -304,7 +304,7 @@ class GeneratedConstraintsTest(unittest.TestCase):
         field-for-field (gen_board.pour_sections). The engine side -- that this compiles to
         the ``pours`` key pnr.planes/pnr.pour/the router read -- is verified directly against
         pnr.power_spec.parse_pour, not hermetically (this file's contract is no engine)."""
-        self.assertEqual(self.doc["pour"], [{"layer": "B.Cu", "net": "GND"}])
+        self.assertEqual(self.doc["pour"], [{"layer": "B.Cu", "net": "GND", "connect": "solid"}])
 
     def test_slots_clear_the_planned_exit_bands(self):
         """The ball-anchored slots against the exit bands of the committed placement's plan

@@ -218,6 +218,36 @@ class MainTest(unittest.TestCase):
         marker = (self.root / "relwork" / "finish.marker").read_text()
         self.assertEqual(marker, str((self.root / "relwork").resolve()) + "/token")
 
+    def test_cwd_placeholder_is_substituted_with_this_process_cwd(self):
+        # The bug this guards against: a relative --engine, read by a driver that pins its own
+        # subprocess cwd to --engine, makes that subprocess's own relative PYTHONPATH (built
+        # from the same string) resolve against its own cwd and double up -- so --engine must
+        # be absolute too, via {cwd}, not just {work}.
+        previous = Path.cwd()
+        try:
+            os.chdir(self.root)
+            code = pnr_explore_job.main(
+                [
+                    "--driver",
+                    str(self.driver),
+                    "--python",
+                    sys.executable,
+                    "--work-dir",
+                    "work",
+                    "--common",
+                    json.dumps(["--work", "work", "--out", "board"]),
+                    "--step",
+                    json.dumps(["finish", "--placement", "{cwd}/engine"]),
+                    "--out",
+                    "out/s3",
+                ]
+            )
+        finally:
+            os.chdir(previous)
+        self.assertEqual(code, 0)
+        marker = (self.root / "work" / "finish.marker").read_text()
+        self.assertEqual(marker, str(self.root.resolve()) + "/engine")
+
 
 if __name__ == "__main__":
     unittest.main()

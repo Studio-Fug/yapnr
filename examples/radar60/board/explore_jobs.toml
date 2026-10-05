@@ -27,11 +27,13 @@ work_dir = "work"
 # once per inputs change and point this at the result (examples/radar60/board/reva/prepared by
 # convention, matching integrate.py's own --out default).
 seed_from = "reva/prepared"
-# integrate.py runs each step with its subprocess cwd pinned to --engine, so --work/--out must
-# be absolute; {work} is pnr_explore_job.py's own substitution for --work-dir's absolute path
-# (tools/exp/pnr_explore_job.py's docstring). The driver's --out (where the placed/routed board
-# goes) is nested under it so "work/..." below still finds it from this process's own cwd.
-common_args = ["--work", "{work}", "--out", "{work}/board", "--engine", "src", "--python", "${PYTHON}"]
+# integrate.py runs each step with its subprocess cwd pinned to --engine, so --work/--out/
+# --engine must all be absolute (tools/exp/pnr_explore_job.py's docstring, "found the hard
+# way": a relative --engine doubles up integrate.py's own relative PYTHONPATH under its pinned
+# cwd and silently fails to import yapnr.fab.capability, among others). {work}/{cwd} are
+# pnr_explore_job.py's own substitutions. The driver's --out (where the placed/routed board
+# goes) is nested under --work so "work/..." below still finds it from this process's own cwd.
+common_args = ["--work", "{work}", "--out", "{work}/board", "--engine", "{cwd}/src", "--python", "${PYTHON}"]
 post_steps = [["route"], ["check"]]
 collect = ["work/route/candidate.kicad_pcb", "work/board/measure.json", "work/route-diag.json"]
 embed = [["measure", "work/board/measure.json"], ["route_diag", "work/route-diag.json"]]

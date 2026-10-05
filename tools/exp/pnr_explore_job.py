@@ -12,13 +12,17 @@ example that follows this convention, not only radar60).
 its first element the step name and the rest its own arguments (``["place", "--seed", "3"]``);
 ``--common`` (a JSON array, optional, repeatable) is inserted after ``STEP`` and before the
 step's own arguments, for flags every step takes (``--engine``, ``--python``, ``--work``,
-``--out``...). ``{work}`` in ``--common`` or a ``--step``'s own arguments is substituted by
-``--work-dir``'s absolute path -- some drivers run each step with its subprocess ``cwd`` pinned
-to ``--engine`` (so its own module imports resolve), not to this process's, and a relative
-``--work``/``--out`` would then land under ``--engine`` instead of the task's own directory.
-``--seed-from DIR`` copies a prepared snapshot (an earlier ``source``/``prepare`` run, read-only
-in the task's inputs) into ``--work-dir`` before the first step, so a cloud task with no network
-access does not have to redo whatever ``source`` needs (an atopile board, say).
+``--out``...). ``{work}``/``{cwd}`` in ``--common`` or a ``--step``'s own arguments are
+substituted by ``--work-dir``'s and this process's own absolute paths. Some drivers run each
+step's subprocess with its ``cwd`` pinned to ``--engine`` (so its own module imports resolve),
+not to this process's, so a *relative* ``--work``/``--out``/``--engine`` resolves against the
+wrong directory -- found the hard way: a relative ``--engine`` made such a step's own relative
+``PYTHONPATH`` entries, built from that same string, double up under its pinned ``cwd`` and
+silently fail to import. Give such a driver ``{cwd}/src`` rather than ``src``, and ``{work}``
+rather than a bare ``work``, wherever ``--common`` hands it a path. ``--seed-from DIR`` copies a
+prepared snapshot (an earlier ``source``/``prepare`` run, read-only in the task's inputs) into
+``--work-dir`` before the first step, so a cloud task with no network access does not have to
+redo whatever ``source`` needs (an atopile board, say).
 
 Steps run in order and stop at the first failure; each one's exit code, wall time and log are
 recorded. On the way out, ``--collect`` globs (resolved against the current directory, so
@@ -149,15 +153,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         shutil.copytree(args.seed_from, work_dir)
     else:
         work_dir.mkdir(parents=True, exist_ok=True)
-    # Several board drivers run each step's subprocess with its cwd pinned to --engine (so the
-    # step's own module imports resolve), not to this process's cwd; a relative --work/--out
-    # would then resolve under --engine instead of under the task's own work directory. "{work}"
-    # in --common or a --step's own arguments is substituted by --work-dir's absolute path so a
-    # driver can still be told "--out {work}/board" and have it land where this task expects.
+    # {work} and {cwd}: see the module docstring ("found the hard way").
     work_abs = str(work_dir.resolve())
+    cwd_abs = str(Path.cwd().resolve())
 
     def resolve(tokens: List[str]) -> List[str]:
-        return [t.replace("{work}", work_abs) for t in tokens]
+        return [t.replace("{work}", work_abs).replace("{cwd}", cwd_abs) for t in tokens]
 
     common: List[str] = []
     for group in args.common:

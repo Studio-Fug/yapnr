@@ -358,10 +358,13 @@ corrected worst cases are in <a class="reference internal" href="#predictions/co
 (<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.order0</span> <span class="pre">correct</span></code>).</p></li>
 <li><p><strong>The full optimizer history</strong>: every D1 and D2 attempt with its validation, failures included,
 and the rule that picked the shipped run.</p></li>
-<li><p><strong>An independent 3D prediction</strong> (openEMS 0.37, <a class="reference internal" href="#predictions/openems/README.md"><span class="xref myst">predictions/openems/</span></a>):
+<li><p><strong>An independent 3D prediction</strong> (openEMS 0.37, <a class="reference internal" href="predictions/openems/README.html"><span class="std std-doc">predictions/openems/</span></a>):
 D1 and R1 with 43 µm copper on the nominal FR408HR stack at two meshes, the 0.40 mm line, and
 the sticks A01 and A04 with the Cinch launches as the tier-1 calibration sees them, with the
-comparison against the optimizer’s FDTD stated as found.</p></li>
+comparison against the optimizer’s FDTD stated as found: the two agree on |S21| within
+0.09 dB, but openEMS predicts D1’s worst |S11| at −17.4 dB (0.05 mm mesh) and −18.2 dB
+(0.025 mm), a miss of the −20 dB spec, against yapnr.rf’s −20.9 dB, with the in-band minimum
+about 10 % higher in frequency. That competing prediction is registered as it stands.</p></li>
 <li><p><strong>The criteria</strong> (below) and the analysis order.</p></li>
 </ol>
 <p>D1 and D2 carry the first 8 hex digits of the sha256 of their <code class="docutils literal notranslate"><span class="pre">result.json</span></code> in silkscreen, which
@@ -435,9 +438,10 @@ impedance before the comparison; on M the two agree within the fit’s uncertain
 <li><p><strong>Measured notch frequencies</strong> (ring, stub) come from fitting the model’s notch shape to the
 data around the notch, not from the lowest sample (the n = 3 notch lies 10-20 dB above the
 instrument floor).</p></li>
-<li><p><strong>D2</strong> ships only as the owner decides (no D2 formulation passed its own validation; the nearest,
-<code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>, missed its coarse |S21| criterion by 0.012 dB). If it ships, it is judged by
-the same rows, labelled a design that missed its own criterion.</p></li>
+<li><p><strong>D2</strong> ships only as the owner decides (no D2 formulation meets the −20 dB |S11| spec; the
+nearest, <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>, reaches −19.3 to −19.4 dB and passes its |S21|, |S31| validation
+limits, <a class="reference internal" href="predictions/D2/README.html"><span class="std std-doc">D2</span></a>). If it ships, it is judged by the same rows, labelled a
+design that missed its |S11| spec.</p></li>
 <li><p>Criteria are never changed after data arrive; if one must be, results are reported against
 both versions.</p></li>
 </ul>

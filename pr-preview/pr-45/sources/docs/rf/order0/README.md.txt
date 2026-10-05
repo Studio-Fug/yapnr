@@ -41,9 +41,12 @@ its validated copper (`export.contour`'s own representation) into O0-D's window 
 pad (the main body, one net) plus the 14 floating etch islands as separate netless F.Cu fills
 (`layout_o.optimized_pad`); regenerate with `python -m yapnr.rf.coupons generate --stackup
 OSHPARK-4L-FR408HR --upload D --out <dir>`. The merge is mechanically correct (ports, nets,
-orientation) but the regenerated board is **not yet KiCad-DRC clean**: a 0.127 mm netclass
-clearance violation between the main pad and one floating island (actual 0.100 mm) needs an
-owner call (see the PR description) before upload, so the checked-in
+orientation; all 15 polygons equal the footprint's vertex for vertex) but the regenerated board is
+**not yet KiCad-DRC clean**: two 0.127 mm netclass clearance violations between the main pad and
+the two mirror-image floating islands next to it (actual 0.100 mm, corner to corner). The gap is
+in the validated footprint itself, not made by the merge: the raster width/space check
+(`export.drc`) that passed it does not see a gap between two diagonally offset corners. It needs
+an owner call (see the PR description) before upload, so the checked-in
 `examples/rf-coupons/order0/O0-D/` still carries the placeholder window.
 
 The KiCad projects, catalogues and DRC results are in

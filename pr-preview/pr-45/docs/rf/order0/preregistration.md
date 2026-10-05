@@ -63,7 +63,10 @@ each upload:
 5. **An independent 3D prediction** (openEMS 0.37, [predictions/openems/](predictions/openems/README.md)):
    D1 and R1 with 43 µm copper on the nominal FR408HR stack at two meshes, the 0.40 mm line, and
    the sticks A01 and A04 with the Cinch launches as the tier-1 calibration sees them, with the
-   comparison against the optimizer's FDTD stated as found.
+   comparison against the optimizer's FDTD stated as found: the two agree on \|S21\| within
+   0.09 dB, but openEMS predicts D1's worst \|S11\| at −17.4 dB (0.05 mm mesh) and −18.2 dB
+   (0.025 mm), a miss of the −20 dB spec, against yapnr.rf's −20.9 dB, with the in-band minimum
+   about 10 % higher in frequency. That competing prediction is registered as it stands.
 6. **The criteria** (below) and the analysis order.
 
 D1 and D2 carry the first 8 hex digits of the sha256 of their `result.json` in silkscreen, which
@@ -114,9 +117,10 @@ How the rows are applied (decided before any measurement; none of these changes 
 - **Measured notch frequencies** (ring, stub) come from fitting the model's notch shape to the
   data around the notch, not from the lowest sample (the n = 3 notch lies 10-20 dB above the
   instrument floor).
-- **D2** ships only as the owner decides (no D2 formulation passed its own validation; the nearest,
-  `d2-star-sched`, missed its coarse \|S21\| criterion by 0.012 dB). If it ships, it is judged by
-  the same rows, labelled a design that missed its own criterion.
+- **D2** ships only as the owner decides (no D2 formulation meets the −20 dB \|S11\| spec; the
+  nearest, `d2-star-sched`, reaches −19.3 to −19.4 dB and passes its \|S21\|, \|S31\| validation
+  limits, [D2](predictions/D2/README.md)). If it ships, it is judged by the same rows, labelled a
+  design that missed its \|S11\| spec.
 - Criteria are never changed after data arrive; if one must be, results are reported against
   both versions.
 

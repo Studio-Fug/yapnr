@@ -358,9 +358,12 @@ the PR description).</p>
 its validated copper (<code class="docutils literal notranslate"><span class="pre">export.contour</span></code>’s own representation) into O0-D’s window as one custom
 pad (the main body, one net) plus the 14 floating etch islands as separate netless F.Cu fills
 (<code class="docutils literal notranslate"><span class="pre">layout_o.optimized_pad</span></code>); regenerate with <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.coupons</span> <span class="pre">generate</span> <span class="pre">--stackup</span> <span class="pre">OSHPARK-4L-FR408HR</span> <span class="pre">--upload</span> <span class="pre">D</span> <span class="pre">--out</span> <span class="pre">&lt;dir&gt;</span></code>. The merge is mechanically correct (ports, nets,
-orientation) but the regenerated board is <strong>not yet KiCad-DRC clean</strong>: a 0.127 mm netclass
-clearance violation between the main pad and one floating island (actual 0.100 mm) needs an
-owner call (see the PR description) before upload, so the checked-in
+orientation; all 15 polygons equal the footprint’s vertex for vertex) but the regenerated board is
+<strong>not yet KiCad-DRC clean</strong>: two 0.127 mm netclass clearance violations between the main pad and
+the two mirror-image floating islands next to it (actual 0.100 mm, corner to corner). The gap is
+in the validated footprint itself, not made by the merge: the raster width/space check
+(<code class="docutils literal notranslate"><span class="pre">export.drc</span></code>) that passed it does not see a gap between two diagonally offset corners. It needs
+an owner call (see the PR description) before upload, so the checked-in
 <code class="docutils literal notranslate"><span class="pre">examples/rf-coupons/order0/O0-D/</span></code> still carries the placeholder window.</p>
 <p>The KiCad projects, catalogues and DRC results are in
 <a class="reference internal" href="#../../../examples/rf-coupons/order0/README.md"><span class="xref myst">examples/rf-coupons/order0/</span></a>.</p>

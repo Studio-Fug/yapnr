@@ -763,7 +763,10 @@ def o_reference(region: str) -> dict:
     )
 
 
-D1_WINNER = "docs/rf/order0/predictions/D1/runs/d1-star/footprint.kicad_mod"
+D1_WINNER = "docs/rf/order0/predictions/D1-d1c/runs/d1-star/footprint.kicad_mod"
+# Superseded 2026-10-05 (part 5): the old D1/runs/d1-star footprint (label ad20e643) reproduced
+# two 0.100 mm corner-gap violations under PR #53's fixed exact DRC. D1-d1c/runs/d1-star (label
+# 7e070ca8) is the re-optimized, DRC-clean replacement (same spec/criteria/selection rule).
 # D2 never passed every check (|S11| misses -20 dB by 0.6-0.7 dB); `d2-star-sched` is the
 # nearest formulation and compute.md's recommendation absent other owner direction (see
 # docs/rf/order0/predictions/D2/README.md) -- shipped as a pre-registered |S11|-missing design.
@@ -876,8 +879,21 @@ def o_optimized(stick_id: str, footprint_path: Optional[str]) -> dict:
         dict(kind=v.kind, reason=v.reason, at_mm=list(v.at_mm), extent_mm=v.extent_mm)
         for v in drc.violations
     ]
-    win["docs_url"] = f"{DOCS_URL}/{stick_id}"
+    win["docs_url"] = f"{DOCS_URL}/{_predictions_page(footprint_path, stick_id)}"
     return win
+
+
+def _predictions_page(footprint_path: str, stick_id: str) -> str:
+    """The predictions page that holds a winner: the directory under `predictions/` in its path
+    (D1's re-optimized winner lives in `predictions/D1-d1c`, not `predictions/D1`, part 2's
+    superseded export), else the stick id. Review of part 5: the QR on O0-D's A15 pointed at
+    the superseded `predictions/D1` page while its silkscreen hash was the new winner's."""
+    import os
+
+    parts = os.path.normpath(footprint_path).split(os.sep)
+    if "predictions" in parts[:-1]:
+        return parts[parts.index("predictions") + 1]
+    return stick_id
 
 
 def _winner_note(stick_id: str, win: dict) -> str:
@@ -1099,8 +1115,9 @@ def _o_board_notes(upload: str) -> List[str]:
         else (
             [
                 "D1's window carries d1-star (the headline demo): see the D1 stick's label for its"
-                " run id, hash and fab DRC status, and docs/rf/order0/predictions/D1 for the full"
-                " record"
+                " run id, hash and fab DRC status, and docs/rf/order0/predictions/"
+                + _predictions_page(D1_WINNER, "D1")
+                + " for the full record"
             ]
             if upload == "D"
             else []

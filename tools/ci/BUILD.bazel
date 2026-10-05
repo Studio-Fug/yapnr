@@ -8,6 +8,7 @@ py_library(
     name = "ci_lib",
     srcs = [
         "__init__.py",
+        "check_run_inputs.py",
         "ladder_summary.py",
     ],
     imports = ["../.."],
@@ -19,5 +20,13 @@ py_binary(
     name = "ladder_summary",
     srcs = ["ladder_summary.py"],
     main = "ladder_summary.py",
+    deps = [":ci_lib"],
+)
+
+# `bazel run //tools/ci:check_run_inputs -- RUN_DIR --file design.json`
+py_binary(
+    name = "check_run_inputs",
+    srcs = ["check_run_inputs.py"],
+    main = "check_run_inputs.py",
     deps = [":ci_lib"],
 )

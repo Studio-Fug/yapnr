@@ -105,6 +105,51 @@ class FamilyTest(unittest.TestCase):
         self.assertAlmostEqual(eps, 2.685, delta=0.03)
 
 
+class OptimizedWinnerTest(unittest.TestCase):
+    """`catalog.o_optimized`: review findings 1, 4 and 5 (the fab DRC, the hash label computed
+    from the winner's own result.json, and a loud failure instead of a silent placeholder)."""
+
+    def test_missing_winner_path_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            catalog.o_optimized("D1", "/no/such/footprint.kicad_mod")
+
+    def test_none_is_the_explicit_no_winner_case(self):
+        win = catalog.o_optimized("D1", None)
+        self.assertNotIn("islands", win)
+        self.assertEqual(win, catalog.O_WINDOWS["D1"])
+
+    def test_d1_hash_matches_its_result_json_and_fails_fab_drc(self):
+        import hashlib
+        import os
+
+        path = os.path.join(catalog._repo_root(), catalog.D1_WINNER)
+        if not os.path.isfile(path):
+            self.skipTest("D1's winner footprint is not checked out")
+        win = catalog.o_optimized("D1", path)
+        result = os.path.join(os.path.dirname(path), "result.json")
+        with open(result, "rb") as fh:
+            want = hashlib.sha256(fh.read()).hexdigest()[:8]
+        self.assertEqual(win["hash8"], want)
+        # review finding 1: two 0.100 mm island-to-body gaps the raster-only check missed.
+        self.assertFalse(win["drc_ok"])
+        self.assertEqual({v["reason"] for v in win["drc_violations"]}, {"corner"})
+
+    def test_d2_hash_matches_its_result_json_and_passes_fab_drc(self):
+        import hashlib
+        import os
+
+        path = os.path.join(catalog._repo_root(), catalog.D2_WINNER)
+        if not os.path.isfile(path):
+            self.skipTest("D2's winner footprint is not checked out")
+        win = catalog.o_optimized("D2", path)
+        result = os.path.join(os.path.dirname(path), "result.json")
+        with open(result, "rb") as fh:
+            want = hashlib.sha256(fh.read()).hexdigest()[:8]
+        self.assertEqual(win["hash8"], want)
+        self.assertTrue(win["drc_ok"])
+        self.assertEqual(win["drc_violations"], [])
+
+
 class CatalogTest(unittest.TestCase):
     def test_uploads(self):
         m = catalog.board(FR, "M")
@@ -136,13 +181,21 @@ class CatalogTest(unittest.TestCase):
             ["B01", "B02", "B03", "B04", "B05"],
         )
         self.assertTrue(all(s.height == 16.0 for s in w.sticks if s.kind in ("thru", "line")))
-        self.assertEqual(w.stick("D2").kind, "window")
+        # D2 (d2-star-sched, a near-miss) and D1 (d1-star) both carry real exported copper now
+        # (catalog.o_optimized's winner paths), so neither window is a placeholder any more.
+        self.assertEqual(w.stick("D2").kind, "demo")
         d = catalog.board(FR, "D")
         self.assertEqual(sorted(s.id for s in d.sticks), ["A01", "A04", "A20", "D1", "R1"])
         self.assertEqual(d.trl["M"]["dl"], [0.0, 9.0, 30.0])  # review M2: O0-D's own lines
         for u, sid in (("W", "D2"), ("D", "D1")):
-            self.assertTrue(catalog.board(FR, u).stick(sid).geometry["placeholder"])
+            self.assertNotIn("placeholder", catalog.board(FR, u).stick(sid).geometry)
         self.assertNotIn("placeholder", m.stick("R1").geometry)
+        # D1 ships with a known fab-DRC miss (review finding 1/2: re-optimization pending);
+        # D2's near-miss design has no such width/space violation.
+        self.assertFalse(d.stick("D1").geometry["window"]["drc_ok"])
+        self.assertTrue(w.stick("D2").geometry["window"]["drc_ok"])
+        self.assertEqual(len(d.stick("D1").geometry["window"]["hash8"]), 8)
+        self.assertEqual(len(w.stick("D2").geometry["window"]["hash8"]), 8)
 
     def test_conditioning(self):
         """Design §4.2/§4.3: the M set >= 0.926 over 0.5-6 GHz for εeff 2.60-2.95, the W set
@@ -318,7 +371,10 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(
             text.count('(footprint "SMA_EdgeLaunch_Cinch_142-0701-851"'), 33
         )  # design §16.7: 33 SMAs per O0-M copy
-        self.assertIn('(footprint "Placeholder', layout.board_text(FR, catalog.board(FR, "D"))[0])
+        # D1 and D2 both carry real exported copper now (no upload has a placeholder window).
+        self.assertNotIn(
+            '(footprint "Placeholder', layout.board_text(FR, catalog.board(FR, "D"))[0]
+        )
         dru = layout.dru_text(panel.mask_rules, bites=True)
         self.assertIn("memberOfFootprint('MB1')", dru)
         self.assertIn("physical_hole_clearance (min 0.005mm)", dru)
@@ -335,7 +391,8 @@ class PanelTest(unittest.TestCase):
             self.assertEqual({t.split(" ", 1)[1] for t in back}, ids, u)
             self.assertTrue(all(t.startswith(f"O0-{u} ") for t in back), u)
             ph = re.findall(r'\(property "yapnr_placeholder" "([^"]*)"', text)
-            self.assertEqual(len(ph), {"M": 0, "W": 1, "D": 1}[u], u)
+            # D1 and D2 both carry real exported copper now: no placeholder anywhere.
+            self.assertEqual(len(ph), 0, u)
 
     def test_no_stitching_under_silk(self):
         """Review F6: no plane-stitching via within 0.1 mm of a silkscreen item."""

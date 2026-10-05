@@ -200,6 +200,13 @@ class CatalogTest(unittest.TestCase):
         self.assertTrue(d.stick("D1").geometry["window"]["drc_ok"])
         self.assertTrue(w.stick("D2").geometry["window"]["drc_ok"])
         self.assertEqual(len(d.stick("D1").geometry["window"]["hash8"]), 8)
+        # The QR (A15) and the window's docs link point at the winner's own predictions page,
+        # not part 2's superseded predictions/D1 (review of part 5).
+        self.assertTrue(
+            d.stick("D1").geometry["window"]["docs_url"].endswith("/predictions/D1-d1c")
+        )
+        self.assertTrue(d.stick("A15").geometry["url"].endswith("/predictions/D1-d1c"))
+        self.assertTrue(w.stick("D2").geometry["window"]["docs_url"].endswith("/predictions/D2"))
         self.assertEqual(len(w.stick("D2").geometry["window"]["hash8"]), 8)
 
     def test_conditioning(self):

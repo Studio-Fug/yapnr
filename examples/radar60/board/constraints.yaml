@@ -652,6 +652,11 @@ group:
     radius_mm: 10
     hard: true
     anchor_pad: D2
+  - members: ['@pmic.r_sh']
+    anchor: '@pmic.l_b2'
+    radius_mm: 2
+    hard: true
+    anchor_pad: '2'
   - members: ['@pmic.r_damp_rf1']
     anchor: '@pmic.fb_rf1'
     radius_mm: 3

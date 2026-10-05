@@ -319,8 +319,14 @@ or measured yet; every number below comes from models and synthetic measurements
 <tr class="row-even"><td><p><a class="reference internal" href="#../examples/rf-coupons/README.md"><span class="xref myst">examples/rf-coupons/JLC04161H-7628/</span></a></p></td>
 <td><p>board A (4 layers): KiCad project, catalogue, expected S-parameters, fab</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#../examples/rf-coupons/README.md"><span class="xref myst">examples/rf-coupons/JLC06161H-7628/</span></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#../examples/rf-coupons/README.md"><span class="xref myst">examples/rf-coupons/JLC06161H-2116C/</span></a></p></td>
 <td><p>board B (6 layers, stripline): the same</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#../examples/rf-coupons/order0/README.md"><span class="xref myst">examples/rf-coupons/order0/</span></a></p></td>
+<td><p>board O, the OSH Park Order 0 uploads O0-M, O0-W, O0-D</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="rf/order0/README.html"><span class="std std-doc">docs/rf/order0/</span></a></p></td>
+<td><p>Order 0: the boards, the pre-registration, the predictions</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#../examples/rf-coupons/measurements/README.md"><span class="xref myst">examples/rf-coupons/measurements/</span></a></p></td>
 <td><p>the layout of a measurement session</p></td>
@@ -355,16 +361,22 @@ are the only dependencies), or <code class="docutils literal notranslate"><span 
 <td><p>176 × 182</p></td>
 </tr>
 <tr class="row-odd"><td><p>B</p></td>
-<td><p>JLCPCB JLC06161H-7628, 6L</p></td>
+<td><p>JLCPCB JLC06161H-2116C, 6L</p></td>
 <td><p>L3 stripline (S) between L2 and L4; L1 P tie set</p></td>
-<td><p>134 × 189</p></td>
+<td><p>224 × 120</p></td>
+</tr>
+<tr class="row-even"><td><p>O</p></td>
+<td><p>OSH Park 4L, FR408HR</p></td>
+<td><p>Order 0: L1 microstrip M (over In1) and W (over L4)</p></td>
+<td><p>three uploads, below</p></td>
 </tr>
 </tbody>
 </table>
 </div>
 <p>Every structure is a <strong>stick</strong>: a 15 mm (or wider) strip of board with an edge SMA at each end,
 held in the panel by mouse-bite tabs on its long sides. The 50 Ω lines are P 0.291 mm with
-0.20 mm gaps (L1, under mask), M 0.348 mm (L1, under mask) and S 0.214 mm (L3). Each board has</p>
+0.20 mm gaps (L1, under mask) and M 0.348 mm (L1, under mask) on board A; board B, on the
+product’s JLC06161H-2116C, has S 0.279 mm (L3) and P 0.350 mm with 0.20 mm gaps. Each board has</p>
 <ul class="simple">
 <li><p>a <strong>multiline TRL set</strong> of its main family: thru (20 mm) and lines of 2.5, 6.5, 16, 40 and
 100 mm more, a reflect (via shorts at the reference planes) and a 28 mm verification line;</p></li>
@@ -378,13 +390,15 @@ coupled-line section;</p></li>
 <li><p>a <strong>microsection</strong> stick with every line family side by side and a cut line.</p></li>
 </ul>
 <p><img alt="Board A, rendered by KiCad: the TRL set, the variants, the ring, the stubs, the coupledsection, the DC and microsection sticks in their frame" src="../images/rf-coupon-board-a.png" /></p>
-<p>The full list is in each board’s <code class="docutils literal notranslate"><span class="pre">catalog.json</span></code> and in design §5. Board B shares board A’s L1
-cross-section. On its own, board B measures the stripline’s mix of the core’s and the 7628’s εr
-(S’s εeff to 0.008) but not the split between them: its L1 sticks are all under mask, and with the
-mask unknown they do not pin the 7628’s εr (the fit reports the two εr correlated −0.97 to −1.00).
-Fit board B with board A’s fit as the prior (<code class="docutils literal notranslate"><span class="pre">--prior</span> <span class="pre">&lt;board</span> <span class="pre">A&gt;/fit.json</span></code>, §4), which assumes the
-same prepreg and mask on both boards, so order them together. In a synthetic test this cut the
-core’s εr σ from 0.14 to 0.05 and the 7628’s from 0.09 to 0.03, with the truth within 0.4σ.</p>
+<p>The full list is in each board’s <code class="docutils literal notranslate"><span class="pre">catalog.json</span></code> and in design §5. Board B is built on the
+product’s stackup, JLC06161H-2116C (owner decision, 2026-10-02): its L1 dielectric is 2 × 2116, not
+board A’s 7628, so board A’s fit is no longer a prior for it. The stripline alone measures the
+mix of the core’s and the 2116’s εr but not the split; the L1 tie set (P under mask) and a
+mask-off copy of the tie line (B24, P-MO) separate the mask from the 2116’s εr on board B itself.
+The former board B on JLC06161H-7628, which shares board A’s L1 cross-section, stays defined (its
+tables and the synthetic studies below use it): there, board B alone cannot split the core’s and
+the 7628’s εr (correlated −0.97 to −1.00), and board A’s fit as the prior (<code class="docutils literal notranslate"><span class="pre">--prior</span> <span class="pre">&lt;board</span> <span class="pre">A&gt;/fit.json</span></code>, §4) cut the core’s εr σ from 0.14 to 0.05 and the 7628’s from 0.09 to 0.03 in a
+synthetic test.</p>
 <section id="regenerating">
 <h3>Regenerating<a class="headerlink" href="#regenerating" title="Link to this heading">¶</a></h3>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="nv">YAPNR_KICAD_CLI</span><span class="o">=</span>&lt;headless<span class="w"> </span>kicad-cli&gt;<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons<span class="w"> </span>generate<span class="w"> </span><span class="se">\</span>
@@ -398,6 +412,76 @@ KiCad’s DRC with the zones refilled (the boards are DRC-clean: no violations, 
 items), exports Gerbers and Excellon drill files and packs them with the fab notes into
 <code class="docutils literal notranslate"><span class="pre">fab/board-&lt;A|B&gt;-fab.zip</span></code>. Use the headless KiCad (DEVELOPERS.md), never the GUI bundle. The
 generator is parametric in the stackup; a new stackup needs its 2D tables first (§6).</p>
+</section>
+<section id="the-osh-park-edge-launch-order-0">
+<h3>The OSH Park edge launch (Order 0)<a class="headerlink" href="#the-osh-park-edge-launch-order-0" title="Link to this heading">¶</a></h3>
+<p>The OSH Park 4-layer boards of Order 0 use the Cinch 142-0701-851 end-launch SMA (a 0.51 x 0.25 mm
+flat tab contact) on every port, with a launch designed in 2D for each region
+(<code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/launch.py</span></code>, shipped as <code class="docutils literal notranslate"><span class="pre">data/launch-oshpark-4l-fr408hr.json</span></code>):</p>
+<ul class="simple">
+<li><p><strong>Region M</strong> (L1 microstrip over In1.Cu, 0.20 mm): a 0.80 mm grounded-coplanar pin pad from
+the 0.381 mm copper keep-back to 0.4 mm past the tab, its coplanar gap solved with the tab and a
+solder fillet on it (and solved again for the bare toe), In1.Cu cut out under the pad so it
+references In2.Cu; then a 1.2 mm taper to the line in which the cut-out closes at constant 2D
+impedance, and a 2 mm flare of the L1 ground to the line’s 1.0 mm keep-away.</p></li>
+<li><p><strong>Region W</strong> (L1 over B.Cu, inner layers removed): the same pad, then a coplanar taper to the
+3 mm line whose gap follows the 50 Ω solution until the ground has to clear the line.</p></li>
+<li><p><strong>Ground:</strong> the manufacturer’s leg pads on F.Cu and B.Cu, vias inside and behind each pad, a row
+0.7 mm from the edge, and fences (0.3 mm drill, 1.0 mm pitch) 0.50 mm outside the channel to
+4 mm past the launch. The solder mask covers the pad’s gap (a web against bridges) and opens over
+the line and its keep-away from a 0.2 mm dam at the pad end.</p></li>
+</ul>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons.launch<span class="w"> </span>show<span class="w">                     </span><span class="c1"># the numbers and the rule check</span>
+python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons.launch<span class="w"> </span>design<span class="w"> </span>--region<span class="w"> </span>M<span class="w">        </span><span class="c1"># re-solve (FEA environment)</span>
+<span class="nv">YAPNR_KICAD_CLI</span><span class="o">=</span>&lt;headless<span class="w"> </span>kicad-cli&gt;<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons.launch<span class="w"> </span>board<span class="w"> </span>--region<span class="w"> </span>M<span class="w"> </span>--out<span class="w"> </span>&lt;dir&gt;
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">board</span></code> writes a small check board (a thru and a line stick carrying the launch, OSH Park’s
+4-layer design rules) and runs KiCad’s DRC on it. The launch is not 3D-tuned: the multiline
+calibration removes it as long as it repeats. A 3D (openEMS) sweep should still check the 0.38 mm
+of bare laminate under the tab at the milled edge, the connector’s set-back and the tab’s height
+in the 1.73 mm slot, the solder fillet, the closing profile of the In1.Cu cut-out and the return
+path through the legs.</p>
+</section>
+<section id="board-o-the-order-0-uploads">
+<h3>Board O: the Order 0 uploads<a class="headerlink" href="#board-o-the-order-0-uploads" title="Link to this heading">¶</a></h3>
+<p>Board O is the OSH Park 4-layer Order 0 (<a class="reference internal" href="rf/order0/README.html"><span class="std std-doc">docs/rf/order0/</span></a>), generated as three
+uploads of one catalogue (<code class="docutils literal notranslate"><span class="pre">--upload</span> <span class="pre">M|W|D</span></code>):</p>
+<ul class="simple">
+<li><p><strong>O0-M</strong>: the region M multiline TRL set (thru, ΔL 4.5, 13, 30, 70 mm, an open reflect, a 21 mm
+verification line), the width set (0.28, 0.56 mm), the masked line, a directly fed ring
+(notches at n = 1 and 3, 1.92 and 5.79 GHz), an open λ/4 stub notching at 5.5 GHz, the switch-term
+coupon (a shunt 0402 100 Ω), two C-pads (6 and 12 mm, for h), the 30 mm line turned 90°, the
+DC/microsection/tag stick with the QR to docs/rf/order0, and R1, the textbook divider;</p></li>
+<li><p><strong>O0-W</strong>: the region W set (thru, ΔL 5, 14, 34 mm, an open reflect), R1t and the D2 window;</p></li>
+<li><p><strong>O0-D</strong>: the D1 window, an R1 copy, a thru and lines ΔL 9 and 30 mm (its own lot’s γ up to
+6 GHz).</p></li>
+</ul>
+<p>R1 and R1t, the textbook dividers, count their λ/4 arm from Hammerstad’s T-junction reference
+plane (<code class="docutils literal notranslate"><span class="pre">models.tee_offsets</span></code>), as does the stub, and lie on the optimizer’s second grid refinement,
+where their FDTD predictions run. The ring’s arcs and the stub carry the same junction planes in
+the expected S-parameters, and <code class="docutils literal notranslate"><span class="pre">expected</span></code> also writes the pre-registered scalars: the notch
+frequencies to 10 kHz (<code class="docutils literal notranslate"><span class="pre">scalars.json</span></code>) and every line family on the 6 MHz measurement grid
+(<code class="docutils literal notranslate"><span class="pre">lines.csv</span></code>).</p>
+<p>The line families are solved on the sticks’ real cross-sections (the L1 ground at the 1.0 mm or
+4.2 mm keep-away, W over prepreg, core and prepreg with the stitched inner ring) and shipped in
+<code class="docutils literal notranslate"><span class="pre">data/OSHPARK-4L-FR408HR.json</span></code>; the EM528 alternate reads the same tables with its own priors. The
+panel is OSH Park’s frameless form: one outline, 2.54 mm milled slots, OSH Park’s suggested
+mouse-bite tab (0.1 in wide, three 0.020 in holes at 0.0384 in along each stick edge it bridges,
+the outer ones just inside its milled sides), at least two per stick, only on edges that carry no
+connector (a 3-port demo is turned so its fourth edge meets a neighbour’s long side), and nothing
+on a frame. The board’s <code class="docutils literal notranslate"><span class="pre">.kicad_dru</span></code> lets only those holes come within 0.005 mm of a milled edge.
+The back silkscreen names each stick’s upload. Demo windows (D1, D2) carry their launches, feeds,
+outline and keep-away and a placeholder footprint that <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">check</span></code> refuses
+(<code class="docutils literal notranslate"><span class="pre">FAB-PLACEHOLDER</span></code>); the optimizer’s copper replaces it when a design passes.</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="nv">YAPNR_KICAD_CLI</span><span class="o">=</span>&lt;headless<span class="w"> </span>kicad-cli&gt;<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons<span class="w"> </span>generate<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--stackup<span class="w"> </span>OSHPARK-4L-FR408HR<span class="w"> </span>--upload<span class="w"> </span>M<span class="w"> </span>--out<span class="w"> </span>examples/rf-coupons/order0/O0-M
+python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons<span class="w"> </span>expected<span class="w"> </span>--stackup<span class="w"> </span>OSHPARK-4L-FR408HR<span class="w"> </span>--upload<span class="w"> </span>M<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--out<span class="w"> </span>docs/rf/order0/predictions/coupons/O0-M<span class="w">     </span><span class="c1"># FR408HR and EM528</span>
+yapnr<span class="w"> </span>fab<span class="w"> </span>check<span class="w"> </span>examples/rf-coupons/order0/O0-M/O0-M.kicad_pcb<span class="w"> </span>--vendor<span class="w"> </span>oshpark<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--profile<span class="w"> </span>oshpark-4l<span class="w"> </span>--stackup<span class="w"> </span>oshpark-4l-fr408hr
+</pre></div>
+</div>
 </section>
 </section>
 <section id="ordering">
@@ -418,7 +502,7 @@ generator is parametric in the stackup; a new stackup needs its 2D tables first 
 </tr>
 <tr class="row-odd"><td><p>Impedance control</p></td>
 <td><p>yes, JLC04161H-7628</p></td>
-<td><p>yes, JLC06161H-7628</p></td>
+<td><p>yes, JLC06161H-2116C</p></td>
 </tr>
 <tr class="row-even"><td><p>Copper</p></td>
 <td><p>1 oz outer, 0.5 oz inner</p></td>
@@ -463,7 +547,7 @@ drawing must match the pads, or the launch geometry (<code class="docutils liter
 designs). JLC’s capabilities page (read 2026-10-02) asks for copper at least 0.2 mm from a
 routed edge (the zones stop 0.30 mm from every edge), mouse-bite tabs at least 5 mm wide (they
 are 5 mm, six 0.5 mm bites) and silkscreen text at least 1.0 mm high (it is 1.0 mm);</p></li>
-<li><p>the launches are matched by 2D solves only (pad gap 0.342 mm on A, 0.616 mm on B, with the
+<li><p>the launches are matched by 2D solves only (pad gap 0.342 mm on A, 0.435 mm on B, with the
 planes cut out under the pad), not tuned in 3D; the calibration removes them, but their match
 limits the usable bandwidth of the hobby-VNA setup;</p></li>
 <li><p>the switch-connector and u.FL sticks (A18-A20) and the extended set (A23-A31, B17, B20-B23) are
@@ -573,7 +657,7 @@ the FEA environment:</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons.families<span class="w"> </span>build<span class="w"> </span>--samples-dir<span class="w"> </span>&lt;dir&gt;<span class="w">     </span><span class="c1"># about 20 min on 2 cores</span>
 python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons.families<span class="w"> </span>refit<span class="w"> </span>--samples-dir<span class="w"> </span>&lt;dir&gt;<span class="w">     </span><span class="c1"># numpy only: refit the basis</span>
 python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons.families<span class="w"> </span>point<span class="w"> </span>P<span class="w"> </span>--set<span class="w"> </span>L1.etch<span class="o">=</span><span class="m">0</span>.01<span class="w">    </span><span class="c1"># one direct solve</span>
-python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons.families<span class="w"> </span>pad<span class="w"> </span>--stackup<span class="w"> </span>JLC06161H-7628<span class="w"> </span>--cut<span class="w"> </span><span class="m">2</span>,3
+python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons.families<span class="w"> </span>pad<span class="w"> </span>--stackup<span class="w"> </span>JLC06161H-2116C<span class="w"> </span>--cut<span class="w"> </span><span class="m">2</span>,3
 </pre></div>
 </div>
 <p>Each table stores held-out fine-mesh checks. At nominal the surrogates are within 0.01 Ω and
@@ -597,7 +681,8 @@ session), adds four-wire readings (0.05 % noise, the board temperature recorded 
 microsection, and runs the extraction unchanged.</p>
 <p>Results (2026-10-02, 20 draws per board and band, 8 bootstrap sessions per extraction, truth
 from the shipped tables; rms error of the fitted value over the draws, and the median reported
-σ; re-run after the multiline-TRL fix of the same day, which changed them by rounding only):</p>
+σ; re-run after the multiline-TRL fix of the same day, which changed them by rounding only;
+board B is the JLC06161H-7628 board B of that day, not yet re-run on JLC06161H-2116C):</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -755,8 +840,9 @@ quality: the coupler check failed and 6 sticks were reported not passive.</p></l
 </ul>
 <p>The fast part runs in CI (<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//tests/unit/rf_coupons/...</span></code>): noise-free recovery, exact
 multiline TRL, realistic sessions within the reported σ, the mask product, the file formats, the
-catalogue and panel, and the CLI. <code class="docutils literal notranslate"><span class="pre">test_kicad</span></code> (tag <code class="docutils literal notranslate"><span class="pre">kicad</span></code>) generates both boards with DRC;
-<code class="docutils literal notranslate"><span class="pre">test_xsec</span></code> (manual) checks the 2D solver against design §4.3 in the FEA environment.</p>
+catalogue and panel, and the CLI. <code class="docutils literal notranslate"><span class="pre">test_kicad</span></code> (tag <code class="docutils literal notranslate"><span class="pre">kicad</span></code>) generates boards A and B, the
+launch check boards and the three board O uploads with DRC; <code class="docutils literal notranslate"><span class="pre">test_xsec</span></code> (manual) checks the 2D
+solver against design §4.3 in the FEA environment.</p>
 </section>
 <section id="limitations">
 <h2>8. Limitations<a class="headerlink" href="#limitations" title="Link to this heading">¶</a></h2>
@@ -768,8 +854,11 @@ gap-coupled: on 0.21 mm of 7628 with 0.35 mm lines a 0.2 mm end gap couples at a
 (Garg-Bahl gap model), below a hobby VNA’s noise. Its T-junctions are not modelled.</p></li>
 <li><p>Discontinuities (open ends, via shorts, gaps) are closed forms (Kirschning-Jansen-Koster,
 Goldfarb-Pucel), estimates for coplanar lines; no 3D or FDTD check yet (design §12).</p></li>
-<li><p>The launch and the L1-L3 via transition are not 3D-tuned; the switch-connector and u.FL
-sticks are not generated.</p></li>
+<li><p>The launches (the Samtec geometry of boards A and B, the Cinch launch of the OSH Park boards)
+and the L1-L3 via transition are not 3D-tuned; the switch-connector and u.FL sticks are not
+generated. On board O the ring is fed directly (the Order 0 design’s gap-coupled ring needs an
+FDTD-set gap), the C-pads’ line-to-pad step is not modelled, and the demos and references
+(D1, D2, R1, R1t) are predicted by the RF optimizer’s FDTD, not by this tool.</p></li>
 <li><p>The uncertainty model assumes the synthetic error model describes the lab; the verification
 line and the thru repeats scale it, but a session with unusual errors can still be
 overconfident. The held-out checks are the guard.</p></li>
@@ -793,8 +882,6 @@ reported as a problem (<code class="docutils literal notranslate"><span class="p
 the edge and its Z0 is biased. Rebuild the tables around the measured values
 (<code class="docutils literal notranslate"><span class="pre">families</span> <span class="pre">build</span></code>) and refit. A synthetic board with a 0.150 mm L1 dielectric (table edge
 0.158 mm) came out 1.2 Ω (3σ) high in Z0 with only that flag to show it.</p></li>
-<li><p>JLC06161H-2116C (the alternative board B’) is defined as a stackup but has no tables or board
-yet; <code class="docutils literal notranslate"><span class="pre">families</span> <span class="pre">build</span></code> and <code class="docutils literal notranslate"><span class="pre">generate</span></code> make them.</p></li>
 <li><p>The commands are <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.coupons</span> <span class="pre">...</span></code>, not yet <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">rf</span> <span class="pre">coupons</span> <span class="pre">...</span></code>: the <code class="docutils literal notranslate"><span class="pre">yapnr</span></code>
 command line gains <code class="docutils literal notranslate"><span class="pre">rf</span></code> with the inverse-design branch (#29).</p></li>
 <li><p>scikit-rf’s <code class="docutils literal notranslate"><span class="pre">NISTMultilineTRL</span></code> is a cross-check of the calibration when installed (a unit test
@@ -886,6 +973,8 @@ lines”, Electronics Letters 7(26), 1971.</p></li>
 <li><a class="reference internal" href="#what-is-in-the-repository">What is in the repository</a></li>
 <li><a class="reference internal" href="#the-boards">1. The boards</a><ul>
 <li><a class="reference internal" href="#regenerating">Regenerating</a></li>
+<li><a class="reference internal" href="#the-osh-park-edge-launch-order-0">The OSH Park edge launch (Order 0)</a></li>
+<li><a class="reference internal" href="#board-o-the-order-0-uploads">Board O: the Order 0 uploads</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#ordering">2. Ordering</a></li>

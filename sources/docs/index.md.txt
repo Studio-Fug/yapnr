@@ -35,6 +35,8 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
 - [RF fab-model test coupons](rf-fab-coupons.md): coupon boards that measure the fab's stackup
   (εr, loss, heights, copper, etch, mask), and the extraction that turns VNA data into a fitted
   stackup with uncertainties.
+- [Order 0](rf/order0/README.md): the OSH Park 4-layer RF demo and coupon boards, their
+  pre-registered predictions and the measurement procedure.
 - [Cloud and HPC experiments](cloud-experiments.md): `yapnr exp` campaigns on a local pool, Google
   Cloud Batch (Spot VMs) or a Slurm allocation, with cost guards; the owner's bootstrap runbook.
 - [Palace models](rf-palace.md): one solver-neutral description of layered RF structures, its

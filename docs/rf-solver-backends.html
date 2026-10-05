@@ -559,7 +559,10 @@ image’s Linux architecture in a container and puts it into the Mac’s wheel
 loader then also looks at the installed wheel’s library, and uses it when the bundle’s C sources
 are the ones it was built from (the sha256 it records). A bundle whose C source differs from the
 image’s runs numpy instead, says so, or with <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code> stops at once; such a
-job can still ship a library of its own and point <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_FDTD_LIB</span></code> at it.</p>
+job can still ship a library of its own and point <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_FDTD_LIB</span></code> at it. The stage plan sets
+<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code> and <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code> on every line by default, and
+<code class="docutils literal notranslate"><span class="pre">--image-commit</span></code> refuses a bundle whose C sources are not the image’s
+(<a class="reference internal" href="cloud-experiments.html#rf-runs"><span class="std std-ref">cloud experiments</span></a>).</p>
 </section>
 </section>
 <section id="performance">

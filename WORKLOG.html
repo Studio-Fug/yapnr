@@ -508,6 +508,27 @@ alone does not split the core’s and the 7628’s εr (use board A’s fit as <
 re-checked with an independent finite-volume solver (within 0.1 Ω) and IPC-2141A (stripline
 50.5 Ω); recovery re-run with another seed, a wrong nominal stackup and a worse lab. Open: the
 SMA part, the panel fee, a mask-off stick on board B.</p></li>
+<li><p><strong>RF coupons, Order 0 on OSH Park</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/order0</span></code>, from <code class="docutils literal notranslate"><span class="pre">claude/rf-coupons</span></code>; pages
+<a class="reference internal" href="docs/rf/order0/README.html"><span class="std std-doc">docs/rf/order0/</span></a>): the Cinch 142-0701-851 launch of regions M and W
+(2D-designed), board O as three uploads (O0-M coupons + R1 + A16 + A04R + tag/QR; O0-W light
+with the D2 window; O0-D with the D1 window), the OSH Park frameless panel, line tables for
+FR408HR (EM528 shares them), coupon predictions on both substrates; board B moved to
+JLC06161H-2116C with a mask-off tie line. All DRC-clean; <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">check</span></code> 0 errors. Next: D1/D2
+copper and the R1/R1t FDTD predictions (#29 round 2), the fab bundles, the pre-registration
+release, the capture tooling (WP7).</p></li>
+<li><p><strong>Order 0 part 2</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/order0-p2</span></code>, main + <code class="docutils literal notranslate"><span class="pre">claude/order0</span></code>): RF stage plans
+require the native FDTD library and pass <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code>, backend, dtype and <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_*</span></code>
+per job, <code class="docutils literal notranslate"><span class="pre">--image-commit</span></code> refuses a bundle whose C sources are not the image’s (PR #30 review
+follow-up); <code class="docutils literal notranslate"><span class="pre">yapnr.rf.coupons.equivalent</span></code> (2D thickness-equivalent substrates of regions M and
+W on FR408HR and EM528, matched to the coupon model’s line at 5 GHz); <code class="docutils literal notranslate"><span class="pre">yapnr.rf.order0</span></code> (D1/D2
+specs in four formulations, the selection rule, criteria, forward-run directories of R1/R1t and
+of run 0b’s loss lines, the loss correction and D-O0-11); <a class="reference internal" href="docs/rf/order0/demos.html"><span class="std std-doc">docs/rf/order0/demos.md</span></a>
+and the generated <a class="reference internal" href="#docs/rf/order0/inputs/"><span class="xref myst">inputs</span></a>. Run 0b and the D1/D2 compute stage on GCP
+Batch (C4 Montreal, C4D us-west4); <code class="docutils literal notranslate"><span class="pre">d1-star</span></code> passes all three validation grids and is merged
+into O0-D’s window (<code class="docutils literal notranslate"><span class="pre">catalog.o_optimized</span></code>, one real DRC clearance call left for the owner); no
+D2 formulation passes (closest miss 0.012 dB). openEMS-vs-yapnr.rf predictions collected
+(D-O0-13a); pre-registration bundle and manifest in <code class="docutils literal notranslate"><span class="pre">docs/rf/order0/</span></code>. Open: the D1 island/DRC
+and D2 near-miss decisions, the release/OpenTimestamps step (owner).</p></li>
 <li><p><strong>Palace, the second RF solver</strong> (#46, branch <code class="docutils literal notranslate"><span class="pre">claude/palace</span></code>; guide
 <a class="reference internal" href="docs/rf-palace.html"><span class="std std-doc">docs/rf-palace.md</span></a>, image <code class="docutils literal notranslate"><span class="pre">docker/palace</span></code>): planar documents
 (<code class="docutils literal notranslate"><span class="pre">yapnr.rf.planar</span></code>: lines, the radar60 patch and feed models, KiCad regions with footprint pads;

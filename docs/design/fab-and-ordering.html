@@ -1252,63 +1252,67 @@ project’s.</p></li>
 <td><p>KiCad DRC errors under the vendor rules (the judge)</p></td>
 <td><p>error per DRC error; DRC warnings are warnings</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-LAYERS</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PLACEHOLDER</span></code></p></td>
+<td><p>A footprint with a <code class="docutils literal notranslate"><span class="pre">yapnr_placeholder</span></code> field: copper still to come (an empty optimizer window on a coupon board)</p></td>
+<td><p>error</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-LAYERS</span></code></p></td>
 <td><p>Copper layer count differs from the stackup’s</p></td>
 <td><p>error</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-OUTLINE</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-OUTLINE</span></code></p></td>
 <td><p>No outline, or more than one closed outline (a panel); OSH Park’s panel rules <a class="reference external" href="https://docs.oshpark.com/troubleshooting/panelized-designs/">O-panel</a></p></td>
 <td><p>error / warning</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-SIZE</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-SIZE</span></code></p></td>
 <td><p>Outside the vendor’s minimum or maximum board size</p></td>
 <td><p>error</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-VIA-TYPE</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-VIA-TYPE</span></code></p></td>
 <td><p>Blind, buried or micro vias on a profile without them</p></td>
 <td><p>error</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-DRILL</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-DRILL</span></code></p></td>
 <td><p>A hole above the vendor’s maximum drill (OSH Park mills it <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a>); slots present (vendor slot notes); as built, non-plated holes in a merged drill file (OSH Park)</p></td>
 <td><p>warning</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-CASTELLATED</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-CASTELLATED</span></code></p></td>
 <td><p>Castellated pads: OSH Park “allowed, but not guaranteed” <a class="reference external" href="https://docs.oshpark.com/tips+tricks/castellation/">O-cast</a>; JLC needs the option and hole ≥ 0.5 mm</p></td>
 <td><p>warning / error</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-STACKUP</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-STACKUP</span></code></p></td>
 <td><p>The board’s KiCad stackup differs from the chosen stackup (thickness, εr)</p></td>
 <td><p>warning</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-RF</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-RF</span></code></p></td>
 <td><p>An RF footprint’s assumed substrate differs from the order’s stackup (§6.6)</p></td>
 <td><p>error</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-IMPEDANCE</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-IMPEDANCE</span></code></p></td>
 <td><p>Impedance-relevant items on a vendor or service without impedance control</p></td>
 <td><p>warning (the card states “not controlled”)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ALTERNATE</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ALTERNATE</span></code></p></td>
 <td><p>The vendor has an alternate substrate at checkout (OSH Park EM528) and the board has RF items</p></td>
 <td><p>info; the card tells the human what to pick</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-QTY</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-QTY</span></code></p></td>
 <td><p>Quantity not allowed (OSH Park: multiples of 3; JLC and PCBWay: 5 or more)</p></td>
 <td><p>error</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-MARKING</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-MARKING</span></code></p></td>
 <td><p>Assembly vendors print an order number on the silkscreen unless the human chooses otherwise (to be confirmed on the live quote pages)</p></td>
 <td><p>info on the card</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ASSEMBLY</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ASSEMBLY</span></code></p></td>
 <td><p>Missing LCSC id or MPN, unchecked rotation, bottom-side parts, DNP parts</p></td>
 <td><p>error / warning</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PROFILE-DRAFT</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PROFILE-DRAFT</span></code></p></td>
 <td><p>A draft profile</p></td>
 <td><p>error without <code class="docutils literal notranslate"><span class="pre">--allow-draft</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PRIVACY</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PRIVACY</span></code></p></td>
 <td><p>With <code class="docutils literal notranslate"><span class="pre">--public</span></code>: absolute paths or e-mail addresses in bundle text</p></td>
 <td><p>error</p></td>
 </tr>

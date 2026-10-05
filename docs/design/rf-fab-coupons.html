@@ -418,8 +418,8 @@ honest uncertainties, not traceable permittivity values.</p></li>
 </thead>
 <tbody>
 <tr class="row-even"><td><p>Boards</p></td>
-<td><p>A: 4L JLC04161H-7628; B: 6L JLC06161H-7628 (JLC06161H-2116C as the alternative)</p></td>
-<td><p>the 4L target, and a 6L with stripline that shares A’s L1 cross-section, so one board ties the other (§4.2)</p></td>
+<td><p>A: 4L JLC04161H-7628; B: 6L JLC06161H-2116C, the product stackup (JLC06161H-7628 as the alternative)</p></td>
+<td><p>the 4L target, and a 6L with the product’s stripline; B ties its own L1 with a mask-off line (§4.2)</p></td>
 </tr>
 <tr class="row-odd"><td><p>Format</p></td>
 <td><p>“sticks”: every structure on its own break-out strip with an edge SMA at each end</p></td>
@@ -562,8 +562,10 @@ Shengyi and others), so the material can change between orders.</p>
 </div>
 <p>The inner planes are only removed on the DC stick, where L2 and L3 carry meanders (§5.2).</p>
 </section>
-<section id="board-b-jlc06161h-7628-6-layers-1-6-mm">
-<h3>4.2 Board B: JLC06161H-7628 (6 layers, 1.6 mm)<a class="headerlink" href="#board-b-jlc06161h-7628-6-layers-1-6-mm" title="Link to this heading">¶</a></h3>
+<section id="board-b-jlc06161h-2116c-6-layers-1-6-mm">
+<h3>4.2 Board B: JLC06161H-2116C (6 layers, 1.6 mm)<a class="headerlink" href="#board-b-jlc06161h-2116c-6-layers-1-6-mm" title="Link to this heading">¶</a></h3>
+<p>Board B is built on the product’s stackup, JLC06161H-2116C (owner decision, below; 1.589 mm of
+published layers):</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -578,15 +580,15 @@ Shengyi and others), so the material can change between orders.</p>
 <td><p>launches; the L1 tie set (§5.3)</p></td>
 </tr>
 <tr class="row-odd"><td><p>–</p></td>
-<td><p>7628 prepreg 0.2104, εr 4.4</p></td>
-<td><p>the same L1 cross-section as board A</p></td>
+<td><p>2 × 2116 prepreg 0.2464, εr 4.16</p></td>
+<td><p>the L1 dielectric (not board A’s 7628)</p></td>
 </tr>
 <tr class="row-even"><td><p>L2</p></td>
 <td><p>copper 0.0152</p></td>
 <td><p>ground (upper stripline plane)</p></td>
 </tr>
 <tr class="row-odd"><td><p>–</p></td>
-<td><p>core 0.40, εr 4.6</p></td>
+<td><p>core 0.30, εr 4.6</p></td>
 <td><p>above the stripline</p></td>
 </tr>
 <tr class="row-even"><td><p>L3</p></td>
@@ -594,7 +596,7 @@ Shengyi and others), so the material can change between orders.</p>
 <td><p><strong>stripline</strong></p></td>
 </tr>
 <tr class="row-odd"><td><p>–</p></td>
-<td><p>7628 prepreg 0.2028, εr 4.4</p></td>
+<td><p>3 × 2116 prepreg 0.3658, εr 4.16</p></td>
 <td><p>below the stripline</p></td>
 </tr>
 <tr class="row-even"><td><p>L4</p></td>
@@ -602,7 +604,7 @@ Shengyi and others), so the material can change between orders.</p>
 <td><p>ground (lower stripline plane)</p></td>
 </tr>
 <tr class="row-odd"><td><p>–</p></td>
-<td><p>core 0.40, εr 4.6</p></td>
+<td><p>core 0.30, εr 4.6</p></td>
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p>L5</p></td>
@@ -610,7 +612,7 @@ Shengyi and others), so the material can change between orders.</p>
 <td><p>ground; meanders on the DC stick</p></td>
 </tr>
 <tr class="row-odd"><td><p>–</p></td>
-<td><p>7628 prepreg 0.2104, εr 4.4</p></td>
+<td><p>2 × 2116 prepreg 0.2464, εr 4.16</p></td>
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p>L6</p></td>
@@ -620,6 +622,8 @@ Shengyi and others), so the material can change between orders.</p>
 </tbody>
 </table>
 </div>
+<p>The 7628 alternative (JLC06161H-7628: 7628 0.2104 mm, core 0.40 mm, 7628 0.2028 mm below the
+stripline) stays defined in the generator, with the synthetic-study results of §10.</p>
 <p>JLCPCB lists 16 six-layer stackups. In several the L3 layer sits close to one plane only (a thin
 core with a 0.55–0.7 mm dielectric on the other side), which is not a balanced stripline. Two give
 a true stripline on L3:</p>
@@ -633,6 +637,12 @@ together with board A’s fit, see there).</p></li>
 most symmetric stripline. Its L1 dielectric is 2116 (0.2464 mm), so nothing is shared with
 board A. Choose it if the product will use it; the generator then builds a board B’ from it.</p></li>
 </ul>
+<p><em>Decision (owner, 2026-10-02):</em> the product stackup is JLC06161H-2116C, so <strong>board B is built on
+JLC06161H-2116C</strong> (S 0.279 mm, P 0.350 / 0.200 mm at 50 Ω; the launch’s coplanar gap re-solved
+to 0.435 mm with L2 and L3 cut). Because its L1 no longer shares board A’s prepreg, board A’s fit
+cannot serve as board B’s prior: board B gets a mask-off copy of its L1 tie line (B24, P-MO) so
+that its own L1 sticks separate the mask from the 2116’s εr. The 7628 board B stays defined as an
+alternative (and keeps the synthetic-study results of §10).</p>
 <p>The 6-layer service fills and caps vias and has no HASL finish (ENIG only).</p>
 </section>
 <section id="line-families-and-their-dimensions">
@@ -1120,8 +1130,8 @@ L1 0.2 mm meander reads about 49 mV (0.49 Ω) and dissipates 5 mW.</p>
 <p>Multi-port structures (A29, A31) carry an SMA on every port; unused ports are terminated with SMA
 loads and the full S-matrix is assembled from 2-port measurements.</p>
 </section>
-<section id="board-b-catalogue-jlc06161h-7628">
-<h3>5.3 Board B catalogue (JLC06161H-7628)<a class="headerlink" href="#board-b-catalogue-jlc06161h-7628" title="Link to this heading">¶</a></h3>
+<section id="board-b-catalogue-jlc06161h-2116c">
+<h3>5.3 Board B catalogue (JLC06161H-2116C)<a class="headerlink" href="#board-b-catalogue-jlc06161h-2116c" title="Link to this heading">¶</a></h3>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -1167,7 +1177,7 @@ loads and the full S-matrix is assembled from 2-port measurements.</p>
 <td><p>L1 tie set: P thru and lines ΔL = 6.5, 16, 40</p></td>
 <td><p>20–60</p></td>
 <td><p>core</p></td>
-<td><p>7628 εr (ties εr of the core and the prepreg); lot comparison with board A</p></td>
+<td><p>2116 εr (ties εr of the core and the prepreg); lot comparison with board A</p></td>
 </tr>
 <tr class="row-even"><td><p>B16</p></td>
 <td><p>P reflect</p></td>
@@ -1210,6 +1220,12 @@ loads and the full S-matrix is assembled from 2-port measurements.</p>
 <td><p>60</p></td>
 <td><p>extended</p></td>
 <td><p>weave on the inner layer</p></td>
+</tr>
+<tr class="row-odd"><td><p>B24</p></td>
+<td><p>P-MO: the tie line with the mask opened over 40 mm</p></td>
+<td><p>60</p></td>
+<td><p>core</p></td>
+<td><p>mask Dk × thickness on L1, so board B’s fit needs no board A prior</p></td>
 </tr>
 </tbody>
 </table>
@@ -1265,7 +1281,7 @@ or ground edges next to gaps, since ink changes εeff.</p></li>
 </tr>
 <tr class="row-odd"><td><p>Impedance control</p></td>
 <td><p>yes, JLC04161H-7628</p></td>
-<td><p>yes, JLC06161H-7628</p></td>
+<td><p>yes, JLC06161H-2116C</p></td>
 </tr>
 <tr class="row-even"><td><p>Impedance tolerance</p></td>
 <td><p>the product’s (±10 % standard)</p></td>
@@ -2055,7 +2071,7 @@ merges.</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>examples/rf-coupons/
   JLC04161H-7628/            board-A.kicad_pro, board-A.kicad_pcb, catalog.json, expected/*.s2p,
                              fab/ (gerbers via kicad-cli, drill, fab notes, order options)
-  JLC06161H-7628/            board-B.* (same layout)
+  JLC06161H-2116C/           board-B.* (same layout; the product&#39;s stackup)
   measurements/README.md     the session layout of §7.6
 docs/rf-fab-coupons.md       user guide: order, assemble, measure, run the fit, read the report
 docs/design/rf-fab-coupons.md  this design
@@ -2167,7 +2183,8 @@ the adapter of §8.9 at the design frequency.</p></li>
 <ol class="arabic simple">
 <li><p><strong>Product line type:</strong> L1 GCPW under mask (the default P), microstrip, or mask-free RF lines?
 It sets the primary family.</p></li>
-<li><p><strong>Board B stackup:</strong> JLC06161H-7628 (default, shares L1 with board A) or JLC06161H-2116C?</p></li>
+<li><p><s><strong>Board B stackup:</strong> JLC06161H-7628 (default, shares L1 with board A) or JLC06161H-2116C?</s>
+Decided 2026-10-02: JLC06161H-2116C, the product stackup (§4.2).</p></li>
 <li><p><strong>Connectors:</strong> soldered 142-0701-851 on every measured stick, or one reusable clamp-on pair for
 the TRL sets as well?</p></li>
 <li><p><strong>VNA:</strong> which instrument, and is a lab VNA to at least 13.5 GHz available for one session?</p></li>
@@ -2359,14 +2376,14 @@ background on TDR and loss).</p></li>
 <li><a class="reference internal" href="#why-the-fab-model-needs-measuring">3. Why the fab model needs measuring</a></li>
 <li><a class="reference internal" href="#stackups-boards-and-line-families">4. Stackups, boards and line families</a><ul>
 <li><a class="reference internal" href="#board-a-jlc04161h-7628-4-layers-1-6-mm">4.1 Board A: JLC04161H-7628 (4 layers, 1.6 mm)</a></li>
-<li><a class="reference internal" href="#board-b-jlc06161h-7628-6-layers-1-6-mm">4.2 Board B: JLC06161H-7628 (6 layers, 1.6 mm)</a></li>
+<li><a class="reference internal" href="#board-b-jlc06161h-2116c-6-layers-1-6-mm">4.2 Board B: JLC06161H-2116C (6 layers, 1.6 mm)</a></li>
 <li><a class="reference internal" href="#line-families-and-their-dimensions">4.3 Line families and their dimensions</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#coupon-structures">5. Coupon structures</a><ul>
 <li><a class="reference internal" href="#the-stick-format">5.1 The stick format</a></li>
 <li><a class="reference internal" href="#board-a-catalogue-jlc04161h-7628">5.2 Board A catalogue (JLC04161H-7628)</a></li>
-<li><a class="reference internal" href="#board-b-catalogue-jlc06161h-7628">5.3 Board B catalogue (JLC06161H-7628)</a></li>
+<li><a class="reference internal" href="#board-b-catalogue-jlc06161h-2116c">5.3 Board B catalogue (JLC06161H-2116C)</a></li>
 <li><a class="reference internal" href="#product-rail-coupon">5.4 Product rail coupon</a></li>
 <li><a class="reference internal" href="#panel-outline-and-labels">5.5 Panel, outline and labels</a></li>
 <li><a class="reference internal" href="#fab-notes">5.6 Fab notes</a></li>

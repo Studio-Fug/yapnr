@@ -899,11 +899,17 @@ committed. Each task runs the job bundle’s <code class="docutils literal notra
 (or that command itself for a job with nothing to replace and <code class="docutils literal notranslate"><span class="pre">attempt_s</span> <span class="pre">=</span> <span class="pre">0</span></code>) on as many cores as
 it has threads, with <code class="docutils literal notranslate"><span class="pre">OMP_NUM_THREADS</span></code> and <code class="docutils literal notranslate"><span class="pre">MKL_NUM_THREADS</span></code> at that number and
 <code class="docutils literal notranslate"><span class="pre">OPENBLAS_NUM_THREADS=1</span></code>. Cores are physical, two vCPUs each on SMT shapes: one 4-thread run fills
-a <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-8</span></code>. The solver runs its native kernel by default, on the job’s threads, from the
-image’s yapnr wheel when the bundle’s C sources are the ones that library was built from
-(otherwise the numpy reference, said in the task’s log; set <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code> to stop
-instead; <a class="reference internal" href="rf-solver-backends.html"><span class="std std-doc">solver backends</span></a>); a bundle from before the native kernel runs
-torch on at most 4 threads, and the generator warns above that.
+a <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-8</span></code>. The solver runs its native kernel by default, on the job’s threads (<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code>,
+re-validations included), from the image’s yapnr wheel when the bundle’s C sources are the ones
+that library was built from (<a class="reference internal" href="rf-solver-backends.html"><span class="std std-doc">solver backends</span></a>). Every line sets
+<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code> unless its job says <code class="docutils literal notranslate"><span class="pre">require_native</span> <span class="pre">=</span> <span class="pre">false</span></code>: a bundle whose C
+sources differ from the image’s would otherwise run the numpy reference, 12–60 times slower, with
+one line in the task’s log; with it the task fails at its first simulation and the diagnostic
+job’s <code class="docutils literal notranslate"><span class="pre">ok</span></code> is false. <code class="docutils literal notranslate"><span class="pre">--image-commit</span> <span class="pre">REV</span></code> (the image’s source revision, its
+<code class="docutils literal notranslate"><span class="pre">org.opencontainers.image.revision</span></code>) refuses such a bundle before anything is uploaded, and the
+manifest records both sources’ sha256. A job’s <code class="docutils literal notranslate"><span class="pre">backend</span></code>, <code class="docutils literal notranslate"><span class="pre">dtype</span></code> and <code class="docutils literal notranslate"><span class="pre">env</span></code> (other <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_*</span></code>
+variables, such as <code class="docutils literal notranslate"><span class="pre">YAPNR_RF_TBLOCK</span></code>) set the solver’s environment over its spec. A bundle from
+before the native kernel runs torch on at most 4 threads, and the generator warns above that.
 The record is <code class="docutils literal notranslate"><span class="pre">out/&lt;id&gt;/validation.json</span></code> (the verdict is its <code class="docutils literal notranslate"><span class="pre">ok</span></code>), the run directory is the
 checkpoint, and the cases runner resumes from it; <code class="docutils literal notranslate"><span class="pre">--max-iterations</span></code> counts the iterations of one
 attempt, so an attempt resumed mid-loop may run that many again. A run longer than <code class="docutils literal notranslate"><span class="pre">max_wall_s</span></code>

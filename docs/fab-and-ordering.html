@@ -458,52 +458,55 @@ is the judge: no finding is relaxed. On top of it, the checks KiCad cannot expre
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-DRC</span></code></p></td>
 <td><p>KiCad DRC under the vendor’s rules (errors, warnings, unconnected items)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-LAYERS</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PLACEHOLDER</span></code></p></td>
+<td><p>a footprint marked as a placeholder (an empty optimizer window on a coupon board): an error until it is filled</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-LAYERS</span></code></p></td>
 <td><p>the copper layer count against the profile and stackup</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-OUTLINE</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-OUTLINE</span></code></p></td>
 <td><p>a closed outline; several outlines (a panel) with the vendor’s panel rules</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-SIZE</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-SIZE</span></code></p></td>
 <td><p>the vendor’s minimum and maximum board size</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-VIA-TYPE</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-VIA-TYPE</span></code></p></td>
 <td><p>blind, buried or micro vias on a through-via-only service</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-DRILL</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-DRILL</span></code></p></td>
 <td><p>holes the vendor mills instead of drilling; slots and the minimum slot; NPTH in OSH Park’s merged drill file</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-CASTELLATED</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-CASTELLATED</span></code></p></td>
 <td><p>castellated pads (OSH Park: “allowed, but not guaranteed”; JLC: the option and hole size)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-STACKUP</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-STACKUP</span></code></p></td>
 <td><p>the board’s KiCad stackup against the ordered stackup</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-RF</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-RF</span></code></p></td>
 <td><p>an RF footprint designed for another substrate than the ordered stackup</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-IMPEDANCE</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-IMPEDANCE</span></code></p></td>
 <td><p>impedance-relevant items on a service without impedance control</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ALTERNATE</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ALTERNATE</span></code></p></td>
 <td><p>the substrate to pick at checkout when the vendor offers an alternate (OSH Park EM528)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-QTY</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-QTY</span></code></p></td>
 <td><p>OSH Park: multiples of 3; JLCPCB and PCBWay: 5 or more</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-MARKING</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-MARKING</span></code></p></td>
 <td><p>the order-number marking option (PCBWay prints its number unless told otherwise; JLCPCB adds no mark by default)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ASSEMBLY</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ASSEMBLY</span></code></p></td>
 <td><p>missing LCSC ids or MPNs, parts not in the parts lock, unchecked rotations, bottom parts</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PROFILE-DRAFT</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PROFILE-DRAFT</span></code></p></td>
 <td><p>a draft profile</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-SOURCES</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-SOURCES</span></code></p></td>
 <td><p>vendor data read more than 180 days ago</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PRIVACY</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PRIVACY</span></code></p></td>
 <td><p>with <code class="docutils literal notranslate"><span class="pre">--public</span></code>: absolute paths, home directories or e-mail addresses in the bundle</p></td>
 </tr>
 </tbody>

@@ -452,7 +452,8 @@ def draw_plane_regions(board, rows, rules: dict, point, full, net_code=None) -> 
     codes = dict(net_code or _net_code_map(board))
     nets_of: Dict[str, set] = {}
     for r in rows:
-        nets_of.setdefault(r["layer"], set()).add(r["net"])
+        if not r.get("pour"):  # an outer pour keeps the layer's other zones of its net
+            nets_of.setdefault(r["layer"], set()).add(r["net"])
     for z in list(board.Zones()):
         if z.GetIsRuleArea():
             continue
@@ -475,6 +476,13 @@ def draw_plane_regions(board, rows, rules: dict, point, full, net_code=None) -> 
         z.SetLocalClearance(_nm(fab["clearance_mm"]))
         z.SetMinThickness(_nm(fab["track_width_mm"]))
         z.SetAssignedPriority(int(r["priority"]))
+        if r.get("connect"):
+            # An outer pour owning its lands (plane_partition connect: solid).
+            z.SetPadConnection(
+                pcbnew.ZONE_CONNECTION_FULL
+                if r["connect"] == "solid"
+                else pcbnew.ZONE_CONNECTION_THERMAL
+            )
         outline = z.Outline()
         outline.NewOutline()
         for corner in full if r["outline"] is None else [point(p) for p in r["outline"]]:
@@ -1854,6 +1862,17 @@ def writeback(
             regions = [r for r in regions if r.layer not in done]
         formed = form_planes(board, stack, rules, width, height, net_code or None, regions)
         sys.stderr.write("writeback: stack planes " + str(formed) + "\n")
+    elif (routes or {}).get("plane_regions"):
+        # Outer pours only (plane_partition with a region), on a board without a
+        # declared stack: their zones as routed.
+        frame = _WriteFrame(height)
+        full = [frame.point(0, 0), frame.point(width, 0), frame.point(width, height)]
+        full.append(frame.point(0, height))
+        drawn = draw_plane_regions(
+            board, routes["plane_regions"], rules, lambda p: frame.point(*p), full, net_code or None
+        )
+        sys.stderr.write("writeback: outer pour zones %d\n" % len(drawn))
+    if stack is not None and stack.dedicated:
         if (rules or {}).get("via_policy"):
             # Blind and micro drops join only some plane layers: each layer's count.
             counts = plane_connections(board, stack)

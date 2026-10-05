@@ -758,6 +758,43 @@ plane drop is planned whose copper or via keep-out takes such a cell (a cap's dr
 via beside a ball's tail closed its only way out), and the trunk cores' via
 keepouts spare a via site at each of them. Without the key nothing changes.
 
+**Outer pours (`region`).** An entry with a `region` partitions a routed layer (an
+outer layer, typed signal) inside that region instead: a power stage whose hot-rod
+lands (0.25 x 1.82 mm at 0.5 mm pitch, say) no track can enter at its class
+clearance, connected by copper that overlaps each land along its length.
+
+```yaml
+plane_partition:
+  - layer: F.Cu
+    nets: [5V_SYS, SW_B0, SW_B1, 1V0_BUCK, GND] # any nets of the board
+    region: { refs: [U2, L1, L2, C30, C31], margin_mm: 0.5 } # or a polygon [[x, y], ...]
+    terminals: pad # whole lands (default reach: discs as on a plane layer)
+    connect: solid # the zones' pad connection (or thermal; default: the zone's)
+    stitch_vias: 4 # through vias into each pour of a net with a dedicated plane (default 1)
+    split_gap_mm: 0.2
+    min_width_mm: 0.25
+```
+
+The region is the polygon, or the bounding box of the parts' courtyards at their
+placed poses plus `margin_mm`; the raster is that region. A rail's terminals are its
+surface pads on the layer inside the region (with `terminals: pad` the whole land,
+claimed before any tree like a via land), its plated holes and its planned or fixed
+vias there. Other nets' lands, escape tracks and vias and fixed copper on the layer
+are blocked at the pair's clearance, and every other net's land in the region keeps a
+way out: before the territories grow, the shortest corridor of free cells no rail
+claims from the land to the region's edge, a track with its clearance wide, is held
+out of the growth (a land without one is reported under `walled_in`). The zones are
+drawn at priority 100 and up, above the layer's other zones (which writeback keeps),
+with `connect` as their pad connection; `fill` does not go with a region.
+
+The router (`pnr/route/detail/pour.py`) claims each territory for its net on its layer
+(tracks and vias of other nets keep out; a cell another net's pad already owns is left
+to it, and KiCad's fill keeps the clearance there), plans no escape or plane drop for
+the pads a territory covers, gives a net whose other pads still route one access cell
+in its territory (the maze joins them to the pour), and drills `stitch_vias` through
+vias inside each pour of a net with a dedicated plane, at sites where a drop of that
+net may land. The escape diagnostics list each pour's pads and stitches (`pours`).
+
 The route's escape diagnostics carry a `plane_partition` report per layer: per rail
 its current, width (and the IPC and budget widths), tree length, terminals reached,
 the unreached ones (also failure sites; a pad's drop then fails in the drop planner,

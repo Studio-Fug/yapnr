@@ -842,6 +842,45 @@ py_test(
     ],
 )
 
+# Outer pours (plane_partition with a region, stage 3c E1): whole-land terminals,
+# corridors for other nets' lands, the grid claim, ports and stitching vias.
+py_test(
+    name = "outer_pour_test",
+    size = "small",
+    srcs = ["tests/test_outer_pour.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_outer_pour.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# The outer pour drawn (connect: solid) and filled by KiCad: each rail's hot-rod lands
+# joined by its pour alone. It needs KiCad's Python (pcbnew) with numpy: run it there
+# by hand.
+py_test(
+    name = "outer_pour_kicad_test",
+    size = "small",
+    srcs = ["tests/test_outer_pour_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_outer_pour_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
 # Plane partitions beside declared fanouts (stage 3c E4): protect_fanouts keeps the
 # fanouts' access cells open to other nets' drops and the trunk cores; a bottom-site
 # part's plane pad drops by a stub to its fanout via.

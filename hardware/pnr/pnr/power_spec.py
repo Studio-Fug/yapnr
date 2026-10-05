@@ -16,6 +16,10 @@ routing rules carry under the same names, only when declared.
         terminal_reach_mm: 0.8          # a pad's drop lands within this of it
         neck_mm: 0                      # a trunk may narrow this close to its terminals
         protect_fanouts: true           # declared fanouts' access cells stay open
+        region: {refs: [U2, L1], margin_mm: 0.5}  # an outer pour inside a region
+        terminals: pad                  # (with region) whole lands, or reach discs
+        connect: solid                  # (with region) the zones' pad connection
+        stitch_vias: 4                  # (with region) vias per plane net's pour
         currents: {1V2: 1.0}            # A, else the net's @pnr-current peak or class
         budgets_mohm: {1V2: 12}         # widens a trunk for its IR budget
         sources: {1V2: {"@pmic.fb_1v2": "2"}}  # the trunk's root (else a central pad)
@@ -59,6 +63,10 @@ PARTITION_KEYS = {
     "h_mm",
     "neck_mm",
     "protect_fanouts",
+    "region",
+    "terminals",
+    "connect",
+    "stitch_vias",
 }
 IR_KEYS = {
     "net",
@@ -164,6 +172,10 @@ def parse_partition(raw) -> List[Dict]:
         )
         if entry.get("neck_mm") is not None:  # only when declared (rules unchanged else)
             out[-1]["neck_mm"] = _num(entry["neck_mm"], where + ".neck_mm", minimum=0.0)
+        if entry.get("region") is not None:  # an outer pour (only when declared)
+            out[-1].update(_outer(entry, where))
+        elif any(entry.get(k) is not None for k in ("terminals", "connect", "stitch_vias")):
+            raise PowerSpecError(where + ": terminals, connect and stitch_vias go with a region")
         if entry.get("protect_fanouts") is not None:  # only when declared
             if not isinstance(entry["protect_fanouts"], bool):
                 raise PowerSpecError(where + ".protect_fanouts must be a boolean")
@@ -172,6 +184,50 @@ def parse_partition(raw) -> List[Dict]:
     layers = [e["layer"] for e in out]
     if len(set(layers)) != len(layers):
         raise PowerSpecError("plane_partition: one entry per layer")
+    return out
+
+
+def _outer(entry, where) -> Dict:
+    """The keys of an outer pour (``region`` and the keys that go with it)."""
+    region = entry["region"]
+    if isinstance(region, dict):
+        bad = sorted(set(region) - {"refs", "margin_mm"})
+        if bad:
+            raise PowerSpecError("%s.region: unknown key(s) %s" % (where, ", ".join(bad)))
+        refs = _names(region.get("refs") or [], where + ".region.refs")
+        if not refs:
+            raise PowerSpecError(where + ".region.refs names at least one part")
+        out_region = dict(refs=refs)
+        if region.get("margin_mm") is not None:
+            out_region["margin_mm"] = _num(
+                region["margin_mm"], where + ".region.margin_mm", minimum=0.0
+            )
+    else:
+        if not isinstance(region, (list, tuple)) or len(region) < 3:
+            raise PowerSpecError(where + ".region is a polygon (3+ points) or {refs, margin_mm}")
+        out_region = []
+        for k, pt in enumerate(region):
+            if not isinstance(pt, (list, tuple)) or len(pt) != 2:
+                raise PowerSpecError("%s.region[%d] is an [x, y] point" % (where, k))
+            out_region.append([_num(v, "%s.region[%d]" % (where, k)) for v in pt])
+    if entry.get("fill") is not None:
+        raise PowerSpecError(where + ": an outer pour (region) takes no fill")
+    out = dict(region=out_region)
+    terminals = entry.get("terminals")
+    if terminals is not None:
+        if terminals not in ("pad", "reach"):
+            raise PowerSpecError(where + ".terminals must be pad or reach")
+        out["terminals"] = terminals
+    connect = entry.get("connect")
+    if connect is not None:
+        if connect not in ("solid", "thermal"):
+            raise PowerSpecError(where + ".connect must be solid or thermal")
+        out["connect"] = connect
+    if entry.get("stitch_vias") is not None:
+        n = entry["stitch_vias"]
+        if isinstance(n, bool) or not isinstance(n, int) or n < 0:
+            raise PowerSpecError(where + ".stitch_vias must be a whole number, 0 or more")
+        out["stitch_vias"] = n
     return out
 
 

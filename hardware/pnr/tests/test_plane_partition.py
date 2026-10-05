@@ -299,6 +299,102 @@ class HardWidthTest(unittest.TestCase):
         self.assertTrue(via[0, 30, 40])  # (4.05, 3.05): on the trunk
 
 
+def land(name, at, size):
+    return Terminal(name, "land", at, max(size) / 2, size)
+
+
+class OuterRegionTest(unittest.TestCase):
+    """An outer-layer partition inside a region with whole lands as terminals (a
+    power stage's hot-rod lands, 0.25 x 1.82 mm at 0.5 mm pitch): each rail's pour
+    owns its lands and joins them to its other parts' pads, inside the region."""
+
+    REGION = [[0.5, 0.5], [7.5, 0.5], [7.5, 6.0], [0.5, 6.0]]
+    ENTRY = dict(
+        ENTRY,
+        layer="F.Cu",
+        nets=["SW", "GND", "VIN"],
+        split_gap_mm=0.2,
+        min_width_mm=0.25,
+        region=REGION,
+        terminals="pad",
+        connect="solid",
+    )
+    HOT = (0.25, 1.82)
+    TERMS = {
+        "SW": [land("U2.1", (2.0, 3.0), HOT), land("U2.2", (2.5, 3.0), HOT)]
+        + [land("L1.1", (2.25, 0.95), (1.2, 0.8))],
+        "GND": [land("U2.3", (3.0, 3.0), HOT), land("U2.4", (3.5, 3.0), HOT)]
+        + [land("C1.2", (3.25, 5.2), (0.6, 0.6))],
+        "VIN": [land("U2.5", (4.0, 3.0), HOT), land("U2.6", (4.5, 3.0), HOT)]
+        + [land("C2.1", (5.6, 3.0), (0.6, 0.9))],
+    }
+    # A foreign pad in the region (a feedback pin), with its clearance.
+    FOREIGN = [([[[6.5, 1.0], [7.1, 1.0], [7.1, 1.8], [6.5, 1.8]]], frozenset())]
+
+    @classmethod
+    def setUpClass(cls):
+        _CACHE.clear()
+        cls.part = partition(
+            dict(cls.ENTRY),
+            width=10.0,
+            height=8.0,
+            terminals=cls.TERMS,
+            blocked=[],
+            blocked_polygons=cls.FOREIGN,
+            fill_min_mm=0.15,
+        )
+
+    def cover(self, net, step=0.025):
+        g = _Grid(10.0, 8.0, step)
+        mask = g.zeros()
+        for r in self.part.regions:
+            if r.net == net:
+                mask |= g.polygon([r.outline] + list(r.holes))
+        return g, mask
+
+    def test_every_rail_owns_its_lands_in_one_piece(self):
+        for net, terms in self.TERMS.items():
+            info = self.part.report["nets"][net]
+            self.assertEqual(info["unreached"], [], (net, info))
+            self.assertEqual(info["components"], 1)
+            self.assertEqual(info["status"], "ok", info)
+            g, mask = self.cover(net)
+            for t in terms:
+                w, h = t.size
+                # The whole land (its rectangle, a raster cell inside its edges).
+                for dx in (-w / 2 + 0.06, 0.0, w / 2 - 0.06):
+                    for dy in (-h / 2 + 0.06, 0.0, h / 2 - 0.06):
+                        i, j = g.cell((t.at[0] + dx, t.at[1] + dy))
+                        self.assertTrue(mask[j, i], (net, t.name, dx, dy))
+
+    def test_the_pours_keep_the_gap_and_stay_in_the_region(self):
+        self.assertGreaterEqual(self.part.report["gap_min_mm"], 0.2 - 1e-6)
+        masks = {n: self.cover(n)[1] for n in self.TERMS}
+        nets = sorted(masks)
+        for a in nets:
+            for b in nets:
+                if a < b:
+                    self.assertFalse((masks[a] & masks[b]).any(), (a, b))
+        g = _Grid(10.0, 8.0, 0.025)
+        inside_region = g.polygon([self.REGION])
+        for net, mask in masks.items():
+            self.assertFalse((mask & ~inside_region).any(), net)
+            i, j = g.cell((6.8, 1.4))  # the foreign pad
+            self.assertFalse(mask[j, i], net)
+
+    def test_regions_carry_the_connection(self):
+        rows = self.part.rows()
+        self.assertTrue(rows)
+        self.assertTrue(all(r["connect"] == "solid" for r in rows))
+        plain = run()
+        self.assertTrue(all("connect" not in r for r in plain.rows()))
+
+    def test_a_land_terminal_without_a_size_key_digests_as_before(self):
+        t = via("A3", (10.0, 5.0))
+        self.assertEqual(sorted(t.key()), ["at", "kind", "name", "radius"])
+        self.assertIn("size", land("X", (0, 0), (1, 1)).key())
+
+
 class PlaneAccessHolesTest(unittest.TestCase):
     def test_a_site_in_a_hole_is_not_in_the_region(self):
         rec = {

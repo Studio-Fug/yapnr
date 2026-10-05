@@ -1171,6 +1171,41 @@ def route_board(
             inset=via_radius_mm,
             outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
+    # Outer pours (plane_partition entries with a region, pnr.route.detail.pour): the
+    # territories are claimed on their layer, the pads they join need no escape or
+    # drop, and a plane net's pour gets its stitching vias. Only when declared.
+    poured, stitched, outer_parts = {}, {}, []
+    if rules and any(e.get("region") for e in rules.get("plane_partition") or []):
+        from pnr.plane_partition import for_route as outer_route
+
+        from .pour import reserve as reserve_pours
+        from .pour import stitch as stitch_pours
+
+        outer_parts = outer_route(
+            grid,
+            graph,
+            rules,
+            stack,
+            width,
+            height,
+            fixed_copper=fixed_copper,
+            fanouts=fanouts,
+            outer=True,
+        )
+        poured = reserve_pours(grid, graph, outer_parts)
+        counts = {}
+        for e in rules.get("plane_partition") or []:
+            if e.get("region"):
+                for n in e["nets"]:
+                    counts[n] = int(e.get("stitch_vias", 1))
+        stitched = stitch_pours(
+            grid, poured, set(drop_widths), counts, plane_access, via_keepout=via_keepout
+        )
+    escape_skip = set(fanouts.skip_pads) if fanouts is not None else set()
+    if poured:
+        from .pour import covered as poured_pads
+
+        escape_skip |= poured_pads(poured)
     guarded = fanouts is not None and any(
         e.get("protect_fanouts") for e in (rules or {}).get("plane_partition") or []
     )
@@ -1196,9 +1231,39 @@ def route_board(
         drop_pad_width=pad_drop_width,
         plane_access=plane_access,
         drop_span=drop_span,
-        **({"skip_pads": fanouts.skip_pads} if fanouts is not None else {}),
+        **({"skip_pads": escape_skip} if fanouts is not None or poured else {}),
         **({"drop_reuse": _bottom_site_reuse(graph, rules)} if fanouts is not None else {}),
     )
+    if poured:
+        from .escape import Escape
+        from .grid import Cell as _Cell
+        from .pour import ports as pour_ports
+
+        for net, cells in pour_ports(grid, poured, plan.net_access).items():
+            plan.net_access.setdefault(net, []).extend(cells)
+        for net, sites in sorted(stitched.items()):
+            layer = poured[net]["layer"]
+            la = grid.layers.index(layer)
+            for q in sites:
+                plan.escapes.append(
+                    Escape(
+                        net=net,
+                        kind="joint",
+                        access=_Cell(la, *grid.cell_of(*q)),
+                        pad_xy=q,
+                        side_layer=layer,
+                        via_xy=q,
+                        segments=[],
+                    )
+                )
+        plan.diagnostics["pours"] = {
+            net: dict(
+                layer=row["layer"],
+                pads=["%s.%s" % p for p in row["pads"]],
+                stitches=[[round(x, 4), round(y, 4)] for x, y in stitched.get(net, [])],
+            )
+            for net, row in sorted(poured.items())
+        }
     if guarded:
         grid.guard_access = None
     # PNR_COMPACT DROPS: the drops are planned and reserved; the maze's predicates never
@@ -1362,6 +1427,7 @@ def route_board(
         board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
     if fanouts is not None and fanouts.partial_open:
         board.partial_open = {n: dict(v) for n, v in sorted(fanouts.partial_open.items())}
+    partitions = list(partitions) + list(outer_parts)
     if partitions:
         board.plane_regions = [row for p in partitions for row in p.rows()]
         board.escape_diagnostics["plane_partition"] = [p.report for p in partitions]

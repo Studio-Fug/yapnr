@@ -1,8 +1,10 @@
+ed547daa9d750fea5331207a09751bdd931abaf66b710638f0b5260517ac4000  ./BUILD.bazel
 31c0c27856dd69319f9db266220c4127196cf51c0e83960d973e97184394ace0  ./demos.md
 b28cfa3d235a107330ea5ac60ab6d40d4d69703ea6cf5558216e0ddd98d0ebf2  ./fab/O0-M.sha256
+c093aac8b01aad580336ae39f37b4b7916fcd5f1b34c0f348d8cbccb505fbcde  ./fab/O0-W.sha256
 d0151a620fd4bdad8f6828d8fe6f4b2eeffa9208336d85917ab9492f8cebfb25  ./images/O0-D.png
 45a3b8d83abdf0d363b5c8a8e5100b4f025b9910a57d572b03031a4436780be4  ./images/O0-M.png
-c8cead9829d8c3724f041919b4f8d89412ed27b0b8102b153c3c8c46dcfa3ace  ./images/O0-W.png
+afbeac17d06415bafacdc4724755fda5abf05543bdf2a0d01371902413c27fca  ./images/O0-W.png
 01dbb660e2a3e34e706653a3eb8dfe735a866448b932ae0a1484a47c9b95c43b  ./inputs/compute-m.toml
 df982289a5c376e1a89a34c55c9c622122b8d425ee1acd8a6601feecec280678  ./inputs/compute-w.toml
 be3089525b6d424738d19f62d87b4a421fa0dbdc233f0df12034d241638a9264  ./inputs/criteria/d1.json
@@ -312,7 +314,7 @@ d0c511027d7aa9e32255872dd989fa647a7aa092f17a27ec7704455bee21f3f7  ./predictions/
 a977a9b635bf6d4075900f2575883fd0649e47f5af077e0a0d5c67322732ba43  ./predictions/D1/variants/d1-star-m-nom/forward.json
 d11889d1a8e3352452450f842016d89d0c990ef5a364b1e103420b2e5a5c75b7  ./predictions/D1/variants/d1-star-m-nom/spec.json
 4d898b731fafcdce120d1598c98be7974c0ed177bda2c07507939d66900cdca2  ./predictions/D1/variants/d1-star-m-nom/validation.json
-2271a352ab90ac2d0a6c215ec2afb6d6ea321df2c66861686ba6af4eb8076eac  ./predictions/D2/README.md
+f4045733b6c620ad31e8352c5bc3a7ae39af922f3afdca3e9f0cbb17690b09f7  ./predictions/D2/README.md
 9f6007311aadd51ebe931a539c772e1b5ce50189407a2ac4ae6a048799910565  ./predictions/D2/runs/d2-base/coarse_dense.s3p
 a534923983df088f035b334897df7e9e812cbeef598d72df5ac4ad790ba72a93  ./predictions/D2/runs/d2-base/fine.s3p
 3e4aa4431300a175460c2a13fcd8fd0fb3f72352a179598c8f115340ba64aa74  ./predictions/D2/runs/d2-base/finer.s3p
@@ -522,5 +524,5 @@ ae0098ff4d86478ed317b707ca72cc0262aed5d6f1071614d1220de5c048ea25  ./predictions/
 f7be4fa13f120c96c6a139de4e38be9dc89e4e1002abef69d0ff7984ffd7d776  ./predictions/run0b/r1-m-eq-loss-corrected.s3p
 b74b0b3c23028c084d730f979297ebb48befe968f83598340155f8873786caf7  ./predictions/run0b/r1-m-eq.s3p
 c74f1c862695db8910d0f24d3a9825973d0ce6cb093d89998a3a7e597caa1f9d  ./predictions/run0b/run0b.json
-46a839da9fe47da1a161058b51a27a8c2de28e081001715ac3add8bcec8989d3  ./preregistration.md
-d53b507358fd53933b6056a32e5a43edfb7008268fedd7ad3fe059d3a37338a9  ./README.md
+9de33ac0285a5d2ebf0045dc851f5332d4433ae932c02e5e7a7146b934b17873  ./preregistration.md
+1db377ce47da5e56ec41a35554f13a82b6cfae467b77f1aef36782678bd0205b  ./README.md

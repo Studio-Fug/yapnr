@@ -37,5 +37,13 @@ over an infinite ground does not see:
 - the TRL line of region W (B01-B05) is 48.6 Ω with that pour and ring (2D), about 1.4 Ω under
   the solver's open-L1 port: the comparison renormalizes the measurement to the solver's port
   impedance ([pre-registration](../../preregistration.md)). The same holds for R1t;
-- the window carries a placeholder footprint (`PHD2`): `yapnr fab check` stops on it
-  (`FAB-PLACEHOLDER`) until the copper replaces it.
+- the window carries `d2-star-sched`'s exported copper (`catalog.o_optimized`; the board's
+  copper equals `runs/d2-star-sched/footprint.kicad_mod`, 122.5 mm², polygon symmetric
+  difference 0), with `03b7d938` on the back silkscreen.
+
+**Against the spec, not only the validation limits:** the loss-corrected \|S21\| = \|S31\| that
+"meets spec" uses is −3.43 to −3.45 dB on W-eq and W-nom (a 0.03-0.05 dB miss of −3.4 dB) and
+−3.35 to −3.36 dB on W-eq-em528 ([corrected/](../corrected/summary.json)); the committed in-job
+criteria ([d2.json](../../inputs/criteria/d2.json), −3.40 dB coarse) also fail at the coarse grid.
+So on FR408HR the prediction misses the spec on \|S11\| and, narrowly, on \|S21\|; both versions
+of the \|S21\| limit are reported in the [pre-registration](../../preregistration.md).

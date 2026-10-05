@@ -970,7 +970,7 @@
 	(gr_poly (pts (xy 48.54 75.08) (xy 66.54 75.08) (xy 66.54 93.08) (xy 48.54 93.08)) (stroke (width 0) (type solid)) (fill yes) (layer "F.Cu") (uuid "5cd737c8-3d4e-5815-b9a5-ef5d00331deb"))
 	(gr_text "yapnr Order 0 rev A O0-W" (at 48.54 93.98 0) (layer "F.SilkS") (uuid "0b6fdca4-dfad-58c9-a677-e995b53dfc90") (effects (font (size 1 1) (thickness 0.15)) (justify left)))
 	(gr_text "oshpark-4l-fr408hr" (at 48.54 95.78 0) (layer "F.SilkS") (uuid "e67aa237-0888-514e-8ba9-7aa90456f638") (effects (font (size 1 1) (thickness 0.15)) (justify left)))
-	(gr_text "gen ad2bda7" (at 48.54 97.58 0) (layer "F.SilkS") (uuid "b4cc3ec8-dea5-5794-a8ea-f1cf6d1e2d02") (effects (font (size 1 1) (thickness 0.15)) (justify left)))
+	(gr_text "gen ee9da3f" (at 48.54 97.58 0) (layer "F.SilkS") (uuid "b4cc3ec8-dea5-5794-a8ea-f1cf6d1e2d02") (effects (font (size 1 1) (thickness 0.15)) (justify left)))
 	(gr_line (start 51.54 82.58) (end 54.54 82.58) (stroke (width 0.15) (type solid)) (layer "B.SilkS") (uuid "1e376537-d015-57da-a6fe-082c6cb53f18"))
 	(gr_line (start 54.54 82.58) (end 54.54 85.58) (stroke (width 0.15) (type solid)) (layer "B.SilkS") (uuid "6a6427ee-6738-5971-b53c-9ffdcc2e051e"))
 	(gr_line (start 54.54 85.58) (end 51.54 85.58) (stroke (width 0.15) (type solid)) (layer "B.SilkS") (uuid "057852d4-2f26-5ba4-ab7f-ddf284b8ca92"))

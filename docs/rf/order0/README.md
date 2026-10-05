@@ -29,12 +29,15 @@ the bounding rectangle, for 3 copies.
 | Upload   | Contents                                                                             | Size                         | Cost | SMAs per copy |
 | -------- | ------------------------------------------------------------------------------------ | ---------------------------- | ---- | ------------- |
 | **O0-M** | the thin-microstrip (region M) coupons, R1, A16, A04R, the tag                       | 120.1 × 144.3 mm, 26.9 sq in | $269 | 33            |
-| **O0-W** | the thick-microstrip (region W) calibration set, R1t, the D2 window                  | 57.5 × 131.2 mm, 11.7 sq in  | $117 | 16            |
+| **O0-W** | the thick-microstrip (region W) calibration set, R1t, D2 (`d2-star-sched`), QR B15   | 54.0 × 158.7 mm, 13.3 sq in  | $133 | 16            |
 | **O0-D** | the D1 window, an R1 copy, a thru, a 9 mm and a 30 mm line (uploaded when D1 passes) | 90.6 × 51.5 mm, 7.2 sq in    | $72  | 12            |
 
-The D2 window is a placeholder: `yapnr fab check` refuses O0-W (`FAB-PLACEHOLDER`) until D2
-passes, or the owner decides to ship it empty or as a registered miss (outside this repo, see
-the PR description).
+O0-W carries D2's nearest miss, `d2-star-sched` (label `03b7d938`), as a pre-registered design
+that misses its spec, by the owner default recorded in the
+[pre-registration](preregistration.md) (the owner confirms or overrides it before the release),
+and the small QR stick B15 to [predictions/D2](predictions/D2/README.md). Its Gerber zip's sha256
+is in [fab/O0-W.sha256](fab/O0-W.sha256). O0-D grows to about 118 × 50 mm, 9.2 sq in, with its own
+QR stick A15 when it is regenerated with the re-optimized D1.
 
 D1 passed (`d1-star`, label `O0 D1 divider-osh-m ad20e643`). `catalog.o_optimized` now merges
 its validated copper (`export.contour`'s own representation) into O0-D's window as one custom
@@ -55,7 +58,7 @@ The KiCad projects, catalogues and DRC results are in
 ![O0-M, the top copper, mask openings (light) and silkscreen as KiCad renders them: one outline,
 the sticks held by tabs with three mouse-bite holes each side](images/O0-M.png)
 
-![O0-W: the W calibration set, R1t and the empty D2 window](images/O0-W.png)
+![O0-W: the W calibration set, R1t, the QR stick B15 and D2 (d2-star-sched) in its window](images/O0-W.png)
 
 ![O0-D: the empty D1 window, R1, and the thru and lines, turned 90°](images/O0-D.png)
 
@@ -89,12 +92,13 @@ with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.
 
 ### O0-W sticks
 
-| Stick   | Structure                                                                      | Size (mm)  | What it determines                                  |
-| ------- | ------------------------------------------------------------------------------ | ---------- | --------------------------------------------------- |
-| B01-B04 | W thru and lines, ΔL 5, 14, 34 mm                                              | 20-54 × 16 | γ(f) of W: the core's Dk, which region M cannot see |
-| B05     | reflect, open at both reference planes                                         | 30 × 16    | mTRL reflect                                        |
-| R1t     | the textbook divider on W                                                      | 33 × 50    | the reference for D2                                |
-| D2      | window for the optimizer's thick divider (20 × 24 mm), its feeds and keep-away | 40 × 52    | **placeholder** until D2 passes validation          |
+| Stick   | Structure                                                                           | Size (mm)  | What it determines                                    |
+| ------- | ----------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------- |
+| B01-B04 | W thru and lines, ΔL 5, 14, 34 mm                                                   | 20-54 × 16 | γ(f) of W: the core's Dk, which region M cannot see   |
+| B05     | reflect, open at both reference planes                                              | 30 × 16    | mTRL reflect                                          |
+| R1t     | the textbook divider on W                                                           | 33 × 50    | the reference for D2                                  |
+| D2      | the optimizer's thick divider `d2-star-sched` (20 × 24 mm window), feeds, keep-away | 40 × 52    | D2: a pre-registered miss of its spec (owner default) |
+| B15     | QR to predictions/D2 and the tag text                                               | 25 × 25    | this page                                             |
 
 ### O0-D sticks
 

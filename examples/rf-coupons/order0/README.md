@@ -9,7 +9,7 @@ these files: change the generator and regenerate them.
 | Directory     | Upload | Contents                                                           |
 | ------------- | ------ | ------------------------------------------------------------------ |
 | [O0-M](O0-M/) | O0-M   | region M coupons, R1, A16 C-pads, A04R, the tag (QR)               |
-| [O0-W](O0-W/) | O0-W   | region W calibration set, R1t, the D2 window (placeholder)         |
+| [O0-W](O0-W/) | O0-W   | region W calibration set, R1t, D2 (`d2-star-sched`), QR stick B15  |
 | [O0-D](O0-D/) | O0-D   | the D1 window (placeholder), an R1 copy, a thru, 9 and 30 mm lines |
 
 Each directory holds the KiCad 10 project (`.kicad_pro`, `.kicad_pcb` with unfilled zones,
@@ -18,7 +18,7 @@ Each directory holds the KiCad 10 project (`.kicad_pro`, `.kicad_pcb` with unfil
 size in square inches) and `drc-summary.json`. The fab bundle (Gerbers, drill, order card) is built
 later with `yapnr fab build`; agents never upload or order.
 
-The demo windows are placeholders: the optimizer's copper of D1 and D2 goes into them when each
-passes its validation, with its feeds, keep-away and launches already in place. Each carries a
-placeholder footprint (`PHD1`, `PHD2`), so `yapnr fab check` reports `FAB-PLACEHOLDER` on O0-W and
-O0-D and `yapnr fab build` writes nothing for them until then; O0-M checks clean.
+O0-W carries D2's exported copper (`d2-star-sched`, a pre-registered miss of its spec) and checks
+clean. The checked-in O0-D still carries the placeholder D1 window (`PHD1`, so `yapnr fab check`
+reports `FAB-PLACEHOLDER`) until the re-optimized D1 passes the fixed width/space check; O0-M
+checks clean.

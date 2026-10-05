@@ -120,16 +120,31 @@ How the rows are applied (decided before any measurement; none of these changes 
 - **D2** ships only as the owner decides (no D2 formulation meets the −20 dB \|S11\| spec; the
   nearest, `d2-star-sched`, reaches −19.3 to −19.4 dB and passes its \|S21\|, \|S31\| validation
   limits, [D2](predictions/D2/README.md)). If it ships, it is judged by the same rows, labelled a
-  design that missed its \|S11\| spec.
+  design that missed its spec (see below: \|S11\|, and loss-corrected \|S21\| on FR408HR).
+
   - **Owner default (recorded by the main loop, 2026-10-04):** `d2-star-sched` ships on O0-W as
-    this pre-registered near-miss unless the owner says otherwise. It passes \|S21\|/\|S31\| on
-    every grid and substrate it was validated on (coarse/fine/finer, W-eq/W-nom; EM528 passes
-    outright) and misses only \|S11\| — by 0.6-0.7 dB against the −20 dB spec, −19.3 to −19.4 dB
-    measured. The board carries its run id, the first 8 hex of its `result.json` sha256, and its
-    fab-DRC status in silkscreen (the D2 stick's label; `catalog.o_optimized`), plus a QR label
-    stick to this page. This default is a placeholder for the owner's own sign-off, not a
-    substitute for it: the row above ("ships only as the owner decides") is the binding text
-    until the owner confirms or overrides it.
+    this pre-registered near-miss unless the owner says otherwise. What its predictions say
+    (yapnr.rf only; no independent solver has run on D2) [S]:
+
+    - \|S11\|: −19.3 to −19.4 dB on W-eq and W-nom (coarse/fine/finer), a 0.6-0.7 dB miss of the
+      −20 dB spec; −19.9 to −20.1 dB on W-eq-em528.
+    - \|S21\| = \|S31\|, raw: inside the design's validation limits (−3.45 dB coarse, −3.6 dB
+      fine/finer) everywhere, but the committed in-job criteria ([inputs/criteria/d2.json](inputs/criteria/d2.json):
+      −3.40 dB coarse) fail on the coarse grid: −3.4117 dB (W-eq), −3.4205 dB (W-eq, wide pulse),
+      −3.4334 dB (W-nom). Both versions are reported.
+    - \|S21\| = \|S31\|, loss-corrected (the prediction "meets spec" uses): −3.43 to −3.45 dB on
+      W-eq and W-nom, a 0.03-0.05 dB miss of the −3.4 dB spec; −3.35 to −3.36 dB on W-eq-em528
+      ([predictions/corrected/](predictions/corrected/summary.json)).
+
+    So on FR408HR D2 is predicted to miss the spec on \|S11\| and, by a smaller margin, on
+    loss-corrected \|S21\|/\|S31\|; it is judged by the same rows and labelled a design that
+    missed its spec, not only its \|S11\| spec. The board carries the first 8 hex of its
+    `result.json` sha256 (`03b7d938`, back silkscreen "O0-W D2 03b7d938") and a QR label stick
+    (B15) to its predictions page; its run id and fab-DRC status are in O0-W's `catalog.json`
+    (`catalog.o_optimized`), not in silkscreen. This default is
+    a placeholder for the owner's own sign-off, not a substitute for it: the row above ("ships
+    only as the owner decides") is the binding text until the owner confirms or overrides it.
+
 - Criteria are never changed after data arrive; if one must be, results are reported against
   both versions.
 

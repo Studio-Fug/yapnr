@@ -5,7 +5,7 @@ LVDS/QSPI by connectivity and the R1 macro digest -- the knowledge of ``measure.
 that tools/exp/pnr_explore_plan.py (generic) does not have.
 
     yapnr exp fetch PLAN
-    python3 examples/radar60/board/explore_rank.py <store>/fetched/<campaign>/assembled/default
+    python3 examples/radar60/board/explore_rank.py <store>/fetched/<campaign>/assembled
 
 Reads ``dataset.jsonl`` (one line per task: ``{"candidate", "record", "shard"}``, written by
 ``mc-eval``'s own assembly -- docs/cloud-experiments.md); a task's ``record`` is this campaign's
@@ -91,7 +91,7 @@ def render(rows: List[Dict[str, Any]]) -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("assembled", type=Path, help="<store>/fetched/<campaign>/assembled/<config>")
+    ap.add_argument("assembled", type=Path, help="<store>/fetched/<campaign>/assembled")
     ap.add_argument("--json", action="store_true", help="print the rows as JSON, not a table")
     args = ap.parse_args(argv)
     entries = load(args.assembled / "dataset.jsonl")

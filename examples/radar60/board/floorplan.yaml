@@ -888,10 +888,13 @@ power_stage:
     - anchor: efuse
       contains: [efuse, connector_tvs, efuse_caps]
       fixed_block: { name: efuse_stage, group: EFUSE_STAGE, solid_layers: [F.Cu] }
-      # U5's VIN and OUT lands (0.3 x 2.4 mm, 0.2 mm apart): the same pour treatment.
+      # U5's VIN and OUT lands (0.3 x 2.4 mm, 0.2 mm apart): the same pour treatment. GND is
+      # not poured here: U5's GND pin 8 is an ordinary 0.25 x 0.6 mm land between ILM and PG,
+      # whose pour piece had no room for a stitch via in any of 30 block layouts (6 of 13 hot
+      # links open); it escapes and drops to In1 like any GND pad.
       pours:
         - layer: F.Cu
-          nets: [VIN_5V, 5V_SYS, GND]
+          nets: [VIN_5V, 5V_SYS]
           region: { parts: [efuse, connector_tvs, efuse_caps], margin_mm: 0.5 }
           terminals: pad
           connect: solid
@@ -899,7 +902,7 @@ power_stage:
           split_gap_mm: 0.2
           min_width_mm: 0.25
           h_mm: 0.05
-          pieces: [GND, 5V_SYS]
+          pieces: [5V_SYS]
       hot_loops: # TPS25947 layout: CIN and the TVS at IN/GND, COUT at OUT/GND
         - { ic: efuse, parts: [efuse_caps], nets: [VIN_5V, 5V_SYS, GND] }
         - { ic: efuse, parts: [connector_tvs], nets: [VIN_5V, GND] }

@@ -67,7 +67,13 @@ placement exposed:
   macro boards (`hull.gp_bodies`), `regions.check_feasible`, and `plane_intent`, which widens
   the body to its symmetric via-array reservation.
 - **Unchanged** (the symmetric box contains the body): `_fit_outline`, rows, line-group spacing,
-  `_opposite_body_basins`, hierarchical block areas. `PNR_POWER_FIRST=1` refuses `PNR_COMPACT`.
+  `_opposite_body_basins`, hierarchical block areas.
+- **Power-first placement** (`PNR_POWER_FIRST=1`, `power_first.staged_place`): `GP` (spread and
+  the cluster box of the staged placer's random starts), `LEGALIZE` (the courtyard gap in the staged
+  overlap term and the legalizer, the slot grid, the copper margins), `COURTYARD`, `DROPS` and
+  `RANK` apply; `WIRE` and `TURN` do not (the power-first legalizer and its retry judge every slot
+  by the hot loops; section 11). Line groups (`SATELLITES`) are refused there with or without
+  compact.
 
 ## 3. Global placement (`GP`)
 

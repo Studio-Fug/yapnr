@@ -40,6 +40,8 @@ caller takes its unchanged path and writes no new JSON keys.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 
 PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
@@ -67,3 +69,31 @@ def active() -> dict:
     if shrink_enabled():
         out["SHRINK"] = True
     return out
+
+
+def settings() -> dict:
+    """The placement settings the compact parts decide, for the router key: the active parts
+    (with ``PNR_SHRINK``) and every legalizer switch's effective value
+    (:func:`pnr.legalize_flags.active`; ``WIRE``, ``TURN`` and ``SATELLITES`` are three of
+    them, and an explicit variable wins over its part). Empty when all are off."""
+    from pnr import legalize_flags
+
+    out = {}
+    parts = active()
+    if parts:
+        out["parts"] = sorted(parts)
+    switches = legalize_flags.active()
+    if switches:
+        out["legalize"] = switches
+    return out
+
+
+def settings_key():
+    """The router key's ``compact`` field: None when :func:`settings` is empty (no part and no
+    legalizer switch: the key is what it was before the field existed), else a short digest of
+    it, so evaluations and block libraries of two placement configurations never mix."""
+    conf = settings()
+    if not conf:
+        return None
+    text = json.dumps(conf, sort_keys=True)
+    return hashlib.sha256(text.encode()).hexdigest()[:12]

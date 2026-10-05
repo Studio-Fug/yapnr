@@ -1971,6 +1971,34 @@ py_test(
     ],
 )
 
+# Power-first placement (PNR_POWER_FIRST=1): derivation, staged objective, legalizer,
+# ranking, routed metrics; and the compact parts under it.
+py_test(
+    name = "power_first_test",
+    size = "medium",
+    srcs = [
+        "tests/power_topology_golden.py",
+        "tests/test_power_first.py",
+    ],
+    data = glob([
+        "pnr/**/*.py",
+        "testdata/power_topology/*",
+    ]),
+    imports = [
+        ".",
+        "tests",
+    ],
+    main = "tests/test_power_first.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
+)
+
 # Line groups: parser, group layout, rigid placement, legality, macro collapse defaults.
 py_test(
     name = "line_group_test",

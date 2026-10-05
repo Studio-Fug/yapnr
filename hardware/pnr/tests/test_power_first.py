@@ -244,7 +244,7 @@ class Derivation(unittest.TestCase):
         outs = [
             subprocess.run(
                 [sys.executable, "-c", code],
-                env=dict(os.environ, PYTHONHASHSEED=seed),
+                env=dict(os.environ, PYTHONHASHSEED=seed, PYTHONPATH=os.pathsep.join(sys.path)),
                 capture_output=True,
                 text=True,
                 check=True,
@@ -372,6 +372,52 @@ class Placement(unittest.TestCase):
         self.assertLess(q["power_mst_mm"], q0["power_mst_mm"])
         self.assertIn("stars", placed.power_first)
 
+    def test_power_first_with_compact(self):
+        # PNR_COMPACT under PNR_POWER_FIRST=1 (once refused): the staged placer draws its
+        # starts in the cluster box and keeps the courtyard gap, the legalizer the gap,
+        # grid and copper margins; the result is legal and still power-first placed
+        from pnr.place import compact
+        from pnr.place.power_first import StagedPlacer, roles_for
+
+        with mock.patch.dict(os.environ, {"PNR_COMPACT": "1"}):
+            (placed, report), (g, c, r) = self.place("converter", True)
+            self.assertTrue(report.legal, report.summary())
+            self.assertIn("stars", placed.power_first)
+            from pnr.place.geometry import outline_size
+
+            w, h = outline_size(g, c)
+            box = compact.cluster_box(g, c, w, h)
+            tight = compact.legalize_settings(g, c, r)
+            sp = StagedPlacer(
+                g,
+                c,
+                w,
+                h,
+                roles_for(g, c, r),
+                seed=0,
+                iters=30,
+                start_box=box,
+                clearance=tight.gap,
+                grid_mm=tight.grid_mm,
+            )
+        self.assertAlmostEqual(sp.clearance, tight.gap)
+        self.assertAlmostEqual(sp.overlap_clearance, tight.gap + tight.grid_mm)
+        x0, y0, bw, bh = box
+        free = ~sp.is_fixed
+        for init in sp.inits[1:]:  # start 0's fixed parts are overwritten by their poses later
+            xs, ys = init[free, 0], init[free, 1]
+            half = sp.half[free]
+            inside_x = (xs >= x0 - 1e-4) & (xs <= x0 + bw + 1e-4)
+            inside_y = (ys >= y0 - 1e-4) & (ys <= y0 + bh + 1e-4)
+            # a part wider than the box sits at its centre, else inside it
+            fits = (2 * half[:, 0] <= bw) & (2 * half[:, 1] <= bh)
+            self.assertTrue(bool((inside_x & inside_y)[fits].all()))
+        # PNR_COMPACT=0 is the flag-off path
+        (off, _), _ = self.place("converter", True, iters=80)
+        with mock.patch.dict(os.environ, {"PNR_COMPACT": "0"}):
+            (off0, _), _ = self.place("converter", True, iters=80)
+        self.assertEqual(plain(off.to_json()), plain(off0.to_json()))
+
     def test_fallback_without_channel_rules_is_default(self):
         def outcome(flag):
             try:
@@ -411,7 +457,7 @@ class Placement(unittest.TestCase):
         outs = [
             subprocess.run(
                 [sys.executable, "-c", code],
-                env=dict(os.environ, PYTHONHASHSEED=seed),
+                env=dict(os.environ, PYTHONHASHSEED=seed, PYTHONPATH=os.pathsep.join(sys.path)),
                 capture_output=True,
                 text=True,
                 check=True,

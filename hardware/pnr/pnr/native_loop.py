@@ -1642,6 +1642,10 @@ def controller(argv=None, nested=False):
     if os.environ.get("PNR_GLOSS") == "1":
         current = gloss_pass(current, "06g-gloss")
     started = phase_clock.begin_refinement()
+    # PNR_COMPACT parts and legalizer switches (None: all off, nothing is stamped)
+    from pnr.compact_flags import settings_key as compact_settings_key
+
+    compact_key = compact_settings_key()
     before = drc(current)
     initial = before
     inv = worker("inspect", current, a.out_dir / "initial")
@@ -1680,6 +1684,11 @@ def controller(argv=None, nested=False):
             progress["gloss_key"] = a.gloss_key
             if getattr(a, "gloss_summaries", None):
                 progress["gloss"] = a.gloss_summaries
+            save(a.out_dir / "progress.json", progress)
+        if compact_key is not None:
+            # the router key's compact field (pnr.feedback.signals reads it from progress.json)
+            progress = read(a.out_dir / "progress.json")
+            progress["compact_key"] = compact_key
             save(a.out_dir / "progress.json", progress)
 
     portal_trials = set()

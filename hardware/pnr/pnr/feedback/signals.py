@@ -13,7 +13,8 @@ instance dir (``<synth out>/<tid>/native/<tag>``) or a halving stage dir
   connections are keyed by a caller key (block-local path for templates, ref at
   top level) and pool across layouts and instances;
 * ``electrical/native-loop/progress.json`` and ``rules.json``: the native budget,
-  the gloss settings key (PNR_GLOSS=1) and the fab profile, for the router key;
+  the gloss settings key (PNR_GLOSS=1), the compact placement key (PNR_COMPACT=1 or a
+  legalizer switch) and the fab profile, for the router key;
 * ``electrical/coalesce.json``: the source tree that ran the evaluation, whose
   evaluation modules give the code part of the router key (:func:`observed_code`).
 
@@ -137,6 +138,7 @@ def read_round(round_dir, key=None):
         budget_seconds=(progress.get("budgets") or {}).get("seconds"),
         fab_profile=rules.get("fab_profile", "legacy") if rules else None,
         gloss=progress.get("gloss_key"),
+        compact=progress.get("compact_key"),
         conns=[conns[c] for c in sorted(conns)],
         same_part=dict(count=len(same), ids=sorted(same)),
         endpoints={k_: endpoints[k_] for k_ in sorted(endpoints)},
@@ -698,6 +700,19 @@ def gloss_key():
         return "invalid"
 
 
+def compact_key():
+    """The router key's ``compact`` field: None with every compact part and legalizer switch
+    off, else a digest of the placement settings they decide
+    (:func:`pnr.compact_flags.settings_key`), so the two arms of a compact A/B (and the parts'
+    ablations) never share a key."""
+    from pnr.compact_flags import settings_key
+
+    try:
+        return settings_key()
+    except ValueError:
+        return "invalid"
+
+
 def current_key(stage, budget_seconds, inputs=None):
     """Router key of evaluations this process will run (environment + CLI + evaluation code)."""
     router = _router()
@@ -710,6 +725,7 @@ def current_key(stage, budget_seconds, inputs=None):
         fab_profile=os.environ.get("PNR_FAB_PROFILE") or "jlc-pofv",
         inputs=file_sha(Path(inputs) / "source.kicad_pcb") if inputs else None,
         gloss=gloss_key(),
+        compact=compact_key(),
         code=code_key(PNR_ROOT, router),
         code_key_scheme=CODE_KEY_SCHEME,
     )
@@ -721,13 +737,16 @@ def key_string(key):
     The code key's scheme is the last field, so a key string names the scheme of
     its code key; strings written before schemes existed have one field less (and
     a legacy code key). With PNR_GLOSS=1 a ``gloss=<settings key>`` field precedes
-    the code key; without it the string is what it was before the flag existed."""
+    the code key, and with compact placement (or a legalizer switch) a
+    ``compact=<settings key>`` field; without them the string is what it was before
+    the flags existed."""
     fields = ["router", "stage", "budget_seconds", "power_first", "fanout_reserve"]
-    fields += ["fab_profile", "inputs", "gloss", "code", "code_key_scheme"]
+    fields += ["fab_profile", "inputs", "gloss", "compact", "code", "code_key_scheme"]
+    optional = ("gloss", "compact")
     return "|".join(
-        ("gloss=%s" % key[f]) if f == "gloss" else str(key.get(f))
+        ("%s=%s" % (f, key[f])) if f in optional else str(key.get(f))
         for f in fields
-        if f != "gloss" or key.get(f) is not None
+        if f not in optional or key.get(f) is not None
     )
 
 
@@ -742,6 +761,7 @@ def observed_key(fb, *, stage=None, power_first=None):
         power_first=power_first,
         fab_profile=fb.get("fab_profile"),
         gloss=fb.get("gloss"),
+        compact=fb.get("compact"),
     )
 
 
@@ -752,10 +772,13 @@ def check_import(observed, current, budget_policy="error"):
     depend on the router). A different native budget is an error unless
     ``budget_policy`` is 'warn'. Fields the import cannot show are warnings. The gloss
     settings key (None: PNR_GLOSS unset, also for records older than the flag) must match:
-    a gloss A/B arm never imports the other arm's evaluations."""
+    a gloss A/B arm never imports the other arm's evaluations. So must the compact
+    placement key (None: every compact part and legalizer switch off, also for records
+    older than the key)."""
     errors, warnings = [], []
-    if observed.get("gloss") != current.get("gloss"):
-        errors.append("gloss %r != this run %r" % (observed.get("gloss"), current.get("gloss")))
+    for field in ("gloss", "compact"):
+        if observed.get(field) != current.get(field):
+            errors.append("%s %r != this run %r" % (field, observed.get(field), current.get(field)))
     for field in ("router", "power_first", "fab_profile", "stage"):
         o, c = observed.get(field), current.get(field)
         if o is None or c is None:

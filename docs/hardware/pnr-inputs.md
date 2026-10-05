@@ -379,6 +379,34 @@ v0 limits: the series topology of a block with two ports on one net is not impos
 left as a stub); placement does not see block ports (only its footprints' absence and
 your `keepout`).
 
+**The hier -> fixed_block bridge.** A hierarchical block (`pnr.hier.blocks`,
+`pnr.hier.macro`) is placed as one rigid macro and chosen from a library of routed
+local layouts; once a layout is settled, it can become an ordinary `fixed_block`
+instead of being re-placed and re-routed as a macro every wave:
+
+1. `pnr.hier.macro.fixed_block_from_macro(flat, plan, mref, name, group, anchor,
+   solid_layers=...)` reads the macro's placed, expanded graph (`MacroPlan.expand`'s
+   output) and returns `(fixed, fixed_block)`: the `fixed` entry pins `anchor` (one
+   of the macro's members) at its landed pose, so later placement leaves the whole
+   macro where it is; the `fixed_block` entry lists every other member as a held-out
+   `ref` riding on it. It raises `ValueError` for an anchor that is not a member of
+   that macro, or a macro ref `plan` does not know.
+2. `python -m pnr.hier.assemble full.kicad_pcb --block block.kicad_pcb --out out.kicad_pcb
+   --zones --group NAME --anchor REF` draws the routed block's copper onto the full
+   board (as it always has) and, with these two flags, also clones its zones
+   (`--zones`: copper pours and rule areas, by the same rigid transform; dropped by
+   default, byte-identical when undeclared) and puts everything this run drew plus
+   every block footprint except `REF` into a new KiCad group `NAME` (`--group`,
+   `--anchor`; undeclared, no group is made). It prints that group's
+   `pnr.fixed_copper.block_digest`, the value a `fixed_block.sha256` pins once the
+   layout is final.
+
+Step 2's `NAME`/`REF` are step 1's `group`/`anchor`: run 1 first to decide them (and
+to write the `fixed`/`fixed_block` entries into the board's source yaml), then run 2
+on the placed board to turn the chosen layout's copper, zones included, into that
+group. `--anchor` without `--group` is refused; a `--group` name already on the
+board is refused rather than merged into.
+
 ### `side_pref` — top/bottom bias (soft)
 
 Biases a set of parts toward a side. The classic use is pushing decoupling caps

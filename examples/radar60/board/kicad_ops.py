@@ -18,13 +18,20 @@
             macro items, U1 and the macro's footprints locked, zones filled, and the macro
             digest R1 v2 (:func:`macro_digest`) compared with the RF track's board.
 ``poses``   footprint poses and pad positions of a board as JSON (for the audits).
+``measure`` post-route checks (integrate.py check, R6) on a routed board: the macro group's
+            copper digest unchanged by routing (R1 v2), no foreign copper next to the RF region
+            (R4), and routed length/skew for the differential pairs and single nets named.
 
 Usage: KICAD_PYTHON kicad_ops.py source FLOORPLAN_PCB ATOPILE_PCB OUT_PCB PARAMS_JSON
        KICAD_PYTHON kicad_ops.py finish PLACED_PCB FLOORPLAN_PCB MACRO_PCB OUT_PCB REPORT_JSON
        KICAD_PYTHON kicad_ops.py poses PCB OUT_JSON
+       KICAD_PYTHON kicad_ops.py measure ROUTED_PCB FINISH_JSON PARAMS_JSON OUT_JSON
 
 PARAMS_JSON (integrate.py writes it): ``macro_pcb``, ``u1`` (``address``, ``at_kicad``,
 ``orientation_deg``) and ``rf_region_kicad`` (the RF region's rectangles in KiCad mm).
+``measure``'s own PARAMS_JSON is unrelated (see :func:`measure`'s docstring): it carries the
+RF region rects again (the check step may run long after source, with no shared process), plus
+``diff_pairs`` and ``nets``.
 
 The text helpers (:func:`merge_macro`, :func:`macro_digest`, ...) need no pcbnew; the unit tests
 in tests/unit/radar60 run them on the committed macro board.
@@ -33,6 +40,7 @@ in tests/unit/radar60 run them on the committed macro board.
 import hashlib
 import json
 import math
+import os
 import re
 import sys
 
@@ -689,6 +697,126 @@ def finish(placed_pcb, floorplan_pcb, macro_pcb, out_pcb, report_json):
     print(json.dumps(report, sort_keys=True))
 
 
+# ---------------------------------------------------------------- measure (post-route checks)
+
+
+def _foreign_copper(pcbnew, board, group, rects_kicad_mm, layers):
+    """Copper on ``layers`` inside ``rects_kicad_mm`` (KiCad page mm) that is not ``group``'s:
+    R4 (no digital copper next to the RF region), checked on the routed board."""
+    area = pcbnew.SHAPE_POLY_SET()
+    for x0, y0, x1, y1 in rects_kicad_mm:
+        area.NewOutline()
+        for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
+            area.Append(round(x * 1e6), round(y * 1e6))
+    area.Simplify()
+    foreign, zone_fill = [], {}
+    for lname in layers:
+        la = board.GetLayerID(lname)
+        for t in board.GetTracks():
+            if _group_name(t) == group or not t.IsOnLayer(la):
+                continue
+            shape = pcbnew.SHAPE_POLY_SET()
+            t.TransformShapeToPolygon(shape, la, 0, 1000, pcbnew.ERROR_INSIDE)
+            shape.BooleanIntersection(area)
+            if shape.OutlineCount() and shape.Area() > 0:
+                foreign.append([t.GetNetname(), t.GetClass(), lname])
+        for z in board.Zones():
+            if z.GetIsRuleArea() or _group_name(z) == group or not z.IsOnLayer(la):
+                continue
+            fill = pcbnew.SHAPE_POLY_SET(z.GetFilledPolysList(la))
+            fill.BooleanIntersection(area)
+            if fill.OutlineCount() and fill.Area() > 0:
+                key = "%s %s %s" % (z.GetZoneName() or "zone", z.GetNetname(), lname)
+                zone_fill[key] = round(fill.Area() / 1e12, 3)
+    return {"items": foreign, "zone_fill_mm2": zone_fill}
+
+
+def _net_lengths(board, prefixes):
+    """Per-net routed length (mm; vias add none) and via count, for nets starting with one of
+    ``prefixes`` (e.g. ``LVDS_``, ``QSPI_``)."""
+    length, vias, layers = {}, {}, {}
+    for t in board.GetTracks():
+        n = t.GetNetname()
+        if not any(n.startswith(p) for p in prefixes):
+            continue
+        if t.GetClass() == "PCB_VIA":
+            vias[n] = vias.get(n, 0) + 1
+            continue
+        length[n] = length.get(n, 0.0) + t.GetLength() / 1e6
+        layers.setdefault(n, set()).add(board.GetLayerName(t.GetLayer()))
+    return length, vias, layers
+
+
+def measure(routed_pcb, finish_json, params_json, out_json):
+    """Post-route checks (integrate.py check, R6): the macro's copper digest unchanged by
+    routing (R1 v2), no foreign copper next to the RF region (R4), and routed length/skew for
+    the differential pairs and single nets ``params_json`` names.
+
+    ``params_json``: ``{"rf_region_kicad": [[x0,y0,x1,y1], ...], "diff_pairs": {"TX0": ["LVDS_TX0_P",
+    "LVDS_TX0_N"], ...}, "nets": ["QSPI_CLK", ...]}`` (KiCad page mm; integrate.py writes it from
+    floorplan.yaml, so this module stays floorplan-ignorant)."""
+    import pcbnew
+
+    finish_report = json.load(open(finish_json, encoding="utf-8"))
+    params = json.load(open(params_json, encoding="utf-8"))
+    out = {}
+
+    # R1 v2: the macro group's own copper, untouched by routing.
+    board = pcbnew.LoadBoard(routed_pcb)
+    u1 = board.FindFootprintByReference("U1").GetPosition()
+    u1_xy = (u1.x / 1e6, u1.y / 1e6)
+    for item in list(board.GetTracks()):
+        if _group_name(item) != MACRO_GROUP:
+            board.Delete(item)
+    macro_only = out_json[: -len(".json")] + ".macro-only.kicad_pcb"
+    pcbnew.SaveBoard(macro_only, board)
+    text = open(macro_only, encoding="utf-8").read()
+    os.remove(macro_only)
+    load_refs = (finish_report.get("macro") or {}).get("loads") or []
+    sha, counts = macro_digest(text, u1_xy, None, load_refs)
+    want = (finish_report.get("r1_macro_copper") or {}).get("macro_sha256")
+    out["r1_macro"] = {"board_sha256": sha, "counts": counts, "want": want, "equal": sha == want}
+
+    # R4 and the diff pairs / single nets: a fresh load (the one above lost everything outside
+    # the macro group).
+    board = pcbnew.LoadBoard(routed_pcb)
+    out["r4_foreign_copper"] = _foreign_copper(
+        pcbnew,
+        board,
+        MACRO_GROUP,
+        params.get("rf_region_kicad") or [],
+        ("F.Cu", "In1.Cu", "In2.Cu"),
+    )
+    pairs = params.get("diff_pairs") or {}
+    singles = params.get("nets") or []
+    prefixes = tuple(sorted({n[: n.rfind("_")] + "_" for pair in pairs.values() for n in pair}))
+    length, vias, layers = _net_lengths(board, prefixes)
+    out["diff_pairs"] = {}
+    for name, (p, n) in pairs.items():
+        lp, ln = length.get(p, 0.0), length.get(n, 0.0)
+        out["diff_pairs"][name] = {
+            "p": round(lp, 3),
+            "n": round(ln, 3),
+            "skew_mm": round(abs(lp - ln), 3),
+            "vias": {p: vias.get(p, 0), n: vias.get(n, 0)},
+            "layers": {p: sorted(layers.get(p, [])), n: sorted(layers.get(n, []))},
+        }
+    routed = [v["p"] for v in out["diff_pairs"].values() if v["p"] > 0]
+    out["diff_pairs_group_skew_mm"] = round(max(routed) - min(routed), 3) if routed else None
+    length2, vias2, layers2 = _net_lengths(board, tuple(sorted({n for n in singles})))
+    out["nets"] = {
+        n: {
+            "length_mm": round(length2.get(n, 0.0), 3),
+            "vias": vias2.get(n, 0),
+            "layers": sorted(layers2.get(n, [])),
+        }
+        for n in singles
+    }
+    with open(out_json, "w", encoding="utf-8") as fh:
+        json.dump(out, fh, indent=1, sort_keys=True)
+    print(json.dumps({k: out[k] for k in ("r1_macro", "diff_pairs_group_skew_mm")}, indent=1))
+
+
 # ---------------------------------------------------------------- poses
 
 
@@ -742,6 +870,8 @@ def main(argv):
         finish(*argv[2:7])
     elif cmd == "poses":
         poses(*argv[2:4])
+    elif cmd == "measure":
+        measure(*argv[2:6])
     else:
         raise SystemExit(__doc__)
     return 0

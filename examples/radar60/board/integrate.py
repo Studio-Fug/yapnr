@@ -30,6 +30,16 @@ Steps (each reads the previous one's files in WORK; nothing is placed by hand):
              independent DRC resolves the synthetic Radar60_* lib nicknames), KiCad's DRC, the
              placement audit and the RF audit (rf_audit.py A1-A6) of the final board, and its
              report.
+``route``    pnr.staged_signal on the finished board (class-clearance maze, DRU routing, exact
+             edge, the In3 plane partition and IR-drop report already in the policy): route the
+             remaining signal nets, append the copper, refill, IR-drop (pnr.ir_extract) and the
+             internal baseline/candidate DRC and fixed-copper validation. Diagnostics (unrouted
+             nets, failure sites) to WORK/route-diag.json; the routed board to
+             WORK/route/candidate.kicad_pcb.
+``check``    independent DRC on every severity, R1 (the macro's copper digest unchanged by
+             routing), R4 (no foreign copper next to the RF region), LVDS pair lengths and
+             skew, QSPI net lengths (kicad_ops.py measure) and the IR-drop report per rail, all
+             against the routed board. Written to OUT/measure.json.
 ``render``   kicad-cli pcb render: top, angled and bottom views (labelled with --label-python,
              a Python with Pillow).
 
@@ -756,6 +766,190 @@ def step_finish(a):
     print(json.dumps(report["summary"], indent=1))
 
 
+def step_route(a):
+    """R6: pnr.staged_signal on the finished board (class-clearance maze, DRU routing, exact
+    edge: the policy work/inputs/rules.json already carries) — route_board, append, refill, the
+    IR-drop report if the policy declares one, baseline/candidate DRC and the fixed-copper
+    validation. Diagnostics (unrouted nets, failure sites) go to WORK/route-diag.json; the
+    routed board is WORK/route/candidate.kicad_pcb (``check`` reads it).
+
+    A rejected validate (status != "ok" in WORK/route-status.json, e.g. a DRC regression
+    against the baseline board) does not raise: the routed board and its diagnostics are still
+    on disk, and ``check`` (and a wave loop's ``select``) classify the failure from those, not
+    from this step's own exit code."""
+    work = Path(a.work)
+    out_dir = Path(a.out)
+    board = out_dir / (BOARD_NAME + ".kicad_pcb")
+    route_dir = work / "route"
+    if route_dir.exists():
+        shutil.rmtree(route_dir)
+    sys.path[:0] = [str(Path(a.engine) / "hardware/pnr"), str(a.engine)]
+    os.environ["PNR_FAB_PROFILE"] = PROFILE
+    import pnr.route.detail.router as router
+    from pnr.staged_signal import run as route_signals
+
+    captured = {}
+    original = router.route_board
+
+    def _capture(*args, **kwargs):
+        result = original(*args, **kwargs)
+        captured["unrouted"] = result.result.unrouted
+        captured["partial_open"] = result.partial_open
+        captured["failure_sites"] = result.failure_sites
+        return result
+
+    router.route_board = _capture
+    t = time.time()
+    status = "ok"
+    try:
+        route_signals(
+            board,
+            work / "inputs" / "rules.json",
+            work / "constraints-place.yaml",
+            route_dir,
+            a.kicad_python,
+            a.kicad_cli,
+            iterations=a.route_iters,
+        )
+    except subprocess.CalledProcessError as error:
+        status = "failed: %s (exit %s)" % (
+            " ".join(str(c) for c in error.cmd),
+            error.returncode,
+        )
+    finally:
+        router.route_board = original
+    seconds = round(time.time() - t, 1)
+    (work / "route-diag.json").write_text(
+        json.dumps(captured, indent=1, sort_keys=True, default=str)
+    )
+    (work / "route-status.json").write_text(json.dumps(dict(status=status, seconds=seconds)))
+    print(
+        json.dumps(
+            dict(status=status, seconds=seconds, unrouted=captured.get("unrouted")), default=str
+        )
+    )
+    if status != "ok":
+        # Not fatal: a rejected validate (e.g. a DRC regression against the baseline) still
+        # leaves WORK/route/candidate.kicad_pcb and its diagnostics on disk — check (and a wave
+        # loop's select) read exactly those to classify the failure. A crash before route_board
+        # even started (an earlier internal step's own CalledProcessError) leaves no routed
+        # board, and check already refuses cleanly when it finds none.
+        print("step_route: %s (continuing to check)" % status, file=sys.stderr)
+
+
+def step_check(a):
+    """R6: DRC on every severity, R1 (the macro's copper digest unchanged by routing), R4 (no
+    foreign copper next to the RF region), the LVDS pairs' lengths and skew, the QSPI nets'
+    lengths, and the IR-drop report per rail (route's own ir.json, when the policy declares
+    one) — all against WORK/route/candidate.kicad_pcb. Written to OUT/measure.json."""
+    work = Path(a.work)
+    out_dir = Path(a.out)
+    route_dir = work / "route"
+    routed = route_dir / "candidate.kicad_pcb"
+    if not routed.is_file():
+        raise SystemExit("no routed board at %s (run the route step first)" % routed)
+
+    # fp-lib-table beside the routed board too: same footprints, same extraction (step_finish's).
+    lib_table = out_dir / "fp-lib-table"
+    if lib_table.is_file():
+        shutil.copyfile(lib_table, route_dir / "fp-lib-table")
+        if (work / "libs").is_dir():
+            libs_dst = route_dir / "libs"
+            if libs_dst.exists():
+                shutil.rmtree(libs_dst)
+            shutil.copytree(work / "libs", libs_dst)
+
+    drc = work / "check-drc.json"
+    subprocess.run(
+        [
+            a.kicad_cli,
+            "pcb",
+            "drc",
+            "--severity-all",
+            "--format",
+            "json",
+            "--units",
+            "mm",
+            "-o",
+            str(drc),
+            str(routed),
+        ],
+        check=False,
+        capture_output=True,
+    )
+    drc_doc = (
+        json.loads(drc.read_text())
+        if drc.is_file()
+        else {"violations": [], "unconnected_items": []}
+    )
+    import collections
+
+    drc_by_type = dict(collections.Counter(v["type"] for v in drc_doc.get("violations", [])))
+    unconnected = len(drc_doc.get("unconnected_items", []))
+
+    floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
+    graph_doc = json.loads((work / "inputs" / "graph.json").read_text())
+    rf_region = [kicad_rect(floorplan, r) for r in floorplan["rf"]["region"]]
+    diff_pairs = {
+        name.upper().replace("LVDS_", ""): list(pn)
+        for name, pn in floorplan["nets"]["LVDS"]["pairs"].items()
+    }
+    qspi_globs = floorplan["nets"]["QSPI"]["globs"]
+    qspi_nets = sorted(
+        n["name"]
+        for n in graph_doc["nets"]
+        if any(fnmatch.fnmatchcase(n["name"], g) for g in qspi_globs)
+    )
+    params = {"rf_region_kicad": rf_region, "diff_pairs": diff_pairs, "nets": qspi_nets}
+    params_path = work / "check-params.json"
+    params_path.write_text(json.dumps(params, indent=1))
+    measure = work / "measure-kicad.json"
+    _run(
+        [
+            a.kicad_python,
+            HERE / "kicad_ops.py",
+            "measure",
+            routed,
+            work / "finish.json",
+            params_path,
+            measure,
+        ],
+        log=work / "measure.log",
+    )
+    out = {"drc_by_type": drc_by_type, "unconnected": unconnected}
+    out.update(json.loads(measure.read_text()))
+    out["qspi_max_length_mm"] = (
+        max(v["length_mm"] for v in out["nets"].values()) if out.get("nets") else None
+    )
+    ir_path = route_dir / "ir" / "ir.json"
+    if ir_path.is_file():
+        ir = json.loads(ir_path.read_text())
+        out["ir"] = {
+            net: {
+                k: rep.get(k)
+                for k in (
+                    "status",
+                    "r_eff_mohm",
+                    "worst_drop_mv",
+                    "budget_mohm",
+                    "opens",
+                    "current_a",
+                    "loss_w",
+                )
+            }
+            for net, rep in (ir.get("rails") or ir).items()
+            if isinstance(rep, dict)
+        }
+    (out_dir / "measure.json").write_text(json.dumps(out, indent=1, sort_keys=True, default=str))
+    print(
+        json.dumps(
+            {k: out[k] for k in ("drc_by_type", "unconnected", "r1_macro")},
+            indent=1,
+            default=str,
+        )
+    )
+
+
 def step_render(a):
     out = Path(a.renders)
     out.mkdir(parents=True, exist_ok=True)
@@ -783,7 +977,18 @@ def step_render(a):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument(
-        "step", choices=["source", "prepare", "place", "select", "finish", "render", "all"]
+        "step",
+        choices=[
+            "source",
+            "prepare",
+            "place",
+            "select",
+            "finish",
+            "route",
+            "check",
+            "render",
+            "all",
+        ],
     )
     ap.add_argument("--work", required=True, help="scratch directory for the run")
     ap.add_argument("--ato-board", help="the atopile build's board (yapnr atopile build -b rev-a)")
@@ -807,6 +1012,9 @@ def main(argv=None):
     ap.add_argument("--n0", type=int, default=24, help="placement starts")
     ap.add_argument("--procs", type=int, default=4)
     ap.add_argument("--iters", type=int, default=600)
+    ap.add_argument(
+        "--route-iters", type=int, default=12, help="route: pnr.staged_signal max_iters"
+    )
     a = ap.parse_args(argv)
     a.renders = a.renders or str(Path(a.out) / "renders")
     sys.path.insert(0, str(HERE))
@@ -816,6 +1024,8 @@ def main(argv=None):
         "place": step_place,
         "select": step_select,
         "finish": step_finish,
+        "route": step_route,
+        "check": step_check,
         "render": step_render,
     }
     for name in list(steps) if a.step == "all" else [a.step]:

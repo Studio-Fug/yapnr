@@ -54,6 +54,44 @@ place_args = ["--seed", "2", "--n0", "8", "--procs", "2"]
 id = "s3"
 place_args = ["--seed", "3", "--n0", "8", "--procs", "2"]
 
+# s4-s11 (2026-10-05, wide wave): the proof campaign (wave 1/2, gcp-task.md) ran only s0-s3 to
+# prove the machinery end to end. This wave widens to the owner's 48-96-start / 8-16-routed-
+# candidate guidance (pnr-on-gcp.md): 12 seeds x n0=8 = 96 starts, 12 routed+checked candidates
+# in parallel (plus cand-arm-a as the fixed comparison point) -- same per-seed shape (n0=8,
+# procs=2, no power-stage library) as s0-s3, so wave 2's result (s0 legalizes-then-audit-fails
+# on GCP, s1 fails at place) is the expected per-seed outcome class, not a regression.
+[[seeds]]
+id = "s4"
+place_args = ["--seed", "4", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s5"
+place_args = ["--seed", "5", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s6"
+place_args = ["--seed", "6", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s7"
+place_args = ["--seed", "7", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s8"
+place_args = ["--seed", "8", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s9"
+place_args = ["--seed", "9", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s10"
+place_args = ["--seed", "10", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s11"
+place_args = ["--seed", "11", "--n0", "8", "--procs", "2"]
+
 [[candidates]]
 # radar60-3c's own real result (stage3b-rf/freeze.md, arm A): a route+check run that reaches
 # every post_step, as a comparison point against the four (currently all-fail-to-legalize)

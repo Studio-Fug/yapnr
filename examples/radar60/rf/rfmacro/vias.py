@@ -959,6 +959,30 @@ def place(mc, ru) -> None:
                 continue
             pl.add(q, "load", True)
 
+    # 3b. D14 PA fence (owner 2026-10-04, stage-3b E1/E2): one row of GND through vias along the
+    # PA pocket's bank-facing edge (toward larger y, where the antenna bank sits -- the pocket's
+    # own leaked field couples there), `pa_fence_offset` out, stepped by `pa_fence_pitch` across
+    # the pocket's x-span. This is NOT the full ring the EM test modelled
+    # (em/models/pa-pa-tx1-fence.json/pa-pa-rx4-fence.json, which measured -45..-47 dB with 5-6
+    # vias all round the pocket, stage-3b E2); it is at most one edge's worth of sites
+    # (floor(dx/pa_fence_pitch)+1), fewer once a load pad or line conflicts -- see params.py's
+    # `pa_fence` comment for the gap this leaves. Sites inside the PA feed's own keepout
+    # (`pl.pa`), a load pad/zone or too close to a line are skipped like any other GND via; the
+    # board's standard via_fence drill/pad apply (board rules unchanged).
+    if getattr(mc, "pa", None) is not None and p["pa_fence"]:
+        x0, _, x1, y1 = mc.pa.pocket
+        t = float(p["pa_fence_offset"])
+        step = float(p["pa_fence_pitch"])
+        yf = y1 + t
+        n = max(1, int(math.floor((x1 - x0) / step)) + 1)
+        for i in range(n):
+            q = (round(x0 + i * step, 6), round(yf, 6))
+            why = pl.site(q, band=True)
+            if why is not None:  # a load pad or similar legitimately holds this site; optional
+                pl._drop("pa_fence", why)
+                continue
+            pl.add(q, "pa_fence", False)
+
     # 4. U-turn and tight-bend centres of the meanders (arcs of radius fence_offset): the inner
     # fence row collapses there, one via serves it (design: a via at each U-turn centre)
     for n, f in mc.feeds.items():

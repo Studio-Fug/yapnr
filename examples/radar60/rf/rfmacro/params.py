@@ -126,8 +126,10 @@ DEFAULTS: Dict[str, object] = {
     # meander radius: legs 2R = 1.0 mm apart share one fence row; a via sits at each U-turn centre
     "meander_r": 0.50,
     # terminated dummy columns: "both" (S2, all four bank ends), "outer" (S1, the open ends RXD0
-    # and TXD4), "outer+txd0" (S1.5, S1 plus TXD0) or "none"
-    "dummies": "both",
+    # and TXD4), "outer+txd0" (S1.5, S1 plus TXD0) or "none". Frozen 2026-10-04/05 (stage-3b E1
+    # bank runs, s3b-bank-s1 vs s3b-bank-a/b/c): S1 beats S2 by ~1.5 dB isolation (38.2 vs 36.7
+    # dB) and by less TX1 feed loss (-1.50 vs -1.78/-1.79 dB); recommend S1 [S].
+    "dummies": "outer",
     # dummy load: 50 ohm thin-film 0201 (KiCad R_0201_0603Metric land), along the run-in axis.
     # Every load is the same cell (review 2026-10-04: fill vias had landed in three of the four
     # GND lands): its GND end is returned by its own five vias, given relative to (x_in, Pg), each
@@ -251,6 +253,25 @@ DEFAULTS: Dict[str, object] = {
     # beyond the coplanar ground's 0.30 mm, so the GCPW reference under the line and its gaps is
     # whole
     "pa_antipad_feed_min": 0.50,
+    # D14 PA ground-via fence (owner 2026-10-04, stage-3b E1/E2): the un-fenced PA island
+    # couples TX1 -34.9 dB into the antenna bank at 62.05 GHz (port case, measured), short of
+    # the plan's <= -40 dB rule by ~5 dB (RX4's corner already clears it unfenced, -42.2 dB,
+    # despite an earlier note claiming otherwise). A model-only EM test of the FULL 5-6 via
+    # ring geometry (em/models/pa-pa-*-fence.json, stage-3b E2) measured -45 to -47 dB with
+    # the fence on, 10+ dB of margin past the rule [S] -- a real, not marginal, fix. What this
+    # generator step actually places is NOT that ring: it is one row along the pocket edge
+    # facing the bank, `pa_fence_offset` out, stepped by `pa_fence_pitch` -- at most
+    # floor(pocket_dx / pa_fence_pitch) + 1 (~4) sites, fewer once a load pad or line
+    # conflicts, and on the current default layout only ~2 are free. The -45..-47 dB number
+    # is therefore evidence that a full fence works, not yet a measurement of what this
+    # function builds; closing D14 on the built macro needs either more sites recovered here
+    # (nudge the conflicting load/line, or a tighter `pa_fence_pitch`) or a fresh EM point run
+    # on the as-placed 2-4 via geometry. The fence vias are plain GND fence vias
+    # (RULES["via_fence"] drill/pad, like every other GND via the macro places); board rules
+    # are unchanged.
+    "pa_fence": True,
+    "pa_fence_offset": 0.31,
+    "pa_fence_pitch": 0.475,
 }
 
 # D15 open-pour presets (owner 2026-10-04): a parameter left None takes its preset's value

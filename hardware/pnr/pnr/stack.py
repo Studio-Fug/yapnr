@@ -511,6 +511,8 @@ class Region:
     priority: int
     outline: Optional[Tuple[Tuple[float, float], ...]]
     source: bool = False
+    # Holes in ``outline`` (a plane partition's territory around another rail's).
+    holes: Tuple[Tuple[Tuple[float, float], ...], ...] = ()
 
 
 SPLIT_MARGIN_MM = 2.0  # a split region's margin around its net's pads (pnr.writeback)
@@ -667,20 +669,27 @@ class PlaneAccess:
             for r in rows:
                 if r.net != net:
                     continue
-                if r.outline is not None and not (
-                    _inside(r.outline, p) and _edge_distance(r.outline, p) >= self.inset
-                ):
+                if r.outline is not None and not _within(r, p, self.inset):
                     continue
                 if any(
                     f.net != net
                     and f.priority >= r.priority
                     and (
                         f.outline is None
-                        or _inside(f.outline, p)
+                        or (_inside(f.outline, p) and not any(_inside(h, p) for h in f.holes))
                         or _edge_distance(f.outline, p) < self.outset
+                        or any(_edge_distance(h, p) < self.outset for h in f.holes)
                     )
                     for f in rows
                 ):
                     continue
                 return True
         return False
+
+
+def _within(r: Region, p, inset) -> bool:
+    """``p`` lies in ``r`` (its outline less its holes) at least ``inset`` from its
+    edges."""
+    if not (_inside(r.outline, p) and _edge_distance(r.outline, p) >= inset):
+        return False
+    return not any(_inside(h, p) or _edge_distance(h, p) < inset for h in r.holes)

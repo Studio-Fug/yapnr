@@ -21,6 +21,13 @@ still leak (channel A at port 3 −9.8 dB and channel B at port 4 −11.4 dB aga
 grids). The results and the reasons are [below](#end-to-end-cases); what the numbers are worth is in
 [accuracy](#accuracy).
 
+Since then the radiated fraction is measured by a closed box with modal port waves (the 4 %
+power-balance failures were the old box's and the V/I port's bookkeeping, not an energy error;
+design §25), and antennas can be specified by their far field on a finite board: gain, beam
+width, front-to-back ratio, cross-polarization, efficiency and a target radiation density
+([antennas](#antennas-the-radiated-fraction-boards-and-patterns)). The published antenna's
+numbers below were measured before that change and have not been re-validated.
+
 ## A spec
 
 A spec is YAML or JSON (`yapnr-rf-spec/1`, lengths in mm, frequencies in GHz):
@@ -49,20 +56,29 @@ optimizer: { betas: [8, 16, 32, 64, 128], iterations_per_beta: 30, budget_min: 4
 - **Ports** are line ports: a feed strip enters the design region on side `W`, `E`, `S` or `N`
   at `at_mm` (the transverse position of its centre) and runs into the absorbing boundary.
   `width_cells: auto` picks the whole number of cells whose calibrated impedance is closest to
-  50 Ω.
+  50 Ω. Their waves come from the feed's mode (`solver.port_extraction: modal`, the default;
+  `vi` keeps the voltage and current samples, [accuracy](#accuracy)). On a board model the
+  ports are lumped (`{n: 1, kind: lumped, x_mm: [a, b], y_mm: [c, d], ohms: 50}`,
+  [below](#antennas-the-radiated-fraction-boards-and-patterns)).
 - **Requirements:** `max_db`, `min_db`, `between_db: [lo, hi]`, piecewise-linear masks
   `mask_db: [[f, dB], ...]` (upper) and `min_mask_db` (lower), `phase_deg` with `tol_deg`
   (engineering e^{+jωt} convention), `{radiated: j, min: η}` for the fraction of the power
-  incident at port j that leaves through a box above the board, `{absorbed: j, element: R1,
+  incident at port j that leaves a closed box around the design region other than along the
+  feeds (on a board model: the radiated power, the total efficiency), `{absorbed: j, element: R1,
 min: a}` for the fraction a lumped resistor dissipates, and `{loss: j, max: l}` for the
   fraction that leaves neither through a port nor into a lumped resistor (radiation and the
-  copper's and substrate's dissipation, gray copper's included). Every requirement names a band
-  and may set its `scale` (the normalization of its violation).
+  copper's and substrate's dissipation, gray copper's included). On a board model also the
+  pattern requirements: `gain`, `ripple`, `hpbw`, `front_to_back`, `cross_pol`, `shape` and
+  `efficiency` ([below](#antennas-the-radiated-fraction-boards-and-patterns)). Every requirement
+  names a band and may set its `scale` (the normalization of its violation).
 - **Optional sections:** `fixed` (rectangles of fixed copper or keepout), `lumped` (resistors
   across a gap, such as a Wilkinson divider's isolation resistor: the body rectangle stays void
-  and carries the resistance between two copper pads), `radiation` (the box's offset and
-  height), `solver` (backend, precision, tolerances, `edge_correction` and `port_source:
-mode`, [accuracy](#accuracy)) and `optimizer`: the β schedule, iteration caps, budget, move
+  and carries the resistance between two copper pads), `radiation` (the radiated-power box:
+  `clearance_cells`, default 2, and optionally `offset_mm` and `height_mm`; the feed-window keys
+  of round 2 are an error), `board`, `far_field` and `patterns` (a board model and its pattern
+  targets, [below](#antennas-the-radiated-fraction-boards-and-patterns)), `solver` (backend,
+  precision, tolerances, `edge_correction`, `port_source: mode` and `port_extraction`,
+  [accuracy](#accuracy)) and `optimizer`: the β schedule, iteration caps, budget, move
   limits, `conservative` (CCSA steps that never raise t), `adaptive_move` (steps that raise t
   by more than `trust_slack` are refused and retried with half the move; `trust_reference:
 best` measures the slack from the β epoch's best t with a slack shrinking as β grows, so that
@@ -88,6 +104,94 @@ antenna_target = RadiatedFraction(1).at_least(0.7, band="main")
 wilkinson_resistor = Absorbed("R1", 2).at_least(0.4, band="pass")  # the resistor's share
 lost = Loss(2).at_most(0.08, band="pass")  # radiated and dissipated outside resistors
 ```
+
+## Antennas: the radiated fraction, boards and patterns
+
+**The radiated fraction.** `{radiated: j, min: η}` is measured by a box closed by the ground
+around the design region (`radiation: {clearance_cells: 2}`): the power leaving it, plus the
+guided waves the feeds carry in and out (separated by projecting on their modes), over the
+incident power. It does not depend on the box's size beyond the feed's own loss inside it. On
+the infinite substrate of the default model this is the **non-guided fraction**: the
+substrate's surface wave never leaves any closed surface, so it counts as radiated (0.27 of a
+half-wave patch's power on S2 at 10 GHz by the closed form; the result and validation reports
+state it under `assumptions`). The validator checks it against the closed box's discrete
+Poynting identity (0.5 %) and the port's incident power against a run with an empty design
+region (1e-3). Design §25 has the audit that led here.
+
+**Board models.** A `board` section puts the whole board in the simulation: a substrate block of
+the board's outline and `thickness_mm`, a ground on the plane `stackup.h_mm` below the copper
+(its outline less `keepout` rectangles) or `ground: infinite` (a PEC floor under everything),
+air on every side and absorbing boundaries beyond. Its ports are lumped: Ez columns from the
+ground to the copper on the grid nodes inside the port's rectangle, each standing on ground.
+`board.copper` adds fixed top copper outside the design region, such as the feed from a port at
+the board's edge. A closed box in air around the board then measures the radiated power
+exactly, `radiated` becomes the total efficiency, and the box's fields give the far field.
+
+```yaml
+# The 5.8 GHz printed omni antenna (docs/rf/antenna-omni-5g8/spec.json, abridged)
+stackup: { er: 4.3, tan_delta: 0.02, h_mm: 0.246, f_ref_ghz: 5.8 } # L1 over L2
+grid: { pitch_mm: 0.25, substrate_cells: 2 }
+design_region: { x_mm: [-14.5, 14.5], y_mm: [0.5, 13.5] } # the ground clearance
+symmetry: mirror_x
+ports:
+  - { n: 1, kind: lumped, x_mm: [-0.25, 0.25], y_mm: [0, 0], ohms: 50 }
+board:
+  x_mm: [-15, 15]
+  y_mm: [-46, 14]
+  thickness_mm: 1.6
+  ground: { x_mm: [-15, 15], y_mm: [-46, 0] } # or keepout: [{x_mm, y_mm}, ...]
+  copper: [{ x_mm: [-0.25, 0.25], y_mm: [-0.5, 0.5] }]
+far_field: { frame: { axis: '+y', zero: '+x' } } # θ from +y, φ from +x
+patterns:
+  omni: { preset: omni, axis: '+y', hpbw_deg: 90 }
+requirements:
+  - { s: [1, 1], max_db: -12, band: match }
+  - { gain: 1, min_dbi: -1, directions: { cut: { theta_deg: 90, points: 12 } }, band: pattern }
+  - { ripple: 1, max_db: 5, directions: { cut: { theta_deg: 90, points: 36 } }, band: pattern }
+  - { radiated: 1, min: 0.6, band: pattern }
+  - { shape: 1, target: omni, max_rms_db: 3, band: pattern }
+```
+
+**Pattern requirements** (each names the excited port, a band, and directions in
+`far_field.frame` or its own `frame`):
+
+| Requirement                                                                            | Bounds                                                                                                                    |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `{gain: j, min_dbi \| max_dbi \| min_mask_dbi \| max_mask_dbi, directions, kind, pol}` | realized gain (default), `gain` or `directivity`, in every direction; masks are `[[angle, dBi], …]` along a cut           |
+| `{ripple: j, max_db, directions}`                                                      | the spread (smooth max − smooth min) of the level over the directions                                                     |
+| `{hpbw: j, between_deg: [b1, b2], cut_phi_deg, boresight_theta_deg}`                   | the half-power beam width along a cut, at least b1 and at most b2                                                         |
+| `{front_to_back: j, min_db, front, back}`                                              | the level in `front` over the largest in `back`                                                                           |
+| `{cross_pol: j, max_db, directions, reference_phi_deg}`                                | cross- over co-polar level (Ludwig-3 about the reference azimuth)                                                         |
+| `{shape: j, target, max_rms_db, form: kl \| log_l2, weight: uniform \| target}`        | the pattern against a target density: Kullback–Leibler divergence or mean square dB error, either read as an RMS dB error |
+| `{efficiency: j, kind: radiation \| total, min}`                                       | radiated over accepted (`radiation`) or incident (`total`) power                                                          |
+
+`max_rms_db` reads as an RMS dB error (both forms) only for small deviations from the target; it
+under-penalizes excess radiation where the target density sits at its `floor_db`, since the error
+there is bounded by the floor rather than growing with the excess. Add `form: log_l2, weight:
+uniform` when sidelobe or off-axis radiation also needs suppressing, not just the shape's bulk.
+
+`pol` is `total` (default), `co`, `cross` (Ludwig-3), `theta`, `phi`, `rhcp` or `lhcp` (IEEE
+sense). Directions: `{point: {theta_deg, phi_deg}}`, `{cut: {theta_deg: 90, points: 12}}` (a
+conical cut), `{cut: {phi_deg: 0, theta_deg: [-90, 90], step_deg: 5}}` (an elevation cut;
+negative θ is the far side), `{cone: {toward: "-z", half_angle_deg: 60, step_deg: 15}}`,
+`upper` and `sphere`. Targets: `{preset: beam, toward, hpbw_deg: h or [h_E, h_H],
+e_plane_phi_deg, back_db}` (broadside, endfire or a fan beam), `{preset: omni, axis, hpbw_deg:
+h or "dipole", tilt_deg}`, a `{grid: {theta_deg, phi_deg, dbi}}` table or `{sh: {lmax, coef}}`
+(real spherical harmonics of the power density); each is floored at `floor_db` (−20 dB below
+its peak) and normalized to 4π.
+
+Each direction is a separate term of the minimax, so the optimizer raises the worst direction
+(it fills an omni pattern's nulls) rather than the average. Realized gain is the default
+because directivity and shape alone can be bought with lossy gray copper; the problem warns
+when a shape or directivity requirement has no gain or efficiency floor on its port, when a
+target peaks above what a box of its size can radiate (Harrington's (ka)² + 2ka), and when a
+grid or harmonic target does not integrate to 4π. Over an infinite ground the far field exists
+above it only. Every term has an exact adjoint gradient (the far field is a linear map of the
+box's fields), at a cost of about 0.2–1 s per evaluation against tens of seconds of FDTD.
+`result.json` reports per port the peak directivity and realized gain, their direction, the
+efficiencies and the far field's power check (`far_field`). Design §26 has the method and its
+measurements. Not yet: several ground layers, vias, the ground as a design layer, and port
+pads in a board design's KiCad footprint.
 
 ## Running a design
 
@@ -366,9 +470,10 @@ remaining half per cent is more than the plain patch's 0.13 % and the 0.1–0.3 
 two-cell gaps, slots or holes, and its cause is not established. Over the band η is 0.83–0.87
 on the optimization grid and 0.82–0.86 on the finer ones.
 
-**Power balance.** The error (the box's flux plus the dissipation inside, against the port's net
-power) is −3.6, −4.6 and −4.7 % at 9.7 GHz on the three grids and −0.9 to −1.8 % at 10.0 and
-10.3 GHz, so the case fails the 4 % check on the fine and finer grids (round 2's criterion,
+**Power balance (round 2's check, since replaced).** The error (the box's flux plus the
+dissipation inside, against the port's net power) is −3.6, −4.6 and −4.7 % at 9.7 GHz on the
+three grids and −0.9 to −1.8 % at 10.0 and 10.3 GHz, so the case fails the 4 % check on the
+fine and finer grids (round 2's criterion,
 not relaxed further; round 1's was 2 %). A study (design §24.7) found the solver's energy
 accounting exact (a box without a feed window closes to 0.04 %): the error is the difference
 between the power entering through the feed window and the port's net power from its V/I
@@ -376,9 +481,14 @@ waves. It converges (1 % from the coarse grid to half its pitch, 0.1 % from ther
 and does not track the window's size; with the box closed at the V/I plane it changes sign
 across the band (−2.9 to +1.8 %), so neither η nor |S11| is shown to read low, and the cause
 (likely the radiator's near field at the port's V/I samples) is not established. η exceeds
-0.7 by 0.12 or more on every grid, more than twice the imbalance. The run took 109 minutes (60
-iterations, three designs each, about 110 s per iteration on 4 threads); the re-validation
-took 16 minutes (3 threads, line calibrations cached).
+0.7 by 0.12 or more on every grid, more than twice the imbalance. The cause has since been
+found (design §25): the port's V/I waves read the antenna's own radiation, the feed window
+dropped the power leaving backwards through it, and the feed's loss between port and box added
+in; with modal waves and a closed box the identity holds to 3e-4 and η on the optimization grid
+is 0.90, 0.92 and 0.89 at 9.7, 10.0 and 10.3 GHz (a non-guided fraction, which includes the
+substrate's surface wave). The table above is round 2's and has not been re-run. The run
+took 109 minutes (60 iterations, three designs each, about 110 s per iteration on 4 threads);
+the re-validation took 16 minutes (3 threads, line calibrations cached).
 
 How the formulation was found (design §22 has every attempt; [decisions](decisions.md)):
 
@@ -660,6 +770,15 @@ divider's footprint:
   (the earlier −0.01 passivity tolerance). The feed between the measurement and the reference
   plane (6h, about 5 mm on S1) is now de-embedded in phase only; its true loss (about 0.01 dB)
   makes the reported |S| that much low.
+- **Port waves next to a radiator (`solver.port_extraction`).** The V/I samples 6h behind the
+  reference plane also see the design's radiated and surface-wave fields: next to the antenna
+  the incident power they report moved by −5.2 to +2.0 % with the design and the frequency, and
+  the closed-form patch's match null read −26.1 dB where the guided wave's is −21.8 dB.
+  `port_extraction: modal` (the default) projects the whole transverse plane on the feed's
+  discrete mode, which is orthogonal to those fields: the incident power then moves by 2–3e-4
+  with the design (the antenna against an empty design region, an open end), and on circuits
+  the two agree to about 1e-4. The plane must hold the mode's lateral tail: with a 4h margin on
+  S1 an open end moved the incident power by 2e-3, with 8 mm by 4e-4 (design §25.1).
 - **The excited port's incident wave (`solver.port_source`).** The default source, J = n̂ × H
   of the strip's static field in air, also launches the substrate's TM0 surface wave, which
   reaches the V/I samples: the excited port's incident wave reads up to 1.5–2 % off at 8–12 GHz
@@ -707,7 +826,13 @@ divider's footprint:
 
 ## Limitations
 
-- One copper layer over a solid ground; no vias, no finite board or ground edges.
+- One copper layer over a solid ground; no vias. A board model (`board`) has a finite board and
+  one ground layer with keepouts, lumped ports only, and no copper-edge correction on the
+  ground's edges; its KiCad export carries the copper without port pads or rule areas.
+- On the infinite substrate the radiated fraction is the non-guided fraction: it includes the
+  substrate's surface wave (0.27 of a half-wave patch's power on S2 at 10 GHz by Jackson and
+  Alexopoulos's closed form, which the reports state). Radiation efficiency, gain and patterns
+  need a board model.
 - The copper is a zero-thickness sheet: without `solver.edge_correction` the strip impedance
   on coarse grids is a few per cent low and edges act about half a cell larger than their
   pixels; with it lines, stubs and the patch agree with a grid three times finer to 0.13–0.22 %,
@@ -728,11 +853,9 @@ divider's footprint:
 - The width and space repair at export can change a design that relies on features under the
   rules (one-pixel slots, corner contacts): the antenna's second run met its objectives before
   the repair and missed by 3 dB after it; the dilated variant in the epigraph prevents that.
-- The antenna's power balance closes to 1–4.7 % over 9.7–10.3 GHz (worst at the lower band
-  edge, on the finer grids): the solver's energy accounting is exact, but the port's wave
-  power and the flux through the feed window differ by that much, with a sign that changes
-  across the band, so the radiated fraction and |S11| carry an uncertainty of that order (cause
-  not established; design §24.7).
+- The published antenna's numbers come from round 2's windowed box and V/I waves (its 4.6–4.7 %
+  power-balance failures were that bookkeeping, design §25); the case has not been re-validated
+  with the closed box and modal waves.
 - Lumped elements are resistors across a gap (`lumped`); no capacitors, inductors or vias. No
   external solver cross-check.
 - The footprint's rule areas keep other copper out of the simulated margin (no pour, vias or

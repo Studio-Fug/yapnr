@@ -18,7 +18,9 @@ Check kinds: ``inside_board``, ``side``, ``fixed``, ``edge``, ``orientation``,
 ``microvia_span``, ``copper_digest``, ``no_copper``, and for area-array parts
 ``via_class`` (the size and site of a part's plane vias), ``escape`` (each listed ball's
 copper reaches a via or leaves the courtyard) and ``pad_distance`` (parts' pads near their
-net's pads on an anchor).
+net's pads on an anchor); for supplies ``unconnected`` (exactly the listed pads are cut off
+from the rest of their net), ``rail_zones`` (each rail of a shared plane layer fills as one
+piece) and ``ir_drop`` (a rail's DC drop within its budget, measured by pnr.ir_extract).
 
     python3 check_constraints.py BOARD.kicad_pcb --spec SPEC.json --out OUT.json
 
@@ -44,6 +46,7 @@ def mm(v):
 
 class Board:
     def __init__(self, path):
+        self.path = str(path)
         self.board = pcbnew.LoadBoard(str(path))
         xs, ys = [], []
         for d in self.board.GetDrawings():
@@ -569,6 +572,127 @@ def check_pad_distance(b, c):
     return worst <= c["max_mm"] + TOL, dict(distance_mm=out), dict(max_mm=c["max_mm"])
 
 
+def check_net_vias(b, c):
+    """The vias of ``nets`` number at most ``max`` (default 0: a no-via rule)."""
+    nets = set(c["nets"])
+    found = []
+    for t in b.board.GetTracks():
+        if t.GetClass() == "PCB_VIA" and t.GetNetname() in nets:
+            p = t.GetPosition()
+            found.append([t.GetNetname(), round(mm(p.x) - b.x0, 3), round(b.y1 - mm(p.y), 3)])
+    limit = int(c.get("max", 0))
+    return len(found) <= limit, dict(vias=len(found), at=found[:10]), dict(max=limit)
+
+
+def _filled(board):
+    """Fill the zones in memory (never saved) when any is not filled."""
+    if not all(z.IsFilled() for z in board.Zones() if not z.GetIsRuleArea()):
+        pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+        return True
+    return False
+
+
+def check_unconnected(b, c):
+    """The pads cut off from the rest of their net (outside its largest connected
+    group of pads, zones filled) are exactly ``pads`` ("REF.PAD")."""
+    board = b.board
+    _filled(board)
+    board.BuildConnectivity()
+    conn = board.GetConnectivity()
+    by_net = {}
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetNetCode() > 0:
+                by_net.setdefault(pad.GetNetCode(), []).append(pad)
+    cut = []
+    for _code, pads in sorted(by_net.items()):
+        if len(pads) < 2:
+            continue
+        name = {
+            id(p): "%s.%s" % (p.GetParentFootprint().GetReference(), p.GetNumber()) for p in pads
+        }
+        key = {name[id(p)]: p for p in pads}
+        groups, seen = [], set()
+        for p in pads:
+            if name[id(p)] in seen:
+                continue
+            group = {name[id(p)]}
+            for item in conn.GetConnectedItems(p):  # the pad's whole cluster
+                if item.GetClass() != "PAD":
+                    continue
+                q = pcbnew.Cast_to_PAD(item) if hasattr(pcbnew, "Cast_to_PAD") else item
+                group.add("%s.%s" % (q.GetParentFootprint().GetReference(), q.GetNumber()))
+            group &= set(key)
+            seen |= group
+            groups.append(group)
+        if len(groups) > 1:
+            groups.sort(key=lambda g: (-len(g), sorted(g)))
+            for g in groups[1:]:
+                cut.extend(g)
+    want = sorted(c["pads"])
+    return sorted(cut) == want, dict(unconnected=sorted(cut)), dict(pads=want)
+
+
+def check_rail_zones(b, c):
+    """Each rail of ``nets`` fills ``layer`` as one piece of at least ``min_area_mm2``,
+    and no other net (but the ``fill`` net) pours there."""
+    board = b.board
+    lid = board.GetLayerID(c["layer"])
+    _filled(board)
+    zones = [z for z in board.Zones() if not z.GetIsRuleArea() and z.IsOnLayer(lid)]
+    measured = {}
+    ok = True
+    for net in c["nets"]:
+        pieces, area = 0, 0.0
+        for z in zones:
+            if z.GetNetname() == net:
+                fill = z.GetFilledPolysList(lid)
+                pieces += fill.OutlineCount()
+                area += mm(mm(fill.Area()))
+        measured[net] = dict(pieces=pieces, area_mm2=round(area, 3))
+        ok = ok and pieces == 1 and area >= c["min_area_mm2"]
+    foreign = sorted(
+        {z.GetNetname() or "<no net>" for z in zones}
+        - set(c["nets"])
+        - ({c["fill"]} if c.get("fill") else set())
+    )
+    measured["foreign"] = foreign
+    return ok and not foreign, measured, dict(pieces=1, min_area_mm2=c["min_area_mm2"])
+
+
+def check_ir_drop(b, c):
+    """The rail's DC drop (pnr.ir_extract: filled zones, tracks, vias, pads) from
+    ``sources`` to ``sinks`` at ``current_a`` is within ``budget_mv`` (or
+    ``budget_mohm``) and reaches every sink."""
+    import tempfile
+
+    from pnr.ir_extract import report
+
+    _filled(b.board)
+    keys = (
+        "net",
+        "sources",
+        "sinks",
+        "exclude",
+        "current_a",
+        "budget_mv",
+        "budget_mohm",
+        "temperature_c",
+    )
+    entry = {k: c[k] for k in keys if c.get(k) is not None}
+    entry["two_point"] = False  # the verdict needs the drop, not each sink alone
+    with tempfile.TemporaryDirectory() as tmp:
+        rep = report(b.board, dict(ir_drop=[entry]), Path(tmp), b.path)[c["net"]]
+    measured = dict(
+        status=rep["status"],
+        opens=rep["opens"],
+        worst_drop_mv=rep.get("worst_drop_mv"),
+        r_eff_mohm=rep.get("r_eff_mohm"),
+    )
+    limit = {k: c[k] for k in ("budget_mv", "budget_mohm") if c.get(k) is not None}
+    return rep["status"] == "pass", measured, limit
+
+
 KINDS = dict(
     inside_board=check_inside_board,
     side=check_side,
@@ -587,6 +711,10 @@ KINDS = dict(
     via_class=check_via_class,
     escape=check_escape,
     pad_distance=check_pad_distance,
+    net_vias=check_net_vias,
+    unconnected=check_unconnected,
+    rail_zones=check_rail_zones,
+    ir_drop=check_ir_drop,
 )
 
 

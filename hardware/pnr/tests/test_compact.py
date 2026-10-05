@@ -85,7 +85,16 @@ class FlagsTest(unittest.TestCase):
             self.assertTrue(compact_flags.enabled("COURTYARD"))
             self.assertEqual(
                 compact_flags.active(),
-                dict(RANK=True, LEGALIZE=True, COURTYARD=True, DROPS=True, SHRINK=True),
+                dict(
+                    RANK=True,
+                    LEGALIZE=True,
+                    COURTYARD=True,
+                    DROPS=True,
+                    WIRE=True,
+                    TURN=True,
+                    SATELLITES=True,
+                    SHRINK=True,
+                ),
             )
             with self.assertRaises(ValueError):
                 compact_flags.enabled("SPREAD")

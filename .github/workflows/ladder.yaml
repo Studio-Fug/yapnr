@@ -18,7 +18,9 @@ name: Ladder
 #                     as given
 #
 # Every run first judges the exact-separation router's routes with KiCad's DRC
-# (tests/test_exact_route_kicad.py, the KiCad tier of its unit tests).
+# (tests/test_exact_route_kicad.py, the KiCad tier of its unit tests), then runs the KiCad
+# tier of the supply, pad-local clearance and board-edge tests under the image's own KiCad
+# Python (no numpy there; the numeric parts go to the ladder's Python).
 #
 # The ladder runs the checkout's engine sources (run.py freezes them), not the image's wheel. A
 # pull request can change the runtime pins, so a runtime guard compares the image's /opt/venv
@@ -283,6 +285,22 @@ jobs:
             -e PNR_KICAD_CLI=/usr/bin/kicad-cli \
             --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
             "${LADDER_PY}" -m unittest -v tests.test_exact_route_kicad
+
+      # The KiCad tier of the plane partition, IR-drop, pad-local clearance and board-edge
+      # tests (their Bazel targets are manual: they need KiCad), run by the image's KiCad
+      # Python itself, which has no numpy: the partition and the IR solves go to the
+      # ladder's numeric Python (PNR_PYTHON), as pnr.ir_extract and staged_signal do in a
+      # run. A KiCad-side defect (an API KiCad 10 dropped, numpy assumed) fails here.
+      - name: Supply, pad and edge tests under KiCad's Python
+        timeout-minutes: 15
+        run: |
+          docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work/hardware/pnr \
+            -e PYTHONPATH=/work/hardware/pnr -e PNR_PYTHON="${LADDER_PY}" \
+            -e PNR_KICAD_PYTHON=/usr/bin/python3 -e PNR_KICAD_CLI=/usr/bin/kicad-cli \
+            --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
+            /bin/sh -c '/usr/bin/python3 -c "import pcbnew" && /usr/bin/python3 -m unittest -v \
+              tests.test_ir_extract_kicad tests.test_plane_partition_kicad \
+              tests.test_pad_clearance_kicad tests.test_board_edge_kicad'
 
       - name: Run the ladder (baseline)
         id: baseline

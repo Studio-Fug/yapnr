@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from pnr.graph import BoardGraph
 
 from ...place.geometry import pad_rects
-from .grid import Cell, RouteGrid
+from .grid import Cell, RouteGrid, far_twins, pad_layer
 
 # Directions to try a dog-bone stub, ordered so "outward" (away from the part
 # centre) is preferred — filled per-pad from the pad→centre vector.
@@ -184,11 +184,15 @@ def plan_escapes(
     # Reserve cells taken by an escape via's keep-out, keyed to the owning net so the
     # maze (which reads grid.pad_net) treats them as that net's copper.
     for comp in graph.components:
-        side = grid.side_layer(comp.side)
         cx_part, cy_part = comp.pos
-        for name, net, r in pad_rects(comp):
+        twins = far_twins(comp)
+        for k, ((name, net, r), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
             if net not in net_names or (skip_pads and (comp.ref, name) in skip_pads):
                 continue
+            if k in twins:
+                continue  # a far-side land beside a near one: that one is the access
+            # The pad's own layer: a far-side land escapes on the opposite outer layer.
+            side = pad_layer(grid, comp, pad)
             ci, cj = grid.cell_of(r.cx, r.cy)
             center = Cell(side, ci, cj)
             esc = _plan_one(
@@ -270,22 +274,26 @@ def _offgrid_escape(grid, net, center, pad_xy, side, part_center):
                     or getattr(grid, "fixed_owned", {}).get((side, i, j), net) != net
                 ):
                     return False
+        keepaways = getattr(grid, "pad_keepaways", None) or {}
         for layer, owner, r in grid.pad_rectangles:
             if layer != side or owner == net:
                 continue
+            grow = radius
+            keep = keepaways.get((layer, owner, r)) if keepaways else None
+            if keep is not None:  # the pad's own clearance or mask margin
+                grow = max(radius, grid.track_width / 2 + keep)
             if (
-                max(a[0], b[0]) + radius < r.left
-                or min(a[0], b[0]) - radius > r.right
-                or max(a[1], b[1]) + radius < r.bottom
-                or min(a[1], b[1]) - radius > r.top
+                max(a[0], b[0]) + grow < r.left
+                or min(a[0], b[0]) - grow > r.right
+                or max(a[1], b[1]) + grow < r.bottom
+                or min(a[1], b[1]) - grow > r.top
             ):
                 continue
             if any(r.left <= p[0] <= r.right and r.bottom <= p[1] <= r.top for p in (a, b)):
                 return False
             corners = [(r.left, r.bottom), (r.right, r.bottom), (r.right, r.top), (r.left, r.top)]
             if any(
-                _segment_distance_sq(a, b, corners[i], corners[(i + 1) % 4])
-                < radius * radius - 1e-10
+                _segment_distance_sq(a, b, corners[i], corners[(i + 1) % 4]) < grow * grow - 1e-10
                 for i in range(4)
             ):
                 return False

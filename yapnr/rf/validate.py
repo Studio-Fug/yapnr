@@ -161,80 +161,182 @@ def resimulate(
     }
 
 
-def power_balance(prob, rho: np.ndarray, freqs, port: int = 1) -> dict:
-    """The power balance of the design `rho` with `port` excited, at `freqs` (Hz).
+# Run tolerance of the radiated-power checks (design §25.5): at the default 1e-3 a resonant
+# design's closed-box identity keeps up to 0.3 % of truncation error (the audit), at 1e-4 under
+# 0.03 %.
+BALANCE_TOL = 1e-4
+# The criteria judged on `power_balance`'s report (not trended over the grids).
+BALANCE_KINDS = ("balance", "incident")
 
-    Returns per frequency (lists): `p_in` (the port's net input power, power factor × (|a|² −
-    |b|²)/2, at the reference plane), the fractions of it that leave the closed box
-    (`closed`), leave the radiation box the objectives use (`eta`, from the copper plane up),
-    are dissipated inside the closed box (`diss`) and are taken by the other ports (`ports`),
-    and `error` = closed + diss + ports − 1. A non-zero error is the inconsistency of the port
-    power (the calibration's power factor, |S|) with the fields: the radiated fraction the
-    criteria judge is only as good as this balance.
+
+def power_balance(prob, rho: np.ndarray, freqs, port: int = 1, *, reference: bool = True) -> dict:
+    """The radiated-power checks of the design `rho` with `port` excited, at `freqs` (Hz)
+    (design §25.5); per frequency (lists):
+
+    - `eta`: the non-guided fraction η of the closed box (`Problem.nonguided`), and the split
+      of the incident modal power on the excited port's face: `reflected` (|Γ|² there),
+      `ports` (the other feeds' outgoing modal power on their faces) and `diss` (dissipated
+      inside the box: the substrate, the copper sheet, gray copper and lumped resistors);
+    - `error`: the closed-box identity η + reflected + ports + diss − 1 (exact for the scheme up
+      to the run's truncation; the check: |error| ≤ 0.5 %);
+    - `incident_error` (with `reference`): the port's incident power (`solver.port_extraction`)
+      against a second run with an empty design region, P_inc/P_inc,ref − 1. The incident wave
+      does not depend on the design, so this measures how much of the design's own field the
+      extraction mistakes for it (the check: ≤ 1e-3; radiation reaching the V/I plane moved
+      it by −5..+2 % on the antenna, the audit);
+    - `faces`: the box's flux per face over P_inc (the diagnostic split: top, sides, feeds).
     """
     from yapnr.rf.fdtd.monitors import dissipated_power, region_probes
     from yapnr.rf.fdtd.stop import StopRule
 
     if prob.box is None:
         raise ValueError("the power balance needs a spec with a radiation box")
-    rb = prob.spec.radiation
-    dom, g = prob.domain, prob.grid
-    closed = dom.radiation_box(
-        (rb.offset_mm * 1e-3) if rb.offset_mm is not None else 0.5 * dom.spec.margin,
-        (rb.height_mm * 1e-3) if rb.height_mm is not None else 0.6 * dom.spec.air,
-        name="closed",
-        window_margin=None if rb.window_margin_mm is None else rb.window_margin_mm * 1e-3,
-        window_height=None if rb.window_height_mm is None else rb.window_height_mm * 1e-3,
-        from_ground=True,
-    )
-    (i0, i1), (j0, j1), _ = closed.node_box
+    g = prob.grid
+    (i0, i1), (j0, j1), (k0, k1) = prob.box.node_box
     # Lossy edges only: the substrate and the copper plane (σ = 0 in the air above).
-    zbox = (0, g.k_c + 1)
+    zbox = (k0, min(k1, g.k_c + 1))
     region = region_probes(g, "diss", ((i0, i1), (j0, j1), zbox))
     weights = []
     for p in region:
-        ii, jj, _ = g.unravel(p.comp, p.index)
+        ii, jj, kk = g.unravel(p.comp, p.index)
         w = np.ones(p.index.size)
         if p.comp != "ex":
             w = np.where((ii == i0) | (ii == i1), 0.5 * w, w)
         if p.comp != "ey":
             w = np.where((jj == j0) | (jj == j1), 0.5 * w, w)
+        if p.comp != "ez" and zbox[1] == k1:
+            w = np.where(kk == k1, 0.5 * w, w)
         weights.append(w)
     freqs = np.asarray(freqs, dtype=np.float64)
     omega = 2.0 * np.pi * freqs
+    tol = min(prob.tol, BALANCE_TOL)
+
+    def run(probes):
+        names = {p.name for p in probes}
+        stop = StopRule(
+            tol=tol,
+            f_lo=float(freqs.min()),
+            max_steps=prob.spec.solver.max_steps,
+            probes=tuple(n for n in prob.watched if n in names),
+        )
+        return prob.sim.run(
+            prob.port_sources(port), probes, omega, stop, decimation=prob._decimation()
+        )
+
     prob.set_design(rho)
-    probes = prob.port_probes + prob.box_probes + closed.probes + region
+    res = run(prob.port_probes + prob.box_probes + region)
+    dft = res.dft
+    q = prob.quantities(dft, port, omega)
+    a, _ = q["waves"][port]
+    eta, p_inc = prob.nonguided(dft, port, omega)
+    eta = np.asarray(eta, dtype=np.float64)
+    out_power = {}
+    for n, plane in prob.box.planes.items():
+        mp = prob.modal[n]
+        face = plane.faces[0]
+        ap, am = mp.amplitudes(face, mp.face_modes(face, omega), dft)
+        outgoing = am if mp.pg.sign > 0 else ap
+        out_power[n] = 0.5 * np.abs(outgoing) ** 2
+    p_diss = dissipated_power(prob.sim.structure, region, dft, omega, prob.dt, weights)
+    reflected = out_power[port] / p_inc
+    others = sum((v for n, v in out_power.items() if n != port), np.zeros(freqs.size)) / p_inc
+    diss = p_diss / p_inc
+    err = eta + reflected + others + diss - 1.0
+    faces = {}
+    for f, tag in zip(prob.box.box.faces, ("x-", "x+", "y-", "y+", "z+")):
+        tot = 0.0
+        for pair, w in enumerate(f.weights):
+            e, h_lo, h_hi = (np.asarray(dft[p.name]) for p in f.probes[3 * pair : 3 * pair + 3])
+            sgn = 1.0 if pair == 0 else -1.0
+            tot = tot + f.sign * sgn * 0.5 * (np.real(e * np.conj(0.5 * (h_lo + h_hi))) * w).sum(-1)
+        faces[tag] = (np.asarray(tot) / p_inc).tolist()
+    out = {
+        "ghz": (freqs / 1e9).tolist(),
+        "p_inc": np.asarray(p_inc).tolist(),
+        "steps": int(res.steps),
+        "tol": tol,
+        "eta": eta.tolist(),
+        "reflected": np.asarray(reflected).tolist(),
+        "ports": np.asarray(others).tolist(),
+        "diss": np.asarray(diss).tolist(),
+        "error": np.asarray(err).tolist(),
+        "faces": faces,
+        "port_extraction": prob.port_extraction,
+    }
+    if reference:
+        p_port = np.asarray(prob.wave_power(port, a, omega), dtype=np.float64)
+        prob.set_design(np.zeros(prob.design_shape))
+        ref = run(prob.port_probes)
+        prob.set_design(rho)
+        a_ref, _ = prob.port_waves(port, ref.dft, omega)
+        p_ref = np.asarray(prob.wave_power(port, a_ref, omega), dtype=np.float64)
+        out["incident_error"] = (p_port / p_ref - 1.0).tolist()
+        out["reference_steps"] = int(ref.steps)
+    return out
+
+
+# The far field's check (design §25.5 (c)): the quadrature's radiated power against the
+# Huygens box's flux.
+FAR_FIELD = 0.01
+
+
+def far_field_report(prob, rho: np.ndarray, freqs, port: int = 1) -> dict:
+    """The far field of a board model's design `rho` with `port` excited, at `freqs` (Hz), per
+    frequency (lists): the radiated power by the quadrature over the box's flux (`p_ff_error`
+    = P_ff/P_box − 1; the check: ≤ 1 %), the radiation and total efficiencies, the peak
+    directivity and realized gain (dBi) and their direction (θ, φ in the spec's frame, deg),
+    and the realized gain along the frame's axis (dBi)."""
+    import torch
+
+    from yapnr.rf.farfield import intensity_factor
+    from yapnr.rf.fdtd.stop import StopRule
+
+    if not getattr(prob, "board", False):
+        raise ValueError("the far field needs a board model")
+    freqs = np.asarray(freqs, dtype=np.float64)
+    omega = 2.0 * np.pi * freqs
+    prob.set_design(rho)
     stop = StopRule(
-        tol=prob.tol,
+        tol=min(prob.tol, BALANCE_TOL),
         f_lo=float(freqs.min()),
         max_steps=prob.spec.solver.max_steps,
         probes=tuple(prob.watched),
     )
-    sources = prob.port_sources(port)
-    res = prob.sim.run(sources, probes, omega, stop, decimation=prob._decimation())
-    q = prob.quantities(res.dft, port, omega)
-    a, b = q["waves"][port]
-    p_in = prob.cal[port].power_at(omega) * 0.5 * (np.abs(a) ** 2 - np.abs(b) ** 2)
-    others = np.zeros(freqs.size)
-    for n, (_, bn) in q["waves"].items():
-        if n != port:
-            others += sparams.incident_power(bn, prob.cal[n], omega)
-    p_closed = np.asarray(closed.power(res.dft), dtype=np.float64)
-    p_diss = dissipated_power(prob.sim.structure, region, res.dft, omega, prob.dt, weights)
-    eta = np.asarray(q["eta"][port], dtype=np.float64) * sparams.incident_power(
-        a, prob.cal[port], omega
+    res = prob.sim.run(
+        prob.port_sources(port),
+        prob.port_probes + prob.box_probes,
+        omega,
+        stop,
+        decimation=prob._decimation(),
     )
-    frac = {
-        "closed": p_closed / p_in,
-        "eta": eta / p_in,
-        "diss": p_diss / p_in,
-        "ports": others / p_in,
+    a, b = prob.port_waves(port, res.dft, omega, port)
+    p_inc = 0.5 * np.abs(a) ** 2
+    p_acc = p_inc - 0.5 * np.abs(b) ** 2
+    p_box = np.asarray(prob.box.power(res.dft), dtype=np.float64)
+    frame = prob.spec.frame
+    dirs, w, _, _ = prob.far.quadrature(omega, frame=frame)
+    axis = frame.directions(0.0, 0.0)[None]
+    dft = {k: torch.as_tensor(v) for k, v in res.dft.items()}
+    f = prob.far.vectors(dft, omega, np.concatenate([dirs, axis])).numpy()
+    u = intensity_factor(omega)[:, None] * (np.abs(f) ** 2).sum(-1)
+    p_ff = u[:, :-1] @ w
+    k = np.argmax(u[:, :-1], axis=1)
+    th, ph = frame.angles(dirs[k])
+    d_max = 4 * np.pi * u[np.arange(freqs.size), k] / p_box
+    return {
+        "ghz": (freqs / 1e9).tolist(),
+        "steps": int(res.steps),
+        "p_ff_error": (p_ff / p_box - 1.0).tolist(),
+        "e_rad": (p_box / p_acc).tolist(),
+        "e_tot": (p_box / p_inc).tolist(),
+        "s11_db": sparams.db(b / a).tolist(),
+        "d_max_dbi": (10 * np.log10(d_max)).tolist(),
+        "gr_max_dbi": (10 * np.log10(d_max * p_box / p_inc)).tolist(),
+        "max_direction_deg": np.degrees(np.stack([th, ph], axis=1)).tolist(),
+        "gr_axis_dbi": (10 * np.log10(4 * np.pi * u[:, -1] / p_inc)).tolist(),
+        "quadrature_points": int(w.size),
+        "image_ground": bool(prob.far.image),
     }
-    err = frac["closed"] + frac["diss"] + frac["ports"] - 1.0
-    out = {"ghz": (freqs / 1e9).tolist(), "p_in": p_in.tolist(), "steps": int(res.steps)}
-    out.update({k: np.asarray(v, dtype=np.float64).tolist() for k, v in frac.items()})
-    out["error"] = err.tolist()
-    return out
 
 
 def reciprocity_error(s: np.ndarray) -> float:
@@ -385,7 +487,7 @@ def convergence(levels: dict, checks) -> dict:
     finest: {"refine": [...], "checks": {name: [worst, ...]}, "last_change": {name: Δ}}. The
     trend shows whether the fine grid's verdict is converged: the zero-thickness copper's edge
     and the staircase of diagonal edges make the response depend on the pitch."""
-    names = [c.name for c in checks if c.kind != "balance"]
+    names = [c.name for c in checks if c.kind not in BALANCE_KINDS]
     out = {"refine": sorted(levels), "checks": {}, "last_change": {}}
     for name in names:
         vals = []
@@ -467,7 +569,7 @@ def validate_case(
     overlap = seed_overlap(prob, co["mask"])
     if overlap is not None:
         report["seed_overlap"] = overlap
-    balance_at = [c for c in crit["coarse"] if c.kind == "balance"]
+    balance_at = [c for c in crit["coarse"] if c.kind in BALANCE_KINDS]
     if balance_at:
         bal = power_balance(
             prob, co["mask"].astype(np.float64), np.asarray(balance_at[0].at_ghz) * 1e9
@@ -512,13 +614,16 @@ def validate_case(
     if fine:
         # The coarse sweep judged by the fine criteria, for the trend over the grids.
         levels[1] = cases.judge(
-            [c for c in crit["fine"] if c.kind != "balance"], co["freqs"], co["s"], co["eta"]
+            [c for c in crit["fine"] if c.kind not in BALANCE_KINDS],
+            co["freqs"],
+            co["s"],
+            co["eta"],
         )
         n_sub = substrate_cells_at(spec, refine)
         fi = resimulate(run_dir, refine=refine, n_sub=n_sub, freqs=freqs, log=log)
         report["wall_s"]["fine"] = fi["wall_s"]
         _touchstone(os.path.join(run_dir, f"fine.s{n}p"), fi, f"refine {refine}", spec)
-        balance_at = [c for c in crit["fine"] if c.kind == "balance"]
+        balance_at = [c for c in crit["fine"] if c.kind in BALANCE_KINDS]
         if balance_at:
             bal = power_balance(
                 fi["problem"],
@@ -547,7 +652,7 @@ def validate_case(
         fr = resimulate(run_dir, refine=finer, n_sub=n_sub, freqs=freqs, log=log)
         report["wall_s"]["finer"] = fr["wall_s"]
         _touchstone(os.path.join(run_dir, f"finer.s{n}p"), fr, f"refine {finer}", spec)
-        balance_at = [c for c in crit["fine"] if c.kind == "balance"]
+        balance_at = [c for c in crit["fine"] if c.kind in BALANCE_KINDS]
         if balance_at:
             bal = power_balance(
                 fr["problem"],

@@ -259,6 +259,35 @@ class LadderOptionsTest(unittest.TestCase):
         self.assertTrue(any("compact_off names" in e for e in errors), errors)
         self.assertTrue(any("compact_off needs compact" in e for e in errors), errors)
 
+    def test_legalizer_switches_reach_the_runner(self):
+        from yapnr.exp.kinds import ladder
+
+        args = ladder.runner_arguments(
+            dict(gp_channels=1, legalize_hpwl=4.0, legalize_reorient=True, pool_source_clamp=True)
+        )
+        self.assertEqual(args[args.index("--gp-channels") + 1], "1.0")
+        self.assertEqual(args[args.index("--legalize-hpwl") + 1], "4.0")
+        for flag in ("--legalize-reorient", "--pool-source-clamp"):
+            self.assertIn(flag, args)
+        self.assertNotIn("--gp-polish", args)
+        self.assertIn("--gp-polish", ladder.runner_arguments(dict(gp_polish=True)))
+        wire = ladder.runner_arguments(dict(legalize_reorient_wire=True))
+        self.assertEqual(wire[wire.index("--legalize-reorient") + 1], "wire")
+        more = ladder.runner_arguments(
+            dict(legalize_channel_clearance_fab=True, line_satellites=True)
+        )
+        self.assertEqual(more[more.index("--legalize-channel-clearance") + 1], "fab")
+        self.assertIn("--line-satellites", more)
+        kind = kinds.get("ladder-cell")
+        campaign = {
+            "schema": spec.CAMPAIGN_SCHEMA,
+            "kind": "ladder-cell",
+            "matrix": {"case": ["01-connector-led-2"], "seed": [0], "config": ["on", "bad"]},
+            "configs": {"on": {"legalize_hpwl": 4}, "bad": {"gp_channels": 0}},
+        }
+        errors = kind.check(campaign)
+        self.assertEqual(errors, ["configs.bad.gp_channels is a positive weight"])
+
     def test_compact_parts_match_the_engine(self):
         """The kind's PNR_COMPACT parts are the engine's (hardware/pnr/pnr/compact_flags.py,
         read without importing the engine)."""

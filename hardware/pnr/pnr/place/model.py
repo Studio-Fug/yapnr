@@ -209,6 +209,7 @@ def global_place(
     initial_sides: Optional[Dict[str, str]] = None,
     return_sides: bool = False,
     start_box: Optional[Tuple[float, float, float, float]] = None,
+    polish=None,
 ):
     """Optimize continuous centres (+ orientation); return positions and angles.
 
@@ -236,6 +237,12 @@ def global_place(
     ``start_box`` ((x0, y0, w, h), PNR_COMPACT ``GP``) maps the seeded random starts into
     that box (:func:`pnr.place.compact.box_coordinate`, the same draws); None keeps them
     spread across the board.
+
+    ``polish`` (:class:`pnr.place.gp_polish.Polish`, ``PNR_GP_POLISH``; None = off, and
+    ignored with hull macros) runs ``polish.steps`` more iterations of this loop with the
+    turns and free sides frozen at their arg-max, the overlap, outline and keep-out terms on
+    the legalizer's slots, the optional channel term, the overlap weight ramped and a fresh
+    positions-only Adam with a decaying step (:mod:`pnr.place.gp_polish`).
 
     Returns ``({ref: (x, y)}, {ref: angle_deg})`` for every component (angle is
     the arg-max of the relaxed rotation distribution, a legal 0/90/180/270), and
@@ -470,20 +477,43 @@ def global_place(
     opt = torch.optim.Adam(params, lr=lr)
     from pnr.trace import placement_tracer
 
-    tracer = placement_tracer(comps, iters)  # None unless PNR_TRACE_DIR is set (pnr.trace)
+    # PNR_GP_POLISH (pnr.place.gp_polish): extra iterations after the main ones (none with
+    # the switch off, or with hull macros, whose bodies the slot model does not know).
+    extra = 0 if polish is None or bodies is not None else polish.steps
+    if extra:
+        from .gp_polish import channel_shortage, slot_bound, slot_keepout, slot_overlap
+    # None unless PNR_TRACE_DIR is set (pnr.trace); the polish iterations are traced too.
+    tracer = placement_tracer(comps, iters + extra)
+    frozen = None
 
-    for step in range(iters):
-        temp = 2.0 - (2.0 - 0.2) * (step / max(1, iters - 1))  # anneal 2.0 -> 0.2
-        opt.zero_grad()
-        pos = full_pos()
-        p = rot_probs(temp)  # (n, 4)
+    for step in range(iters + extra):
+        if step >= iters:
+            # Polish: turns and sides frozen, the legalizer's slots, a decaying step.
+            if frozen is None:
+                frozen = _freeze(
+                    graph, polish, rot_probs(0.2), sided, comps, width, height, side_overlap
+                )
+                opt = torch.optim.Adam([move], lr=polish.lr(0.0))
+            frac = (step - iters) / max(1, extra - 1)
+            for group in opt.param_groups:
+                group["lr"] = polish.lr(frac)
+            opt.zero_grad()
+            pos = full_pos()
+            p = frozen["p"]
+        else:
+            temp = 2.0 - (2.0 - 0.2) * (step / max(1, iters - 1))  # anneal 2.0 -> 0.2
+            opt.zero_grad()
+            pos = full_pos()
+            p = rot_probs(temp)  # (n, 4)
 
         # Expected pin offset under the rotation distribution.
         p_pin = p[pin_comp_t]  # (P, 4)
         exp_off = (p_pin.unsqueeze(-1) * pin_off4_t).sum(1)  # (P, 2)
         if sided is not None:
             # ... and under the side distribution: the far side mirrors the offsets.
-            bottom = _bottom_probability(sided, temp)  # (n,)
+            bottom = (
+                _bottom_probability(sided, temp) if frozen is None else frozen["bottom"]
+            )  # (n,)
             away = torch.where(sided["current_bottom"], 1.0 - bottom, bottom)
             mirrored = (p_pin.unsqueeze(-1) * sided["pin_off4_mirror"]).sum(1)
             away_pin = away[pin_comp_t].unsqueeze(-1)
@@ -520,7 +550,10 @@ def global_place(
             body = pos + exp_body
 
         # Pairwise smooth overlap (spreading), upper triangle only.
-        if bodies is None:
+        if frozen is not None:
+            # Polish: the legalizer's slots, the weight ramped (pnr.place.gp_polish).
+            overlap = polish.ramp(frac) * slot_overlap(pos, frozen, frozen["mask"])
+        elif bodies is None:
             dx = (body[:, 0].unsqueeze(1) - body[:, 0].unsqueeze(0)).abs()
             dy = (body[:, 1].unsqueeze(1) - body[:, 1].unsqueeze(0)).abs()
             sw = hw.unsqueeze(1) + hw.unsqueeze(0) + clearance
@@ -541,8 +574,15 @@ def global_place(
             + torch.clamp(cy + hh - height, min=0.0) ** 2
         )
         bound = (bound * movable_f).sum()
+        if frozen is not None:
+            bound = slot_bound(pos, frozen, width, height, movable_f)
 
         loss = wl + w_spread * overlap + w_bound * bound
+        if frozen is not None and frozen["need"] is not None:
+            # PNR_GP_CHANNELS: the legalizer's channel cost, smooth (each pair from both ends).
+            loss = loss + polish.channel_weight * 0.5 * channel_shortage(
+                pos, frozen, frozen["mask"]
+            )
         if sided is not None:
             loss = loss + _side_cost(sided, bottom)
         if pairs is not None:
@@ -603,7 +643,9 @@ def global_place(
             if term is not None:
                 loss = loss + term
 
-        if keep_t is not None:
+        if keep_t is not None and frozen is not None:
+            loss = loss + w_keep * slot_keepout(pos, frozen, keep_t, movable_f)
+        elif keep_t is not None:
             kdx = (cx.unsqueeze(1) - keep_t[:, 0].unsqueeze(0)).abs()
             kdy = (cy.unsqueeze(1) - keep_t[:, 1].unsqueeze(0)).abs()
             kox = torch.clamp(
@@ -659,6 +701,29 @@ def global_place(
         for k, i in enumerate(sided["free"]):
             sides[comps[i].ref] = "bottom" if float(logits[k]) > 0.0 else "top"
     return positions, rotations, sides
+
+
+def _freeze(graph, polish, probs, sided, comps, width, height, side_overlap):
+    """The constants of the polish phase (PNR_GP_POLISH, :mod:`pnr.place.gp_polish`): the
+    one-hot arg-max turns ``p`` (the turns :func:`global_place` returns), the frozen free sides
+    ``bottom`` (0/1 per part; None without free sides) and their same-side ``mask``, plus the
+    slot, pad-edge and channel tensors of :meth:`pnr.place.gp_polish.Polish.prepare`."""
+    idx = torch.argmax(probs.detach(), dim=1)
+    p = torch.nn.functional.one_hot(idx, 4).float()
+    angles = [ANGLES[int(k)] for k in idx]
+    sides = [c.side for c in comps]
+    bottom, mask = None, side_overlap
+    if sided is not None:
+        logits = sided["logits"].detach()
+        bottom = sided["current_bottom"].float().clone()
+        for k, i in enumerate(sided["free"]):
+            down = float(logits[k]) > 0.0
+            bottom[i] = 1.0 if down else 0.0
+            sides[i] = "bottom" if down else "top"
+        mask = _side_overlap(sided, bottom)
+    out = polish.prepare(graph, angles, sides, width, height)
+    out.update(p=p, bottom=bottom, mask=mask)
+    return out
 
 
 # Initial side logit: toward the start side, like a start rotation's logit.

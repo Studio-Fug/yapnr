@@ -25,6 +25,7 @@ TERM_LABELS = {
     "target_displacement": "Distance to continuous target",
     "channel_shortage": "Surface escape shortage",
     "local_capacitor_loop": "Local capacitor loop",
+    "wirelength": "Wirelength (half-perimeter, PNR_LEGALIZE_HPWL)",
 }
 
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from yapnr.rf.constants import EPS0, ETA0, MU0, SIGMA_CU
+from yapnr.rf.constants import C0, EPS0, ETA0, MU0, SIGMA_CU
 
 
 @dataclass(frozen=True)
@@ -100,3 +100,24 @@ def kirschning_jansen_eps_eff(w: float, h: float, er: float, f: float) -> float:
     p4 = 1.0 + 2.751 * (1.0 - math.exp(-((er / 15.916) ** 8)))
     p = p1 * p2 * ((0.1844 + p3 * p4) * fn) ** 1.5763
     return er - (er - e0) / (1.0 + p)
+
+
+def surface_wave_share(er: float, h: float, f: float) -> float:
+    """P_sw/(P_sp + P_sw): the share of a horizontal electric dipole's power on a grounded
+    substrate that goes into the TM0 surface wave, 1 − e_hed with Jackson and Alexopoulos's
+    CAD formula for the dipole's space-wave efficiency,
+
+        e_hed = 1 / (1 + (3π/4) (k0 h) (1 − 1/n²)³ / c1),   c1 = 1 − 1/n² + 2/(5n⁴),  n² = εr
+
+    (D. R. Jackson, N. G. Alexopoulos, "Simple approximate formulas for input resistance,
+    bandwidth, and efficiency of a resonant rectangular patch", IEEE TAP 39(3), 1991). A
+    resonant λ/2 patch shares it (Q_sw = Q_sp e_hed/(1 − e_hed)): 0.27 on S2 (εr 3.55, 1.524 mm)
+    at 10 GHz. The infinite-substrate model's radiated fraction counts this power as radiated
+    (design §25.4)."""
+    if not (er >= 1.0 and h > 0.0 and f > 0.0):
+        raise ValueError("surface_wave_share needs er >= 1, h > 0 and f > 0")
+    k0 = 2.0 * math.pi * f / C0
+    q = 1.0 - 1.0 / er
+    c1 = q + 0.4 / (er * er)
+    e_hed = 1.0 / (1.0 + 0.75 * math.pi * k0 * h * q**3 / c1)
+    return 1.0 - e_hed

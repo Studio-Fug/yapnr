@@ -28,6 +28,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from pnr import legalize_flags
 from pnr import trace as _trace
 from pnr.constraints import Constraint, Enforcement
 from pnr.graph import BoardGraph, BoardOutline
@@ -252,6 +253,10 @@ def initial_starts(graph, constraints, config, seed=0, orient=True, rules=None):
             rotations={c.ref: c.rot for c in movable} if orient else None,
         )
     )
+    if legalize_flags.pool_source_clamp():
+        # PNR_POOL_SOURCE_CLAMP: the source start begins inside the outline (the cluster box
+        # under PNR_COMPACT GP), not at source rows that may lie far off the board.
+        _clamp_start(movable, result[1]["positions"], box, width, height)
     count = len(movable)
     for index in range(2, config.starts):
         this_seed = seed + 104729 * index
@@ -347,6 +352,39 @@ def initial_starts(graph, constraints, config, seed=0, orient=True, rules=None):
                 if start["kind"] == "under-body-sides":
                     _project_start(graph, constraints, start, fit=False)
     return result
+
+
+def _clamp_coordinate(value, half, lo, size, limit):
+    """``value`` clamped so a part of half extent ``half`` lies in ``[lo, lo + size]`` (at
+    the box centre when it does not fit), then in ``[half, limit - half]`` of the outline: the
+    rule :func:`pnr.place.compact.box_coordinate` maps draws with."""
+    if size >= 2.0 * half:
+        value = min(max(value, lo + half), lo + size - half)
+    else:
+        value = lo + size / 2.0
+    return min(max(value, half), max(half, limit - half))
+
+
+def _clamp_start(movable, positions, box, width, height):
+    """``PNR_POOL_SOURCE_CLAMP``: each movable position of ``positions`` clamped into ``box``
+    ((x0, y0, w, h), the PNR_COMPACT cluster box; None: the outline) and the outline, with the
+    half extents the other explicit starts use (the occupied box under the cluster box)."""
+    x0, y0, bw, bh = (0.0, 0.0, width, height) if box is None else box
+    for comp in movable:
+        if comp.ref not in positions:
+            continue
+        if box is None:
+            half_x = min(width / 2, comp.courtyard[0] / 2)
+            half_y = min(height / 2, comp.courtyard[1] / 2)
+        else:
+            a0, b0, a1, b1 = compact.occupied_box(comp)
+            half_x = min(width / 2, (a1 - a0) / 2)
+            half_y = min(height / 2, (b1 - b0) / 2)
+        x, y = positions[comp.ref]
+        positions[comp.ref] = [
+            _clamp_coordinate(float(x), half_x, x0, bw, width),
+            _clamp_coordinate(float(y), half_y, y0, bh, height),
+        ]
 
 
 # Side starts (pnr.place.sides): a free part starts on its other side with this

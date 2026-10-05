@@ -96,7 +96,25 @@ def copper_sha(board):
     return hashlib.sha256("\n".join(sorted(blocks)).encode()).hexdigest()
 
 
-def acceptance(pnr, audit, drc):
+# A KiCad unconnected item's pad: "Pad K4 [VCC] of U1 on F.Cu".
+PAD_ITEM = re.compile(r"^Pad (\S+) \[[^\]]*\] of (\S+) on ")
+
+
+def designed_open(item, pads):
+    """Whether KiCad's unconnected ``item`` names one of ``pads`` ("REF.PAD"): a rung's
+    designed opens (``designed_open``), which its ``unconnected`` check holds exact."""
+    for end in item.get("items") or []:
+        m = PAD_ITEM.match(end.get("description") or "")
+        if m and "%s.%s" % (m.group(2), m.group(1)) in pads:
+            return True
+    return False
+
+
+def acceptance(pnr, audit, drc, designed=()):
+    """The reasons a routed case fails. ``designed`` ("REF.PAD", a spec's
+    ``designed_open``): KiCad's unconnected items at those pads are the design's own
+    (the partial-fanout rung leaves one ball open by design) and are not reasons; the
+    spec's ``unconnected`` check judges that exactly those pads are cut off."""
     reasons = []
     if not pnr.get("legal"):
         reasons.append("illegal_placement")
@@ -113,7 +131,8 @@ def acceptance(pnr, audit, drc):
     ):
         reasons.append("invalid_drc_report")
     else:
-        if drc["unconnected_items"]:
+        pads = set(designed)
+        if [u for u in drc["unconnected_items"] if not (pads and designed_open(u, pads))]:
             reasons.append("native_unconnected_items")
         if drc["violations"]:
             reasons.append("native_drc_violations")
@@ -224,7 +243,7 @@ FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/cap
 
 # The parts of PNR_COMPACT (pnr.compact_flags.PARTS; test_compact keeps them equal)
 # --compact-off may drop.
-COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
 
 
 def compact_environment(compact, compact_off=(), shrink=False):
@@ -240,6 +259,47 @@ def compact_environment(compact, compact_off=(), shrink=False):
             env["PNR_COMPACT_" + part] = "0"
     if shrink:
         env["PNR_SHRINK"] = "1"
+    return env
+
+
+def legalize_environment(
+    gp_polish=False,
+    gp_channels=None,
+    pool_source_clamp=False,
+    legalize_hpwl=None,
+    reorient=None,
+    channel_clearance=None,
+    line_satellites=False,
+):
+    """The PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP / PNR_LEGALIZE_HPWL /
+    PNR_LEGALIZE_REORIENT / PNR_LEGALIZE_CHANNEL_CLEARANCE / PNR_LINE_SATELLITES variables of
+    ``--gp-polish``, ``--gp-channels``, ``--pool-source-clamp``, ``--legalize-hpwl``,
+    ``--legalize-reorient``, ``--legalize-channel-clearance`` and ``--line-satellites``
+    (``pnr.legalize_flags``; set after the ambient PNR_* variables are stripped, so provenance
+    records them); empty when none is given. ``reorient`` is ``"1"`` (guarded), ``"wire"`` or
+    None; ``channel_clearance`` is ``"fab"`` or None."""
+    env = {}
+    for name, value in (("--gp-channels", gp_channels), ("--legalize-hpwl", legalize_hpwl)):
+        if value is not None and not (math.isfinite(value) and value > 0):
+            raise ValueError("%s takes a positive weight, got %r" % (name, value))
+    if gp_polish:
+        env["PNR_GP_POLISH"] = "1"
+    if gp_channels is not None:
+        env["PNR_GP_CHANNELS"] = repr(float(gp_channels))
+    if pool_source_clamp:
+        env["PNR_POOL_SOURCE_CLAMP"] = "1"
+    if legalize_hpwl is not None:
+        env["PNR_LEGALIZE_HPWL"] = repr(float(legalize_hpwl))
+    if reorient not in (None, "1", "wire"):
+        raise ValueError("--legalize-reorient takes nothing or wire, got %r" % (reorient,))
+    if reorient:
+        env["PNR_LEGALIZE_REORIENT"] = reorient
+    if channel_clearance not in (None, "fab"):
+        raise ValueError("--legalize-channel-clearance takes fab, got %r" % (channel_clearance,))
+    if channel_clearance:
+        env["PNR_LEGALIZE_CHANNEL_CLEARANCE"] = channel_clearance
+    if line_satellites:
+        env["PNR_LINE_SATELLITES"] = "1"
     return env
 
 
@@ -716,6 +776,60 @@ def parser():
         help="With --compact: drop one part, PNR_COMPACT_<PART>=0 (repeatable; ablations)",
     )
     ap.add_argument(
+        "--gp-polish",
+        action="store_true",
+        help=(
+            "PNR_GP_POLISH=1: a final global-placement phase on the legalizer's own slots, turns "
+            "frozen (docs/design/compact-placement.md, section 11)"
+        ),
+    )
+    ap.add_argument(
+        "--gp-channels",
+        type=float,
+        metavar="LAMBDA",
+        help="PNR_GP_CHANNELS=LAMBDA: the polish (implied) also weighs the legalizer's channel cost",
+    )
+    ap.add_argument(
+        "--pool-source-clamp",
+        action="store_true",
+        help="PNR_POOL_SOURCE_CLAMP=1: the initial pool's source start begins inside the outline",
+    )
+    ap.add_argument(
+        "--legalize-hpwl",
+        type=float,
+        metavar="W",
+        help=(
+            "PNR_LEGALIZE_HPWL=W: the legalizer's slot cost gains W times the part's wirelength "
+            "and the turn is chosen with the slot among all four"
+        ),
+    )
+    ap.add_argument(
+        "--legalize-reorient",
+        nargs="?",
+        const="1",
+        choices=("1", "wire"),
+        help=(
+            "PNR_LEGALIZE_REORIENT=1: in-place turns that shorten wires after legalization, "
+            "never raising a part's channel shortage; 'wire' drops that guard"
+        ),
+    )
+    ap.add_argument(
+        "--legalize-channel-clearance",
+        choices=("fab",),
+        help=(
+            "PNR_LEGALIZE_CHANNEL_CLEARANCE=fab: the legalizer's channel model spaces unclassed "
+            "nets at the fab clearance (the router's) instead of the board default"
+        ),
+    )
+    ap.add_argument(
+        "--line-satellites",
+        action="store_true",
+        help=(
+            "PNR_LINE_SATELLITES=1: a line group carries each member's series part (a two-pad "
+            "part on a two-pin net to the member) flush beside it"
+        ),
+    )
+    ap.add_argument(
         "--shrink",
         action="store_true",
         help=(
@@ -848,11 +962,25 @@ def main():
         env["PNR_BATCHED_WIRELENGTH"] = "1"
     try:
         env.update(compact_environment(args.compact, args.compact_off, args.shrink))
+        env.update(
+            legalize_environment(
+                args.gp_polish,
+                args.gp_channels,
+                args.pool_source_clamp,
+                args.legalize_hpwl,
+                args.legalize_reorient,
+                args.legalize_channel_clearance,
+                args.line_satellites,
+            )
+        )
     except ValueError as error:
         raise SystemExit(str(error))
     env["PNR_FAB_PROFILE"] = (
         args.fab_profile
     )  # routed and judged under one profile (route_case.py, writeback)
+    # The KiCad-side judge's numeric solves (pnr.ir_extract, the ir_drop check) run in this
+    # Python when KiCad's has no numpy (the container image's).
+    env["PNR_PYTHON"] = str(args.python)
     if args.initial_pool:
         if not 2 <= args.initial_starts <= 128 or not 1 <= args.initial_finalists <= min(
             args.initial_starts, 16
@@ -883,7 +1011,9 @@ def main():
         ),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
         pnr_environment={
-            k: v for k, v in env.items() if k.startswith("PNR_") and k != "PNR_MAZE_LIB"
+            k: v
+            for k, v in env.items()
+            if k.startswith("PNR_") and k not in ("PNR_MAZE_LIB", "PNR_PYTHON")
         },
         native_maze=native,
     )
@@ -1078,7 +1208,7 @@ def main():
                 audit = json.loads((root / "native-audit.json").read_text())
                 drc = json.loads((root / "drc.json").read_text())
                 result.update(
-                    reasons=acceptance(pnr, audit, drc),
+                    reasons=acceptance(pnr, audit, drc, spec.get("designed_open") or ()),
                     opens=len(drc["unconnected_items"]),
                     violations=dict(Counter(x["type"] for x in drc["violations"])),
                     tracks=audit["tracks"],

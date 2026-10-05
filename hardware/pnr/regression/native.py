@@ -10,7 +10,7 @@ from pathlib import Path
 import pcbnew as k
 
 from pnr.ingest import load
-from pnr.writeback import _PAGE_OFFSET_MM, frame_region, patch_project_rules
+from pnr.writeback import _PAGE_OFFSET_MM, frame_region, patch_project_rules, strip_edge_cuts
 
 
 def make(spec, root, library):
@@ -77,6 +77,20 @@ def make(spec, root, library):
         stackup.add_plane_zones(b, spec, rect, "extra")
     k.SaveBoard(str(source), b)
     text = frame_region(source.read_text(), size["w"], size["h"])
+    shape = spec.get("outline_shape")
+    if shape:
+        # A rung's own outline (hard_rungs, -classes): rounded corners, its stroke.
+        text = strip_edge_cuts(text).rstrip()
+        text = (
+            text[: text.rfind(")")]
+            + rounded_outline(
+                size["w"],
+                size["h"],
+                shape.get("corner_radius_mm", 0.0),
+                shape.get("stroke_mm", 0.15),
+            )
+            + ")\n"
+        )
     if spec.get("stackup"):
         text = stackup.insert_stackup(text, spec["stackup"])
     source.write_text(text)
@@ -127,6 +141,42 @@ def make(spec, root, library):
             indent=2,
         )
     )
+
+
+def rounded_outline(width, height, radius, stroke, offset=_PAGE_OFFSET_MM):
+    """Edge.Cuts text of a ``width`` x ``height`` rectangle at the generator's page
+    offset with corner arcs of ``radius``, drawn at ``stroke`` (a rung's
+    ``outline_shape``)."""
+    x0, y0, x1, y1 = offset, offset, offset + width, offset + height
+    r = max(0.0, min(radius, width / 2, height / 2))
+    k = r * (1 - math.sqrt(0.5))  # a corner arc's mid point, inset from the corner
+    lines = [
+        ((x0 + r, y0), (x1 - r, y0)),
+        ((x1, y0 + r), (x1, y1 - r)),
+        ((x1 - r, y1), (x0 + r, y1)),
+        ((x0, y1 - r), (x0, y0 + r)),
+    ]
+    arcs = [
+        ((x1 - r, y0), (x1 - k, y0 + k), (x1, y0 + r)),
+        ((x1, y1 - r), (x1 - k, y1 - k), (x1 - r, y1)),
+        ((x0 + r, y1), (x0 + k, y1 - k), (x0, y1 - r)),
+        ((x0, y0 + r), (x0 + k, y0 + k), (x0 + r, y0)),
+    ]
+    out = []
+    for n, (a, b) in enumerate(lines):
+        out.append(
+            "  (gr_line (start %.6f %.6f) (end %.6f %.6f)\n"
+            '    (stroke (width %g) (type solid)) (layer "Edge.Cuts")\n'
+            '    (uuid "b0ad0013-0000-4000-8000-%012d"))' % (a[0], a[1], b[0], b[1], stroke, n)
+        )
+    for n, (a, m, b) in enumerate(arcs if r > 0 else ()):
+        out.append(
+            "  (gr_arc (start %.6f %.6f) (mid %.6f %.6f) (end %.6f %.6f)\n"
+            '    (stroke (width %g) (type solid)) (layer "Edge.Cuts")\n'
+            '    (uuid "b0ad0013-0000-4000-8000-%012d"))'
+            % (a[0], a[1], m[0], m[1], b[0], b[1], stroke, 4 + n)
+        )
+    return "\n".join(out) + "\n"
 
 
 def add_fixed_block(b, spec, nets, height):
@@ -247,7 +297,8 @@ def audit(spec, root, pcb):
     netwidth = {n: rules["fab"]["track_width_mm"] for n in set(expected.values()) if n}
     for cls in rules["net_classes"]:
         for n in cls["nets"]:
-            netwidth[n] = max(netwidth[n], cls["width_mm"])
+            # A class that sets only a clearance leaves the width to the fab.
+            netwidth[n] = max(netwidth[n], cls["width_mm"] or 0.0)
     thin = [
         str(t.m_Uuid.AsString())
         for t in b.GetTracks()

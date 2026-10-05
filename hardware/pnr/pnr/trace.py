@@ -947,6 +947,12 @@ def board_header(graph, constraints=None, rules=None):
     relations = header_constraints(constraints)
     if relations:
         header["constraints"] = relations
+    from pnr.legalize_flags import active as legalize_active
+
+    # PNR_GP_POLISH, PNR_LEGALIZE_HPWL, ... (pnr.legalize_flags): only when one is on.
+    switches = legalize_active()
+    if switches:
+        header["placement_switches"] = switches
     return header
 
 

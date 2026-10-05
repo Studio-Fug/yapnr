@@ -38,6 +38,10 @@ CHECK_KINDS = {
     "via_class",
     "escape",
     "pad_distance",
+    "net_vias",
+    "unconnected",
+    "ir_drop",
+    "rail_zones",
 }
 
 
@@ -147,11 +151,17 @@ class HardRungContract(unittest.TestCase):
                     self.assertEqual(len(owners), 1)
                     self.assertEqual(owners[0].get("plane_layer"), layer)
                 planes = [c for c in classes.values() if c.get("plane_layer")]
-                self.assertEqual(len(planes), len(first))
+                # A partitioned plane layer (plane_partition) carries several rails,
+                # each in a class of its own naming the layer, and a rail_zones check
+                # in place of the one-net plane check.
+                parts = spec["constraints"].get("plane_partition") or []
+                shared = sum(len(p["nets"]) - 1 for p in parts)
+                self.assertEqual(len(planes), len(first) + shared)
                 self.assertEqual(
                     sum(c["kind"] == "plane" for c in spec["checks"]),
-                    code.count("G") + code.count("P"),
+                    code.count("G") + code.count("P") - len(parts),
                 )
+                self.assertEqual(sum(c["kind"] == "rail_zones" for c in spec["checks"]), len(parts))
 
     def test_the_judge_enforces_via_policy_planes_and_pairs(self):
         for spec in self.rungs:
@@ -320,6 +330,35 @@ class HardRungContract(unittest.TestCase):
         self.assertEqual(guard["allowed_nets"], ["CLOCK", "GND", "VCC"])
         self.assertIn("arcs", spec["features"])
 
+    def test_bga_classes_rung(self):
+        """The BGA rung with class clearances, custom rules, a fiducial and a rounded
+        outline: the engine switches, the judge's rules and the checks that hold them."""
+        from hard_rungs import CLASSES_FIDUCIAL, CLASSES_OUTLINE
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+
+        spec = self.by_name["11-ufbga201-fanout-6L-SGSGPS-classes"]
+        board = spec["constraints"]["board"]
+        self.assertEqual(
+            (board["class_clearance"], board["dru_routing"], board["edge"]),
+            ("maze", True, "exact"),
+        )
+        self.assertEqual(spec["outline_shape"], CLASSES_OUTLINE)
+        text = dru_text(spec)
+        self.assertIn("A.hasNetclass('clk')", text)
+        self.assertIn("physical_hole_clearance (min 0.425mm)", text)
+        (check,) = [c for c in spec["checks"] if c["kind"] == "net_vias"]
+        self.assertEqual(check["nets"], ["PB1", "PE7"])
+        self.assertEqual(spec["constraints"]["fixed"]["FID1"]["at"], list(CLASSES_FIDUCIAL))
+        refs = [p["ref"] for p in spec["parts"]]
+        compiled = compile_constraints(spec["constraints"], refs)
+        nets = sorted({n for p in spec["parts"] for n in p["pins"].values() if n})
+        rules = compile_routing_rules(compiled, nets)
+        self.assertEqual(rules["class_clearance"], "maze")
+        classes = {c["name"]: c for c in rules["net_classes"]}
+        self.assertEqual(classes["clk"]["clearance_mm"], 0.2)
+        self.assertEqual(classes["plane_vcc"]["clearance_mm"], 0.12)
+
     def test_bga_block_rung(self):
         """The BGA rung with a fixed block: its launch copper digest, ground stitching
         vias on U1's interstitial lattice, a group rule area on F.Cu alone, keep-outs
@@ -358,6 +397,54 @@ class HardRungContract(unittest.TestCase):
         self.assertEqual(rules["fanouts"][0]["skip_pads"], ["F15"])
         launch = [c for c in spec["checks"] if c["id"] == "keepout-launch"][0]
         self.assertIn("zones", launch["items"])
+
+    def test_partial_and_rails_rungs(self):
+        from hard_rungs import PARTIAL_BRIDGED, PARTIAL_OPEN, RAIL_HEADERS, _ball_xy
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+        from pnr.fanout.geom import segment_polygon
+
+        parent = self.by_name["11-ufbga201-fanout-6L-SGSGPS"]
+        spec = self.by_name["11-ufbga201-fanout-6L-SGSGPS-partial"]
+        (fanout,) = spec["constraints"]["fanout"]
+        self.assertEqual(fanout["partial"], {"bridge": True})
+        self.assertEqual(nets_of(spec), nets_of(parent))
+        u1 = spec["parts"][0]["pins"]
+        self.assertEqual(u1[PARTIAL_BRIDGED], "VCC")
+        self.assertEqual(u1[PARTIAL_OPEN], "VCC")
+        # The bridge's path to C7 clears every reserved square (0.1 mm stub, 1 um margin).
+        a, b = _ball_xy(PARTIAL_BRIDGED), _ball_xy("C7")
+        self.assertEqual(u1["C7"], "VCC")
+        for r in fanout["reserved"]:
+            if r["name"].startswith("c8-"):
+                self.assertGreater(segment_polygon(a, b, r["polygon"]), 0.05 + 1e-3)
+        (check,) = [c for c in spec["checks"] if c["kind"] == "unconnected"]
+        self.assertEqual(check["pads"], ["U1." + PARTIAL_OPEN])
+        self.assertEqual(spec["designed_open"], check["pads"])
+        # A designed open is only excused where an unconnected check holds it exact.
+        for other in self.by_name.values():
+            if other.get("designed_open"):
+                pads = [c["pads"] for c in other["checks"] if c["kind"] == "unconnected"]
+                self.assertEqual(pads, [other["designed_open"]], other["name"])
+
+        rails = self.by_name["11-ufbga201-fanout-6L-SGSGPS-rails"]
+        nets = {n for p in rails["parts"] for n in p["pins"].values() if n}
+        self.assertNotIn("VCC", nets)
+        self.assertTrue({"VDD", "VDDA", "VBAT"} <= nets)
+        refs = [p["ref"] for p in rails["parts"]]
+        for net, (ref, _at) in RAIL_HEADERS.items():
+            self.assertIn(ref, refs)
+            self.assertIn(ref, rails["constraints"]["fixed"])
+        c = compile_constraints(rails["constraints"], refs)
+        rules = compile_routing_rules(c, sorted(nets))
+        (part,) = rules["plane_partition"]
+        self.assertEqual(part["nets"], ["VDD", "VDDA", "VBAT"])
+        self.assertEqual(part["fill"], "GND")
+        self.assertEqual([e["net"] for e in rules["ir_drop"]], ["VDD", "VDDA", "VBAT"])
+        balls = [e for e in rules["ir_drop"] if e["net"] == "VDDA"][0]["sinks"]
+        self.assertEqual(sorted(balls), ["U1:P1", "U1:R1"])
+        classes = [x for x in rules["net_classes"] if x.get("plane_layer") == part["layer"]]
+        self.assertEqual(sorted(n for x in classes for n in x["nets"]), ["VBAT", "VDD", "VDDA"])
 
     def test_runner_offers_the_hard_rungs(self):
         args = parser().parse_args(["--out", "x", "--hard"])

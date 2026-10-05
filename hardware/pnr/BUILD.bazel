@@ -65,6 +65,10 @@ filegroup(
         "pnr/fixed_copper.py",
         # Fixed blocks and copper keepouts (stdlib only): fixed_copper and writeback.
         "pnr/fixed_block.py",
+        # board.edge: exact / keep_outline: the board's own outline (writeback keeps it).
+        "pnr/board_edge.py",
+        # board.dru_routing: the custom rules where they constrain routing (staged_signal).
+        "pnr/dru_rules.py",
         "pnr/paired_bootstrap.py",
         "pnr/placement_trials.py",
         "pnr/placement_copper.py",
@@ -131,6 +135,12 @@ filegroup(
         "pnr/writeback.py",
         "pnr/stack.py",
         "pnr/via_policy.py",
+        # Rail IR drop (pnr.ir_extract under KiCad's Python, its numpy solver) and the
+        # plane_partition / ir_drop sections.
+        "pnr/ir_drop.py",
+        "pnr/ir_extract.py",
+        "pnr/power_spec.py",
+        "pnr/plane_partition.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -758,6 +768,97 @@ py_test(
         ":pnr",
         ":pnr_hier",
         ":pnr_place",
+    ],
+)
+
+# The rail IR-drop solver (pnr.ir_drop) against analytic resistances (numpy only).
+py_test(
+    name = "ir_drop_test",
+    size = "small",
+    srcs = ["tests/test_ir_drop.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_ir_drop.py",
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# A rail's copper extracted from a KiCad board and solved (pnr.ir_extract). It needs
+# KiCad's Python (pcbnew): run it there by hand (python3 -m unittest
+# tests.test_ir_extract_kicad).
+py_test(
+    name = "ir_extract_kicad_test",
+    size = "small",
+    srcs = ["tests/test_ir_extract_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_ir_extract_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# Supply rails sharing a plane layer (pnr.plane_partition): territories, widths, gaps,
+# PlaneAccess with holes, and route_board's drops inside them.
+py_test(
+    name = "plane_partition_test",
+    size = "medium",
+    srcs = ["tests/test_plane_partition.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_plane_partition.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# The partition drawn by writeback and filled by KiCad, its rails' IR drop, and the
+# checker's supply checks (rail_zones, ir_drop, unconnected). It needs KiCad's Python
+# (pcbnew): run it there by hand.
+py_test(
+    name = "plane_partition_kicad_test",
+    size = "small",
+    srcs = [
+        "regression/check_constraints.py",
+        "tests/test_plane_partition_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_plane_partition_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# Partial fanouts (the fanout entry's ``partial``): open balls, retries and bridges.
+py_test(
+    name = "fanout_partial_test",
+    size = "medium",
+    srcs = ["tests/test_fanout_partial.py"],
+    main = "tests/test_fanout_partial.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
     ],
 )
 
@@ -1723,6 +1824,102 @@ py_test(
     ],
 )
 
+# Legalizer and global-placement switches (PNR_GP_POLISH, PNR_GP_CHANNELS,
+# PNR_POOL_SOURCE_CLAMP, PNR_LEGALIZE_HPWL, PNR_LEGALIZE_REORIENT; default off;
+# docs/design/compact-placement.md section 11): parsing, the runner's options, the trace header
+# and the flag-off identity against the compact goldens on two ladder cases.
+py_test(
+    name = "legalize_flags_test",
+    size = "medium",
+    srcs = [
+        "tests/compact_fixture.py",
+        "tests/test_legalize_flags.py",
+    ],
+    # run.py reads the regression modules.
+    data = glob([
+        "pnr/**/*.py",
+        "regression/*.py",
+        "testdata/compact/*",
+    ]),
+    imports = [
+        ".",
+        "regression",
+        "tests",
+    ],
+    main = "tests/test_legalize_flags.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
+)
+
+# PNR_LEGALIZE_HPWL: the legalizer's wirelength term and four-turn search (the README's
+# line-chaser resistors end flush with the row).
+py_test(
+    name = "legalize_wire_test",
+    size = "small",
+    srcs = ["tests/test_legalize_wire.py"],
+    imports = ["."],
+    main = "tests/test_legalize_wire.py",
+    deps = [
+        ":pnr",
+        ":pnr_hier",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+# PNR_LEGALIZE_REORIENT: in-place turns after legalization (pnr.place.reorient).
+py_test(
+    name = "reorient_test",
+    size = "medium",
+    srcs = [
+        "tests/compact_fixture.py",
+        "tests/test_reorient.py",
+    ],
+    data = ["testdata/compact/04-inverter-leds-8.json"],
+    imports = [
+        ".",
+        "tests",
+    ],
+    main = "tests/test_reorient.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
+# PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP: global placement on the
+# legalizer's slots and channel cost (pnr.place.gp_polish).
+py_test(
+    name = "gp_polish_test",
+    size = "medium",
+    srcs = [
+        "tests/compact_fixture.py",
+        "tests/test_gp_polish.py",
+    ],
+    data = ["testdata/compact/04-inverter-leds-8.json"],
+    imports = [
+        ".",
+        "tests",
+    ],
+    main = "tests/test_gp_polish.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
 # The hierarchical ladder driver (regression/hier_case.py) on a synthetic 10-part design.
 py_test(
     name = "hier_case_test",
@@ -1887,6 +2084,103 @@ py_test(
         ":pnr_place",
         requirement("numpy"),
     ],
+)
+
+# Pad-local clearance and solder mask margin (a fiducial's): graph keys, grid halos,
+# the exact escape and fanout checks, and a routed board that keeps them.
+py_test(
+    name = "pad_clearance_test",
+    size = "small",
+    srcs = ["tests/test_pad_clearance.py"],
+    main = "tests/test_pad_clearance.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# board.class_clearance: maze: class halos and via keep-outs in the maze, class tables,
+# the exact check and reroute (class_check), the copper audit, kernel parity.
+py_test(
+    name = "class_clearance_test",
+    size = "small",
+    srcs = ["tests/test_class_clearance.py"],
+    main = "tests/test_class_clearance.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# board.edge: exact: the outline parsed into the engine frame, the via and track insets
+# KiCad's hole-to-edge rule implies (stroke, rounded corners), the routed vias, and the
+# writeback text that keeps the outline.
+py_test(
+    name = "board_edge_test",
+    size = "small",
+    srcs = ["tests/test_board_edge.py"],
+    main = "tests/test_board_edge.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# board.dru_routing: the custom-rules parser and its three-valued conditions, the
+# routing effects of a radar60-style rules file and what it lists unmodelled, and
+# route_board applying them (no-via layer, pair keep-outs, length report).
+py_test(
+    name = "dru_rules_test",
+    size = "small",
+    srcs = ["tests/test_dru_rules.py"],
+    main = "tests/test_dru_rules.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# Writeback keeps the outline under KiCad (inline board; the KiCad lane runs it).
+py_test(
+    name = "board_edge_kicad_test",
+    size = "small",
+    srcs = ["tests/test_board_edge_kicad.py"],
+    main = "tests/test_board_edge_kicad.py",
+    tags = [
+        "kicad",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
+# The same values read from KiCad footprints by pnr.ingest (inline footprints; the
+# KiCad lane runs it, it skips without pcbnew).
+py_test(
+    name = "pad_clearance_kicad_test",
+    size = "small",
+    srcs = ["tests/test_pad_clearance_kicad.py"],
+    main = "tests/test_pad_clearance_kicad.py",
+    tags = [
+        "kicad",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
 )
 
 # The native kernel's parity cases on the Bazel-built library (needs a C toolchain):

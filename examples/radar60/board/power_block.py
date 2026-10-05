@@ -1,10 +1,10 @@
-"""radar60 stage 3c R1: the power-stage subcell, synthesized on its own board and handed to the
-top placement as one rigid block, then fixed with its copper and pours.
+"""radar60 stage 3c R1: the power-stage subcells, each synthesized on its own board and handed
+to the top placement as one rigid block, then fixed with its copper and pours.
 
-The block is the one ``pnr.hier.blocks.extract_blocks`` finds around floorplan
-``power_stage.anchor`` (U2): the hard groups of U2 (inductors, input caps, snubbers, VANA,
-R_SH1 and its Kelvin TP) joined with U5's (thresholds, in/out caps, D3) by the ``power_stage``
-group. Nothing here picks parts by hand: ``contains`` only checks the extraction.
+A block is the one ``pnr.hier.blocks.extract_blocks`` finds around a floorplan
+``power_stage.blocks[].anchor`` (``--block-anchor``, default the first): U2's hard groups
+(inductors, input caps, snubbers, VANA, R_SH1 and its Kelvin TP), or U5's (D3, the in/out
+caps). Nothing here picks parts by hand: ``contains`` only checks the extraction.
 
 Steps (``python power_block.py STEP --work WORK --out DIR``; WORK is an ``integrate.py
 prepare`` work directory):
@@ -26,6 +26,7 @@ prepare`` work directory):
             reads it) holding the complete layouts in rank order, each with its routed block
             board (``instances[].dir``).
 ``eval``    stage B for one candidate directory (run by ``synth`` in a subprocess).
+``merge``   several blocks' ``library.json`` into one (``--libs A B``, to ``--out``).
 ``rescore`` the hot-loop links recounted on every evaluated layout's routed board, then rank.
 ``ki-strip`` (KiCad's Python) the block's footprints alone from a board, no copper.
 
@@ -93,11 +94,22 @@ def role_addresses(floorplan, role, addresses):
 # ------------------------------------------------------------------ the block
 
 
-def find_block(graph, compiled, floorplan):
-    """The extracted block holding ``power_stage.anchor``; every ``contains`` role inside it."""
+def stage_spec(floorplan, anchor=None):
+    """The floorplan ``power_stage.blocks`` entry anchored on role ``anchor`` (default: the
+    first)."""
+    blocks = floorplan["power_stage"]["blocks"]
+    if anchor is None:
+        return blocks[0]
+    for b in blocks:
+        if b["anchor"] == anchor:
+            return b
+    raise SystemExit("no power_stage block anchored on %r" % anchor)
+
+
+def find_block(graph, compiled, floorplan, spec):
+    """The extracted block holding ``spec['anchor']``; every ``contains`` role inside it."""
     from pnr.hier.blocks import extract_blocks
 
-    spec = floorplan["power_stage"]
     addr = {c.ref: c.address for c in graph.components}
     by_addr = {c.address: c.ref for c in graph.components if c.address}
     anchor = by_addr[role_patterns(floorplan, spec["anchor"])[0]]
@@ -116,7 +128,7 @@ def find_block(graph, compiled, floorplan):
     return block, anchor, {r: addr[r] for r in block.refs}
 
 
-def block_doc(top_doc, floorplan, addresses, width, height):
+def block_doc(top_doc, floorplan, addresses, width, height, stage):
     """The block board's constraint document: the top document's net classes, fab and board
     switches, its groups, sides and orientations restricted to the block, no board-level
     relations (fixed poses, regions, rows, keepouts of other parts, the fixed RF block, U1's
@@ -176,7 +188,6 @@ def block_doc(top_doc, floorplan, addresses, width, height):
     # Rails: the top board's In3 partition is the top board's; the block keeps its plane nets'
     # classes (drops land on the inner layers as on the top board) and pours its outer layer.
     out.pop("plane_partition", None)
-    stage = floorplan["power_stage"]
     pours = []
     for p in stage.get("pours") or []:
         entry = {k: v for k, v in p.items() if k != "region"}
@@ -217,8 +228,9 @@ def block_doc(top_doc, floorplan, addresses, width, height):
     return out
 
 
-def hot_links(floorplan, components):
-    """The datasheet hot-loop links of floorplan ``power_stage.hot_loops``, from the netlist:
+def hot_links(floorplan, components, stage):
+    """The datasheet hot-loop links of a ``power_stage.blocks`` entry's ``hot_loops``, from the
+    netlist:
     ``[(net, [(ref, pad)] one side, [(ref, pad), ...] the other)]``. One link per part pad on
     a listed net that the loop's IC also carries (to any of the IC's pads on it), then one per
     IC pad on such a net (to any of the loop parts' pads on it): every land of the IC's hot
@@ -227,7 +239,7 @@ def hot_links(floorplan, components):
     by_addr = {c.address: c for c in components if c.address}
     links = []
     ic_side = {}  # (net, IC pad) -> the loop parts' pads on that net, over every loop
-    for loop in floorplan["power_stage"].get("hot_loops") or []:
+    for loop in stage.get("hot_loops") or []:
         ic = by_addr[role_patterns(floorplan, loop["ic"])[0]]
         ic_pads = {}
         for p in ic.pads:
@@ -304,7 +316,8 @@ def step_synth(a):
     top_doc = load_yaml(work / "constraints-place.yaml")
     t = time.time()
     graph, compiled, rules = _compile(a.engine, work / "inputs" / "graph.json", top_doc)
-    block, anchor, addresses = find_block(graph, compiled, floorplan)
+    stage = stage_spec(floorplan, a.block_anchor)
+    block, anchor, addresses = find_block(graph, compiled, floorplan, stage)
     print(
         "block %s: %d parts, anchor %s, %.0f s to compile"
         % (block.name, len(block.refs), anchor, time.time() - t),
@@ -314,12 +327,18 @@ def step_synth(a):
         block=block.to_dict(),
         anchor=anchor,
         addresses=addresses,
-        hot_links=[[n, s, d] for n, s, d in hot_links(floorplan, graph.components)],
+        stage_anchor=stage["anchor"],
+        hot_links=[[n, s, d] for n, s, d in hot_links(floorplan, graph.components, stage)],
     )
     (out / "block.json").write_text(json.dumps(info, indent=1))
     pkl = out / "top.pkl"
     pkl.write_bytes(pickle.dumps((graph, compiled, rules, block)))
-    sizes = aspect_sizes(graph, block, utilisations=tuple(a.utilisations))
+    sizes = aspect_sizes(
+        graph,
+        block,
+        utilisations=tuple(a.utilisations or stage.get("utilisations") or (0.35, 0.45, 0.55)),
+        aspects=tuple(a.aspects or stage.get("aspects") or (1.0, 1.5, 1 / 1.5)),
+    )
     jobs = [(str(pkl), s, seed, a.iters) for s in sizes for seed in range(a.seeds)]
     print("stage A: %d placement trials" % len(jobs), flush=True)
     recs = []
@@ -445,6 +464,7 @@ def step_eval(a):
     trial = json.loads((d / "trial.json").read_text())
     info = json.loads((Path(a.out).parents[1] / "block.json").read_text())
     floorplan = floorplan_doc()
+    stage = stage_spec(floorplan, info.get("stage_anchor"))
     t0 = time.time()
     rec = dict(id=trial["id"], area=trial["area"], width=trial["width"], height=trial["height"])
     rec["port_debt_mm"] = trial["port_debt_mm"]
@@ -461,7 +481,7 @@ def step_eval(a):
         rec["apron_mm"] = apron
         (d / "placed.json").write_text(g.to_json())
         doc = block_doc(
-            top_doc, floorplan, info["addresses"].values(), g.outline.width, g.outline.height
+            top_doc, floorplan, info["addresses"].values(), g.outline.width, g.outline.height, stage
         )
         import yaml
 
@@ -542,7 +562,7 @@ def step_eval(a):
         )
         rec.update(score_hot_links(info["hot_links"], cand, a.kicad_python))
         # The library's board: the layout's copper and its outer pours only.
-        layers = sorted({p["layer"] for p in floorplan["power_stage"].get("pours") or []})
+        layers = sorted({p["layer"] for p in stage.get("pours") or []})
         _run(
             [a.kicad_python, __file__, "ki-pours", "--src", cand, "--dest", d / "block.kicad_pcb"]
             + ["--layers", ",".join(layers)],
@@ -574,6 +594,18 @@ def score_hot_links(links, board, kicad_python):
     return dict(hot_links=len(links), hot_links_open=len(opened), hot_open=opened)
 
 
+def step_merge(a):
+    """One frozen tier map from several blocks' ``library.json`` (``--libs``), to ``--out``."""
+    merged = {}
+    for path in a.libs:
+        for name, tier in json.loads(Path(path).read_text()).items():
+            if name in merged:
+                raise SystemExit("block %s in two libraries" % name)
+            merged[name] = tier
+    Path(a.out).write_text(json.dumps(merged, indent=1, sort_keys=True))
+    print("merged %s" % {k: len(v) for k, v in merged.items()})
+
+
 def step_rescore(a):
     """Recount every evaluated layout's hot-loop links from its routed board (after the
     floorplan's ``hot_loops`` or :func:`hot_links` changed), then ``rank``."""
@@ -583,7 +615,8 @@ def step_rescore(a):
     from pnr.graph import BoardGraph
 
     graph = BoardGraph.from_json((Path(a.work) / "inputs" / "graph.json").read_text())
-    links = hot_links(floorplan_doc(), graph.components)
+    fp = floorplan_doc()
+    links = hot_links(fp, graph.components, stage_spec(fp, info.get("stage_anchor")))
     info["hot_links"] = [[n, s, d] for n, s, d in links]
     (out / "block.json").write_text(json.dumps(info, indent=1))
     for d in sorted((out / "cand").glob("*")):
@@ -706,7 +739,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument(
         "step",
-        choices=["synth", "eval", "rank", "rescore", "ki-strip", "ki-pours"],
+        choices=["synth", "eval", "rank", "rescore", "merge", "ki-strip", "ki-pours"],
         help="see the docstring",
     )
     ap.add_argument("--work", help="an integrate.py prepare work directory")
@@ -717,8 +750,11 @@ def main(argv=None):
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--iters", type=int, default=600)
     ap.add_argument(
-        "--utilisations", type=float, nargs="+", default=[0.35, 0.45, 0.55], help="block fill"
+        "--utilisations", type=float, nargs="+", help="block fill (default: the block's own)"
     )
+    ap.add_argument("--aspects", type=float, nargs="+", help="w/h (default: the block's own)")
+    ap.add_argument("--block-anchor", help="the power_stage block's anchor role (default: first)")
+    ap.add_argument("--libs", nargs="+", help="merge: the library.json files")
     ap.add_argument("--procs", type=int, default=4)
     ap.add_argument("--evaluate", type=int, default=12, help="stage B layouts at most")
     ap.add_argument("--eval-procs", type=int, default=2)
@@ -733,7 +769,9 @@ def main(argv=None):
         return step_ki_strip(a)
     if a.step == "ki-pours":
         return step_ki_pours(a)
-    {"synth": step_synth, "eval": step_eval, "rank": step_rank, "rescore": step_rescore}[a.step](a)
+    steps = dict(synth=step_synth, eval=step_eval, rank=step_rank, rescore=step_rescore)
+    steps["merge"] = step_merge
+    steps[a.step](a)
 
 
 if __name__ == "__main__":

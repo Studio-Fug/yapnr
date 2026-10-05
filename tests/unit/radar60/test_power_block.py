@@ -26,6 +26,8 @@ import power_block  # noqa: E402
 
 FLOORPLAN = yaml.safe_load((EXAMPLE / "board/floorplan.yaml").read_text())
 TOP = yaml.safe_load((EXAMPLE / "board/constraints.yaml").read_text())
+STAGE = power_block.stage_spec(FLOORPLAN)  # the buck stage at U2
+EFUSE = power_block.stage_spec(FLOORPLAN, "efuse")
 
 BLOCK = [
     "pmic.u2",
@@ -42,12 +44,6 @@ BLOCK = [
     "pmic.c_vana",
     "pmic.r_sh",
     "pmic.tp_isns",
-    "power_in.efuse",
-    "power_in.tvs",
-    "power_in.c_in_bulk",
-    "power_in.c_in_hf",
-    "power_in.c_sys_bulk",
-    "power_in.r_uv_top",
 ]
 
 
@@ -61,7 +57,7 @@ def part(ref, address, *pads):
 
 class BlockDocTest(unittest.TestCase):
     def setUp(self):
-        self.doc = power_block.block_doc(TOP, FLOORPLAN, BLOCK, 20.4, 18.4)
+        self.doc = power_block.block_doc(TOP, FLOORPLAN, BLOCK, 20.4, 18.4, STAGE)
 
     def test_board_level_relations_go(self):
         for key in ("region", "fixed_block", "fanout", "diff_pair", "length_match", "rf_macro"):
@@ -87,16 +83,15 @@ class BlockDocTest(unittest.TestCase):
         self.assertEqual((pour["terminals"], pour["connect"]), ("pad", "solid"))
         self.assertIn("5V_SYS", pour["nets"])
         self.assertIn("@pmic.u2", pour["region"]["refs"])
-        self.assertIn("@power_in.efuse", pour["region"]["refs"])
+        self.assertEqual(pour["pieces"], ["GND", "5V_SYS"])
         self.assertIn("@pmic.c_in[[]0]", pour["region"]["refs"])  # address globs are literal
         self.assertNotIn("In3.Cu", [p["layer"] for p in self.doc["plane_partition"]])
 
     def test_only_rails_inside_the_block(self):
         nets = sorted(r["net"] for r in self.doc["ir_drop"])
-        # 1V0_BUCK (L_b2 -> R_SH1), 3V3 (L_b0 to its sense pin) and 5V_SYS (the eFuse output) are
-        # inside; 1V0_SH runs to the
-        # ferrites outside, 1V0_RF1 from them to U1.
-        self.assertEqual(nets, ["1V0_BUCK", "3V3", "5V_SYS"])
+        # 1V0_BUCK (L_b2 -> R_SH1) and 3V3 (L_b0 to its sense pin) are inside; 5V_SYS starts
+        # at the eFuse (the other block), 1V0_SH runs to the ferrites outside.
+        self.assertEqual(nets, ["1V0_BUCK", "3V3"])
         (buck,) = [r for r in self.doc["ir_drop"] if r["net"] == "1V0_BUCK"]
         self.assertEqual(buck["budget_mohm"], 0.5)
         self.assertEqual(buck["sources"], {"@pmic.l_b2": ["2"]})
@@ -119,7 +114,8 @@ class HotLinksTest(unittest.TestCase):
             part("U5", "power_in.efuse", ("5", "VIN_5V"), ("6", "5V_SYS"), ("8", "GND")),
             part("D3", "power_in.tvs", ("1", "VIN_5V"), ("2", "GND")),
         ]
-        links = power_block.hot_links(FLOORPLAN, comps)
+        links = power_block.hot_links(FLOORPLAN, comps, STAGE)
+        links += power_block.hot_links(FLOORPLAN, comps, EFUSE)
         got = sorted((net, src[0], tuple(dst)) for net, src, dst in links)
         self.assertEqual(
             got,
@@ -139,6 +135,16 @@ class HotLinksTest(unittest.TestCase):
                 ("VIN_5V", ("U5", "5"), (("D3", "1"),)),
             ],
         )
+
+
+class StageTest(unittest.TestCase):
+    def test_two_blocks(self):
+        self.assertEqual(
+            [b["anchor"] for b in FLOORPLAN["power_stage"]["blocks"]], ["pmic", "efuse"]
+        )
+        self.assertEqual(EFUSE["fixed_block"]["group"], "EFUSE_STAGE")
+        with self.assertRaises(SystemExit):
+            power_block.stage_spec(FLOORPLAN, "radio")
 
 
 class RankTest(unittest.TestCase):

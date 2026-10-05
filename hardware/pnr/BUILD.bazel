@@ -722,6 +722,24 @@ py_test(
     deps = [":pnr"],
 )
 
+# extract_footprints against real KiCad I/O: a board whose footprints carry a synthetic lib
+# nickname with no fp-lib-table entry (as radar60's generated/vendor-cached parts do), saved
+# out and re-registered, checked against KiCad's own DRC. It needs KiCad's Python (pcbnew):
+# run it there by hand (python3 -m unittest tests.test_library_table_kicad).
+py_test(
+    name = "library_table_kicad_test",
+    size = "small",
+    srcs = ["tests/test_library_table_kicad.py"],
+    imports = ["."],
+    main = "tests/test_library_table_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 # Regression: underside test copper and physical pad coordinates after a flip.
 py_test(
     name = "two_sided_placement_test",

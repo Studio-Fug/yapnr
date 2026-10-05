@@ -97,6 +97,22 @@ class BlockDocTest(unittest.TestCase):
         self.assertEqual(buck["sources"], {"@pmic.l_b2": ["2"]})
 
 
+class SiteTest(unittest.TestCase):
+    def test_regions_move_into_the_site(self):
+        x0, y0, x1, y1 = STAGE["site"]
+        w, h = x1 - x0, y1 - y0
+        doc = power_block.block_doc(TOP, FLOORPLAN, BLOCK, w, h, STAGE, origin=(x0, y0))
+        rects = {r["name"]: r["rect"] for r in doc["region"]}
+        # pmic_switching (x >= 41, y <= 21.7) inside the site's frame; pmic_block clipped to it
+        self.assertEqual(rects["pmic_switching"], [3.0, 0.0, round(w, 4), round(h, 4)])
+        self.assertEqual(rects["pmic_block"], [0.0, 0.0, round(w, 4), round(h, 4)])
+        for r in doc["region"]:  # only the block's parts
+            for ref in r["refs"]:
+                self.assertTrue(any(power_block.fnmatch.fnmatchcase(a, ref[1:]) for a in BLOCK))
+        # without a site no region comes along
+        self.assertNotIn("region", power_block.block_doc(TOP, FLOORPLAN, BLOCK, w, h, STAGE))
+
+
 class HotLinksTest(unittest.TestCase):
     def test_links_follow_the_floorplan_loops(self):
         comps = [

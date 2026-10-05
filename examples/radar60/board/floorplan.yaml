@@ -849,6 +849,16 @@ escape:
 # synthesis) fitted no legal place in 24 of 24 top starts (wave 4: the pmic regions are 20 mm
 # wide, the strip west of J1 6.55 mm tall), so the subcell splits along its own hard-group
 # clusters: the buck stage at U2, the eFuse stage at U5 (with D3 and its in/out caps).
+#
+# In situ (`site`): each block is synthesized on a board the size of its site, with the
+# floorplan's regions on its parts moved into that frame, and fixed where it was made
+# (integrate.py fixblocks). As free-floating macros the buck stage's 6 best layouts (15-19 mm)
+# left 24 of 24 top starts without a slot: their U2/inductor bodies (pmic_switching, y <= 21.7)
+# pinned the macro so low that it met MH2's keepout in every one (window analysis, wave 4).
+# Sites [D]: the buck stage takes pmic_block's width (x 38-58) from MH2's keepout (y 3.5 + 3.25)
+# up to pmic_switching's top (y 21.7); pmic_block keeps y 21.7-26.65 and x 38-53 below for the
+# PMIC's other parts. The eFuse stage takes the strip west of J1 under J2's region (efuse_block,
+# y up to J2's 6.95).
 power_stage:
   blocks:
     - anchor: pmic
@@ -881,10 +891,7 @@ power_stage:
         - { ic: pmic, parts: [pmic_in_caps], nets: [5V_SYS, GND] }
         - { ic: pmic, parts: [pmic_inductors], nets: ['PMIC_SW_B*'] }
         - { ic: pmic, parts: [pmic_snub_r], nets: ['PMIC_SW_B*'] }
-      # block outlines: denser than the default (pmic_block is 20 mm wide, MH2's keepout takes
-      # its south-east corner) [D]
-      utilisations: [0.5, 0.55, 0.6, 0.65]
-      aspects: [1.0, 0.8, 1.25]
+      site: [38.0, 6.75, 58.0, 21.7]
     - anchor: efuse
       contains: [efuse, connector_tvs, efuse_caps]
       fixed_block: { name: efuse_stage, group: EFUSE_STAGE, solid_layers: [F.Cu] }
@@ -906,6 +913,4 @@ power_stage:
       hot_loops: # TPS25947 layout: CIN and the TVS at IN/GND, COUT at OUT/GND
         - { ic: efuse, parts: [efuse_caps], nets: [VIN_5V, 5V_SYS, GND] }
         - { ic: efuse, parts: [connector_tvs], nets: [VIN_5V, GND] }
-      # the strip west of J1 under J2 is 15.9 x 6.55 mm: wide, low outlines [D]
-      utilisations: [0.45, 0.55, 0.65]
-      aspects: [2.0, 2.5, 3.0]
+      site: [6.8, 0.4, 22.5, 6.95]

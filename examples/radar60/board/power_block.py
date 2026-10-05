@@ -128,12 +128,41 @@ def find_block(graph, compiled, floorplan, spec):
     return block, anchor, {r: addr[r] for r in block.refs}
 
 
-def block_doc(top_doc, floorplan, addresses, width, height, stage):
+def block_doc(top_doc, floorplan, addresses, width, height, stage, origin=None):
     """The block board's constraint document: the top document's net classes, fab and board
     switches, its groups, sides and orientations restricted to the block, no board-level
-    relations (fixed poses, regions, rows, keepouts of other parts, the fixed RF block, U1's
-    fanout, pairs), the floorplan's outer pours and the top rails that lie inside the block."""
+    relations (fixed poses, rows, keepouts of other parts, the fixed RF block, U1's fanout,
+    pairs), the floorplan's outer pours and the top rails that lie inside the block.
+
+    Regions: none, unless the block has a ``site`` (it is synthesized where it will sit):
+    then ``origin`` is the board-frame point of the block board's (0, 0) and every region
+    on the block's parts comes along, its parts restricted to the block's and its rectangle
+    moved into the block frame and clipped to the block board."""
     addresses = set(addresses)
+    regions = []
+    if origin is not None:
+        ox, oy = origin
+        for r in top_doc.get("region") or []:
+            refs = [x for x in r.get("refs") or [] if isinstance(x, str) and x.startswith("@")]
+            refs = [x for x in refs if any(fnmatch.fnmatchcase(a, x[1:]) for a in addresses)]
+            if not refs:
+                continue
+            rects = [r["rect"]] if "rect" in r else [x["rect"] for x in r.get("areas") or []]
+            moved = []
+            for x0, y0, x1, y1 in rects:
+                q = [max(0.0, x0 - ox), max(0.0, y0 - oy)]
+                q += [min(float(width), x1 - ox), min(float(height), y1 - oy)]
+                if q[0] < q[2] and q[1] < q[3]:
+                    moved.append([round(v, 4) for v in q])
+            if not moved:
+                continue
+            entry = {k: v for k, v in r.items() if k not in ("rect", "areas", "refs")}
+            entry["refs"] = refs
+            if len(moved) == 1:
+                entry["rect"] = moved[0]
+            else:
+                entry["areas"] = [{"rect": m} for m in moved]
+            regions.append(entry)
 
     def hit(sel):
         return (
@@ -167,6 +196,8 @@ def block_doc(top_doc, floorplan, addresses, width, height, stage):
     ):
         out.pop(key, None)
     out["fixed"] = {}
+    if regions:
+        out["region"] = regions
     for key in ("keepout", "copper_keepout"):
         if key in out:
             out[key] = [k for k in out[key] if hit(k.get("ref"))]
@@ -277,7 +308,14 @@ def _place_worker(args):
         from pnr.place.placer import place
 
         graph, compiled, rules, block = pickle.loads(Path(pkl).read_bytes())
-        sg, sc, sr = sub_board(graph, compiled, rules, block, w, h)
+        if (
+            graph.outline.width == w
+            and graph.outline.height == h
+            and len(graph.components) == len(block.refs)
+        ):
+            sg, sc, sr = graph, compiled, rules  # in situ: the site's sub-board, prepared
+        else:
+            sg, sc, sr = sub_board(graph, compiled, rules, block, w, h)
         placed, report = place(sg, sc, seed=seed, iters=iters, orient=True, channel_rules=sr)
         rec["legal"] = bool(report.legal)
         rec["status"] = "legal" if report.legal else "illegal"
@@ -335,12 +373,27 @@ def step_synth(a):
     (out / "block.json").write_text(json.dumps(info, indent=1))
     pkl = out / "top.pkl"
     pkl.write_bytes(pickle.dumps((graph, compiled, rules, block)))
-    sizes = aspect_sizes(
-        graph,
-        block,
-        utilisations=tuple(a.utilisations or stage.get("utilisations") or (0.35, 0.45, 0.55)),
-        aspects=tuple(a.aspects or stage.get("aspects") or (1.0, 1.5, 1 / 1.5)),
-    )
+    if stage.get("site"):
+        # In situ: one outline, the site; the block's regions come along (block_doc).
+        x0, y0, x1, y1 = stage["site"]
+        w, h = round(x1 - x0, 4), round(y1 - y0, 4)
+        from pnr.hier.blocks import block_area, sub_board
+
+        sg, _sc, sr = sub_board(graph, compiled, rules, block, w, h)
+        doc = block_doc(top_doc, floorplan, addresses.values(), w, h, stage, origin=(x0, y0))
+        (out / "site-graph.json").write_text(sg.to_json())
+        _g, sc, _r = _compile(a.engine, out / "site-graph.json", doc)
+        pkl.write_bytes(pickle.dumps((sg, sc, sr, block)))
+        sizes = [(w, h, round(block_area(graph, block) / (w * h), 4), round(w / h, 4))]
+        info["site"] = [x0, y0, x1, y1]
+        (out / "block.json").write_text(json.dumps(info, indent=1))
+    else:
+        sizes = aspect_sizes(
+            graph,
+            block,
+            utilisations=tuple(a.utilisations or stage.get("utilisations") or (0.35, 0.45, 0.55)),
+            aspects=tuple(a.aspects or stage.get("aspects") or (1.0, 1.5, 1 / 1.5)),
+        )
     jobs = [(str(pkl), s, seed, a.iters) for s in sizes for seed in range(a.seeds)]
     print("stage A: %d placement trials" % len(jobs), flush=True)
     recs = []
@@ -438,6 +491,29 @@ def step_ki_strip(a):
     os._exit(0)  # KiCad's Python can crash at interpreter teardown
 
 
+def step_ki_pose(a):
+    """KiCad's Python: footprints of ``--src`` posed from ``--poses`` (``{ref: [x, y, rot,
+    side]}``, board frame: mm, origin lower left, +y north, rot CCW), saved to ``--dest``; the
+    page frame is pnr.writeback's (``--height`` the outline's, 30 mm page offset)."""
+    import pcbnew
+
+    poses = json.loads(Path(a.poses).read_text())
+    board = pcbnew.LoadBoard(str(a.src))
+    footprints = {fp.GetReference(): fp for fp in board.GetFootprints()}
+    missing = sorted(set(poses) - set(footprints))
+    if missing:
+        raise SystemExit("missing footprints: %s" % missing)
+    off, height = 30.0, float(a.height)
+    for ref, (x, y, rot, side) in sorted(poses.items()):
+        fp = footprints[ref]
+        if (side == "bottom") != bool(fp.IsFlipped()):
+            fp.Flip(fp.GetPosition(), False)
+        fp.SetPosition(pcbnew.VECTOR2I(round((off + x) * 1e6), round((off + height - y) * 1e6)))
+        fp.SetOrientationDegrees(float(rot))
+    pcbnew.SaveBoard(str(a.dest), board)
+    os._exit(0)
+
+
 def step_ki_pours(a):
     """KiCad's Python: ``--src`` with only its copper and the zones on ``--layers`` (the block's
     outer pours; the inner planes are the top board's), filled, saved to ``--dest``."""
@@ -482,8 +558,16 @@ def step_eval(a):
         g.outline = BoardOutline(g.outline.width + 2 * apron, g.outline.height + 2 * apron)
         rec["apron_mm"] = apron
         (d / "placed.json").write_text(g.to_json())
+        site = info.get("site")
+        origin = (site[0] - apron, site[1] - apron) if site else None
         doc = block_doc(
-            top_doc, floorplan, info["addresses"].values(), g.outline.width, g.outline.height, stage
+            top_doc,
+            floorplan,
+            info["addresses"].values(),
+            g.outline.width,
+            g.outline.height,
+            stage,
+            origin=origin,
         )
         import yaml
 
@@ -713,6 +797,7 @@ def step_rank(a):
                 ir=e["ir"],
                 area=e["area"],
                 id=e["id"],
+                site=info.get("site"),
                 instances=[dict(instance=name, dir=e["dir"])],
             )
             for e in tier
@@ -741,7 +826,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument(
         "step",
-        choices=["synth", "eval", "rank", "rescore", "merge", "ki-strip", "ki-pours"],
+        choices=["synth", "eval", "rank", "rescore", "merge", "ki-strip", "ki-pours", "ki-pose"],
         help="see the docstring",
     )
     ap.add_argument("--work", help="an integrate.py prepare work directory")
@@ -766,11 +851,15 @@ def main(argv=None):
     ap.add_argument("--dest")
     ap.add_argument("--keep-refs", help="ki-strip: a JSON list of the refs to keep")
     ap.add_argument("--layers")
+    ap.add_argument("--poses", help="ki-pose: {ref: [x, y, rot, side]} (board frame)")
+    ap.add_argument("--height", type=float, help="ki-pose: the board outline's height")
     a = ap.parse_args(argv)
     if a.step == "ki-strip":
         return step_ki_strip(a)
     if a.step == "ki-pours":
         return step_ki_pours(a)
+    if a.step == "ki-pose":
+        return step_ki_pose(a)
     steps = dict(synth=step_synth, eval=step_eval, rank=step_rank, rescore=step_rescore)
     steps["merge"] = step_merge
     steps[a.step](a)

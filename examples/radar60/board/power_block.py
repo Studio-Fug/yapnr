@@ -658,12 +658,11 @@ def step_rank(a):
         for e in evals
     ]
     name = info["block"]["name"]
-    # The tier: every layout as good as the best on the keys before area (the placement draws
-    # among them by rank, pnr.hier.top.draw_layout, so a shape that does not fit at top level
+    # The tier: the best ``keep`` layouts in rank order (the placement draws among them with
+    # weight 0.5**rank, pnr.hier.top.draw_layout, so a shape that does not fit at top level
     # still leaves the others).
     ok = [e for e in evals if e.get("status") == "ok"]
-    tier = [e for e in ok if rank_key(e)[:5] == rank_key(ok[0])[:5]] if ok else []
-    tier = tier[: a.keep]
+    tier = ok[: a.keep]
     library = {
         name: [
             dict(

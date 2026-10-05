@@ -84,16 +84,16 @@ flowchart LR
     out --> rf["yapnr.rf materials<br/>robust variants"]
 ```
 
-| Topic         | Choice                                                                                                       | Reason                                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Boards        | A: 4L JLC04161H-7628; B: 6L JLC06161H-7628 (JLC06161H-2116C as the alternative)                              | the 4L target, and a 6L with stripline that shares A's L1 cross-section, so one board ties the other (§4.2) |
-| Format        | "sticks": every structure on its own break-out strip with an edge SMA at each end                            | every port needs a board edge with room for the connector and wrench; sticks are measured independently     |
-| Calibration   | two tiers: SOLT at the cable ends, then multiline TRL on the board                                           | Jargon and Marks' two-tier scheme for low-cost VNAs; removes connectors and launches from every structure   |
-| Line lengths  | thru 20 mm (2 × 10 mm) plus lines ΔL = 2.5, 6.5, 16, 40 and 100 mm                                           | conditioning ≥ 0.95 over 1–12 GHz for every family; the 100 mm line doubles as the loss line (§5.1)         |
-| Separation    | width set, mask-off copies, a second line type, DC meanders, microsection                                    | each breaks one degeneracy of the line data (§8.8)                                                          |
-| Forward model | 2D quasi-static RLGC per family; Djordjevic–Sarkar dielectric; causal roughness; closed-form discontinuities | fast, accurate for uniform lines; held-out resonators test the model form                                   |
-| Connector     | Cinch 142-0701-851 edge SMA (18 GHz) by default; optionally one reusable clamp-on pair for the TRL sets      | soldered connectors differ between sticks, which TRL assumes away (§6.1)                                    |
-| Output        | `yapnr-stackup-fit/1`: values, covariance, provenance                                                        | one record that `rules['stackup']` and the RF solver both read                                              |
+| Topic         | Choice                                                                                                       | Reason                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Boards        | A: 4L JLC04161H-7628; B: 6L JLC06161H-2116C, the product stackup (JLC06161H-7628 as the alternative)         | the 4L target, and a 6L with the product's stripline; B ties its own L1 with a mask-off line (§4.2)       |
+| Format        | "sticks": every structure on its own break-out strip with an edge SMA at each end                            | every port needs a board edge with room for the connector and wrench; sticks are measured independently   |
+| Calibration   | two tiers: SOLT at the cable ends, then multiline TRL on the board                                           | Jargon and Marks' two-tier scheme for low-cost VNAs; removes connectors and launches from every structure |
+| Line lengths  | thru 20 mm (2 × 10 mm) plus lines ΔL = 2.5, 6.5, 16, 40 and 100 mm                                           | conditioning ≥ 0.95 over 1–12 GHz for every family; the 100 mm line doubles as the loss line (§5.1)       |
+| Separation    | width set, mask-off copies, a second line type, DC meanders, microsection                                    | each breaks one degeneracy of the line data (§8.8)                                                        |
+| Forward model | 2D quasi-static RLGC per family; Djordjevic–Sarkar dielectric; causal roughness; closed-form discontinuities | fast, accurate for uniform lines; held-out resonators test the model form                                 |
+| Connector     | Cinch 142-0701-851 edge SMA (18 GHz) by default; optionally one reusable clamp-on pair for the TRL sets      | soldered connectors differ between sticks, which TRL assumes away (§6.1)                                  |
+| Output        | `yapnr-stackup-fit/1`: values, covariance, provenance                                                        | one record that `rules['stackup']` and the RF solver both read                                            |
 
 ## 3. Why the fab model needs measuring
 
@@ -145,21 +145,27 @@ Shengyi and others), so the material can change between orders.
 
 The inner planes are only removed on the DC stick, where L2 and L3 carry meanders (§5.2).
 
-### 4.2 Board B: JLC06161H-7628 (6 layers, 1.6 mm)
+### 4.2 Board B: JLC06161H-2116C (6 layers, 1.6 mm)
 
-| Layer | Material, thickness (mm)    | Use on the coupon                    |
-| ----- | --------------------------- | ------------------------------------ |
-| L1    | copper 0.035                | launches; the L1 tie set (§5.3)      |
-| –     | 7628 prepreg 0.2104, εr 4.4 | the same L1 cross-section as board A |
-| L2    | copper 0.0152               | ground (upper stripline plane)       |
-| –     | core 0.40, εr 4.6           | above the stripline                  |
-| L3    | copper 0.0152               | **stripline**                        |
-| –     | 7628 prepreg 0.2028, εr 4.4 | below the stripline                  |
-| L4    | copper 0.0152               | ground (lower stripline plane)       |
-| –     | core 0.40, εr 4.6           |                                      |
-| L5    | copper 0.0152               | ground; meanders on the DC stick     |
-| –     | 7628 prepreg 0.2104, εr 4.4 |                                      |
-| L6    | copper 0.035                | ground; meanders on the DC stick     |
+Board B is built on the product's stackup, JLC06161H-2116C (owner decision, below; 1.589 mm of
+published layers):
+
+| Layer | Material, thickness (mm)         | Use on the coupon                      |
+| ----- | -------------------------------- | -------------------------------------- |
+| L1    | copper 0.035                     | launches; the L1 tie set (§5.3)        |
+| –     | 2 × 2116 prepreg 0.2464, εr 4.16 | the L1 dielectric (not board A's 7628) |
+| L2    | copper 0.0152                    | ground (upper stripline plane)         |
+| –     | core 0.30, εr 4.6                | above the stripline                    |
+| L3    | copper 0.0152                    | **stripline**                          |
+| –     | 3 × 2116 prepreg 0.3658, εr 4.16 | below the stripline                    |
+| L4    | copper 0.0152                    | ground (lower stripline plane)         |
+| –     | core 0.30, εr 4.6                |                                        |
+| L5    | copper 0.0152                    | ground; meanders on the DC stick       |
+| –     | 2 × 2116 prepreg 0.2464, εr 4.16 |                                        |
+| L6    | copper 0.035                     | ground; meanders on the DC stick       |
+
+The 7628 alternative (JLC06161H-7628: 7628 0.2104 mm, core 0.40 mm, 7628 0.2028 mm below the
+stripline) stays defined in the generator, with the synthetic-study results of §10.
 
 JLCPCB lists 16 six-layer stackups. In several the L3 layer sits close to one plane only (a thin
 core with a 0.55–0.7 mm dielectric on the other side), which is not a balanced stripline. Two give
@@ -173,6 +179,13 @@ a true stripline on L3:
 - **JLC06161H-2116C (alternative):** 0.30 mm core above, 3 × 2116 (0.366 mm, εr 4.16) below, the
   most symmetric stripline. Its L1 dielectric is 2116 (0.2464 mm), so nothing is shared with
   board A. Choose it if the product will use it; the generator then builds a board B' from it.
+
+_Decision (owner, 2026-10-02):_ the product stackup is JLC06161H-2116C, so **board B is built on
+JLC06161H-2116C** (S 0.279 mm, P 0.350 / 0.200 mm at 50 Ω; the launch's coplanar gap re-solved
+to 0.435 mm with L2 and L3 cut). Because its L1 no longer shares board A's prepreg, board A's fit
+cannot serve as board B's prior: board B gets a mask-off copy of its L1 tie line (B24, P-MO) so
+that its own L1 sticks separate the mask from the 2116's εr. The 7628 board B stays defined as an
+alternative (and keeps the synthetic-study results of §10).
 
 The 6-layer service fills and caps vias and has no HASL finish (ENIG only).
 
@@ -296,7 +309,7 @@ L1 0.2 mm meander reads about 49 mV (0.49 Ω) and dissipates 5 mW.
 Multi-port structures (A29, A31) carry an SMA on every port; unused ports are terminated with SMA
 loads and the full S-matrix is assembled from 2-port measurements.
 
-### 5.3 Board B catalogue (JLC06161H-7628)
+### 5.3 Board B catalogue (JLC06161H-2116C)
 
 | Stick    | Structure                                                            | Size (mm) | Tier     | Determines                                                                 |
 | -------- | -------------------------------------------------------------------- | --------- | -------- | -------------------------------------------------------------------------- |
@@ -305,7 +318,7 @@ loads and the full S-matrix is assembled from 2-port measurements.
 | B08      | S verification line, ΔL = 28                                         | 48        | core     | residual calibration error                                                 |
 | B09, B10 | S0.7, S1.4 over 40 mm                                                | 60        | core     | etch and heights on L3; tan δ versus roughness                             |
 | B11      | stripline ring, S, mean radius 7.774 mm, coupling gaps 0.15          | 60 × 30   | core     | held out: εeff at 2.9, 5.8, 8.7, 11.6 GHz                                  |
-| B12–B15  | L1 tie set: P thru and lines ΔL = 6.5, 16, 40                        | 20–60     | core     | 7628 εr (ties εr of the core and the prepreg); lot comparison with board A |
+| B12–B15  | L1 tie set: P thru and lines ΔL = 6.5, 16, 40                        | 20–60     | core     | 2116 εr (ties εr of the core and the prepreg); lot comparison with board A |
 | B16      | P reflect                                                            | 30        | core     | calibration of the tie set                                                 |
 | B17      | via transition L1 → L3 → L1, 2x-thru                                 | 40        | core     | held out: the via model                                                    |
 | B18      | DC meanders on L1–L6 (two widths each), via chain                    | 60 × 30   | core     | w·t and etch per layer                                                     |
@@ -313,6 +326,7 @@ loads and the full S-matrix is assembled from 2-port measurements.
 | B20, B21 | DIFF100-S, DIFF90-S as λ/4 coupled sections                          | 40        | extended | inner-layer pair modes                                                     |
 | B22      | S through line with a shunt open λ/4 stub                            | 60 × 25   | extended | held out: stripline open end                                               |
 | B23      | S ΔL = 40 rotated 10°                                                | 60        | extended | weave on the inner layer                                                   |
+| B24      | P-MO: the tie line with the mask opened over 40 mm                   | 60        | core     | mask Dk × thickness on L1, so board B's fit needs no board A prior         |
 
 The tie set uses ΔL = {0, 6.5, 16, 40} mm: worst-case conditioning 0.93 over 1–6 GHz and 0.56 over
 1–12 GHz, enough for a cross-check.
@@ -352,7 +366,7 @@ The coupons are ordered exactly as the product will be:
 | Option              | Board A                                   | Board B                                 |
 | ------------------- | ----------------------------------------- | --------------------------------------- |
 | Layers, thickness   | 4, 1.6 mm                                 | 6, 1.6 mm                               |
-| Impedance control   | yes, JLC04161H-7628                       | yes, JLC06161H-7628                     |
+| Impedance control   | yes, JLC04161H-7628                       | yes, JLC06161H-2116C                    |
 | Impedance tolerance | the product's (±10 % standard)            | the product's                           |
 | Copper              | 1 oz outer, 0.5 oz inner                  | 1 oz outer, 0.5 oz inner                |
 | Finish              | ENIG (recommended for the product too)    | ENIG (the only option)                  |
@@ -800,7 +814,7 @@ merges.
 examples/rf-coupons/
   JLC04161H-7628/            board-A.kicad_pro, board-A.kicad_pcb, catalog.json, expected/*.s2p,
                              fab/ (gerbers via kicad-cli, drill, fab notes, order options)
-  JLC06161H-7628/            board-B.* (same layout)
+  JLC06161H-2116C/           board-B.* (same layout; the product's stackup)
   measurements/README.md     the session layout of §7.6
 docs/rf-fab-coupons.md       user guide: order, assemble, measure, run the fit, read the report
 docs/design/rf-fab-coupons.md  this design
@@ -873,7 +887,8 @@ a dependency.
 
 1. **Product line type:** L1 GCPW under mask (the default P), microstrip, or mask-free RF lines?
    It sets the primary family.
-2. **Board B stackup:** JLC06161H-7628 (default, shares L1 with board A) or JLC06161H-2116C?
+2. ~~**Board B stackup:** JLC06161H-7628 (default, shares L1 with board A) or JLC06161H-2116C?~~
+   Decided 2026-10-02: JLC06161H-2116C, the product stackup (§4.2).
 3. **Connectors:** soldered 142-0701-851 on every measured stick, or one reusable clamp-on pair for
    the TRL sets as well?
 4. **VNA:** which instrument, and is a lab VNA to at least 13.5 GHz available for one session?

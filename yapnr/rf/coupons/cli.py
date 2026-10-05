@@ -35,12 +35,17 @@ def _stackup(a) -> str:
 def cmd_generate(a) -> int:
     from yapnr.rf.coupons import fab
 
-    out = fab.generate(_stackup(a), a.out, revision=a.revision, fab=not a.no_fab)
-    print(f"board: {out['board']} (panel {out['panel'][0]:.1f} x {out['panel'][1]:.1f} mm)")
+    out = fab.generate(
+        _stackup(a), a.out, revision=a.revision, fab=not a.no_fab, upload=a.upload, git=a.git
+    )
+    w, h = out["panel"]
+    print(f"board: {out['board']} (panel {w:.1f} x {h:.1f} mm, {w * h / 645.16:.2f} sq in)")
     if out.get("drc") is not None:
         drc = out["drc"]
         n = sum(drc["violations"].values())
         print(f"DRC: {n} violations, {drc['unconnected']} unconnected ({drc['kicad_version']})")
+        for v in drc["details"][:10]:
+            print(f"  {v['severity']} {v['type']}: {v['description']}")
         if out.get("fab_zip"):
             print(f"fab package: {out['fab_zip']}")
         return 0 if n == 0 and drc["unconnected"] == 0 else 1
@@ -52,7 +57,11 @@ def cmd_generate(a) -> int:
 def cmd_expected(a) -> int:
     from yapnr.rf.coupons import expected
 
-    paths = expected.write(_stackup(a), a.out)
+    st = stackups.get(_stackup(a))
+    if st.board == "O":
+        paths = expected.write_o(a.upload or "M", a.out)
+    else:
+        paths = expected.write(_stackup(a), a.out)
     print(f"{len(paths)} Touchstone files in {a.out}")
     return 0
 
@@ -106,7 +115,7 @@ def cmd_extract(a) -> int:
     paths = export.write_all(a.out, res, d, p, a.measured, a.serial)
     print(f"fit in {time.time() - t0:.1f} s ({res.iterations} iterations)")
     for n in res.names:
-        q = stackups.PARAMS[n]
+        q = stackups.param(n, p.st)
         print(f"  {n:12s} {res.value[n]:.5g} ± {res.sigma_total[n]:.2g} {q.unit}")
     for w in res.warnings:
         print(f"  warning: {w}")
@@ -153,11 +162,16 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--out", required=True)
     g.add_argument("--revision", default="1")
     g.add_argument("--no-fab", action="store_true", help="skip DRC, Gerbers and the zip")
+    g.add_argument("--upload", default="", help="board O: the OSH Park upload, M, W or D")
+    g.add_argument("--git", default=None, help="board O: the generator commit on the tag")
     g.set_defaults(fn=cmd_generate)
 
     e = sub.add_parser("expected", help="predicted Touchstone files at nominal parameters")
     stackup_arg(e)
     e.add_argument("--out", required=True)
+    e.add_argument(
+        "--upload", default="", help="board O: the upload (M, W, D); FR408HR and EM528 both"
+    )
     e.set_defaults(fn=cmd_expected)
 
     s = sub.add_parser("synthetic", help="a synthetic measurement session")

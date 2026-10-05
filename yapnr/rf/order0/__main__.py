@@ -1,0 +1,69 @@
+"""python -m yapnr.rf.order0 write --out DIR | predict --out DIR | loss --fetched DIR | variant ...
+(see `yapnr.rf.order0.write`)."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+
+def main(argv=None) -> int:
+    from yapnr.rf.order0 import write
+
+    ap = argparse.ArgumentParser(prog="python -m yapnr.rf.order0", description=write.__doc__)
+    sub = ap.add_subparsers(dest="command", required=True)
+    w = sub.add_parser("write", help="specs, criteria, forward runs and job files")
+    w.add_argument("--out", required=True)
+    w.add_argument("--s21", type=float, default=-3.4, help="D-O0-11's |S21| criterion (dB)")
+    w.add_argument("--offset", type=float, default=0.10, help="R1's loss correction (dB)")
+    lo = sub.add_parser("loss", help="run 0b: the loss correction and D-O0-11")
+    lo.add_argument(
+        "--fetched", required=True, help="the fetched campaign (yapnr exp fetch --full)"
+    )
+    lo.add_argument("--out", help="write the result here (JSON)")
+    lo.add_argument("--out-dir", help="also write run0b.json and the Touchstone files here")
+    pr = sub.add_parser("predict", help="the predictions stage: resonators and loss lines")
+    pr.add_argument("--out", required=True)
+    pr.add_argument("--image", default="edge", help="the image (pin the designs' digest)")
+    co = sub.add_parser("correct", help="loss-corrected demo and reference predictions")
+    co.add_argument("--out", required=True)
+    co.add_argument("--lines", nargs="*", default=[], help="more loss-line directories")
+    v = sub.add_parser("variant", help="an optimized run's footprint as a forward run")
+    v.add_argument("--run", required=True, help="the (fetched) run directory")
+    v.add_argument("--out", required=True)
+    v.add_argument("--substrate", help="M-nom, M-eq-em528, W-nom, ... (default: as optimized)")
+    v.add_argument("--no-wide", action="store_true", help="keep the spec's bands")
+    args = ap.parse_args(argv)
+    if args.command == "variant":
+        from yapnr.rf.order0 import demos
+
+        print(demos.forward_variant(args.run, args.out, args.substrate, not args.no_wide))
+        return 0
+    if args.command == "correct":
+        from yapnr.rf.order0 import predict
+
+        roots = predict.line_roots() + list(args.lines)
+        summary = predict.correct_all(args.out, roots=roots)
+        for name, item in summary["items"].items():
+            print(name, json.dumps({k: item.get(k) for k in ("raw", "corrected")}))
+        return 0
+    if args.command == "predict":
+        manifest = write.predict(args.out, image=args.image)
+        print(json.dumps(sorted(manifest["runs"])))
+        return 0
+    if args.command == "write":
+        manifest = write.write(args.out, args.s21, args.offset)
+        print(json.dumps({k: manifest[k] for k in ("s21_criterion_db", "s21_optimizer_db")}))
+        return 0
+    result = write.loss(args.fetched, out_dir=args.out_dir)
+    text = json.dumps(result, indent=1)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

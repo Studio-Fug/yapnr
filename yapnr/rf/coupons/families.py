@@ -30,10 +30,14 @@ from yapnr.rf.coupons import SCHEMA_TABLES, jsonfmt, stackups
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 RECEDE_MM = 0.002  # Wheeler wall recession
+INNER_T = 0.01727  # inner copper of the OSH Park W ring (0.68 mil, fixed)
 
 OUTER_MASKED = ("pp.dk", "pp1.h", "L1.etch", "L1.t", "mask.scale", "mask.dk")
 OUTER_BARE = ("pp.dk", "pp1.h", "L1.etch", "L1.t")
 STRIP = ("core.dk", "pp.dk", "core.h", "pp3.h", "L3.etch", "L3.t")
+# OSH Park region W: L1 over prepreg, core and prepreg to B.Cu (both prepregs one material, one
+# thickness: an assumption of the Order 0 model)
+DEEP = ("pp.dk", "core.dk", "pp1.h", "core.h", "L1.etch", "L1.t")
 
 
 @dataclass(frozen=True)
@@ -45,6 +49,12 @@ class Family:
     mask: bool
     pair_gap: Optional[float] = None
     title: str = ""
+    # OSH Park Order 0 sections (xsec.layered_spec): "M" (L1 over In1.Cu) or "W" (L1 over B.Cu,
+    # In1/In2 removed but for a perimeter ring at |y| >= ring); "" the JLC cross-sections
+    section: str = ""
+    box_w: float = 0.0  # the stick width the 2D model sees (mm)
+    mask_mm: float = 0.0  # conformal mask thickness of a masked section family (nominal)
+    ring: float = 0.0
 
     @property
     def layer(self) -> str:
@@ -54,6 +64,8 @@ class Family:
     def params(self) -> Tuple[str, ...]:
         if self.kind == "strip":
             return STRIP
+        if self.section == "W":
+            return DEEP + (OUTER_MASKED[-2:] if self.mask else ())
         return OUTER_MASKED if self.mask else OUTER_BARE
 
     @property
@@ -61,7 +73,10 @@ class Family:
         """Dielectric region -> (Dk parameter, Df parameter)."""
         if self.kind == "strip":
             return {"lo": ("pp.dk", "pp.df"), "hi": ("core.dk", "core.df")}
-        r = {"sub": ("pp.dk", "pp.df")}
+        if self.section == "W":
+            r = {"pp": ("pp.dk", "pp.df"), "core": ("core.dk", "core.df")}
+        else:
+            r = {"sub": ("pp.dk", "pp.df")}
         if self.mask:
             r["mask"] = ("mask.dk", "mask.df")
         return r
@@ -94,6 +109,14 @@ class Family:
     def rough_param(self) -> str:
         return f"{self.layer}.rough"
 
+    def dispersion_substrate(self, v: Dict[str, float]) -> Tuple[float, float]:
+        """(h, εr) of the equivalent microstrip substrate for the Kirschning-Jansen dispersion
+        of an L1 family: the L1-L2 prepreg, or (region W) the three dielectrics in series."""
+        if self.section == "W":
+            h = 2 * v["pp1.h"] + v["core.h"]
+            return h, h / (2 * v["pp1.h"] / v["pp.dk"] + v["core.h"] / v["core.dk"])
+        return v["pp1.h"], v["pp.dk"]
+
 
 # Drawn dimensions: design §4.3 (2D quasi-static, 50 Ω at nominal).
 FAMILIES: Dict[str, Family] = {
@@ -112,15 +135,92 @@ FAMILIES: Dict[str, Family] = {
     ]
 }
 
+# JLC06161H-2116C (board B): the same roles at that stackup's 50 Ω widths (2D quasi-static at
+# nominal, `point --stackup JLC06161H-2116C`; design §4.3 lists 0.279 mm and 0.350 / 0.200 mm).
+FAMILIES_2116C: Dict[str, Family] = {
+    f.id: f
+    for f in [
+        Family("S", "strip", 0.279, None, False, title="L3 stripline"),
+        Family("S0.7", "strip", 0.195, None, False, title="S at 0.7 w"),
+        Family("S1.4", "strip", 0.391, None, False, title="S at 1.4 w"),
+        Family("P", "outer", 0.350, 0.200, True, title="L1 GCPW under mask (tie set)"),
+        Family("P-MO", "outer", 0.350, 0.200, False, title="P with the mask opened"),
+    ]
+}
+
+# OSH Park 4-layer, Order 0 (board O; Order 0 design §4.1): mask open over the RF copper and its
+# keep-away (the L1 ground 1.0 mm = 5 h from M copper, 4.2 mm = 3 h from W copper), one masked
+# line (M-MK), and the C-pads of A16 as wide lines. M is 4 pixels of the optimizer's 0.10 mm grid,
+# W 6 pixels of its 0.50 mm grid.
+_M = dict(section="M", box_w=12.0)
+FAMILIES_O: Dict[str, Family] = {
+    f.id: f
+    for f in [
+        Family("M", "outer", 0.40, 1.0, False, title="L1 microstrip over In1.Cu, mask open", **_M),
+        Family("M0.7", "outer", 0.28, 1.0, False, title="M at 0.7 w", **_M),
+        Family("M1.4", "outer", 0.56, 1.0, False, title="M at 1.4 w", **_M),
+        Family("M-MK", "outer", 0.40, 1.0, True, title="M under mask", mask_mm=0.01524, **_M),
+        Family(
+            "W",
+            "outer",
+            3.0,
+            4.2,
+            False,
+            title="L1 over B.Cu, In1/In2 removed, mask open",
+            section="W",
+            box_w=16.0,
+            ring=5.7,
+        ),
+        Family(
+            "C6",
+            "outer",
+            6.0,
+            1.0,
+            False,
+            title="6 mm C-pad as a wide line",
+            section="M",
+            box_w=16.0,
+        ),
+        Family(
+            "C12",
+            "outer",
+            12.0,
+            1.0,
+            False,
+            title="12 mm C-pad as a wide line",
+            section="M",
+            box_w=16.0,
+        ),
+    ]
+}
+
+FAMILY_SETS: Dict[str, Dict[str, Family]] = {
+    "JLC04161H-7628": FAMILIES,
+    "JLC06161H-7628": FAMILIES,
+    "JLC06161H-2116C": FAMILIES_2116C,
+    "OSHPARK-4L-FR408HR": FAMILIES_O,
+    "OSHPARK-4L-EM528": FAMILIES_O,
+}
+
+
+def of(stackup_id: Optional[str] = None) -> Dict[str, Family]:
+    """The line families of a stackup's coupon board (the JLC 7628 set by default)."""
+    return FAMILY_SETS.get(stackup_id or "", FAMILIES)
+
+
+def get(fam_id: str, stackup_id: Optional[str] = None) -> Family:
+    return of(stackup_id)[fam_id]
+
+
 # Copper-free distances from the trace edge assumed by the 2D models (no side copper): L1
 # microstrip (no L1 ground) and L3 stripline (no L3 copper).
 M_CLEAR = 2.0
 S_CLEAR = 1.5
 
 
-def channel_halfwidth(fam_id: str) -> float:
+def channel_halfwidth(fam_id: str, stackup_id: Optional[str] = None) -> float:
     """Half width (mm) of the copper-free channel around a family's trace."""
-    f = FAMILIES[fam_id]
+    f = get(fam_id, stackup_id)
     if f.kind == "strip":
         return f.w / 2 + S_CLEAR
     return f.w / 2 + (f.gap if f.gap is not None else M_CLEAR)
@@ -129,6 +229,8 @@ def channel_halfwidth(fam_id: str) -> float:
 BOARD_FAMILIES = {
     "JLC04161H-7628": ("P", "P0.7", "P1.4", "P-MO", "M", "M-MO", "CPL20"),
     "JLC06161H-7628": ("S", "S0.7", "S1.4", "P"),
+    "JLC06161H-2116C": ("S", "S0.7", "S1.4", "P", "P-MO"),
+    "OSHPARK-4L-FR408HR": ("M", "M0.7", "M1.4", "M-MK", "W", "C6", "C12"),
 }
 
 
@@ -138,6 +240,25 @@ BOARD_FAMILIES = {
 def spec_for(fam: Family, v: Dict[str, float], recede: float = 0.0):
     from yapnr.rf.coupons import xsec
 
+    if fam.section:
+        if fam.section == "W":
+            slabs = [("pp", v["pp1.h"]), ("core", v["core.h"]), ("pp", v["pp1.h"])]
+            air = 10.0
+        else:
+            slabs, air = [("sub", v["pp1.h"])], 5.0
+        return xsec.layered_spec(
+            fam.w,
+            t=v["L1.t"],
+            etch=v["L1.etch"],
+            gap=fam.gap,
+            slabs=slabs,
+            mask=fam.mask_mm * v.get("mask.scale", 1.0) if fam.mask else 0.0,
+            ring=fam.ring or None,
+            t_ring=INNER_T,
+            recede=recede,
+            width=fam.box_w,
+            air=air,
+        )
     if fam.kind == "outer":
         return xsec.outer_spec(
             fam.w,
@@ -162,14 +283,19 @@ def spec_for(fam: Family, v: Dict[str, float], recede: float = 0.0):
 
 
 def solve_point(
-    fam_id: str, values: Dict[str, float], mesh: str = "fit", parts: str = "all"
+    fam_id: str,
+    values: Dict[str, float],
+    mesh: str = "fit",
+    parts: str = "all",
+    stackup_id: Optional[str] = None,
 ) -> Dict[str, float]:
     """Direct 2D solve of one family at one parameter point: the surrogate outputs. parts:
     "all", "c" (no Wheeler solve) or "g" (the Wheeler factor only)."""
     from yapnr.rf.coupons import xsec
 
-    fam = FAMILIES[fam_id]
-    v = dict(stackups.nominal(fam.params))
+    fam = get(fam_id, stackup_id)
+    st = stackups.get(stackup_id) if stackup_id else None
+    v = dict(stackups.nominal(fam.params, st))
     v.update(values)
     spec, sig = spec_for(fam, v)
     er_of = {r: v[dk] for r, (dk, _) in fam.regions.items()}
@@ -345,13 +471,14 @@ def _lstsq(B: np.ndarray, y: np.ndarray, ridge: float = 1e-10) -> np.ndarray:
     return np.linalg.solve(B.T @ B + reg, B.T @ y)
 
 
-def _ranges(fam: Family) -> Tuple[np.ndarray, np.ndarray]:
-    r = [stackups.PARAMS[p].table for p in fam.params]
+def _ranges(fam: Family, st=None) -> Tuple[np.ndarray, np.ndarray]:
+    ps = stackups.params_of(st)
+    r = [ps[p].table for p in fam.params]
     return np.array([a for a, _ in r]), np.array([b for _, b in r])
 
 
-def _blank(fam: Family) -> Surrogate:
-    lo, hi = _ranges(fam)
+def _blank(fam: Family, st=None) -> Surrogate:
+    lo, hi = _ranges(fam, st)
     d = len(fam.params)
     return Surrogate(
         fam.id,
@@ -365,8 +492,8 @@ def _blank(fam: Family) -> Surrogate:
     )
 
 
-def points_to_values(fam: Family, X: np.ndarray) -> List[Dict[str, float]]:
-    sur = _blank(fam)
+def points_to_values(fam: Family, X: np.ndarray, st=None) -> List[Dict[str, float]]:
+    sur = _blank(fam, st)
     return [sur.denormalize(x) for x in X]
 
 
@@ -374,7 +501,11 @@ def points_to_values(fam: Family, X: np.ndarray) -> List[Dict[str, float]]:
 
 
 def table_path(stackup_id: str, data_dir: Optional[str] = None) -> str:
-    return os.path.join(data_dir or DATA_DIR, f"{stackup_id}.json")
+    """A stackup's table file; a stackup that shares another's tables (`Stackup.tables`, the
+    OSH Park EM528 alternate) reads that one."""
+    st = stackups.STACKUPS.get(stackup_id)
+    sid = st.tables if st is not None and st.tables else stackup_id
+    return os.path.join(data_dir or DATA_DIR, f"{sid}.json")
 
 
 _CACHE: Dict[str, Dict[str, Surrogate]] = {}
@@ -382,7 +513,7 @@ _CACHE: Dict[str, Dict[str, Surrogate]] = {}
 
 def load(stackup_id: str, path: Optional[str] = None) -> Dict[str, Surrogate]:
     """The surrogate of every family of a stackup's coupon board."""
-    key = path or stackup_id
+    key = path or table_path(stackup_id)
     if key in _CACHE:
         return _CACHE[key]
     p = path or table_path(stackup_id)
@@ -434,39 +565,46 @@ def load_doc(stackup_id: str) -> dict:
 
 
 def _work(args):
-    fam_id, values, mesh, parts = args
+    fam_id, values, mesh, parts, sid = args
     t0 = time.time()
-    out = solve_point(fam_id, values, mesh, parts)
+    out = solve_point(fam_id, values, mesh, parts, sid)
     return out, time.time() - t0
 
 
 def build_family(
-    fam_id: str, pool, n_test: int = 10, log=print, samples_dir: Optional[str] = None
+    fam_id: str,
+    pool,
+    n_test: int = 10,
+    log=print,
+    samples_dir: Optional[str] = None,
+    stackup_id: Optional[str] = None,
 ) -> dict:
     """Solve the design points of one family and fit its surrogate.
 
     About twice as many samples as basis terms; the Wheeler factor (two vacuum solves per point)
     on the centre, the axial points and the first LHS points only. Held-out points on the fine
     mesh, the nominal point among them, measure the surrogate error including the mesh error."""
-    fam = FAMILIES[fam_id]
+    fam = get(fam_id, stackup_id)
+    st = stackups.get(stackup_id) if stackup_id else None
     d = len(fam.params)
     terms_c = _terms(d, "c", _etch_index(fam.params))
     terms_g = _terms(d, "g", None)
     n_axial = 1 + 6 * d
     X = design_points(d, n_lhs=max(2 * len(terms_c) - n_axial, 10))
-    vals = points_to_values(fam, X)
+    vals = points_to_values(fam, X, st)
     t0 = time.time()
-    res = pool.map(_work, [(fam_id, v, "fit", "c") for v in vals])
+    sid = stackup_id
+    res = pool.map(_work, [(fam_id, v, "fit", "c", sid) for v in vals])
     n_g = min(len(X), n_axial + len(terms_g))
-    rg = pool.map(_work, [(fam_id, v, "fit", "g") for v in vals[:n_g]])
+    rg = pool.map(_work, [(fam_id, v, "fit", "g", sid) for v in vals[:n_g]])
     rng = np.random.default_rng(1000 + len(fam_id))
     Xt = rng.uniform(-0.8, 0.8, size=(n_test, d))
-    Xt[0] = _blank(fam).normalize(stackups.nominal(fam.params))
-    vt = points_to_values(fam, Xt)
-    rt = pool.map(_work, [(fam_id, v, "fine", "all") for v in vt])
+    Xt[0] = _blank(fam, st).normalize(stackups.nominal(fam.params, st))
+    vt = points_to_values(fam, Xt, st)
+    rt = pool.map(_work, [(fam_id, v, "fine", "all", sid) for v in vt])
     tests = [dict(values=v, fine=direct) for v, (direct, _) in zip(vt, rt)]
     c, g = [r[0] for r in res], [r[0] for r in rg]
-    entry = _table_entry(fam, X, c, g, tests)
+    entry = _table_entry(fam, X, c, g, tests, st)
     err, err0 = entry["test"]["max_err"], entry["test"]["nominal_err"]
     cpu = sum(r[1] for r in res) + sum(r[1] for r in rg) + sum(r[1] for r in rt)
     log(
@@ -522,7 +660,7 @@ def build(
 
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-    done: Dict[str, dict] = {}
+    done: Dict[tuple, dict] = {}
     ctx = mp.get_context("spawn")
     with ctx.Pool(workers) as pool:
         for sid in stackup_ids:
@@ -540,16 +678,33 @@ def build(
             for fid in BOARD_FAMILIES[sid]:
                 if families and fid not in families:
                     continue
+                key = (_set_key(sid), fid)
                 if fid in doc["families"] and not force:
-                    done.setdefault(fid, doc["families"][fid])
-                if fid not in done:
-                    done[fid] = build_family(
-                        fid, pool, log=lambda m: print(m, flush=True), samples_dir=samples_dir
+                    done.setdefault(key, doc["families"][fid])
+                if key not in done:
+                    done[key] = build_family(
+                        fid,
+                        pool,
+                        log=lambda m: print(m, flush=True),
+                        samples_dir=_samples(samples_dir, sid),
+                        stackup_id=sid,
                     )
-                doc["families"][fid] = done[fid]
+                doc["families"][fid] = done[key]
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 jsonfmt.dump(doc, path)
             print(f"wrote {path}", flush=True)
+
+
+def _set_key(sid: str) -> str:
+    """ "" for the stackups of the JLC 7628 family set (board A and the 7628 board B share solved
+    entries and the samples directory), else the stackup id."""
+    st = stackups.get(sid)
+    return "" if of(sid) is FAMILIES and not st.priors else sid
+
+
+def _samples(samples_dir: Optional[str], sid: str) -> Optional[str]:
+    key = _set_key(sid)
+    return os.path.join(samples_dir, key) if samples_dir and key else samples_dir
 
 
 def launch_gap(stackup_id: str, pad_w: float = 1.27, cut: Sequence[int] = (2,), z0: float = 50.0):
@@ -586,29 +741,34 @@ def launch_gap(stackup_id: str, pad_w: float = 1.27, cut: Sequence[int] = (2,), 
 def refit(stackup_ids: Sequence[str], samples_dir: str, data_dir: Optional[str] = None):
     """Rebuild the tables from saved 2D samples (`build --samples-dir`) with the current basis,
     without solving again."""
-    done: Dict[str, dict] = {}
+    done: Dict[tuple, dict] = {}
     for sid in stackup_ids:
+        st = stackups.get(sid)
         doc = {"schema": SCHEMA_TABLES, "stackup": sid, "families": {}, "basis": [BASIS_C, BASIS_G]}
         doc["mesh"] = {"fit": list(_mesh("fit")), "fine": list(_mesh("fine"))}
         doc["recede_mm"] = RECEDE_MM
         doc["tool"] = "python -m yapnr.rf.coupons.families build (refit from saved samples)"
         for fid in BOARD_FAMILIES[sid]:
-            if fid not in done:
-                with open(os.path.join(samples_dir, f"{fid}.json"), encoding="utf-8") as f:
+            key = (_set_key(sid), fid)
+            if key not in done:
+                path = os.path.join(_samples(samples_dir, sid), f"{fid}.json")
+                with open(path, encoding="utf-8") as f:
                     smp = json.load(f)
-                done[fid] = _table_entry(
-                    FAMILIES[fid], np.array(smp["X"]), smp["c"], smp["g"], smp["tests"]
+                done[key] = _table_entry(
+                    get(fid, sid), np.array(smp["X"]), smp["c"], smp["g"], smp["tests"], st
                 )
-                e = done[fid]["test"]
+                e = done[key]["test"]
                 print(f"{fid}: test max {e['max_err']}, nominal {e['nominal_err']}", flush=True)
-            doc["families"][fid] = done[fid]
+            doc["families"][fid] = done[key]
         path = table_path(sid, data_dir)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         jsonfmt.dump(doc, path)
         print(f"wrote {path}", flush=True)
 
 
-def _table_entry(fam: Family, X: np.ndarray, c: List[dict], g: List[dict], tests: List[dict]):
+def _table_entry(
+    fam: Family, X: np.ndarray, c: List[dict], g: List[dict], tests: List[dict], st=None
+):
     """Fit the surrogate of one family to its samples and evaluate it on the held-out tests."""
     d = len(fam.params)
     terms_c = _terms(d, "c", _etch_index(fam.params))
@@ -619,7 +779,7 @@ def _table_entry(fam: Family, X: np.ndarray, c: List[dict], g: List[dict], tests
     Bg = basis(X[: len(g)], terms_g)
     Yg = {k: np.array([r[k] for r in g]) for k in fam.outputs if k.endswith("lng")}
     coef.update({k: _lstsq(Bg, y) for k, y in Yg.items()})
-    sur = _blank(fam)
+    sur = _blank(fam, st)
     sur.coef = coef
     fit_rms = {k: float(np.sqrt(np.mean((Bc @ coef[k] - y) ** 2))) for k, y in Y.items()}
     fit_rms.update({k: float(np.sqrt(np.mean((Bg @ coef[k] - y) ** 2))) for k, y in Yg.items()})
@@ -667,6 +827,7 @@ def main(argv=None) -> int:
     r.add_argument("--data-dir", default=None)
     p = sub.add_parser("point", help="one direct 2D solve (prints Z0, eps_eff per mode)")
     p.add_argument("family")
+    p.add_argument("--stackup", default=None, help="the stackup whose family set and priors")
     p.add_argument("--set", action="append", default=[], help="param=value")
     p.add_argument("--mesh", default="fit")
     a = ap.parse_args(argv)
@@ -686,8 +847,8 @@ def main(argv=None) -> int:
     else:
         vals = {k: float(x) for k, x in (s.split("=", 1) for s in a.set)}
         t0 = time.time()
-        out = solve_point(a.family, vals, a.mesh)
-        fam = FAMILIES[a.family]
+        out = solve_point(a.family, vals, a.mesh, stackup_id=a.stackup)
+        fam = get(a.family, a.stackup)
         for m in fam.modes:
             pre = f"{m}:" if m else ""
             c, c0 = math.exp(out[pre + "lnC"]), math.exp(out[pre + "lnC0"])

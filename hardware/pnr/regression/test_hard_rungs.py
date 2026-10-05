@@ -359,6 +359,44 @@ class HardRungContract(unittest.TestCase):
         self.assertEqual(classes["clk"]["clearance_mm"], 0.2)
         self.assertEqual(classes["plane_vcc"]["clearance_mm"], 0.12)
 
+    def test_bga_pairs_rung(self):
+        """The BGA rung with a coupled LVDS pair: two adjacent unused south balls to a
+        header, the engine switch and pair keys, the judge's rules (skew, uncoupled
+        length, gap) and the no-via check, one dimension (parts) from the 6L rung."""
+        from hard_rungs import PAIRS_BALLS, PAIRS_HEADER
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+
+        spec = self.by_name["11-ufbga201-fanout-6L-SGSGPS-pairs"]
+        parent = self.by_name["11-ufbga201-fanout-6L-SGSGPS"]
+        self.assertEqual(
+            [k for k in spec["dims"] if spec["dims"][k] != parent["dims"][k]], ["parts"]
+        )
+        u1, base = spec["parts"][0]["pins"], parent["parts"][0]["pins"]
+        for ball, net in PAIRS_BALLS.items():
+            self.assertEqual((base[ball], u1[ball]), ("", net))
+        self.assertEqual(spec["constraints"]["fixed"][PAIRS_HEADER[0]]["rot"], 180)
+        text = dru_text(spec)
+        self.assertIn("A.inDiffPair('LVDS_')", text)
+        self.assertIn("diff_pair_uncoupled (max 3mm)", text)
+        self.assertIn("skew (max 0.1mm)", text)
+        (check,) = [c for c in spec["checks"] if c["kind"] == "net_vias"]
+        self.assertEqual((check["nets"], check["max"]), (["LVDS_P", "LVDS_N"], 0))
+        refs = [p["ref"] for p in spec["parts"]]
+        compiled = compile_constraints(spec["constraints"], refs)
+        nets = sorted({n for p in spec["parts"] for n in p["pins"].values() if n})
+        rules = compile_routing_rules(compiled, nets)
+        self.assertEqual(rules["route_pairs"], "coupled")
+        (pair,) = rules["diff_pairs"]
+        self.assertEqual((pair["layers"], pair["max_uncoupled_mm"]), (["F.Cu"], 3.0))
+        self.assertNotIn(
+            "route_pairs",
+            compile_routing_rules(
+                compile_constraints(parent["constraints"], [p["ref"] for p in parent["parts"]]),
+                sorted({n for p in parent["parts"] for n in p["pins"].values() if n}),
+            ),
+        )
+
     def test_bga_block_rung(self):
         """The BGA rung with a fixed block: its launch copper digest, ground stitching
         vias on U1's interstitial lattice, a group rule area on F.Cu alone, keep-outs

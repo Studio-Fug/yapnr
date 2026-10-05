@@ -1761,6 +1761,9 @@ def ufbga_rails(spec):
             min_width_mm=1.0,
             fill="GND",
             currents=dict(RAIL_CURRENT),
+            # The fanout's access cells stay open to the caps' drops (seed 1: a VDD
+            # cap's drop via closed B12's tail; stage 3c E4).
+            protect_fanouts=True,
         )
     ]
     cons["ir_drop"] = []

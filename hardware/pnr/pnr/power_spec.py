@@ -15,6 +15,7 @@ routing rules carry under the same names, only when declared.
         core_no_vias: true              # other nets' vias stay out of each trunk core
         terminal_reach_mm: 0.8          # a pad's drop lands within this of it
         neck_mm: 0                      # a trunk may narrow this close to its terminals
+        protect_fanouts: true           # declared fanouts' access cells stay open
         currents: {1V2: 1.0}            # A, else the net's @pnr-current peak or class
         budgets_mohm: {1V2: 12}         # widens a trunk for its IR budget
         sources: {1V2: {"@pmic.fb_1v2": "2"}}  # the trunk's root (else a central pad)
@@ -57,6 +58,7 @@ PARTITION_KEYS = {
     "sources",
     "h_mm",
     "neck_mm",
+    "protect_fanouts",
 }
 IR_KEYS = {
     "net",
@@ -162,6 +164,11 @@ def parse_partition(raw) -> List[Dict]:
         )
         if entry.get("neck_mm") is not None:  # only when declared (rules unchanged else)
             out[-1]["neck_mm"] = _num(entry["neck_mm"], where + ".neck_mm", minimum=0.0)
+        if entry.get("protect_fanouts") is not None:  # only when declared
+            if not isinstance(entry["protect_fanouts"], bool):
+                raise PowerSpecError(where + ".protect_fanouts must be a boolean")
+            if entry["protect_fanouts"]:
+                out[-1]["protect_fanouts"] = True
     layers = [e["layer"] for e in out]
     if len(set(layers)) != len(layers):
         raise PowerSpecError("plane_partition: one entry per layer")

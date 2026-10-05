@@ -842,6 +842,25 @@ py_test(
     ],
 )
 
+# Plane partitions beside declared fanouts (stage 3c E4): protect_fanouts keeps the
+# fanouts' access cells open to other nets' drops and the trunk cores; a bottom-site
+# part's plane pad drops by a stub to its fanout via.
+py_test(
+    name = "partition_fanout_test",
+    size = "small",
+    srcs = ["tests/test_partition_fanout.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_partition_fanout.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
 # The partition drawn by writeback and filled by KiCad, its rails' IR drop, and the
 # checker's supply checks (rail_zones, ir_drop, unconnected). It needs KiCad's Python
 # (pcbnew): run it there by hand.

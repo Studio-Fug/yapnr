@@ -440,6 +440,7 @@ class HardRungContract(unittest.TestCase):
         (part,) = rules["plane_partition"]
         self.assertEqual(part["nets"], ["VDD", "VDDA", "VBAT"])
         self.assertEqual(part["fill"], "GND")
+        self.assertTrue(part["protect_fanouts"])
         self.assertEqual([e["net"] for e in rules["ir_drop"]], ["VDD", "VDDA", "VBAT"])
         balls = [e for e in rules["ir_drop"] if e["net"] == "VDDA"][0]["sinks"]
         self.assertEqual(sorted(balls), ["U1:P1", "U1:R1"])

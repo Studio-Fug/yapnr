@@ -1209,15 +1209,24 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
                 for (_name, net, r), pad in zip(pad_rects(comp), comp.pads)
                 if net and net not in terms and not pad.through_hole
             ]
-            _core_keepouts(grid, part, grid.via_radius + clearance, spare, reach)
+            extra = ()
+            if entry.get("protect_fanouts") and fanouts is not None:
+                # The fanouts' planned access cells keep a via site: a ball's tail may
+                # need its via right there (the trunk's copper keeps its gap anyway).
+                extra = [
+                    (grid.center_of(i, j), grid.via_radius + clearance + grid.pitch)
+                    for (_la, i, j) in sorted(fanouts.protected)
+                ]
+            _core_keepouts(grid, part, grid.via_radius + clearance, spare, reach, extra)
         out.append(part)
     return out
 
 
-def _core_keepouts(grid, part, via_reach, spare=(), spare_reach=0.0):
+def _core_keepouts(grid, part, via_reach, spare=(), spare_reach=0.0, spare_sites=()):
     """Other nets' vias stay ``via_reach`` (via radius + clearance) beyond each trunk's
     claimed copper (the router's net keepouts, vias only), except within
-    ``spare_reach`` of a ``spare`` point (another net's pad: its drop site)."""
+    ``spare_reach`` of a ``spare`` point (another net's pad: its drop site) and within
+    each ``(point, reach)`` of ``spare_sites`` (a fanout's access cell)."""
     if not part.cores:
         return
     xs = (np.arange(grid.nx) + 0.5) * grid.pitch
@@ -1227,6 +1236,8 @@ def _core_keepouts(grid, part, via_reach, spare=(), spare_reach=0.0):
     keep = g.zeros()
     for p in spare:
         keep |= g.disc(p, spare_reach)
+    for p, r in spare_sites:
+        keep |= g.disc(p, r)
     for net, (points, half) in sorted(part.cores.items()):
         if not points:
             continue

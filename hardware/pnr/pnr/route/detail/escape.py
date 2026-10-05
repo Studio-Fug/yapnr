@@ -138,6 +138,7 @@ def plan_escapes(
     plane_access=None,
     drop_span=None,
     skip_pads=None,
+    drop_reuse=None,
 ) -> EscapePlan:
     """Plan a legal escape for every pad of the routable ``net_names``.
 
@@ -156,6 +157,8 @@ def plan_escapes(
     plane fill. ``drop_span(net, side)`` gives a drop's blind or micro via span
     under the grid's via model (None: a through via). ``skip_pads`` ((ref, pad)
     pairs) are left alone: a declared fanout (:mod:`.fanout`) holds them.
+    ``drop_reuse`` ((ref, pad) -> reach, joint only): a plane pad that may drop by a
+    stub to a planned via of its net (a fanout's bottom site).
     """
     if joint:
         from .joint_escape import plan_joint_escapes
@@ -177,6 +180,7 @@ def plan_escapes(
             plane_access=plane_access,
             drop_span=drop_span,
             **({"skip_pads": skip_pads} if skip_pads else {}),
+            **({"drop_reuse": drop_reuse} if drop_reuse else {}),
         )
     plan = EscapePlan()
     plan.diagnostics = {"model": "legacy-sequential", "complete": None}

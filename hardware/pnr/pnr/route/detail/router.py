@@ -80,6 +80,25 @@ def _net_clearances(rules: Optional[dict]) -> dict:
     return out
 
 
+def _bottom_site_reuse(graph: BoardGraph, rules: Optional[dict]) -> dict:
+    """``{(ref, pad): max_stub_mm}`` for every pad of a declared fanout's bottom-site
+    part (``fanout.bottom_sites``): the site was chosen with each pad within
+    ``max_stub_mm`` of a fanout via of its net, so its plane drop may be a stub to
+    that via (the drop planner's ``reuse``). Empty without bottom sites."""
+    out = {}
+    refs = set(graph.refs)
+    for spec in (rules or {}).get("fanouts") or []:
+        bottom = spec.get("bottom_sites") or {}
+        reach = float(bottom.get("max_stub_mm", 0.0) or 0.0)
+        for ref in bottom.get("parts") or []:
+            if ref not in refs:
+                continue
+            for pad in graph.component(ref).pads:
+                if pad.net:
+                    out[(ref, pad.name)] = max(out.get((ref, pad.name), 0.0), reach)
+    return out
+
+
 def _late_copper(
     graph: BoardGraph, planes: Set[str], deferred: Set[str], escapes=()
 ) -> Optional[str]:
@@ -1152,6 +1171,14 @@ def route_board(
             inset=via_radius_mm,
             outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
+    guarded = fanouts is not None and any(
+        e.get("protect_fanouts") for e in (rules or {}).get("plane_partition") or []
+    )
+    if guarded:
+        # plane_partition protect_fanouts: the fanouts' planned access cells stay free
+        # of the other nets' exits and drops planned below (their via keep-out would
+        # close a ball's only way out). Only when declared.
+        grid.guard_access = dict(fanouts.protected)
     plan = plan_escapes(
         grid,
         graph,
@@ -1170,7 +1197,10 @@ def route_board(
         plane_access=plane_access,
         drop_span=drop_span,
         **({"skip_pads": fanouts.skip_pads} if fanouts is not None else {}),
+        **({"drop_reuse": _bottom_site_reuse(graph, rules)} if fanouts is not None else {}),
     )
+    if guarded:
+        grid.guard_access = None
     # PNR_COMPACT DROPS: the drops are planned and reserved; the maze's predicates never
     # read the own-region cells, so the grid goes on as the maze kernels know it.
     grid.own_plane_cells = {}

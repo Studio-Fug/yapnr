@@ -686,7 +686,10 @@ clears the fanout's vias and bottom tracks and lies within `max_stub_mm` of a
 fanout via of its net; `interior` keeps the sites inside the array's outermost
 fully vacant ring (else inside ring 2), `shadow` allows the whole array. Placement
 takes the sites as fixed bottom poses; parts no site fits are reported. Other bottom
-parts are kept out of the array by the side policy only.
+parts are kept out of the array by the side policy only. A site part's pad on a net
+with a dedicated plane may drop by a stub on its own layer to a fanout via of its
+net within `max_stub_mm` of its land (the via reaches the plane): the drop planner
+offers that first, before drilling a via of its own.
 
 `python -m pnr.fanout plan GRAPH --rules RULES --out DIR` writes the plan
 (`fanout-<name>.json`: copper, every ball's terminal, diagnostics) without routing;
@@ -716,6 +719,7 @@ plane_partition:
     budgets_mohm: { 1V2: 12 } # widens a trunk for its IR budget (default: its ir_drop budget)
     sources: { 1V2: { "@pmic.fb_1v2": "2" } } # the trunk's root (default: the central terminal)
     h_mm: 0.1 # the raster
+    protect_fanouts: true # declared fanouts' access cells stay open (default false)
 ```
 
 How it works (`pnr/plane_partition.py`, run by the router after the declared
@@ -747,6 +751,12 @@ replaces that layer's zones of those nets with one zone per region (its holes an
 priority; the fill net under them all). With `core_no_vias`, other nets' vias keep
 via radius plus clearance beyond half the minimum width of each trunk's centre line,
 so a row of vias cannot cut a rail's neck.
+
+With `protect_fanouts: true` the plane machinery leaves a declared fanout's planned
+access cells (where each ball's tail meets the maze) open: no other net's exit or
+plane drop is planned whose copper or via keep-out takes such a cell (a cap's drop
+via beside a ball's tail closed its only way out), and the trunk cores' via
+keepouts spare a via site at each of them. Without the key nothing changes.
 
 The route's escape diagnostics carry a `plane_partition` report per layer: per rail
 its current, width (and the IPC and budget widths), tree length, terminals reached,

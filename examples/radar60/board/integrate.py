@@ -20,6 +20,9 @@ Steps (each reads the previous one's files in WORK; nothing is placed by hand):
 ``place``    pnr.mc.halving stage 0 only (--stop-after place): N seeded global starts
              (stratified and Latin-hypercube, initial_pool), each legalized and scored by the
              engine's width-aware routability proxy. Run it through the shared heavy-run queue.
+             With ``--library`` (power_block.py's library.json) every start places the
+             power-stage block as one rigid macro drawn from that library
+             (pnr.hier.top.hierarchical_place) and expands it.
 ``select``   the winner, mechanically: legal candidates that pass the placement audit
              (audit.py), ranked by the engine's own stage-0 key (proxy score, then cheap score),
              then HPWL, then id. Every candidate's audit and rank go to WORK/selection.json.
@@ -30,6 +33,12 @@ Steps (each reads the previous one's files in WORK; nothing is placed by hand):
              independent DRC resolves the synthetic Radar60_* lib nicknames), KiCad's DRC, the
              placement audit and the RF audit (rf_audit.py A1-A6) of the final board, and its
              report.
+``block``    (with a power-stage library, plan R1/E2) the chosen power-stage layout made the
+             fixed block: its routed copper and outer pours drawn into the finished board as
+             the KiCad group PWR_STAGE (pnr.hier.assemble --zones --group --anchor), and the
+             ``fixed``/``fixed_block`` entries of pnr.hier.macro.fixed_block_from_macro (with
+             the group's digest) added to the routing constraints (WORK/constraints-route.yaml,
+             WORK/inputs/rules-route.json), which route and check then use.
 ``route``    pnr.staged_signal on the finished board (class-clearance maze, DRU routing, exact
              edge, the In3 plane partition and IR-drop report already in the policy): route the
              remaining signal nets, append the copper, refill, IR-drop (pnr.ir_extract) and the
@@ -475,7 +484,8 @@ def step_place(a):
             a.iters,
             "--stop-after",
             "place",
-        ],
+        ]
+        + (["--library", Path(a.library).resolve()] if a.library else []),
         env=_env(a.engine, {"RADAR60_FANOUT_CACHE": str(work / "inputs")}),
         cwd=a.engine,
         log=work / "place.log",
@@ -591,6 +601,8 @@ def write_placement(a, work, recs, winner, sel):
             "cheap_score": rec.get("cheap_score"),
             "hpwl_mm": rec.get("hpwl_mm"),
         },
+        # the block layouts a hierarchical start drew (pnr.hier.top), with their routed boards
+        "hier": rec.get("hier"),
         "frame": "mm, origin at the board's lower-left corner, +y north, rot CCW; [x, y, rot, side]",
         "poses": {
             key[ref]: pose for ref, pose in sorted(rec["poses"].items(), key=lambda kv: key[kv[0]])
@@ -767,6 +779,114 @@ def step_finish(a):
     print(json.dumps(report["summary"], indent=1))
 
 
+def _route_inputs(work):
+    """The routing rules and constraints: ``block``'s (the power stage as a fixed block) when
+    that step ran, else prepare's."""
+    work = Path(work)
+    if (work / "inputs" / "rules-route.json").is_file():
+        return work / "inputs" / "rules-route.json", work / "constraints-route.yaml"
+    return work / "inputs" / "rules.json", work / "constraints-place.yaml"
+
+
+def step_block(a):
+    """Plan R1/E2: the power-stage layout the placement drew, made the fixed block PWR_STAGE.
+
+    The finished board gets the layout's routed copper and its outer pours as one KiCad group
+    (pnr.hier.assemble --zones --group --anchor; the anchor, U2, stays out of it), and the
+    routing constraints get the ``fixed`` pose of the anchor and the ``fixed_block`` entry
+    (pnr.hier.macro.fixed_block_from_macro, from the placed graph) pinned to the group's
+    digest: WORK/constraints-route.yaml and WORK/inputs/rules-route.json."""
+    work = Path(a.work)
+    out_dir = Path(a.out)
+    board = out_dir / (BOARD_NAME + ".kicad_pcb")
+    floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
+    stage = floorplan["power_stage"]
+    fb = stage["fixed_block"]
+    placement = json.loads((out_dir / "placement.json").read_text())
+    hier = placement.get("hier") or {}
+    blocks = hier.get("blocks") or {}
+    if len(blocks) != 1:
+        raise SystemExit("block: the placement drew %d block layouts, not one" % len(blocks))
+    ((name, choice),) = blocks.items()
+    block_dir = Path(choice["native_dir"])
+    sys.path[:0] = [str(Path(a.engine) / "hardware/pnr"), str(a.engine)]
+    os.environ["PNR_FAB_PROFILE"] = PROFILE
+    from pnr.graph import BoardGraph
+    from pnr.hier.macro import MacroPlan, fixed_block_from_macro
+
+    info = json.loads((block_dir.parents[1] / "block.json").read_text())
+    refs = info["block"]["refs"]
+    anchor = info["anchor"]
+    addr = info["addresses"]
+    placed_json = work / "placed-from-record.json"  # finish --placement
+    if not placed_json.is_file():
+        sel = json.loads((work / "selection.json").read_text())
+        placed_json = work / "mc" / "cand" / sel["winner"] / "placed.json"
+    flat = BoardGraph.from_json(placed_json.read_text())
+    by_ref = {c.ref: c for c in flat.components}
+    # The macro the placement drew, as pnr.hier.macro records it (members at their poses).
+    plan = MacroPlan()
+    plan.macros["MB00"] = dict(
+        block=name,
+        members={r: (*by_ref[r].pos, by_ref[r].rot, by_ref[r].side) for r in refs},
+    )
+    plan.member_of = {r: "MB00" for r in refs}
+    fixed, entry = fixed_block_from_macro(
+        flat, plan, "MB00", fb["name"], fb["group"], anchor, fb.get("solid_layers")
+    )
+    res = _run(
+        [
+            a.kicad_python,
+            "-m",
+            "pnr.hier.assemble",
+            board,
+            "--block",
+            block_dir / "block.kicad_pcb",
+            "--out",
+            board,
+            "--zones",
+            "--group",
+            fb["group"],
+            "--anchor",
+            anchor,
+        ],
+        env=_env(a.engine),
+        cwd=Path(a.engine) / "hardware/pnr",
+        log=work / "block-assemble.log",
+    )
+    assembled = json.loads(res.strip().splitlines()[-1])
+    doc = yaml.safe_load((work / "constraints-place.yaml").read_text())
+    key = "@" + _glob_literal(addr[anchor])
+    doc.setdefault("fixed", {})[key] = dict(fixed)
+    doc.setdefault("fixed_block", []).append(
+        dict(
+            name=entry["name"],
+            group=entry["group"],
+            anchor=key,
+            solid_layers=entry["solid_layers"],
+            sha256=assembled["sha256"],
+        )
+    )
+    (work / "constraints-route.yaml").write_text(
+        "# constraints-place.yaml plus the power stage as a fixed block (integrate.py block;"
+        " generated)\n" + yaml.safe_dump(doc, sort_keys=False)
+    )
+    rules0 = json.loads((work / "inputs" / "rules.json").read_text())
+    _graph, _compiled, rules = _compile(a.engine, work / "inputs" / "graph.json", doc)
+    rules["fixed_copper"] = rules0.get("fixed_copper")
+    (work / "inputs" / "rules-route.json").write_text(json.dumps(rules, indent=1, sort_keys=True))
+    report = dict(
+        block=name,
+        layout=choice,
+        board=str(block_dir / "block.kicad_pcb"),
+        fixed=fixed,
+        fixed_block=entry,
+        assembled=assembled,
+    )
+    (work / "block.json").write_text(json.dumps(report, indent=1, default=str))
+    print(json.dumps(report, indent=1, default=str)[:3000])
+
+
 def step_route(a):
     """R6: pnr.staged_signal on the finished board (class-clearance maze, DRU routing, exact
     edge: the policy work/inputs/rules.json already carries) — route_board, append, refill, the
@@ -802,11 +922,12 @@ def step_route(a):
     router.route_board = _capture
     t = time.time()
     status = "ok"
+    rules_path, constraints_path = _route_inputs(work)
     try:
         route_signals(
             board,
-            work / "inputs" / "rules.json",
-            work / "constraints-place.yaml",
+            rules_path,
+            constraints_path,
             route_dir,
             a.kicad_python,
             a.kicad_cli,
@@ -951,7 +1072,7 @@ def step_check(a):
                 shutil.rmtree(libs_dst)
             shutil.copytree(work / "libs", libs_dst)
 
-    rules_path = work / "inputs" / "rules.json"
+    rules_path, _ = _route_inputs(work)
     policy = json.loads(rules_path.read_text()) if rules_path.is_file() else {}
 
     # R6: an explicit refill of the candidate before anything reads its copper. route already
@@ -1152,6 +1273,7 @@ def main(argv=None):
             "place",
             "select",
             "finish",
+            "block",
             "route",
             "check",
             "render",
@@ -1176,6 +1298,9 @@ def main(argv=None):
         default="n",
         help="the RF macro's D12 variant to merge (rfm1-m/-n/-p; one placement fits all three)",
     )
+    ap.add_argument(
+        "--library", help="place: a power-stage block library (power_block.py library.json)"
+    )
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--n0", type=int, default=24, help="placement starts")
     ap.add_argument("--procs", type=int, default=4)
@@ -1192,6 +1317,7 @@ def main(argv=None):
         "place": step_place,
         "select": step_select,
         "finish": step_finish,
+        "block": step_block,
         "route": step_route,
         "check": step_check,
         "render": step_render,

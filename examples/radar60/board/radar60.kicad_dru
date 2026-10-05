@@ -115,10 +115,10 @@
   (constraint diff_pair_uncoupled (max 3mm))
   (constraint skew (max 0.1mm) (within_diff_pairs))
   (condition "(A.hasNetclass('LVDS') || A.hasNetclass('dp_lvds_tx0') || A.hasNetclass('dp_lvds_tx1') || A.hasNetclass('dp_lvds_clk') || A.hasNetclass('dp_lvds_frclk')) && !A.intersectsCourtyard('U1')"))
-# LVDS on the outer layers only (plan 7.2: F.Cu or B.Cu, next to J2)
+# LVDS on F.Cu only (plan R4: a coupled pair needs one shared layer; B.Cu dropped)
 (rule "radar60_lvds_outer_layers"
   (constraint disallow track)
-  (condition "A.Type == 'Track' && (A.hasNetclass('LVDS') || A.hasNetclass('dp_lvds_tx0') || A.hasNetclass('dp_lvds_tx1') || A.hasNetclass('dp_lvds_clk') || A.hasNetclass('dp_lvds_frclk')) && A.Layer != 'F.Cu' && A.Layer != 'B.Cu'"))
+  (condition "A.Type == 'Track' && (A.hasNetclass('LVDS') || A.hasNetclass('dp_lvds_tx0') || A.hasNetclass('dp_lvds_tx1') || A.hasNetclass('dp_lvds_clk') || A.hasNetclass('dp_lvds_frclk')) && A.Layer != 'F.Cu'"))
 # QSPI at 80 MHz: <= 25 mm routed (plan 3.4 @pnr-si)
 (rule "radar60_qspi_length"
   (constraint length (max 25mm))

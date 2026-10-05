@@ -131,6 +131,14 @@ CASES = [
         "lvds_outer_layers",
     ),
     (
+        # plan R4: a coupled LVDS pair needs one shared layer for both legs, so B.Cu is no
+        # longer an allowed leg even though it is an outer layer (only F.Cu is).
+        "lvds_on_bcu",
+        "track",
+        dict(a=(8, 21), b=(10, 21), layer="B.Cu", net="LVDS_TXP0"),
+        "lvds_outer_layers",
+    ),
+    (
         "track_on_gnd_plane",
         "track",
         dict(a=(8, 24), b=(10, 24), layer="In1.Cu", net="SIG1"),

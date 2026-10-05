@@ -309,6 +309,10 @@ def constraints(fp: Floorplan):
             "width_mm": lv["width"],
             "gap_mm": lv["gap"],
             "skew_mm": lv["skew_mm"],
+            # plan R4/E5: coupled from the fanout exits, F.Cu only (the lvds via class agrees),
+            # uncoupled capped at the DRU's own diff_pair_uncoupled limit below.
+            "layers": ["F.Cu"],
+            "max_uncoupled_mm": lv["max_uncoupled_mm"],
         }
         for name, (p, n) in d["nets"]["LVDS"]["pairs"].items()
     ]
@@ -810,14 +814,14 @@ def board_rules(fp):
                 % (_n(lv["width"] - 0.02), _n(lv["width"])),
                 "(constraint diff_pair_gap (min %smm) (opt %smm) (max %smm))"
                 % (_n(lv["gap"] - 0.02), _n(lv["gap"]), _n(lv["gap"] + 0.04)),
-                "(constraint diff_pair_uncoupled (max 3mm))",
+                "(constraint diff_pair_uncoupled (max %smm))" % _n(lv["max_uncoupled_mm"]),
                 "(constraint skew (max %smm) (within_diff_pairs))" % _n(lv["skew_mm"]),
             ],
         ),
         (
-            "LVDS on the outer layers only (plan 7.2: F.Cu or B.Cu, next to J2)",
+            "LVDS on F.Cu only (plan R4: a coupled pair needs one shared layer; B.Cu dropped)",
             "lvds_outer_layers",
-            "A.Type == 'Track' && %s && A.Layer != 'F.Cu' && A.Layer != 'B.Cu'" % lvds,
+            "A.Type == 'Track' && %s && A.Layer != 'F.Cu'" % lvds,
             ["(constraint disallow track)"],
         ),
         (

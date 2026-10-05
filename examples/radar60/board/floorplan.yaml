@@ -24,11 +24,12 @@ board:
   # Layer roles (plan 4.1): In1 GND (RF reference), In2 GND under the RF region and escape
   # signals elsewhere, In3 power pours, In4 GND, F/B signals.
   planes: { In1.Cu: GND, In4.Cu: GND }
-  # Router switches (yapnr stage 3b, opt-in): net class clearances in the maze (PWR, XTAL,
+  # Router switches (yapnr stage 3b/3c, opt-in): net class clearances in the maze (PWR, XTAL,
   # SW, LVDS), the board's custom rules where they constrain routing (no vias on XTAL/RF,
-  # LVDS on F/B only, SW-XTAL 8 mm, SW-RF 5 mm, In1/In4 track-free, hole to edge), and the
-  # board's own rounded outline.
-  routing: { class_clearance: maze, dru_routing: true, edge: exact }
+  # LVDS on F.Cu only (plan R4), SW-XTAL 8 mm, SW-RF 5 mm, In1/In4 track-free, hole to edge),
+  # the board's own rounded outline, and the declared LVDS diff pairs routed coupled from
+  # their fanout exits (plan R4/E5) instead of each leg alone.
+  routing: { class_clearance: maze, dru_routing: true, edge: exact, route_pairs: coupled }
 
 # In3.Cu (typed power): a plane partition for the two 2.5 A core rails (stage 3b power track:
 # 1V2 and 1V8 interleave with them round U1, so they stay drop nets with traces); the rest of
@@ -270,6 +271,7 @@ lvds: # 100 ohm edge-coupled microstrip on F.Cu over In1.Cu (RO4835 4 mil): 99-1
   gap: 0.18
   skew_mm: 0.1 # within a pair (plan 3.4 @pnr-pair)
   group_skew_mm: 2.0 # across the four pairs
+  max_uncoupled_mm: 3.0 # plan R4: the DRU's own diff_pair_uncoupled cap, declared so E5 enforces it
 qspi_max_length_mm: 25.0 # plan 3.4 @pnr-si
 
 u1:
@@ -351,8 +353,9 @@ fanout:
   skip_pads: [B4, B6, B8, F2, H2, K2, M2, A2, B2]
   via_classes:
     ground: { diameter_mm: 0.35, drill_mm: 0.15, nets: [GND], sites: [interstitial, outside] }
-    # radar60.kicad_dru: crystal nets take no via, LVDS stays on the outer layers, supply and
-    # signal vias under U1 are 0.40/0.20
+    # radar60.kicad_dru: crystal nets take no via, LVDS stays on F.Cu only (plan R4: a coupled
+    # pair that drops to B.Cu loses its reference plane and its partner), supply and signal
+    # vias under U1 are 0.40/0.20
     xtal: { diameter_mm: 0.4, drill_mm: 0.2, nets: ['XTAL_*'], layers: [F.Cu] }
     lvds:
       {
@@ -360,7 +363,7 @@ fanout:
         drill_mm: 0.2,
         nets: ['LVDS_*'],
         sites: [vacant, outside],
-        layers: [F.Cu, B.Cu],
+        layers: [F.Cu],
       }
     supply:
       {

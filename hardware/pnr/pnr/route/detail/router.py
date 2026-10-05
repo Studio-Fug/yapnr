@@ -80,6 +80,25 @@ def _net_clearances(rules: Optional[dict]) -> dict:
     return out
 
 
+def _bottom_site_reuse(graph: BoardGraph, rules: Optional[dict]) -> dict:
+    """``{(ref, pad): max_stub_mm}`` for every pad of a declared fanout's bottom-site
+    part (``fanout.bottom_sites``): the site was chosen with each pad within
+    ``max_stub_mm`` of a fanout via of its net, so its plane drop may be a stub to
+    that via (the drop planner's ``reuse``). Empty without bottom sites."""
+    out = {}
+    refs = set(graph.refs)
+    for spec in (rules or {}).get("fanouts") or []:
+        bottom = spec.get("bottom_sites") or {}
+        reach = float(bottom.get("max_stub_mm", 0.0) or 0.0)
+        for ref in bottom.get("parts") or []:
+            if ref not in refs:
+                continue
+            for pad in graph.component(ref).pads:
+                if pad.net:
+                    out[(ref, pad.name)] = max(out.get((ref, pad.name), 0.0), reach)
+    return out
+
+
 def _late_copper(
     graph: BoardGraph, planes: Set[str], deferred: Set[str], escapes=()
 ) -> Optional[str]:
@@ -991,6 +1010,15 @@ def route_board(
                 merged[n] = merged[n] & allowed if n in merged else allowed
             grid.layer_mask = merged
         dru_report["raised_clearances"] = dict(sorted(raised.items()))
+    if any(dp.get("layers") for dp in (rules or {}).get("diff_pairs") or []):
+        # diff_pair.layers: both legs of the pair stay on those layers (coupled or
+        # not), intersected with the masks above (pnr.route.detail.pair_route).
+        from .pair_route import pair_layer_masks
+
+        merged = dict(grid.layer_mask or {})
+        for n, allowed in pair_layer_masks(grid, rules).items():
+            merged[n] = merged[n] & allowed if n in merged else allowed
+        grid.layer_mask = merged
     grid.reserve_wide_pad_clearance()
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.
@@ -1152,6 +1180,78 @@ def route_board(
             inset=via_radius_mm,
             outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
+    # Outer pours (plane_partition entries with a region, pnr.route.detail.pour): the
+    # territories are claimed on their layer, the pads they join need no escape or
+    # drop, and a plane net's pour gets its stitching vias. Only when declared.
+    poured, stitched, outer_parts = {}, {}, []
+    if rules and any(e.get("region") for e in rules.get("plane_partition") or []):
+        from pnr.plane_partition import for_route as outer_route
+
+        from .pour import reserve as reserve_pours
+        from .pour import stitch as stitch_pours
+
+        outer_parts = outer_route(
+            grid,
+            graph,
+            rules,
+            stack,
+            width,
+            height,
+            fixed_copper=fixed_copper,
+            fanouts=fanouts,
+            outer=True,
+        )
+        poured = reserve_pours(grid, graph, outer_parts)
+        counts = {}
+        for e in rules.get("plane_partition") or []:
+            if e.get("region"):
+                for n in e["nets"]:
+                    counts[n] = int(e.get("stitch_vias", 1))
+        stitched = stitch_pours(
+            grid, poured, set(drop_widths), counts, plane_access, via_keepout=via_keepout
+        )
+    escape_skip = set(fanouts.skip_pads) if fanouts is not None else set()
+    if poured:
+        from .pour import covered as poured_pads
+
+        escape_skip |= poured_pads(poured)
+    pour_pads = set()
+    if rules and rules.get("pours"):
+        # Declared pours (pnr.pour): their net's pads on their layer join after the
+        # refill; no escape or plane drop is planned for them.
+        from pnr.pour import pads as declared_pour_pads
+
+        pour_pads = declared_pour_pads(grid, graph, rules["pours"])
+        escape_skip |= pour_pads
+    guarded = fanouts is not None and any(
+        e.get("protect_fanouts") for e in (rules or {}).get("plane_partition") or []
+    )
+    if guarded:
+        # plane_partition protect_fanouts: the fanouts' planned access cells stay free
+        # of the other nets' exits and drops planned below (their via keep-out would
+        # close a ball's only way out). Only when declared.
+        grid.guard_access = dict(fanouts.protected)
+    # board.route_pairs: coupled: the declared pairs routed coupled from their pads and
+    # fanout exits before any other escape (pnr.route.detail.pair_route); their nets
+    # leave the maze. Off: nothing here.
+    coupled_route = None
+    coupled_nets = set()
+    if rules and rules.get("route_pairs") == "coupled" and rules.get("diff_pairs"):
+        from .pair_route import route_pairs as route_coupled_pairs
+
+        coupled_route = route_coupled_pairs(
+            grid,
+            graph,
+            rules,
+            signal_nets=signal_nets,
+            fanouts=fanouts,
+            net_width=net_width,
+            track_width=track_width_mm,
+            blocked=set(ports)
+            | (fanouts.blocked_nets | set(fanouts.partial_open) if fanouts is not None else set()),
+        )
+        coupled_nets = set(coupled_route.nets)
+        signal_nets -= coupled_nets
     plan = plan_escapes(
         grid,
         graph,
@@ -1169,8 +1269,43 @@ def route_board(
         drop_pad_width=pad_drop_width,
         plane_access=plane_access,
         drop_span=drop_span,
-        **({"skip_pads": fanouts.skip_pads} if fanouts is not None else {}),
+        **({"skip_pads": escape_skip} if fanouts is not None or escape_skip else {}),
+        **({"drop_reuse": _bottom_site_reuse(graph, rules)} if fanouts is not None else {}),
     )
+    if pour_pads:
+        plan.diagnostics["pour_pads"] = sorted("%s.%s" % p for p in pour_pads)
+    if poured:
+        from .escape import Escape
+        from .grid import Cell as _Cell
+        from .pour import ports as pour_ports
+
+        for net, cells in pour_ports(grid, poured, plan.net_access).items():
+            plan.net_access.setdefault(net, []).extend(cells)
+        for net, sites in sorted(stitched.items()):
+            layer = poured[net]["layer"]
+            la = grid.layers.index(layer)
+            for q in sites:
+                plan.escapes.append(
+                    Escape(
+                        net=net,
+                        kind="joint",
+                        access=_Cell(la, *grid.cell_of(*q)),
+                        pad_xy=q,
+                        side_layer=layer,
+                        via_xy=q,
+                        segments=[],
+                    )
+                )
+        plan.diagnostics["pours"] = {
+            net: dict(
+                layer=row["layer"],
+                pads=["%s.%s" % p for p in row["pads"]],
+                stitches=[[round(x, 4), round(y, 4)] for x, y in stitched.get(net, [])],
+            )
+            for net, row in sorted(poured.items())
+        }
+    if guarded:
+        grid.guard_access = None
     # PNR_COMPACT DROPS: the drops are planned and reserved; the maze's predicates never
     # read the own-region cells, so the grid goes on as the maze kernels know it.
     grid.own_plane_cells = {}
@@ -1216,7 +1351,10 @@ def route_board(
     net_access = {
         n: cells
         for n, cells in plan.net_access.items()
-        if len(cells) >= 2 and n not in plan.blocked_nets and n not in drop_widths
+        if len(cells) >= 2
+        and n not in plan.blocked_nets
+        and n not in drop_widths
+        and n not in coupled_nets
     }
     # PNR_TRACE_DIR only: records this route inside a traced route scope (pnr.trace).
     from .trace_route import start as trace_start
@@ -1293,6 +1431,12 @@ def route_board(
         for name in sorted(deferred | plan.blocked_nets):
             result.nets[name] = RoutedNet(name)
         result.unrouted = sorted(set(result.unrouted) | deferred | plan.blocked_nets)
+    if coupled_nets:
+        from .maze import RoutedNet
+
+        # Routed coupled before the maze; their copper is emitted below.
+        for name in sorted(coupled_nets):
+            result.nets[name] = RoutedNet(name, routed=True)
 
     if os.environ.get("PNR_DIAG_UNROUTED"):
         _diag_unrouted(grid, net_access, result.unrouted, via_keepout)
@@ -1332,6 +1476,7 @@ def route_board(
         board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
     if fanouts is not None and fanouts.partial_open:
         board.partial_open = {n: dict(v) for n, v in sorted(fanouts.partial_open.items())}
+    partitions = list(partitions) + list(outer_parts)
     if partitions:
         board.plane_regions = [row for p in partitions for row in p.rows()]
         board.escape_diagnostics["plane_partition"] = [p.report for p in partitions]
@@ -1387,6 +1532,17 @@ def route_board(
     # stub + via) so the net is electrically whole from the real pad centre.
     emitted = []  # declared fanouts' escapes that were emitted
     for esc in plan.escapes:
+        if esc.net in coupled_nets:
+            # A coupled pair's fanout escape: its exit is where the pair begins
+            # (none when the pair starts at the balls themselves).
+            if (
+                esc.fanout
+                and esc.kind != "blocked"
+                and esc.net not in coupled_route.dropped_escapes
+            ):
+                _emit_escape(board, esc, grid, esc.width, span_at)
+                emitted.append(esc)
+            continue
         if esc.net in drop_widths:
             # A plane drop needs no maze route: its via reaches the plane(s).
             _emit_escape(board, esc, grid, esc.width or drop_widths[esc.net], span_at)
@@ -1410,6 +1566,9 @@ def route_board(
                 centre = grid.center_of(cell.i, cell.j)
                 w = net_width.get(net, track_width_mm)
                 board.tracks.append((net, layer, tuple(point), centre, w))
+    if coupled_route is not None:
+        board.tracks.extend(coupled_route.tracks)
+        board.escape_diagnostics["coupled_pairs"] = coupled_route.report
     if fanouts is not None:
         _fanout_extras(board, emitted, fanouts, fab)
     # Zero-length pad-to-grid stubs add no connection and become dangling items.

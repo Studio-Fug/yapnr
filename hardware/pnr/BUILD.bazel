@@ -141,6 +141,7 @@ filegroup(
         "pnr/ir_extract.py",
         "pnr/power_spec.py",
         "pnr/plane_partition.py",
+        "pnr/pour.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -722,6 +723,24 @@ py_test(
     deps = [":pnr"],
 )
 
+# extract_footprints against real KiCad I/O: a board whose footprints carry a synthetic lib
+# nickname with no fp-lib-table entry (as radar60's generated/vendor-cached parts do), saved
+# out and re-registered, checked against KiCad's own DRC. It needs KiCad's Python (pcbnew):
+# run it there by hand (python3 -m unittest tests.test_library_table_kicad).
+py_test(
+    name = "library_table_kicad_test",
+    size = "small",
+    srcs = ["tests/test_library_table_kicad.py"],
+    imports = ["."],
+    main = "tests/test_library_table_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 # Regression: underside test copper and physical pad coordinates after a flip.
 py_test(
     name = "two_sided_placement_test",
@@ -824,6 +843,102 @@ py_test(
     ],
 )
 
+# Outer pours (plane_partition with a region, stage 3c E1): whole-land terminals,
+# corridors for other nets' lands, the grid claim, ports and stitching vias.
+py_test(
+    name = "outer_pour_test",
+    size = "small",
+    srcs = ["tests/test_outer_pour.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_outer_pour.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# The outer pour drawn (connect: solid) and filled by KiCad: each rail's hot-rod lands
+# joined by its pour alone. It needs KiCad's Python (pcbnew) with numpy: run it there
+# by hand.
+py_test(
+    name = "outer_pour_kicad_test",
+    size = "small",
+    srcs = ["tests/test_outer_pour_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_outer_pour_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# Declared outer-layer pours (pour:, stage 3c E6): the spec and the router leaving the
+# pour's pads to it.
+py_test(
+    name = "pour_test",
+    size = "small",
+    srcs = [
+        "tests/test_pour.py",
+        "tests/test_stack_route.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_pour.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# The pour drawn, filled and its islands stitched to the plane by KiCad (pnr.pour). It
+# needs KiCad's Python (pcbnew): run it there by hand.
+py_test(
+    name = "pour_kicad_test",
+    size = "small",
+    srcs = ["tests/test_pour_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_pour_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
+# Plane partitions beside declared fanouts (stage 3c E4): protect_fanouts keeps the
+# fanouts' access cells open to other nets' drops and the trunk cores; a bottom-site
+# part's plane pad drops by a stub to its fanout via.
+py_test(
+    name = "partition_fanout_test",
+    size = "small",
+    srcs = ["tests/test_partition_fanout.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_partition_fanout.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
 # The partition drawn by writeback and filled by KiCad, its rails' IR drop, and the
 # checker's supply checks (rail_zones, ir_drop, unconnected). It needs KiCad's Python
 # (pcbnew): run it there by hand.
@@ -867,6 +982,16 @@ py_test(
     size = "medium",
     srcs = ["tests/test_fanout_route.py"],
     main = "tests/test_fanout_route.py",
+    deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
+)
+
+# Coupled differential pairs inside route_board (board.route_pairs: coupled,
+# pnr.route.detail.pair_route).
+py_test(
+    name = "pair_route_test",
+    size = "small",
+    srcs = ["tests/test_pair_route.py"],
+    main = "tests/test_pair_route.py",
     deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
 )
 
@@ -1299,6 +1424,41 @@ py_test(
         "requires-kicad",
     ],
     deps = [":pnr"],
+)
+
+# E2, the hier -> fixed_block bridge (pnr.hier.macro.fixed_block_from_macro): the
+# fixed/fixed_block constraint pair a placed, expanded macro derives. Pure python.
+py_test(
+    name = "hier_fixed_block_test",
+    size = "small",
+    srcs = ["tests/test_hier_fixed_block.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_hier_fixed_block.py",
+    deps = [":pnr", ":pnr_hier", ":pnr_place"],
+)
+
+# The copper side of the E2 bridge, through KiCad (KiCad Python only, by hand:
+# python3 -m unittest tests.test_hier_assemble_kicad): pnr.hier.assemble's
+# --zones (clones a block's pours and rule areas) and --group/--anchor (groups
+# the assembled items and the block's non-anchor footprints, reports the
+# group's fixed_copper.block_digest); the undeclared default stays unchanged.
+py_test(
+    name = "hier_assemble_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_hier_assemble_kicad.py",
+        "tests/test_stack_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_hier_assemble_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr", ":pnr_hier"],
 )
 
 py_test(

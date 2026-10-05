@@ -24,8 +24,12 @@ and the member poses of the layout:
 * :func:`used_area` - the summed extent area of a library record's instances,
   for ``PNR_LIBRARY_RANK_USED``.
 
-Zones are not measured: ``pnr.hier.assemble`` copies tracks and vias only, and
-the full board pours its own planes. Arcs are refused (assemble refuses them too).
+Zones are not measured: by default ``pnr.hier.assemble`` copies tracks and vias
+only, and the full board pours its own planes. With ``assemble --zones`` (E2, the
+hier -> fixed_block bridge) a block's zones ride along too, but this module's
+used-extent and hull geometry still does not grow for them; a block whose plane
+pour reaches past its measured extent needs its own margin or keepout. Arcs are
+refused (assemble refuses them too).
 """
 
 from __future__ import annotations

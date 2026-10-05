@@ -23,6 +23,7 @@ from __future__ import annotations
 import fnmatch
 import math
 import os
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -214,6 +215,12 @@ class DiffPair:
     # PNR_BUS_CLASSES=1 only: ``_defaulted`` (a plain attribute, not a dataclass
     # field, so asdict() is unchanged) names the fields the constraint file left to
     # their defaults; a bus class (pnr.si.bus_classes) may derive those.
+    # Declared only (plain class attributes, not dataclass fields, so asdict() and
+    # rules.json are unchanged without them; pnr.route.detail.pair_route): the copper
+    # layers both legs may use, and the bound on each leg's uncoupled length (mm)
+    # when the board routes its pairs coupled (board.route_pairs: coupled).
+    layers = None
+    max_uncoupled_mm = None
 
 
 @dataclass
@@ -260,6 +267,9 @@ class CompiledConstraints:
     # reports (``ir_drop:``), pnr.power_spec; empty when not declared.
     plane_partitions: List[Dict] = field(default_factory=list)
     ir_drop: List[Dict] = field(default_factory=list)
+    # Outer-layer pours whose pads count as connected after the refill (``pour:``,
+    # pnr.power_spec / pnr.pour); empty when not declared.
+    pours: List[Dict] = field(default_factory=list)
 
     @property
     def hard(self) -> List[Constraint]:
@@ -485,6 +495,12 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
                 "skew_mm": dp.skew_mm,
                 **({"skew_ps": dp.skew_ps} if dp.skew_ps is not None else {}),
                 **({"defaulted": list(dp._defaulted)} if getattr(dp, "_defaulted", ()) else {}),
+                **({"layers": list(dp.layers)} if dp.layers else {}),
+                **(
+                    {"max_uncoupled_mm": dp.max_uncoupled_mm}
+                    if dp.max_uncoupled_mm is not None
+                    else {}
+                ),
             }
             for dp in compiled.diff_pairs
             if dp.p in names and dp.n in names
@@ -532,6 +548,10 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             else {}
         ),
         **({"ir_drop": [dict(e) for e in compiled.ir_drop]} if compiled.ir_drop else {}),
+        # Declared only (pnr.pour): outer-layer pours whose pads the router leaves to them.
+        **(
+            {"pours": [dict(e) for e in compiled.pours]} if getattr(compiled, "pours", None) else {}
+        ),
     }
 
 
@@ -548,11 +568,15 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
 #   keep_outline: true      writeback keeps the source outline (no router change)
 #   dru_routing: true       the board's custom rules (.kicad_dru) where they
 #                           constrain routing (pnr.dru_rules, route.detail.dru_apply)
+#   route_pairs: coupled    the declared diff pairs routed coupled from their pads
+#                           and fanout exits before the maze
+#                           (pnr.route.detail.pair_route)
 ROUTING_SWITCHES = {
     "class_clearance": ("class_clearance", ("maze", "repair")),
     "edge": ("edge", ("exact",)),
     "keep_outline": ("keep_outline", (True, False)),
     "dru_routing": ("dru_routing", (True, False)),
+    "route_pairs": ("route_pairs", ("coupled",)),
 }
 
 
@@ -1184,6 +1208,7 @@ def compile_constraints(
         "fanout",
         "plane_partition",
         "ir_drop",
+        "pour",
     }
     for key in doc:
         if key not in known_keys:
@@ -1465,6 +1490,22 @@ def compile_constraints(
         )
         if os.environ.get("PNR_BUS_CLASSES") == "1":
             dp._defaulted = tuple(k for k in ("skew_mm",) if k not in entry)
+        if entry.get("layers") is not None:
+            layers = entry["layers"]
+            if isinstance(layers, str):
+                layers = [layers]
+            if not layers or not all(
+                isinstance(n, str) and re.fullmatch(r"F\.Cu|B\.Cu|In[1-9]\d*\.Cu", n)
+                for n in layers
+            ):
+                raise ConstraintError(
+                    f"diff_pair {dp.name!r}.layers must name copper layers (F.Cu, In1.Cu, B.Cu)"
+                )
+            dp.layers = tuple(dict.fromkeys(layers))
+        if entry.get("max_uncoupled_mm") is not None:
+            dp.max_uncoupled_mm = _positive(
+                entry["max_uncoupled_mm"], f"diff_pair {dp.name!r}.max_uncoupled_mm"
+            )
         diff_pairs.append(dp)
 
     # length_match: groups whose routed lengths must agree within a tolerance.
@@ -1597,13 +1638,14 @@ def compile_constraints(
 
     # plane_partition / ir_drop: supply rails on a shared plane layer and their IR
     # reports (pnr.power_spec), validated here; the router and pnr.ir_extract use them.
-    partitions, ir_drop = [], []
-    if doc.get("plane_partition") is not None or doc.get("ir_drop") is not None:
-        from pnr.power_spec import PowerSpecError, parse_ir_drop, parse_partition
+    partitions, ir_drop, pours = [], [], []
+    if any(doc.get(k) is not None for k in ("plane_partition", "ir_drop", "pour")):
+        from pnr.power_spec import PowerSpecError, parse_ir_drop, parse_partition, parse_pour
 
         try:
             partitions = parse_partition(doc.get("plane_partition"))
             ir_drop = parse_ir_drop(doc.get("ir_drop"))
+            pours = parse_pour(doc.get("pour"))
         except PowerSpecError as error:
             raise ConstraintError(str(error)) from None
 
@@ -1626,6 +1668,7 @@ def compile_constraints(
         routing=_parse_routing(doc.get("board") or {}),
         plane_partitions=partitions,
         ir_drop=ir_drop,
+        pours=pours,
     )
 
 

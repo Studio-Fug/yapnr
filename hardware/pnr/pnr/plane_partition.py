@@ -65,17 +65,33 @@ import numpy as np
 
 _CACHE: Dict[str, "Partition"] = {}
 MAX_WIDTH_MM = 10.0  # a trunk's widest target (its room decides below that)
+OUTER_PRIORITY = 100  # an outer pour's zones fill above the layer's other zones
 
 
 @dataclass
 class Terminal:
-    """One terminal of a rail: a via land (``kind="via"``, exact) or a pad's reach
-    disc (``kind="pad"``, where its drop will land)."""
+    """One terminal of a rail: a via land (``kind="via"``, exact), a pad's reach
+    disc (``kind="pad"``, where its drop will land) or, on an outer layer with
+    ``terminals: pad``, a surface pad's whole land (``kind="land"``, exact: the
+    rectangle ``size`` about ``at``)."""
 
     name: str
     kind: str
     at: Tuple[float, float]
     radius: float
+    size: Optional[Tuple[float, float]] = None
+    # A land given by its outline instead (a fixed block's pad or zone of the net on
+    # the layer, ``fixed_lands``): the cells inside it.
+    outline: Optional[List[Tuple[float, float]]] = None
+
+    def key(self) -> dict:
+        """The terminal for the inputs digest (``size`` / ``outline`` only when set)."""
+        out = dict(name=self.name, kind=self.kind, at=self.at, radius=self.radius)
+        if self.size is not None:
+            out["size"] = self.size
+        if self.outline is not None:
+            out["outline"] = [list(p) for p in self.outline]
+        return out
 
 
 @dataclass
@@ -85,9 +101,18 @@ class Partition:
     report: dict
     # net -> (centre-line points mm, keepout radius mm) for core_no_vias
     cores: Dict[str, Tuple[List[Tuple[float, float]], float]] = field(default_factory=dict)
+    # ``connect: solid`` (an outer-layer pour owning its lands): the zones' pad
+    # connection; None: the zone default (thermal reliefs).
+    connect: Optional[str] = None
+    # An outer pour (a ``region`` entry): its rows say so (``pour``), and writeback
+    # keeps the layer's other zones of those nets.
+    outer: bool = False
 
     def rows(self) -> List[dict]:
         """The regions as JSON (routes.json ``plane_regions``)."""
+        extra = {"connect": self.connect} if self.connect else {}
+        if self.outer:
+            extra["pour"] = True
         return [
             dict(
                 layer=r.layer,
@@ -95,6 +120,7 @@ class Partition:
                 priority=r.priority,
                 outline=None if r.outline is None else [list(p) for p in r.outline],
                 holes=[[list(p) for p in h] for h in r.holes],
+                **extra,
             )
             for r in self.regions
         ]
@@ -430,6 +456,10 @@ def partition(
     via_drill_mm: float = 0.2,
     temperature_c: float = 25.0,
     fill_min_mm: float = 0.0,
+    foreign_lands: Sequence[list] = (),
+    corridor_mm: float = 0.0,
+    corridor_keep_mm: float = 0.0,
+    bodies: Sequence[list] = (),
 ) -> Partition:
     """Partition ``entry["layer"]`` (see the module doc). ``terminals``: net ->
     :class:`Terminal` list (in the nets' order of ``entry["nets"]``); ``blocked``:
@@ -440,7 +470,7 @@ def partition(
         entry=entry,
         width=width,
         height=height,
-        terminals={n: [t.__dict__ for t in ts] for n, ts in terminals.items()},
+        terminals={n: [t.key() for t in ts] for n, ts in terminals.items()},
         blocked=[[list(c), r] for c, r in blocked],
         polygons=[[r, sorted(a)] for r, a in blocked_polygons],
         currents=currents,
@@ -453,6 +483,10 @@ def partition(
     )
     if fill_min_mm:
         payload["fill_min"] = fill_min_mm
+    if foreign_lands:  # an outer pour's other nets' lands (only then)
+        payload["foreign_lands"] = [list(map(list, r)) for r in foreign_lands]
+        payload["corridor"] = [corridor_mm, corridor_keep_mm]
+        payload["bodies"] = [list(map(list, r)) for r in bodies]
     key = _digest(payload)
     if key in _CACHE:
         return _CACHE[key]
@@ -471,6 +505,10 @@ def partition(
         via_drill_mm,
         temperature_c,
         fill_min_mm,
+        foreign_lands,
+        corridor_mm,
+        corridor_keep_mm,
+        bodies,
     )
     result.report["inputs_sha256"] = key
     if len(_CACHE) > 8:
@@ -494,6 +532,10 @@ def _partition(
     via_drill_mm,
     temperature_c,
     fill_min_mm=0.0,
+    foreign_lands=(),
+    corridor_mm=0.0,
+    corridor_keep_mm=0.0,
+    bodies=(),
 ):
     from pnr.electrical import current_width
     from pnr.ir_drop import barrel_ohm, resistivity
@@ -519,7 +561,10 @@ def _partition(
             if n not in allowed:
                 per_net_block[n] |= cells
     free &= ~hard
-    # 2. Terminals: via lands (exact, pre-claimed) and pad reach discs.
+    if entry.get("region"):
+        # An outer-layer pour inside a region (a power stage's lands): only there.
+        free &= g.polygon([entry["region"]])
+    # 2. Terminals: via lands and whole pad lands (exact, pre-claimed), pad reach discs.
     label = np.full((g.ny, g.nx), -1, dtype=np.int64)  # claimed copper per rail
     cells_of = {}
     via_land = {}
@@ -527,8 +572,8 @@ def _partition(
         via_land[n] = g.zeros()
         cells_of[n] = []
         for t in terminals[n]:
-            disc = g.disc(t.at, t.radius)
-            if t.kind == "via":
+            disc = _land(g, t) if t.kind == "land" else g.disc(t.at, t.radius)
+            if t.kind in ("via", "land"):
                 via_land[n] |= disc
             cells_of[n].append(disc)
     for k, n in enumerate(nets):
@@ -644,6 +689,17 @@ def _partition(
         if spines[n].any():
             core_masks[n] = (claimed == k) & dilate(spines[n], widths[n] / h / 2)
     # 5. Growth: a breadth-first competition into the free cells, then carving.
+    if foreign_lands:
+        # An outer pour: every other net's land in the region keeps a way out (the
+        # shortest corridor of free, unclaimed cells to the region's edge, its track
+        # with clearance wide), so the grown pours do not wall it in.
+        region = g.polygon([entry["region"]]) if entry.get("region") else free
+        lanes, walled = _corridors(
+            g, label, region, free, foreign_lands, corridor_mm, corridor_keep_mm, bodies
+        )
+        free = free & ~lanes
+        if walled:
+            report["walled_in"] = walled
     grown = _grow(label, free, per_net_block, nets, order)
     # A grown cell keeps gap + h (centre to centre) from another rail's claimed copper
     # and gap / 2 + h from another rail's grown copper (which carves the other half).
@@ -761,7 +817,7 @@ def _partition(
             jj, ii = np.nonzero(mask)
             cores[n] = (list(zip((ii + 0.5) * h, (jj + 0.5) * h)), h / 2)
     report["order"] = [nets[k] for k in order]
-    return Partition(layer, regions, report, cores)
+    return Partition(layer, regions, report, cores, entry.get("connect"))
 
 
 def _connect(ctx, label0, order):
@@ -857,6 +913,79 @@ def _connect(ctx, label0, order):
             ctx["terminals"][n][t] for t in range(len(ctx["terminals"][n])) if t not in set(reached)
         ]
     return label, spines, unreached, lengths, reached_of
+
+
+BODY_COST = 20.0  # a corridor cell under a part's body (see _corridors)
+
+
+def _corridors(g, label, region, free, lands, width_mm, keep_mm=0.0, bodies=()):
+    """``(lanes, walled)``: for each land ring (another net's, grown by its
+    clearance), the shortest 4-connected way from it through free cells at least
+    ``keep_mm`` (a track's half width and clearance) from every rail's claimed copper
+    and every other foreign land, to a cell outside ``region``, widened to
+    ``width_mm`` (held out of the growth); ``walled``: the lands without one."""
+    lanes = g.zeros()
+    walled = []
+    masks = [g.polygon([ring]) for ring in lands]
+    every = g.zeros()
+    for m in masks:
+        every |= m
+    open_ = (label < 0) & free | ~region
+    claimed = label >= 0
+    body = g.zeros()
+    for ring in bodies:
+        body |= g.polygon([ring])
+    ny, nx = free.shape
+    for ring, land in zip(lands, masks):
+        if not land.any():
+            continue
+        near = claimed | (every & ~land)  # rails' copper, another foreign land
+        if keep_mm > 0 and near.any():
+            near = dilate(near, keep_mm / g.h)
+        passable = open_ & ~near | ~region
+        start = dilate(land, 1.0) & ~land
+        # Under a part's body (between other lands) a lane costs BODY_COST per cell: a
+        # land leaves its package outward when it can.
+        cost = np.where(body & ~dilate(land, 2.0), BODY_COST, 1.0).ravel()
+        dist = np.full(free.size, np.inf)
+        prev = np.full(free.size, -1, dtype=np.int64)
+        heap = []
+        for c in np.flatnonzero(start & passable).tolist():
+            dist[c] = 0.0
+            heap.append((0.0, c))
+        heapq.heapify(heap)
+        end = None
+        while heap:
+            d, c = heapq.heappop(heap)
+            if d > dist[c]:
+                continue
+            j, i = divmod(c, nx)
+            if not region[j, i]:
+                end = c
+                break
+            for nb, ok in (
+                (c - 1, i > 0),
+                (c + 1, i < nx - 1),
+                (c - nx, j > 0),
+                (c + nx, j < ny - 1),
+            ):
+                if ok and passable.ravel()[nb] and d + cost[nb] < dist[nb]:
+                    dist[nb] = d + cost[nb]
+                    prev[nb] = c
+                    heapq.heappush(heap, (dist[nb], nb))
+        xs = [p[0] for p in ring]
+        ys = [p[1] for p in ring]
+        centre = [round((min(xs) + max(xs)) / 2, 4), round((min(ys) + max(ys)) / 2, 4)]
+        if end is None:
+            walled.append(centre)
+            continue
+        path = g.zeros()
+        c = end
+        while c >= 0:
+            path.ravel()[c] = True
+            c = int(prev[c])
+        lanes |= dilate(path, width_mm / g.h / 2)
+    return lanes, walled
 
 
 def _tree_reach(g, path, flat_terms, root, reached):
@@ -973,6 +1102,23 @@ def _width_check(g, mine, n, terms, cells_of, exempt, root, min_w, h):
     return out
 
 
+def _land(g, t):
+    """The cells of a land terminal: centres inside its rectangle or outline (at
+    least the centre's cell)."""
+    if t.outline is not None:
+        ring = list(t.outline)
+    else:
+        w, h = t.size
+        x, y = t.at
+        ring = [(x - w / 2, y - h / 2), (x + w / 2, y - h / 2), (x + w / 2, y + h / 2)]
+        ring.append((x - w / 2, y + h / 2))
+    out = g.polygon([ring])
+    if not out.any():
+        i, j = g.cell(t.at)
+        out[j, i] = True
+    return out
+
+
 def _cells(g, flat):
     out = g.zeros()
     out.ravel()[np.asarray(flat, dtype=np.int64)] = True
@@ -1072,11 +1218,62 @@ def _gap_min(grown, count, h):
 # --------------------------------------------------------- the router's inputs
 
 
-def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fanouts=None):
+def fixed_vias_on(copper, layer):
+    """``[(net, xy, diameter)]``: the fixed copper's vias (top level and every
+    block's) whose copper is on ``layer``: through vias, and blind, buried or micro
+    ones whose span (``layers``) holds it. A via outside its span neither joins nor
+    blocks the layer."""
+    import re
+
+    def _copper_order(name):  # F.Cu, In1.Cu .. InN.Cu, B.Cu
+        if name == "F.Cu":
+            return 0
+        if name == "B.Cu":
+            return 10**6
+        match = re.fullmatch(r"In(\d+)\.Cu", name)
+        if not match:
+            raise ValueError("not a copper layer name: %r" % name)
+        return int(match.group(1))
+
+    out = []
+    at = _copper_order(layer)
+    for source in [copper or {}] + list((copper or {}).get("blocks") or []):
+        for v in source.get("vias", []):
+            span = v.get("layers")
+            if span and len(span) == 2:
+                top, bottom = sorted(_copper_order(n) for n in span)
+                if not top <= at <= bottom:
+                    continue
+            out.append((v.get("net", ""), v["xy"], v["diameter_mm"]))
+    return out
+
+
+def _fixed_lands(polygons, layer, terms):
+    """Own-net fixed pads and zones on ``layer`` (``fixed_lands: true``): land
+    terminals by their outlines."""
+    out = []
+    for k, poly in enumerate(polygons):
+        net = poly.get("net")
+        if poly.get("kind") in ("pad", "zone") and poly.get("layer") == layer and net in terms:
+            ring = [tuple(p) for p in poly["outline"]]
+            xs, ys = [p[0] for p in ring], [p[1] for p in ring]
+            at = ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
+            half = max(max(xs) - min(xs), max(ys) - min(ys)) / 2
+            name = "fixed %s %d" % (poly.get("kind"), k)
+            out.append((net, Terminal(name, "land", at, half, None, ring)))
+    return out
+
+
+def for_route(
+    grid, graph, rules, stack, width, height, *, fixed_copper=None, fanouts=None, outer=False
+):
     """Every declared partition of ``rules`` on this route: its inputs from the grid
     after the fanouts are planned (their vias are terminals or foreign copper), the
     partition, and its trunk cores as net keepouts on ``grid``. Returns the
-    :class:`Partition` list."""
+    :class:`Partition` list.
+
+    ``outer``: the entries with a ``region`` instead (a pour on a routed layer inside
+    a region, :func:`outer_terminals`); without ``outer`` those are left out."""
     from pnr.fanout.planner import fixed_items
     from pnr.fixed_block import keepout_polygon
     from pnr.place.geometry import pad_rects
@@ -1094,6 +1291,13 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
     out = []
     for entry in rules.get("plane_partition") or []:
         layer = entry["layer"]
+        if bool(entry.get("region")) != bool(outer):
+            continue  # an outer pour (region) or a plane layer's partition: the other pass
+        if outer:
+            out.append(
+                _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanouts)
+            )
+            continue
         if layer not in stack.names:
             raise ValueError("plane_partition: %s is not a copper layer of the board" % layer)
         lay = stack.layer(layer)
@@ -1123,14 +1327,17 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
                 terms[net].append(Terminal("via %.3f,%.3f" % p, "via", tuple(p), d / 2))
             else:
                 blocked.append((tuple(p), d / 2 + gap_to(net)))
-        _t, fixed_vias, polygons = fixed_items(fixed_copper) if fixed_copper else ((), [], [])
-        for net, xy, d, _drill in fixed_vias:
+        _t, _v, polygons = fixed_items(fixed_copper) if fixed_copper else ((), [], [])
+        for net, xy, d in fixed_vias_on(fixed_copper, layer) if fixed_copper else ():
             if net in terms:
                 terms[net].append(
                     Terminal("fixed via %.3f,%.3f" % tuple(xy), "via", tuple(xy), d / 2)
                 )
             else:
                 blocked.append((tuple(xy), d / 2 + gap_to(net)))
+        if entry.get("fixed_lands"):
+            for net, t in _fixed_lands(polygons, layer, terms):
+                terms[net].append(t)
         skip = getattr(fanouts, "skip_pads", set()) if fanouts is not None else set()
         reach = float(entry.get("terminal_reach_mm", 0.8))
         for comp in graph.components:
@@ -1209,15 +1416,24 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
                 for (_name, net, r), pad in zip(pad_rects(comp), comp.pads)
                 if net and net not in terms and not pad.through_hole
             ]
-            _core_keepouts(grid, part, grid.via_radius + clearance, spare, reach)
+            extra = ()
+            if entry.get("protect_fanouts") and fanouts is not None:
+                # The fanouts' planned access cells keep a via site: a ball's tail may
+                # need its via right there (the trunk's copper keeps its gap anyway).
+                extra = [
+                    (grid.center_of(i, j), grid.via_radius + clearance + grid.pitch)
+                    for (_la, i, j) in sorted(fanouts.protected)
+                ]
+            _core_keepouts(grid, part, grid.via_radius + clearance, spare, reach, extra)
         out.append(part)
     return out
 
 
-def _core_keepouts(grid, part, via_reach, spare=(), spare_reach=0.0):
+def _core_keepouts(grid, part, via_reach, spare=(), spare_reach=0.0, spare_sites=()):
     """Other nets' vias stay ``via_reach`` (via radius + clearance) beyond each trunk's
     claimed copper (the router's net keepouts, vias only), except within
-    ``spare_reach`` of a ``spare`` point (another net's pad: its drop site)."""
+    ``spare_reach`` of a ``spare`` point (another net's pad: its drop site) and within
+    each ``(point, reach)`` of ``spare_sites`` (a fanout's access cell)."""
     if not part.cores:
         return
     xs = (np.arange(grid.nx) + 0.5) * grid.pitch
@@ -1227,6 +1443,8 @@ def _core_keepouts(grid, part, via_reach, spare=(), spare_reach=0.0):
     keep = g.zeros()
     for p in spare:
         keep |= g.disc(p, spare_reach)
+    for p, r in spare_sites:
+        keep |= g.disc(p, r)
     for net, (points, half) in sorted(part.cores.items()):
         if not points:
             continue
@@ -1241,3 +1459,196 @@ def _core_keepouts(grid, part, via_reach, spare=(), spare_reach=0.0):
         cells = near[np.ix_(jj, ii)]
         mask = np.broadcast_to(cells, (grid.nlayers,) + cells.shape).copy()
         grid.add_net_keepout(None, mask, {net})
+
+
+# ------------------------------------------------- outer pours inside a region
+
+
+def region_polygon(graph, spec) -> List[Tuple[float, float]]:
+    """A partition ``region`` in the board frame: its polygon (``[[x, y], ...]``), or
+    ``{refs: [...], margin_mm}``: the bounding box of those parts' courtyards (at
+    their placed poses) grown by the margin (default 0)."""
+    if isinstance(spec, dict):
+        boxes = []
+        for ref in spec["refs"]:
+            comp = graph.component(ref)
+            w, h = comp.courtyard
+            if int(round(comp.rot)) % 180 == 90:
+                w, h = h, w
+            boxes.append((comp.pos[0] - w / 2, comp.pos[1] - h / 2, comp.pos[0] + w / 2))
+            boxes[-1] += (comp.pos[1] + h / 2,)
+        m = float(spec.get("margin_mm", 0.0) or 0.0)
+        x0, y0 = min(b[0] for b in boxes) - m, min(b[1] for b in boxes) - m
+        x1, y1 = max(b[2] for b in boxes) + m, max(b[3] for b in boxes) + m
+        return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    return [(float(x), float(y)) for x, y in spec]
+
+
+def _capsule_discs(a, b, radius, step):
+    """Discs of ``radius`` along the segment ``ab`` (centres at most ``step`` apart):
+    a track's copper with its clearance, for the raster."""
+    n = max(1, int(math.ceil(math.dist(a, b) / step)))
+    return [
+        ((a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n), radius) for k in range(n + 1)
+    ]
+
+
+def _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanouts):
+    """One ``region`` entry (see :func:`for_route`): a partition of a routed layer
+    inside the region. Terminals are the rails' surface pads on the layer inside the
+    region (their whole lands with ``terminals: pad``, else reach discs), their
+    plated holes and planned or fixed vias there; foreign copper on the layer (other
+    nets' lands, escape tracks and vias, fixed copper) is blocked at the pair's
+    clearance. No trunk cores: the territories are reserved on the grid instead
+    (:func:`reserve_outer`)."""
+    from pnr.fanout.planner import fixed_items
+    from pnr.fixed_block import point_in_polygon
+    from pnr.place.geometry import pad_rects
+    from pnr.power_spec import rail_current
+    from pnr.route.detail.grid import pad_layer
+
+    layer = entry["layer"]
+    if layer not in grid.layers:
+        raise ValueError("plane_partition: %s (with a region) is not a routed layer" % layer)
+    fab = dict(rules.get("fab") or {})
+    clearance = float(fab.get("clearance_mm", grid.clearance))
+    classes = dict(getattr(grid, "net_clearances", None) or {})
+    fill_min = float(fab.get("track_width_mm", grid.track_width))
+    via_d = float(fab.get("via_diameter_mm", 2 * grid.via_radius))
+    via_h = float(fab.get("via_drill_mm", via_d / 2))
+    edge = float(fab.get("edge_clearance_mm", 0.3))
+    region = region_polygon(graph, entry["region"])
+    entry = dict(entry, region=[list(p) for p in region])
+    names = {n.name for n in graph.nets}
+    nets = [n for n in entry["nets"] if n in names]
+    rail_clear = max([clearance] + [classes.get(n, 0.0) for n in nets])
+
+    def gap_to(net):
+        return max(rail_clear, classes.get(net, 0.0))
+
+    def inside(p):
+        return point_in_polygon(p, region)
+
+    h = float(entry.get("h_mm", 0.1))
+    terms: Dict[str, List[Terminal]] = {n: [] for n in nets}
+    blocked = []
+    keepouts = []
+    sizes = getattr(fanouts, "via_sizes", {}) if fanouts is not None else {}
+    for net, p in grid.escape_vias:
+        d = sizes.get((net, p[0], p[1]), (via_d, via_h))[0]
+        if net in terms:
+            if inside(p):
+                terms[net].append(Terminal("via %.3f,%.3f" % p, "via", tuple(p), d / 2))
+        else:
+            blocked.append((tuple(p), d / 2 + gap_to(net)))
+    for la, net, a, b in getattr(grid, "escape_segments", ()):
+        if grid.layers[la] == layer and net not in terms:
+            w = grid.net_widths.get(net, grid.track_width)
+            blocked += _capsule_discs(a, b, w / 2 + gap_to(net), h / 2)
+    tracks, _v, polygons = fixed_items(fixed_copper) if fixed_copper else ((), [], [])
+    for net, xy, d in fixed_vias_on(fixed_copper, layer) if fixed_copper else ():
+        if net in terms:
+            if inside(xy):
+                terms[net].append(
+                    Terminal("fixed via %.3f,%.3f" % tuple(xy), "via", tuple(xy), d / 2)
+                )
+        else:
+            blocked.append((tuple(xy), d / 2 + gap_to(net)))
+    if entry.get("fixed_lands"):
+        for net, t in _fixed_lands(polygons, layer, terms):
+            if inside(t.at):
+                terms[net].append(t)
+    for net, tlayer, a, b, w in tracks:
+        if tlayer == layer and net not in terms:
+            blocked += _capsule_discs(tuple(a), tuple(b), w / 2 + gap_to(net), h / 2)
+    for poly in polygons:
+        if poly.get("kind") in ("pad", "zone") and poly.get("layer") == layer:
+            if poly.get("net") not in terms:
+                rings = [poly["outline"]] + list(poly.get("holes") or [])
+                keepouts.append(([[tuple(p) for p in ring] for ring in rings], frozenset()))
+    skip = getattr(fanouts, "skip_pads", set()) if fanouts is not None else set()
+    reach = float(entry.get("terminal_reach_mm", 0.8))
+    lands = entry.get("terminals") == "pad"
+    foreign = []  # other nets' lands inside the region: each keeps a way out
+    bodies = []  # the courtyards of the parts in the region (corridors avoid them)
+    for comp in graph.components:
+        if inside(comp.pos):
+            w, h_ = comp.courtyard
+            if int(round(comp.rot)) % 180 == 90:
+                w, h_ = h_, w
+            x, y = comp.pos
+            bodies.append([(x - w / 2, y - h_ / 2), (x + w / 2, y - h_ / 2)])
+            bodies[-1] += [(x + w / 2, y + h_ / 2), (x - w / 2, y + h_ / 2)]
+        for (name, net, r), pad in zip(pad_rects(comp), comp.pads):
+            half = max(r.w, r.h) / 2
+            if pad.through_hole:
+                if net in terms:
+                    if inside((r.cx, r.cy)):
+                        terms[net].append(
+                            Terminal("%s.%s" % (comp.ref, name), "via", (r.cx, r.cy), half)
+                        )
+                else:
+                    blocked.append(((r.cx, r.cy), half + gap_to(net)))
+                continue
+            if grid.layers[pad_layer(grid, comp, pad)] != layer:
+                continue
+            if net in terms:
+                if inside((r.cx, r.cy)) and (comp.ref, name) not in skip:
+                    pad_id = "%s.%s" % (comp.ref, name)
+                    if lands:
+                        terms[net].append(Terminal(pad_id, "land", (r.cx, r.cy), half, (r.w, r.h)))
+                    else:
+                        terms[net].append(Terminal(pad_id, "pad", (r.cx, r.cy), reach))
+                continue
+            g = gap_to(net)  # another net's land (or a pad without a net)
+            ring = [(r.left - g, r.bottom - g), (r.right + g, r.bottom - g)]
+            ring += [(r.right + g, r.top + g), (r.left - g, r.top + g)]
+            keepouts.append(([ring], frozenset()))
+            if net and inside((r.cx, r.cy)):
+                foreign.append(ring)
+    for hole in rules.get("mounting_holes") or []:
+        d = float(hole.get("clearance_diameter_mm", hole.get("drill_mm", 3.0)))
+        blocked.append((tuple(hole["at"]), d / 2))
+    currents = {n: rail_current(rules, n, (entry.get("currents") or {}).get(n)) for n in nets}
+    budgets = dict(entry.get("budgets_mohm") or {})
+    sources = {n: text.replace(":", ".", 1) for n, text in (entry.get("sources") or {}).items()}
+    copper = 0.035
+    if stack is not None and layer in stack.names:
+        copper = stack.layer(layer).copper_mm or 0.035
+    part = partition(
+        entry,
+        width=width,
+        height=height,
+        terminals=terms,
+        blocked=blocked,
+        blocked_polygons=keepouts,
+        currents={n: c for n, c in currents.items() if c},
+        budgets_mohm=budgets,
+        sources=sources,
+        copper_mm=copper,
+        edge_mm=edge,
+        via_drill_mm=via_h,
+        fill_min_mm=fill_min,
+        foreign_lands=foreign,
+        # A lane holds one free grid column between the pours' halos (their claims
+        # reach clearance + half a track + half a cell's diagonal), with a cell spare.
+        corridor_mm=grid.track_width + 2 * rail_clear + (math.sqrt(2) + 2) * grid.pitch,
+        corridor_keep_mm=grid.track_width / 2 + rail_clear,
+        bodies=bodies,
+    )
+    # A copy (the partition is cached): no trunk cores, the grid reservation keeps
+    # other nets off the pours; the zones fill above any board-wide pour of the
+    # layer (a GND flood).
+    from dataclasses import replace
+
+    part = replace(
+        part,
+        regions=[replace(r, priority=OUTER_PRIORITY + r.priority) for r in part.regions],
+        report=dict(part.report),
+        cores={},
+        outer=True,
+    )
+    skipped = [n for n in entry["nets"] if n not in names]
+    if skipped:
+        part.report["not_board_nets"] = skipped
+    return part

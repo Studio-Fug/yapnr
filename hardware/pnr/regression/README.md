@@ -236,6 +236,15 @@ south exits' corridor; and an outline with 1 mm corner radii drawn at 0.15 mm
 `dru_routing` and `edge: exact`; KiCad's DRC judges clearance, mask bridges and hole to
 edge, and the `net_vias` check (`check_constraints.py`) holds CLK to no via.
 
+`11-ufbga201-fanout-6L-SGSGPS-pairs` adds a coupled differential pair (one new dimension,
+`parts`): the unused adjacent ring-0 south balls R13 and R14 become `LVDS_N` and
+`LVDS_P` and run to a 2-pin 1.0 mm JST SH header fixed on the south edge east of J2.
+The engine declares `board.route_pairs: coupled` and the pair (0.10/0.15 mm, skew 0.1 mm)
+with `layers: [F.Cu]` and `max_uncoupled_mm: 3`, so it is routed coupled from the
+fanout's escape exits (`pnr.route.detail.pair_route`). The judge's custom rules hold its
+skew, uncoupled length (3 mm) and gap (0.14-0.16 mm), and the `net_vias` check holds it to
+no via (F.Cu only).
+
 ## Length-matching scratch designs
 
 No ladder case or hard rung declares a length-match group, so

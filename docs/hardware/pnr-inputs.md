@@ -104,6 +104,7 @@ The approximate board you're targeting.
 | `plane_fallback_drops` | `true` (default): writeback and the plane stage (`pnr.planes`) drop a via from every plane pad the router left without a through contact (dog-bone fallback). `false`: neither adds copper nobody routed; the unreached plane pads are listed on stderr (`unreached plane pads`). Use `false` for a placement-only writeback and for boards whose plane access another stage owns (a BGA fanout). |
 | `class_clearance`      | `maze` or `repair` (opt-in). `maze`: the grid router keeps net class clearances in the maze itself. Each net's track halo and via keep-out are sized from its own clearance (its class `clearance_mm` where larger than the fab's), every routed net judges pads and escape copper through tables at its own width and clearance (a class net's copper at the class clearance for every other net too), the routed nets are then checked with the exact pairwise rule (any pair still too close is ripped and routed again around the rest; a net that cannot be is left open, not emitted), and an mm audit of all emitted copper against other nets and pads is reported in the PnR report (`escape_diagnostics.class_clearance`: `pairs`, `static`, `ripped`, `rerouted`, `audit`). `repair`: the route is the one without the switch; then the routed nets too close to static copper at their class clearances, and the fewest that part every pair the exact rule finds too close, are ripped and routed again exactly around the rest (the class tables now in force), with the same audit. `maze` costs routing capacity on a grid whose pitch is one signal track and clearance (each class net's halo grows by a cell); `repair` costs only the nets it reroutes. Off (default): every reservation uses the fab clearance and only the escape and drop checks read the classes. |
 | `edge`                 | `exact` (opt-in): the router judges the board edge on the board's own `Edge.Cuts` outline (lines, arcs, circles; rounded corners and notches count) instead of the placement rectangle: tracks keep `edge_clearance_mm + ½width` from its centre line and vias the larger of `edge_clearance_mm + via radius` and the hole-to-edge rule as KiCad measures it (to the stroke's edge: `limit + ½stroke + ½drill`, with `limit` the board's own `physical_hole_clearance` to `Edge.Cuts` when `dru_routing` reads one), 1 µm margin. The drivers (`route_case.py`, `pnr.staged_signal`) attach the outline to the rules (`board_edges`, `pnr.board_edge`); an outline that does not frame the `outline` region falls back to the rectangle (warned, `escape_diagnostics.board_edge`). Implies `keep_outline`. |
+| `route_pairs`          | `coupled` (opt-in): the grid router routes every declared `diff_pair` whose two nets each join two terminals as one coupled pair, before the escape planner and the maze (`pnr.route.detail.pair_route`). The pair starts at its pads; on balls a declared fanout escaped, at the balls themselves where both escapes are surface stubs (the stubs are dropped: KiCad's `diff_pair_gap` judges every parallel stretch of the pair, the stubs' ball pitch too), else at the escape exits (the escape's length then counts as uncoupled copper); it runs on one layer both ends reach, the pair's `layers` and its nets' layer masks allow: a clearance envelope of `2 width + gap` is searched around pads, fixed and escape copper, keepouts and other nets' fanout exits (each keeps a 1 mm corridor outward and a via site at its end where the pair can leave them that room), and both legs are offset from it at exactly `gap`. Each leg's uncoupled copper stays within the pair's `max_uncoupled_mm` (default 2 mm), measured exactly; the shorter leg gets a 45-degree trombone to half the skew budget, checked with KiCad's length model. A `length_match` group whose members are all legs of coupled pairs is matched to half its tolerance with coupled bumps (both legs gain the same length and stay at the gap). The legs are committed as escape copper; a pair that cannot be routed coupled is routed as two legs, as without the switch. The PnR report lists each pair and group (`escape_diagnostics.coupled_pairs`: `status`, `reason`, `layer`, `lengths_mm`, `skew_mm`, `uncoupled_mm`, `start`, `exit_room`, `bumps`). |
 | `keep_outline`         | `true` (opt-in): writeback keeps the source board's `Edge.Cuts` (moved to its frame) instead of stamping the 0.15 mm rectangle, when it frames the placement region (else the rectangle, with a warning). |
 | `dru_routing`          | `true` (opt-in): the router reads the board's custom rules (`<board>.kicad_dru`) where they constrain routing (`pnr.dru_rules`): `disallow via` for a net (a no-via class) keeps it on its pads' one layer; `disallow track` on layers takes those layers from the net; a `clearance` between two kinds of nets (`A.hasNetclass('SW') && B.hasNetclass('XTAL')`) raises one side's clearance when it is 1 mm or less, else keeps each side's tracks and vias that far from the other side's pads, escapes and fixed copper; `length (max)` is reported against the routed length; `physical_hole_clearance` / `edge_clearance` against `Edge.Cuts` feed `edge: exact`. Conditions are judged for each net's tracks and vias (`A/B.Type`, `NetClass`, `NetName`, `Layer`, `hasNetclass`, a via's `Hole`, `&& \|\| !`); every rule or constraint it cannot state exactly (areas, courtyards, pad properties, sizes, pair geometry) is listed with its reason in the PnR report (`escape_diagnostics.dru`: `applied`, `unmodelled`, `length`, `pair_keepouts`, `audit`), never dropped. |
 
@@ -378,6 +379,34 @@ v0 limits: the series topology of a block with two ports on one net is not impos
 (the router joins the net's pads and the port nearest them, so the second end may be
 left as a stub); placement does not see block ports (only its footprints' absence and
 your `keepout`).
+
+**The hier -> fixed_block bridge.** A hierarchical block (`pnr.hier.blocks`,
+`pnr.hier.macro`) is placed as one rigid macro and chosen from a library of routed
+local layouts; once a layout is settled, it can become an ordinary `fixed_block`
+instead of being re-placed and re-routed as a macro every wave:
+
+1. `pnr.hier.macro.fixed_block_from_macro(flat, plan, mref, name, group, anchor,
+   solid_layers=...)` reads the macro's placed, expanded graph (`MacroPlan.expand`'s
+   output) and returns `(fixed, fixed_block)`: the `fixed` entry pins `anchor` (one
+   of the macro's members) at its landed pose, so later placement leaves the whole
+   macro where it is; the `fixed_block` entry lists every other member as a held-out
+   `ref` riding on it. It raises `ValueError` for an anchor that is not a member of
+   that macro, or a macro ref `plan` does not know.
+2. `python -m pnr.hier.assemble full.kicad_pcb --block block.kicad_pcb --out out.kicad_pcb
+   --zones --group NAME --anchor REF` draws the routed block's copper onto the full
+   board (as it always has) and, with these two flags, also clones its zones
+   (`--zones`: copper pours and rule areas, by the same rigid transform; dropped by
+   default, byte-identical when undeclared) and puts everything this run drew plus
+   every block footprint except `REF` into a new KiCad group `NAME` (`--group`,
+   `--anchor`; undeclared, no group is made). It prints that group's
+   `pnr.fixed_copper.block_digest`, the value a `fixed_block.sha256` pins once the
+   layout is final.
+
+Step 2's `NAME`/`REF` are step 1's `group`/`anchor`: run 1 first to decide them (and
+to write the `fixed`/`fixed_block` entries into the board's source yaml), then run 2
+on the placed board to turn the chosen layout's copper, zones included, into that
+group. `--anchor` without `--group` is refused; a `--group` name already on the
+board is refused rather than merged into.
 
 ### `side_pref` — top/bottom bias (soft)
 
@@ -686,7 +715,10 @@ clears the fanout's vias and bottom tracks and lies within `max_stub_mm` of a
 fanout via of its net; `interior` keeps the sites inside the array's outermost
 fully vacant ring (else inside ring 2), `shadow` allows the whole array. Placement
 takes the sites as fixed bottom poses; parts no site fits are reported. Other bottom
-parts are kept out of the array by the side policy only.
+parts are kept out of the array by the side policy only. A site part's pad on a net
+with a dedicated plane may drop by a stub on its own layer to a fanout via of its
+net within `max_stub_mm` of its land (the via reaches the plane): the drop planner
+offers that first, before drilling a via of its own.
 
 `python -m pnr.fanout plan GRAPH --rules RULES --out DIR` writes the plan
 (`fanout-<name>.json`: copper, every ball's terminal, diagnostics) without routing;
@@ -716,6 +748,8 @@ plane_partition:
     budgets_mohm: { 1V2: 12 } # widens a trunk for its IR budget (default: its ir_drop budget)
     sources: { 1V2: { "@pmic.fb_1v2": "2" } } # the trunk's root (default: the central terminal)
     h_mm: 0.1 # the raster
+    protect_fanouts: true # declared fanouts' access cells stay open (default false)
+    fixed_lands: true # own-net fixed pads and zones on the layer are terminals (default false)
 ```
 
 How it works (`pnr/plane_partition.py`, run by the router after the declared
@@ -748,12 +782,95 @@ priority; the fill net under them all). With `core_no_vias`, other nets' vias ke
 via radius plus clearance beyond half the minimum width of each trunk's centre line,
 so a row of vias cannot cut a rail's neck.
 
+A fixed block's vias count where their copper is: a through via of a rail is one of
+its terminals (a macro's feed vias, say), another net's blocks it, and a blind, buried
+or micro via whose span misses the layer does neither. With `fixed_lands: true` a
+fixed block's own-net pads and zones on the layer (a macro's tie on the plane layer)
+are land terminals too, by their outlines.
+
+With `protect_fanouts: true` the plane machinery leaves a declared fanout's planned
+access cells (where each ball's tail meets the maze) open: no other net's exit or
+plane drop is planned whose copper or via keep-out takes such a cell (a cap's drop
+via beside a ball's tail closed its only way out), and the trunk cores' via
+keepouts spare a via site at each of them. Without the key nothing changes.
+
+**Outer pours (`region`).** An entry with a `region` partitions a routed layer (an
+outer layer, typed signal) inside that region instead: a power stage whose hot-rod
+lands (0.25 x 1.82 mm at 0.5 mm pitch, say) no track can enter at its class
+clearance, connected by copper that overlaps each land along its length.
+
+```yaml
+plane_partition:
+  - layer: F.Cu
+    nets: [5V_SYS, SW_B0, SW_B1, 1V0_BUCK, GND] # any nets of the board
+    region: { refs: [U2, L1, L2, C30, C31], margin_mm: 0.5 } # or a polygon [[x, y], ...]
+    terminals: pad # whole lands (default reach: discs as on a plane layer)
+    connect: solid # the zones' pad connection (or thermal; default: the zone's)
+    stitch_vias: 4 # through vias into each pour of a net with a dedicated plane (default 1)
+    split_gap_mm: 0.2
+    min_width_mm: 0.25
+```
+
+The region is the polygon, or the bounding box of the parts' courtyards at their
+placed poses plus `margin_mm`; the raster is that region. A rail's terminals are its
+surface pads on the layer inside the region (with `terminals: pad` the whole land,
+claimed before any tree like a via land), its plated holes and its planned or fixed
+vias there. Other nets' lands, escape tracks and vias and fixed copper on the layer
+are blocked at the pair's clearance, and every other net's land in the region keeps a
+way out: before the territories grow, the cheapest corridor from the land to the
+region's edge through free cells a track's half width and clearance off every rail's
+copper and every other foreign land (a cell under a part's courtyard costs 20, so a
+land leaves its package outward when it can) is held out of the growth, wide enough
+for one free grid column between the pours' router claims (a land without one is
+reported under `walled_in`). The hard rung `11-buck-vqfnhr-4L-SGPS-pour` (a buck stage
+on a VQFN-HR-10 land pattern) exercises it; `11-buck-vqfnhr-4L-SGPS` is the same stage
+without the section. The zones are
+drawn at priority 100 and up, above the layer's other zones (which writeback keeps),
+with `connect` as their pad connection; `fill` does not go with a region.
+
+The router (`pnr/route/detail/pour.py`) claims each territory for its net on its layer
+(tracks and vias of other nets keep out; a cell another net's pad already owns is left
+to it, and KiCad's fill keeps the clearance there), plans no escape or plane drop for
+the pads a territory covers, gives a net whose other pads still route one access cell
+in its territory (the maze joins them to the pour), and drills `stitch_vias` through
+vias inside each pour of a net with a dedicated plane, at sites where a drop of that
+net may land. The escape diagnostics list each pour's pads and stitches (`pours`).
+
 The route's escape diagnostics carry a `plane_partition` report per layer: per rail
 its current, width (and the IPC and budget widths), tree length, terminals reached,
 the unreached ones (also failure sites; a pad's drop then fails in the drop planner,
 as a pad outside its region does), connected pieces, area, the narrowest width along
 its trunk (`core_min_mm`), and the smallest gap between rails. `ir_drop` (below)
 measures the result on the routed board.
+
+### `pour` — an outer-layer pour whose pads count as connected after the refill
+
+A net poured on an outer layer (a GND flood on B.Cu, the fallback for bottom-side
+decoupling caps under an array and for connector returns) joins that net's pads on
+the layer itself: the router plans no escape and no plane drop for them (the escape
+diagnostics list them as `pour_pads`), and writeback's fallback drops leave them
+alone.
+
+```yaml
+pour:
+  - layer: B.Cu # an outer layer
+    net: GND
+    stitch: true # stitch islands with pads to the net's other zones (default true)
+    connect: thermal # the zone's pad connection: solid or thermal (default)
+    clearance_mm: 0.2 # default: the fab clearance
+    min_width_mm: 0.15 # default: the fab track width
+```
+
+`pnr.planes` (KiCad's Python; both the planes and the refill steps run it) draws the
+pour over the outline where the board has no zone of that name yet, at priority 0 so
+every other zone of the layer fills first, fills it, and judges it after the fill
+(`pnr/pour.py`): each filled island that holds a pad of the net but no via or plated
+hole of it gets a through via at the site nearest its pads where the via's land lies
+inside the island, it clears every other net's copper on every layer by the
+clearance, and another zone of the net (its plane) fills there; then the board is
+refilled. An island without such a site is reported (`planes: pours {...}`, a
+warning per island). KiCad's DRC remains the judge of what is connected. Without the
+section nothing changes.
 
 ### `ir_drop` — the DC drop of a supply rail
 
@@ -853,7 +970,11 @@ length_match:
   propagation delay from the board's stackup); a pair gives one or the other. The
   native electrical flow routes a pair coupled; the own grid router routes its two
   legs as two nets and matches their lengths (the route report says how much of the
-  P leg runs beside the N leg).
+  P leg runs beside the N leg), or, with `board.route_pairs: coupled`, routes the pair
+  coupled (above). Two optional keys, written to the rules only when given:
+  `layers` (copper layer names, e.g. `[F.Cu]`) keeps both legs on those layers,
+  coupled or not; `max_uncoupled_mm` bounds each leg's uncoupled copper (escape
+  leads, pad fanouts and skew trombones) when the pair is routed coupled.
 - **`length_match`** — a group of nets whose routed lengths must agree within
   `tolerance_mm` or `tolerance_ps` (not both); the quality pass reports the group
   **spread** and flags it if it exceeds the tolerance.

@@ -58,10 +58,12 @@ def prepared(graph, constraints, rules):
     return con, _prepared_source(graph, con, rules)
 
 
-def source_errors(candidate, source, constraints):
+def source_errors(candidate, source, constraints, rules=None):
     from pnr.place.initial_pool import _hard_and_source_errors
 
-    return {k: v for k, v in _hard_and_source_errors(candidate, source, constraints).items() if v}
+    return {
+        k: v for k, v in _hard_and_source_errors(candidate, source, constraints, rules).items() if v
+    }
 
 
 def top_board(
@@ -95,7 +97,9 @@ def top_board(
             guard = power_guard(parent, roles)
 
     def extra(graph_, moved):
-        return sorted(source_errors(graph_, source, con))
+        return sorted(source_errors(graph_, source, con, rules))
+
+    from pnr.place.compact import legalize_settings, margin_kwargs, placement_clearance
 
     return MoveBoard(
         graph=parent,
@@ -105,7 +109,10 @@ def top_board(
         units=units or None,
         tier1=tier1,
         origin=origin,
-        clearance=float(con.board.default_clearance_mm),
+        # The board clearance; the courtyard gap with PNR_COMPACT LEGALIZE, plus the
+        # copper margins of parts whose box hugs their pads.
+        clearance=placement_clearance(con),
+        **margin_kwargs(legalize_settings(parent, con, rules)),
         plane=plane_nets(parent, con),
         extra_check=extra,
         guard=guard,

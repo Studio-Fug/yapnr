@@ -1,0 +1,47 @@
+"""yapnr.rf.export: KiCad footprint/contour export, Touchstone and width/space DRC.
+
+numpy only (no torch, no `yapnr.rf.sparams`'s solver chain), except `report.py`, which also
+pulls in `yapnr.rf.sparams` for its forward-run report (used by `yapnr.rf.order0`, which already
+depends on the full `//yapnr/rf` solver). Split out so that `yapnr.rf.coupons.catalog.o_optimized`
+can read a validated footprint's contour (`contour.point_in_loop`) and emit it as copper
+(`kicad.read_footprint`) without coupons pulling in the solver or torch.
+"""
+
+load("@rules_python//python:defs.bzl", "py_library")
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "export",
+    srcs = [
+        "__init__.py",
+        "contour.py",
+        "drc.py",
+        "kicad.py",
+        "raster.py",
+        "repair.py",
+        "touchstone.py",
+    ],
+    imports = ["../../.."],
+    deps = [
+        "//yapnr:package",
+        "//yapnr/rf:package",
+        requirement("numpy"),
+    ],
+)
+
+# report.py needs yapnr.rf.sparams (numpy-only; //yapnr/rf:sparams, not the full solver, to
+# avoid a cycle with //yapnr/rf:rf, which depends on this target). Kept separate so
+# //yapnr/rf/export:export (and anything depending on it, like //yapnr/rf/coupons) stays
+# numpy-only with no risk of pulling in report.py's extra import.
+py_library(
+    name = "report",
+    srcs = ["report.py"],
+    imports = ["../../.."],
+    deps = [
+        ":export",
+        "//yapnr/rf:sparams",
+        requirement("numpy"),
+    ],
+)

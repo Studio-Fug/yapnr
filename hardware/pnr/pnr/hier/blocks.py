@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 from pnr.constraints import CompiledConstraints, Constraint
 from pnr.graph import BoardGraph, BoardOutline, Net
+from pnr.stack import local_record
 
 
 @dataclass
@@ -59,11 +60,12 @@ def _suffix(address: str, prefix: str) -> str:
 def extract_blocks(graph: BoardGraph, constraints: CompiledConstraints) -> List[Block]:
     by_ref = {c.ref: c for c in graph.components}
     # Parts carrying board-level pose relations (edge rows, fixed poses, line
-    # groups) are interface parts: they stay top-level so those relations remain exact.
+    # groups, alignments) are interface parts: they stay top-level so those relations
+    # remain exact. (A region on a block member becomes a body of the block macro.)
     interface = {
         r
         for con in constraints.constraints
-        if con.kind in ("row", "fixed", "edge_align", "line_group")
+        if con.kind in ("row", "fixed", "edge_align", "line_group", "align")
         for r in con.refs
     }
     modules: Dict[str, List[str]] = {}
@@ -176,7 +178,9 @@ def sub_board(
     constraints that reference parts outside the block are dropped.
     """
     inside = set(block.refs)
-    sub = BoardGraph(name=graph.name + ":" + block.name)
+    sub = BoardGraph(
+        name=graph.name + ":" + block.name, stack=local_record(copy.deepcopy(graph.stack))
+    )
     for c in graph.components:
         if c.ref in inside:
             cc = copy.deepcopy(c)
@@ -196,8 +200,9 @@ def sub_board(
         refs = tuple(r for r in c.refs if r in inside)
         if not refs:
             continue
-        if c.kind in ("fixed", "row", "edge_align", "keepout", "line_group"):
-            # Absolute/edge poses are board-level decisions, made when the block is placed.
+        if c.kind in ("fixed", "row", "edge_align", "keepout", "line_group", "region", "align"):
+            # Absolute/edge poses, regions and alignments are board-level decisions,
+            # made when the block is placed (a region on the block macro's bodies).
             continue
         anchor = c.params.get("anchor")
         if anchor and anchor not in inside:
@@ -289,11 +294,13 @@ def aspect_sizes(
     return out
 
 
-def block_constraints_doc(doc: dict, addresses, width: float, height: float) -> dict:
+def block_constraints_doc(doc: dict, addresses, width: float, height: float, refs=None) -> dict:
     """Authored constraints restricted to one block's parts, on a width x height board.
 
     Selectors are kept only where they match block members; board-level relations
-    (rows, fixed poses) are dropped because the block is posed at top level.
+    (rows, fixed poses) are dropped because the block is posed at top level. A
+    ``fanout`` entry is kept only when its part is one of the block's ``refs`` (its
+    ``bottom_sites`` parts filtered to them); without ``refs`` none is kept.
     """
     import fnmatch
 
@@ -313,8 +320,32 @@ def block_constraints_doc(doc: dict, addresses, width: float, height: float) -> 
     out.setdefault("board", {})["outline"] = {"w": float(width), "h": float(height)}
     out.pop("row", None)
     out.pop("line_group", None)
+    # Board-coordinate regions and alignments apply to the placed block macro.
+    out.pop("region", None)
+    out.pop("align", None)
+    # Fixed copper blocks are board-level copper (their anchors are fixed poses).
+    out.pop("fixed_block", None)
     out["fixed"] = {}
     out.pop("layout_array", None)
+    if "fanout" in out:
+        members = set(refs or ())
+        fanouts = []
+        for f in out["fanout"] or []:
+            if not isinstance(f, dict) or f.get("ref") not in members:
+                continue
+            f = dict(f)
+            bottom = f.get("bottom_sites")
+            if isinstance(bottom, dict):
+                parts = [r for r in bottom.get("parts") or [] if r in members]
+                if parts:
+                    f["bottom_sites"] = dict(bottom, parts=parts)
+                else:
+                    f.pop("bottom_sites")
+            fanouts.append(f)
+        if fanouts:
+            out["fanout"] = fanouts
+        else:
+            out.pop("fanout")
     if "side" in out:
         out["side"] = {k: [s for s in v if hits(s)] for k, v in out["side"].items()}
         out["side"] = {k: v for k, v in out["side"].items() if v}

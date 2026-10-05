@@ -37,6 +37,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--dump-json", metavar="PATH")
     ap.add_argument("--dump-svg", metavar="PATH")
     ap.add_argument(
+        "--board",
+        metavar="KICAD_PCB",
+        help="the KiCad board the graph was ingested from: declared diff pairs and "
+        "length-match groups are tuned against its stackup and its pads' lands",
+    )
+    ap.add_argument(
         "--dump-rules",
         metavar="PATH",
         help="write resolved net-class/diff-pair/length-match rules (rules.json) "
@@ -180,6 +186,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Fab capability profile (PNR_FAB_PROFILE; identity for legacy): every
     # downstream consumer of the dumped rules.json sees one rule set.
     rules = apply_rules(rules)
+    if args.board:
+        from pnr.length_model import attach_board
+
+        with open(args.board, encoding="utf-8") as fh:
+            attach_board(rules, fh.read())
     si_dir = None
     from pnr.si import enabled as si_enabled
 
@@ -255,6 +266,29 @@ def main(argv: Optional[List[str]] = None) -> int:
             "vias": [[net, x, y] for (net, x, y) in board.vias],
             "unrouted": board.result.unrouted,
         }
+        if board.via_spans:  # blind, buried and micro vias (pnr.via_policy)
+            routes["via_spans"] = [list(s) for s in board.via_spans]
+        routes.update(board.extras())  # a declared fanout's via sizes and locked copper
+        if board.length_report is not None:
+            # Pair / group length tuning (pnr.route.detail.tune), only when declared.
+            routes["length_tuning"] = board.length_report
+            for entry in board.length_report:
+                if entry.get("status") not in ("ok", "tuned"):
+                    print(
+                        "pnr.route: %s %r is %s%s"
+                        % (
+                            entry.get("kind"),
+                            entry.get("name"),
+                            entry.get("status"),
+                            (
+                                ""
+                                if entry.get("spread") is None
+                                else " (spread %.3f %s, budget %g)"
+                                % (entry["spread"], entry.get("unit"), entry.get("budget"))
+                            ),
+                        ),
+                        file=sys.stderr,
+                    )
         with open(args.dump_routes, "w", encoding="utf-8") as fh:
             json.dump(routes, fh, indent=2, sort_keys=True)
 

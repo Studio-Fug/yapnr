@@ -235,6 +235,23 @@ class JointGeometryTest(unittest.TestCase):
 
                 self.assertTrue(_segment_clear(grid, "INPUT", la, a, b, width))
 
+    def test_exact_checks_keep_the_larger_class_clearance(self):
+        # A ground drop via beside a PWR-class pad (0.15 mm) on a 0.10 mm fab: the
+        # exact check judges the pair at the PWR class's clearance, as KiCad does
+        # (the radar trial's 0.125 mm findings); without class clearances it is
+        # the fab's, as before.
+        from pnr.route.detail.joint_escape import _segment_clear
+
+        grid = RouteGrid(10, 10, 0.1, layers=("F.Cu", "B.Cu"), track_width=0.1, clearance=0.1)
+        grid.pad_rectangles.append((0, "PWR", Rect(5.0, 5.0, 0.3, 0.3)))
+        via = (5.0, 5.15 + 0.125 + 0.175)  # a 0.35 mm via 0.125 mm above the pad
+        self.assertTrue(_segment_clear(grid, "GND", 0, via, via, 0.35))
+        grid.net_clearances = {"PWR": 0.15}
+        self.assertFalse(_segment_clear(grid, "GND", 0, via, via, 0.35))
+        far = (5.0, 5.15 + 0.155 + 0.175)
+        self.assertTrue(_segment_clear(grid, "GND", 0, far, far, 0.35))
+        self.assertTrue(_segment_clear(grid, "PWR", 0, via, via, 0.35))  # its own pad
+
     def test_unqualified_terminal_is_not_emitted_as_a_center_stub(self):
         grid = self.grid()
         grid.blocked[:] = True

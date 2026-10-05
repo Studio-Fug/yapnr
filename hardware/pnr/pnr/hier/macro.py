@@ -19,6 +19,15 @@ is centred there; with PNR_MACRO_HULL=1 the macro also carries a per-side
 occupancy hull (``Component.hull``, :mod:`pnr.place.hull`) so parts and other
 blocks can nest into its free space. :meth:`MacroPlan.expand` stays rigid in
 both cases (members are posed from the recorded frame origin).
+
+E2 (the hier -> fixed_block bridge): :func:`fixed_block_from_macro` turns one
+placed, expanded macro into the ``fixed`` and ``fixed_block`` constraint entries
+(pnr-inputs.md, pnr.fixed_block) that make its chosen layout permanent -- one
+member keeps an ordinary placed pose (the macro's own, pinned), every other
+member becomes a held-out ref riding fixed on it. Pairing this with
+``pnr.hier.assemble --group --anchor [--zones]`` turns the macro's *copper*
+(tracks, vias and, opted in, zones) into that group's drawn copper on the full
+board, with the digest the ``fixed_block`` pins.
 """
 
 from __future__ import annotations
@@ -108,6 +117,7 @@ class MacroPlan:
                 src = by_ref[comp.ref]
                 comp.pos, comp.rot, comp.side = src.pos, src.rot, src.side
                 comp.pads = copy.deepcopy(src.pads)  # keep any side mirroring the placer applied
+                comp.body = src.body
         out.outline = copy.deepcopy(placed.outline)
         return out
 
@@ -160,6 +170,44 @@ def _macro_frame(geo, w, h, margin, shrink):
     )
 
 
+def _macro_relation(c, refs, plan, member_frame):
+    """A ``region`` or ``align`` on the macro graph: a member's bodies become bodies
+    of its macro, a member's anchor the macro's anchor, both in the macro frame, so
+    the relation stays exact at every macro rotation (pnr.place.regions)."""
+    from pnr.place.regions import anchor_spec, macro_anchor, macro_bodies
+
+    params = dict(c.params)
+    if c.kind == "region":
+        given = params.get("bodies") or {}
+        bodies = {}
+        for r in c.refs:
+            m = plan.member_of.get(r)
+            if m is None:
+                if r in given:
+                    bodies[r] = given[r]
+                continue
+            member, offset, rot = member_frame[r]
+            bodies.setdefault(m, []).extend(macro_bodies(member, c, offset, rot))
+        if bodies:
+            params["bodies"] = bodies
+    else:
+        anchors = {}
+        for r in c.refs:
+            m = plan.member_of.get(r)
+            if m is None:
+                anchors[r] = anchor_spec(c, r)
+                continue
+            if m in anchors:
+                raise ValueError(
+                    "align %r: two of its refs are members of macro %s (block %s), whose "
+                    "layout already fixes their offsets" % (c.name, m, plan.macros[m]["block"])
+                )
+            member, offset, rot = member_frame[r]
+            anchors[m] = macro_anchor(member, anchor_spec(c, r), offset, rot)
+        params["anchors"] = anchors
+    return Constraint(c.kind, c.enforcement, refs, params, c.weight, c.name)
+
+
 def collapse(
     flat: BoardGraph,
     constraints: CompiledConstraints,
@@ -193,7 +241,11 @@ def collapse(
     """
     plan = MacroPlan()
     by_ref = {c.ref: c for c in flat.components}
-    macro_graph = BoardGraph(name=flat.name + ":macro", outline=copy.deepcopy(flat.outline))
+    macro_graph = BoardGraph(
+        name=flat.name + ":macro",
+        outline=copy.deepcopy(flat.outline),
+        stack=copy.deepcopy(flat.stack),
+    )
     pad_alias: Dict[Tuple[str, str], Tuple[str, str]] = {}
     # Orientation is a per-ref absolute axis: every ref of a lock counts, not just refs[0].
     orient_locks = {
@@ -214,6 +266,10 @@ def collapse(
 
     shrink, with_hull = shrink_enabled(), hull_enabled()
     shaped = geometry is not None and (shrink or with_hull)
+    # Each member's component in the block frame, its offset from the macro centre
+    # (macro unrotated) and its rotation there: regions and aligns on members
+    # become bodies and anchors of the macro (pnr.place.regions).
+    member_frame = {}
     for index, (block, sub, w, h) in enumerate(layouts):
         mref = "%s%02d" % (prefix, index)
         members = {}
@@ -229,6 +285,8 @@ def collapse(
             reserves.extend(macro_reserves(c))
             members[c.ref] = (c.pos[0], c.pos[1], c.rot, c.side)
             plan.member_of[c.ref] = mref
+            centre = (fx, fy) if frame is not None else (w / 2, h / 2)
+            member_frame[c.ref] = (c, (c.pos[0] - centre[0], c.pos[1] - centre[1]), c.rot)
             for p in c.pads:
                 ox, oy = _rot(p.offset[0], p.offset[1], c.rot)
                 q = copy.deepcopy(p)
@@ -352,6 +410,9 @@ def collapse(
                 f"these parts together or leave the block flat"
             )
         refs = tuple(dict.fromkeys(plan.member_of.get(r, r) for r in c.refs))
+        if c.kind in ("region", "align"):
+            kept.append(_macro_relation(c, refs, plan, member_frame))
+            continue
         if c.kind == "orientation" and c.refs[0] in plan.member_of:
             continue
         if c.kind == "side" and all(r in plan.member_of for r in c.refs):
@@ -389,3 +450,56 @@ def collapse(
         i for i in rules.get("plane_access_intents", []) if i.get("ref") not in plan.member_of
     ]
     return macro_graph, con, place_rules, plan
+
+
+def fixed_block_from_macro(
+    flat: BoardGraph,
+    plan: "MacroPlan",
+    mref: str,
+    name: str,
+    group: str,
+    anchor: str,
+    solid_layers: Optional[List[str]] = None,
+) -> Tuple[dict, dict]:
+    """The ``fixed`` and ``fixed_block`` constraint entries (pnr.constraints,
+    pnr-inputs.md) that make macro ``mref``'s chosen layout permanent, read from
+    its placed and expanded graph ``flat`` (:meth:`MacroPlan.expand`'s output).
+
+    ``anchor`` must be one of the macro's members; it keeps an ordinary placed
+    pose there, returned as a ``fixed`` entry (``at``/``rot``/``side``) so later
+    placement passes leave it, and with it the whole macro, where it landed. Every
+    other member becomes a ``fixed_block`` ref: held out of placement
+    (``pnr.fixed_block.hold_out``) and reserved as copper only, riding fixed on
+    the anchor. ``name`` and ``group`` are the fixed_block's own name and the
+    KiCad group its copper must be drawn into (:func:`pnr.hier.assemble`'s
+    ``--group NAME --anchor ANCHOR``); ``solid_layers`` names the copper zones
+    that become routing obstacles for other nets.
+
+    This derives the two constraint dicts only; it does not touch ``flat`` or
+    any board file. A caller merges them into the top board's source yaml
+    (``fixed`` and ``fixed_block`` tables) before the next placement/routing
+    pass, and pins the ``sha256`` that ``pnr.hier.assemble --group`` reports
+    once the chosen layout is final.
+
+    Raises ``ValueError`` when ``mref`` is not a collapsed macro of ``plan`` or
+    ``anchor`` is not one of its members.
+    """
+    if mref not in plan.macros:
+        raise ValueError(f"{mref!r} is not a collapsed macro of this plan")
+    members = sorted(plan.macros[mref]["members"])
+    if anchor not in members:
+        raise ValueError(
+            f"fixed_block anchor {anchor!r} is not a member of macro {mref} "
+            f"(block {plan.macros[mref]['block']}); its members are {members}"
+        )
+    by_ref = {c.ref: c for c in flat.components}
+    a = by_ref[anchor]
+    fixed = dict(at=[round(a.pos[0], 6), round(a.pos[1], 6)], rot=float(a.rot), side=a.side)
+    block = dict(
+        name=name,
+        group=group,
+        anchor=anchor,
+        refs=[r for r in members if r != anchor],
+        solid_layers=list(solid_layers or []),
+    )
+    return fixed, block

@@ -30,6 +30,36 @@ class CopperKeepoutTest(unittest.TestCase):
             self.assertFalse(g.passable(la, *g.cell_of(12.5, 10)))
             self.assertTrue(g.passable(la, *g.cell_of(7.5, 10)))
 
+    def test_bottom_keepout_mirrors_with_the_pads(self):
+        # A keep-out drawn around pad 1 (footprint frame, top side) stays on pad 1 when
+        # the part is on the bottom at any rotation: mirrored in y as the pads are,
+        # not in x (which would put it on the pad 180 degrees around).
+        from pnr.graph import Pad
+        from pnr.place.geometry import pin_positions, set_component_side
+
+        for rot in (0, 90, 180, 270):
+            comp = Component(
+                "U1",
+                "sot",
+                (10, 10),
+                rot,
+                "top",
+                (4, 4),
+                (4, 4),
+                pads=[Pad("1", "A", (-1.5, 1.0)), Pad("3", "B", (1.5, -1.0))],
+            )
+            set_component_side(comp, "bottom")
+            g = RouteGrid(20, 20, 0.25)
+            _mark_copper_keepouts(
+                g,
+                BoardGraph("t", [comp]),
+                {"copper_keepouts": [{"ref": "U1", "rect_mm": [-1.7, 0.8, -1.3, 1.2]}]},
+            )
+            (_, pad1), (_, pad3) = pin_positions(comp)
+            for la in range(g.nlayers):
+                self.assertFalse(g.passable(la, *g.cell_of(*pad1)), rot)
+                self.assertTrue(g.passable(la, *g.cell_of(*pad3)), rot)
+
 
 class TrackSpacingTest(unittest.TestCase):
     def test_nearest_unreserved_cell_preserves_signal_and_power_clearance(self):

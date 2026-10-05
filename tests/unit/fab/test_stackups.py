@@ -31,8 +31,8 @@ class MicrostripTest(unittest.TestCase):
         m = stackups.load("oshpark-4l-fr408hr").microstrip("F.Cu")
         self.assertEqual((m.reference, m.h_mm, m.er, m.er_freq_hz), ("In1.Cu", 0.1999, 3.61, 1e9))
         self.assertAlmostEqual(m.t_um, 43.18, 2)
-        self.assertIsNone(m.tan_delta)
-        self.assertEqual(m.tan_delta_prior, 0.009)
+        # Df 0.009 from OSH Park's construction drawing (O-4l-stack), no stand-in needed
+        self.assertEqual(m.tan_delta, 0.009)
 
     def test_bottom_layer_view_mirrors_the_top(self):
         s = stackups.load("oshpark-4l-fr408hr")
@@ -49,15 +49,20 @@ class MicrostripTest(unittest.TestCase):
         self.assertAlmostEqual(m.h_mm, 0.127 + 0.1194, 6)
 
     def test_rf_spec_refuses_an_unpublished_df_without_the_prior(self):
-        m = stackups.load("oshpark-4l-fr408hr").microstrip("F.Cu")
+        m = stackups.load("jlc04161h-7628").microstrip("F.Cu")
         with self.assertRaises(stackups.StackupError):
             m.rf_stackup_spec(10.0)
         spec = m.rf_stackup_spec(10.0, use_prior=True)
         self.assertEqual(
             {k: spec[k] for k in ("er", "tan_delta", "h_mm", "f_ref_ghz")},
-            {"er": 3.61, "tan_delta": 0.009, "h_mm": 0.1999, "f_ref_ghz": 10.0},
+            {"er": 4.4, "tan_delta": 0.017, "h_mm": 0.2104, "f_ref_ghz": 10.0},
         )
         self.assertEqual(spec["provenance"]["priors_used"], ["tan_delta"])
+
+    def test_oshpark_rf_spec_needs_no_prior(self):
+        spec = stackups.load("oshpark-4l-fr408hr").microstrip("F.Cu").rf_stackup_spec(10.0)
+        self.assertEqual((spec["er"], spec["tan_delta"], spec["h_mm"]), (3.61, 0.009, 0.1999))
+        self.assertEqual(spec["provenance"]["priors_used"], [])
         self.assertEqual(spec["provenance"]["er_freq_hz"], 1e9)
 
     def test_rogers_uses_the_design_dk_and_needs_no_prior(self):

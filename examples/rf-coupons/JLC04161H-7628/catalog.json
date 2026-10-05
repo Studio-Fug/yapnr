@@ -12,7 +12,8 @@
       2
     ],
     "via_x": null,
-    "source": "2D, L2 cut, L3 reference"
+    "source": "2D, L2 cut, L3 reference",
+    "design": ""
   },
   "trl": {
     "P": {
@@ -552,7 +553,7 @@
         [
           "line",
           "M",
-          6.496471003837301
+          6.496471003837307
         ],
         [
           "coupled",
@@ -562,7 +563,7 @@
         [
           "line",
           "M",
-          6.496471003837301
+          6.496471003837307
         ],
         [
           "junction",

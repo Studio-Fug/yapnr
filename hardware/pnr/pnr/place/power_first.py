@@ -522,7 +522,9 @@ class StagedPlacer:
         from .model import pair_tensors
 
         self.pairs = pair_tensors(pair_weights, pin_key)
-        pats = [p for nc in constraints.net_classes if nc.plane_layer for p in nc.nets]
+        from pnr.stack import split_plane_patterns
+
+        pats = split_plane_patterns(constraints, graph)
         self.plane_pins = []
         for net in graph.nets:
             if any(fnmatch.fnmatch(net.name, p) for p in pats):
@@ -979,7 +981,7 @@ def staged_place(
     from pnr.constraints import compile_routing_rules
     from pnr.graph import BoardGraph
 
-    from . import metrics
+    from . import legal_options, metrics
     from .channels import ChannelModel
     from .geometry import hard_group_edges, hard_group_limits, resolve_hard_rotations
     from .legalize import LegalizationError, legalize
@@ -1055,6 +1057,7 @@ def staged_place(
                 spread=legalize_spread,
                 roles=roles,
                 **({} if pad_edge is None else dict(pad_edge=pad_edge)),
+                **legal_options.legalize_kwargs(constraints, graph),
             )
         except LegalizationError as exc:
             out["error"] = exc

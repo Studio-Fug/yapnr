@@ -18,9 +18,14 @@ Units: all coordinates and lengths are **millimetres**; ``rot`` is degrees CCW.
 The frame matches the constraint file: origin at the board-outline bottom-left.
 (``pcbnew`` reports nanometres with y pointing down; :mod:`pnr.ingest` converts.)
 
+``BoardGraph.stack`` (the board's declared copper stack, :mod:`pnr.stack`) is
+omitted when None, so a board without a stackup serializes byte-identically.
+
 src13: ``Component.reserves`` (placement reservations derived from routing rules,
 PNR_PAIR_LANDING_RESERVE) round-trips through JSON and is omitted when empty, so
-graphs without reservations serialize byte-identically to before.
+graphs without reservations serialize byte-identically to before. ``Component.body``
+(the part's real, possibly off-centre body box) is likewise omitted when it is the
+centred ``courtyard`` box.
 """
 
 from __future__ import annotations
@@ -72,6 +77,19 @@ class Pad:
     # offset lands, and every legacy graph). The detailed grid admits filled in-pad
     # vias (fab profile 5B) only in exact lands.
     land_corner: Optional[float] = None
+    # The pad's own copper clearance (mm) where the pad or its footprint overrides
+    # the net class (KiCad's local clearance: a fiducial's 0.6 mm, say), and its own
+    # solder mask margin where set above the library default (a fiducial's 0.5 mm
+    # aperture ring; pnr.ingest). Foreign copper keeps the larger of the two away
+    # (pnr.route.detail.grid.pad_keepaway). None: not set, the net class decides,
+    # and the graph JSON carries no key.
+    clearance_mm: Optional[float] = None
+    mask_margin_mm: Optional[float] = None
+    # True for an SMD land on the outer copper layer opposite its footprint's side
+    # (a top part's exposed pad repeated as a thermal land on B.Cu, say): the
+    # router keeps foreign copper off that layer there. None for every other pad,
+    # and the graph JSON carries no key.
+    far_side: Optional[bool] = None
 
     def __post_init__(self):
         self.offset = _fpair(self.offset)
@@ -79,6 +97,10 @@ class Pad:
         self.drill_size = _fpair(self.drill_size)
         if self.land_corner is not None:
             self.land_corner = float(self.land_corner)
+        if self.clearance_mm is not None:
+            self.clearance_mm = float(self.clearance_mm)
+        if self.mask_margin_mm is not None:
+            self.mask_margin_mm = float(self.mask_margin_mm)
 
 
 @dataclass
@@ -90,6 +112,11 @@ class Component:
     (width, height) of the courtyard used for overlap/density; ``bbox`` is the
     full graphical bounding box. Both are in mm in the unrotated frame and
     symmetric around the footprint origin, including offset component bodies.
+    ``body`` is the box those symmetric sizes are built from, as it lies about
+    the origin: ``(x0, y0, x1, y1)`` in the unrotated frame of the current side
+    (y up), so ``courtyard == (2 * max(-x0, x1), 2 * max(-y0, y1))`` at ingest.
+    None when it is centred (then it is the ``courtyard`` box); the region and
+    align constraints (:mod:`pnr.place.regions`) measure off-centre parts by it.
     """
 
     ref: str
@@ -112,11 +139,30 @@ class Component:
     # pnr.place.hull; only set with PNR_MACRO_HULL=1). None for every ordinary
     # part, and then omitted from the JSON so default graphs stay byte-identical.
     hull: Optional[dict] = None
+    # The off-centre body box (see above); None, and omitted from the JSON, when centred.
+    body: Optional[Tuple[float, float, float, float]] = None
 
     def __post_init__(self):
         self.pos = _fpair(self.pos)
         self.courtyard = _fpair(self.courtyard)
         self.bbox = _fpair(self.bbox)
+        if self.body is not None:
+            self.body = tuple(float(v) for v in self.body)
+
+
+def footprint_point(comp: "Component", x: float, y: float) -> Tuple[float, float]:
+    """A point in a footprint's own frame (unrotated, as the library draws it on the
+    top side, mm) at ``comp``'s pose: mirrored in y on the bottom side, as the pads are
+    (KiCad ``Flip``; :func:`pnr.place.geometry.set_component_side`), then turned by
+    ``comp.rot`` about the component origin. For rule areas tied to a footprint
+    (``copper_keepout.rect_mm``)."""
+    import math
+
+    if comp.side == SIDE_BOTTOM:
+        y = -y
+    a = math.radians(comp.rot)
+    co, si = math.cos(a), math.sin(a)
+    return (comp.pos[0] + co * x - si * y, comp.pos[1] + si * x + co * y)
 
 
 @dataclass
@@ -157,6 +203,10 @@ class BoardGraph:
     nets: List[Net] = field(default_factory=list)
     outline: Optional[BoardOutline] = None
     schema: str = SCHEMA_VERSION
+    # The board's declared copper stack (pnr.ingest.stack_record): copper layers
+    # in order with KiCad type, copper thickness and zone nets. None when the
+    # board declares no physical stackup; then omitted from the JSON.
+    stack: Optional[dict] = None
 
     # -- convenience views -------------------------------------------------
 
@@ -189,6 +239,15 @@ class BoardGraph:
                 c.pop("reserves", None)
             if c.get("hull") is None:
                 c.pop("hull", None)
+            if c.get("body") is None:
+                c.pop("body", None)
+            for p in c.get("pads", ()):
+                # Pad-local rules only where a footprint sets them (pnr.ingest).
+                for key in ("clearance_mm", "mask_margin_mm", "far_side"):
+                    if p.get(key) is None:
+                        p.pop(key, None)
+        if d.get("stack") is None:
+            d.pop("stack", None)
         return d
 
     def to_json(self, *, indent: Optional[int] = 2) -> str:
@@ -212,6 +271,7 @@ class BoardGraph:
                 smd_body=bool(c.get("smd_body", False)),
                 reserves=[dict(r) for r in c.get("reserves", [])],
                 hull=c.get("hull"),
+                body=c.get("body"),
                 pads=[
                     Pad(
                         name=p["name"],
@@ -223,6 +283,9 @@ class BoardGraph:
                         plated=p.get("plated"),
                         plated_land_radius=float(p.get("plated_land_radius", 0.0)),
                         land_corner=p.get("land_corner"),
+                        clearance_mm=p.get("clearance_mm"),
+                        mask_margin_mm=p.get("mask_margin_mm"),
+                        far_side=p.get("far_side"),
                     )
                     for p in c.get("pads", [])
                 ],
@@ -251,6 +314,7 @@ class BoardGraph:
             nets=nets,
             outline=outline,
             schema=d.get("schema", SCHEMA_VERSION),
+            stack=d.get("stack"),
         )
 
     @classmethod

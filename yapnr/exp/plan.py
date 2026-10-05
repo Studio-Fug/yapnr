@@ -142,7 +142,30 @@ def _repo_root(explicit: Optional[Path]) -> Optional[Path]:
     return None
 
 
+def default_families(ranking: Sequence[Tuple[str, str]]) -> List[str]:
+    """The families a campaign without ``[placement] families`` may use: the owner's ranked ones
+    (in rank order), then ``DEFAULT_FAMILIES``."""
+    out: List[str] = []
+    for family in [f for f, _ in ranking] + list(DEFAULT_FAMILIES):
+        if family not in out:
+            out.append(family)
+    return out
+
+
 def gcp_placements(
+    classes: Sequence[ResourceClass],
+    campaign: Mapping[str, Any],
+    config: Config,
+    table: cost.PriceTable,
+    calibration: cost.Calibration,
+    **kwargs,
+) -> Dict[str, cost.Placement]:
+    """The preferred (family, region, shape) per class: the first of ``gcp_candidates``."""
+    candidates = gcp_candidates(classes, campaign, config, table, calibration, **kwargs)
+    return {name: options[0] for name, options in candidates.items()}
+
+
+def gcp_candidates(
     classes: Sequence[ResourceClass],
     campaign: Mapping[str, Any],
     config: Config,
@@ -154,8 +177,16 @@ def gcp_placements(
     shape: Optional[str] = None,
     families: Optional[Sequence[str]] = None,
     template: Optional[bool] = None,
-) -> Dict[str, cost.Placement]:
-    """A (family, region, shape) per class; one machine type for wall-clock-budgeted campaigns."""
+) -> Dict[str, List[cost.Placement]]:
+    """The candidate placements per class, preferred first.
+
+    With ``[gcp] ranking``, every usable ranked (family, region) pair is a candidate, in rank
+    order, and ``submit`` takes the first whose region has Spot quota for one more VM. Without a
+    ranking a class has one candidate (the cheapest per result, or the first family). A
+    wall-clock-budgeted campaign runs on one machine type: every class has the same candidate
+    pairs with one shape per family (a family that would need different shapes for two classes is
+    dropped), and ``submit`` keeps the machine type its first submission chose.
+    """
     gcp = config.require_gcp()
     placement = dict(campaign.get("placement", {}))
     if template is not None:
@@ -168,7 +199,7 @@ def gcp_placements(
     for name in regions:
         if name not in gcp.regions:
             raise PlanError("region %s is not one of gcp.regions in the owner config" % name)
-    chosen = list(families or placement.get("families") or DEFAULT_FAMILIES)
+    chosen = list(families or placement.get("families") or default_families(gcp.ranking))
     vm_vcpus = int(placement.get("vm_vcpus", 16))
     if placement.get("shape"):
         parts = placement["shape"].split("-")
@@ -183,16 +214,19 @@ def gcp_placements(
     # Wall-clock-budgeted search does the most work per budget on the fastest core, so those
     # campaigns take the first listed family that fits; the others the cheapest per result.
     prefer = placement.get("prefer") or ("first-family" if one_type else "cost")
-    out: Dict[str, cost.Placement] = {}
-    first: Optional[cost.Placement] = None
+    out: Dict[str, List[cost.Placement]] = {}
+    first: Optional[List[cost.Placement]] = None
     order = sorted(classes, key=lambda c: -len(c.lines))
     for cls in order:
-        pairs = gcp.ranking
+        pairs = list(gcp.ranking)
         allowed_families, allowed_regions = chosen, regions
         if one_type and first is not None:
-            allowed_families, allowed_regions, pairs = [first.family], [first.region], []
+            allowed_families = sorted({p.family for p in first})
+            allowed_regions = sorted({p.region for p in first})
+            pairs = [(p.family, p.region) for p in first]
+        ranked = bool(cost.ranked_pairs(pairs, allowed_families, allowed_regions))
         try:
-            p = cost.place(
+            options = cost.placements(
                 table,
                 calibration,
                 cpus=cls.cpus,
@@ -210,25 +244,58 @@ def gcp_placements(
             )
         except cost.CostError as err:
             raise PlanError("class %s: %s" % (cls.name, err)) from err
-        if placement.get("shape") and p.shape != placement["shape"]:
-            raise PlanError(
-                "class %s needs %s, not the requested %s" % (cls.name, p.shape, placement["shape"])
-            )
-        if one_type and first is not None and p.shape != first.shape:
-            raise PlanError(
-                "a wall-clock-budgeted campaign runs on one machine type, but class %s needs %s "
-                "and class %s %s; give the tasks the same resources"
-                % (
-                    cls.name,
-                    p.shape,
-                    order[0].name,
-                    first.shape,
+        if not ranked:
+            options = options[:1]  # no ranking: no spill-over to pairs the owner did not rank
+        for p in options:
+            if placement.get("shape") and p.shape != placement["shape"]:
+                raise PlanError(
+                    "class %s needs %s, not the requested %s"
+                    % (cls.name, p.shape, placement["shape"])
                 )
+            if placement.get("template") is False:
+                p.template = False
+        if one_type and first is not None:
+            shapes = {p.family: p.shape for p in first}
+            if options[0].family != first[0].family or options[0].shape != first[0].shape:
+                raise PlanError(
+                    "a wall-clock-budgeted campaign runs on one machine type, but class %s needs "
+                    "%s and class %s %s; give the tasks the same resources"
+                    % (
+                        cls.name,
+                        options[0].shape,
+                        order[0].name,
+                        first[0].shape,
+                    )
+                )
+            # Another family is a candidate only where every class gets the same shape from it.
+            keep = {p.family for p in options if shapes.get(p.family) == p.shape}
+            first = [p for p in first if p.family in keep]
+            for name in out:
+                out[name] = [p for p in out[name] if p.family in keep]
+            options = [p for p in options if p.family in keep]
+        first = first or options
+        out[cls.name] = options
+    return out
+
+
+def candidate_rows(
+    classes: Sequence[ResourceClass],
+    candidates: Mapping[str, Sequence[cost.Placement]],
+    config: Config,
+    table: cost.PriceTable,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """``campaign.json``'s ``candidates``: each class's placements with the class's estimate."""
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for cls in classes:
+        rows = []
+        for p in candidates.get(cls.name, []):
+            est = estimate("gcp-batch", [cls], {cls.name: p}, config, table)
+            row = p.to_json()
+            row.update(
+                expected_usd=round(est.expected_usd, 4), ceiling_usd=round(est.ceiling_usd, 4)
             )
-        if placement.get("template") is False:
-            p.template = False
-        first = first or p
-        out[cls.name] = p
+            rows.append(row)
+        out[cls.name] = rows
     return out
 
 
@@ -403,6 +470,12 @@ def make_plan(
             repo=root,
         )
         tasks = kind.expand(campaign, ctx)
+        # An image other than yapnr's: its own launcher (or none) wraps every task's command.
+        runtime = campaign.get("runtime")
+        if runtime is not None and "entrypoint" in runtime:
+            for task in tasks:
+                task["entrypoint"] = runtime["entrypoint"] or None
+                spec.check_task(task)
     except (bundle.BundleError, ValueError, OSError) as err:
         shutil.rmtree(out, ignore_errors=True)
         raise PlanError(str(err)) from err
@@ -422,8 +495,9 @@ def make_plan(
     classes = resource_classes(tasks, reference)
 
     placements: Dict[str, cost.Placement] = {}
+    candidates: Dict[str, List[cost.Placement]] = {}
     if backend == "gcp-batch":
-        placements = gcp_placements(
+        candidates = gcp_candidates(
             classes,
             campaign,
             config,
@@ -435,6 +509,7 @@ def make_plan(
             families=families,
             template=template,
         )
+        placements = {name: options[0] for name, options in candidates.items()}
     est = estimate(backend, classes, placements, config, table, site=site_config)
     caps = None
     if backend == "gcp-batch":
@@ -466,6 +541,7 @@ def make_plan(
             "requested": image_text,
             "digest": pinned.digest if pinned else None,
             "repository": pinned.name if pinned else None,
+            **({"runtime": dict(campaign["runtime"])} if "runtime" in campaign else {}),
         },
         "bundles": sorted({i["bundle"] for t in tasks for i in t["inputs"]}),
         "task_count": len(tasks),
@@ -474,6 +550,8 @@ def make_plan(
         "classes": [c.to_json() for c in classes],
         "backend": {"name": backend},
         "placements": {k: v.to_json() for k, v in placements.items()},
+        # Where a submit may place each class instead, in order (one entry: no choice).
+        "candidates": candidate_rows(classes, candidates, config, table) if candidates else {},
         "estimate": est.to_json(),
         "caps": caps,
         "prices": (
@@ -524,6 +602,7 @@ class Plan:
             raise PlanError("%s: unknown plan schema %r" % (directory, self.meta.get("schema")))
         self.tasks = [json.loads(line) for line in self.lines]
         self.classes = [ResourceClass.from_json(c) for c in self.meta["classes"]]
+        self.chosen: Dict[str, cost.Placement] = {}
 
     @property
     def id(self) -> str:
@@ -538,12 +617,24 @@ class Plan:
         return self.meta["visibility"] == "private"
 
     def placement(self, name: str) -> cost.Placement:
-        data = dict(self.meta["placements"][name])
-        data.pop("vm_hour_usd", None)
-        return cost.Placement(**data)
+        """The class's placement: the one a submit chose (``choose``), else the preferred one."""
+        if name in self.chosen:
+            return self.chosen[name]
+        return cost.Placement.from_json(self.meta["placements"][name])
 
     def placements(self) -> Dict[str, cost.Placement]:
         return {name: self.placement(name) for name in self.meta.get("placements", {})}
+
+    def candidates(self, name: str) -> List[cost.Placement]:
+        """Where the class may run, preferred first (plans made before candidates: one)."""
+        rows = (self.meta.get("candidates") or {}).get(name)
+        if not rows:
+            return [cost.Placement.from_json(self.meta["placements"][name])]
+        return [cost.Placement.from_json(row) for row in rows]
+
+    def choose(self, name: str, placement: cost.Placement) -> None:
+        """Run the class on ``placement`` (one of its candidates) for the rest of this submit."""
+        self.chosen[name] = placement
 
     def check(self) -> List[str]:
         """Integrity findings: every task matches its hash, the wrapper its sha256, bundles exist."""

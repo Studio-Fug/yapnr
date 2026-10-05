@@ -19,7 +19,17 @@ import json
 import sys
 from pathlib import Path
 
-STAGES = ("generate", "place-route", "writeback", "planes", "refill", "audit", "drc", "via-scan")
+STAGES = (
+    "generate",
+    "place-route",
+    "writeback",
+    "planes",
+    "refill",
+    "audit",
+    "drc",
+    "via-scan",
+    "checks",
+)
 
 
 def _violations(value):
@@ -34,7 +44,7 @@ def _reasons(result):
     reasons = list(result.get("reasons") or [])
     if "stage_failure" in reasons:
         done = [s for s in STAGES if s in (result.get("stages") or {})]
-        failed = STAGES[len(done)] if len(done) < len(STAGES) else "after via-scan"
+        failed = STAGES[len(done)] if len(done) < len(STAGES) else "after checks"
         reasons[reasons.index("stage_failure")] = "stage_failure (%s)" % failed
     return reasons
 

@@ -1,0 +1,107 @@
+# Cloud Build of the Palace task image (README.md here) on the 8-vCPU machine the project's
+# regional build quota allows. Two dependency stages are built first and pushed before Palace
+# itself compiles: palace-deps:<tag>-<variant>-solvers (Scotch, METIS, ScaLAPACK, SuperLU_DIST,
+# MUMPS and their checks) and palace-deps:<tag>-<variant> (every dependency), so a later build (a
+# failed MFEM or Palace compile, a change to the runtime stage) starts from them: the builds read
+# them back with --cache-from (BuildKit inline cache). After the image, syft (pinned by digest)
+# lists what is in it independently of the build's own bill of materials, and the build fails if
+# either finds ParMETIS. The default build timeout is 10 minutes; this one may take hours.
+# tools/exp/palace_plan.py image prints (or runs) the submit command with the owner config's
+# values:
+#
+#   gcloud builds submit docker/palace --config docker/palace/cloudbuild.yaml \
+#     --region REGION --service-account projects/PROJECT/serviceAccounts/BUILD_ACCOUNT \
+#     --gcs-source-staging-dir gs://INPUTS_BUCKET/cloudbuild/source \
+#     --substitutions _IMAGE=REGION-docker.pkg.dev/PROJECT/images/palace,_TAG=b797ea8-pts
+steps:
+  - id: solvers
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --target=solvers
+      - --cache-from=${_IMAGE}-deps:${_TAG}-${_VARIANT}-solvers
+      - --build-arg=BUILDKIT_INLINE_CACHE=1
+      - --build-arg=PALACE_COMMIT=${_PALACE_COMMIT}
+      - --build-arg=PALACE_VERSION=${_PALACE_VERSION}
+      - --build-arg=ARCH_FLAGS=${_ARCH_FLAGS}
+      - --build-arg=NJOBS=${_NJOBS}
+      - --tag=${_IMAGE}-deps:${_TAG}-${_VARIANT}-solvers
+      - .
+  - id: push-solvers
+    name: gcr.io/cloud-builders/docker
+    args: [push, '${_IMAGE}-deps:${_TAG}-${_VARIANT}-solvers']
+  - id: deps
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --target=deps
+      - --cache-from=${_IMAGE}-deps:${_TAG}-${_VARIANT}-solvers
+      - --cache-from=${_IMAGE}-deps:${_TAG}-${_VARIANT}
+      - --build-arg=BUILDKIT_INLINE_CACHE=1
+      - --build-arg=PALACE_COMMIT=${_PALACE_COMMIT}
+      - --build-arg=PALACE_VERSION=${_PALACE_VERSION}
+      - --build-arg=ARCH_FLAGS=${_ARCH_FLAGS}
+      - --build-arg=NJOBS=${_NJOBS}
+      - --tag=${_IMAGE}-deps:${_TAG}-${_VARIANT}
+      - .
+  - id: push-deps
+    name: gcr.io/cloud-builders/docker
+    args: [push, '${_IMAGE}-deps:${_TAG}-${_VARIANT}']
+  - id: image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --cache-from=${_IMAGE}-deps:${_TAG}-${_VARIANT}
+      - --build-arg=PALACE_COMMIT=${_PALACE_COMMIT}
+      - --build-arg=PALACE_VERSION=${_PALACE_VERSION}
+      - --build-arg=ARCH_FLAGS=${_ARCH_FLAGS}
+      - --build-arg=NJOBS=${_NJOBS}
+      - --build-arg=PALACE_NJOBS=${_PALACE_NJOBS}
+      - --build-arg=YAPNR_COMMIT=${_YAPNR_COMMIT}
+      - --tag=${_IMAGE}:${_TAG}-${_VARIANT}
+      - .
+  # syft's bill of materials of the image (OS and Python packages, binaries it recognises),
+  # compared with the image's own (provenance/sbom.spdx.json)
+  - id: save
+    name: gcr.io/cloud-builders/docker
+    args: [save, '${_IMAGE}:${_TAG}-${_VARIANT}', -o, /workspace/palace.tar]
+  - id: syft
+    name: docker.io/anchore/syft:v1.54.0@sha256:0356562f495d432056237fbea5cbc2d4839c9c75cd500784a66de2e7cc95ca7c
+    args: [docker-archive:/workspace/palace.tar, -o, spdx-json=/workspace/syft.spdx.json]
+  - id: compare
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - >-
+        docker run --rm -i ${_IMAGE}:${_TAG}-${_VARIANT} python3
+        /opt/palace/share/palace/provenance/sbom.py compare-syft
+        /opt/palace/share/palace/provenance/sbom.spdx.json /dev/stdin
+        < /workspace/syft.spdx.json
+images:
+  - ${_IMAGE}:${_TAG}-${_VARIANT}
+  - ${_IMAGE}-deps:${_TAG}-${_VARIANT}
+  - ${_IMAGE}-deps:${_TAG}-${_VARIANT}-solvers
+substitutions:
+  _IMAGE: ''
+  # The Palace commit, and -pts: the build with Scotch/PT-Scotch in place of ParMETIS
+  _TAG: b797ea8-pts
+  _VARIANT: x86-64-v3
+  _PALACE_COMMIT: b797ea8060a52241cd9ab1176199f06af8585816
+  _PALACE_VERSION: v0.18.1-160-gb797ea8
+  _ARCH_FLAGS: -march=x86-64-v3 -mtune=znver4
+  _NJOBS: '6'
+  _PALACE_NJOBS: '4'
+  # The yapnr commit of this directory (palace_plan.py image fills it in), recorded as the
+  # image's org.opencontainers.image.revision label.
+  _YAPNR_COMMIT: ''
+options:
+  machineType: E2_HIGHCPU_8
+  # The build account writes its logs to Cloud Logging (it has no logs bucket).
+  logging: CLOUD_LOGGING_ONLY
+  env:
+    - DOCKER_BUILDKIT=1
+# 3 hours: about $3.2 at most on E2_HIGHCPU_8; the first full build (with ParMETIS) took 31
+# minutes (~$0.56).
+timeout: 10800s
+tags: [yapnr, palace]

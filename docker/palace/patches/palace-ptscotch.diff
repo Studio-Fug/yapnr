@@ -1,0 +1,327 @@
+diff --git a/cmake/ExternalGitTags.cmake b/cmake/ExternalGitTags.cmake
+index 88a299d..24ddda2 100644
+--- a/cmake/ExternalGitTags.cmake
++++ b/cmake/ExternalGitTags.cmake
+@@ -165,6 +165,21 @@ set(EXTERN_PARMETIS_GIT_TAG
+   "Git tag for external ParMETIS build"
+ )
+ 
++# Scotch / PT-Scotch (CeCILL-C), built in place of ParMETIS: its libptscotchparmetisv3 provides
++# the ParMETIS_V3_NodeND that SuperLU_DIST calls, and MUMPS calls PT-Scotch directly
++set(EXTERN_SCOTCH_URL
++  "https://gitlab.inria.fr/scotch/scotch.git" CACHE STRING
++  "URL for external Scotch build"
++)
++set(EXTERN_SCOTCH_GIT_BRANCH
++  "master" CACHE STRING
++  "Git branch for external Scotch build"
++)
++set(EXTERN_SCOTCH_GIT_TAG
++  "ea5d15690c54aa8644b4cb7bab76099a70db693c" CACHE STRING
++  "Git tag for external Scotch build (v7.0.16)"
++)
++
+ # PETSc (for SLEPc)
+ set(EXTERN_PETSC_URL
+   "https://gitlab.com/petsc/petsc.git" CACHE STRING
+diff --git a/cmake/ExternalMETIS.cmake b/cmake/ExternalMETIS.cmake
+index ec91acb..762e207 100644
+--- a/cmake/ExternalMETIS.cmake
++++ b/cmake/ExternalMETIS.cmake
+@@ -2,12 +2,12 @@
+ # SPDX-License-Identifier: Apache-2.0
+ 
+ #
+-# Build METIS and ParMETIS (from PETSc forks)
++# Build METIS (from the PETSc fork) and Scotch/PT-Scotch
+ #
+ 
+ # Force build order
+ set(METIS_DEPENDENCIES)
+-set(PARMETIS_DEPENDENCIES metis)
++set(SCOTCH_DEPENDENCIES)
+ 
+ # METIS does not add OpenMP flags
+ set(METIS_CFLAGS "${CMAKE_C_FLAGS}")
+@@ -77,57 +77,94 @@ set(METIS_LIBRARIES ${CMAKE_INSTALL_PREFIX}/lib/libmetis${_METIS_LIB_SUFFIX} CAC
+   "List of library files for METIS"
+ )
+ 
+-# Build ParMETIS (as needed)
++# Build Scotch and PT-Scotch (as needed), not ParMETIS (whose licence allows evaluation use only
++# outside non-profit research, and no redistribution). Scotch's libptscotchparmetisv3 provides
++# ParMETIS_V3_NodeND on top of PT-Scotch for SuperLU_DIST's parallel ordering (ColPerm = PARMETIS);
++# MUMPS calls PT-Scotch itself (ExternalMUMPS.cmake). Scotch installs into its own prefix and only
++# the libraries and headers its consumers need are copied to CMAKE_INSTALL_PREFIX: Scotch's
++# libscotchmetis (METIS_* names) and its metis.h stay out of the way of METIS.
+ if(PALACE_WITH_SUPERLU OR PALACE_WITH_STRUMPACK OR PALACE_WITH_MUMPS)
+-  set(PARMETIS_OPTIONS ${PALACE_SUPERBUILD_DEFAULT_ARGS})
+-  list(APPEND PARMETIS_OPTIONS
+-    "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
+-    "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
+-    "-DGKLIB_PATH=${CMAKE_BINARY_DIR}/extern/metis/GKlib"
+-    "-DMETIS_PATH=${CMAKE_INSTALL_PREFIX}"
+-  )
++  # Static Scotch libraries in every case (position-independent for a shared build)
++  set(SCOTCH_CFLAGS "${CMAKE_C_FLAGS}")
+   if(BUILD_SHARED_LIBS)
+-    list(APPEND PARMETIS_OPTIONS "-DSHARED=1")
+-  else()
+-    list(APPEND PARMETIS_OPTIONS "-DSHARED=0")
++    set(SCOTCH_CFLAGS "${SCOTCH_CFLAGS} -fPIC")
+   endif()
+-  if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+-    list(APPEND PARMETIS_OPTIONS "-DMSVC=1")
++  set(SCOTCH_OPTIONS ${PALACE_SUPERBUILD_DEFAULT_ARGS})
++  list(APPEND SCOTCH_OPTIONS
++    "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
++    "-DCMAKE_C_FLAGS=${SCOTCH_CFLAGS}"
++    "-DBUILD_SHARED_LIBS=OFF"
++    "-DCMAKE_INSTALL_LIBDIR=lib"
++    "-DBUILD_FORTRAN=OFF"
++    "-DBUILD_PTSCOTCH=ON"
++    "-DBUILD_LIBESMUMPS=ON"
++    "-DBUILD_LIBSCOTCHMETIS=ON"
++    "-DSCOTCH_METIS_PREFIX=OFF"
++    "-DINSTALL_METIS_HEADERS=ON"
++    "-DTHREADS=OFF"
++    "-DMPI_THREAD_MULTIPLE=OFF"
++    "-DSCOTCH_DETERMINISTIC=FULL"
++    "-DIDXSIZE=64"
++    "-DUSE_ZLIB=OFF"
++    "-DUSE_LZMA=OFF"
++    "-DUSE_BZ2=OFF"
++    "-DENABLE_TESTS=OFF"
++  )
++  if(PALACE_WITH_64BIT_INT)
++    list(APPEND SCOTCH_OPTIONS "-DINTSIZE=64")
+   else()
+-    list(APPEND PARMETIS_OPTIONS "-DMSVC=0")
++    list(APPEND SCOTCH_OPTIONS "-DINTSIZE=")
+   endif()
+ 
+-  # User might specify the MPI compiler wrappers directly, otherwise we need to supply MPI
+-  # as found from the CMake module
+-  if(NOT MPI_FOUND)
+-    message(FATAL_ERROR "MPI is not found when trying to build ParMETIS")
+-  endif()
+-  if(NOT CMAKE_C_COMPILER STREQUAL MPI_C_COMPILER)
+-    string(REPLACE ";" "$<SEMICOLON>" PARMETIS_MPI_LIBRARIES "${MPI_C_LIBRARIES}")
+-    string(REPLACE ";" "$<SEMICOLON>" PARMETIS_MPI_INCLUDE_DIRS "${MPI_C_INCLUDE_DIRS}")
+-    list(APPEND PARMETIS_OPTIONS
+-      "-DMPI_LIBRARIES=${PARMETIS_MPI_LIBRARIES}"
+-      "-DMPI_INCLUDE_PATH=${PARMETIS_MPI_INCLUDE_DIRS}"
++  string(REPLACE ";" "; " SCOTCH_OPTIONS_PRINT "${SCOTCH_OPTIONS}")
++  message(STATUS "SCOTCH_OPTIONS: ${SCOTCH_OPTIONS_PRINT}")
++
++  # Link order: the ParMETIS API, EsMUMPS and PT-Scotch before Scotch, each error library after
++  # its users
++  set(SCOTCH_LIBRARY_NAMES
++    ptscotchparmetisv3 ptesmumps ptscotch ptscotcherr esmumps scotch scotcherr
++  )
++  set(SCOTCH_HEADERS scotch.h scotchf.h ptscotch.h ptscotchf.h esmumps.h parmetis.h)
++  set(SCOTCH_LIBRARY_FILES)
++  set(SCOTCH_STAGED_LIBRARIES)
++  foreach(lib IN LISTS SCOTCH_LIBRARY_NAMES)
++    list(APPEND SCOTCH_LIBRARY_FILES <INSTALL_DIR>/lib/lib${lib}${CMAKE_STATIC_LIBRARY_SUFFIX})
++    list(APPEND SCOTCH_STAGED_LIBRARIES
++      ${CMAKE_INSTALL_PREFIX}/lib/lib${lib}${CMAKE_STATIC_LIBRARY_SUFFIX}
+     )
+-  endif()
++  endforeach()
++  list(TRANSFORM SCOTCH_HEADERS PREPEND <INSTALL_DIR>/include/ OUTPUT_VARIABLE SCOTCH_HEADER_FILES)
+ 
+-  string(REPLACE ";" "; " PARMETIS_OPTIONS_PRINT "${PARMETIS_OPTIONS}")
+-  message(STATUS "PARMETIS_OPTIONS: ${PARMETIS_OPTIONS_PRINT}")
++  # Scotch v7.0.16 with its hdgraphFold2() refactor (Scotch commit 2747e2b, first in v7.0.15)
++  # reverted: with it, PT-Scotch's nested dissection aborts in MPI_Waitany (MPI_ERR_TRUNCATE) on
++  # the distributed graphs MUMPS builds at 8 ranks (v7.0.10, before the refactor, works)
++  set(SCOTCH_PATCH_FILES
++    "${CMAKE_SOURCE_DIR}/extern/patch/scotch/patch_hdgraph_fold.diff"
++  )
+ 
+-  ExternalProject_Add(parmetis
+-    DEPENDS           ${PARMETIS_DEPENDENCIES}
+-    GIT_REPOSITORY    ${EXTERN_PARMETIS_URL}
+-    GIT_TAG           ${EXTERN_PARMETIS_GIT_TAG}
+-    SOURCE_DIR        ${CMAKE_BINARY_DIR}/extern/parmetis
+-    BINARY_DIR        ${CMAKE_BINARY_DIR}/extern/parmetis-build
+-    INSTALL_DIR       ${CMAKE_INSTALL_PREFIX}
+-    PREFIX            ${CMAKE_BINARY_DIR}/extern/parmetis-cmake
++  ExternalProject_Add(scotch
++    DEPENDS           ${SCOTCH_DEPENDENCIES}
++    GIT_REPOSITORY    ${EXTERN_SCOTCH_URL}
++    GIT_TAG           ${EXTERN_SCOTCH_GIT_TAG}
++    SOURCE_DIR        ${CMAKE_BINARY_DIR}/extern/scotch
++    BINARY_DIR        ${CMAKE_BINARY_DIR}/extern/scotch-build
++    INSTALL_DIR       ${CMAKE_BINARY_DIR}/extern/scotch-install
++    PREFIX            ${CMAKE_BINARY_DIR}/extern/scotch-cmake
+     UPDATE_COMMAND    ""
+-    CONFIGURE_COMMAND ${CMAKE_COMMAND} <SOURCE_DIR> "${PARMETIS_OPTIONS}"
++    PATCH_COMMAND     git apply "${SCOTCH_PATCH_FILES}"
++    CONFIGURE_COMMAND ${CMAKE_COMMAND} <SOURCE_DIR> "${SCOTCH_OPTIONS}"
++    INSTALL_COMMAND   ${CMAKE_COMMAND} --install <BINARY_DIR> --prefix <INSTALL_DIR>
++      COMMAND         ${CMAKE_COMMAND} -E make_directory ${CMAKE_INSTALL_PREFIX}/lib
++                                                         ${CMAKE_INSTALL_PREFIX}/include
++      COMMAND         ${CMAKE_COMMAND} -E copy ${SCOTCH_LIBRARY_FILES} ${CMAKE_INSTALL_PREFIX}/lib
++      COMMAND         ${CMAKE_COMMAND} -E copy ${SCOTCH_HEADER_FILES} ${CMAKE_INSTALL_PREFIX}/include
+     TEST_COMMAND      ""
+   )
+-  set(PARMETIS_LIBRARIES ${CMAKE_INSTALL_PREFIX}/lib/libparmetis${_METIS_LIB_SUFFIX} CACHE STRING
+-  "List of library files for ParMETIS"
+-)
+-endif()
+ 
++  # What the consumers link where they linked ParMETIS (SuperLU_DIST, MFEM, Palace); a
++  # $<SEMICOLON> list, since it is passed on inside their option strings
++  string(REPLACE ";" "$<SEMICOLON>" _SCOTCH_STAGED_LIBRARIES "${SCOTCH_STAGED_LIBRARIES}")
++  set(PARMETIS_LIBRARIES ${_SCOTCH_STAGED_LIBRARIES} CACHE STRING
++    "List of library files for the ParMETIS API (Scotch's libptscotchparmetisv3 and PT-Scotch)"
++  )
++endif()
+diff --git a/cmake/ExternalMUMPS.cmake b/cmake/ExternalMUMPS.cmake
+index 832e1c8..ed39d97 100644
+--- a/cmake/ExternalMUMPS.cmake
++++ b/cmake/ExternalMUMPS.cmake
+@@ -6,7 +6,7 @@
+ #
+ 
+ # Force build order
+-set(MUMPS_DEPENDENCIES scalapack parmetis metis)
++set(MUMPS_DEPENDENCIES scalapack scotch metis)
+ 
+ set(MUMPS_OPTIONS ${PALACE_SUPERBUILD_DEFAULT_ARGS})
+ list(APPEND MUMPS_OPTIONS
+@@ -23,10 +23,12 @@ list(APPEND MUMPS_OPTIONS
+   "-DBUILD_COMPLEX16=OFF"
+   "-DMUMPS_BUILD_TESTING=OFF"
+   "-Dmetis=ON"
+-  "-Dparmetis=ON"
+-  "-Dscotch=OFF"
++  "-Dparmetis=OFF"
++  "-Dscotch=ON"
++  "-Dptscotch=ON"
+   "-DMUMPS_scalapack=ON"
+-  "-DPARMETIS_LIBRARY=${PARMETIS_LIBRARIES}"
++  "-DScotch_ROOT=${CMAKE_INSTALL_PREFIX}"
++  "-DScotch_INCLUDE_DIR=${CMAKE_INSTALL_PREFIX}/include"
+   "-DMETIS_LIBRARY=${METIS_LIBRARIES}"
+   "-DMETIS_INCLUDE_DIR=${CMAKE_INSTALL_PREFIX}/include"
+   "-DSCALAPACK_LIBRARIES=${SCALAPACK_LIBRARIES}"
+@@ -44,9 +46,10 @@ endif()
+ string(REPLACE ";" "; " MUMPS_OPTIONS_PRINT "${MUMPS_OPTIONS}")
+ message(STATUS "MUMPS_OPTIONS: ${MUMPS_OPTIONS_PRINT}")
+ 
+-# Fix FindLAPACK and FindScaLAPACK in configuration
++# Fix FindLAPACK and FindScaLAPACK in configuration; the ptscotch option (PT-Scotch analysis)
+ set(MUMPS_PATCH_FILES
+   "${CMAKE_SOURCE_DIR}/extern/patch/mumps/patch_build.diff"
++  "${CMAKE_SOURCE_DIR}/extern/patch/mumps/patch_ptscotch.diff"
+ )
+ 
+ include(ExternalProject)
+diff --git a/cmake/ExternalPalace.cmake b/cmake/ExternalPalace.cmake
+index 6eb8d93..2ad427a 100644
+--- a/cmake/ExternalPalace.cmake
++++ b/cmake/ExternalPalace.cmake
+@@ -77,6 +77,9 @@ if(NOT "${PARMETIS_DIR}" STREQUAL "")
+ elseif(PALACE_BUILD_EXTERNAL_DEPS)
+   list(APPEND PALACE_OPTIONS "-DPARMETIS_DIR=${CMAKE_INSTALL_PREFIX}")
+ endif()
++if(PALACE_BUILD_EXTERNAL_DEPS AND NOT "${PARMETIS_LIBRARIES}" STREQUAL "")
++  list(APPEND PALACE_OPTIONS "-DPARMETIS_LIBRARIES=${PARMETIS_LIBRARIES}")
++endif()
+ if(NOT "${HYPRE_DIR}" STREQUAL "")
+   list(APPEND PALACE_OPTIONS "-DHYPRE_DIR=${HYPRE_DIR}")
+ elseif(PALACE_BUILD_EXTERNAL_DEPS)
+@@ -140,6 +143,13 @@ else()
+   )
+ endif()
+ 
++# A link map of the Palace executable (every archive member it pulls in, and why)
++if(NOT "${PALACE_LINK_MAP}" STREQUAL "")
++  list(APPEND PALACE_OPTIONS
++    "-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS} -Wl,-Map=${PALACE_LINK_MAP}"
++  )
++endif()
++
+ string(REPLACE ";" "; " PALACE_OPTIONS_PRINT "${PALACE_OPTIONS}")
+ message(STATUS "PALACE_OPTIONS: ${PALACE_OPTIONS_PRINT}")
+ 
+diff --git a/cmake/ExternalSTRUMPACK.cmake b/cmake/ExternalSTRUMPACK.cmake
+index d95e35e..837796a 100644
+--- a/cmake/ExternalSTRUMPACK.cmake
++++ b/cmake/ExternalSTRUMPACK.cmake
+@@ -6,7 +6,7 @@
+ #
+ 
+ # Force build order
+-set(STRUMPACK_DEPENDENCIES scalapack parmetis)
++set(STRUMPACK_DEPENDENCIES scalapack scotch metis)
+ # if(PALACE_WITH_CUDA OR PALACE_WITH_HIP)
+ #   list(APPEND STRUMPACK_DEPENDENCIES slate)
+ # endif()
+diff --git a/cmake/ExternalSuperLU_DIST.cmake b/cmake/ExternalSuperLU_DIST.cmake
+index 662465f..a49e8db 100644
+--- a/cmake/ExternalSuperLU_DIST.cmake
++++ b/cmake/ExternalSuperLU_DIST.cmake
+@@ -6,7 +6,7 @@
+ #
+ 
+ # Force build order
+-set(SUPERLU_DEPENDENCIES parmetis)
++set(SUPERLU_DEPENDENCIES scotch metis)
+ 
+ set(SUPERLU_OPTIONS ${PALACE_SUPERBUILD_DEFAULT_ARGS})
+ list(APPEND SUPERLU_OPTIONS
+diff --git a/extern/CMakeLists.txt b/extern/CMakeLists.txt
+index 2df908b..e298665 100644
+--- a/extern/CMakeLists.txt
++++ b/extern/CMakeLists.txt
+@@ -5,8 +5,8 @@
+ # Download and build third-party dependencies
+ #
+ 
+-# Add METIS/ParMETIS libraries
+-message(STATUS "================ Configuring METIS/ParMETIS dependencies ===============")
++# Add METIS and Scotch/PT-Scotch libraries
++message(STATUS "================= Configuring METIS/Scotch dependencies ================")
+ include(ExternalMETIS)
+ 
+ # Add SuperLU_DIST
+diff --git a/palace/CMakeLists.txt b/palace/CMakeLists.txt
+index 252b296..d9b8c22 100644
+--- a/palace/CMakeLists.txt
++++ b/palace/CMakeLists.txt
+@@ -83,6 +83,9 @@ set(METIS_DIR "" CACHE STRING
+ set(PARMETIS_DIR "" CACHE STRING
+   "Path to ParMETIS build or installation directory (not required if already on CMAKE_PREFIX_PATH)"
+ )
++set(PARMETIS_LIBRARIES "" CACHE STRING
++  "Library files providing the ParMETIS API, in link order (instead of PARMETIS_DIR)"
++)
+ set(SUNDIALS_DIR "" CACHE STRING
+   "Path to SUNDIALS build or installation directory (not required if already on CMAKE_PREFIX_PATH)"
+ )
+@@ -520,7 +523,20 @@ else()
+ endif()
+ 
+ find_package(ParMETIS QUIET)
+-if(NOT TARGET ParMETIS::ParMETIS)
++if(NOT TARGET ParMETIS::ParMETIS AND NOT "${PARMETIS_LIBRARIES}" STREQUAL "")
++  # A library providing the ParMETIS API given as its list of library files (the superbuild's
++  # PT-Scotch: Scotch's libptscotchparmetisv3 and the PT-Scotch libraries it needs)
++  add_library(ParMETIS::ParMETIS INTERFACE IMPORTED)
++  set_target_properties(ParMETIS::ParMETIS PROPERTIES
++    INTERFACE_LINK_LIBRARIES "${PARMETIS_LIBRARIES};METIS::METIS")
++  message(STATUS "Found ParMETIS API: ${PARMETIS_LIBRARIES}")
++  # The MUMPS CMake package built with (PT-)Scotch names Scotch::Scotch in its link interface
++  if(NOT TARGET Scotch::Scotch)
++    add_library(Scotch::Scotch INTERFACE IMPORTED)
++    set_target_properties(Scotch::Scotch PROPERTIES
++      INTERFACE_LINK_LIBRARIES "${PARMETIS_LIBRARIES}")
++  endif()
++elseif(NOT TARGET ParMETIS::ParMETIS)
+   find_library(PARMETIS_LIBRARY NAMES parmetis HINTS ${ParMETIS_ROOT}/lib REQUIRED)
+   find_path(PARMETIS_INCLUDE_DIR NAMES parmetis.h HINTS ${ParMETIS_ROOT}/include REQUIRED)
+   add_library(ParMETIS::ParMETIS UNKNOWN IMPORTED)

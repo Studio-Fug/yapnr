@@ -1,7 +1,7 @@
 """The yapnr wheel: what the container image installs and what releases attach.
 
     bazel build //release:wheel.dist --stamp --embed_label="$(tools/release/version.py --field pep440)"
-    # -> bazel-bin/release/wheel_dist/yapnr-<version>-py3-none-any.whl
+    # -> bazel-bin/release/wheel_dist/yapnr-<version>-py3-none-<platform>.whl
 
 The version comes from the release tag only (docs/releases.md), so :wheel is
 always stamped with --embed_label and is tagged manual: `bazel build //...`
@@ -9,9 +9,13 @@ never builds it without a version. :wheel_for_test is the same wheel with a
 fixed placeholder version; tests/unit/release/test_wheel.py checks its
 contents and metadata.
 
-The wheel is pure Python (py3-none-any) until the native search backend lands
-(PR5). Requires-Dist comes from requirements-runtime.in; the image installs
-the pinned runtime locks with --no-deps instead (docker/yapnr/Dockerfile).
+The wheel carries yapnr.rf's native FDTD library (//yapnr/rf:libyapnr_fdtd.so,
+loaded with ctypes), built for the platform Bazel runs on, so it is one wheel
+per platform, tagged py3-none-<platform> (wheel.bzl): manylinux_2_34_x86_64
+and manylinux_2_34_aarch64 (the image workflow builds each on its own
+runner), macosx_11_0_arm64 (local). Requires-Dist comes from
+requirements-runtime.in; the image installs the pinned runtime locks with
+--no-deps instead (docker/yapnr/Dockerfile).
 """
 
 load("@rules_python//python:packaging.bzl", "py_package")
@@ -22,7 +26,10 @@ package(default_visibility = ["//visibility:public"])
 py_package(
     name = "yapnr_package",
     packages = ["yapnr"],
-    deps = ["//yapnr"],
+    deps = [
+        "//yapnr",
+        "//yapnr/rf:wheel_files",
+    ],
 )
 
 yapnr_wheel(

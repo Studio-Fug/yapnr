@@ -234,6 +234,19 @@ def evaluate(
         )
     out += _drc_findings(drc, profile)
 
+    # Placeholders: a footprint that marks copper still to come (the yapnr.rf coupon boards'
+    # optimizer windows) stops the build until it is replaced.
+    for fp in board.footprints:
+        what = fp.field("yapnr_placeholder")
+        if what:
+            out.append(
+                Finding(
+                    "FAB-PLACEHOLDER",
+                    "error",
+                    f"{fp.reference} is a placeholder ({what}): fill it before fabrication",
+                )
+            )
+
     # Layers.
     n_stack = len(stackup.copper_layers())
     if board.layer_count != n_stack or board.layer_count != profile.copper_layers:

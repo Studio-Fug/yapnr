@@ -13,8 +13,10 @@ the site:
     <stage>/README.md, ...      the top-level Markdown documents
     <stage>/LICENSE             so links to it resolve (served as a download)
     <stage>/docs/**/*.md        the documentation pages
+    <stage>/docs/**/<images>    images beside them (Sphinx copies the ones it resolves)
     <stage>/_extra/branding/    copied verbatim into the output (README images)
     <stage>/_extra/docs/animations/  the ladder animations, at docs/animations/ in the output
+    <stage>/_extra/docs/rf/     the RF design examples, at docs/rf/ in the output
 
 ``docs/index.md`` is the root document; the output root gets a small redirect to
 it. The output is then made safe for GitHub Pages, including the per-PR
@@ -29,8 +31,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from sphinx.cmd.build import main as sphinx_main
 
@@ -46,6 +49,9 @@ ROOT_DOCUMENTS = [
 ]
 
 # Brand assets used by the theme (docs/_sphinx/conf.py names them).
+# Image files under docs/ that are staged beside the pages (see _stage).
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+
 STATIC_ASSETS = {
     "branding/yapnr-logo-256.png": "yapnr-logo-256.png",
     "branding/yapnr-logo-light.png": "yapnr-logo-light.png",
@@ -104,14 +110,24 @@ def _stage(ws: Path, stage: Path) -> None:
         if rel.parts and rel.parts[0] in skip_top:
             continue
         _copy(md, stage / "docs" / rel)
+    # Images beside the pages. Sphinx resolves Markdown images and MyST's one-line <img> tags
+    # (the html_image extension) against the source tree and copies them into _images/; an
+    # image missing from the stage only warns and leaves a broken path in the page.
+    for image in sorted(p for p in docs.rglob("*") if p.suffix.lower() in IMAGE_SUFFIXES):
+        rel = image.relative_to(docs)
+        if rel.parts and rel.parts[0] in skip_top:
+            continue
+        _copy(image, stage / "docs" / rel)
 
     # 5. Files copied verbatim into the output root (raw-HTML images in README).
     shutil.copytree(ws / "branding", stage / "_extra" / "branding", dirs_exist_ok=True)
-    # The ladder animations keep their repository path, so the raw-HTML images in README.md
-    # and docs/regression-ladder.md resolve the same way on GitHub and on the site.
-    animations = ws / "docs" / "animations"
-    if animations.is_dir():
-        shutil.copytree(animations, stage / "_extra" / "docs" / "animations", dirs_exist_ok=True)
+    # The ladder animations and the RF design examples keep their repository paths, so the
+    # raw-HTML images and links in README.md, docs/regression-ladder.md and
+    # docs/rf-inverse-design.md resolve the same way on GitHub and on the site.
+    for sub in ("animations", "rf"):
+        src = ws / "docs" / sub
+        if src.is_dir():
+            shutil.copytree(src, stage / "_extra" / "docs" / sub, dirs_exist_ok=True)
 
 
 # Sphinx emits ``_``-prefixed asset directories. GitHub Pages runs Jekyll, which
@@ -153,6 +169,25 @@ def _make_jekyll_safe(out_dir: Path) -> None:
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
 
 
+_IMG_SRC = re.compile(r'<img\b[^>]*?\bsrc="([^"]+)"', re.IGNORECASE)
+
+
+def _missing_images(out_dir: Path) -> List[Tuple[str, str]]:
+    """Every local ``<img src>`` in the built pages that does not name a file in ``out_dir``."""
+    missing = []
+    for page in sorted(out_dir.rglob("*.html")):
+        for src in _IMG_SRC.findall(page.read_text(encoding="utf-8", errors="replace")):
+            if re.match(r"^(?:[a-z][a-z0-9+.-]*:|//)", src, re.IGNORECASE):
+                continue
+            path = src.split("#", 1)[0].split("?", 1)[0]
+            if not path:
+                continue
+            target = (page.parent / urllib.parse.unquote(path)).resolve()
+            if not target.is_file():
+                missing.append((str(page.relative_to(out_dir)), src))
+    return missing
+
+
 def _prepare_output(out_dir: Path) -> None:
     """Empty ``out_dir`` if it holds a previous build; never touch anything else."""
     if out_dir.exists() and any(out_dir.iterdir()):
@@ -180,6 +215,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             return rc
         (out_dir / "index.html").write_text(_REDIRECT, encoding="utf-8")
         _make_jekyll_safe(out_dir)
+        missing = _missing_images(out_dir)
+        if missing:
+            for page, src in missing:
+                print(f"broken image: {page} -> {src}", file=sys.stderr)
+            print(f"{len(missing)} image(s) do not resolve in the built site", file=sys.stderr)
+            return 1
     finally:
         shutil.rmtree(stage, ignore_errors=True)
 

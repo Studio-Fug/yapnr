@@ -85,6 +85,256 @@ class GridBasicsTest(unittest.TestCase):
         self.assertFalse(g.passable(0, 999, 0, "A"))
 
 
+def _segment_rect_distance(a, b, r):
+    """Least distance between segment ``a``-``b`` and rectangle ``r`` (0 if they
+    meet): for disjoint convex shapes it is reached at a vertex of one of them."""
+    import math
+
+    def point_rect(p):
+        dx = max(r.left - p[0], 0.0, p[0] - r.right)
+        dy = max(r.bottom - p[1], 0.0, p[1] - r.top)
+        return math.hypot(dx, dy)
+
+    def point_segment(p):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)
+        t = max(0.0, min(1.0, t))
+        return math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1])
+
+    # Liang-Barsky clip: does the segment enter the rectangle at all?
+    t0, t1 = 0.0, 1.0
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    meets = True
+    for p, q in (
+        (-dx, a[0] - r.left),
+        (dx, r.right - a[0]),
+        (-dy, a[1] - r.bottom),
+        (dy, r.top - a[1]),
+    ):
+        if p == 0:
+            if q < 0:
+                meets = False
+        elif p < 0:
+            t0 = max(t0, q / p)
+        else:
+            t1 = min(t1, q / p)
+    if meets and t0 <= t1:
+        return 0.0
+    corners = [(x, y) for x in (r.left, r.right) for y in (r.bottom, r.top)]
+    return min([point_rect(a), point_rect(b)] + [point_segment(c) for c in corners])
+
+
+class WidePadClearanceTest(unittest.TestCase):
+    """A net wider than ``track + pitch`` keeps its copper ``clearance`` from
+    foreign pads (the pad track halo is sized for signal tracks)."""
+
+    def _grid(self, rng, width):
+        from pnr.route.detail.grid import Rect
+
+        g = RouteGrid(6.0, 6.0, 0.25, clearance=0.2, track_width=0.25)
+        for _ in range(6):
+            r = Rect(
+                rng.uniform(0.5, 5.5),
+                rng.uniform(0.5, 5.5),
+                rng.uniform(0.2, 1.5),
+                rng.uniform(0.2, 1.5),
+            )
+            g.add_pad(rng.randrange(2), rng.choice(("W", "A", "")), r)
+        g.net_widths = {"W": width, "S": 0.25, "M": 0.5}
+        g.reserve_wide_pad_clearance()
+        return g
+
+    def test_no_table_up_to_track_plus_pitch(self):
+        from pnr.route.detail.grid import Rect
+
+        g = RouteGrid(4.0, 4.0, 0.25, clearance=0.2, track_width=0.25)
+        g.add_pad(0, "A", Rect(2.0, 2.0, 0.5, 0.5))
+        g.net_widths = {"V": 0.4, "W": 0.5}
+        g.reserve_wide_pad_clearance()
+        self.assertEqual(g.wide_pad_net, {})
+
+    def test_route_edges_keep_wide_copper_clear_of_foreign_pads(self):
+        import random
+
+        for seed in range(12):
+            rng = random.Random(seed)
+            width = rng.choice((0.525, 0.9, 1.3))
+            g = self._grid(rng, width)
+            self.assertIn("W", g.wide_pad_net)
+            self.assertNotIn("M", g.wide_pad_net)
+            need = g.clearance + width / 2 - 1e-9
+
+            own = set()
+            for la, owner, r in g.pad_rectangles:
+                if owner == "W":
+                    g._mark_rect(la, r, 0.0, lambda *cell: own.add(cell))
+
+            def free(la, i, j):
+                # Passable, and not a cell of the net's own pads (where it lands
+                # whatever its neighbours).
+                return g.passable(la, i, j, "W") and (la, i, j) not in own
+
+            foreign = [(la, r) for la, owner, r in g.pad_rectangles if owner != "W"]
+            for la in range(g.nlayers):
+                for j in range(g.ny):
+                    for i in range(g.nx):
+                        if not free(la, i, j):
+                            continue
+                        for di, dj in ((1, 0), (0, 1), (1, 1), (1, -1)):
+                            if not g.in_bounds(i + di, j + dj) or not free(la, i + di, j + dj):
+                                continue
+                            if di and dj and not (free(la, i + di, j) and free(la, i, j + dj)):
+                                continue
+                            a, b = g.center_of(i, j), g.center_of(i + di, j + dj)
+                            for pla, r in foreign:
+                                if pla == la:
+                                    self.assertGreaterEqual(_segment_rect_distance(a, b, r), need)
+
+    def test_own_pads_stay_reachable_and_other_nets_unchanged(self):
+        import random
+
+        from pnr.route.detail.grid import Rect
+
+        g = RouteGrid(6.0, 4.0, 0.25, clearance=0.2, track_width=0.25)
+        # Two pads 1.2 mm apart: a 0.9 mm track lands on its own pad but never
+        # runs through the gap, where a signal track still fits.
+        g.add_pad(0, "W", Rect(2.0, 2.0, 1.0, 1.4))
+        g.add_pad(0, "A", Rect(4.2, 2.0, 1.0, 1.4))
+        g.net_widths = {"W": 0.9}
+        g.reserve_wide_pad_clearance()
+        self.assertTrue(g.passable(0, *g.cell_of(2.0, 2.0), "W"))
+        self.assertTrue(g.passable(0, *g.cell_of(1.0, 2.0), "W"))
+        self.assertFalse(g.passable(0, *g.cell_of(3.1, 2.0), "W"))
+        self.assertTrue(g.passable(0, *g.cell_of(3.1, 2.0), "S"))
+        g = self._grid(random.Random(7), 0.9)
+        plain = self._grid(random.Random(7), 0.9)
+        plain.wide_pad_net = {}
+        for la in range(g.nlayers):
+            for j in range(g.ny):
+                for i in range(g.nx):
+                    for net in ("S", "M", "A"):
+                        self.assertEqual(g.passable(la, i, j, net), plain.passable(la, i, j, net))
+
+
+def _segment_distance(a, b, c, d):
+    """Least distance between segments ``a``-``b`` and ``c``-``d`` (neither
+    crossing the other; a point when both ends are equal)."""
+    import math
+
+    def point_segment(p, u, v):
+        dx, dy = v[0] - u[0], v[1] - u[1]
+        den = dx * dx + dy * dy
+        t = 0.0 if den == 0 else max(0.0, min(1.0, ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / den))
+        return math.hypot(u[0] + t * dx - p[0], u[1] + t * dy - p[1])
+
+    return min(
+        point_segment(a, c, d),
+        point_segment(b, c, d),
+        point_segment(c, a, b),
+        point_segment(d, a, b),
+    )
+
+
+def _free_edges(g, net, own=()):
+    """Every route edge ``net`` may take on ``g`` (orthogonal and 45° steps whose
+    cells, and for a step both corner cells, are passable), off the cells ``own``."""
+
+    def free(la, i, j):
+        return g.passable(la, i, j, net) and (la, i, j) not in own
+
+    for la in range(g.nlayers):
+        for j in range(g.ny):
+            for i in range(g.nx):
+                if not free(la, i, j):
+                    continue
+                for di, dj in ((1, 0), (0, 1), (1, 1), (1, -1)):
+                    if not g.in_bounds(i + di, j + dj) or not free(la, i + di, j + dj):
+                        continue
+                    if di and dj and not (free(la, i + di, j) and free(la, i, j + dj)):
+                        continue
+                    yield la, g.center_of(i, j), g.center_of(i + di, j + dj)
+
+
+class WideCopperRecordedLaterTest(unittest.TestCase):
+    """The wide net's tables also cover copper recorded after they were first
+    built (a power array's pads, the escape plan's stubs and vias), at each
+    item's own extent, once :meth:`RouteGrid.reserve_wide_pad_clearance` runs
+    again, as :func:`pnr.route.detail.maze.route` does before routing."""
+
+    def test_pad_added_after_the_tables(self):
+        from pnr.route.detail.grid import Rect
+        from pnr.route.detail.maze import route
+
+        for late in (False, True):
+            g = RouteGrid(10, 10, 0.25, clearance=0.2, track_width=0.25, via_radius=0.3)
+            g.net_widths = {"W": 0.9}
+            pad = Rect(5.0, 5.0, 1.0, 1.0)
+            if not late:
+                g.add_pad(0, "X", pad)
+            g.reserve_wide_pad_clearance()
+            if late:
+                g.add_pad(0, "X", pad)  # e.g. router._mark_source_arrays
+                route(g, {})  # brings the tables up to date
+            for la, a, b in _free_edges(g, "W"):
+                if la == 0:
+                    self.assertGreaterEqual(_segment_rect_distance(a, b, pad), 0.2 + 0.45 - 1e-9)
+
+    def test_escape_stubs_and_vias(self):
+        import random
+
+        for seed in range(6):
+            rng = random.Random(seed)
+            width = rng.choice((0.525, 0.9))
+            g = RouteGrid(6, 6, 0.25, clearance=0.2, track_width=0.25, via_radius=0.3)
+            g.net_widths = {"W": width, "E": rng.choice((0.25, 0.4))}
+            g.reserve_wide_pad_clearance()
+            stubs = []
+            for _ in range(3):
+                a = (rng.uniform(1, 5), rng.uniform(1, 5))
+                b = (a[0] + rng.uniform(-1, 1), a[1] + rng.uniform(-1, 1))
+                la = rng.randrange(2)
+                g.escape_segments.append((la, "E", a, b))
+                stubs.append((la, a, b))
+            via = (rng.uniform(1, 5), rng.uniform(1, 5))
+            g.escape_vias.append(("E", via))
+            g.reserve_wide_pad_clearance()
+            stub = g.net_widths["E"] / 2
+            for la, a, b in _free_edges(g, "W"):
+                for sla, c, d in stubs:
+                    if sla == la:
+                        self.assertGreaterEqual(
+                            _segment_distance(a, b, c, d), stub + 0.2 + width / 2 - 1e-9
+                        )
+                self.assertGreaterEqual(
+                    _segment_distance(a, b, via, via), 0.3 + 0.2 + width / 2 - 1e-9
+                )
+
+    def test_class_clearance_of_either_net(self):
+        from pnr.route.detail.grid import Rect
+
+        for owner, mine in ((0.5, None), (None, 0.5)):
+            g = RouteGrid(8, 8, 0.25, clearance=0.2, track_width=0.25)
+            g.net_widths = {"W": 0.9}
+            g.net_clearances = {k: v for k, v in (("X", owner), ("W", mine)) if v}
+            pad = Rect(4.0, 4.0, 1.0, 1.0)
+            g.add_pad(0, "X", pad)
+            g.reserve_wide_pad_clearance()
+            for la, a, b in _free_edges(g, "W"):
+                if la == 0:
+                    self.assertGreaterEqual(_segment_rect_distance(a, b, pad), 0.5 + 0.45 - 1e-9)
+
+    def test_tables_for_a_board_without_wide_nets_stay_empty(self):
+        from pnr.route.detail.grid import Rect
+
+        g = RouteGrid(4, 4, 0.25, clearance=0.2, track_width=0.25)
+        g.net_widths = {"V": 0.4}
+        g.reserve_wide_pad_clearance()
+        g.add_pad(0, "A", Rect(2.0, 2.0, 0.5, 0.5))
+        g.escape_vias.append(("A", (1.0, 1.0)))
+        g.reserve_wide_pad_clearance()
+        self.assertEqual(g.wide_pad_net, {})
+
+
 class GridFromGraphTest(unittest.TestCase):
     def _two_pad_graph(self):
         a = Component(

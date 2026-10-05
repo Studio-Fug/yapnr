@@ -74,7 +74,7 @@ def save(kind, payload):
             kind=kind,
             phase_context=phase_context(),
             runtime_sources=sources,
-            **payload
+            **payload,
         ),
         separators=(",", ":"),
         default=lambda v: v.value if isinstance(v, enum.Enum) else str(v),
@@ -113,7 +113,10 @@ def global_loss(
     step,
     roles=None,
     pf_state=None,
+    shift=None,
 ):
+    """``shift`` (PNR_COMPACT offset courtyards only): the expected body-centre offsets
+    from the origins the optimizer used, replayed by the objective."""
     from pnr.graph import BoardGraph, BoardOutline
 
     from .cost_inspect import Objective
@@ -134,6 +137,7 @@ def global_loss(
         effective_half=half,
         roles=roles,
         pf_state=pf_state,
+        **({} if shift is None else dict(effective_shift=shift)),
     )
     report = m.report()
     difference = report["board_total"] - loss
@@ -154,11 +158,12 @@ def global_loss(
             inflation=inflation or {},
             effective_offsets=offsets,
             effective_half=half,
+            **({} if shift is None else dict(effective_shift=shift)),
             rotation_probabilities=probabilities,
             optimizer_step=step,
             report=report,
             geometry_scope="display uses argmax rotations; cost uses recorded soft rotation mixture",
-            **extra
+            **extra,
         ),
     )
 
@@ -175,8 +180,13 @@ def legalizer_decision(
     grid,
     channel_weight,
     local_details=(),
+    wire_weight=None,
 ):
-    """Store actual evaluated legal candidates/terms before another part is placed."""
+    """Store actual evaluated legal candidates/terms before another part is placed.
+
+    ``wire_weight`` (PNR_LEGALIZE_HPWL only): the legalizer's wirelength term is on; ``chosen``
+    then carries the chosen slot's raw wirelength fourth, the terms gain ``wirelength`` and a
+    candidate field with six columns names the sixth ``wire_raw``."""
     import numpy as np
 
     p = folder()
@@ -197,7 +207,8 @@ def legalizer_decision(
                 rotation=pose,
                 path=str(dest.resolve()),
                 sha256=hashlib.sha256(dest.read_bytes()).hexdigest(),
-                columns=["x", "y", "target_distance_squared", "channel_raw", "local_loop_weighted"],
+                columns=["x", "y", "target_distance_squared", "channel_raw", "local_loop_weighted"]
+                + (["wire_raw"] if array.ndim == 2 and array.shape[1] == 6 else []),
                 count=len(array),
             )
         )
@@ -221,6 +232,15 @@ def legalizer_decision(
             details=local_details,
         ),
     ]
+    if wire_weight is not None:
+        terms.append(
+            dict(
+                key="wirelength",
+                raw=chosen[3],
+                weight=wire_weight,
+                weighted=wire_weight * chosen[3],
+            )
+        )
     return save(
         "legalizer-decision",
         dict(
@@ -285,7 +305,7 @@ def routing_probe(graph, comp, original, candidates, context, *, accumulator=Non
             probe_sources={
                 name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
                 for name in ("relocate.py", "batch_relocate.py")
-            }
+            },
         ),
     )
 

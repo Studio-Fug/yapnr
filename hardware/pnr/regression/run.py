@@ -23,6 +23,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from designs import designs, showcases
+from hard_rungs import dru_text, hard_rungs
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -95,7 +96,25 @@ def copper_sha(board):
     return hashlib.sha256("\n".join(sorted(blocks)).encode()).hexdigest()
 
 
-def acceptance(pnr, audit, drc):
+# A KiCad unconnected item's pad: "Pad K4 [VCC] of U1 on F.Cu".
+PAD_ITEM = re.compile(r"^Pad (\S+) \[[^\]]*\] of (\S+) on ")
+
+
+def designed_open(item, pads):
+    """Whether KiCad's unconnected ``item`` names one of ``pads`` ("REF.PAD"): a rung's
+    designed opens (``designed_open``), which its ``unconnected`` check holds exact."""
+    for end in item.get("items") or []:
+        m = PAD_ITEM.match(end.get("description") or "")
+        if m and "%s.%s" % (m.group(2), m.group(1)) in pads:
+            return True
+    return False
+
+
+def acceptance(pnr, audit, drc, designed=()):
+    """The reasons a routed case fails. ``designed`` ("REF.PAD", a spec's
+    ``designed_open``): KiCad's unconnected items at those pads are the design's own
+    (the partial-fanout rung leaves one ball open by design) and are not reasons; the
+    spec's ``unconnected`` check judges that exactly those pads are cut off."""
     reasons = []
     if not pnr.get("legal"):
         reasons.append("illegal_placement")
@@ -112,20 +131,68 @@ def acceptance(pnr, audit, drc):
     ):
         reasons.append("invalid_drc_report")
     else:
-        if drc["unconnected_items"]:
+        pads = set(designed)
+        if [u for u in drc["unconnected_items"] if not (pads and designed_open(u, pads))]:
             reasons.append("native_unconnected_items")
         if drc["violations"]:
             reasons.append("native_drc_violations")
     return reasons
 
 
-def constraint_reasons(spec, placed):
+def _quarter(x, y, rot):
+    """``(x, y)`` turned ``rot`` degrees CCW (a quarter turn, exactly)."""
+    return ((x, y), (-y, x), (-x, -y), (y, -x))[int(round(rot / 90.0)) % 4]
+
+
+def body_extent(comp, use_body=True):
+    """``(x0, y0, x1, y1)`` of a placed.json component's box at its pose: its off-centre
+    ``body`` (``use_body``, when it has one), else the ``courtyard`` centred on ``pos``."""
+    x, y = comp["pos"]
+    body = comp.get("body") if use_body else None
+    if not body:
+        w, h = comp["courtyard"]
+        body = (-w / 2.0, -h / 2.0, w / 2.0, h / 2.0)
+    corners = [
+        _quarter(px, py, comp["rot"]) for px in (body[0], body[2]) for py in (body[1], body[3])
+    ]
+    xs, ys = [c[0] for c in corners], [c[1] for c in corners]
+    return (x + min(xs), y + min(ys), x + max(xs), y + max(ys))
+
+
+def compactness(placed):
+    """Stdlib measure of a placed.json (every arm alike, the engine's
+    pnr.place.compact.metrics): the bounding box of the parts' body boxes, their summed
+    area, utilization (area / bbox), occupancy (area / outline) and the outline area."""
+    boxes = [body_extent(c) for c in placed["components"]]
+    outline = placed.get("outline") or {}
+    board = float(outline.get("width") or 0.0) * float(outline.get("height") or 0.0)
+    if not boxes:
+        return None
+    bw = max(b[2] for b in boxes) - min(b[0] for b in boxes)
+    bh = max(b[3] for b in boxes) - min(b[1] for b in boxes)
+    area = sum((b[2] - b[0]) * (b[3] - b[1]) for b in boxes)
+    return dict(
+        bbox_mm2=round(bw * bh, 3),
+        bbox_mm=[round(bw, 3), round(bh, 3)],
+        area_mm2=round(area, 3),
+        utilization=round(area / (bw * bh), 3) if bw * bh > 0 else 0.0,
+        occupancy=round(area / board, 3) if board > 0 else None,
+        outline_mm2=round(board, 3),
+    )
+
+
+def constraint_reasons(spec, placed, use_body=False, shrunk=False):
     """Independent audit (stdlib, not the engine's metrics) of the showcase constraints
     on ``placed`` (placed.json): each line group collinear at its pitch or gap, in member
-    order, with its declared rotation, and each hard edge part within its tolerance.
+    order, with its declared rotation, and each hard edge part within its tolerance of
+    the design's outline (placed.json's with ``shrunk``: ``--shrink``), measured on its
+    body box with ``use_body`` (``--compact``: the placer holds off-centre bodies).
     Returns ``(checked, findings)``."""
     cons = spec["constraints"]
     width, height = cons["board"]["outline"]["w"], cons["board"]["outline"]["h"]
+    outline = placed.get("outline") or {}
+    if shrunk and outline.get("width") and outline.get("height"):
+        width, height = outline["width"], outline["height"]
     comps = {c["ref"]: c for c in placed["components"]}
     checked, findings = [], []
 
@@ -163,13 +230,8 @@ def constraint_reasons(spec, placed):
             continue
         checked.append("edge_align " + ref)
         comp = comps[ref]
-        w, h = comp["courtyard"]
-        if int(round(comp["rot"] / 90.0)) % 2:
-            w, h = h, w
-        x, y = comp["pos"]
-        distance = dict(
-            south=y - h / 2, north=height - y - h / 2, west=x - w / 2, east=width - x - w / 2
-        )[rule["edge"]]
+        x0, y0, x1, y1 = body_extent(comp, use_body)
+        distance = dict(south=y0, north=height - y1, west=x0, east=width - x1)[rule["edge"]]
         if distance > rule.get("tolerance_mm", 1.0) + 1e-3:
             findings.append("%s: %.3f mm from the %s edge" % (ref, distance, rule["edge"]))
     return checked, findings
@@ -178,6 +240,67 @@ def constraint_reasons(spec, placed):
 # The vendor profile data pnr.fab_profile resolves data profiles from (yapnr.fab.capability), frozen
 # with the engine so a run under oshpark-4l or jlc-4l uses the data of its own checkout.
 FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/capability.py")
+
+# The parts of PNR_COMPACT (pnr.compact_flags.PARTS; test_compact keeps them equal)
+# --compact-off may drop.
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
+
+
+def compact_environment(compact, compact_off=(), shrink=False):
+    """The PNR_COMPACT / PNR_SHRINK variables of ``--compact``, ``--compact-off`` and
+    ``--shrink`` (set after the ambient PNR_* variables are stripped, so provenance
+    records them); empty when none is given."""
+    if compact_off and not compact:
+        raise ValueError("--compact-off needs --compact")
+    env = {}
+    if compact:
+        env["PNR_COMPACT"] = "1"
+        for part in sorted(set(compact_off)):
+            env["PNR_COMPACT_" + part] = "0"
+    if shrink:
+        env["PNR_SHRINK"] = "1"
+    return env
+
+
+def legalize_environment(
+    gp_polish=False,
+    gp_channels=None,
+    pool_source_clamp=False,
+    legalize_hpwl=None,
+    reorient=None,
+    channel_clearance=None,
+    line_satellites=False,
+):
+    """The PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP / PNR_LEGALIZE_HPWL /
+    PNR_LEGALIZE_REORIENT / PNR_LEGALIZE_CHANNEL_CLEARANCE / PNR_LINE_SATELLITES variables of
+    ``--gp-polish``, ``--gp-channels``, ``--pool-source-clamp``, ``--legalize-hpwl``,
+    ``--legalize-reorient``, ``--legalize-channel-clearance`` and ``--line-satellites``
+    (``pnr.legalize_flags``; set after the ambient PNR_* variables are stripped, so provenance
+    records them); empty when none is given. ``reorient`` is ``"1"`` (guarded), ``"wire"`` or
+    None; ``channel_clearance`` is ``"fab"`` or None."""
+    env = {}
+    for name, value in (("--gp-channels", gp_channels), ("--legalize-hpwl", legalize_hpwl)):
+        if value is not None and not (math.isfinite(value) and value > 0):
+            raise ValueError("%s takes a positive weight, got %r" % (name, value))
+    if gp_polish:
+        env["PNR_GP_POLISH"] = "1"
+    if gp_channels is not None:
+        env["PNR_GP_CHANNELS"] = repr(float(gp_channels))
+    if pool_source_clamp:
+        env["PNR_POOL_SOURCE_CLAMP"] = "1"
+    if legalize_hpwl is not None:
+        env["PNR_LEGALIZE_HPWL"] = repr(float(legalize_hpwl))
+    if reorient not in (None, "1", "wire"):
+        raise ValueError("--legalize-reorient takes nothing or wire, got %r" % (reorient,))
+    if reorient:
+        env["PNR_LEGALIZE_REORIENT"] = reorient
+    if channel_clearance not in (None, "fab"):
+        raise ValueError("--legalize-channel-clearance takes fab, got %r" % (channel_clearance,))
+    if channel_clearance:
+        env["PNR_LEGALIZE_CHANNEL_CLEARANCE"] = channel_clearance
+    if line_satellites:
+        env["PNR_LINE_SATELLITES"] = "1"
+    return env
 
 
 def fab_data_inputs(repo):
@@ -192,6 +315,7 @@ def source_inputs(repo):
         raise FileNotFoundError("Native regression requires " + str(scanner))
     return (
         sorted((repo / "hardware/pnr/pnr").rglob("*.py"))
+        + sorted((repo / "hardware/pnr/pnr").rglob("*.c"))
         + sorted((repo / "hardware/pnr/regression").glob("*.py"))
         + [scanner]
         + [p for p in fab_data_inputs(repo) if p.is_file()]
@@ -541,7 +665,32 @@ def parser():
         help="Explicit signal grid pitch for source and fixed-copper handoff; 0 keeps automatic pitch",
     )
     ap.add_argument(
-        "--packed-maze", action="store_true", help="Validate the packed CPU maze kernel explicitly"
+        "--packed-maze",
+        action="store_true",
+        help="The packed CPU maze kernel (the default; kept so recorded configurations still parse)",
+    )
+    ap.add_argument(
+        "--maze-kernel",
+        choices=("packed", "native"),
+        default="packed",
+        help=(
+            "native: build the C search loop from the frozen sources with the host compiler and "
+            "route with it (identical routes; the packed kernel runs if it cannot load)"
+        ),
+    )
+    ap.add_argument(
+        "--exact-separation",
+        choices=("off", "recover", "full"),
+        help=(
+            "PNR_EXACT_SEPARATION: recover routes again with the exact pairwise separation when "
+            "a detailed route leaves connections open (and keeps it only with fewer open), full "
+            "routes with it only; default: the engine's (recover)"
+        ),
+    )
+    ap.add_argument(
+        "--reference-maze",
+        action="store_true",
+        help="Route with the reference dict A* kernel (PNR_PACKED_MAZE=0) instead of the packed one",
     )
     ap.add_argument(
         "--batched-wirelength",
@@ -571,6 +720,22 @@ def parser():
         help="Also offer the showcase cases (designs.showcases(), outside the ladder) to --case",
     )
     ap.add_argument(
+        "--hard",
+        action="store_true",
+        help="Also offer the hard rungs (hard_rungs.hard_rungs(), outside the ladder) to --case",
+    )
+    ap.add_argument(
+        "--design-json",
+        action="append",
+        default=[],
+        help="Also offer the designs in this JSON list (e.g. lenmatch_scratch.py write) to --case",
+    )
+    ap.add_argument(
+        "--lane",
+        choices=("nightly", "manual"),
+        help="Run the hard rungs whose ci.lane is LANE (with any --case given); implies --hard",
+    )
+    ap.add_argument(
         "--gloss",
         action="store_true",
         help=(
@@ -592,6 +757,84 @@ def parser():
         help=(
             "pnr.gloss --measure on a copy of each final board (objective, length, bends, "
             "adjacency, dead space): the figures of a gloss A/B, for both arms"
+        ),
+    )
+    ap.add_argument(
+        "--compact",
+        action="store_true",
+        help=(
+            "PNR_COMPACT=1: compact placement (spread 1.0, clustered starts, the courtyard gap "
+            "and copper margins in the legalizer, offset courtyards, a compactness tie-break)"
+        ),
+    )
+    ap.add_argument(
+        "--compact-off",
+        action="append",
+        default=[],
+        choices=COMPACT_PARTS,
+        metavar="PART",
+        help="With --compact: drop one part, PNR_COMPACT_<PART>=0 (repeatable; ablations)",
+    )
+    ap.add_argument(
+        "--gp-polish",
+        action="store_true",
+        help=(
+            "PNR_GP_POLISH=1: a final global-placement phase on the legalizer's own slots, turns "
+            "frozen (docs/design/compact-placement.md, section 11)"
+        ),
+    )
+    ap.add_argument(
+        "--gp-channels",
+        type=float,
+        metavar="LAMBDA",
+        help="PNR_GP_CHANNELS=LAMBDA: the polish (implied) also weighs the legalizer's channel cost",
+    )
+    ap.add_argument(
+        "--pool-source-clamp",
+        action="store_true",
+        help="PNR_POOL_SOURCE_CLAMP=1: the initial pool's source start begins inside the outline",
+    )
+    ap.add_argument(
+        "--legalize-hpwl",
+        type=float,
+        metavar="W",
+        help=(
+            "PNR_LEGALIZE_HPWL=W: the legalizer's slot cost gains W times the part's wirelength "
+            "and the turn is chosen with the slot among all four"
+        ),
+    )
+    ap.add_argument(
+        "--legalize-reorient",
+        nargs="?",
+        const="1",
+        choices=("1", "wire"),
+        help=(
+            "PNR_LEGALIZE_REORIENT=1: in-place turns that shorten wires after legalization, "
+            "never raising a part's channel shortage; 'wire' drops that guard"
+        ),
+    )
+    ap.add_argument(
+        "--legalize-channel-clearance",
+        choices=("fab",),
+        help=(
+            "PNR_LEGALIZE_CHANNEL_CLEARANCE=fab: the legalizer's channel model spaces unclassed "
+            "nets at the fab clearance (the router's) instead of the board default"
+        ),
+    )
+    ap.add_argument(
+        "--line-satellites",
+        action="store_true",
+        help=(
+            "PNR_LINE_SATELLITES=1: a line group carries each member's series part (a two-pad "
+            "part on a two-pin net to the member) flush beside it"
+        ),
+    )
+    ap.add_argument(
+        "--shrink",
+        action="store_true",
+        help=(
+            "PNR_SHRINK=1: the flat driver searches a smaller outline inside the design's "
+            "(the board shrinks); hard rungs are exempt"
         ),
     )
     ap.add_argument(
@@ -636,8 +879,15 @@ def main():
     if glossing and not (args.gloss or args.gloss_measure):
         raise SystemExit("--gloss-flag needs --gloss or --gloss-measure")
     out.mkdir(parents=True, exist_ok=False)
-    allcases = designs() + (showcases() if args.showcases else [])
-    cases = [c for c in allcases if not args.case or c["name"] in args.case]
+    hard = hard_rungs() if args.hard or args.lane else []
+    allcases = designs() + (showcases() if args.showcases else []) + hard
+    for path in args.design_json:
+        allcases += json.loads(Path(path).read_text())
+    if args.lane:
+        lane = {c["name"] for c in hard if c["ci"]["lane"] == args.lane}
+        cases = [c for c in allcases if c["name"] in lane or c["name"] in args.case]
+    else:
+        cases = [c for c in allcases if not args.case or c["name"] in args.case]
     if not cases or (set(args.case) - {c["name"] for c in cases}):
         raise SystemExit("Unknown/empty case selection")
     source_files = source_inputs(REPO)
@@ -662,8 +912,44 @@ def main():
     for key in list(env):
         if key.startswith("PNR_") and key not in ("PNR_LOCAL_PRESSURE", "PNR_JOINT_ACCESS"):
             del env[key]
+    if args.packed_maze and args.reference_maze:
+        raise SystemExit("--packed-maze and --reference-maze are exclusive")
     if args.packed_maze:
         env["PNR_PACKED_MAZE"] = "1"
+    if args.reference_maze:
+        env["PNR_PACKED_MAZE"] = "0"
+    if args.exact_separation:
+        env["PNR_EXACT_SEPARATION"] = args.exact_separation
+    native = None
+    if args.maze_kernel == "native":
+        if args.reference_maze:
+            raise SystemExit("--maze-kernel native and --reference-maze are exclusive")
+        # The frozen C source, compiled once for the run (pnr.route.detail.native_maze).
+        # Without a working compiler the run keeps the packed kernel (identical routes)
+        # and says so here and in provenance.
+        try:
+            library = subprocess.run(
+                [
+                    args.python,
+                    "-c",
+                    "import sys; from pnr.route.detail.native_maze import build_library; "
+                    "print(build_library(sys.argv[1]))",
+                    str(out / "native"),
+                ],
+                env=dict(env, PYTHONPATH=str(freeze / "hardware/pnr")),
+                capture_output=True,
+                text=True,
+                timeout=600,
+                check=True,
+            ).stdout.strip()
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
+            detail = (getattr(error, "stderr", None) or str(error)).strip().splitlines()
+            reason = detail[-1] if detail else type(error).__name__
+            print("native maze kernel not built (%s); the packed kernel routes" % reason)
+            native = dict(library=None, error=reason)
+        else:
+            env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
+            native = dict(library=Path(library).name, sha256=sha(Path(library)))
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.detail_pitch_mm is not None:
@@ -674,9 +960,27 @@ def main():
         env["PNR_DETAIL_PITCH_MM"] = str(args.detail_pitch_mm)
     if args.batched_wirelength:
         env["PNR_BATCHED_WIRELENGTH"] = "1"
+    try:
+        env.update(compact_environment(args.compact, args.compact_off, args.shrink))
+        env.update(
+            legalize_environment(
+                args.gp_polish,
+                args.gp_channels,
+                args.pool_source_clamp,
+                args.legalize_hpwl,
+                args.legalize_reorient,
+                args.legalize_channel_clearance,
+                args.line_satellites,
+            )
+        )
+    except ValueError as error:
+        raise SystemExit(str(error))
     env["PNR_FAB_PROFILE"] = (
         args.fab_profile
     )  # routed and judged under one profile (route_case.py, writeback)
+    # The KiCad-side judge's numeric solves (pnr.ir_extract, the ir_drop check) run in this
+    # Python when KiCad's has no numpy (the container image's).
+    env["PNR_PYTHON"] = str(args.python)
     if args.initial_pool:
         if not 2 <= args.initial_starts <= 128 or not 1 <= args.initial_finalists <= min(
             args.initial_starts, 16
@@ -706,7 +1010,12 @@ def main():
             groups=gloss_groups,
         ),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-        pnr_environment={k: v for k, v in env.items() if k.startswith("PNR_")},
+        pnr_environment={
+            k: v
+            for k, v in env.items()
+            if k.startswith("PNR_") and k not in ("PNR_MAZE_LIB", "PNR_PYTHON")
+        },
+        native_maze=native,
     )
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2))
     for key, cmd in [
@@ -783,12 +1092,28 @@ def main():
                     sum(bool(p["net"]) for c in graph["components"] for p in c["pads"])
                     == spec["expected_connected_pads"]
                 )
-                # A design's driver: flat (route_case.py) or hierarchical (hier_case.py).
-                driver = "hier_case.py" if spec.get("driver") == "hier" else "route_case.py"
+                # A hard rung's custom rules (via policy, plane layers, pair skew) sit
+                # beside the boards before any stage loads them: the zone filler and
+                # the judge read <board>.kicad_dru (never generated under legacy, so
+                # the fab profile leaves a hand-written file alone).
+                dru = dru_text(spec) if spec.get("tier") == "hard" else None
+                if dru:
+                    for stem in ("source", "routed"):
+                        (root / (stem + ".kicad_dru")).write_text(dru)
+                # A design's driver: flat (route_case.py), hierarchical (hier_case.py) or
+                # Monte-Carlo successive halving (mc_case.py).
+                driver = {"hier": "hier_case.py", "mc": "mc_case.py"}.get(
+                    spec.get("driver"), "route_case.py"
+                )
+                extra = dict(native.environment()) if native else {}
+                if args.shrink and spec.get("tier") == "hard":
+                    # A hard rung's outline is part of its contract: never shrunk.
+                    extra["PNR_SHRINK"] = "0"
+                    result["shrink_exempt"] = True
                 run(
                     "place-route",
                     [args.python, frozen_here / driver, root, seed, args.rounds],
-                    native.environment() if native else None,
+                    extra or None,
                 )
                 board = root / "routed.kicad_pcb"
                 run(
@@ -864,11 +1189,26 @@ def main():
                         root / "via-scan",
                     ],
                 )
+                # The independent constraint check (check_constraints.py) on the saved
+                # board: every case, gating only the hard rungs.
+                run(
+                    "checks",
+                    [
+                        args.kicad_python,
+                        frozen_here / "check_constraints.py",
+                        board,
+                        "--spec",
+                        root / "design.json",
+                        "--out",
+                        root / "checks.json",
+                        "--exit-zero",
+                    ],
+                )
                 pnr = json.loads((root / "pnr-report.json").read_text())
                 audit = json.loads((root / "native-audit.json").read_text())
                 drc = json.loads((root / "drc.json").read_text())
                 result.update(
-                    reasons=acceptance(pnr, audit, drc),
+                    reasons=acceptance(pnr, audit, drc, spec.get("designed_open") or ()),
                     opens=len(drc["unconnected_items"]),
                     violations=dict(Counter(x["type"] for x in drc["violations"])),
                     tracks=audit["tracks"],
@@ -882,16 +1222,27 @@ def main():
                 )
                 if source != sha(root / "source.kicad_pcb"):
                     result["reasons"].append("source_changed")
+                checks = json.loads((root / "checks.json").read_text())
+                result["checks"] = checks["summary"]
+                if spec.get("tier") == "hard":
+                    result["dims"] = spec["dims"]
+                    if checks["summary"]["satisfied"] != checks["summary"]["total"]:
+                        result["reasons"].append("constraint_violated")
                 if result.get("gloss_error"):
                     result["reasons"].append("gloss_error")
                 if args.gloss_measure:
                     result["gloss_measure"] = gloss_measure(root, board, args, run, glossing)
+                placed_doc = json.loads((root / "placed.json").read_text())
+                result["compactness"] = compactness(placed_doc)
                 constraints = spec["constraints"]
                 if constraints.get("line_group") or any(
                     rule.get("hard") for rule in (constraints.get("edge_align") or {}).values()
                 ):
                     checked, findings = constraint_reasons(
-                        spec, json.loads((root / "placed.json").read_text())
+                        spec,
+                        placed_doc,
+                        use_body=args.compact and "COURTYARD" not in args.compact_off,
+                        shrunk=args.shrink,
                     )
                     result["constraint_audit"] = dict(checked=checked, findings=findings)
                     if findings:

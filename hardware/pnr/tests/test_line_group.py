@@ -375,6 +375,85 @@ class RouteAndPlaceTest(unittest.TestCase):
         self.assertFalse(any(hard_violations(placed, cc).values()))
 
 
+class SatelliteTest(unittest.TestCase):
+    """PNR_LINE_SATELLITES: each LED's series resistor rides flush beside it in the rigid line."""
+
+    def flag(self, value):
+        saved = os.environ.get("PNR_LINE_SATELLITES")
+        if value is None:
+            os.environ.pop("PNR_LINE_SATELLITES", None)
+        else:
+            os.environ["PNR_LINE_SATELLITES"] = value
+        self.addCleanup(
+            lambda: (
+                os.environ.pop("PNR_LINE_SATELLITES", None)
+                if saved is None
+                else os.environ.__setitem__("PNR_LINE_SATELLITES", saved)
+            )
+        )
+
+    def test_found_for_the_series_resistors_only(self):
+        graph = board()
+        cc = compiled(graph, line_group=[LINE])
+        self.assertEqual(
+            line_group.satellites(graph, cc),
+            {"D%d" % i: [("R%d" % i, "2", "2")] for i in range(1, 5)},
+        )
+        # A part some constraint names, or one on a diff pair, is nobody's satellite.
+        held = compiled(graph, line_group=[LINE], orientation={"R1": 0})
+        self.assertNotIn("D1", line_group.satellites(graph, held))
+        pair = compiled(graph, line_group=[LINE], diff_pair=[dict(name="p", p="Q1", n="L1")])
+        self.assertNotIn("D2", line_group.satellites(graph, pair))
+        self.assertEqual(line_group.satellites(graph, compiled(graph)), {})
+
+    def test_layout_puts_each_resistor_flush_beside_its_led(self):
+        graph = board()
+        cc = compiled(graph, line_group=[LINE])
+        con = line_group.groups(cc)[0]
+        width, height, poses = line_group.layout(graph, con, 0.4)
+        found = line_group.satellites(graph, cc)
+        w2, h2, sat = line_group.satellite_layout(graph, con, width, height, poses, found, 0.4)
+        self.assertAlmostEqual(w2, width)
+        # LED across extent 3.49, the resistor's 3.45, 0.4 apart.
+        self.assertAlmostEqual(h2, 3.49 + 0.4 + 3.45)
+        for i in range(1, 5):
+            dx, dy, drot = sat["D%d" % i]
+            rx, ry, rrot = sat["R%d" % i]
+            self.assertAlmostEqual(rx, dx)
+            self.assertAlmostEqual(abs(ry - dy), 3.49 / 2 + 0.4 + 3.45 / 2)
+            self.assertIn(rrot % 180, (90.0,))
+
+    def test_placed_flush_and_in_line(self):
+        from pnr.place.geometry import pin_positions
+
+        graph = board()
+        cc = compiled(graph, line_group=[LINE])
+        self.flag("1")
+        for seed in range(2):
+            with self.subTest(seed=seed):
+                placed, _ = placed_line(self, graph, cc, seed=seed)
+                for i in range(1, 5):
+                    d = placed.component("D%d" % i)
+                    r = placed.component("R%d" % i)
+                    (_, d1), (_, d2) = pin_positions(d)
+                    (_, r1), (_, r2) = pin_positions(r)
+                    ax = (d2[0] - d1[0], d2[1] - d1[1])
+                    norm = math.hypot(*ax)
+                    for q in (r1, r2):  # the resistor's pads on the LED's pad axis
+                        cross = (q[0] - d1[0]) * ax[1] - (q[1] - d1[1]) * ax[0]
+                        self.assertLess(abs(cross) / norm, 1e-6)
+                    # The shared pad (L) faces the LED's L pad.
+                    self.assertLess(math.dist(r2, d2), math.dist(r1, d2))
+                    self.assertLess(math.dist(r2, d2), 2.5)
+
+    def test_off_never_looks_for_satellites(self):
+        graph = board()
+        cc = compiled(graph, line_group=[LINE])
+        self.flag(None)
+        with mock.patch.object(line_group, "satellites", side_effect=AssertionError("called")):
+            placed_line(self, graph, cc, seed=0)
+
+
 class MacroDefaultsTest(unittest.TestCase):
     def test_collapse_defaults_are_unchanged(self):
         """Default prefix and margin: MB macros with the fab edge clearance margin."""

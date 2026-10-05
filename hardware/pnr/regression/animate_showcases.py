@@ -14,7 +14,9 @@ It writes those files, the ``showcases`` and ``readme_showcase`` entries of ``ma
 and the ``showcases`` array of ``ladder-results.json`` (the ladder's own entries stay as they
 are). ``--render-only RUN_DIR`` renders a finished showcase run (no KiCad); otherwise the run
 is made first (``run.py --showcases --trace --trace-placement-every 5`` with the initial
-pool, seed 0). The case titles live here, next to the ladder's (``animate_ladder.TITLES``).
+pool, seed 0). ``--runner-arg ARG`` (repeatable) passes one more argument to ``run.py``; the
+options that shaped the run (``animate_ladder.runner_options``) join each entry's ``config``.
+The case titles live here, next to the ladder's (``animate_ladder.TITLES``).
 """
 
 from __future__ import annotations
@@ -31,7 +33,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 
-from animate_ladder import case_result, ladder_provenance, platform_name  # noqa: E402
+from animate_ladder import (  # noqa: E402
+    case_result,
+    ladder_provenance,
+    platform_name,
+    runner_options,
+)
 
 POOL = ["--initial-pool", "--initial-starts", "8", "--initial-finalists", "3"]
 EVERY = "5"
@@ -110,6 +117,7 @@ def run_showcases(args):
     command = [args.python, str(HERE / "run.py"), "--repo", str(repo_root()), "--out", str(run)]
     command += ["--python", args.python, "--seed", "0", "--trace", "--showcases"]
     command += ["--trace-placement-every", EVERY, "--timeout", str(args.timeout)] + POOL
+    command += list(getattr(args, "runner_arg", None) or [])
     for flag in ("kicad_python", "kicad_cli", "library"):
         value = getattr(args, flag)
         if value:
@@ -161,7 +169,7 @@ def render(run, out, allow_failed=False, only=None):
             print("%s: not rendered: %s" % (file, error), flush=True)
             failed.append(file)
             continue
-        entry["config"] = config_of(names[0])
+        entry["config"] = config_of(names[0], run_options(run))
         print(
             "%s: %d frames, %.1f s, %d bytes"
             % (entry["file"], entry["frames"], entry["seconds"], entry["bytes"]),
@@ -171,10 +179,17 @@ def render(run, out, allow_failed=False, only=None):
     return cases, entries, failed
 
 
-def config_of(case):
-    """The run flags that shaped a case's result (the pool's apply to the flat cases only)."""
+def config_of(case, extra=()):
+    """The run flags that shaped a case's result (the pool's apply to the flat cases only),
+    with ``extra``, the run's own options (:func:`animate_ladder.runner_options`)."""
     every = ["--trace-placement-every", EVERY]
-    return every if case in HIER_CASES else POOL + every
+    return (every if case in HIER_CASES else POOL + every) + list(extra)
+
+
+def run_options(run):
+    """The board-changing run.py options of a showcase run (its provenance)."""
+    path = Path(run) / "provenance.json"
+    return runner_options(json.loads(path.read_text())) if path.is_file() else []
 
 
 def render_one(cases, path, kind, names, labels, title, fmt, allow_failed):
@@ -264,7 +279,9 @@ def write_documents(out, run, cases, entries, image=None):
     rows = []
     for case in CASES:
         directory, result, _trace = cases[case]
-        row = case_result(case, directory, result, config_of(case), ladder.get("fab_profile"))
+        row = case_result(
+            case, directory, result, config_of(case, run_options(run)), ladder.get("fab_profile")
+        )
         row["title"] = SHOWCASE_TITLES[case]
         audit = result.get("constraint_audit")
         row["constraint_audit"] = (
@@ -292,6 +309,13 @@ def main(argv=None):
     ap.add_argument("--allow-failed", action="store_true")
     ap.add_argument("--no-documents", action="store_true", help="do not touch the JSON files")
     ap.add_argument("--image", help="container image digest the run used (manifest)")
+    ap.add_argument(
+        "--runner-arg",
+        action="append",
+        default=[],
+        metavar="ARG",
+        help="one more run.py argument (repeatable; e.g. --runner-arg=--compact)",
+    )
     a = ap.parse_args(argv)
     out = a.out or repo_root() / "docs" / "animations"
     run = a.render_only.resolve() if a.render_only else run_showcases(a)

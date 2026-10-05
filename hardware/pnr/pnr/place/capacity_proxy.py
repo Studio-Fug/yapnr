@@ -13,25 +13,66 @@ from collections import defaultdict
 import numpy as np
 
 from pnr.electrical import net_policy
+from pnr.graph import footprint_point
 
 from .geometry import courtyard_rect, pad_rects, pin_positions
 
 
+def stack_layers(graph, rules):
+    """``(layers, plane_layers, net_plane)`` of the board's declared copper stack
+    (:mod:`pnr.stack`), or None for the legacy 2/4-layer model.
+
+    The model keeps the stack's routed layers plus one plane layer per plane net
+    (its class plane when that is one of its dedicated planes, else its first), in
+    stack order, for any copper layer count. Only those plane layers are restricted
+    to their nets (``plane_layers``); ``net_plane`` maps each plane net to its layer.
+    """
+    from pnr.stack import resolve
+
+    stack = resolve(rules, getattr(graph, "stack", None))
+    if stack is None:
+        return None
+    classes = {
+        n: c["plane_layer"]
+        for c in rules.get("net_classes", [])
+        if c.get("plane_layer")
+        for n in c.get("nets", [])
+    }
+    net_plane = {}
+    for net in sorted(stack.plane_nets):
+        own = stack.net_planes(net)
+        net_plane[net] = classes[net] if classes.get(net) in own else own[0]
+    for net, layer in stack.split_nets.items():
+        net_plane.setdefault(net, layer)
+    keep = set(stack.grid_layers) | {net_plane[n] for n in stack.plane_nets}
+    layers = [name for name in stack.names if name in keep]
+    plane_layers = {}
+    for net in sorted(stack.plane_nets):
+        plane_layers.setdefault(layers.index(net_plane[net]), []).append(net)
+    return layers, plane_layers, net_plane
+
+
 class CapacityGraph:
     def __init__(self, graph, rules, pitch=2.0, raster=0.25):
-        if rules.get("layers", 4) not in (2, 4):
-            raise ValueError("Proxy currently supports 2 or 4 copper layers")
+        stacked = stack_layers(graph, rules)
+        if stacked is None and rules.get("layers", 4) not in (2, 4):
+            raise ValueError("Proxy supports 2 or 4 copper layers without a declared stack")
         if graph.outline.polygon and any(
             x not in (0, graph.outline.width) or y not in (0, graph.outline.height)
             for x, y in graph.outline.polygon
         ):
             raise ValueError("Proxy requires rectangular outline")
         self.pitch = pitch
-        self.layers = (
-            ["F.Cu", "B.Cu"]
-            if rules.get("layers", 4) == 2
-            else ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"]
-        )
+        if stacked is not None:
+            self.layers = stacked[0]
+        else:
+            self.layers = (
+                ["F.Cu", "B.Cu"]
+                if rules.get("layers", 4) == 2
+                else ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"]
+            )
+        # Plane net -> its plane layer in this model (declared stack only).
+        self.net_plane = stacked[2] if stacked is not None else {}
         self.nx = math.ceil(graph.outline.width / pitch)
         self.ny = math.ceil(graph.outline.height / pitch)
         sub = max(2, math.ceil(pitch / raster))
@@ -77,17 +118,34 @@ class CapacityGraph:
                     rect.top + clearance / 2,
                     self.net_ids.get(p.net, -1),
                 )
+        layer_index = {name: k for k, name in enumerate(self.layers)}
         for v in rules.get("copper_keepouts", []):
+            if "items" in v:
+                # v1: its bounding box on its own layers when it bars tracks. One with
+                # allowed nets is not modelled (optimistic); exempt groups alone exempt
+                # only fixed copper, so it bars every routed net, as the router reads it.
+                if v.get("allowed_nets") or "tracks" not in v["items"]:
+                    continue
+                if v.get("polygon") is not None:
+                    pts = v["polygon"]
+                else:
+                    c = graph.component(v["ref"])
+                    x0, y0, x1, y1 = v["rect_mm"]
+                    pts = [
+                        footprint_point(c, x, y)
+                        for x, y in [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]
+                    ]
+                box(
+                    [layer_index[la] for la in v["layers"] if la in layer_index],
+                    min(x for x, y in pts),
+                    min(y for x, y in pts),
+                    max(x for x, y in pts),
+                    max(y for x, y in pts),
+                )
+                continue
             c = graph.component(v["ref"])
             x0, y0, x1, y1 = v["rect_mm"]
-            a = math.radians(c.rot)
-            pts = [
-                (
-                    c.pos[0] + x * math.cos(a) - y * math.sin(a),
-                    c.pos[1] + x * math.sin(a) + y * math.cos(a),
-                )
-                for x, y in [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]
-            ]
+            pts = [footprint_point(c, x, y) for x, y in [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]]
             box(
                 range(len(self.layers)),
                 min(x for x, y in pts),
@@ -95,6 +153,24 @@ class CapacityGraph:
                 max(x for x, y in pts),
                 max(y for x, y in pts),
             )
+        if rules.get("fixed_copper"):
+            # Fixed copper carried in the rules (fixed blocks): owned by its nets.
+            from pnr.fixed_block import flatten
+
+            fixed = flatten(rules["fixed_copper"])
+            for net, layer, a, b, width in fixed.get("tracks", []):
+                if layer not in layer_index:
+                    continue
+                owner = self.net_ids.get(net, -1)
+                r = (width + clearance) / 2
+                for t in np.linspace(0, 1, max(2, math.ceil(math.dist(a, b) / step) + 1)):
+                    x = a[0] + t * (b[0] - a[0])
+                    y = a[1] + t * (b[1] - a[1])
+                    box([layer_index[layer]], x - r, y - r, x + r, y + r, owner)
+            for via in fixed.get("vias", []):
+                (x, y), r = via["xy"], via["diameter_mm"] / 2 + clearance / 2
+                owner = self.net_ids.get(via.get("net"), -1)
+                box(range(len(self.layers)), x - r, y - r, x + r, y + r, owner)
         for h in rules.get("mounting_holes", []):
             # Different upstream schemas are recorded as a limitation if absent.
             xy = h.get("at", h.get("pos"))
@@ -218,11 +294,14 @@ class CapacityGraph:
                 for net in columns.get((x, y), []):
                     self.plated_resources[net].add(r)
         self.cap = np.array(self.cap)
-        self.plane_layers = {
-            self.layers.index(c["plane_layer"]): c["nets"]
-            for c in rules.get("net_classes", [])
-            if c.get("plane_layer") in self.layers
-        }
+        if stacked is not None:
+            self.plane_layers = stacked[1]
+        else:
+            self.plane_layers = {
+                self.layers.index(c["plane_layer"]): c["nets"]
+                for c in rules.get("net_classes", [])
+                if c.get("plane_layer") in self.layers
+            }
 
     def node(self, la, x, y):
         return (la * self.ny + y) * self.nx + x
@@ -311,6 +390,8 @@ def commodities(graph, rules, mesh):
         if net in paired:
             continue
         p = net_policy(net, rules)
+        if net in mesh.net_plane:
+            p["plane"] = mesh.net_plane[net]
         if p.get("plane") and p["plane"] not in mesh.layers:
             raise ValueError("Declared plane absent from layer model")
         if len(nodes) < 2 and not p.get("plane"):

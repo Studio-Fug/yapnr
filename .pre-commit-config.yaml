@@ -79,7 +79,8 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^hardware/pnr/testdata/
+        # docker/palace/patches: a blank context line of a patch is a single space
+        exclude: ^(hardware/pnr/testdata/|docker/palace/patches/)
       - id: end-of-file-fixer
         exclude: ^hardware/pnr/testdata/
       - id: check-yaml
@@ -95,7 +96,7 @@ repos:
       - id: name-tests-test
         args: [--pytest-test-first]
         # Helper modules the engine's tests import; PR3b moves them out of tests/.
-        exclude: ^hardware/pnr/tests/(cost_fixture|gloss_fixture|power_topology_golden)\.py$
+        exclude: ^hardware/pnr/tests/(compact_fixture|cost_fixture|gloss_fixture|power_topology_golden)\.py$
 
   # Keep machine paths, tailnet hosts and addresses, personal e-mail
   # addresses and credentials out of this public repository. Stdlib-only.

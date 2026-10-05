@@ -38,21 +38,28 @@
 <p align="center">
   <img src="docs/animations/05-timer-led-10.gif" width="640"
     alt="Animation: yapnr places and routes a TLC555 LED flasher, from unplaced footprints to a
-    fully routed board that passes KiCad's DRC">
+    compact, fully routed board; the gloss pass smooths its copper, and the board passes KiCad's
+    DRC">
 </p>
 
 _The 555 flasher (a TLC555 astable blinker, 10 parts, 2 layers) from the
 [regression ladder](docs/regression-ladder.md): from unplaced footprints to 100 % routed, with the
-placement starts and routes it was chosen from, ending on KiCad's clean DRC verdict._
+placement starts and routes it was chosen from, then the gloss pass (the copper it replaces in
+red, its new copper in green), ending on KiCad's clean DRC verdict. Recorded with the opt-in
+[compact placement](docs/design/compact-placement.md) and [gloss](docs/design/gloss.md)
+(`PNR_COMPACT=1`, `PNR_GLOSS=1`; both off by default)._
 
 <p align="center">
   <img src="docs/animations/showcase-chaser-line.gif" width="800"
     alt="Animation, side by side: an LED chaser placed and routed twice, its LEDs placed freely
-    on the left and held in one line that the placer moves and turns as a whole on the right">
+    on the left and held in one line on the right, each LED's series resistor beside it, which
+    the placer moves and turns as a whole">
 </p>
 
 _Left: LEDs placed freely. Right: the same chaser with its LEDs held in a
-[line group](docs/constraints-and-hierarchy.md); the placer moves and turns the whole line._
+[line group](docs/constraints-and-hierarchy.md); compact placement keeps each LED's series resistor
+flush beside it, and the placer moves and turns the whole row. Both with compact placement and
+gloss, as above._
 
 yapnr places components and routes copper for KiCad boards. It uses a mechanical,
 Monte-Carlo-driven search: hierarchical block synthesis, power-first placement, native KiCad

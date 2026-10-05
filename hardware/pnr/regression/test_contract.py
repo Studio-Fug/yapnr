@@ -270,6 +270,20 @@ class GateContract(unittest.TestCase):
         self.d["unconnected_items"] = [{}]
         self.assertIn("native_unconnected_items", acceptance(self.p, self.a, self.d))
 
+    def test_designed_opens_are_not_reasons(self):
+        def item(pad, ref):
+            ends = [dict(description="Track [VCC] on F.Cu, length 0.46 mm")]
+            ends.append(dict(description="Pad %s [VCC] of %s on F.Cu" % (pad, ref)))
+            return dict(type="unconnected_items", items=ends)
+
+        self.d["unconnected_items"] = [item("K4", "U1")]
+        self.assertEqual(acceptance(self.p, self.a, self.d, ["U1.K4"]), [])
+        self.assertIn("native_unconnected_items", acceptance(self.p, self.a, self.d))
+        self.d["unconnected_items"].append(item("K5", "U1"))
+        self.assertIn("native_unconnected_items", acceptance(self.p, self.a, self.d, ["U1.K4"]))
+        self.d["unconnected_items"] = [item("K4", "U10")]
+        self.assertIn("native_unconnected_items", acceptance(self.p, self.a, self.d, ["U1.K4"]))
+
     def test_every_native_warning_rejected(self):
         for kind in [
             "shorting_items",

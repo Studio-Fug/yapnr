@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -18,7 +19,13 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
     out.mkdir(parents=True, exist_ok=False)
     rules = Path(rules).resolve()
     board = Path(board).resolve()
-    env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent.parent))
+    # The KiCad workers import pnr and, for a vendor data profile (PNR_FAB_PROFILE), the
+    # yapnr package beside it (yapnr.fab: the profile files).
+    pnr_root = Path(__file__).resolve().parent.parent
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(pnr_root), str(pnr_root.parent.parent)]))
+    # The KiCad workers' numeric solves (pnr.ir_extract) run here when KiCad's Python has
+    # no numpy.
+    env.setdefault("PNR_PYTHON", sys.executable)
 
     def invoke(args, name):
         from pnr.proc import (  # one KiCad worker: PNR_WORKER_TIMEOUT; stays in this process group
@@ -28,8 +35,12 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         with (out / name).open("w") as f:
             run_checked(args, session=False, env=env, stdout=f, stderr=subprocess.STDOUT)
 
+    # With fixed blocks declared (rules fixed_blocks) the export holds their
+    # footprints out of placed.json and records their copper as blocks.
     invoke(
-        [kicad_python, "-m", "pnr.fixed_copper", str(board), "--export-dir", str(out)], "export.log"
+        [kicad_python, "-m", "pnr.fixed_copper", str(board), "--export-dir", str(out)]
+        + (["--rules", str(rules)] if json.loads(rules.read_text()).get("fixed_blocks") else []),
+        "export.log",
     )
     g = BoardGraph.from_json((out / "placed.json").read_text())
     policy = json.loads(rules.read_text())
@@ -48,6 +59,16 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         layout=json.loads(g.to_json()),
         data=dict(phase="signals", provisional=True),
     )
+    # board.edge: exact: this board's own outline for the router (pnr.board_edge);
+    # board.dru_routing: its custom rules where they constrain routing (pnr.dru_rules).
+    from pnr.board_edge import attach_edges
+    from pnr.dru_rules import attach_dru
+
+    attach_edges(policy, board.read_text())
+    dru_path = board.with_suffix(".kicad_dru")
+    attach_dru(
+        policy, dru_path.read_text() if dru_path.exists() else None, [n.name for n in g.nets]
+    )
     started = time.monotonic()
     result = route_board(
         g,
@@ -57,9 +78,11 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         fixed_copper=json.loads((out / "fixed.json").read_text()),
     )
     routes = out / "routes.json"
-    routes.write_text(
-        json.dumps(dict(tracks=result.tracks, vias=result.vias, unrouted=result.result.unrouted))
-    )
+    payload = dict(tracks=result.tracks, vias=result.vias, unrouted=result.result.unrouted)
+    if result.via_spans:  # blind, buried and micro vias (pnr.via_policy)
+        payload["via_spans"] = result.via_spans
+    payload.update(result.extras())  # a declared fanout's via sizes and locked copper
+    routes.write_text(json.dumps(payload))
     (out / "result.json").write_text(
         json.dumps(
             dict(
@@ -93,6 +116,13 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         [kicad_python, "-m", "pnr.planes", str(final), "--rules", str(rules), "--refill-only"],
         "refill.log",
     )
+    if policy.get("ir_drop"):
+        # The rails' IR-drop report on the refilled board (pnr.ir_extract), declared only.
+        invoke(
+            [kicad_python, "-m", "pnr.ir_extract", str(final), "--rules", str(rules)]
+            + ["--out", str(out / "ir"), "--heatmaps"],
+            "ir.log",
+        )
     from pnr.native_drc import run_drc
 
     run_drc(kicad_cli, board, out / "baseline.drc.json", env=env)

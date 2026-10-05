@@ -39,11 +39,105 @@ class CapacityTests(unittest.TestCase):
         self.assertGreater(wide["overflow_units"], small["overflow_units"])
         self.assertGreater(wide["score"], small["score"])
 
+    def stacked(self, code, planes, zones=None):
+        """The fixture on a declared stack (pnr.stack): S signal, G/P plane layers."""
+        from pnr.stack import copper_names, record_from_rows
+
+        g = self.fixture(2)
+        g.components.append(
+            Component(
+                "C0",
+                "",
+                (5, 2),
+                0,
+                "top",
+                (0.2, 0.2),
+                (0.2, 0.2),
+                pads=[Pad("1", "GND", (0, 0), (0.2, 0.2))],
+                smd_body=True,
+            )
+        )
+        g.components.append(
+            Component(
+                "C1",
+                "",
+                (6, 2),
+                0,
+                "top",
+                (0.2, 0.2),
+                (0.2, 0.2),
+                pads=[Pad("1", "VCC", (0, 0), (0.2, 0.2))],
+                smd_body=True,
+            )
+        )
+        rows = [
+            dict(name=n, type="signal" if r == "S" else "power", zones=(zones or {}).get(n, []))
+            for n, r in zip(copper_names(len(code)), code)
+        ]
+        g.stack = record_from_rows(rows)
+        rules = {
+            "layers": len(code),
+            "net_classes": [
+                dict(name="p" + n, nets=[n], plane_layer=la, width_mm=0.4)
+                for n, la in planes.items()
+            ],
+        }
+        return g, rules
+
+    def test_declared_six_and_eight_layer_stacks_build_with_their_planes(self):
+        g, rules = self.stacked("SGSGPS", {"GND": "In1.Cu", "VCC": "In4.Cu"}, {"In3.Cu": ["GND"]})
+        m = CapacityGraph(g, rules)
+        # Routed layers plus one plane layer per plane net, in stack order.
+        self.assertEqual(m.layers, ["F.Cu", "In1.Cu", "In2.Cu", "In4.Cu", "B.Cu"])
+        self.assertEqual(m.plane_layers, {1: ["GND"], 3: ["VCC"]})
+        result = score(g, rules, passes=1)
+        self.assertEqual(result["unreachable_branches"], 0)
+        self.assertEqual(result["layers"], m.layers)
+        g, rules = self.stacked(
+            "SGSGPSGS", {"GND": "In1.Cu", "VCC": "In4.Cu"}, {"In3.Cu": ["GND"], "In6.Cu": ["GND"]}
+        )
+        m = CapacityGraph(g, rules)
+        self.assertEqual(m.layers, ["F.Cu", "In1.Cu", "In2.Cu", "In4.Cu", "In5.Cu", "B.Cu"])
+        self.assertEqual(score(g, rules, passes=1)["unreachable_branches"], 0)
+        # Without a declared stack the legacy model still refuses six layers.
+        g.stack = None
+        with self.assertRaises(ValueError):
+            CapacityGraph(g, rules)
+
+    def test_plane_layers_carry_only_their_nets(self):
+        g, rules = self.stacked("SGPS", {"GND": "In1.Cu", "VCC": "In2.Cu"})
+        nets = {c["name"]: c for c in commodities(g, rules, CapacityGraph(g, rules))}
+        self.assertEqual(nets["GND"]["plane"], 1)
+        self.assertEqual(nets["VCC"]["plane"], 2)
+        self.assertIsNone(nets["n0"]["plane"])
+        # The legacy four-layer model is the same mesh on this stack.
+        legacy = BoardGraph(g.name, g.components, g.nets, g.outline)
+        self.assertEqual(
+            score(legacy, rules, passes=2)["score"], score(g, rules, passes=2)["score"]
+        )
+
     def test_through_board_barrier_unreachable(self):
         g = self.fixture()
         r = {"layers": 2, "copper_keepouts": [{"ref": "A0", "rect_mm": [3, -2, 5, 2]}]}
         result = score(g, r, passes=1)
         self.assertEqual(result["unreachable_branches"], 1)
+
+    def test_v1_keepout_with_exempt_groups_only_is_a_barrier(self):
+        # Exempt groups exempt only fixed copper: the router bars every routed net, so
+        # the proxy does too; allowed nets keep it optimistic (not modelled).
+        g = self.fixture()
+        v1 = dict(
+            name="block",
+            polygon=[[3, -1], [5, -1], [5, 5], [3, 5]],
+            layers=["F.Cu", "B.Cu"],
+            items=["tracks", "vias"],
+            exempt_groups=["BLOCK"],
+        )
+        result = score(g, {"layers": 2, "copper_keepouts": [v1]}, passes=1)
+        self.assertEqual(result["unreachable_branches"], 1)
+        allowed = dict(v1, allowed_nets=["n0"])
+        result = score(g, {"layers": 2, "copper_keepouts": [allowed]}, passes=1)
+        self.assertEqual(result["unreachable_branches"], 0)
 
     def test_smd_body_does_not_reserve_backside(self):
         g = self.fixture()

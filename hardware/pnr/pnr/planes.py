@@ -48,6 +48,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         n = len(list(board.Zones()))
     else:
         n = apply_planes(board, rules)
+    if rules.get("pours"):
+        # Declared pours (pnr.pour): drawn where missing, filled, their islands with
+        # pads stitched to the net's other zones. Only when declared.
+        from pnr.pour import draw, stitch
+
+        if draw(board, rules):
+            pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+        report = stitch(board, rules)
+        print("planes: pours %s" % json.dumps(report, sort_keys=True))
     pcbnew.SaveBoard(args.pcb, board)
     # Authoritatively stamp the design rules into the project file *after* the last
     # board save — DRC reads the .kicad_pro, and the board's live settings detach

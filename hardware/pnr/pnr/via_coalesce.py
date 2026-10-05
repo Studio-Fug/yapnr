@@ -76,11 +76,16 @@ def preserved(before, after):
 
 def protected(board, rules, sources):
     """Resolve semantic protection from source, never reference-specific policy."""
+    from pnr.ingest import board_stack
+    from pnr.stack import plane_nets_of
+
     minimum = rules.get("fab", {}).get("track_width_mm", 0.2)
     nets = set()
     for c in rules.get("net_classes", []):
         if c.get("plane_layer") or (c.get("width_mm") or minimum) > minimum:
             nets.update(c.get("nets", []))
+    # A declared copper stack: every net with a dedicated plane, zone-only ones too.
+    nets.update(plane_nets_of(rules, board_stack(board, rules)))
     for pair in rules.get("diff_pairs", []):
         nets.update([pair["p"], pair["n"]])
     for group in rules.get("length_match", []):

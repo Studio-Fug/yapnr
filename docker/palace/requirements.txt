@@ -1,0 +1,11 @@
+# Python packages of the Palace task image, hash-checked (pip --require-hashes): gmsh for meshing
+# in the task (PyPI has its wheel for linux x86_64 only, so arm64 builds go without it), numpy,
+# shapely. Python 3.12 (Ubuntu 24.04).
+gmsh==4.15.2 ; platform_machine == "x86_64" \
+    --hash=sha256:4076a948ce22625330d1413d4982e22b5c69fc2f0f7951f5df64c778cf54108c
+numpy==2.5.3 \
+    --hash=sha256:b7e18c623bb5c95acb3b3328861272816ba199fb531921c5d6d0b675f1fde9e3 \
+    --hash=sha256:76c2c1e6bfa5c84adc6434dfbf013aa92096a7985221762c8f11fedfd20fff58
+shapely==2.1.2 \
+    --hash=sha256:1e7d4d7ad262a48bb44277ca12c7c78cb1b0f56b32c10734ec9a1d30c0b0c54b \
+    --hash=sha256:0bd308103340030feef6c111d3eb98d50dc13feea33affc8a6f9fa549e9458a3

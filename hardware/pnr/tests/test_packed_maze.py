@@ -26,6 +26,25 @@ class PackedMazeTest(unittest.TestCase):
         self.assertEqual(astar(*args, **kwargs), expected)
         return expected
 
+    def test_packed_is_the_default_and_zero_opts_out(self):
+        from pnr.route.detail import packed_maze
+        from pnr.route.detail.maze import maze_kernel
+
+        environ = {k: v for k, v in os.environ.items() if k != "PNR_PACKED_MAZE"}
+        grid = RouteGrid(4, 4, 1)
+        args = (grid, {Cell(0, 0, 0)}, {Cell(0, 3, 3)}, "N", {}, {}, 3.0, 0.6)
+        with patch.dict(os.environ, environ, clear=True):
+            self.assertEqual(maze_kernel(), "packed")
+            with patch.object(packed_maze, "astar", wraps=packed_maze.astar) as packed:
+                _astar(*args)
+            self.assertEqual(packed.call_count, 1)
+        for value, kernel in (("1", "packed"), ("0", "reference")):
+            with patch.dict(os.environ, {"PNR_PACKED_MAZE": value}):
+                self.assertEqual(maze_kernel(), kernel)
+                with patch.object(packed_maze, "astar", wraps=packed_maze.astar) as packed:
+                    _astar(*args)
+                self.assertEqual(packed.call_count, int(kernel == "packed"))
+
     def test_seeded_obstacles_prices_halos_and_drills(self):
         for seed in range(60):
             with self.subTest(seed=seed):
@@ -56,6 +75,25 @@ class PackedMazeTest(unittest.TestCase):
                     diagonal=seed % 3 != 0,
                     drill_sites=((5.5, 5.5),),
                 )
+
+    def test_layer_masks_agree_and_keep_tracks_off_masked_layers(self):
+        for seed in range(30):
+            with self.subTest(seed=seed):
+                rng = random.Random(seed)
+                grid = RouteGrid(9, 8, 1, layers=("F.Cu", "In1.Cu", "In2.Cu", "B.Cu"))
+                cells = [Cell(la, i, j) for la in (0, 3) for i in range(9) for j in range(8)]
+                for c in rng.sample(cells, 40):
+                    grid.blocked[c.layer, c.j, c.i] = True
+                grid.layer_mask = {"N": frozenset({0, 3, 1 + seed % 2}), "OTHER": frozenset()}
+                path = self.parity(
+                    grid,
+                    {Cell(0, 0, 0)},
+                    {Cell(3, 8, 7)},
+                    occ={c: rng.randrange(3) for c in rng.sample(cells, 20)},
+                    diagonal=seed % 2 == 0,
+                )
+                if path is not None:
+                    self.assertFalse({c.layer for c in path} - {0, 3, 1 + seed % 2})
 
     def test_outside_coordinates_never_alias_an_edge(self):
         grid = RouteGrid(3, 3, 1)

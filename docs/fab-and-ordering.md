@@ -95,6 +95,7 @@ is the judge: no finding is relaxed. On top of it, the checks KiCad cannot expre
 | Code                | Checks                                                                                                           |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `FAB-DRC`           | KiCad DRC under the vendor's rules (errors, warnings, unconnected items)                                         |
+| `FAB-PLACEHOLDER`   | a footprint marked as a placeholder (an empty optimizer window on a coupon board): an error until it is filled   |
 | `FAB-LAYERS`        | the copper layer count against the profile and stackup                                                           |
 | `FAB-OUTLINE`       | a closed outline; several outlines (a panel) with the vendor's panel rules                                       |
 | `FAB-SIZE`          | the vendor's minimum and maximum board size                                                                      |

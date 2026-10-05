@@ -24,6 +24,8 @@
 #     the source revision; the default command (doctor) succeeds;
 #   - the controller Python imports torch and numpy and converts between them, and cannot
 #     import pcbnew (KiCad-side code runs under YAPNR_KICAD_PYTHON);
+#   - tools/image/rf_native_smoke.py: yapnr.rf's native FDTD library from the wheel loads, is
+#     the default backend and steps fields bit-identically to numpy;
 #   - the license texts of the bundled native code: python-build-standalone's in
 #     /usr/share/doc/yapnr/licenses/python-build-standalone, third_party/image-licenses in
 #     /usr/share/doc/yapnr/licenses, GPL-3 and LGPL-2.1 in /usr/share/common-licenses.
@@ -223,6 +225,22 @@ sys.exit(1 if problems else 0)
     else
         pass "controller Python does not see pcbnew"
     fi
+
+    # yapnr.rf's native FDTD library from the wheel: loads, is the default backend, and steps
+    # fields bit-identically to numpy (also as another UID on a read-only root file system).
+    for mode in default uid-readonly; do
+        args=(-v "${HERE}:/smoke:ro")
+        if [ "${mode}" = uid-readonly ]; then
+            args+=(--user 4242:4242 --read-only --tmpfs /tmp)
+        fi
+        if out="$(docker run --rm "${args[@]}" --entrypoint /opt/venv/bin/python "${IMAGE}" \
+            /smoke/rf_native_smoke.py 2>&1)"; then
+            pass "native FDTD (${mode}): $(echo "${out}" | tail -n 1)"
+        else
+            fail "native FDTD (${mode}):"
+            echo "${out}" | sed 's/^/        /' >&2
+        fi
+    done
 fi
 
 if [ "${FAILURES}" -gt 0 ]; then

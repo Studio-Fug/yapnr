@@ -2,7 +2,8 @@
 moved trace), size budgets, no metadata, the overlay text validator and the command line; the
 ladder's timelines unchanged by the constraint and hierarchy work (a golden over the views);
 line groups (rigid tween, one legalization step per body, highlighting, metrics) and
-side-by-side comparisons (the sync rule, determinism, width, the command line)."""
+side-by-side comparisons (the sync rule, determinism, width, the command line); the gloss
+stage's before/after (geometry-only changes, the scene's frames and colours)."""
 
 import hashlib
 import io
@@ -43,7 +44,9 @@ def copper(net_y):
     )
 
 
-def make_trace(root, result=None, starts=("start-00", "start-01"), shortlist=None):
+def make_trace(root, result=None, starts=("start-00", "start-01"), shortlist=None, gloss=None):
+    """The tiny traced case; ``gloss`` (a copper blob) adds a saved board after the gloss stage
+    between ``planes`` and ``refill``, and becomes the refill's copper."""
     root = Path(root)
     shortlist = list(shortlist or starts)
     trace.write_run(
@@ -143,7 +146,11 @@ def make_trace(root, result=None, starts=("start-00", "start-01"), shortlist=Non
         poses=[["R1", 4000, 4000, 0.0, "top"], ["R2", 8000, 4000, 0.0, "top"]],
         frame=(0.0, 0.0),
     )
-    for stage in ("writeback", "planes", "refill"):
+    for stage in ("writeback", "planes", "gloss", "refill"):
+        if stage == "gloss" and gloss is None:
+            continue
+        if stage == "gloss":
+            board = dict(board, copper=dict(gloss, zones=board["copper"]["zones"]))
         native.board(stage, board, dict(unconnected_items=[], violations=[]), 2)
     native.result(
         **(result or dict(passed=True, opens=0, violations={}, vias=2, copper_length_mm=8.0))
@@ -1077,6 +1084,97 @@ class CompareTest(unittest.TestCase):
             self.assertEqual(code, 0)
             with Image.open(out) as image:
                 self.assertEqual(image.size[0], 480)
+
+
+class GlossTest(unittest.TestCase):
+    """The gloss stage's before/after (pnr.animate.gloss and the timeline's gloss scene)."""
+
+    def test_only_geometry_counts_as_changed(self):
+        from pnr.animate.gloss import copper_change, copper_length_mm
+
+        straight = [0, 1000, 1000, 9000, 1000, 250]
+        corner = [[0, 1000, 3000, 6000, 3000, 250], [0, 6000, 3000, 6000, 7000, 250]]
+        before = dict(tracks=[straight] + corner, vias=[[1000, 1000, 600, 300]], zones=[])
+        # Normalization splits the straight track in two (no change); a dekink cuts the corner.
+        after = dict(
+            tracks=[
+                [0, 9000, 1000, 4000, 1000, 250],
+                [0, 4000, 1000, 1000, 1000, 250],
+                [0, 1000, 3000, 4000, 3000, 250],
+                [0, 4000, 3000, 6000, 5000, 250],
+                [0, 6000, 5000, 6000, 7000, 250],
+            ],
+            vias=[[1000, 1000, 600, 300], [6000, 7000, 600, 300]],
+            zones=[],
+        )
+        removed, added = copper_change(before, after)
+        self.assertAlmostEqual(copper_length_mm(removed), 4.0, places=1)  # 2 mm each way
+        self.assertAlmostEqual(copper_length_mm(added), 2.0 * math.sqrt(2.0), places=1)
+        self.assertEqual(removed["vias"], [])
+        self.assertEqual(added["vias"], [[6000, 7000, 600, 300]])
+        # Another layer or width is not the same copper.
+        moved = dict(before, tracks=[[1] + straight[1:]] + corner)
+        self.assertAlmostEqual(copper_length_mm(copper_change(before, moved)[0]), 8.0, places=1)
+        self.assertEqual(copper_change(before, before), (dict(tracks=[], vias=[], zones=[]),) * 2)
+
+    def test_the_stage_plays_before_and_after(self):
+        dekinked = dict(
+            tracks=[[0, 3100, 3000, 5100, 3000, 250], [0, 5100, 3000, 7100, 5000, 250]],
+            vias=[[5000, 3000, 600, 300]],
+            zones=[],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            make_trace(Path(tmp) / "t", gloss=dekinked)
+            loaded = Trace(Path(tmp) / "t")
+            board = storyboard.build(loaded)
+            stages = [s.get("stage") for s in board["scenes"] if s["type"] == "native"]
+            self.assertEqual(stages, ["writeback", "planes", "gloss", "refill"])
+            frames = Timeline(loaded, board, max_seconds=30).frames
+            phases = [v.phase for v, _ms in frames]
+            first, last = phases.index("gloss-before"), len(phases) - phases[::-1].index(
+                "gloss-after"
+            )
+            self.assertLess(phases.index("planes"), first)
+            self.assertEqual(last, phases.index("refill"))
+            gloss = frames[first:last]
+            before, after = gloss[0][0], gloss[-1][0]
+            self.assertEqual(before.caption, "4.0 mm of copper")
+            self.assertEqual(after.caption, "4.8 mm of copper (+0.8 mm)")
+            self.assertEqual([style for _c, style in before.overlay], ["ripped"])
+            self.assertEqual([style for _c, style in after.overlay], ["flash"])
+            self.assertTrue(any(v.blend is not None for v, _ms in gloss))  # the cross-fade
+            # The overlay ends with the stage; the refill draws the board as it is.
+            refill = [v for v in (f[0] for f in frames) if v.phase == "refill"]
+            self.assertTrue(refill and all(not v.overlay for v in refill))
+            renderer = Renderer(loaded.header, board["subject"], width=480)
+            red = ImageColor.getrgb(render_mod.theme.RIPPED)
+            mint = ImageColor.getrgb(render_mod.theme.NEW)
+            self.assertIn(red, {c for _n, c in renderer.frame(before).getcolors(1 << 20)})
+            self.assertIn(mint, {c for _n, c in renderer.frame(after).getcolors(1 << 20)})
+            self.assertIn("Gloss: before · 4.0 mm of copper", renderer.strings)
+
+    def test_a_stage_that_changed_nothing_holds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_trace(Path(tmp) / "t", gloss=copper(3000))
+            loaded = Trace(Path(tmp) / "t")
+            frames = Timeline(loaded, storyboard.build(loaded), max_seconds=30).frames
+            gloss = [v for v, _ms in frames if str(v.phase).startswith("gloss")]
+            self.assertEqual([v.phase for v in gloss], ["gloss"])
+            self.assertEqual(gloss[0].caption, "no copper changed")
+
+    def test_a_block_rank_reads_both_key_shapes(self):
+        from pnr.animate.hier import block_rank_text
+
+        # pnr.hier.synth.rank_key: missing, unmatched lengths, port debt, area, vias, copper.
+        self.assertEqual(
+            block_rank_text([0, 0, 115.2, 525.0, 20, 300.1]), "debt 115 · 525 sq mm · 20 vias"
+        )
+        self.assertEqual(
+            block_rank_text([2, 1, 10, 525, 20, 300]),
+            "2 open · 1 unmatched · debt 10 · 525 sq mm · 20 vias",
+        )
+        # A trace from before the unmatched-lengths term.
+        self.assertEqual(block_rank_text([0, 106, 525, 20, 300]), "debt 106 · 525 sq mm · 20 vias")
 
 
 if __name__ == "__main__":

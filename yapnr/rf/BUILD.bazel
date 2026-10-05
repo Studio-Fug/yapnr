@@ -1,0 +1,155 @@
+"""yapnr.rf: RF microstrip inverse design (docs/design/rf-topology-optimization.md)."""
+
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+load("//tools/bazel:native_cc.bzl", "native_shared_library")
+
+package(default_visibility = ["//visibility:public"])
+
+_NATIVE_DATA = glob([
+    "fdtd/native/*.c",
+    "fdtd/native/*.h",
+]) + [":libyapnr_fdtd.so"]
+
+py_library(
+    name = "rf",
+    srcs = glob(
+        ["**/*.py"],
+        exclude = [
+            "animate.py",
+            "testing.py",
+        ],
+    ),
+    # The native stepper (the default backend where it loads) and its C source, which also
+    # travels with the package so that it can be rebuilt where it runs (python -m
+    # yapnr.rf.fdtd.native_kernel build) and so that the loader can tell a stale library.
+    data = _NATIVE_DATA,
+    imports = ["../.."],
+    deps = [
+        "//yapnr:package",
+        "//yapnr/rf/export",
+        "//yapnr/rf/export:report",
+        requirement("numpy"),
+        requirement("pyyaml"),
+        requirement("torch"),
+    ],
+)
+
+# The package marker alone (yapnr/rf/__init__.py), for subpackages that need none of the solver
+# (//yapnr/rf/coupons): without it their runfiles would get an auto-created, empty one.
+py_library(
+    name = "package",
+    srcs = ["__init__.py"],
+    imports = ["../.."],
+    deps = ["//yapnr:package"],
+)
+
+# sparams.py + numerics.py (numpy only): split out so that //yapnr/rf/export:report (which needs
+# sparams for its forward-run report) can depend on this instead of the full :rf, which would
+# otherwise depend back on :report (cycle: :rf -> export:report -> :rf).
+py_library(
+    name = "sparams",
+    srcs = [
+        "numerics.py",
+        "sparams.py",
+    ],
+    imports = ["../.."],
+    deps = [
+        "//yapnr/rf:package",
+        requirement("numpy"),
+    ],
+)
+
+# Test helpers (a tiny spec), for tests only.
+py_library(
+    name = "testing",
+    testonly = True,
+    srcs = ["testing.py"],
+    imports = ["../.."],
+    deps = [":rf"],
+)
+
+# The optimization animation (design §10.5): Pillow only, like pnr.animate.
+py_library(
+    name = "animate_lib",
+    srcs = ["animate.py"],
+    imports = ["../.."],
+    deps = [
+        ":rf",
+        requirement("pillow"),
+    ],
+)
+
+# bazel run //yapnr/rf:animate -- RUN_DIR --out PATH.webp (python -m yapnr.rf.animate).
+py_binary(
+    name = "animate",
+    srcs = ["animate.py"],
+    main = "animate.py",
+    deps = [":animate_lib"],
+)
+
+# The package's files as the yapnr wheel ships them (//release:yapnr_package): every module but
+# the test helpers, the native library and its sources. No pip dependencies, so that the wheel
+# builds on every platform it ships for (the Bazel lock's torch is not valid on linux-x86_64);
+# the wheel's Requires-Dist names them.
+py_library(
+    name = "wheel_files",
+    srcs = glob(
+        ["**/*.py"],
+        exclude = ["testing.py"],
+    ),
+    data = _NATIVE_DATA,
+    imports = ["../.."],
+    deps = ["//yapnr:package"],
+)
+
+# The native FDTD stepper (yapnr.rf.fdtd.native_kernel, backend "native", the default where it
+# loads): blocks of Yee steps in C on a thread pool, loaded with ctypes. No floating-point
+# contraction, so float64 runs are bit-identical to the numpy reference. Built for the host with
+# Bazel's C toolchain (`bazel build //...` needs one); //yapnr/rf and the wheel carry it, and
+# without it every backend "auto" runs numpy. The library records the sources' sha256
+# (:fdtd_src_sha), so the loader refuses it under other sources. Linux: no libstdc++ (the
+# toolchain's default link libraries are off); macOS: arm64 from macOS 11 on, like the wheel's
+# tag (//release).
+native_shared_library(
+    name = "libyapnr_fdtd.so",
+    srcs = [
+        "fdtd/native/fdtd.c",
+        "fdtd/native/fdtd_kernels.h",
+        ":fdtd_src_sha",
+    ],
+    copts = [
+        "-O3",
+        "-std=c11",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+    ] + select({
+        "@bazel_tools//src/conditions:darwin": ["-mmacosx-version-min=11.0"],
+        "//conditions:default": [],
+    }),
+    features = ["-default_link_libs"],
+    linkopts = ["-pthread"] + select({
+        "@bazel_tools//src/conditions:darwin": [
+            "-mmacosx-version-min=11.0",
+            "-Wl,-install_name,@rpath/libyapnr_fdtd.so",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+# sha256 of fdtd.c and fdtd_kernels.h, in that order (native_kernel.source_sha256), as the
+# header fdtd.c includes when YF_SRC_SHA is not defined on the command line.
+genrule(
+    name = "fdtd_src_sha",
+    srcs = [
+        "fdtd/native/fdtd.c",
+        "fdtd/native/fdtd_kernels.h",
+    ],
+    outs = ["fdtd/native/yf_src_sha.h"],
+    cmd = " ".join([
+        "sha=$$(cat $(location fdtd/native/fdtd.c) $(location fdtd/native/fdtd_kernels.h)",
+        "| { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64) &&",
+        "echo \"$${sha}\" | grep -Eq '^[0-9a-f]{64}$$' &&",
+        "printf '#define YF_SRC_SHA \"%s\"\\n' \"$${sha}\" > $@",
+    ]),
+)

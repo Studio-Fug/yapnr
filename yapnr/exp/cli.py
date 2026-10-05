@@ -1,7 +1,7 @@
 """``yapnr exp``: plan, submit, watch, fetch and cancel experiment campaigns.
 
     yapnr exp plan CAMPAIGN.toml --backend local|gcp-batch|slurm [--site S] [--offline ...]
-    yapnr exp submit PLAN [--yes] [--max-usd X] [--dry-run] [--only TASK ...] [--wait]
+    yapnr exp submit PLAN [--yes] [--max-usd X] [--dry-run] [--only TASK ...] [--region R] [--wait]
     yapnr exp status PLAN [--json]
     yapnr exp logs PLAN [TASK] [--limit N]
     yapnr exp fetch PLAN [--full] [--into DIR] [--from DIR] [--allow-mixed]
@@ -105,11 +105,34 @@ def _cmd_plan(args) -> int:
                 " (template)" if placement["template"] else "",
             )
         print(line)
+        options = (meta.get("candidates") or {}).get(cls["name"]) or []
+        if len(options) > 1:
+            # submit takes the first whose region has Spot quota for one more VM.
+            for rank, option in enumerate(options, 1):
+                print(
+                    "    %d. %-16s %-24s $%.4f/VM-h  expected %s, ceiling %s  (%s)"
+                    % (
+                        rank,
+                        option["shape"],
+                        option["region"],
+                        option["vm_hour_usd"],
+                        _money(option["expected_usd"]),
+                        _money(option["ceiling_usd"]),
+                        option["price_source"],
+                    )
+                )
     if args.backend == "gcp-batch":
         print(
             "estimate  expected %s, ceiling %s, about %.1f h"
             % (_money(est["expected_usd"]), _money(est["ceiling_usd"]), est["makespan_h"])
         )
+        candidates = meta.get("candidates") or {}
+        if any(len(options) > 1 for options in candidates.values()):
+            worst = sum(max(o["ceiling_usd"] for o in opts) for opts in candidates.values() if opts)
+            print(
+                "spill     submit places each class on its first candidate with Spot quota for "
+                "one more VM; on the dearest ones the ceiling is %s" % _money(worst)
+            )
         caps = meta["caps"] or {}
         for refusal in caps.get("refusals", []):
             print("REFUSED   %s" % refusal)
@@ -144,6 +167,7 @@ def _cmd_submit(args) -> int:
         dry_run=args.dry_run,
         only=args.only,
         cloud=cloud,
+        region=args.region,
     )
     if args.dry_run and cloud is not None:
         print("\n# the gcloud calls a submit would make:")
@@ -167,7 +191,12 @@ def _cmd_status(args) -> int:
     for record in subs:
         view = backend.state(plan.meta, record, cfg, cloud)
         views.append(
-            {"submission": record.get("submission"), "class": record.get("class"), "view": view}
+            {
+                "submission": record.get("submission"),
+                "class": record.get("class"),
+                "region": (record.get("job") or {}).get("region"),
+                "view": view,
+            }
         )
     frozen = stores.runs.exists("control/frozen")
     report = dict(rows, campaign=plan.id, backend=plan.backend, frozen=frozen, submissions=views)
@@ -184,13 +213,14 @@ def _cmd_status(args) -> int:
         view = item["view"] or {}
         counts = ", ".join("%s %s" % kv for kv in sorted((view.get("counts") or {}).items()))
         print(
-            "  submission %s  %-10s %s %s%s"
+            "  submission %s  %-10s %s %s%s%s"
             % (
                 item["submission"],
                 item["class"],
                 view.get("state", "-"),
                 counts,
                 "  preemptions %d" % view["preemptions"] if view.get("preemptions") else "",
+                "  in %s" % item["region"] if item.get("region") else "",
             )
         )
     est = plan.meta["estimate"]
@@ -474,6 +504,10 @@ def register(commands: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--dry-run", action="store_true", help="record the calls without making them")
     p.add_argument("--only", nargs="+", metavar="TASK", help="submit only these task ids")
+    p.add_argument(
+        "--region",
+        help="gcp-batch: run in this region (one of the plan's candidates), whatever its quota",
+    )
     p.add_argument("--wait", action="store_true", help="local: run the pool in the foreground")
     p.set_defaults(func=_run(_cmd_submit))
 

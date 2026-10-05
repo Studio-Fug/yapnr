@@ -29,7 +29,8 @@ RUN set -eux; \
     mkdir -p /data /opt/yapnr; \
     chown part-cache:part-cache /data
 
-# The pure-Python yapnr wheel, unpacked (only its stdlib-only cache and picker modules run).
+# The yapnr wheel, unpacked (only its stdlib-only cache and picker modules run; the wheel's
+# native FDTD library is unused here).
 RUN --mount=from=dist,target=/tmp/yapnr-dist \
     set -eux; \
     set -- /tmp/yapnr-dist/yapnr-*.whl; \

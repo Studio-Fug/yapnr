@@ -22,10 +22,14 @@ from .geometry import occupied_sides, pad_rects
 
 
 class ChannelModel:
-    def __init__(self, graph, rules):
+    def __init__(self, graph, rules, clearance=None):
+        """``clearance`` (mm): the clearance of a net without a class (None: the board's
+        ``default_clearance_mm``; ``PNR_LEGALIZE_CHANNEL_CLEARANCE=fab`` passes the fab's)."""
         fab = rules.get("fab", {})
         self.width = float(fab.get("track_width_mm", 0.2))
-        self.clearance = float(rules.get("default_clearance_mm", 0.2))
+        self.clearance = (
+            float(rules.get("default_clearance_mm", 0.2)) if clearance is None else float(clearance)
+        )
         self.via = float(fab.get("via_diameter_mm", 0.6))
         self.classes = {}
         for cls in rules.get("net_classes", []):
@@ -106,13 +110,13 @@ class ChannelModel:
                 )
                 both = np.logical_and(p, n)
                 either = np.logical_or(p, n)
+                # A pair that leaves its width or gap to the defaults routes at the
+                # fab track width and clearance.
+                width = pair.get("width_mm") or self.width
+                gap = pair.get("gap_mm") or self.clearance
                 bundles.append(
                     (
-                        np.where(
-                            both,
-                            2 * pair["width_mm"] + pair["gap_mm"],
-                            np.where(either, pair["width_mm"], 0),
-                        ),
+                        np.where(both, 2 * width + gap, np.where(either, width, 0)),
                         clearance,
                         either,
                     )

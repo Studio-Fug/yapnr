@@ -502,7 +502,16 @@ def gp_bodies(components, scale=None):
             continue
         hx, hy = c.courtyard[0] / 2.0 * s, c.courtyard[1] / 2.0 * s
         owner.append(i)
-        off4.append([(0.0, 0.0)] * 4)
+        from .geometry import compact_body
+
+        body = compact_body(c)
+        if body is None:
+            off4.append([(0.0, 0.0)] * 4)
+        else:
+            # PNR_COMPACT offset courtyard: one body box at its turning offset.
+            cx, cy = (body[0] + body[2]) / 2.0, (body[1] + body[3]) / 2.0
+            hx, hy = (body[2] - body[0]) / 2.0 * s, (body[3] - body[1]) / 2.0 * s
+            off4.append([(cx, cy), (-cy, cx), (-cx, -cy), (cy, -cx)])
         half4.append([(hx, hy), (hy, hx), (hx, hy), (hy, hx)])
         sides.append(set(occupied_sides(c)))
     bits = torch.tensor([(1 if "top" in s else 0) | (2 if "bottom" in s else 0) for s in sides])

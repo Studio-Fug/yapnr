@@ -246,6 +246,15 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual([i["dest"] for i in divider["inputs"]], ["src", "job"])
         self.assertEqual(divider["env"]["OMP_NUM_THREADS"], "4")
         self.assertEqual(divider["env"]["OPENBLAS_NUM_THREADS"], "1")
+        # The native pool's threads and no silent numpy fallback, by default; the spec's
+        # backend and precision unless the job names them.
+        self.assertEqual(divider["env"]["YAPNR_RF_THREADS"], "4")
+        self.assertEqual(divider["env"]["YAPNR_RF_REQUIRE_NATIVE"], "1")
+        self.assertFalse({"YAPNR_RF_BACKEND", "YAPNR_RF_DTYPE"} & set(divider["env"]))
+        self.assertIsNone(manifest["native_sources_sha256"])  # the stand-in has no C sources
+        self.assertEqual(
+            manifest["require_native"], ["divider", "d1-star", "short", "d1-fine", "diag"]
+        )
         self.assertEqual(
             divider["resources"], dict(cpus=4, memory_gb=6, disk_gb=10, max_wall_s=14400)
         )
@@ -267,6 +276,7 @@ class GenerateTest(unittest.TestCase):
             ["--threads", "8"] + ["--attempt-s", "13800"] + ["--end-s", "3600"],
         )
         self.assertEqual(d1["resources"]["cpus"], 8)
+        self.assertEqual(d1["env"]["YAPNR_RF_THREADS"], "8")
         self.assertTrue((out / "job" / "specs" / "d1-star.json").is_file())
         self.assertTrue((out / "job" / "rf_job.py").is_file())
 
@@ -279,6 +289,9 @@ class GenerateTest(unittest.TestCase):
         )
         self.assertIn({"dest": "run", "path": "runs/d1-fine"}, fine["inputs"])
         self.assertNotIn("checkpoint", fine)  # not resumable: it starts again after a preemption
+        # A re-validation takes its threads from the environment (the run's spec says 4).
+        self.assertEqual(fine["env"]["YAPNR_RF_THREADS"], "4")
+        self.assertEqual(fine["env"]["YAPNR_RF_REQUIRE_NATIVE"], "1")
         self.assertEqual(
             sorted(p.name for p in (out / "runs" / "d1-fine").iterdir()),
             ["checkpoint.npz", "spec.json"],
@@ -286,6 +299,7 @@ class GenerateTest(unittest.TestCase):
 
         diag = lines["diag"]
         self.assertEqual(diag["resources"]["cpus"], 1)
+        self.assertEqual(diag["env"]["YAPNR_RF_REQUIRE_NATIVE"], "1")
         self.assertNotIn("checkpoint", diag)
         self.assertIn("vm_vcpus = 8", (out / "campaign.toml").read_text())
 
@@ -337,6 +351,94 @@ class GenerateTest(unittest.TestCase):
         with self.assertRaises(rf_stage_plan.JobError):
             rf_stage_plan.attempt_times({"attempt_s": 600}, 600)  # not below max_wall_s
 
+    def test_solver_environment_per_job(self):
+        doc = {
+            "name": "x",
+            "defaults": {"threads": 16, "dtype": "float64", "env": {"YAPNR_RF_ROWS": 8}},
+            "jobs": [
+                {"id": "a", "case": "divider"},
+                {"id": "b", "case": "divider", "backend": "native", "dtype": "float32",
+                 "env": {"YAPNR_RF_TBLOCK": "0"}},
+                {"id": "c", "case": "divider", "backend": "torch", "require_native": False},
+                {"id": "v", "case": "divider", "validate": "fetched/d1-star", "threads": 8},
+                {"id": "d", "diagnostic": True, "require_native": False},
+            ],
+        }  # fmt: skip
+        self.assertEqual(rf_stage_plan.check_jobs(doc), [])
+        path = self.root / "jobs" / "env.json"
+        path.write_text(json.dumps(doc))
+        out = self.root / "env"
+        manifest = rf_stage_plan.generate(path, self.repo, "HEAD", out)
+        lines = {
+            json.loads(x)["id"]: json.loads(x)
+            for x in (out / "stage.jsonl").read_text().splitlines()
+        }
+
+        def rf(line):
+            return {k: v for k, v in line["env"].items() if k.startswith("YAPNR_RF_")}
+
+        self.assertEqual(
+            rf(lines["a"]),
+            dict(YAPNR_RF_THREADS="16", YAPNR_RF_REQUIRE_NATIVE="1", YAPNR_RF_DTYPE="float64",
+                 YAPNR_RF_ROWS="8"),
+        )  # fmt: skip
+        self.assertEqual(
+            rf(lines["b"]),
+            dict(YAPNR_RF_THREADS="16", YAPNR_RF_REQUIRE_NATIVE="1", YAPNR_RF_BACKEND="native",
+                 YAPNR_RF_DTYPE="float32", YAPNR_RF_TBLOCK="0"),
+        )  # fmt: skip
+        self.assertEqual(rf(lines["c"])["YAPNR_RF_BACKEND"], "torch")
+        self.assertNotIn("YAPNR_RF_REQUIRE_NATIVE", lines["c"]["env"])
+        self.assertEqual(rf(lines["v"])["YAPNR_RF_THREADS"], "8")
+        self.assertNotIn("YAPNR_RF_REQUIRE_NATIVE", lines["d"]["env"])
+        self.assertEqual(manifest["require_native"], ["a", "b", "v"])
+
+    def test_bad_solver_settings_are_refused(self):
+        errors = rf_stage_plan.check_jobs(
+            {
+                "name": "x",
+                "defaults": {"backend": "cuda"},
+                "jobs": [
+                    {"id": "a", "case": "c", "backend": "numpy"},  # numpy, and native required
+                    {"id": "b", "case": "c", "dtype": "f16"},
+                    {"id": "e", "case": "c", "env": {"YAPNR_RF_THREADS": 4, "OMP_X": "1"}},
+                    {"id": "r", "case": "c", "require_native": "yes"},
+                ],
+            }
+        )
+        self.assertEqual(len(errors), 6, errors)
+        self.assertTrue(errors[0].startswith("defaults: backend"), errors)
+        self.assertIn("jobs[0]: backend numpy does not go with require_native", errors[1])
+
+    def test_image_commit_checks_the_native_sources(self):
+        native = self.repo / "yapnr" / "rf" / "fdtd" / "native"
+        write(native / "fdtd.c", "int a;\n")
+        write(native / "fdtd_kernels.h", "#define K 1\n")
+        git(self.repo, "add", "yapnr/rf/fdtd/native")
+        git(self.repo, "commit", "-q", "-m", "native")
+        git(self.repo, "tag", "image")
+        write(native / "fdtd.c", "int b;\n")
+        git(self.repo, "add", "yapnr/rf/fdtd/native")
+        git(self.repo, "commit", "-q", "-m", "native changed")
+        jobs = self.root / "jobs" / "jobs.toml"
+        # The image's own commit: the same sources, the sha the loader computes.
+        manifest = rf_stage_plan.generate(jobs, self.repo, "image", self.root / "a", True, "image")
+        self.assertEqual(manifest["native_sources_sha256"], manifest["image_native_sources_sha256"])
+        expected = __import__("hashlib").sha256(b"int a;\n#define K 1\n").hexdigest()
+        self.assertEqual(manifest["native_sources_sha256"], expected)
+        # HEAD's sources differ: the image's library would be refused, and the jobs require it.
+        with self.assertRaisesRegex(rf_stage_plan.JobError, "native C sources"):
+            rf_stage_plan.generate(jobs, self.repo, "HEAD", self.root / "b", True, "image")
+        doc = tomllib.loads(jobs.read_text())
+        doc["defaults"]["require_native"] = False
+        loose = self.root / "jobs" / "loose.json"
+        loose.write_text(json.dumps(doc))
+        manifest = rf_stage_plan.generate(loose, self.repo, "HEAD", self.root / "c", True, "image")
+        self.assertNotEqual(
+            manifest["native_sources_sha256"], manifest["image_native_sources_sha256"]
+        )
+        self.assertEqual(manifest["require_native"], [])
+
     def work_dir(self, out):
         work = self.root / "work"
         with tarfile.open(next((out / "bundles").iterdir())) as tar:
@@ -381,10 +483,18 @@ class GenerateTest(unittest.TestCase):
             record["criteria"]["coarse"], [["S21", "s_min", [2, 1], -3.6, [4.25, 5.75], None]]
         )
         diag = json.loads((work / "out" / "diag" / "diag.json").read_text())
+        self.assertFalse(diag["native_required"])
         self.assertTrue(diag["from_bundle"])
         self.assertEqual(diag["cases"], ["divider"])
         self.assertEqual(diag["cases_help"]["exit_code"], 0)
         self.assertEqual(diag["compile"]["failures"], [])
+        # Required (the stage plan's default), the stand-in's missing library fails it.
+        proc = self.run_line(work, lines["diag"], YAPNR_RF_REQUIRE_NATIVE="1")
+        diag = json.loads((work / "out" / "diag" / "diag.json").read_text())
+        self.assertTrue(diag["native_required"])
+        self.assertFalse(diag["native"]["loaded"])
+        self.assertFalse(diag["ok"])
+        self.assertEqual(proc.returncode, 1)
 
     def test_a_long_run_goes_on_over_attempts(self):
         out, _, lines = self.generate()

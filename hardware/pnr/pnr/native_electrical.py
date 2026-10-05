@@ -604,20 +604,39 @@ class Oracle:
         )
         self.cache.clear()
 
-    def reserve_via(self, net, point, diameter=0.6, drill=0.3):
+    def span_layers(self, span):
+        """The copper layer ids a via of ``span`` (None: through; else ``(top,
+        bottom)`` layer ids, a blind, buried or micro via) occupies."""
+        if span is None:
+            return list(self.layers)
+        a, z = self.layers.index(span[0]), self.layers.index(span[1])
+        return self.layers[min(a, z) : max(a, z) + 1]
+
+    def _via_item(self, p, diameter, drill, span=None, kind=None):
         import pcbnew as k
 
-        via = k.PCB_VIA(self.b)
-        via.SetPosition(vec(point))
-        via.SetFrontWidth(round(diameter * 1e6))
-        via.SetDrill(round(drill * 1e6))
-        via.SetViaType(k.VIATYPE_THROUGH)
-        via.SetLayerPair(k.F_Cu, k.B_Cu)
+        v = k.PCB_VIA(self.b)
+        v.SetPosition(vec(p))
+        v.SetFrontWidth(round(diameter * 1e6))
+        v.SetDrill(round(drill * 1e6))
+        if span is None:
+            v.SetViaType(k.VIATYPE_THROUGH)
+            v.SetLayerPair(k.F_Cu, k.B_Cu)
+        else:
+            types = {"micro": k.VIATYPE_MICROVIA, "buried": k.VIATYPE_BURIED}
+            v.SetViaType(types.get(kind, k.VIATYPE_BLIND))
+            v.SetLayerPair(*span)
+        return v
+
+    def reserve_via(self, net, point, diameter=0.6, drill=0.3, span=None, kind=None):
+        """Make a planned via an obstacle: a through via, or one of ``span`` (``(top,
+        bottom)`` layer ids) and ``kind`` (pnr.via_policy) on its own layers only."""
+        via = self._via_item(point, diameter, drill, span, kind)
         via.SetNetCode(self.b.FindNet(net).GetNetCode())
         self.items.append(via)
         self.drilled.append(via)
         self.index_physical(via)
-        for layer in self.layers:
+        for layer in self.span_layers(span):
             self.add(
                 via.GetEffectiveShape(layer),
                 via.GetBoundingBox(),
@@ -628,17 +647,15 @@ class Oracle:
             )
         self.cache.clear()
 
-    def via(self, net, p, diameter, drill):
+    def via(self, net, p, diameter, drill, span=None):
+        """A new via of ``net`` at ``p`` is clear: a through via on every layer, or
+        (``span``: ``(top, bottom)`` layer ids) a blind, buried or micro via on its
+        own layers. Holes keep their spacing whatever the spans (conservative)."""
         import pcbnew as k
 
         # Through vias may cut clearance voids in foreign planes, but cannot
         # collide with tracks/pads/keepouts. Plane contact is checked after fill.
-        v = k.PCB_VIA(self.b)
-        v.SetPosition(vec(p))
-        v.SetFrontWidth(round(diameter * 1e6))
-        v.SetDrill(round(drill * 1e6))
-        v.SetViaType(k.VIATYPE_THROUGH)
-        v.SetLayerPair(k.F_Cu, k.B_Cu)
+        v = self._via_item(p, diameter, drill, span)
         if not self.reference_guard.via_clear(net, p, diameter):
             return False
         hole = v.GetEffectiveHoleShape()
@@ -656,7 +673,7 @@ class Oracle:
             return False
         gap = net_policy(net, self.rules)["clearance_mm"] + 0.001
         r = max(gap, self.clearance_cap, 0.05)
-        for la in self.layers:
+        for la in self.span_layers(span):
             near = set()
             shape = v.GetEffectiveShape(la)
             box = shape.BBox()
@@ -682,7 +699,9 @@ class Oracle:
             if (
                 z.GetIsRuleArea()
                 and z.GetDoNotAllowVias()
-                and z.Outline().Collide(v.GetEffectiveShape(k.F_Cu), 1000)
+                and z.Outline().Collide(
+                    v.GetEffectiveShape(k.F_Cu if span is None else span[0]), 1000
+                )
             ):
                 return False
         g = self.geometry
@@ -1000,6 +1019,13 @@ def power_plan(
 ):
     import pcbnew as k
 
+    from pnr.ingest import board_stack
+    from pnr.stack import bridge_layer_names, power_layer_names
+
+    # The board's routed copper (declared stack), else the legacy F/B/In2.
+    stack = board_stack(b, rules)
+    power_ids = [b.GetLayerID(name) for name in power_layer_names(stack)]
+    bridge_ids = [b.GetLayerID(name) for name in bridge_layer_names(stack)]
     p = net_policy(net, rules)
     aa = connected_items(b, source)
     zz = connected_items(b, target)
@@ -1188,7 +1214,7 @@ def power_plan(
                             root_landings[layer, end] = (layer, center, end, landing_width)
         return points
 
-    layers = [k.F_Cu, k.B_Cu, k.In2_Cu]
+    layers = list(power_ids)
     necks = {}
     branch_counts = {}
     # Terminal in-pad array attach (profile 5B only: legacy geometry has no in_pad
@@ -1552,8 +1578,8 @@ def power_plan(
     # 0.2-mm signal path or single via for a power path.
     from pnr.route.detail.layered import route_layers
 
-    ls = [k.F_Cu, k.B_Cu, k.In2_Cu]
-    widths = [p["outer_width_mm"], p["outer_width_mm"], p["inner_width_mm"]]
+    ls = list(power_ids)
+    widths = [p["outer_width_mm"] if la in (k.F_Cu, k.B_Cu) else p["inner_width_mm"] for la in ls]
     starts = set()
     ends = set()
     terminal_map = defaultdict(set)
@@ -1594,7 +1620,7 @@ def power_plan(
             lambda index, a, z: entry_clear(net, ls[index], a, z, widths[index]),
             bank_site,
             pitch=search_pitch,
-            layers=3,
+            layers=len(ls),
             max_expansions=30000,
             max_vias=2,
             terminal_layers=lambda pt: tuple(terminal_map.get(tuple(pt), ())),
@@ -1632,10 +1658,10 @@ def power_plan(
         starts = power_access(aa, source_layer, outer)
         if not starts:
             continue
-        for bridge_layer in (k.B_Cu, k.In2_Cu, k.F_Cu):
+        for bridge_layer in bridge_ids:
             if bridge_layer == source_layer:
                 continue
-            width = inner if bridge_layer == k.In2_Cu else outer
+            width = outer if bridge_layer in (k.F_Cu, k.B_Cu) else inner
             ends = root_access(bridge_layer)
             for a in sorted(starts, key=lambda a: math.dist(a, xy(target.GetPosition())))[:8]:
                 for radius in (1.0, 1.5, 2.0, 3.0):
@@ -2496,15 +2522,14 @@ def pair_reference_validator(board, pair, rules, prospective_vias=(), base_cente
     """Validate actual tuned trunks against the saved filled reference copper."""
     import pcbnew as k
 
+    from pnr.ingest import board_stack
     from pnr.route.detail.coupled import trim_path
+    from pnr.stack import reference_layer, reference_nets
 
-    reference = board.GetLayerID(pair.get("reference_layer", "In1.Cu"))
-    nets = {
-        n
-        for c in rules.get("net_classes", [])
-        if c.get("plane_layer") == pair.get("reference_layer", "In1.Cu")
-        for n in c["nets"]
-    }
+    stack = board_stack(board, rules)
+    reference_name = reference_layer(stack, pair)
+    reference = board.GetLayerID(reference_name)
+    nets = reference_nets(stack, rules, reference_name)
     fill = k.SHAPE_POLY_SET()
     for z in board.Zones():
         if not z.GetIsRuleArea() and z.IsOnLayer(reference) and z.GetNetname() in nets:
@@ -4013,13 +4038,13 @@ def _pair_plan_order(
         return dict(status="pair_unassigned_terminals")
     # Exact polygon containment over the coupled trunk. Fanouts have the
     # explicit bounded uncoupled allowance; impedance needs a real fab stackup.
-    reference = b.GetLayerID(pair.get("reference_layer", "In1.Cu"))
-    plane_nets = {
-        n
-        for c in rules.get("net_classes", [])
-        if c.get("plane_layer") == pair.get("reference_layer", "In1.Cu")
-        for n in c["nets"]
-    }
+    from pnr.ingest import board_stack
+    from pnr.stack import reference_layer, reference_nets
+
+    stack = board_stack(b, rules)
+    reference_name = reference_layer(stack, pair)
+    reference = b.GetLayerID(reference_name)
+    plane_nets = reference_nets(stack, rules, reference_name)
     fill = k.SHAPE_POLY_SET()
     for zone in b.Zones():
         if (

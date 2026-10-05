@@ -1,9 +1,14 @@
 """yapnr.rf.coupons: fab-model test coupons (docs/design/rf-fab-coupons.md, docs/rf-fab-coupons.md).
 
-numpy and PyYAML only. The 2D cross-section solver (xsec.py, families.py `build`) imports
-scikit-fem and gmsh lazily: it runs in the FEA environment, never under Bazel, and the shipped
-tables in data/ are what the fit reads. yapnr/rf has no __init__.py on this branch (the RF
-inverse-design branch, #29, adds it with //yapnr/rf); the coupons package then depends on it.
+numpy and PyYAML only; no torch. The 2D cross-section solver (xsec.py, families.py `build`)
+imports scikit-fem and gmsh lazily: it runs in the FEA environment, never under Bazel, and the
+shipped tables in data/ are what the fit reads. It needs nothing of the RF solver's FDTD/torch
+chain, only that package's marker (//yapnr/rf:package) and the numpy-only export helpers
+(//yapnr/rf/export) that `catalog.o_optimized` uses to read a validated footprint's contour.
+
+`catalog.o_optimized`'s D1_WINNER and D2_WINNER also need //docs/rf/order0:winners in the data
+closure (review finding 5): without it, a sandboxed run cannot see the winner file at all, and
+raises rather than the silent placeholder fallback it used to be.
 """
 
 load("@rules_python//python:defs.bzl", "py_binary", "py_library")
@@ -17,10 +22,12 @@ py_library(
         ["*.py"],
         exclude = ["__main__.py"],
     ),
-    data = glob(["data/*.json"]),
+    data = glob(["data/*.json"]) + ["//docs/rf/order0:winners"],
     imports = ["../../.."],
     deps = [
         "//yapnr:package",
+        "//yapnr/rf:package",
+        "//yapnr/rf/export",
         requirement("numpy"),
         requirement("pyyaml"),
     ],

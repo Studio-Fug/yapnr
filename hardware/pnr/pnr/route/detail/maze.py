@@ -56,6 +56,9 @@ class RoutedNet:
     cells: List[Cell] = field(default_factory=list)  # tree of occupied cells
     segments: List[Tuple[int, Tuple[int, int], Tuple[int, int]]] = field(default_factory=list)
     vias: List[Tuple[int, int]] = field(default_factory=list)  # (i, j) grid via sites
+    # (i, j) -> the vias there (pnr.via_policy.Span) when the grid has a via model
+    # (blind/buried/micro vias allowed); empty otherwise (every via is through).
+    via_spans: Dict[Tuple[int, int], list] = field(default_factory=dict)
     routed: bool = False
     remaining_connections: int = 0  # grid-terminal estimate, never native DRC
 
@@ -104,7 +107,93 @@ def remaining_connections(access, edges):
     return max(0, len({find(c) for c in access}) - 1)
 
 
+def net_via_keepout(grid, net, default=None) -> int:
+    """The via keep-out radius (cells) of ``net``'s vias: the routing call's
+    (``routing_via_keepout``, else ``default``), or the net's own where larger
+    (``routing_via_keepouts``: a net class clearance above the fab's,
+    ``board.class_clearance: maze``; empty otherwise)."""
+    k = getattr(grid, "routing_via_keepout", 0) if default is None else default
+    own = getattr(grid, "routing_via_keepouts", None)
+    if own and net is not None:
+        k = max(k, own.get(net, 0))
+    return k
+
+
+def maze_kernel() -> str:
+    """The A\\* kernel this process routes with.
+
+    * ``"packed"`` (the default): integer keys over a dense per-net field
+      (:mod:`.dense_maze`), the same predicates, prices and tie order, so the
+      same paths;
+    * ``"native"`` (``PNR_MAZE_KERNEL=native``): the packed search loop in C
+      (:mod:`.native_maze`), when its library loads; otherwise packed;
+    * ``"reference"`` (``PNR_PACKED_MAZE=0`` or ``PNR_MAZE_KERNEL=reference``):
+      the dict/Cell search :func:`_astar_reference`, kept as the specification
+      the faster kernels are tested against.
+    """
+    if os.environ.get("PNR_PACKED_MAZE") == "0":
+        return "reference"
+    kernel = os.environ.get("PNR_MAZE_KERNEL") or "packed"
+    if kernel not in ("packed", "reference", "native"):
+        raise ValueError("PNR_MAZE_KERNEL must be packed, native or reference, not %r" % kernel)
+    return kernel
+
+
 def _astar(
+    grid: RouteGrid,
+    sources: Set[Cell],
+    targets: Set[Cell],
+    net: str,
+    occ: Dict[Cell, int],
+    history: Dict[Cell, float],
+    via_cost: float,
+    pres_fac: float,
+    blocked: Optional[Set[Cell]] = None,
+    soft: Optional[Dict[Cell, float]] = None,
+    diagonal: bool = True,
+    drill_sites: Tuple[Tuple[float, float], ...] = (),
+    _field=None,
+) -> Optional[List[Cell]]:
+    """A\\* from any ``sources`` cell to the nearest ``targets`` cell for ``net``
+    with the selected kernel (:func:`maze_kernel`); see :func:`_astar_reference`.
+    ``_field`` is the net's prebuilt dense field for this pricing state."""
+    if maze_kernel() == "reference":
+        from .dense_maze import plain_soft
+
+        return _astar_reference(
+            grid,
+            sources,
+            targets,
+            net,
+            occ,
+            history,
+            via_cost,
+            pres_fac,
+            blocked,
+            plain_soft(soft),
+            diagonal,
+            drill_sites,
+        )
+    from .packed_maze import astar
+
+    return astar(
+        grid,
+        sources,
+        targets,
+        net,
+        occ,
+        history,
+        via_cost,
+        pres_fac,
+        blocked,
+        soft,
+        diagonal,
+        drill_sites,
+        field=_field,
+    )
+
+
+def _astar_reference(
     grid: RouteGrid,
     sources: Set[Cell],
     targets: Set[Cell],
@@ -124,23 +213,6 @@ def _astar(
     DRC-safe 45° steps (both corners free) to shorten diagonal runs. ``blocked``
     cells are hard-impassable; ``soft`` cells (committed other-net copper the rip-up
     pass may cross at a price) are passable but expensive. Returns the path or None."""
-    if os.environ.get("PNR_PACKED_MAZE") == "1":
-        from .packed_maze import astar
-
-        return astar(
-            grid,
-            sources,
-            targets,
-            net,
-            occ,
-            history,
-            via_cost,
-            pres_fac,
-            blocked,
-            soft,
-            diagonal,
-            drill_sites,
-        )
     if not targets:
         return None
     targets = {c for c in targets if grid.passable(c.layer, c.i, c.j, net)}
@@ -150,7 +222,7 @@ def _astar(
     tset = targets
     raw_block = blocked or set()
     track_halo = getattr(grid, "routing_track_halos", {}).get(net, 0)
-    via_halo = getattr(grid, "routing_via_keepout", 0)
+    via_halo = net_via_keepout(grid, net)
     # Search the same reserved footprint that final commit checks. Testing only
     # the centreline repeatedly proposes a path whose width/via halo is rejected.
     block = set(raw_block)
@@ -179,6 +251,32 @@ def _astar(
         return best or 0.0
 
     from functools import lru_cache
+
+    vm = getattr(grid, "via_model", None)
+
+    @lru_cache(maxsize=None)
+    def layer_window(la: int, i: int, j: int, radius: int):
+        """Max occupancy, history and soft price in one layer's window."""
+        cells = [
+            Cell(la, i + di, j + dj)
+            for di in range(-radius, radius + 1)
+            for dj in range(-radius, radius + 1)
+            if grid.in_bounds(i + di, j + dj)
+        ]
+        return (
+            max([0] + [occ.get(p, 0) for p in cells]),
+            max(history.get(p, 0.0) for p in cells),
+            max(softc.get(p, 0.0) for p in cells),
+        )
+
+    @lru_cache(maxsize=None)
+    def span_cost(i: int, j: int, span) -> float:
+        """:func:`cell_cost` of a via of ``span`` (its layers, its keep-out): the
+        maxima over its layers' windows, each window shared by every span."""
+        radius = max(track_halo, span.keepout)
+        windows = [layer_window(la, i, j, radius) for la in span.layers()]
+        present = 1.0 + pres_fac * max(w[0] for w in windows)
+        return (1.0 + max(w[1] for w in windows)) * present + max(w[2] for w in windows)
 
     @lru_cache(maxsize=None)
     def cell_cost(c: Cell, via=False) -> float:
@@ -266,30 +364,43 @@ def _astar(
                     tie += 1
         # A through-via crosses every copper layer. Plane pours may antipad it,
         # but foreign pads, routed copper, holes and physical keepouts may not.
-        # Track entry onto the destination plane remains forbidden.
+        # Track entry onto the destination plane remains forbidden. The column
+        # tests, the plated transition, the hole spacing and a drilled via's price
+        # do not depend on the destination layer: each is evaluated at most once
+        # per expanded cell (``column``), with the same verdicts and prices.
+        # With a via model (blind/buried/micro vias allowed) a via occupies only
+        # the grid layers of its span: those alone are tested, priced and reserved,
+        # and its price is ``via_cost`` times the span's multiplier.
+        column = None
+        memo = {}
         for la in range(grid.nlayers):
             if la == cur.layer:
                 continue
             nc = Cell(la, cur.i, cur.j)
-            # A via needs the wider via-clearance from foreign pads, and the column
-            # must be clear where it lands (checked here and at the source layer).
-            if not grid.passable(nc.layer, nc.i, nc.j, net) or any(
-                Cell(z, nc.i, nc.j) in block or not grid.via_passable(z, nc.i, nc.j, net)
-                for z in range(grid.nlayers)
-            ):
+            if not grid.passable(nc.layer, nc.i, nc.j, net):
                 continue
-            plated = getattr(grid, "plated_transition", lambda *a: None)(net, nc.i, nc.j)
-            if plated is None and any(
-                Cell(z, nc.i + di, nc.j + dj) in raw_block
-                for z in range(grid.nlayers)
-                for di in range(-via_halo, via_halo + 1)
-                for dj in range(-via_halo, via_halo + 1)
-            ):
+            if vm is None:
+                if column is None:
+                    column = _via_column(
+                        grid, cur, net, block, raw_block, via_halo, drill_sites + path_drills[cur]
+                    )
+                # A via needs the wider via-clearance from foreign pads, and the column
+                # must be clear where it lands (checked here and at the source layer).
+                allowed, plated = column
+                span = None
+            else:
+                span = vm.span(cur.layer, la)
+                allowed, plated = _span_column(
+                    grid, cur, net, block, raw_block, drill_sites + path_drills[cur], span, memo
+                )
+            if not allowed:
                 continue
-            sites = drill_sites + path_drills[cur]
-            if plated is None and not grid.hole_site_clear(grid.center_of(cur.i, cur.j), sites):
-                continue
-            ng = base + cell_cost(nc, via=plated is None) + (via_cost if plated is None else 0.0)
+            if plated is None and span is None:
+                ng = base + cell_cost(Cell(0, nc.i, nc.j), via=True) + via_cost
+            elif plated is None:
+                ng = base + span_cost(nc.i, nc.j, span) + via_cost * span.cost
+            else:
+                ng = base + cell_cost(nc)
             if ng < g.get(nc, float("inf")):
                 g[nc] = ng
                 came[nc] = cur
@@ -299,6 +410,64 @@ def _astar(
                 heapq.heappush(open_heap, (ng + h(nc), tie, nc))
                 tie += 1
     return None
+
+
+def _span_column(grid, cur, net, block, raw_block, sites, span, memo):
+    """:func:`_via_column` for a via of ``span`` (pnr.via_policy.Span) at ``cur``'s
+    column, judged on the span's grid layers only at its own keep-out. Each
+    layer's verdict, the plated transition and the hole test are kept in ``memo``
+    (one expanded cell) and shared by every span there; the verdict is the one
+    :func:`_via_column` gives on those layers."""
+    i, j = cur.i, cur.j
+    for z in span.layers():
+        key = ("cell", z)
+        if key not in memo:
+            memo[key] = Cell(z, i, j) not in block and grid.via_passable(z, i, j, net)
+        if not memo[key]:
+            return False, None
+    if "plated" not in memo:
+        memo["plated"] = getattr(grid, "plated_transition", lambda *a: None)(net, i, j)
+    if memo["plated"] is not None:
+        return True, memo["plated"]
+    k = span.keepout
+    if raw_block:
+        for z in span.layers():
+            key = ("halo", z, k)
+            if key not in memo:
+                memo[key] = not any(
+                    Cell(z, i + di, j + dj) in raw_block
+                    for di in range(-k, k + 1)
+                    for dj in range(-k, k + 1)
+                )
+            if not memo[key]:
+                return False, None
+    if "hole" not in memo:
+        memo["hole"] = grid.hole_site_clear(grid.center_of(i, j), sites, net=net)
+    return (True, None) if memo["hole"] else (False, None)
+
+
+def _via_column(grid, cur, net, block, raw_block, via_halo, sites):
+    """``(allowed, plated)`` for a through via at ``cur``'s column: every layer's
+    cell clear of ``block`` and via-passable, then (a drilled via, ``plated`` None)
+    its halo window clear of ``raw_block`` and its hole spaced from ``sites``."""
+    i, j = cur.i, cur.j
+    if any(
+        Cell(z, i, j) in block or not grid.via_passable(z, i, j, net) for z in range(grid.nlayers)
+    ):
+        return False, None
+    plated = getattr(grid, "plated_transition", lambda *a: None)(net, i, j)
+    if plated is not None:
+        return True, plated
+    if any(
+        Cell(z, i + di, j + dj) in raw_block
+        for z in range(grid.nlayers)
+        for di in range(-via_halo, via_halo + 1)
+        for dj in range(-via_halo, via_halo + 1)
+    ):
+        return False, None
+    if not grid.hole_site_clear(grid.center_of(i, j), sites):
+        return False, None
+    return True, None
 
 
 def _route_one(
@@ -311,12 +480,17 @@ def _route_one(
     pres_fac: float,
     blocked: Optional[Set[Cell]] = None,
     soft: Optional[Dict[Cell, float]] = None,
+    _session=None,
+    _field=None,
 ) -> Optional["_Route"]:
     """Connect all ``access`` cells of ``net`` into one tree (Prim on the grid).
     Returns a useful, possibly incomplete :class:`_Route` (cells + edges — edges record which cells are
     diagonally vs orthogonally connected, for DRC-correct 45° emit + corner
     reservation). ``blocked`` cells are hard-impassable; ``soft`` adds a crossing
-    penalty (rip-up pass)."""
+    penalty (rip-up pass). ``_session`` (:class:`.dense_maze.DenseSession`) builds
+    the net's dense search field once for all of its tree's searches (without one,
+    the dense kernels make one for this tree); ``_field`` is such a field built by
+    the caller (the exact-separation router)."""
     access = list(dict.fromkeys(access))  # de-dup, keep order
     original_access = list(access)
     access = [c for c in access if grid.passable(c.layer, c.i, c.j, net)]
@@ -328,7 +502,15 @@ def _route_one(
     remaining = set(access[1:])
     all_cells: List[Cell] = [access[0]]
     edges: List[Tuple[Cell, Cell]] = []
+    field = _field
+    if field is None and _session is None and maze_kernel() != "reference":
+        from .dense_maze import DenseSession
+
+        # The grid's static predicates once for this tree, not once per search.
+        _session = DenseSession(grid)
     while remaining:
+        if field is None and _session is not None:
+            field = _session.field(net, occ, history, pres_fac, blocked, soft)
         path = _astar(
             grid,
             set(tree),
@@ -341,6 +523,7 @@ def _route_one(
             blocked,
             soft,
             drill_sites=tuple(grid.center_of(i, j) for i, j in _new_via_sites(grid, edges, net)),
+            _field=field,
         )
         if path is None:
             return _Route(all_cells, edges) if edges else None
@@ -385,9 +568,13 @@ def _footprint(
     (≥ 0.6 mm centre-to-centre ⇒ DRC-clean copper and hole spacing). Reserving the
     halo (not just the via cell) is what makes vias DRC-clean by construction, the
     same way the pitch does for tracks. Same-net copper may share freely — the
-    caller accounts ownership per net."""
+    caller accounts ownership per net.
+
+    With ``net`` the keep-out is the net's own where larger (:func:`net_via_keepout`:
+    a class clearance above the fab's)."""
     fp: Set[Cell] = set(cells)
     cellset = set(cells)
+    via_keepout = net_via_keepout(grid, net, via_keepout)
     # Only actual route edges create diagonal corners or via barrels. Two
     # branches can cross at the same XY on different layers without a via.
     route_edges = (
@@ -411,6 +598,19 @@ def _footprint(
                     ni, nj = c.i + di, c.j + dj
                     if grid.in_bounds(ni, nj):
                         fp.add(Cell(c.layer, ni, nj))
+    vm = getattr(grid, "via_model", None)
+    if vm is not None:
+        # Each via reserves its keep-out on its own span's grid layers only.
+        for (i, j), spans in _via_spans(grid, cells, edges, net).items():
+            for span in spans:
+                k = span.keepout
+                for la in span.layers():
+                    for di in range(-k, k + 1):
+                        for dj in range(-k, k + 1):
+                            ni, nj = i + di, j + dj
+                            if grid.in_bounds(ni, nj):
+                                fp.add(Cell(la, ni, nj))
+        return fp
     via_sites = _via_sites(cells) if edges is None else _new_via_sites(grid, edges, net)
     for i, j in via_sites:
         for la in range(grid.nlayers):
@@ -422,12 +622,42 @@ def _footprint(
     return fp
 
 
-def _to_geometry(route: "_Route") -> RoutedNet:
+def _via_spans(grid, cells, edges=None, net=None):
+    """(i, j) -> the vias (pnr.via_policy.Span) at each drilled via site, under the
+    grid's via model: the spans of the via moves there, merged where they share a
+    copper layer (one barrel). Without ``edges`` a column's layers give one span
+    from its top to its bottom layer (a conservative superset)."""
+    vm = grid.via_model
+    out = {}
+    if edges is None:
+        by_ij = defaultdict(set)
+        for c in cells:
+            by_ij[(c.i, c.j)].add(c.layer)
+        for ij, lays in by_ij.items():
+            if len(lays) > 1:
+                out[ij] = [vm.span(min(lays), max(lays))]
+        return out
+    plated = getattr(grid, "plated_transition", lambda *a: None)
+    moves = defaultdict(list)
+    for a, b in edges:
+        if a.layer != b.layer and (net is None or plated(net, a.i, a.j) is None):
+            moves[(a.i, a.j)].append(vm.span(a.layer, b.layer))
+    return {ij: vm.merged(spans) for ij, spans in moves.items()}
+
+
+def _to_geometry(route: "_Route", grid=None) -> RoutedNet:
     """Turn a :class:`_Route` into track segments + via sites. Each *same-layer* edge
     (orthogonal OR 45° diagonal) is a track segment; a column present on two layers
     is a via. Emitting from the recorded edges — not by re-scanning cell adjacency —
-    is what keeps the 45° segments exactly the ones the router chose."""
+    is what keeps the 45° segments exactly the ones the router chose. With a
+    ``grid`` that has a via model the vias' spans are kept (``via_spans``)."""
     rn = RoutedNet(name="", cells=list(route.cells))
+    if grid is not None and getattr(grid, "via_model", None) is not None:
+        moves = defaultdict(list)
+        for a, b in route.edges:
+            if a.layer != b.layer:
+                moves[(a.i, a.j)].append(grid.via_model.span(a.layer, b.layer))
+        rn.via_spans = {ij: grid.via_model.merged(sp) for ij, sp in sorted(moves.items())}
     seen: Set[Tuple[Tuple[int, int], Tuple[int, int], int]] = set()
     for a, b in route.edges:
         if a.layer != b.layer:
@@ -440,6 +670,41 @@ def _to_geometry(route: "_Route") -> RoutedNet:
         rn.segments.append((a.layer, p, q))
     rn.vias = sorted({(a.i, a.j) for a, b in route.edges if a.layer != b.layer})
     return rn
+
+
+def _live_net(grid, net, route, kind, pass_index, pres_fac):
+    """One net's live-view event (``PNR_LIVE_DIR`` only): its grid segments."""
+    import os
+
+    if not os.environ.get("PNR_LIVE_DIR"):
+        return
+    from pnr.live import emit
+
+    rn = _to_geometry(route, grid) if route else None
+    tracks = []
+    if rn:
+        for layer, a, b in rn.segments:
+            tracks.append(
+                (
+                    net,
+                    grid.layers[layer],
+                    grid.center_of(*a),
+                    grid.center_of(*b),
+                    grid.track_width,
+                )
+            )
+    emit(
+        kind,
+        data=dict(
+            net=net,
+            phase="signals",
+            pass_index=pass_index,
+            pres_fac=pres_fac,
+            provisional=True,
+            tracks=tracks,
+            preview_width=True,
+        ),
+    )
 
 
 def _route_impl(
@@ -468,7 +733,21 @@ def _route_impl(
     halo) is shared (DRC-clean) or ``max_iters``. Deterministic."""
     nets = sorted(n for n, cells in net_access.items() if len([c for c in cells]) >= 2)
     nego_order = nets  # name order (difficulty-first ordering measured worse here)
-    history: Dict[Cell, float] = defaultdict(float)
+    # Dense kernels: occupancy, history and committed owners are mirrored in
+    # arrays as they change (identical dictionaries for every other reader).
+    session = None
+    if maze_kernel() != "reference":
+        from .dense_maze import DenseSession
+
+        session = DenseSession(grid)
+        if session.static is None:
+            session = None
+    if session is not None:
+        from .dense_maze import DenseCounts, DenseOwners, SoftOwners
+
+        history: Dict[Cell, float] = DenseCounts(float, grid)
+    else:
+        history = defaultdict(float)
     pres_fac = pres_fac0
     result_nets: Dict[str, RoutedNet] = {}
     iters = 0
@@ -482,11 +761,10 @@ def _route_impl(
 
     # Persistent congestion: owner[cell] = nets currently on it, occ[cell] = |owner|.
     owner: Dict[Cell, Set[str]] = defaultdict(set)
-    occ: Dict[Cell, int] = defaultdict(int)
+    occ: Dict[Cell, int] = DenseCounts(int, grid) if session is not None else defaultdict(int)
     routed: Dict[str, Optional[_Route]] = {n: None for n in nets}
     fps: Dict[str, Set[Cell]] = {n: set() for n in nets}
 
-    import os
     import time
 
     from pnr.live import emit
@@ -495,44 +773,19 @@ def _route_impl(
     trace_hook = route_hook()  # None unless a traced route scope is open (pnr.trace)
 
     def live_net(net, route, kind):
-        if not os.environ.get("PNR_LIVE_DIR"):
-            return
-        rn = _to_geometry(route) if route else None
-        tracks = []
-        if rn:
-            for layer, a, b in rn.segments:
-                tracks.append(
-                    (
-                        net,
-                        grid.layers[layer],
-                        grid.center_of(*a),
-                        grid.center_of(*b),
-                        grid.track_width,
-                    )
-                )
-        emit(
-            kind,
-            data=dict(
-                net=net,
-                phase="signals",
-                pass_index=iters,
-                pres_fac=pres_fac,
-                provisional=True,
-                tracks=tracks,
-                preview_width=True,
-            ),
-        )
+        _live_net(grid, net, route, kind, iters, pres_fac)
 
-    def _place(net, route):
+    def _place(net, route, fp=None):
         live_net(net, route, "signal_net_added")
         if trace_hook:
             trace_hook.net(net, route, "add", True, iters)
         routed[net] = route
-        fp = (
-            _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net)
-            if route
-            else set()
-        )
+        if fp is None:
+            fp = (
+                _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net)
+                if route
+                else set()
+            )
         fps[net] = fp
         for c in fp:
             owner[c].add(net)
@@ -564,7 +817,9 @@ def _route_impl(
                 proposals = _pool.batch(batch, net_access, occ, history, via_cost, pres_fac)
             else:
                 proposals = [
-                    _route_one(grid, net_access[n], n, occ, history, via_cost, pres_fac)
+                    _route_one(
+                        grid, net_access[n], n, occ, history, via_cost, pres_fac, _session=session
+                    )
                     for n in batch
                 ]
             added = set()
@@ -582,9 +837,18 @@ def _route_impl(
                         "parallel_grid_retry", data=dict(net=net, phase="signals", pass_index=iters)
                     )
                     proposal = _route_one(
-                        grid, net_access[net], net, occ, history, via_cost, pres_fac
+                        grid,
+                        net_access[net],
+                        net,
+                        occ,
+                        history,
+                        via_cost,
+                        pres_fac,
+                        _session=session,
                     )
-                _place(net, proposal)
+                    footprint = None
+                # The footprint is a pure function of the route: computed once.
+                _place(net, proposal, footprint)
                 added.update(fps[net])
 
     negotiate(nego_order)
@@ -612,19 +876,32 @@ def _route_impl(
     #  contended for one cell during negotiation now reroutes instead of being lost;
     #  it stays unrouted only if it genuinely cannot path around the committed set.
     #  This is the difference between a greedy grid router and a real one.
-    occupied: Dict[Cell, str] = {}
+    occupied: Dict[Cell, str] = DenseOwners(grid) if session is not None else {}
     committed: Set[Cell] = set()
     routes: Dict[str, _Route] = {}  # committed _Route per net (geometry + snapshot)
 
-    def _commit(net: str, route: _Route) -> None:
+    # Footprint of each net's committed route (the route object and its cells), so
+    # rip-ups and the snapshot restore reuse it instead of recomputing it.
+    committed_fp: Dict[str, Tuple[_Route, Set[Cell]]] = {}
+
+    def _fp(net: str, route: _Route) -> Set[Cell]:
+        known = committed_fp.get(net)
+        if known is not None and known[0] is route:
+            return known[1]
+        return _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net)
+
+    def _commit(net: str, route: _Route, fp: Optional[Set[Cell]] = None) -> None:
         live_net(net, route, "signal_net_added")
         if trace_hook:
             trace_hook.net(net, route, "commit", False, iters)
-        for c in _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net):
+        if fp is None:
+            fp = _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net)
+        committed_fp[net] = (route, fp)
+        for c in fp:
             occupied[c] = net
             committed.add(c)
         routes[net] = route
-        rn = _to_geometry(route)
+        rn = _to_geometry(route, grid)
         rn.name = net
         rn.routed = True
         result_nets[net] = rn
@@ -646,7 +923,7 @@ def _route_impl(
             else set()
         )
         if route and not any(c in occupied for c in fp):
-            _commit(net, route)
+            _commit(net, route, fp)
         else:
             leftover.append(net)
 
@@ -670,7 +947,15 @@ def _route_impl(
             if _pool
             else [
                 _route_one(
-                    grid, net_access[n], n, zero_occ, zero_hist, via_cost, 0.0, blocked=committed
+                    grid,
+                    net_access[n],
+                    n,
+                    zero_occ,
+                    zero_hist,
+                    via_cost,
+                    0.0,
+                    blocked=committed,
+                    _session=session,
                 )
                 for n in batch
             ]
@@ -693,6 +978,7 @@ def _route_impl(
                     via_cost,
                     0.0,
                     blocked=committed,
+                    _session=session,
                 )
                 fp = (
                     _footprint(
@@ -702,7 +988,7 @@ def _route_impl(
                     else set()
                 )
             if proposal and not fp & committed:
-                _commit(net, proposal)
+                _commit(net, proposal, fp)
             else:
                 unrouted.append(net)
                 _drop(net)
@@ -715,15 +1001,23 @@ def _route_impl(
     # per-net penalty makes a net that keeps losing eventually route AROUND instead of
     # ripping — so the churn converges — and we snapshot the best (most connected terminal branches)
     # DRC-clean state seen and return that (rip-ups never corrupt the result).
-    def _routed_count() -> int:
-        return sum(
-            max(
-                0,
-                len(set(net_access[n])) - 1 - remaining_connections(net_access[n], routes[n].edges),
-            )
-            for n in nets
-            if n in routes
+    # Connected terminal branches per committed route, kept per net (the route
+    # object it belongs to is checked): only the nets a rip-up touched change.
+    branch_count: Dict[str, Tuple[_Route, int]] = {}
+
+    def _branches(n: str) -> int:
+        route = routes[n]
+        known = branch_count.get(n)
+        if known is not None and known[0] is route:
+            return known[1]
+        value = max(
+            0, len(set(net_access[n])) - 1 - remaining_connections(net_access[n], route.edges)
         )
+        branch_count[n] = (route, value)
+        return value
+
+    def _routed_count() -> int:
+        return sum(_branches(n) for n in nets if n in routes)
 
     def _snapshot() -> Dict[str, _Route]:
         return {n: routes[n] for n in nets if result_nets[n].routed}
@@ -739,9 +1033,21 @@ def _route_impl(
         net = queue.popleft()
         queued.discard(net)
         pen = rip_penalty * (1 + rip_count[net])
-        soft = {c: pen for c, o in occupied.items() if o != net}
+        soft = (
+            SoftOwners(occupied, net, pen)
+            if session is not None
+            else {c: pen for c, o in occupied.items() if o != net}
+        )
         route = _route_one(
-            grid, net_access[net], net, zero_occ, zero_hist, via_cost, 0.0, soft=soft
+            grid,
+            net_access[net],
+            net,
+            zero_occ,
+            zero_hist,
+            via_cost,
+            0.0,
+            soft=soft,
+            _session=session,
         )
         if not route:
             continue
@@ -750,18 +1056,28 @@ def _route_impl(
         if len(crossed) > max_rip:
             # Too disruptive at this penalty — try to route strictly AROUND instead.
             around = _route_one(
-                grid, net_access[net], net, zero_occ, zero_hist, via_cost, 0.0, blocked=committed
+                grid,
+                net_access[net],
+                net,
+                zero_occ,
+                zero_hist,
+                via_cost,
+                0.0,
+                blocked=committed,
+                _session=session,
             )
-            if around and not (
+            around_fp = (
                 _footprint(grid, around.cells, via_keepout, _h(net), edges=around.edges, net=net)
-                & set(occupied)
-            ):
-                _commit(net, around)
+                if around
+                else None
+            )
+            if around and not (around_fp & set(occupied)):
+                _commit(net, around, around_fp)
             continue
         for c in crossed:  # rip the crossed nets, re-queue them
             rc = routes.get(c)
             if rc:
-                for cell in _footprint(grid, rc.cells, via_keepout, _h(c), edges=rc.edges, net=c):
+                for cell in _fp(c, rc):
                     if occupied.get(cell) == c:
                         del occupied[cell]
                         committed.discard(cell)
@@ -771,7 +1087,7 @@ def _route_impl(
             if c not in queued:
                 queue.append(c)
                 queued.add(c)
-        _commit(net, route)
+        _commit(net, route, fp)
         cnt = _routed_count()
         if cnt > best_count:
             best_count = cnt
@@ -781,7 +1097,7 @@ def _route_impl(
     unrouted = []
     for net in nets:
         route = best_snap.get(net)
-        rn = _to_geometry(route) if route else _to_geometry(_Route())
+        rn = _to_geometry(route, grid) if route else _to_geometry(_Route())
         rn.name = net
         rn.remaining_connections = remaining_connections(
             net_access[net], route.edges if route else []
@@ -794,18 +1110,15 @@ def _route_impl(
     # separate from negotiation scoring: unreachable terminals remain open.
     committed = set()
     for name, saved in best_snap.items():
-        committed.update(
-            _footprint(grid, saved.cells, via_keepout, _h(name), edges=saved.edges, net=name)
-        )
+        committed.update(_fp(name, saved))
     for net in sorted(unrouted):
         saved = best_snap.get(net)
         forest = _Route(list(saved.cells), list(saved.edges)) if saved else _Route()
         if saved:
-            committed.difference_update(
-                _footprint(grid, saved.cells, via_keepout, _h(net), edges=saved.edges, net=net)
-            )
+            committed.difference_update(_fp(net, saved))
         remaining = set(net_access[net]) - set(forest.cells)
         first_tree = set(forest.cells)
+        field = None
         while remaining:
             if first_tree:
                 tree = first_tree
@@ -815,6 +1128,8 @@ def _route_impl(
                 remaining.remove(seed)
                 tree = {seed}
             while remaining:
+                if field is None and session is not None:
+                    field = session.field(net, zero_occ, zero_hist, 0.0, blocked=committed)
                 path = _astar(
                     grid,
                     tree,
@@ -828,6 +1143,7 @@ def _route_impl(
                     drill_sites=tuple(
                         grid.center_of(i, j) for i, j in _new_via_sites(grid, forest.edges, net)
                     ),
+                    _field=field,
                 )
                 if not path:
                     break
@@ -842,7 +1158,7 @@ def _route_impl(
                 forest = trial
                 tree.update(path)
                 remaining.difference_update(path)
-        rn = _to_geometry(forest)
+        rn = _to_geometry(forest, grid)
         rn.name = net
         rn.remaining_connections = remaining_connections(net_access[net], forest.edges)
         rn.routed = rn.remaining_connections == 0
@@ -854,21 +1170,109 @@ def _route_impl(
     return RouteResult(nets=result_nets, unrouted=sorted(unrouted), iterations=iters)
 
 
-def route(grid, net_access, **kwargs):
+def route(grid, net_access, *, late_copper=None, exact=None, **kwargs):
+    """Detailed route of ``net_access`` on ``grid``: :func:`_route_impl` (the halo
+    model), and the exact-separation model (:mod:`.exact_route`) by its mode
+    (``exact``, else ``PNR_EXACT_SEPARATION``): ``recover`` routes again with it
+    when the halo route leaves connections open and keeps the route that leaves
+    fewer; ``full`` routes with it only.
+
+    ``late_copper`` describes copper that later stages add to the board without
+    this grid holding it (the plane drops writeback places after routing, natively
+    routed deferred nets), or is None. The recovery packs nets as tightly as the
+    rules allow and can only count this route's own connections, so it cannot
+    tell whether it took room those stages need: it is skipped then (logged).
+
+    ``via_keepouts`` (net -> cells) widens the via keep-out of the nets whose class
+    clearance needs more than ``via_keepout`` (:func:`net_via_keepout`).
+    """
     # Set before spawning so serial and worker proposals use identical geometry.
     grid.routing_track_halos = kwargs.get("net_halo") or {}
     grid.routing_via_keepout = kwargs.get("via_keepout", 1)
+    via_keepouts = kwargs.pop("via_keepouts", None)
+    if via_keepouts or getattr(grid, "routing_via_keepouts", None):
+        grid.routing_via_keepouts = dict(via_keepouts or {})
+    if getattr(grid, "_wide_specs", None) is not None:
+        # Copper recorded since the wide nets' tables were built (the escape plan,
+        # power-array sources): the tables cover it before anything reads them.
+        grid.reserve_wide_pad_clearance()
     import os
+    import sys
 
     from pnr.runtime_controls import route_workers
 
+    from .exact_route import exact_mode
+
+    mode = exact_mode(exact)
+    if mode != "off":
+        from .exact_route import route_exact, supported
+
+        if not supported(grid):
+            mode = "off"
+    if mode == "full":
+        events = []
+        result = route_exact(grid, net_access, _events=events, **kwargs)
+        _replay(grid, None, events, result.iterations)
+        return result
     workers = route_workers("grid-start")
     if workers == 1 and not os.environ.get("PNR_CONTROL_FILE"):
-        return _route_impl(grid, net_access, **kwargs)
-    from .parallel import NetPool
+        result = _route_impl(grid, net_access, **kwargs)
+    else:
+        from .parallel import NetPool
 
-    pool = NetPool(grid, workers)
-    try:
-        return _route_impl(grid, net_access, **kwargs, _pool=pool)
-    finally:
-        pool.close()
+        pool = NetPool(grid, workers)
+        try:
+            result = _route_impl(grid, net_access, **kwargs, _pool=pool)
+        finally:
+            pool.close()
+    if mode == "recover" and result.unrouted:
+        from .exact_route import missing_connections
+
+        before = missing_connections(result)
+        if late_copper:
+            sys.stderr.write(
+                "exact-separation recovery skipped (%d open connections): later stages add "
+                "copper this route cannot see: %s\n" % (before, late_copper)
+            )
+            return result
+        # Open connections left: route again with the exact pairwise separation
+        # and keep it only when it leaves strictly fewer connections open.
+        events = []
+        exact_result = route_exact(grid, net_access, _events=events, **kwargs)
+        after = missing_connections(exact_result)
+        sys.stderr.write(
+            "exact-separation recovery: %d -> %d open connections (%s)\n"
+            % (before, after, "kept" if after < before else "discarded")
+        )
+        if after < before:
+            _replay(grid, result, events, exact_result.iterations)
+            return exact_result
+    return result
+
+
+def _replay(grid, previous, events, pass_index):
+    """Trace (:mod:`pnr.trace`) and live-view events for a route that replaces
+    ``previous`` (a :class:`RouteResult`, or None): every net of ``previous``
+    with copper is dropped, then each net of the new route is committed with its
+    final tree (``events``: ``(net, _Route or None)``), so a traced route's net
+    events end on the board it returns. Observational only."""
+    import os
+
+    from pnr.trace import route_hook
+
+    hook = route_hook()
+    live = bool(os.environ.get("PNR_LIVE_DIR"))
+    if hook is None and not live:
+        return
+    for net in sorted(previous.nets) if previous is not None else ():
+        if previous.nets[net].cells:
+            if hook is not None:
+                hook.net(net, None, "drop", False, pass_index)
+            if live:
+                _live_net(grid, net, None, "signal_net_removed", pass_index, 0.0)
+    for net, tree in events:
+        if hook is not None:
+            hook.net(net, tree, "commit" if tree else "drop", False, pass_index)
+        if live:
+            kind = "signal_net_added" if tree else "signal_net_removed"
+            _live_net(grid, net, tree, kind, pass_index, 0.0)

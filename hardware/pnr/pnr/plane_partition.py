@@ -458,6 +458,8 @@ def partition(
     fill_min_mm: float = 0.0,
     foreign_lands: Sequence[list] = (),
     corridor_mm: float = 0.0,
+    corridor_keep_mm: float = 0.0,
+    bodies: Sequence[list] = (),
 ) -> Partition:
     """Partition ``entry["layer"]`` (see the module doc). ``terminals``: net ->
     :class:`Terminal` list (in the nets' order of ``entry["nets"]``); ``blocked``:
@@ -483,7 +485,8 @@ def partition(
         payload["fill_min"] = fill_min_mm
     if foreign_lands:  # an outer pour's other nets' lands (only then)
         payload["foreign_lands"] = [list(map(list, r)) for r in foreign_lands]
-        payload["corridor"] = corridor_mm
+        payload["corridor"] = [corridor_mm, corridor_keep_mm]
+        payload["bodies"] = [list(map(list, r)) for r in bodies]
     key = _digest(payload)
     if key in _CACHE:
         return _CACHE[key]
@@ -504,6 +507,8 @@ def partition(
         fill_min_mm,
         foreign_lands,
         corridor_mm,
+        corridor_keep_mm,
+        bodies,
     )
     result.report["inputs_sha256"] = key
     if len(_CACHE) > 8:
@@ -529,6 +534,8 @@ def _partition(
     fill_min_mm=0.0,
     foreign_lands=(),
     corridor_mm=0.0,
+    corridor_keep_mm=0.0,
+    bodies=(),
 ):
     from pnr.electrical import current_width
     from pnr.ir_drop import barrel_ohm, resistivity
@@ -687,7 +694,9 @@ def _partition(
         # shortest corridor of free, unclaimed cells to the region's edge, its track
         # with clearance wide), so the grown pours do not wall it in.
         region = g.polygon([entry["region"]]) if entry.get("region") else free
-        lanes, walled = _corridors(g, label, region, free, foreign_lands, corridor_mm)
+        lanes, walled = _corridors(
+            g, label, region, free, foreign_lands, corridor_mm, corridor_keep_mm, bodies
+        )
         free = free & ~lanes
         if walled:
             report["walled_in"] = walled
@@ -906,11 +915,15 @@ def _connect(ctx, label0, order):
     return label, spines, unreached, lengths, reached_of
 
 
-def _corridors(g, label, region, free, lands, width_mm):
+BODY_COST = 20.0  # a corridor cell under a part's body (see _corridors)
+
+
+def _corridors(g, label, region, free, lands, width_mm, keep_mm=0.0, bodies=()):
     """``(lanes, walled)``: for each land ring (another net's, grown by its
-    clearance), the shortest 4-connected way from it through free cells no rail has
-    claimed to a cell outside ``region``, widened to ``width_mm``; ``walled``: the
-    lands without one (by centre)."""
+    clearance), the shortest 4-connected way from it through free cells at least
+    ``keep_mm`` (a track's half width and clearance) from every rail's claimed copper
+    and every other foreign land, to a cell outside ``region``, widened to
+    ``width_mm`` (held out of the growth); ``walled``: the lands without one."""
     lanes = g.zeros()
     walled = []
     masks = [g.polygon([ring]) for ring in lands]
@@ -918,21 +931,34 @@ def _corridors(g, label, region, free, lands, width_mm):
     for m in masks:
         every |= m
     open_ = (label < 0) & free | ~region
+    claimed = label >= 0
+    body = g.zeros()
+    for ring in bodies:
+        body |= g.polygon([ring])
     ny, nx = free.shape
     for ring, land in zip(lands, masks):
         if not land.any():
             continue
-        passable = open_ & ~(every & ~land)  # not through another foreign land
+        near = claimed | (every & ~land)  # rails' copper, another foreign land
+        if keep_mm > 0 and near.any():
+            near = dilate(near, keep_mm / g.h)
+        passable = open_ & ~near | ~region
         start = dilate(land, 1.0) & ~land
-        dist = np.full(free.shape, -1, dtype=np.int64)
+        # Under a part's body (between other lands) a lane costs BODY_COST per cell: a
+        # land leaves its package outward when it can.
+        cost = np.where(body & ~dilate(land, 2.0), BODY_COST, 1.0).ravel()
+        dist = np.full(free.size, np.inf)
         prev = np.full(free.size, -1, dtype=np.int64)
-        q = deque()
+        heap = []
         for c in np.flatnonzero(start & passable).tolist():
-            dist.ravel()[c] = 0
-            q.append(c)
+            dist[c] = 0.0
+            heap.append((0.0, c))
+        heapq.heapify(heap)
         end = None
-        while q:
-            c = q.popleft()
+        while heap:
+            d, c = heapq.heappop(heap)
+            if d > dist[c]:
+                continue
             j, i = divmod(c, nx)
             if not region[j, i]:
                 end = c
@@ -943,10 +969,10 @@ def _corridors(g, label, region, free, lands, width_mm):
                 (c - nx, j > 0),
                 (c + nx, j < ny - 1),
             ):
-                if ok and dist.ravel()[nb] < 0 and passable.ravel()[nb]:
-                    dist.ravel()[nb] = dist.ravel()[c] + 1
+                if ok and passable.ravel()[nb] and d + cost[nb] < dist[nb]:
+                    dist[nb] = d + cost[nb]
                     prev[nb] = c
-                    q.append(nb)
+                    heapq.heappush(heap, (dist[nb], nb))
         xs = [p[0] for p in ring]
         ys = [p[1] for p in ring]
         centre = [round((min(xs) + max(xs)) / 2, 4), round((min(ys) + max(ys)) / 2, 4)]
@@ -1544,7 +1570,15 @@ def _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanout
     reach = float(entry.get("terminal_reach_mm", 0.8))
     lands = entry.get("terminals") == "pad"
     foreign = []  # other nets' lands inside the region: each keeps a way out
+    bodies = []  # the courtyards of the parts in the region (corridors avoid them)
     for comp in graph.components:
+        if inside(comp.pos):
+            w, h_ = comp.courtyard
+            if int(round(comp.rot)) % 180 == 90:
+                w, h_ = h_, w
+            x, y = comp.pos
+            bodies.append([(x - w / 2, y - h_ / 2), (x + w / 2, y - h_ / 2)])
+            bodies[-1] += [(x + w / 2, y + h_ / 2), (x - w / 2, y + h_ / 2)]
         for (name, net, r), pad in zip(pad_rects(comp), comp.pads):
             half = max(r.w, r.h) / 2
             if pad.through_hole:
@@ -1596,7 +1630,11 @@ def _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanout
         via_drill_mm=via_h,
         fill_min_mm=fill_min,
         foreign_lands=foreign,
-        corridor_mm=fill_min + 2 * clearance,
+        # A lane holds one free grid column between the pours' halos (their claims
+        # reach clearance + half a track + half a cell's diagonal), with a cell spare.
+        corridor_mm=grid.track_width + 2 * rail_clear + (math.sqrt(2) + 2) * grid.pitch,
+        corridor_keep_mm=grid.track_width / 2 + rail_clear,
+        bodies=bodies,
     )
     # A copy (the partition is cached): no trunk cores, the grid reservation keeps
     # other nets off the pours; the zones fill above any board-wide pour of the

@@ -788,9 +788,14 @@ surface pads on the layer inside the region (with `terminals: pad` the whole lan
 claimed before any tree like a via land), its plated holes and its planned or fixed
 vias there. Other nets' lands, escape tracks and vias and fixed copper on the layer
 are blocked at the pair's clearance, and every other net's land in the region keeps a
-way out: before the territories grow, the shortest corridor of free cells no rail
-claims from the land to the region's edge, a track with its clearance wide, is held
-out of the growth (a land without one is reported under `walled_in`). The zones are
+way out: before the territories grow, the cheapest corridor from the land to the
+region's edge through free cells a track's half width and clearance off every rail's
+copper and every other foreign land (a cell under a part's courtyard costs 20, so a
+land leaves its package outward when it can) is held out of the growth, wide enough
+for one free grid column between the pours' router claims (a land without one is
+reported under `walled_in`). The hard rung `11-buck-vqfnhr-4L-SGPS-pour` (a buck stage
+on a VQFN-HR-10 land pattern) exercises it; `11-buck-vqfnhr-4L-SGPS` is the same stage
+without the section. The zones are
 drawn at priority 100 and up, above the layer's other zones (which writeback keeps),
 with `connect` as their pad connection; `fill` does not go with a region.
 

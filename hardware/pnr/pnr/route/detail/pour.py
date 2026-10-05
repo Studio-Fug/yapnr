@@ -43,6 +43,9 @@ def reserve(grid, graph, parts) -> Dict[str, dict]:
     cell_radius = grid.pitch / math.sqrt(2)
     track_grow = grid.clearance + grid.track_width / 2 + cell_radius
     via_grow = grid.clearance + grid.via_radius + cell_radius
+    # The exact escape tests sample centre lines (grid.fixed_owned): there the pour's
+    # own reach, without the cell margin the maze's halo needs.
+    exact_grow = grid.clearance + grid.track_width / 2
     out: Dict[str, dict] = {}
     for part in parts:
         la = grid.layers.index(part.layer)
@@ -55,11 +58,13 @@ def reserve(grid, graph, parts) -> Dict[str, dict]:
                 cells = grid.polygon_cells(r.outline, r.holes, grow)
                 for j, i in zip(*cells.nonzero()):
                     key = (la, int(i), int(j))
-                    owner = table.get(key)
-                    if owner is None:
+                    if table.get(key) is None:
                         table[key] = r.net
-                        if table is grid.pad_net:
-                            grid.fixed_owned[key] = r.net
+            exact = grid.polygon_cells(r.outline, r.holes, exact_grow)
+            for j, i in zip(*exact.nonzero()):
+                key = (la, int(i), int(j))
+                if grid.pad_net.get(key) == r.net and grid.fixed_owned.get(key) is None:
+                    grid.fixed_owned[key] = r.net
     for comp in graph.components:
         for (name, net, rect), pad in zip(pad_rects(comp), comp.pads):
             row = out.get(net)

@@ -72,6 +72,9 @@ HARD_LIB = {
     "r_0402": "Resistor_SMD:R_0402_1005Metric",
     # A 1 mm fiducial with its own 0.6 mm clearance and 0.5 mm mask margin.
     "fiducial_1mm": "Fiducial:Fiducial_1mm_Mask2mm",
+    "vqfn_hr10": "Package_DFN_QFN:Texas_RPU0010A_VQFN-HR-10_2x2mm_P0.5mm",
+    "l_1210": "Inductor_SMD:L_1210_3225Metric",
+    "header_1x03": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
 }
 
 
@@ -1821,6 +1824,117 @@ def ufbga_rails(spec):
     return spec
 
 
+# A buck power stage on hot-rod lands (11-buck-vqfnhr-pour): KiCad's VQFN-HR-10 land
+# pattern (TI RPU0010A: three 1.0 x 0.2 mm and three 0.65 x 0.2 mm side lands, four
+# 0.25 x 0.55 mm bottom lands, 0.5 mm pitch) with a synthetic buck pin map, not a
+# device's: EN tied to VIN (1), VIN (2, 9, 10), PG (3), SW (4), FB (5), GND (6, 7, 8).
+BUCK_PINS = {
+    "1": "VIN",
+    "2": "VIN",
+    "3": "PG",
+    "4": "SW",
+    "5": "FB",
+    "6": "GND",
+    "7": "GND",
+    "8": "GND",
+    "9": "VIN",
+    "10": "VIN",
+}
+BUCK_SIZE = (26, 18)
+
+
+def buck_pour():
+    """``11-buck-vqfnhr-4L-SGPS-pour``: a buck stage whose hot-rod lands no track can
+    enter at its clearance, joined by an outer pour per rail (``plane_partition``
+    with a ``region`` over U1, L1 and C1, whole-land terminals, solid connection, the
+    GND pour stitched to In1). VOUT is the In2 plane; VIN arrives on J1 and joins its
+    pour; the FB divider, PG pull-up and output caps are placed and routed freely."""
+    parts = [
+        pinned("U1", "vqfn_hr10", "buck (synthetic pin map)", BUCK_PINS),
+        pinned("L1", "l_1210", "1u", ["SW", "VOUT"]),
+        pinned("C1", "capacitor", "10u", ["VIN", "GND"]),
+        pinned("C2", "capacitor", "22u", ["VOUT", "GND"]),
+        pinned("C3", "capacitor", "22u", ["VOUT", "GND"]),
+        pinned("R1", "r_0402", "100k", ["VOUT", "FB"]),
+        pinned("R2", "r_0402", "50k", ["FB", "GND"]),
+        pinned("R3", "r_0402", "100k", ["VOUT", "PG"]),
+        part("J1", "connector", "5V in", ["VIN", "GND"]),
+        pinned("J2", "header_1x03", "out", ["VOUT", "GND", "PG"]),
+    ]
+    spec = circuit(
+        "11-buck-vqfnhr",
+        "A buck stage on a VQFN-HR-10 land pattern whose hot-rod lands are joined by "
+        "outer-layer pours, with its input, output and feedback parts.",
+        parts,
+        BUCK_SIZE,
+    )
+    cons = spec["constraints"]
+    cons["board"]["default_clearance_mm"] = 0.2
+    cons["fab"] = dict(
+        track_width_mm=0.1,
+        clearance_mm=0.1,
+        via_diameter_mm=0.4,
+        via_drill_mm=0.2,
+        hole_clearance_mm=0.15,
+        edge_clearance_mm=0.3,
+        min_through_drill_mm=0.15,
+        via_annular_mm=0.075,
+        min_track_width_mm=0.1,
+        smd_pad_clearance_mm=0.1,
+        hole_to_hole_mm=0.25,
+        via_to_smd_pad_mm=0.1,
+        min_via_diameter_mm=0.35,
+    )
+    cons["net_class"] = {
+        "supply": dict(nets=["VIN", "VOUT"], width_mm=0.3),
+        "return": dict(nets=["GND"], width_mm=0.3),
+    }
+    w, h = BUCK_SIZE
+    cons["fixed"] = {
+        # The stage as its pins ask: C1 across the VIN (9, 10) and GND (7, 8) bottom
+        # lands (y up here: KiCad's bottom row faces +y), L1 east of SW (4).
+        "U1": dict(at=[11.0, 9.0], rot=0, side="top"),
+        "C1": dict(at=[11.0, 11.9], rot=0, side="top"),
+        "L1": dict(at=[15.6, 8.25], rot=0, side="top"),
+        "J1": dict(at=[2.5, 9.0], rot=0, side="top"),
+        "J2": dict(at=[w - 2.5, 9.0], rot=0, side="top"),
+    }
+    spec["supply"] = dict(voltage_v=5, max_current_a=2.0)
+    return hard(spec, "buck-vqfnhr", ["power-stage"], "manual", 60)
+
+
+def buck_four_layer():
+    """``11-buck-vqfnhr-4L-SGPS``: the buck stage on four layers (GND In1, VOUT In2),
+    without pours: the control arm (no track enters the hot-rod lands)."""
+    return with_stackup(buck_pour(), "4L-SGPS", power="VOUT")
+
+
+def buck_pour_rung(spec):
+    """``spec`` (the four-layer buck stage) with its outer pours."""
+    spec = deepcopy(spec)
+    cons = spec["constraints"]
+    cons["plane_partition"] = [
+        dict(
+            layer="F.Cu",
+            nets=["VIN", "SW", "GND"],
+            region=dict(refs=["U1", "L1", "C1"], margin_mm=0.6),
+            terminals="pad",
+            connect="solid",
+            stitch_vias=3,
+            split_gap_mm=0.2,
+            min_width_mm=0.25,
+        )
+    ]
+    spec["name"] += "-pour"
+    spec["dims"]["parts"] = "pour"
+    spec["features"] = sorted(set(spec["features"]) | {"outer-pour", "hot-rod-lands"})
+    spec["description"] += (
+        " The hot-rod lands of VIN, SW and GND are joined by one F.Cu pour per rail"
+        " inside the power stage's region (whole-land terminals, solid connection)."
+    )
+    return spec
+
+
 # --------------------------------------------------------- run configurations
 
 # yapnr's configuration per family (run.py arguments). The ladder's documented best: the
@@ -1864,7 +1978,8 @@ def hard_rungs():
     chasers.append(chaser_arcblock(chasers[0]))  # on 4L-SGPS: one new dimension
     bga = ufbga_fanout()
     others = [quad_bank(), power_switch(), bga, ufbga_block(bga), ufbga_classes(bga)]
-    others += [ufbga_partial(bga), ufbga_rails(bga)]
+    buck = buck_four_layer()
+    others += [ufbga_partial(bga), ufbga_rails(bga), buck, buck_pour_rung(buck)]
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST
     return deepcopy(out + chasers + others)

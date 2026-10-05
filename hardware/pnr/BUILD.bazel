@@ -1426,6 +1426,41 @@ py_test(
     deps = [":pnr"],
 )
 
+# E2, the hier -> fixed_block bridge (pnr.hier.macro.fixed_block_from_macro): the
+# fixed/fixed_block constraint pair a placed, expanded macro derives. Pure python.
+py_test(
+    name = "hier_fixed_block_test",
+    size = "small",
+    srcs = ["tests/test_hier_fixed_block.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_hier_fixed_block.py",
+    deps = [":pnr", ":pnr_hier", ":pnr_place"],
+)
+
+# The copper side of the E2 bridge, through KiCad (KiCad Python only, by hand:
+# python3 -m unittest tests.test_hier_assemble_kicad): pnr.hier.assemble's
+# --zones (clones a block's pours and rule areas) and --group/--anchor (groups
+# the assembled items and the block's non-anchor footprints, reports the
+# group's fixed_copper.block_digest); the undeclared default stays unchanged.
+py_test(
+    name = "hier_assemble_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_hier_assemble_kicad.py",
+        "tests/test_stack_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_hier_assemble_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr", ":pnr_hier"],
+)
+
 py_test(
     name = "feedback_tie_test",
     size = "small",

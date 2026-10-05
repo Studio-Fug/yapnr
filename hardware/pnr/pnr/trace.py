@@ -458,8 +458,9 @@ class Recorder:
         return self._emit("poses", **fields)
 
     @_guarded
-    def legal(self, order, placed, backtracks=0):
-        """The legalizer's accepted placement order (refs) and the legal ``placed`` graph."""
+    def legal(self, order, placed, backtracks=0, motion=None):
+        """The legalizer's accepted placement order (refs) and the legal ``placed`` graph;
+        ``motion`` (:func:`pnr.place.motion.summary`) joins the event when given."""
         rows = graph_poses(placed)
         extra = {}
         if self.expanders:
@@ -470,6 +471,8 @@ class Recorder:
         ordered = [by_ref[r] for r in order if r in by_ref]
         seen = set(order)
         ordered = [p for r, p in sorted(by_ref.items()) if r not in seen] + ordered
+        if motion is not None:
+            extra["motion"] = motion
         if len(ordered) > INLINE_POSES:
             return self._emit(
                 "legal",
@@ -748,10 +751,10 @@ def placement_tracer(components, iters):
         return None
 
 
-def legal(order, placed, backtracks=0):
+def legal(order, placed, backtracks=0, motion=None):
     recorder = current()
     if recorder is not None:
-        recorder.legal(order, placed, backtracks)
+        recorder.legal(order, placed, backtracks, motion=motion)
 
 
 def board_event(stage, board_path, drc_report=None):

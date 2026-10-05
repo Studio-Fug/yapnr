@@ -73,6 +73,9 @@ def graph(parts, w=20.0, h=12.0):
 
 
 def run(g, fixed, weight, **kwargs):
+    # The wirelength term and its turn search on their own: every part takes the packer's full
+    # search (PNR_LEGALIZE_KEEP would hold the parts that are legal where they are).
+    kwargs.setdefault("keep", False)
     kwargs.setdefault("allow_rotation", True)
     kwargs.setdefault("grid_mm", 0.25)
     return legalize(

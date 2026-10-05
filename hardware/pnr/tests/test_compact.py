@@ -30,7 +30,11 @@ import compact_fixture as fixture  # noqa: E402
 from pnr.compact_flags import PARTS  # noqa: E402
 from pnr.graph import BoardGraph, BoardOutline, Component, Pad  # noqa: E402
 
-FLAGS = ("PNR_COMPACT", "PNR_SHRINK") + tuple("PNR_COMPACT_" + p for p in PARTS)
+FLAGS = ("PNR_COMPACT", "PNR_SHRINK", "PNR_LEGALIZE_KEEP") + tuple(
+    "PNR_COMPACT_" + p for p in PARTS
+)
+# The goldens predate PNR_LEGALIZE_KEEP (on by default): the identity runs with it off.
+LEGACY = dict(PNR_LEGALIZE_KEEP="0")
 EPS = 1e-9
 
 
@@ -110,12 +114,13 @@ class FlagsTest(unittest.TestCase):
 
 
 class IdentityTest(unittest.TestCase):
-    """With the flags unset the engine reproduces the parent commit's outputs."""
+    """With the flags unset (and PNR_LEGALIZE_KEEP off) the engine reproduces the parent
+    commit's outputs."""
 
     golden = json.loads((fixture.DATA / "identity.json").read_text())
 
     def test_flag_off_legalizer_and_starts_are_unchanged(self):
-        with flags():
+        with flags(**LEGACY):
             for case in fixture.CASES:
                 with self.subTest(case=case):
                     self.assertEqual(fixture.legal_digest(case), self.golden[case]["legal"])
@@ -125,7 +130,7 @@ class IdentityTest(unittest.TestCase):
         cases = [c for c in fixture.CASES if key in self.golden[c]["place"]]
         if not cases:
             self.skipTest("no placement golden for " + key)
-        with flags():
+        with flags(**LEGACY):
             for case in cases:
                 with self.subTest(case=case):
                     self.assertEqual(fixture.place_digest(case), self.golden[case]["place"][key])

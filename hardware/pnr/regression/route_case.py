@@ -98,6 +98,12 @@ routes.update(
             exact_separation=exact_mode(),
             elapsed_seconds=time.monotonic() - t,
             summary=report.summary(),
+            # The legalizer's motion from the global poses (pnr.place.motion), when recorded.
+            **(
+                {"legal_motion": report.placement.legal_motion}
+                if getattr(report.placement, "legal_motion", None) is not None
+                else {}
+            ),
             # Pair / group length tuning (pnr.route.detail.tune), only when declared.
             **({"length_tuning": r.length_report} if r.length_report is not None else {}),
             # PNR_SHRINK only (absent otherwise): the outline search and its choice.

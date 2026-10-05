@@ -61,6 +61,30 @@ def subject(trace, title=None, subtitle=None):
     )
 
 
+def legal_motion(trace, scopes):
+    """The legalizer's motion over the last ``legal`` event of each scope in ``scopes`` that
+    records one (``motion``, :func:`pnr.place.motion.summary`), combined (:func:`combine`); None
+    when none does."""
+    records = []
+    for scope in scopes:
+        events = [e for e in trace.kind(scope, "legal") if isinstance(e.get("motion"), dict)]
+        if events:
+            records.append(events[-1]["motion"])
+    return combine(records) if records else None
+
+
+def combine(records):
+    """``moved``, ``count`` and ``sum_mm`` added and ``max_mm`` the largest over ``records``
+    (what the end card shows; :func:`pnr.place.motion.combine` keeps the rest, but the renderer
+    does not import the placer)."""
+    return dict(
+        moved=sum(int(r.get("moved") or 0) for r in records),
+        count=sum(int(r.get("count") or 0) for r in records),
+        sum_mm=round(sum(float(r.get("sum_mm") or 0.0) for r in records), 3),
+        max_mm=round(max(float(r.get("max_mm") or 0.0) for r in records), 3),
+    )
+
+
 def build(trace, title=None, subtitle=None):
     """The storyboard of a loaded :class:`pnr.provenance.Trace`."""
     if trace.root is not None and hier_blocks(trace):
@@ -108,16 +132,14 @@ def build(trace, title=None, subtitle=None):
         last_round = this_round or last_round
     rejected = set_aside(order, index)
     result = trace.results[-1] if trace.results else {}
-    scenes.append(
-        dict(
-            type="end",
-            rejected=rejected,
-            result={
-                k: result.get(k)
-                for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
-            },
-        )
-    )
+    end = {
+        k: result.get(k)
+        for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
+    }
+    motion = legal_motion(trace, [n.scope for n in order if n.stage == "place" and n.scope])
+    if motion is not None:
+        end["legal_motion"] = motion
+    scenes.append(dict(type="end", rejected=rejected, result=end))
     return dict(
         schema=SCHEMA,
         subject=subject(trace, title, subtitle),

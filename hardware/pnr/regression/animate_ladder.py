@@ -163,6 +163,8 @@ def case_result(case, directory, result, config, profile=None):
         selected_start=(pnr.get("initial_pool") or {}).get("selected"),
         compactness=result.get("compactness"),
         gloss=gloss_result(result),
+        # The legalizer's motion from the global poses (pnr.place.motion), when recorded.
+        **({"legal_motion": pnr["legal_motion"]} if pnr.get("legal_motion") else {}),
     )
 
 

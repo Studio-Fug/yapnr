@@ -37,6 +37,16 @@ default and works with or without ``PNR_COMPACT``:
 
 Unset (or ``0``), every caller takes its unchanged path and writes no new JSON keys.
 
+One switch is on by default and turns off with ``0`` (for A/B runs):
+
+``PNR_LEGALIZE_KEEP``
+    Displacement-minimizing legalization (:mod:`pnr.place.keep`): a part legal at its
+    global-placement pose keeps it (a grid snap) and its turn, a slightly overlapping one and its
+    neighbours are pushed apart in their global order, and only a mostly occluded part (or one
+    the push cannot fit) is relocated by the packer's cost and turn search; with
+    ``PNR_LEGALIZE_REORIENT`` (or ``TURN``) only the parts the legalizer moved turn afterwards.
+    ``0`` restores the plain nearest-free-slot packer for every part.
+
 Under ``PNR_COMPACT=1`` three of them are compact parts (:mod:`pnr.compact_flags`): ``WIRE``
 (``PNR_LEGALIZE_HPWL`` at :data:`COMPACT_WIRE_WEIGHT`), ``TURN`` (``PNR_LEGALIZE_REORIENT=wire``)
 and ``SATELLITES`` (``PNR_LINE_SATELLITES=1``). A variable that is set, ``0`` included, wins over
@@ -64,6 +74,7 @@ FLAGS = (
     "PNR_LEGALIZE_REORIENT",
     "PNR_LEGALIZE_CHANNEL_CLEARANCE",
     "PNR_LINE_SATELLITES",
+    "PNR_LEGALIZE_KEEP",
 )
 
 
@@ -145,6 +156,17 @@ def line_satellites() -> bool:
     return os.environ.get("PNR_LINE_SATELLITES") == "1"
 
 
+def legalize_keep() -> bool:
+    """``PNR_LEGALIZE_KEEP``: displacement-minimizing legalization (:mod:`pnr.place.keep`), on
+    unless the variable is ``0``."""
+    raw = (os.environ.get("PNR_LEGALIZE_KEEP") or "").strip()
+    if raw in ("", "1"):
+        return True
+    if raw == "0":
+        return False
+    raise ValueError("PNR_LEGALIZE_KEEP takes 0 or 1, got %r" % (raw,))
+
+
 def active() -> dict:
     """The active switches and their values, for provenance and the trace (empty when off)."""
     out = {}
@@ -162,4 +184,6 @@ def active() -> dict:
         out["LEGALIZE_CHANNEL_CLEARANCE"] = legalize_channel_clearance()
     if line_satellites():
         out["LINE_SATELLITES"] = True
+    if not legalize_keep():
+        out["LEGALIZE_KEEP"] = False  # the default (on) is not listed
     return out

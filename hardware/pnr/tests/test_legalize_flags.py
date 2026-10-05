@@ -207,11 +207,11 @@ class SameSeedTest(unittest.TestCase):
 
 
 class FlagOffIdentityTest(unittest.TestCase):
-    """With the switches unset the placer, the legalizer and the initial pool never call a
-    new function, and reproduce the parent commit's digests on 04-inverter-leds-8 and
-    07-chaser-20 (the legalizer and the pool's starts on every platform, the whole placer on
-    every arm64 platform with a golden: global placement is platform-independent there,
-    pnr.place.portable_math)."""
+    """With the switches unset (and the default-on PNR_LEGALIZE_KEEP off) the placer, the
+    legalizer and the initial pool never call a new function, and reproduce the parent commit's
+    digests on 04-inverter-leds-8 and 07-chaser-20 (the legalizer and the pool's starts on every
+    platform, the whole placer on every arm64 platform with a golden: global placement is
+    platform-independent there, pnr.place.portable_math)."""
 
     golden = json.loads((fixture.DATA / "identity.json").read_text())
 
@@ -238,7 +238,7 @@ class FlagOffIdentityTest(unittest.TestCase):
             (initial_pool, "_clamp_start"),
         ]
         key = fixture.platform_key()
-        with flags(), contextlib.ExitStack() as stack:
+        with flags(PNR_LEGALIZE_KEEP="0"), contextlib.ExitStack() as stack:
             for module, name in guarded:
                 stack.enter_context(mock.patch.object(module, name, refuse(name)))
             for case in fixture.CASES:

@@ -721,6 +721,9 @@ class Renderer:
             metrics.append("%.1f mm copper" % result["copper_length_mm"])
         if self.subject.get("seed") is not None:
             metrics.append("seed %s" % self.subject["seed"])
+        moved = motion_text(result.get("legal_motion"))
+        if moved:
+            metrics.append(moved)
         rejected = card.get("rejected") or {}
         if rejected:
             parts = []
@@ -733,6 +736,37 @@ class Renderer:
         self.strings.update((verdict, line))
         draw.text((x + 14, top + 20), verdict, fill=rgb(color), font=font(size), anchor="lm")
         draw.text((x + 14, top + 44), line, fill=rgb(theme.MUTED), font=font(12), anchor="lm")
+
+
+def motion_text(motion):
+    """The end card's legalization line: how many parts the legalizer moved from their global
+    poses and how far in all (``legal_motion`` of the storyboard's end scene: one record, or the
+    ``block`` and ``top`` records of a hierarchical case); "" without one."""
+    if not isinstance(motion, dict):
+        return ""
+
+    def one(m, label):
+        if not isinstance(m, dict) or "count" not in m:
+            return None
+        return "%s%d of %d (%.1f mm)" % (
+            label,
+            int(m.get("moved") or 0),
+            int(m["count"]),
+            float(m.get("sum_mm") or 0.0),
+        )
+
+    if "count" in motion:
+        return "legalization moved %d of %d parts (%.1f mm)" % (
+            int(motion.get("moved") or 0),
+            int(motion["count"]),
+            float(motion.get("sum_mm") or 0.0),
+        )
+    parts = [
+        t
+        for t in (one(motion.get("block"), "in blocks "), one(motion.get("top"), "at top level "))
+        if t
+    ]
+    return ("legalization moved " + ", ".join(parts)) if parts else ""
 
 
 def _rule_names(rules, most=2):

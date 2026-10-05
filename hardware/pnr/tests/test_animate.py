@@ -44,9 +44,12 @@ def copper(net_y):
     )
 
 
-def make_trace(root, result=None, starts=("start-00", "start-01"), shortlist=None, gloss=None):
+def make_trace(
+    root, result=None, starts=("start-00", "start-01"), shortlist=None, gloss=None, motion=None
+):
     """The tiny traced case; ``gloss`` (a copper blob) adds a saved board after the gloss stage
-    between ``planes`` and ``refill``, and becomes the refill's copper."""
+    between ``planes`` and ``refill``, and becomes the refill's copper; ``motion`` joins every
+    ``legal`` event (the legalizer's motion record)."""
     root = Path(root)
     shortlist = list(shortlist or starts)
     trace.write_run(
@@ -77,6 +80,7 @@ def make_trace(root, result=None, starts=("start-00", "start-01"), shortlist=Non
             "legal",
             order=[["R1", 4000, 4000, 0.0, "top"], ["R2", 8000, 4000, 0.0, "top"]],
             backtracks=0,
+            **({} if motion is None else dict(motion=motion)),
         )
         rec.leave()
     rec.select(
@@ -480,6 +484,31 @@ class AnimateTest(unittest.TestCase):
         )
         self.assertEqual(render_mod._rule_names({"b": 1, "a": 4, "c": 1}), "a 4, b 1, 1 more")
         self.assertEqual(render_mod._rule_names({"bad/name": 2}), "")
+
+    def test_end_card_shows_the_legalization_motion(self):
+        """The legal events' motion records (pnr.place.motion) reach the end card."""
+        passed = dict(passed=True, opens=0, violations=0, vias=2, copper_length_mm=8.0)
+        motion = dict(moved=1, count=2, sum_mm=0.75, max_mm=0.5, topology=1.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            make_trace(Path(tmp) / "t", passed, motion=motion)
+            loaded = Trace(Path(tmp) / "t")
+            board = storyboard.build(loaded)
+            end = board["scenes"][-1]["result"]["legal_motion"]
+            self.assertEqual((end["moved"], end["count"]), (1, 2))
+            frames = Timeline(loaded, board, max_seconds=4).frames
+            renderer = Renderer(loaded.header, board["subject"], width=480)
+            renderer.frame(frames[-1][0])
+        self.assertTrue(
+            any("legalization moved 1 of 2 parts (0.8 mm)" in s for s in renderer.strings),
+            renderer.strings,
+        )
+        self.assertEqual(
+            render_mod.motion_text(
+                dict(block=dict(moved=2, count=16, sum_mm=1.25), top=dict(moved=0, count=5))
+            ),
+            "legalization moved in blocks 2 of 16 (1.2 mm), at top level 0 of 5 (0.0 mm)",
+        )
+        self.assertEqual(render_mod.motion_text(None), "")
 
     def test_gif_keeps_the_signal_colours(self):
         board = storyboard.build(self.trace)

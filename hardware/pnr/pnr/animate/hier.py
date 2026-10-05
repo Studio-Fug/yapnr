@@ -36,7 +36,7 @@ from pnr.provenance import critical_path, from_hier, hier_blocks, hier_traces
 
 from . import theme
 from .render import Renderer, _fit, font, mix, rgb, safe_text
-from .storyboard import SCHEMA, _montage, set_aside, subject
+from .storyboard import SCHEMA, _montage, combine, legal_motion, set_aside, subject
 from .timeline import (
     MONTAGE_HOLD_S,
     MONTAGE_IN_S,
@@ -78,6 +78,31 @@ def templates_of(instances):
 def short(block):
     """A block's display name: the last part of its address (``top.bank_a`` -> ``bank_a``)."""
     return str(block).rsplit(".", 1)[-1]
+
+
+def _legal_motion(trace, top, tiles):
+    """``{"block": ..., "top": ...}``: the legalizer's motion (:mod:`pnr.place.motion`) of each
+    template's chosen trial (in its block trace) and of the chosen top-level placement; a stage
+    without a recorded ``motion`` is left out."""
+    out = {}
+    try:
+        traces = hier_traces(trace)
+    except ValueError:
+        traces = {}
+    blocks = []
+    for tile in tiles:
+        sub = traces.get(tile["template"])
+        if sub is not None:
+            got = legal_motion(sub, [tile["trial"]])
+            if got is not None:
+                blocks.append(got)
+    if blocks:
+        out["block"] = combine(blocks)
+    if top is not None:
+        got = legal_motion(trace, [top.scope])
+        if got is not None:
+            out["top"] = got
+    return out
 
 
 def build(trace, title=None, subtitle=None):
@@ -148,16 +173,14 @@ def build(trace, title=None, subtitle=None):
         if node.id.startswith("native:"):
             scenes.append(dict(type="native", stage=node.label, seq=node.meta.get("event")))
     result = trace.results[-1] if trace.results else {}
-    scenes.append(
-        dict(
-            type="end",
-            rejected=set_aside(order, index),
-            result={
-                k: result.get(k)
-                for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
-            },
-        )
-    )
+    end = {
+        k: result.get(k)
+        for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
+    }
+    motion = _legal_motion(trace, top, tiles)
+    if motion:
+        end["legal_motion"] = motion
+    scenes.append(dict(type="end", rejected=set_aside(order, index), result=end))
     return dict(
         schema=SCHEMA,
         kind="hier",

@@ -2127,6 +2127,22 @@ py_test(
     ],
 )
 
+# PNR_LEGALIZE_KEEP (on by default): displacement-minimizing legalization, the triage and the
+# order-preserving push (pnr.place.keep), and the motion record (pnr.place.motion).
+py_test(
+    name = "legalize_keep_test",
+    size = "small",
+    srcs = ["tests/test_legalize_keep.py"],
+    imports = ["."],
+    main = "tests/test_legalize_keep.py",
+    deps = [
+        ":pnr",
+        ":pnr_hier",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
 # PNR_LEGALIZE_REORIENT: in-place turns after legalization (pnr.place.reorient).
 py_test(
     name = "reorient_test",

@@ -227,7 +227,9 @@ parts:
   l_b1: pmic.l_b1
   l_b2: pmic.l_b2
   l_b3: pmic.l_b3
-  r_sh: pmic.r_sh # R46, the 2.5 A Kelvin current-sense shunt (1V0_BUCK -> 1V0_SH)
+  r_sh: pmic.r_sh # R_SH1, the 2.5 A Kelvin current-sense shunt (1V0_BUCK -> 1V0_SH). Not R46:
+  # R46 is radio.r_pa, the separate 1V0_RF2 -> 1V0_PA feed resistor (stage3c owner Q1), a
+  # different part on a different rail (review 2026-10-05, stage3c wave-1 finding #4).
 
 # Net classes by net-name glob (the schematic's suggested names). The class names are the ones
 # radar60.kicad_dru tests.
@@ -687,10 +689,10 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
       radius_mm: 10.0,
       reason: '1V0_RF2 ferrites within 10 mm of C2/D2',
     }
-  # R_SH (R46, the 2.5 A Kelvin current-sense shunt feeding 1V0_SH from the buck): close to
-  # L_b2:2 so the 0.5 mOhm 1V0_BUCK/1V0_SH budgets (plan stage 3c owner Q2) aren't spent on
-  # copper before the sense point (plan stage 3c R2; no anchor existed, and the un-anchored
-  # placement put it 17.3 mm away).
+  # R_SH (R_SH1, the 2.5 A Kelvin current-sense shunt feeding 1V0_SH from the buck; not R46,
+  # which is radio.r_pa on 1V0_RF2 -> 1V0_PA): close to L_b2:2 so the 0.5 mOhm 1V0_BUCK/1V0_SH
+  # budgets (plan stage 3c owner Q2) aren't spent on copper before the sense point (plan stage
+  # 3c R2; no anchor existed, and the un-anchored placement put it 17.3 mm away).
   r_sh:
     {
       anchor: l_b2,

@@ -53,6 +53,7 @@ use) and the report. numpy only.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import heapq
 import json
@@ -547,6 +548,10 @@ def _partition(
     min_w = float(entry["min_width_mm"])
     g = _Grid(width, height, h)
     nets = [n for n in entry["nets"] if n in terminals]
+    # An outer pour's ``pieces``: rails that need not be one piece on this layer (each
+    # terminal keeps its own territory; pnr.route.detail.pour.stitch joins every piece to
+    # the net's plane). Only when declared.
+    pieces = {n for n in nets if any(fnmatch.fnmatchcase(n, p) for p in entry.get("pieces") or ())}
     # 1. Free cells: inside the outline less the edge clearance, off foreign copper.
     free = g.zeros()
     e = int(math.ceil(edge_mm / h - 1e-9))
@@ -623,6 +628,7 @@ def _partition(
         gap_cells=gap_cells,
         fill_min=fill_min_mm,
         exempt=exempt,
+        pieces=pieces,
     )
     # 3a. Connect every rail at its minimum width first, in order; a rail left with
     # an unreached terminal is tried first in turn, and the order with the fewest
@@ -722,9 +728,12 @@ def _partition(
         mine = grown == k
         lab, count = _label(mine)
         # The piece holding the trunk (or, without one, the most claimed copper); a
-        # rail's other pieces (lands of terminals no tree reached) get no region.
+        # rail's other pieces (lands of terminals no tree reached) get no region. A rail
+        # poured as ``pieces`` keeps every piece that holds one of its terminals.
         anchor = trunks[n] & mine
-        if anchor.any():
+        if n in pieces:
+            keep = sorted(set(lab[(claimed == k) & mine].tolist()) - {-1})
+        elif anchor.any():
             keep = sorted(set(lab[anchor].tolist()) - {-1})
         else:
             sizes = [int((claimed[lab == c] == k).sum()) for c in range(count)]
@@ -733,14 +742,20 @@ def _partition(
         grown[(grown == k) & ~mine] = -1
         info = report["nets"][n]
         info["components"] = len(keep)
+        if n in pieces:
+            info["pieces"] = True
         info["area_mm2"] = round(float(mine.sum()) * h * h, 3)
         spine = trunks[n] & mine
         if spine.any():
             inside = edt(~mine, 4 * widths[n] / h + 4)
             info["core_min_mm"] = round(float(2 * inside[spine].min() * h - h), 4)
         # The widest way from each terminal to the root through the drawn copper.
-        ways = _width_check(
-            g, mine, n, terminals[n], cells_of[n], exempt[n], reached_of[n]["root"], min_w, h
+        ways = (
+            []  # no root: each piece is its own (its terminal's land)
+            if n in pieces
+            else _width_check(
+                g, mine, n, terminals[n], cells_of[n], exempt[n], reached_of[n]["root"], min_w, h
+            )
         )
         narrowest = [row["width_mm"] for row in ways if row["width_mm"] is not None]
         if narrowest:
@@ -833,6 +848,26 @@ def _connect(ctx, label0, order):
     for k in order:
         n = nets[k]
         pending.discard(k)
+        if n in ctx.get("pieces", ()):
+            # Poured as pieces: no tree; every terminal claims its own land or disc (where
+            # free), and is reached when it holds a claimed cell.
+            others = (label >= 0) & (label != k)
+            near = dilate(others, gap_cells - 1e-9) if others.any() else g.zeros()
+            allowed = ctx["free"] & ~ctx["per_net_block"][n] & ~near
+            reached = []
+            for t, disc in enumerate(ctx["cells_of"][n]):
+                label[disc & allowed & (label < 0)] = k
+                if (disc & (label == k)).any():
+                    reached.append(t)
+            spines[n] = g.zeros()
+            lengths[n] = (0.0, 0.0)
+            reached_of[n] = dict(count=len(reached), relaxed=[], root=None)
+            unreached[n] = [
+                ctx["terminals"][n][t]
+                for t in range(len(ctx["terminals"][n]))
+                if t not in set(reached)
+            ]
+            continue
         # The pad discs of rails still to come keep their landing ground (with the
         # gap): a trunk may cross one on its centre line, never widen there.
         later = g.zeros()

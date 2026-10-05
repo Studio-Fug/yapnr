@@ -1427,8 +1427,13 @@ def route_board(
     emitted = []  # declared fanouts' escapes that were emitted
     for esc in plan.escapes:
         if esc.net in coupled_nets:
-            # A coupled pair's fanout escape: its exit is where the pair begins.
-            if esc.fanout and esc.kind != "blocked":
+            # A coupled pair's fanout escape: its exit is where the pair begins
+            # (none when the pair starts at the balls themselves).
+            if (
+                esc.fanout
+                and esc.kind != "blocked"
+                and esc.net not in coupled_route.dropped_escapes
+            ):
                 _emit_escape(board, esc, grid, esc.width, span_at)
                 emitted.append(esc)
             continue

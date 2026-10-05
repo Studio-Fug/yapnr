@@ -133,7 +133,7 @@ class Obstacles:
             for key in self._keys(la, r.left, r.bottom, r.right, r.top):
                 self.pads.setdefault(key, []).append(item)
         for la, owner, a, b in grid.escape_segments:
-            self.add_segment(owner, la, a, b, self._width(owner))
+            self.add_segment(owner, la, a, b, self._width(owner), room=-1)
         for owner, p in grid.escape_vias:
             size = sizes.get((owner, p[0], p[1]))
             radius = size[0] / 2 if size else grid.via_radius
@@ -170,6 +170,9 @@ class Obstacles:
             self.add_segment(owner, la, centres[-1], centres[-1], 2 * grid.via_radius, room=2)
             self.corridors.append((owner, la, cells, centres))
         self.room = 2
+        # The fanout escape copper of these nets (tagged room -1) and their exits'
+        # corridors are not there: a pair started at its balls drops its stubs.
+        self.phantom = set()
 
     def _width(self, owner):
         return max(
@@ -247,7 +250,7 @@ class Obstacles:
                     if holder is not None and holder not in skip:
                         return False
                 holder = self.protected.get((layer, i, j))
-                if holder is not None and holder not in skip:
+                if holder is not None and holder not in skip and holder not in self.phantom:
                     return False
         grow = radius + 1.0
         box = (
@@ -293,7 +296,7 @@ class Obstacles:
                     continue
                 seen.add(id(item))
                 owner, c, d, other, room = item
-                if owner in skip or room > self.room:
+                if owner in skip or room > self.room or (room and owner in self.phantom):
                     continue
                 limit = (other / 2 + self._reach(net, owner, width)) ** 2 - 1e-10
                 if _segment_distance_sq(a, b, c, d) < limit:
@@ -326,6 +329,9 @@ class Terminal:
     escape: Optional[object] = None  # the fanout Escape ending here
     tracks: List[tuple] = field(default_factory=list)  # (layer, a, b, width) of the escape
     vias: List[tuple] = field(default_factory=list)  # (x, y, radius) of the escape
+    # A surface escape's ball: the same pad as a terminal of its own (no escape),
+    # on the escape's layer; None otherwise.
+    ball: Optional["Terminal"] = None
 
 
 def _terminals(grid, graph, net, escapes, via_sizes):
@@ -356,7 +362,11 @@ def _terminals(grid, graph, net, escapes, via_sizes):
                     radius = size[0] / 2 if size else grid.via_radius
                     vias.append((esc.via_xy[0], esc.via_xy[1], radius))
                 lead = sum(math.dist(a, b) for _la, a, b in esc.segments)
-                out.append(Terminal(net, ref, name, tuple(end), (layer,), lead, esc, tracks, vias))
+                term = Terminal(net, ref, name, tuple(end), (layer,), lead, esc, tracks, vias)
+                own = grid.layers[pad_layer(grid, comp, pad)]
+                if esc.via_xy is None and {la for la, _a, _b in esc.segments} == {own}:
+                    term.ball = Terminal(net, ref, name, (r.cx, r.cy), (own,))
+                out.append(term)
             elif pad.through_hole:
                 out.append(Terminal(net, ref, name, (r.cx, r.cy), tuple(grid.layers)))
             else:
@@ -404,6 +414,7 @@ class Solved:
     attempts: int = 0
     bumps: int = 0
     room: int = 2  # the exit room other nets' corridors kept (Obstacles.room)
+    start: str = "pads"  # "balls" or "exits" for a pair on fanned-out balls
 
     def tracks(self):
         for net in (self.pair["p"], self.pair["n"]):
@@ -499,6 +510,39 @@ class PairRouter:
                 return t, {}
             terms[net] = t
         ends = _ends(terms[p], terms[n])
+        # A pair on two fanned-out balls starts at the balls themselves where both
+        # escapes are surface stubs (their planned stubs, parallel at the ball pitch,
+        # are dropped: KiCad judges every parallel stretch of a pair against its gap
+        # rule), else at the escape exits.
+        variants = []
+        if any(t.escape is not None for end in ends for t in end) and all(
+            t.escape is None or t.ball is not None for end in ends for t in end
+        ):
+            variants.append(("balls", [tuple(t.ball or t for t in end) for end in ends]))
+        variants.append(("exits", ends))
+        failures: Dict[str, int] = {}
+        attempts = 0
+        reason, details = "no_coupled_channel", {}
+        for start, ends in variants:
+            self.obstacles.phantom = {p, n} if start == "balls" else set()
+            self.obstacles.cache.clear()
+            try:
+                result = self._solve(pair, ends, failures)
+            finally:
+                self.obstacles.phantom = set()
+                self.obstacles.cache.clear()
+            if isinstance(result, Solved):
+                result.start = start
+                result.attempts += attempts
+                return result
+            reason, details = result
+            attempts += details.get("attempts", 0)
+        if reason == "no_coupled_channel":
+            details = dict(attempts=attempts, failures=failures)
+        return reason, details
+
+    def _solve(self, pair, ends, failures):
+        p, n = pair["p"], pair["n"]
         common = set(self.allowed_layers(pair))
         for end in ends:
             for term in end:
@@ -522,7 +566,6 @@ class PairRouter:
             return "terminals_apart", dict(
                 terminal_distance_mm=[round(d, 6) for d in apart], max_uncoupled_mm=cap
             )
-        failures: Dict[str, int] = {}
         attempts = 0
         terminals = {
             p: (ends[0][0].point, ends[1][0].point),
@@ -610,7 +653,7 @@ class PairRouter:
                 )
         self.obstacles.room = 2
         self.obstacles.cache.clear()
-        return "no_coupled_channel", dict(attempts=attempts, failures=failures)
+        return "no_coupled_channel", dict(attempts=attempts)
 
     def commit(self, solved):
         la = self.grid.layers.index(solved.layer)
@@ -819,6 +862,8 @@ def _on_segment(q, a, b, eps=1e-6):
 @dataclass
 class CoupledRoute:
     nets: set = field(default_factory=set)  # nets routed coupled (both legs)
+    # nets whose fanout escapes were dropped (the pair starts at their balls)
+    dropped_escapes: set = field(default_factory=set)
     tracks: List[tuple] = field(default_factory=list)  # (net, layer, a, b, width)
     report: dict = field(default_factory=dict)
 
@@ -871,8 +916,16 @@ def route_pairs(grid, graph, rules, *, signal_nets, fanouts, net_width, track_wi
             attempts=s.attempts,
             bumps=s.bumps,
             exit_room=("via", "track", "access")[2 - s.room],
+            start=s.start,
         )
+        if s.start == "balls":
+            out.dropped_escapes |= {p, n}
         out.tracks.extend(s.tracks())
+    if out.dropped_escapes:
+        # The dropped stubs are no copper: later escapes judge only what is emitted.
+        grid.escape_segments[:] = [
+            row for row in grid.escape_segments if row[1] not in out.dropped_escapes
+        ]
     if out.tracks:
         for net, layer, a, b, w in out.tracks:
             grid.escape_segments.append((grid.layers.index(layer), net, a, b))

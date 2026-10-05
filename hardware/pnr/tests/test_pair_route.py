@@ -202,6 +202,100 @@ def ordered_path(segments, start):
     return path
 
 
+def _project(p, n):
+    """KiCad's commonParallelProjection: the parts of P and N over their common
+    projection on P's line, or None."""
+    (a, b), (c, d) = p, n
+    length = math.dist(a, b)
+    u = ((b[0] - a[0]) / length, (b[1] - a[1]) / length)
+    t = sorted((q[0] - a[0]) * u[0] + (q[1] - a[1]) * u[1] for q in (c, d))
+    if length <= t[0] or 0 >= t[1]:
+        return None
+    lo, hi = max(0.0, t[0]), min(length, t[1])
+    clip_p = [(a[0] + u[0] * x, a[1] + u[1] * x) for x in (lo, hi)]
+
+    def onto_n(q):
+        dn = math.dist(c, d)
+        v = ((d[0] - c[0]) / dn, (d[1] - c[1]) / dn)
+        x = (q[0] - c[0]) * v[0] + (q[1] - c[1]) * v[1]
+        return (c[0] + v[0] * x, c[1] + v[1] * x)
+
+    return clip_p, [onto_n(q) for q in clip_p]
+
+
+def _nearest(p, n):
+    best = None
+    for q, seg in [(q, n) for q in p] + [(q, p) for q in n]:
+        (a, b) = seg
+        ab = (b[0] - a[0], b[1] - a[1])
+        ll = ab[0] ** 2 + ab[1] ** 2
+        t = (
+            0.0
+            if ll < 1e-18
+            else max(0.0, min(1.0, ((q[0] - a[0]) * ab[0] + (q[1] - a[1]) * ab[1]) / ll))
+        )
+        r = (a[0] + t * ab[0], a[1] + t * ab[1])
+        pair = (q, r) if seg is n else (r, q)
+        if best is None or math.dist(*pair) < math.dist(*best):
+            best = pair
+    return best
+
+
+def kicad_gaps(route, p, n):
+    """The edge gaps KiCad's diff_pair_gap rule judges (drc_test_provider_diff_pair_
+    coupling.cpp): every P/N track pair on one layer whose lines are parallel and
+    distinct and that shares a projection on P's line, at the nearest points of the shared parts,
+    unless other copper on the layer lies on the line between those points."""
+    tracks = [(t[0], t[1], tuple(t[2]), tuple(t[3]), t[4]) for t in route.tracks]
+    pads = [(route.grid.layers[la], r) for la, _net, r in route.grid.pad_rectangles]
+    gaps = []
+    for sp in [t for t in tracks if t[0] == p]:
+        for sn in [t for t in tracks if t[0] == n]:
+            if sp[1] != sn[1] or math.dist(sp[2], sp[3]) < 1e-6 or math.dist(sn[2], sn[3]) < 1e-6:
+                continue
+            # Intersect(..., aLines=true): only parallel, non-collinear lines pass.
+            u = (sp[3][0] - sp[2][0], sp[3][1] - sp[2][1])
+            v = (sn[3][0] - sn[2][0], sn[3][1] - sn[2][1])
+            if abs(u[0] * v[1] - u[1] * v[0]) > 1e-9 * math.hypot(*u) * math.hypot(*v):
+                continue
+            off = (sp[2][0] - sn[2][0], sp[2][1] - sn[2][1])
+            if abs(off[0] * v[1] - off[1] * v[0]) < 1e-9 * math.hypot(*v):
+                continue
+            clipped = _project((sp[2], sp[3]), (sn[2], sn[3]))
+            if clipped is None:
+                continue
+            near_p, near_n = _nearest(*clipped)
+            ends = list(clipped[0]) + list(clipped[1])
+
+            def hits(t, q):
+                return segment_distance(t[2], t[3], q, q) <= t[4] / 2 + 1e-9
+
+            def exits(r, t):
+                inside = [
+                    abs(q[0] - r.cx) <= r.w / 2 and abs(q[1] - r.cy) <= r.h / 2 for q in t[2:4]
+                ]
+                return inside[0] != inside[1]
+
+            # excludeSelf: the two tracks, tracks directly connected to the coupled
+            # parts' ends, and a pad either track exits.
+            blocked = any(
+                t is not sp
+                and t is not sn
+                and t[1] == sp[1]
+                and not any(hits(t, q) for q in ends)
+                and segment_distance(near_p, near_n, t[2], t[3]) < t[4] / 2
+                for t in tracks
+            ) or any(
+                layer == sp[1]
+                and not (exits(r, sp) or exits(r, sn))
+                and segment_distance(near_p, near_n, (r.cx, r.cy), (r.cx, r.cy)) < min(r.w, r.h) / 2
+                for layer, r in pads
+            )
+            if not blocked:
+                gaps.append(math.dist(near_p, near_n) - (sp[4] + sn[4]) / 2)
+    return gaps
+
+
 def length_set(route, name):
     return next(s for s in route.length_report if s["name"] == name)
 
@@ -343,6 +437,13 @@ class FanoutExits(unittest.TestCase):
         self.assertEqual(row["status"], "coupled", row)
         self.assertEqual(row["layer"], "F.Cu")
         self.assertIn(row["exit_room"], ("via", "track", "access"))
+        # Both balls are surface escapes: the pair starts at the balls, so no
+        # parallel stretch of its legs (escape stubs included) leaves the gap.
+        self.assertEqual(row["start"], "balls")
+        gaps = kicad_gaps(r, "S_A3", "S_A4")
+        self.assertTrue(gaps)
+        self.assertAlmostEqual(min(gaps), 0.15, places=6)
+        self.assertLess(max(gaps), 0.15 + 0.01, sorted(gaps))
         tracks = legs(r, "S_A3", "S_A4")
         for net, ball in (("S_A3", (9.675, 11.625)), ("S_A4", (10.325, 11.625))):
             self.assertEqual({t[0] for t in tracks[net]}, {"F.Cu"})

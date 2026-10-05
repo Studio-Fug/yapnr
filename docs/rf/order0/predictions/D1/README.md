@@ -1,5 +1,10 @@
 # D1: the optimizer's thin divider
 
+> **Superseded 2026-10-05.** This export (label `ad20e643`) has two 0.100 mm corner gaps against
+> OSH Park's 0.127 mm rule under PR #53's fixed DRC and does not ship. O0-D carries the
+> re-optimized `d1-star`, label `7e070ca8`: see [D1-d1c](../D1-d1c/README.md). This page is kept
+> otherwise unchanged as the record of part 2's run.
+
 **Compute stage, 2026-10-04 (drafts until the pre-registration release).** The shipped run is
 `d1-star` (the junction start): it passes every validation check on the coarse, fine and finer
 grids of M-eq, worst-case fine/finer margin 0.299 dB (\|S11\| ≤ −20.70 dB, \|S21\| = \|S31\| ≥

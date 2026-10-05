@@ -120,16 +120,23 @@ class HotLinksTest(unittest.TestCase):
             part("D3", "power_in.tvs", ("1", "VIN_5V"), ("2", "GND")),
         ]
         links = power_block.hot_links(FLOORPLAN, comps)
-        got = sorted((net, src[0], dst[0][0]) for net, src, dst in links)
+        got = sorted((net, src[0], tuple(dst)) for net, src, dst in links)
         self.assertEqual(
             got,
             [
-                ("5V_SYS", ("C14", "1"), "U2"),
-                ("GND", ("C14", "2"), "U2"),
-                ("GND", ("D3", "2"), "U5"),
-                ("PMIC_SW_B0", ("L1", "1"), "U2"),
-                ("PMIC_SW_B0", ("R30", "1"), "U2"),
-                ("VIN_5V", ("D3", "1"), "U5"),
+                ("5V_SYS", ("C14", "1"), (("U2", "9"),)),
+                ("5V_SYS", ("U2", "9"), (("C14", "1"),)),
+                ("GND", ("C14", "2"), (("U2", "11"),)),
+                ("GND", ("D3", "2"), (("U5", "8"),)),
+                ("GND", ("U2", "11"), (("C14", "2"),)),
+                ("GND", ("U5", "8"), (("D3", "2"),)),
+                ("PMIC_SW_B0", ("L1", "1"), (("U2", "10"),)),
+                ("PMIC_SW_B0", ("R30", "1"), (("U2", "10"),)),
+                # every IC land on a hot net must reach the loop: one link per land, to any
+                # of the loop parts' pads on it (the inductor's and the snubber's here)
+                ("PMIC_SW_B0", ("U2", "10"), (("L1", "1"), ("R30", "1"))),
+                ("VIN_5V", ("D3", "1"), (("U5", "5"),)),
+                ("VIN_5V", ("U5", "5"), (("D3", "1"),)),
             ],
         )
 

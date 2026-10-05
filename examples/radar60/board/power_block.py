@@ -26,6 +26,7 @@ prepare`` work directory):
             reads it) holding the complete layouts in rank order, each with its routed block
             board (``instances[].dir``).
 ``eval``    stage B for one candidate directory (run by ``synth`` in a subprocess).
+``rescore`` the hot-loop links recounted on every evaluated layout's routed board, then rank.
 ``ki-strip`` (KiCad's Python) the block's footprints alone from a board, no copper.
 
 The library's boards keep only the layout's own copper and its outer pours
@@ -218,10 +219,14 @@ def block_doc(top_doc, floorplan, addresses, width, height):
 
 def hot_links(floorplan, components):
     """The datasheet hot-loop links of floorplan ``power_stage.hot_loops``, from the netlist:
-    ``[(net, [(ref, pad), ...] part side, [(ref, pad), ...] IC side)]``, one per part pad on a
-    listed net that the loop's IC also carries."""
+    ``[(net, [(ref, pad)] one side, [(ref, pad), ...] the other)]``. One link per part pad on
+    a listed net that the loop's IC also carries (to any of the IC's pads on it), then one per
+    IC pad on such a net (to any of the loop parts' pads on it): every land of the IC's hot
+    nets must reach the loop, not only one of them (a floating hot-rod land is an open
+    link)."""
     by_addr = {c.address: c for c in components if c.address}
     links = []
+    ic_side = {}  # (net, IC pad) -> the loop parts' pads on that net, over every loop
     for loop in floorplan["power_stage"].get("hot_loops") or []:
         ic = by_addr[role_patterns(floorplan, loop["ic"])[0]]
         ic_pads = {}
@@ -237,6 +242,10 @@ def hot_links(floorplan, components):
                     if not any(fnmatch.fnmatchcase(p.net, n) for n in loop["nets"]):
                         continue
                     links.append((p.net, [(c.ref, p.name)], ic_pads[p.net]))
+                    for q in ic_pads[p.net]:
+                        ic_side.setdefault((p.net, q), []).append((c.ref, p.name))
+    for (net, q), parts in sorted(ic_side.items()):
+        links.append((net, [q], sorted(set(parts))))
     return links
 
 
@@ -531,19 +540,7 @@ def step_eval(a):
             ),
             4,
         )
-        from pnr.hier.power_quality import Copper, read_board
-
-        dump = read_board(cand, ki_py=a.kicad_python)
-        copper = {}
-        opened = []
-        for net, src, dst in info["hot_links"]:
-            if net not in copper:
-                copper[net] = Copper(dump, net)
-            if copper[net].path([tuple(x) for x in src], [tuple(x) for x in dst]) is None:
-                opened.append([net, src[0]])
-        rec["hot_links"] = len(info["hot_links"])
-        rec["hot_links_open"] = len(opened)
-        rec["hot_open"] = opened
+        rec.update(score_hot_links(info["hot_links"], cand, a.kicad_python))
         # The library's board: the layout's copper and its outer pours only.
         layers = sorted({p["layer"] for p in floorplan["power_stage"].get("pours") or []})
         _run(
@@ -559,6 +556,46 @@ def step_eval(a):
         rec.update(status="failed", error=repr(error), traceback=traceback.format_exc()[-2500:])
     rec["seconds"] = round(time.time() - t0, 1)
     (d / "eval.json").write_text(json.dumps(rec, indent=1))
+
+
+def score_hot_links(links, board, kicad_python):
+    """Open hot-loop links on a routed, filled board (``pnr.hier.power_quality``'s copper
+    graph: tracks, vias, pads and the zones KiCad's fill puts them in)."""
+    from pnr.hier.power_quality import Copper, read_board
+
+    dump = read_board(board, ki_py=kicad_python)
+    copper = {}
+    opened = []
+    for net, src, dst in links:
+        if net not in copper:
+            copper[net] = Copper(dump, net)
+        if copper[net].path([tuple(x) for x in src], [tuple(x) for x in dst]) is None:
+            opened.append([net, list(src[0])])
+    return dict(hot_links=len(links), hot_links_open=len(opened), hot_open=opened)
+
+
+def step_rescore(a):
+    """Recount every evaluated layout's hot-loop links from its routed board (after the
+    floorplan's ``hot_loops`` or :func:`hot_links` changed), then ``rank``."""
+    _engine_path(a.engine)
+    out = Path(a.out)
+    info = json.loads((out / "block.json").read_text())
+    from pnr.graph import BoardGraph
+
+    graph = BoardGraph.from_json((Path(a.work) / "inputs" / "graph.json").read_text())
+    links = hot_links(floorplan_doc(), graph.components)
+    info["hot_links"] = [[n, s, d] for n, s, d in links]
+    (out / "block.json").write_text(json.dumps(info, indent=1))
+    for d in sorted((out / "cand").glob("*")):
+        ev, board = d / "eval.json", d / "route" / "candidate.kicad_pcb"
+        if not ev.is_file() or not board.is_file():
+            continue
+        e = json.loads(ev.read_text())
+        if e.get("status") != "ok":
+            continue
+        e.update(score_hot_links(info["hot_links"], board, a.kicad_python))
+        ev.write_text(json.dumps(e, indent=1))
+    step_rank(a)
 
 
 # ------------------------------------------------------------------ rank
@@ -669,7 +706,9 @@ def step_rank(a):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument(
-        "step", choices=["synth", "eval", "rank", "ki-strip", "ki-pours"], help="see the docstring"
+        "step",
+        choices=["synth", "eval", "rank", "rescore", "ki-strip", "ki-pours"],
+        help="see the docstring",
     )
     ap.add_argument("--work", help="an integrate.py prepare work directory")
     ap.add_argument("--out", help="the synthesis directory (eval: one candidate directory)")
@@ -695,7 +734,7 @@ def main(argv=None):
         return step_ki_strip(a)
     if a.step == "ki-pours":
         return step_ki_pours(a)
-    {"synth": step_synth, "eval": step_eval, "rank": step_rank}[a.step](a)
+    {"synth": step_synth, "eval": step_eval, "rank": step_rank, "rescore": step_rescore}[a.step](a)
 
 
 if __name__ == "__main__":

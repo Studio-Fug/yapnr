@@ -1063,11 +1063,30 @@ Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`,
   one-default-configuration rule). `PNR_LEGALIZE_KEEP` is on by default, with or without compact
   placement, and `PNR_LEGALIZE_KEEP=0` restores the plain packer for A/B runs: a part or block legal
   at its global pose keeps it and its turn, a slight overlap (or a missing routing channel) is
-  resolved by an order-preserving push of the parts around it, and only a mostly occluded part,
-  or one the push cannot fit, is relocated by the packer's cost. `TURN` turns only the parts the
+  resolved by an order-preserving push of the parts around it (the overlap first, routing
+  channels only where they fit), a part the push cannot clear or whose slot is taken takes the
+  nearest free slot around its pose (2026-10-06, the owner's R6 report), and only a mostly
+  occluded part is relocated by the packer's cost. `TURN` turns only the parts the
   legalizer moved. Every legalization records its motion (moved parts, displacement, topology
   kept) in the reports, the trace and the animation's end card. Measurements:
-  [compact placement, section 12](design/compact-placement.md).
+  [compact placement, section 13](design/compact-placement.md).
+
+Compact placement before ladder v2 makes it the default (2026-10-06,
+[design, section 12](design/compact-placement.md)):
+
+- **Compact as far as the board routes (`RELAX`):** a place-route round that leaves a net open or
+  a declared pair or group out of its budget is not converged, and the rounds after it run
+  without compact placement, the first of them exactly as the run without compact does (the
+  initial pool again, at the run's seed). A board keeps its compact layout wherever that routes;
+  where it does not, it gets the layout it had before, one round later. This, not reserving room
+  around pairs, is what makes the `09-mcu-usb-31` lane pass under compact (32 of 32 cells on
+  seeds 0 to 3, against 21 of 32 before and 26 of 32 without compact).
+- **Pair parts turn to face their legs (`PAIRS`):** the matched-length pass may turn a pair's
+  series parts (or a line group's macro); a rigid twin of the two resistors, coupled pair routing
+  and lengthening the short leg through free space were tried and rejected (section 12).
+- **Compact is part of the router key** (`compact`, a digest of the parts and the legalizer
+  switches; absent with everything off, so earlier keys are unchanged), and power-first
+  placement runs with compact instead of refusing it.
 
 ## Pinned versions
 

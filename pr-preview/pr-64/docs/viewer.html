@@ -229,6 +229,7 @@
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
 <li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
@@ -357,6 +358,73 @@ background — it must never let the board underneath show through — and a scr
 behind it and closes it on a tap outside. Every toggle is a real <code class="docutils literal notranslate"><span class="pre">&lt;button&gt;</span></code>
 (keyboard-activatable, <code class="docutils literal notranslate"><span class="pre">aria-pressed</span></code> reflects state), and the page keeps no horizontal scroll down
 to 360px wide.</p>
+</section>
+<section id="rendering-and-performance">
+<h2>Rendering and performance<a class="headerlink" href="#rendering-and-performance" title="Link to this heading">¶</a></h2>
+<p>The board canvas (<code class="docutils literal notranslate"><span class="pre">static/app.js</span></code>) used to redraw everything, every frame, in immediate mode: each
+via was two <code class="docutils literal notranslate"><span class="pre">beginPath</span></code>/<code class="docutils literal notranslate"><span class="pre">arc</span></code>/<code class="docutils literal notranslate"><span class="pre">fill</span></code> calls with a <code class="docutils literal notranslate"><span class="pre">fillStyle</span></code> change, forced to at least a 2px
+radius even when zoomed out past legibility, and both drawing and hover/click hit-testing scanned
+every via and track on the board linearly. On a real board with thousands of ground-stitching
+vias (the reported case) this made panning, pinching and zooming visibly laggy. Four changes fix
+it, in order of how much they matter:</p>
+<ol class="arabic">
+<li><p><strong>A spatial grid</strong> (<code class="docutils literal notranslate"><span class="pre">gridFor()</span></code>, one per geometry object, built lazily and cached by object
+identity — nothing invalidates it by hand, a new geometry is simply a new object): uniform cells
+in board mm, sized so each holds a handful of vias and tracks. <code class="docutils literal notranslate"><span class="pre">paintBoard()</span></code> and <code class="docutils literal notranslate"><span class="pre">boardHit()</span></code>
+both use it — drawing culls to the cells the current viewport actually overlaps; hit-testing
+checks only the cells near the query point. Both return exactly what a full linear scan would
+have (same candidates, same priority order), just over far fewer items; this is the one checked
+directly, not just measured, in <code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer/test_viewer_perf.py</span></code>.</p></li>
+<li><p><strong>Via batching</strong>: the via rings and holes in the culled, visible set are drawn as one <code class="docutils literal notranslate"><span class="pre">Path2D</span></code>
+fill each (board-space coordinates, one <code class="docutils literal notranslate"><span class="pre">setTransform</span></code> per tier) instead of two <code class="docutils literal notranslate"><span class="pre">arc</span></code>/<code class="docutils literal notranslate"><span class="pre">fill</span></code>
+calls and a <code class="docutils literal notranslate"><span class="pre">fillStyle</span></code> change per via. Tracks are culled by the same grid but still drawn one
+at a time, since their stroke width and colour both vary per track (a diff view, a draft net) —
+batching those would need bucketing by width too, judged not worth the added complexity once
+culling and the via work below met the target.</p></li>
+<li><p><strong>Via level of detail</strong>, by true on-screen diameter (<code class="docutils literal notranslate"><span class="pre">diameter</span> <span class="pre">*</span> <span class="pre">view.scale</span></code>, no artificial
+minimum): ≥1.5px draws the normal ring and hole; 0.5–1.5px draws a plain dot at its true size
+(a ring is not legible at that size anyway); below 0.5px, too small to resolve individually, one
+representative dot stands in for every via in that grid cell — a cheap stand-in for a
+pre-rendered texture tile that reuses the grid already built for culling. Hit-testing always
+uses a via’s true diameter regardless of which tier drew it, so a via that is just a cell fleck
+on screen is exactly as clickable as it always was.</p></li>
+<li><p><strong>A gesture raster cache</strong>: while a pan, pinch, wheel-zoom or rectangle drag is live, the board
+canvas just blits an offscreen raster of the static board layers with a scale+translate
+transform, at most once per animation frame however many input events arrive; the dynamic
+overlay (selection, routing target, highlights, drag/annotation rectangles, cost dots, note
+badges) is still drawn live on top every frame. The cache is built at a margin around the
+viewport (snapped so its backing store is an exact pixel multiple — no sub-pixel resampling blur
+when nothing has actually moved yet) and is reused for as long as the board content (its
+content hash, layers, toggles, diff and draft) and the view stay the same.</p></li>
+<li><p><strong>Nothing heavy while a finger is down.</strong> A full <code class="docutils literal notranslate"><span class="pre">render()</span></code> requested mid-gesture (a live poll,
+a note, a highlight) is deferred to the release, which renders anyway; the live poll does not
+even advance its revision until the gesture is over. The full-quality redraw after a gesture is
+the release itself (a pause mid-drag no longer triggers one); only the wheel, which has no
+release, still settles 150ms after its last step. After every full render whose content or view
+the cache does not match, the cache is rebuilt — and forced to rasterise, since canvas drawing
+is otherwise only executed on first use — in idle time, so the next drag starts from a ready
+cache and its first frame is a blit like any other. The one exception mid-gesture: a finger held
+still for 0.7s over a region the cache does not cover (a long pan past the margin, or a pinch
+past 2x) rebuilds the cache at the current view, so the blank edge fills in while the user looks.</p>
+<p>Before this, every full render marked the cache stale and the first gesture frame rebuilt it, so
+every drag started with a 60–140ms hitch on a phone; worse, the settle render fired whenever a
+finger paused for 150ms mid-drag (or a frame took that long), which made the next move rebuild
+the cache again — a loop that turned one slow frame into continuous stutter.</p>
+</li>
+</ol>
+<p>A further option, instanced WebGL vias, was in the original plan but turned out unnecessary: items
+1–4 alone already meet the &lt;16ms p95 target during gestures at 1x CPU throttling (see the
+before/after table in the PR). Pads and other tracks were left without additional level-of-detail
+tiers for the same reason — their counts were never the bottleneck.</p>
+<p>Tests: <code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer/test_viewer_perf.py</span></code> (manual, like its siblings — a real headless Chrome
+against a real viewer server and a synthetic dense board; skips without Chrome) checks that
+<code class="docutils literal notranslate"><span class="pre">boardHit()</span></code> matches a verbatim copy of the pre-grid linear scan at many points and across a dense
+sweep at a zoomed-out LoD tier, that the gesture fast path reproduces a full render pixel-for-pixel
+at each via LoD tier, and that panning does not rebuild the cache mid-gesture.
+<code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer/test_viewer_gesture.py</span></code> (same setup, phone profile with touch emulation) drives
+real touch drags with 16ms move steps, mid-drag pauses and a live poll that re-renders mid-drag,
+and checks that no full render and no cache rebuild happen while a finger is down, that the drag
+starts from a cache built in idle time, and frame-time bounds under a modest CPU throttle.</p>
 </section>
 <section id="the-live-directory">
 <h2>The live directory<a class="headerlink" href="#the-live-directory" title="Link to this heading">¶</a></h2>
@@ -713,6 +781,7 @@ Apache-2.0 web-worker shim; both texts are served) and three.js (MIT); see
 <li><a class="reference internal" href="#">The live viewer</a><ul>
 <li><a class="reference internal" href="#running-it">Running it</a></li>
 <li><a class="reference internal" href="#touch-and-panels">Touch and panels</a></li>
+<li><a class="reference internal" href="#rendering-and-performance">Rendering and performance</a></li>
 <li><a class="reference internal" href="#the-live-directory">The live directory</a></li>
 <li><a class="reference internal" href="#configuration">Configuration</a></li>
 <li><a class="reference internal" href="#design-inputs-and-optional-services">Design inputs and optional services</a><ul>

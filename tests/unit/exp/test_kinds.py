@@ -305,6 +305,23 @@ class LadderOptionsTest(unittest.TestCase):
         ]
         self.assertEqual(ladder.COMPACT_PARTS, parts)
 
+    def test_case_names_allow_the_hard_rungs_stackup_suffix(self):
+        """matrix.case accepts hard_rungs.py's with_stackup names (e.g. "...-6L-SGSGPS"), whose
+        layer codes are upper case; CASE_RE used to accept lower case only, so no stackup
+        variant of a hard rung -- most of them -- could ever be a campaign's case."""
+        kind = kinds.get("ladder-cell")
+        campaign = {
+            "schema": spec.CAMPAIGN_SCHEMA,
+            "kind": "ladder-cell",
+            "matrix": {
+                "case": ["11-ufbga201-fanout-6L-SGSGPS-rails", "09-mcu-usb-31-4L-SGPS"],
+                "seed": [0],
+            },
+        }
+        self.assertEqual(kind.check(campaign), [])
+        bad = dict(campaign, matrix=dict(campaign["matrix"], case=["-leading-dash-not-allowed"]))
+        self.assertTrue(kind.check(bad))
+
 
 if __name__ == "__main__":
     unittest.main()

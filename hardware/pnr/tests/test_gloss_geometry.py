@@ -413,6 +413,28 @@ class NormalizeTest(unittest.TestCase):
                 (got.segments, got.delete, got.modify), (ref.segments, ref.delete, ref.modify)
             )
 
+    def test_merge_direction_independent_of_segment_id_and_drawn_end(self):
+        # N3's merged segment must be the same whichever original segment is kept as the
+        # survivor (an accident of KiCad's per-process random track uuid, pnr.gloss.uid) and
+        # whichever end that survivor happened to be drawn from. far is already sorted
+        # (the one geometry fact), so the merge must always emit (far[0], far[1]).
+        left, mid, right = (0, 0), (3 * MM, 0), (10 * MM, 0)
+
+        def merge(id_left, id_right, flip_left, flip_right):
+            a = seg(id_left, mid, left) if flip_left else seg(id_left, left, mid)
+            b = seg(id_right, right, mid) if flip_right else seg(id_right, mid, right)
+            return g.normalize([a, b])
+
+        seen = set()
+        for id_left, id_right in (("a", "z"), ("z", "a")):
+            for flip_left in (False, True):
+                for flip_right in (False, True):
+                    norm = merge(id_left, id_right, flip_left, flip_right)
+                    self.assertEqual(norm.counts["merged"], 1)
+                    (survivor,) = norm.segments
+                    seen.add((survivor.a, survivor.b))
+        self.assertEqual(seen, {(left, right)})
+
     def test_staircase_normalize_drops_segments_not_copper(self):
         segs = []
         for k, (a, b) in enumerate(zip(STAIRS, STAIRS[1:])):

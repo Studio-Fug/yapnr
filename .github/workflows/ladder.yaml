@@ -479,6 +479,7 @@ jobs:
             out/traced/provenance.json
             out/traced/image.txt
             out/traced/*-version.txt
+            out/traced/*/design.json
             out/traced/*/result.json
             out/traced/*/trace/
 
@@ -494,6 +495,7 @@ jobs:
             out/showcases/provenance.json
             out/showcases/image.txt
             out/showcases/*-version.txt
+            out/showcases/*/design.json
             out/showcases/*/result.json
             out/showcases/*/trace/
 
@@ -559,6 +561,14 @@ jobs:
           name: ladder-traced
           path: out/traced
 
+      # Catches an incomplete upload (e.g. a path missing from "Upload the traced run") here,
+      # with a clear case/file list, instead of a traceback deep inside the renderer below.
+      - name: Check the traced run's inputs
+        if: needs.plan.outputs.animate == 'true'
+        run: |
+          python3 tools/ci/check_run_inputs.py out/traced \
+            --file design.json --file result.json --dir trace
+
       - name: Render the animations
         if: needs.plan.outputs.animate == 'true'
         run: |
@@ -575,6 +585,15 @@ jobs:
         with:
           name: ladder-showcases
           path: out/showcases
+
+      # Informational, like the render step below: an incomplete showcase upload is a notice,
+      # not a job failure, but still caught here with a clear case/file list.
+      - name: Check the showcase run's inputs
+        if: needs.plan.outputs.showcases == 'true'
+        run: |
+          python3 tools/ci/check_run_inputs.py out/showcases \
+            --file design.json --file result.json --dir trace \
+            || echo "::notice::the showcase run's inputs are incomplete (informational)"
 
       # Informational: a showcase that failed or cannot be rendered is a notice.
       - name: Render the showcase animations

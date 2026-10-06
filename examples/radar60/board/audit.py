@@ -59,7 +59,7 @@ DIGITAL = [
 HEIGHTS = [
     ("C_0402", 0.55),
     ("R_0402", 0.40),
-    ("R_0201", 0.30),  # the RF macro's dummy loads RT1-RT4
+    ("R_0201", 0.30),  # the RF macro's dummy loads (RT1, RT2 in macro v2)
     ("C_0603", 0.95),
     ("LED_0603", 0.80),
     ("C_0805", 1.45),

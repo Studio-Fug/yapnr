@@ -10,9 +10,10 @@
             its fixed pose and the RF macro is merged in U1's frame (:func:`merge_macro`): feeds,
             vias and zones bit for bit with nets renamed to the schematic's, the column patches
             (active and dummy) and the mask opening as one locked footprint RFM1, the dummy
-            loads RT1-RT4 as locked, assembled footprints. Every macro item goes into the KiCad
-            group RFM1_MACRO, the engine's ``fixed_block``. The board's In1 GND plane is cut out
-            of the RF region, where the macro's own In1 ground is the reference.
+            loads (the record's, RT1/RT2 in macro v2) as locked, assembled footprints. Every
+            macro item goes into the KiCad group RFM1_MACRO, the engine's ``fixed_block``. The
+            board's In1 GND plane is cut out of the RF region, where the macro's own In1 ground
+            is the reference.
 ``finish``  the placed board (pnr.writeback of the source): the floorplan's rounded outline
             restored, any copper outside the macro removed (nothing is routed at this stage),
             macro items, U1 and the macro's footprints locked, zones filled, and the macro
@@ -205,7 +206,7 @@ def column_name(item):
 def macro_footprint(columns, mask, record, x, y, nets=None):
     """One locked footprint RFM1 at U1's centre: every column's patch pads, active and dummy,
     numbered by port (as the schematic placeholder's pads are: ``rx1`` ... ``tx3``; the dummy
-    columns ``rxd0``, ``rxd5``, ``txd0``, ``txd4`` on their board-only nets), and the mask
+    columns, ``rxd0`` and ``txd4`` in macro v2, on their board-only nets), and the mask
     opening's polygons as drawn (the dummy loads' mask islands are its gaps), in the macro's
     U1 frame."""
     mx, my = MACRO_CENTRE

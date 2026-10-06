@@ -5,7 +5,7 @@ Steps (each reads the previous one's files in WORK; nothing is placed by hand):
 
 ``source``   the board yapnr ingests (kicad_ops.py source): the floorplan board with every
              footprint of the atopile build, U1 at its fixed pose and the RF macro merged in
-             U1's frame (columns, dummy columns, loads RT1-RT4, mask islands, feeds, vias and
+             U1's frame (columns, dummy columns, the record's loads, mask islands, feeds, vias and
              zones), every macro item in the KiCad group RFM1_MACRO (the engine's
              ``fixed_block``), the board's In1 GND plane cut out of the RF region.
 ``fixblocks`` (plan R1/E2, in situ) each power-stage block of a ``--library`` whose layouts
@@ -376,7 +376,7 @@ def step_prepare(a):
         log=work / "fixed.log",
     )
     fixed_copper = json.loads((inputs / "fixed" / "fixed.json").read_text())
-    # The block's footprints (RFM1, RT1-RT4) leave the placement graph.
+    # The block's footprints (RFM1 and the record's loads) leave the placement graph.
     sys.path[:0] = [str(Path(a.engine) / "hardware/pnr"), str(a.engine)]
     from pnr.fixed_block import hold_out
     from pnr.graph import BoardGraph

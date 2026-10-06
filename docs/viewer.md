@@ -72,6 +72,97 @@ behind it and closes it on a tap outside. Every toggle is a real `<button>`
 (keyboard-activatable, `aria-pressed` reflects state), and the page keeps no horizontal scroll down
 to 360px wide.
 
+## The experiment tree
+
+The Experiment lanes panel (`#lanes`) is a collapsible, directory-like tree of every lane the
+live directory has — a campaign's arms, a board case, a seed, and its placement/routing
+candidates — built from the lane ids themselves, not hard-coded to one campaign's shape. A lane
+id is slash-separated and already hierarchical in practice (`ladder/keep-on/09-mcu-usb-31-6L-
+SGSGPS/s0/initial-start-04`, a bare `controller`, a Monte Carlo halving round's `mc/round3/
+candidate2`); `yapnr/viewer/lane_tree.py`'s `build_tree()` splits each id on `/` and walks a trie
+into a nested tree, shipped once per poll as `state["tree"]` (`/api/state`) so the front end never
+re-derives the hierarchy. A lane id that is itself a prefix of other lane ids (`.../s0` is both a
+lane and the parent of `.../s0/initial-start-00`) becomes a node that is simultaneously a leaf and
+a group; there is no fixed depth limit. The candidate-search audit's own bookkeeping lanes
+(`r03/search`) are excluded, same as the old flat list excluded them.
+
+Every node carries `counts` (queued/running/done/failed leaf-descendants, and a `total`) and a
+`fraction` (the mean of every descendant leaf's own progress fraction — a group with 3 lanes done
+and 1 lane half-routed reads as 0.875, not just "3 of 4 done") and `best_leaf` (the most relevant
+descendant: failed ranks ahead of running, then queued, then done — "select this group, show one
+board"). `static/lane-tree.js` renders it: a toolbar (name filter, state filter chips, Expand
+all/Collapse all) built once, then the row list, rebuilt each poll. Expand/collapse persists per
+node per browser in `localStorage` (`yapnr-tree-expand-v1:<run>`, wrapped in `try`/`catch`); a
+fresh page opens the top two levels and leaves deeper candidates collapsed. Arrow keys move
+between visible rows, Right expands/descends, Left collapses/ascends, Enter selects a leaf or
+toggles+selects a group's best leaf (roving `tabindex`, `role="tree"`/`"treeitem"`,
+`aria-expanded`). Filtering by name or by state keeps a non-matching group visible whenever a
+descendant of it matches, so a hit stays reachable without permanently changing what was left
+collapsed. At ≤900px width it lives in the Experiments drawer like the rest of `#lanes-panel`
+(see "Touch and panels" above).
+
+### The phase/progress model
+
+One place, `yapnr/viewer/progress.py`, turns a lane's raw telemetry into a progress bar and a
+status string; nothing else in the viewer derives a phase from an event. Every lane is placed on
+one canonical, ordered pipeline (`PHASES`), independent of which campaign produced it — a
+campaign that never visits a stage (most stop at `place` or `check`) just has nothing to report
+past the stage it stopped at:
+
+| phase      | label              | kept-over fraction within the phase                                                 |
+| ---------- | ------------------ | ----------------------------------------------------------------------------------- |
+| `generate` | Generating         | 0.5 while running (no finer signal)                                                 |
+| `place`    | Placing            | 0.5 while running                                                                   |
+| `legalize` | Legalizing         | 0.5 while running                                                                   |
+| `detail`   | Detailed placement | 0.5 while running                                                                   |
+| `route`    | Routing            | `data.progress.done / data.progress.total` from the latest `route_result`, else 0.5 |
+| `gloss`    | Glossing           | 0.5 while running                                                                   |
+| `check`    | Checking           | 0.5 while running, 1.0 once done                                                    |
+
+A lane's overall `fraction` is `(phase_index + phase_fraction) / len(PHASES)`. The raw phase/kind
+string is matched against a keyword table gathered from the engine's own `phase=` call sites
+(`hardware/pnr/pnr/{trace,provenance,native_loop,gloss,...}.py`) and real live-directory samples —
+`"legalization"` → `legalize`, `"global-placement"`/`"placement"` → `place`, `"routed"`/
+`"commit"`/`"native-phase"`/`"usb-pairs"` → `route`, `"gloss"`/`"power-bank"` → `gloss`,
+`"congestion"`/`"selection"`/`"drc"`/`"result"` → `check`, and so on (`progress.py`'s `_KEYWORDS`
+is authoritative). **A phase string this has never seen before is never an error**: it falls back
+to the lane's last known phase bucket (held over from its previous poll) or, for a lane with no
+classifiable event at all yet, to "running, 0% " — never a crash, never a reset to zero for an
+unrelated event (a `worker_config_applied` mid-route keeps the route phase). `status="queued"` /
+`kind="candidate_queued"` is the zero-fraction `queued` state; `candidate_complete`/an accepted
+`iteration_complete` is `done` (fraction 1.0); `candidate_failed`/a rejected `iteration_complete`
+is `failed`, keeping whatever fraction the lane had reached rather than resetting it — "it got
+this far, then failed" is more informative than snapping back to zero.
+
+A group node's bar is the mean of its descendant leaves' fractions, coloured by the most urgent
+state present (failed, else running, else queued, else done) — the width says how far along, the
+colour says whether something needs attention.
+
+### Status text
+
+`progress.humanize()` turns that classification into one short, plain-language line (fits the
+narrow lanes panel; the raw phase/kind and full counts are in each row's `title` tooltip instead):
+
+- `Queued`
+- `Waiting for placement` — no classifiable event yet
+- `Generating` / `Placing` / `Legalizing: pass 2` / `Glossing` — mid-phase, no finer detail
+- `Routing: 412 of 530 connections (78%)` — from `data.progress` on the latest `route_result`
+- `Checking: 2 opens / 0 violations`
+- `Failed: 3 unconnected, 1 DRC error` — from the lane's `opens`/`violations` (a routed/checked
+  candidate) or, for a screening-only candidate that never got a board extracted, from its own
+  `candidate_failed`/`candidate_complete` payload (`data.missing_connections`/`data.opens`,
+  `data.violations`; stored as `lane["last_candidate"]` by `apply_event`)
+- `Done: all connected, DRC clean, 12.4 s` — the duration is `lane["time"] - lane["started_at"]`
+  (`started_at`: the lane's first event time, tracked per-lane server-side); omitted when either
+  is unavailable
+
+Tests: `tests/unit/viewer/test_lane_tree.py` and `test_progress.py` (hermetic, against lane-id and
+lane-dict samples drawn from real live directories plus odd shapes — a lane that is both leaf and
+group, empty input, very deep nesting, an unrecognised phase string); `tests/e2e/viewer/
+test_experiment_tree.py` (headless Chrome: the tree renders/collapses/expands and persists,
+filtering, keyboard navigation, progress bar widths against this file's model, status text, board
+selection via a leaf or a group's best leaf, and phone width).
+
 ## Rendering and performance
 
 The board canvas (`static/app.js`) used to redraw everything, every frame, in immediate mode: each

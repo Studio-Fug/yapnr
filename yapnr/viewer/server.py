@@ -36,8 +36,9 @@ from urllib.parse import parse_qs, urlparse
 
 import yapnr
 from yapnr.viewer import config as viewer_config
-from yapnr.viewer import runtime
+from yapnr.viewer import lane_tree, runtime
 from yapnr.viewer.event_schema import phase_frame
+from yapnr.viewer.progress import classify_lane
 from yapnr.viewer.settings import save as save_settings
 from yapnr.viewer.settings import seed as seed_settings
 from yapnr.viewer.toolchain import Toolchain
@@ -263,6 +264,10 @@ class Viewer:
         # Native board paths / final objectives per lane, also outside /api/state: the Ask
         # context reads them.
         self.lane_meta = {}
+        # First event time seen per lane, also outside /api/state: humanize() (progress.py)
+        # reads it to report a finished lane's wall-clock duration without the lane dict itself
+        # needing to carry a mutable "start" the UI could accidentally treat as telemetry.
+        self.lane_started = {}
         self.dist, self.dist_missing = find_dist(cfg.dist)
         self.runtime = runtime.engine_runtime(cfg.engine_runtime)
         self.toolchain = Toolchain(
@@ -775,6 +780,8 @@ class Viewer:
         data = e["data"]
         lane = state["lanes"].setdefault(cand, dict(id=cand, draft={}, costs={}, frames=[]))
         lane.update(event_id=e["id"], time=e["time"], iteration=e["iteration"], kind=kind)
+        started_at = self.lane_started.setdefault(cand, e["time"])
+        lane["started_at"] = started_at
         if isinstance(e.get("source"), str):
             self.lane_sources[cand] = e["source"]
         if isinstance(e.get("board"), str):
@@ -824,6 +831,12 @@ class Viewer:
             lane["draft"].pop(data["net"], None)
         if kind == "placement_costs":
             lane["costs"][data["ref"]] = data
+        if kind in ("candidate_complete", "candidate_failed"):
+            # The full payload, for yapnr.viewer.progress's status text: a screening-only
+            # candidate reports its unconnected count as data.missing_connections (no DRC stage
+            # ever ran), while a later, fuller evaluation can report data.opens/data.violations
+            # the same way a route_result frame does; progress.py checks both names.
+            lane["last_candidate"] = data
         if kind == "batch_alternatives":
             state["search"][str(e["iteration"])] = data
         if kind in (
@@ -842,10 +855,26 @@ class Viewer:
         state["revision"] += 1
 
     # ------------------------------------------------------------------ state
+    def _annotate_lanes(self):
+        """Fold each lane's raw telemetry into the phase/progress model (yapnr.viewer.progress),
+        in place on ``self.state["lanes"]`` (lock held), so a lane with no classifiable event in
+        this poll still has its last-known phase to hold over into the next one. Cheap (a handful
+        of dict lookups and string comparisons per lane) and idempotent; called at the top of
+        every :func:`current`, not from :func:`apply_event`, so it runs at most once per served
+        revision rather than once per raw event folded into that revision."""
+        for lane in self.state["lanes"].values():
+            classified = classify_lane(lane)
+            lane["status_text"] = classified.pop("status_text")
+            lane["progress"] = classified
+
     def current(self, selected=None, full=True):
         with self.lock:
+            self._annotate_lanes()
+            # The experiment browser's hierarchy (yapnr.viewer.lane_tree), from the same lanes:
+            # one place builds it, so the front end never re-derives the tree from raw ids itself.
+            tree = lane_tree.build_tree(self.state["lanes"])
             if full:
-                return copy.deepcopy(dict(self.state, server_time=time.time()))
+                return copy.deepcopy(dict(self.state, tree=tree, server_time=time.time()))
             # Filter before copying: unselected board geometry never enters the copy.
             lanes = {
                 key: {
@@ -855,7 +884,7 @@ class Viewer:
                 }
                 for key, lane in self.state["lanes"].items()
             }
-            return copy.deepcopy(dict(self.state, lanes=lanes, server_time=time.time()))
+            return copy.deepcopy(dict(self.state, lanes=lanes, tree=tree, server_time=time.time()))
 
     def state_response(self, query):
         with self.lock:

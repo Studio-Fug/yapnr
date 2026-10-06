@@ -864,6 +864,22 @@ py_test(
     ],
 )
 
+# The optional pnr.plane_partition.PlaneTrace hooks (docs/plane-partition.md): a
+# traced call returns exactly what an untraced one does, and the trace holds one frame per
+# documented stage. stdlib + numpy only (no KiCad, no Pillow): :pnr alone.
+py_test(
+    name = "plane_partition_trace_test",
+    size = "small",
+    srcs = ["tests/test_plane_partition_trace.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_plane_partition_trace.py",
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
 # The outer pour drawn (connect: solid) and filled by KiCad: each rail's hot-rod lands
 # joined by its pour alone. It needs KiCad's Python (pcbnew) with numpy: run it there
 # by hand.
@@ -1803,6 +1819,7 @@ py_library(
     imports = ["."],
     deps = [
         ":pnr",
+        requirement("numpy"),  # pnr.animate.plane_partition rasters cell grids directly
         requirement("pillow"),
     ],
 )
@@ -1847,6 +1864,19 @@ py_binary(
         "manual",
         "requires-kicad",
     ],
+    deps = [":pnr_animate"],
+)
+
+# Renders docs/plane-partition.md's example (the radar60 U2 buck PMIC pour): the WebP and the
+# per-stage PNG stills, from the frozen geometry fixture below (no KiCad, no torch -- the
+# fixture was extracted once under KiCad's Python; see its own "meta.note").
+py_binary(
+    name = "plane_partition_animation",
+    srcs = ["regression/animate_plane_partition.py"],
+    data = ["regression/fixtures/pmic_pour_34c7ed35931c.json"],
+    imports = ["."],
+    main = "regression/animate_plane_partition.py",
+    tags = ["manual"],
     deps = [":pnr_animate"],
 )
 
@@ -1931,6 +1961,20 @@ py_test(
     srcs = ["tests/test_animate.py"],
     imports = ["."],
     main = "tests/test_animate.py",
+    deps = [
+        ":pnr",
+        ":pnr_animate",
+    ],
+)
+
+# pnr.animate.plane_partition (docs/plane-partition.md): the WebP animation (within
+# budget, every frame decodes) and the per-stage PNG stills, from a small synthetic trace.
+py_test(
+    name = "animate_plane_partition_test",
+    size = "medium",
+    srcs = ["tests/test_animate_plane_partition.py"],
+    imports = ["."],
+    main = "tests/test_animate_plane_partition.py",
     deps = [
         ":pnr",
         ":pnr_animate",

@@ -734,6 +734,10 @@ name it as `plane_layer`. Without it, every rail but the one with the most pads 
 its pads' bounding box plus 2 mm, and the boxes of rails whose balls spread over
 one package overlap. Without the section nothing changes.
 
+See [how plane partition works](../plane-partition.md) for a step-by-step walkthrough
+with stills and an animation of a real board (a radar60 PMIC's outer pour), the checks
+and reports below explained, the method's limits, and a prior-art review.
+
 ```yaml
 plane_partition:
   - layer: In3.Cu

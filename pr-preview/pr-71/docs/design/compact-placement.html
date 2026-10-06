@@ -298,7 +298,8 @@
           <section id="design-compact-placement-pnr-compact-and-shrink-to-fit-pnr-shrink">
 <h1>Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)<a class="headerlink" href="#design-compact-placement-pnr-compact-and-shrink-to-fit-pnr-shrink" title="Link to this heading">¶</a></h1>
 <p>Status: implemented on branch <code class="docutils literal notranslate"><span class="pre">claude/compact</span></code>, off by default; section 11 (legalizer spacing
-and turns) on branch <code class="docutils literal notranslate"><span class="pre">claude/legalize</span></code>, off by default. Code: <code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/compact_flags.py</span></code>
+and turns) on branch <code class="docutils literal notranslate"><span class="pre">claude/legalize</span></code>, off by default; section 12 (the <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane:
+<code class="docutils literal notranslate"><span class="pre">PAIRS</span></code>, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code>, power-first placement, the router key) on branch <code class="docutils literal notranslate"><span class="pre">claude/lv2-compact</span></code>. Code: <code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/compact_flags.py</span></code>
 (the switches, stdlib only) and <code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/place/compact.py</span></code> (metrics, cluster box,
 legalizer settings, shrink search); the call sites guard on the switches. Tests:
 <code class="docutils literal notranslate"><span class="pre">hardware/pnr/tests/test_compact.py</span></code>.</p>
@@ -345,9 +346,12 @@ placement exposed:</p>
 <section id="switches">
 <h2>1. Switches<a class="headerlink" href="#switches" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=1</span></code> turns on <code class="docutils literal notranslate"><span class="pre">GP</span></code>, <code class="docutils literal notranslate"><span class="pre">RANK</span></code>, <code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code>, <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code> and <code class="docutils literal notranslate"><span class="pre">DROPS</span></code>, and the three
-legalizer parts of section 11 (<code class="docutils literal notranslate"><span class="pre">WIRE</span></code>, <code class="docutils literal notranslate"><span class="pre">TURN</span></code>, <code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code>); <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT_&lt;PART&gt;=0</span></code> drops one
-part (ablations).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=1</span></code> turns on <code class="docutils literal notranslate"><span class="pre">GP</span></code>, <code class="docutils literal notranslate"><span class="pre">RANK</span></code>, <code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code>, <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code> and <code class="docutils literal notranslate"><span class="pre">DROPS</span></code>, the three
+legalizer parts of section 11 (<code class="docutils literal notranslate"><span class="pre">WIRE</span></code>, <code class="docutils literal notranslate"><span class="pre">TURN</span></code>, <code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code>) and the two parts of section 12
+(<code class="docutils literal notranslate"><span class="pre">PAIRS</span></code>, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code>); <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT_&lt;PART&gt;=0</span></code> drops one part (ablations).</p></li>
+<li><p>The router key (<code class="docutils literal notranslate"><span class="pre">pnr.feedback.signals.current_key</span></code>) carries a <code class="docutils literal notranslate"><span class="pre">compact</span></code> field, a digest of the
+active parts, <code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code> and the legalizer switches’ effective values (section 12), so
+evaluations and block libraries of two placement configurations never mix.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">run.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">--compact-off</span></code> choices and the <code class="docutils literal notranslate"><span class="pre">ladder-cell</span></code> kind’s <code class="docutils literal notranslate"><span class="pre">compact_off</span></code> list the same
 parts as <code class="docutils literal notranslate"><span class="pre">pnr/compact_flags.py</span></code> (tests keep them equal).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">PNR_SHRINK=1</span></code> is separate and never on by default: it changes the board outline.</p></li>
@@ -390,7 +394,13 @@ ref-relative keep-outs (against the body’s edge), the elastic mesh and its pro
 macro boards (<code class="docutils literal notranslate"><span class="pre">hull.gp_bodies</span></code>), <code class="docutils literal notranslate"><span class="pre">regions.check_feasible</span></code>, and <code class="docutils literal notranslate"><span class="pre">plane_intent</span></code>, which widens
 the body to its symmetric via-array reservation.</p></li>
 <li><p><strong>Unchanged</strong> (the symmetric box contains the body): <code class="docutils literal notranslate"><span class="pre">_fit_outline</span></code>, rows, line-group spacing,
-<code class="docutils literal notranslate"><span class="pre">_opposite_body_basins</span></code>, hierarchical block areas. <code class="docutils literal notranslate"><span class="pre">PNR_POWER_FIRST=1</span></code> refuses <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>.</p></li>
+<code class="docutils literal notranslate"><span class="pre">_opposite_body_basins</span></code>, hierarchical block areas.</p></li>
+<li><p><strong>Power-first placement</strong> (<code class="docutils literal notranslate"><span class="pre">PNR_POWER_FIRST=1</span></code>, <code class="docutils literal notranslate"><span class="pre">power_first.staged_place</span></code>): <code class="docutils literal notranslate"><span class="pre">GP</span></code> (spread and
+the cluster box of the staged placer’s random starts), <code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code> (the courtyard gap in the staged
+overlap term and the legalizer, the slot grid, the copper margins), <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code>, <code class="docutils literal notranslate"><span class="pre">DROPS</span></code> and
+<code class="docutils literal notranslate"><span class="pre">RANK</span></code> apply; <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> and <code class="docutils literal notranslate"><span class="pre">TURN</span></code> do not (the power-first legalizer and its retry judge every slot
+by the hot loops; section 11). Line groups (<code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code>) are refused there with or without
+compact.</p></li>
 </ul>
 </section>
 <section id="global-placement-gp">
@@ -575,7 +585,8 @@ A/B. Shrink passes 23 of 24: on <code class="docutils literal notranslate"><span
 the shrunk edge, through pad cells the router’s edge inset leaves open.</p>
 <p>The full tables are in the workflow’s A/B notes; the ladder documentation
 (<a class="reference internal" href="../regression-ladder.html#compact-placement-opt-in"><span class="std std-ref">compact placement</span></a>) summarises them.</p>
-<p>Still open: the 0.01 mm courtyard gap (no DRC finding in any arm).</p>
+<p>Still open: the 0.01 mm courtyard gap (no DRC finding in any arm). The manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code>
+lane is resolved in section 12.</p>
 </section>
 <section id="spacing-and-turns-at-legalization-pnr-gp-polish-pnr-legalize-hpwl">
 <h2>11. Spacing and turns at legalization (<code class="docutils literal notranslate"><span class="pre">PNR_GP_POLISH</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_HPWL</span></code>, …)<a class="headerlink" href="#spacing-and-turns-at-legalization-pnr-gp-polish-pnr-legalize-hpwl" title="Link to this heading">¶</a></h2>
@@ -1002,6 +1013,151 @@ wirelength (+16 %) and is not adopted.</p></li>
 </ul>
 </section>
 </section>
+<section id="the-09-mcu-usb-31-lane-pairs-and-relax-2026-10-06">
+<h2>12. The <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane: <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> and <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> (2026-10-06)<a class="headerlink" href="#the-09-mcu-usb-31-lane-pairs-and-relax-2026-10-06" title="Link to this heading">¶</a></h2>
+<p>Ladder v2 makes compact placement the default, which needs the manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane (the
+seven layout and constraint variants, <code class="docutils literal notranslate"><span class="pre">-header</span></code> and <code class="docutils literal notranslate"><span class="pre">-mc</span></code>) to pass with it wherever it passes
+without. At <code class="docutils literal notranslate"><span class="pre">origin/main</span></code> (<code class="docutils literal notranslate"><span class="pre">82ec1a5</span></code>, GCP C4D x86-64, the lane’s options: pool 8/1, 2 rounds,
+packed maze; seeds 0 and 1) it passed 16 of 16 off and 11 of 16 compact (<code class="docutils literal notranslate"><span class="pre">-header</span></code> 0 of 2 off, 1
+of 2 compact).</p>
+<p><strong>Root cause.</strong> All five failing cells (and every failure on seeds 2 and 3) are one of two kinds:</p>
+<ul class="simple">
+<li><p><strong>A pair out of skew</strong> (<code class="docutils literal notranslate"><span class="pre">length_unmatched</span></code>, 1.5 to 12.6 mm). In every one, one leg of a USB pair
+carries a via pair and a detour that its partner does not: the two series resistors sit
+staggered, stacked across the legs or on either side of the connector, so one leg crosses the
+other or squeezes past a resistor through the bottom layer (a via pair alone is 2 x 1.51 mm on
+the 1.6 mm board). Without compact the same crossings happen, and the length tuner meanders the
+short leg back into the 1 mm budget (16 to 20 mm of meanders on some cells); with the courtyards
+packed at 0.01 mm there is no free cell beside the short leg for a bump, so the tuner adds
+nothing and the set is reverted. The place-route loop then stops anyway: it counted only
+unrouted nets, so a round with an unmatched pair was “converged”.</p></li>
+<li><p><strong>A net unrouted</strong> on the plane variants (<code class="docutils literal notranslate"><span class="pre">4L-SGPS</span></code>, <code class="docutils literal notranslate"><span class="pre">4L-SSGS</span></code>, <code class="docutils literal notranslate"><span class="pre">6L-SGSGPS</span></code>): every ground and
+supply pad drops a via to its plane, and the packed layout leaves the signal escapes no room.</p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">PAIRS</span></code>.</strong> The matched-length pass after legalization (<code class="docutils literal notranslate"><span class="pre">pnr.place.matched.refine_matched</span></code>) may
+also turn a part on a pair or length group, or a line group’s rigid macro (the <code class="docutils literal notranslate"><span class="pre">-rel</span></code> variant’s
+authored <code class="docutils literal notranslate"><span class="pre">usb-series</span></code> line), a quarter turn, so that the pads its legs leave from face where the
+legs go. It never turns a part a hard rotation holds, nor without <code class="docutils literal notranslate"><span class="pre">orient</span></code>.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">RELAX</span></code>: compact as far as the board routes.</strong> In the place-route loop
+(<code class="docutils literal notranslate"><span class="pre">pnr.route.feedback</span></code>) a round that leaves a signal net unrouted, or a declared pair or group
+outside its budget, is not converged. Every later round runs with compact placement switched off
+(<code class="docutils literal notranslate"><span class="pre">pnr.compact_flags.relaxed</span></code>, read by every part’s call site) at the board’s own spread, and the
+first of them takes the initial pool again at the run’s seed: it is the first round of the run
+without compact, byte for byte (checked on <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-rel</span></code> seed 0: <code class="docutils literal notranslate"><span class="pre">placed.json</span></code> and
+<code class="docutils literal notranslate"><span class="pre">routes.json</span></code> identical). So a board that routes without compact in one round routes with it in
+two, and keeps the compact layout wherever that routes. A board that does not place without
+compact (the pin-1-origin header’s envelope) keeps its best compact round
+(<code class="docutils literal notranslate"><span class="pre">termination:</span> <span class="pre">relaxed_placement_failed</span></code>). <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code> records the switch (<code class="docutils literal notranslate"><span class="pre">relaxed</span></code>:
+the round, the spread, why).</p>
+<p><strong>Rejected on the way</strong> (A/B on GCP, the 8 rungs with the lane’s options, seeds 0 to 3):</p>
+<ul class="simple">
+<li><p>the two series resistors placed as a rigid mirrored twin (an engine line group): 15 of 32
+against 21 of 32 without it, since a twin of 0805s puts its legs 2 mm apart and a twin turned
+across the legs mismatches them by that pitch;</p></li>
+<li><p>the declared pairs routed coupled (<code class="docutils literal notranslate"><span class="pre">board.route_pairs:</span> <span class="pre">coupled</span></code>): the staggered resistors give
+the coupled solver no channel (<code class="docutils literal notranslate"><span class="pre">no_coupled_channel</span></code>), both pairs fall back to legs;</p></li>
+<li><p>the short leg routed again, longer, through a waypoint or a via hop where meanders find no
+room: unit-tested, but on the lane’s boards no such route cleared the other nets, so it never
+fired and was removed.</p></li>
+</ul>
+<p><strong>Measured</strong> (GCP C4D, x86-64; the 8 rungs of the lane run with the initial pool, seeds 0 to 3,
+32 cells; <code class="docutils literal notranslate"><span class="pre">-mc</span></code> passes in every arm):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Arm</p></th>
+<th class="head"><p>Pass</p></th>
+<th class="head"><p>Rounds run without compact</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>off (<code class="docutils literal notranslate"><span class="pre">main</span></code>)</p></td>
+<td><p>26/32</p></td>
+<td><p>-</p></td>
+</tr>
+<tr class="row-odd"><td><p>compact (<code class="docutils literal notranslate"><span class="pre">main</span></code>)</p></td>
+<td><p>21/32</p></td>
+<td><p>-</p></td>
+</tr>
+<tr class="row-even"><td><p>compact, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> placing at the board’s spread, no pool</p></td>
+<td><p>28/32</p></td>
+<td><p>17</p></td>
+</tr>
+<tr class="row-odd"><td><p>compact, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> (pool again), <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> off</p></td>
+<td><p>31/32</p></td>
+<td><p>16</p></td>
+</tr>
+<tr class="row-even"><td><p>compact, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> and <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code></p></td>
+<td><p>32/32</p></td>
+<td><p>14</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Off fails <code class="docutils literal notranslate"><span class="pre">-header</span></code> on every seed (its envelope cannot be placed) and <code class="docutils literal notranslate"><span class="pre">-abs</span></code>, <code class="docutils literal notranslate"><span class="pre">-sidelock</span></code> on seed 3
+(pairs out of skew). The one failure with <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> off is <code class="docutils literal notranslate"><span class="pre">-header</span></code> seed 0, whose round without
+compact cannot place the header: the run stopped there, before the fallback kept its compact
+round (fixed since).</p>
+<p>The plane variants fall back on most seeds (their compact rounds leave a net unrouted); the
+two-layer variants keep their compact layout on most.</p>
+<p><strong>Validation</strong> (<code class="docutils literal notranslate"><span class="pre">c5c1f5c</span></code> against <code class="docutils literal notranslate"><span class="pre">main</span></code> <code class="docutils literal notranslate"><span class="pre">586857d</span></code>, GCP C4D x86-64, seeds 0 and 1; the lane with
+its options, the ladder and showcases with the pool 8/3, the 15 nightly hard rungs as the nightly
+lane runs them):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Cells</p></th>
+<th class="head"><p>compact</p></th>
+<th class="head"><p>off</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">RELAX</span></code> rounds</p></th>
+<th class="head"><p>Placed bbox, compact vs off</p></th>
+<th class="head"><p>Copper</p></th>
+<th class="head"><p>Vias</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>8 ladder cases (16)</p></td>
+<td><p>16/16</p></td>
+<td><p>16/16</p></td>
+<td><p>0</p></td>
+<td><p>6427 to 3795 mm² (-41 %)</p></td>
+<td><p>2317 → 1633</p></td>
+<td><p>134 → 128</p></td>
+</tr>
+<tr class="row-odd"><td><p>4 showcases (8)</p></td>
+<td><p>8/8</p></td>
+<td><p>8/8</p></td>
+<td><p>0</p></td>
+<td><p>6641 to 3899 mm² (-41 %)</p></td>
+<td><p>2460 → 1660</p></td>
+<td><p>148 → 132</p></td>
+</tr>
+<tr class="row-even"><td><p>15 nightly hard rungs (30)</p></td>
+<td><p>30/30</p></td>
+<td><p>30/30</p></td>
+<td><p>0</p></td>
+<td><p>26629 to 16935 mm² (-36 %)</p></td>
+<td><p>8514 → 5787</p></td>
+<td><p>821 → 775</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane (18)</p></td>
+<td><p>18/18</p></td>
+<td><p>16/18</p></td>
+<td><p>7</p></td>
+<td><p>22412 to 19833 mm² (-12 %)</p></td>
+<td><p>12012 → 10244</p></td>
+<td><p>983 → 964</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The bbox, copper (mm) and vias are summed over the cells that place in both arms (the lane
+without <code class="docutils literal notranslate"><span class="pre">-header</span></code>, which off cannot place). Off on the branch is byte-identical to <code class="docutils literal notranslate"><span class="pre">main</span></code> on 70
+of 72 cells (<code class="docutils literal notranslate"><span class="pre">placed.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code>, the routed board modulo UUIDs); the other two are
+<code class="docutils literal notranslate"><span class="pre">-header</span></code>, which neither places (the same pool exhaustion). Compact costs 2 to 18 % more CPU
+(the lane’s fallback rounds).</p>
+<p><strong>Power-first placement</strong> (<code class="docutils literal notranslate"><span class="pre">PNR_POWER_FIRST=1</span></code>) no longer refuses compact (section 2).</p>
+</section>
 </section>
 
         </article>
@@ -1082,6 +1238,7 @@ wirelength (+16 %) and is not adopted.</p></li>
 <li><a class="reference internal" href="#conflicts-and-open-points">Conflicts and open points</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#the-09-mcu-usb-31-lane-pairs-and-relax-2026-10-06">12. The <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane: <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> and <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> (2026-10-06)</a></li>
 </ul>
 </li>
 </ul>

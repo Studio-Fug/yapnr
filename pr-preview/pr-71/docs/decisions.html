@@ -1355,6 +1355,23 @@ CI traced runs take the same options so their trace hashes stay comparable. The 
 (version 3) plays the gloss stage’s saved board as a before/after: the copper the stage
 replaced in red, its new copper in green, marked by geometry, not by track rows.</p></li>
 </ul>
+<p>Compact placement before ladder v2 makes it the default (2026-10-06,
+<a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">design, section 12</span></a>):</p>
+<ul class="simple">
+<li><p><strong>Compact as far as the board routes (<code class="docutils literal notranslate"><span class="pre">RELAX</span></code>):</strong> a place-route round that leaves a net open or
+a declared pair or group out of its budget is not converged, and the rounds after it run
+without compact placement, the first of them exactly as the run without compact does (the
+initial pool again, at the run’s seed). A board keeps its compact layout wherever that routes;
+where it does not, it gets the layout it had before, one round later. This, not reserving room
+around pairs, is what makes the <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane pass under compact (32 of 32 cells on
+seeds 0 to 3, against 21 of 32 before and 26 of 32 without compact).</p></li>
+<li><p><strong>Pair parts turn to face their legs (<code class="docutils literal notranslate"><span class="pre">PAIRS</span></code>):</strong> the matched-length pass may turn a pair’s
+series parts (or a line group’s macro); a rigid twin of the two resistors, coupled pair routing
+and lengthening the short leg through free space were tried and rejected (section 12).</p></li>
+<li><p><strong>Compact is part of the router key</strong> (<code class="docutils literal notranslate"><span class="pre">compact</span></code>, a digest of the parts and the legalizer
+switches; absent with everything off, so earlier keys are unchanged), and power-first
+placement runs with compact instead of refusing it.</p></li>
+</ul>
 </section>
 <section id="pinned-versions">
 <h2>Pinned versions<a class="headerlink" href="#pinned-versions" title="Link to this heading">¶</a></h2>

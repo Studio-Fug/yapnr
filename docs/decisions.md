@@ -1086,6 +1086,43 @@ Compact placement before ladder v2 makes it the default (2026-10-06,
   switches; absent with everything off, so earlier keys are unchanged), and power-first
   placement runs with compact instead of refusing it.
 
+Ladder v2 phase 1: one default configuration (2026-10-06, `output/hier/ladder-v2/plan.md`,
+owner questionnaire answer "Go ahead with ladder v2 as planned"):
+
+- **Block-level motion fixed at the GP source first**, as the plan required before flipping
+  compact's default: `pnr.place.compact.gp_channel_inflation` builds a `ChannelModel` on the
+  pre-placement graph and floors global placement's existing route-feedback `inflation` with
+  each part's own escape-channel demand, so the density term reserves (part of) the room the
+  legalizer's push otherwise has to open at legalization time. Measured (seed 0, Mac):
+  `10-quad-bank-56` block 70 %/16.3 mm -> 14 %/3.2 mm (`main` without compact: 65 %/15.0 mm);
+  `hier-twin-bank-32` top 19 %/1.2 mm -> 0 %/0.2 mm (`main`: 19 %/13.0 mm) -- every ladder,
+  showcase and hierarchical case now moves less than the non-compact baseline, not merely no
+  worse. See [compact placement, section 12 appendix F](design/compact-placement.md).
+- **`--compact` (with `WIRE`/`TURN`/`SATELLITES`/`PAIRS`/`RELAX`), `--gloss`, `--initial-pool`
+  and `--route-pairs-diff-pairs` (for any design declaring a `diff_pair`) become the runner's own
+  defaults** in `hardware/pnr/regression/run.py`, each a `BooleanOptionalAction` so
+  `--no-<flag>` still turns it off for an A/B; `yapnr/exp/kinds/ladder.py`'s `runner_arguments`
+  only emits a flag when a campaign config says something explicitly (`true` -> the flag,
+  `false` -> `--no-<flag>`, absent -> the runner's own default), so every existing A/B campaign
+  that relied on omitting a flag for "off" keeps working. Each one had already passed its own
+  A/B gate (compact: `claude/lv2-compact`, the `09-mcu-usb-31` lane fix; gloss: the native-loop
+  GCP A/B above; `--route-pairs-diff-pairs`: `claude/lv2-ab`, 11/18 vs 9/18 pass, 0 regressions;
+  `--initial-pool`: `claude/lv2-ab`, 54/54 both arms, -5.1 % copper).
+- **`--fab-profile` defaults to `jlc-pofv`** (the engine's own fab-capability profile) instead of
+  the fixtures' `legacy` block; an owner decision carried from the inventory
+  (`output/hier/ladder-v2/inventory.md` §4a). Every ladder case passes under both profiles
+  (`docs/regression-ladder.md`).
+- **`PNR_SHRINK` and the A/B-rejected `PNR_LEGALIZE_CHANNEL_CLEARANCE=fab`, `PNR_GP_POLISH` and
+  `PNR_GP_CHANNELS` stay off** (unchanged owner decisions).
+- **One nightly CI configuration:** `.github/workflows/ladder.yaml` runs the runner's own
+  defaults, traced, once, instead of four separate arms (baseline, traced pool+compact+gloss,
+  the opt-in gloss stage, the showcases' own flags); the same run decides the job and feeds the
+  animations job, so docs numbers and CI numbers come from the same run. The docs
+  (`docs/animations/`, `regression-ladder.md`, `constraints-and-hierarchy.md`) were regenerated
+  from a traced run with no explicit `--compact`/`--gloss`/`--initial-pool`/`--fab-profile`
+  flags, letting the runner's new defaults decide; every ladder, showcase and hard-rung case
+  passed.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

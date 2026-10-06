@@ -10,37 +10,40 @@ engine's last Splanc round live in [`hardware/pnr/regression/`][ladder-readme].
 Every case below has an animation of its critical path: one straight line from the unplaced board
 to the fully routed board and KiCad's verdict, including the experiments the final board descends
 from and, at each selection, the candidates it was chosen from. The animations are recorded with
-two opt-in stages, both off by default: [compact placement](#compact-placement-opt-in)
-(`PNR_COMPACT=1`) and the [gloss pass](#gloss-opt-in) (`PNR_GLOSS=1`).
+the runner's own defaults (ladder-v2, `docs/decisions.md`): [compact placement](#compact-placement)
+(`PNR_COMPACT=1`) and the [gloss pass](#gloss) (`PNR_GLOSS=1`); `--no-compact`/`--no-gloss` turn
+either off for an A/B.
 
-> **Status (2026-10-03):** all eight cases **pass** the gate: 100 % routed, no open connections
-> and no findings in KiCad's DRC, in the default configuration and with compact placement and
-> gloss (the animations' configuration). The ladder routes and is judged under its fixtures' own
-> fabrication rules (`--fab-profile legacy`, the runner's default; see below). Under the engine's
-> default JLCPCB profile (`--fab-profile jlc-pofv`), where the router keeps vias 0.127 mm off SMD
-> pads, every case passes too (other boards); which profile the ladder uses by default is an
-> owner decision ([WORKLOG.md](../WORKLOG.md)).
+> **Status (2026-10-06):** all eight cases **pass** the gate: 100 % routed, no open connections
+> and no findings in KiCad's DRC, in the runner's own default configuration (compact placement,
+> gloss, the initial placement pool, the engine's own JLCPCB fab profile -- the animations'
+> configuration too, so docs and CI agree). The ladder routes and is judged under
+> `--fab-profile jlc-pofv` (the runner's default since ladder-v2), where the router keeps vias
+> 0.127 mm off SMD pads; under the fixtures' own legacy rules (`--fab-profile legacy`), every case
+> passes too (other boards, below).
 
 ## The cases
 
-Seed 0, with the initial placement pool (8 starts, 3 routed finalists), compact placement and the
-gloss stage (`run.py --compact --gloss`), the legacy fabrication profile; KiCad 10.0.6, engine
-`d002bfa` (compact placement with the legalizer parts `WIRE`, `TURN` and `SATELLITES`). "Opens" and
-"findings" are KiCad's DRC counts on the saved board; "Placed" is the bounding box of the placed
-parts' bodies (`compactness` in `result.json`) on the board's outline; the time is the case's wall
-time on the development Mac (darwin-arm64), niced, next to other work, gloss stage included (about
-20 s of it is a fixed overhead).
+Seed 0, with the runner's own defaults (the initial placement pool: 8 starts, 3 routed finalists;
+compact placement; the gloss stage; the engine's JLCPCB fab profile); KiCad 10.0.6, engine
+`f362d1e6` (compact placement with the legalizer parts `WIRE`, `TURN`, `SATELLITES`, `PAIRS` and
+`RELAX`, and the GP-side escape-channel reservation that keeps block-level legalization from
+moving much; `docs/design/compact-placement.md` sections 12 and 13). "Opens" and "findings" are
+KiCad's DRC counts on the saved board; "Placed" is the bounding box of the placed parts' bodies
+(`compactness` in `result.json`) on the board's outline; the time is the case's wall time on the
+development Mac (darwin-arm64), niced, next to other work, gloss stage included (about 20 s of it
+is a fixed overhead).
 
 | Case                                                                | Parts | Nets | Layers | Added difficulty                                       | Routed | Opens | Findings | Vias | Copper (mm) | Placed on board (mm)   | Time (s) | Gate |
 | ------------------------------------------------------------------- | ----: | ---: | -----: | ------------------------------------------------------ | :----: | ----: | -------: | ---: | ----------: | ---------------------- | -------: | ---- |
-| [01 Connector + LED](#01-connector--led)                            |     2 |    2 |      2 | Basic connection; externally current-limited supply    | 100 %  |     0 |        0 |    0 |        6.33 | 5.8 × 6.2 on 18 × 14   |     20.0 | pass |
-| [02 Resistor + LED](#02-resistor--led)                              |     3 |    3 |      2 | Movable series current limiter                         | 100 %  |     0 |        0 |    0 |       13.09 | 5.7 × 9.0 on 20 × 16   |     19.1 | pass |
-| [03 Two LEDs](#03-two-leds)                                         |     5 |    4 |      2 | Shared, branched supply and return                     | 100 %  |     0 |        0 |    0 |       24.13 | 8.3 × 8.7 on 24 × 18   |     20.3 | pass |
-| [04 Inverter indicators](#04-inverter-indicators)                   |     8 |    6 |      2 | SOT-23-5 pin escapes, an unused pad, 3-pin connector   | 100 %  |     0 |        0 |    2 |       56.08 | 12.6 × 13.6 on 26 × 20 |     25.1 | pass |
-| [05 TLC555 blinker](#05-tlc555-blinker)                             |    10 |    7 |      2 | 8-pin IC, RC timing and control, bypass and bulk caps  | 100 %  |     0 |        0 |    4 |       75.14 | 14.1 × 15.0 on 30 × 24 |     24.5 | pass |
-| [06 Two-stage chaser](#06-two-stage-chaser)                         |    14 |   11 |      2 | TLC555 + CD4017B, cross-IC clock and reset, fanout     | 100 %  |     0 |        0 |    6 |      165.58 | 20.9 × 19.6 on 36 × 28 |     33.4 | pass |
-| [07 Five-stage chaser](#07-five-stage-chaser)                       |    20 |   17 |      2 | Five LED/resistor outputs, shared rails, dense routes  | 100 %  |     0 |        0 |   13 |      220.85 | 21.2 × 23.6 on 42 × 32 |     44.1 | pass |
-| [08 Five-stage chaser with plane](#08-five-stage-chaser-with-plane) |    20 |   17 |      4 | Four copper layers, ground plane attachment and refill | 100 %  |     0 |        0 |   27 |      172.61 | 23.1 × 20.6 on 42 × 32 |     42.8 | pass |
+| [01 Connector + LED](#01-connector--led)                            |     2 |    2 |      2 | Basic connection; externally current-limited supply    | 100 %  |     0 |        0 |    0 |        6.95 | 5.8 × 6.2 on 18 × 14   |     20.5 | pass |
+| [02 Resistor + LED](#02-resistor--led)                              |     3 |    3 |      2 | Movable series current limiter                         | 100 %  |     0 |        0 |    0 |       15.33 | 8.7 × 7.2 on 20 × 16   |     19.2 | pass |
+| [03 Two LEDs](#03-two-leds)                                         |     5 |    4 |      2 | Shared, branched supply and return                     | 100 %  |     0 |        0 |    0 |       23.71 | 9.3 × 10.5 on 24 × 18  |     22.4 | pass |
+| [04 Inverter indicators](#04-inverter-indicators)                   |     8 |    6 |      2 | SOT-23-5 pin escapes, an unused pad, 3-pin connector   | 100 %  |     0 |        0 |    1 |       70.43 | 11.9 × 15.0 on 26 × 20 |     28.8 | pass |
+| [05 TLC555 blinker](#05-tlc555-blinker)                             |    10 |    7 |      2 | 8-pin IC, RC timing and control, bypass and bulk caps  | 100 %  |     0 |        0 |    3 |      125.34 | 15.9 × 17.6 on 30 × 24 |     32.8 | pass |
+| [06 Two-stage chaser](#06-two-stage-chaser)                         |    14 |   11 |      2 | TLC555 + CD4017B, cross-IC clock and reset, fanout     | 100 %  |     0 |        0 |   11 |      219.99 | 25.4 × 17.2 on 36 × 28 |     39.8 | pass |
+| [07 Five-stage chaser](#07-five-stage-chaser)                       |    20 |   17 |      2 | Five LED/resistor outputs, shared rails, dense routes  | 100 %  |     0 |        0 |   21 |      296.81 | 22.2 × 24.0 on 42 × 32 |     68.7 | pass |
+| [08 Five-stage chaser with plane](#08-five-stage-chaser-with-plane) |    20 |   17 |      4 | Four copper layers, ground plane attachment and refill | 100 %  |     0 |        0 |   26 |      221.81 | 24.4 × 23.4 on 42 × 32 |     48.1 | pass |
 
 Against the animations they replace (2026-10-03: the same configuration without the legalizer parts,
 engine `cfb7cb3`, on the same Mac), the legalizer now picks each part's slot and turn with its
@@ -239,21 +242,21 @@ before. Budgets: the ladder's WebPs at most 2.5 MB (800 px), its README GIF at m
 deliberately, after a notable engine change, not on every pull request: each refresh adds about
 12 MB to the history.
 
-## Gloss (opt-in)
+## Gloss
 
 `run.py --gloss` adds one stage after the refill: the gloss, dekink and corridor-coalescing pass
-(`PNR_GLOSS`, off by default; [design](design/gloss.md)), with the semantics of the native loop's
-`07g-gloss` pass, gated inside the pass by native checks and a cold KiCad DRC, and again by the
-runner's own DRC (a worse DRC restores `routed.pre-gloss.kicad_pcb`). `--gloss-flag
-PNR_GLOSS_NAME=VALUE` passes sub-flags, and `--gloss-measure` measures every final board, for both
-arms of an A/B.
+(`PNR_GLOSS`, on by default since ladder-v2, `docs/decisions.md`; `--no-gloss` restores the plain
+runner path; [design](design/gloss.md)), with the semantics of the native loop's `07g-gloss` pass,
+gated inside the pass by native checks and a cold KiCad DRC, and again by the runner's own DRC (a
+worse DRC restores `routed.pre-gloss.kicad_pcb`). `--gloss-flag PNR_GLOSS_NAME=VALUE` passes
+sub-flags, and `--gloss-measure` measures every final board, for both arms of an A/B.
 
-A/B of 2026-10-03: the eight cases and the four showcases, seeds 0 and 1, one engine (`2fc4cc9`)
-for both arms, legacy profile, on the development Mac (niced, beside other work):
+A/B of 2026-10-03 (Mac) and 2026-10-05 (GCP, the native-loop A/B that unblocked the default):
+the eight cases and the four showcases, seeds 0 and 1, one engine for both arms, legacy profile:
 
 ```sh
-run.py ... --seed 0 --seed 1 --showcases --gloss-measure            # off
-run.py ... --seed 0 --seed 1 --showcases --gloss --gloss-measure    # on
+run.py ... --seed 0 --seed 1 --showcases --no-gloss --gloss-measure    # off
+run.py ... --seed 0 --seed 1 --showcases --gloss --gloss-measure       # on
 ```
 
 Every on-arm case pairs with its off-arm twin (the same placement, routes and pre-gloss copper,
@@ -323,9 +326,10 @@ whole case's CPU time without `--gloss-measure`, which both arms run.
 The ladder runs the pass after a complete route, so it cannot show whether the pass helps or
 hurts completion; turning it on by default waits for a paired A/B of the native loop.
 
-## Compact placement (opt-in)
+## Compact placement
 
-`run.py --compact` places with `PNR_COMPACT=1` (off by default; [design](design/compact-placement.md)):
+`run.py --compact` places with `PNR_COMPACT=1` (on by default since ladder-v2, `docs/decisions.md`;
+`--no-compact` restores the pre-ladder-v2 runner path; [design](design/compact-placement.md)):
 spread 1.0 and starts clustered around the fixed parts, the courtyard gap instead of the routing
 clearance in the legalizer (with a copper margin only where a part's box hugs its pads), offset
 courtyards (a pin-1-origin header occupies its real extent), a compactness tie-break after
@@ -353,36 +357,39 @@ boxes in `placed.json`: the bounding box (`bbox_mm2`, `bbox_mm`), the summed bod
 `utilization` (area over bbox), `occupancy` (area over the outline) and the outline area.
 
 ```sh
-run.py ... --seed 0 --seed 1 --showcases --gloss-measure                      # off
+run.py ... --seed 0 --seed 1 --showcases --gloss-measure --no-compact         # off
 run.py ... --seed 0 --seed 1 --showcases --gloss-measure --compact            # compact
 run.py ... --seed 0 --seed 1 --showcases --gloss-measure --compact --shrink   # and shrink
 ```
 
 The animation scripts pass such options with `--runner-arg` (for example
-`animate_ladder.py ... --runner-arg=--compact --runner-arg=--gloss`) and record them in each
-animation's `config`; `--fallback-runner-arg` gives `animate_ladder.py`'s baseline fallback its
-own (`--fallback-runner-arg=--gloss` reruns a failed compact case without `--compact`).
-The committed animations use `--compact --gloss` (see [The cases](#the-cases)); compact
-placement is not the default, so they show an opt-in configuration.
+`animate_ladder.py ... --runner-arg=--compact --runner-arg=--gloss`, now the runner's own
+defaults) and record them in each animation's `config`; `--fallback-runner-arg` gives
+`animate_ladder.py`'s baseline fallback its own (`--fallback-runner-arg=--no-compact` reruns a
+failed compact case without it). The committed animations use the runner's own defaults, which
+_are_ `--compact --gloss` (see [The cases](#the-cases)).
 
 Results (2026-10-03, GCP C4D x86-64, seeds 0 and 1): with `--compact` the eight cases and four
 showcases all pass (with and without gloss), as do `09-mcu-usb-31-header` (whose pool fails
 without it), `08-chaser-20-plane` on seeds 0 to 9 (7 of 10 without it) and the 14 nightly hard
 rungs; the summed placed bounding box of the 24 ladder cells drops from 13068 to 8122 mm² and
 their copper from 4777 to 4022 mm, for 28 more vias. It stays off by default because 5 of the 16
-manual `09-mcu-usb-31` rung cells, which pass without it, end with a USB pair out of skew or a
-leg unrouted (3 with `COURTYARD` alone): see the [design](design/compact-placement.md).
+manual `09-mcu-usb-31` rung cells had with it at the time (see the
+[design](design/compact-placement.md) section 12): `RELAX` (every round after one that does not
+route falls back to the plain packer) and `PAIRS` (the matched-length pass may turn a pair's
+series parts to face their legs) fixed the lane without losing the rest of the gain, so ladder-v2
+(`docs/decisions.md`) made `--compact` the runner's own default.
 
 ## In CI
 
 `.github/workflows/ladder.yaml` runs the ladder inside the published arm64 image: cases 01 to 06
-with seed 0 on pull requests that change engine inputs, and nightly all eight cases with seeds 0 and
-1, plus a traced pool run whose animations are uploaded as an artifact and whose trace hashes are
-compared with <a href="animations/manifest.json"><code>animations/manifest.json</code></a> (a drift
-is a notice); the traced run and the showcases take the animations' options, `--compact --gloss`,
-so their traces compare with the committed ones. The nightly run also takes the opt-in
-[gloss stage](#gloss-opt-in) through `04-inverter-leds-8` and `07-chaser-20` (seed 0): a stage
-error fails the job, and a stage that kept no edit on either case is a warning. The lane is
-informational, not a required check yet; its aggregate check is named `ladder`.
+with seed 0 on pull requests that change engine inputs, and nightly all eight cases with seeds 0
+and 1, under the runner's own defaults (ladder-v2: compact, gloss, the initial placement pool,
+coupled diff-pair routing, the jlc-pofv fab profile) and traced -- one configuration, which both
+decides the job and feeds the animations job, so docs and CI agree. Its animations are uploaded
+as an artifact and its trace hashes are compared with
+<a href="animations/manifest.json"><code>animations/manifest.json</code></a> (a drift is a
+notice). The showcases run the same defaults, traced. The lane is informational, not a required
+check yet; its aggregate check is named `ladder`.
 
 [ladder-readme]: https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/README.md

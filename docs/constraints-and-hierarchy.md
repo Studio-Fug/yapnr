@@ -6,18 +6,26 @@ blocks. Each animation is recorded engine state, like the [regression ladder](re
 global placement snapshots, the legalizer's order, every net the router commits, the saved KiCad
 boards and KiCad's verdict.
 
+> Figures in this page's tables are from the engine version named in each section and
+> predate the ladder-v2 default-profile flip (`docs/decisions.md`): legacy fab profile,
+> `--compact --gloss` passed explicitly. Re-running today's `--no-fab-profile` default
+> (`jlc-pofv`) changes copper/via counts the same way it does on the public ladder
+> (see [regression-ladder.md](regression-ladder.md#the-cases)); the pass/fail verdicts
+> are unaffected.
+
 The showcase cases (`designs.showcases()` in
 [`hardware/pnr/regression/designs.py`][designs]) run through the ladder's runner and its gate, but
 they are not ladder cases: they sit outside the ladder's gate and its pull-request lane (the
 nightly lane runs them for information). All five cases below come from one traced run: seed 0,
-a placement snapshot every 5 iterations, the legacy fabrication profile, KiCad 10.0.6 on the
-development Mac (darwin-arm64), engine `d002bfa`, with the ladder animations' two opt-in stages:
-[compact placement](design/compact-placement.md) (`--compact`, `PNR_COMPACT=1`) and the
-[gloss pass](design/gloss.md) (`--gloss`, `PNR_GLOSS=1`), both off by default. The four flat
-cases use the initial placement pool (8 starts, 3 routed finalists); the hierarchical case uses
-its own block trials and four top-level seeds. Every case passes the gate: 100 % routed, no open
-connections and no findings in KiCad's DRC. Each animation ends with the gloss stage's before
-and after (the copper it replaces in red, its new copper in green; see
+a placement snapshot every 5 iterations, the engine's own JLCPCB fabrication profile, KiCad
+10.0.6 on the development Mac (darwin-arm64), engine `f362d1e6`, with the runner's own defaults
+since ladder-v2 (`docs/decisions.md`): [compact placement](design/compact-placement.md)
+(`--compact`, `PNR_COMPACT=1`) and the [gloss pass](design/gloss.md) (`--gloss`, `PNR_GLOSS=1`).
+The four flat cases use the initial placement pool (8 starts, 3 routed finalists, also the
+default); the hierarchical case uses its own block trials and four top-level seeds. Every case
+passes the gate: 100 % routed, no open connections and no findings in KiCad's DRC. Each
+animation ends with the gloss stage's before and after (the copper it replaces in red, its new
+copper in green; see
 [Reading an animation](regression-ladder.md#reading-an-animation)).
 
 ## Line groups
@@ -288,7 +296,7 @@ hierarchical case takes about two minutes on the development Mac.
 
 ```sh
 # 1. The showcase run (07-chaser-20 and the four showcase cases); the output must not exist.
-#    --compact --gloss: the committed animations' opt-in stages.
+#    --compact --gloss: the runner's own defaults since ladder-v2 (docs/decisions.md).
 "$NUMERIC_PYTHON" hardware/pnr/regression/run.py --repo . --out .yapnr/ladder/SHOWCASES \
   --seed 0 --trace --trace-placement-every 5 --initial-pool --initial-starts 8 \
   --initial-finalists 3 --timeout 1200 --showcases --compact --gloss \

@@ -1,10 +1,13 @@
 # Design: compact placement (`PNR_COMPACT`) and shrink-to-fit (`PNR_SHRINK`)
 
-Status: implemented on branch `claude/compact`, off by default; section 11 (legalizer spacing
-and turns) on branch `claude/legalize`, off by default; section 12 (the `09-mcu-usb-31` lane:
-`PAIRS`, `RELAX`, power-first placement, the router key) on branch `claude/lv2-compact`; section
-13 (displacement-minimizing legalization) on branch `claude/lv2-legal`, on by default with or
-without compact. Code: `hardware/pnr/pnr/compact_flags.py`
+Status: `PNR_COMPACT` is the runner's own default since ladder-v2 (2026-10-06,
+`docs/decisions.md`; `--no-compact` restores the pre-ladder-v2 path). Implemented on branch
+`claude/compact`; section 11 (legalizer spacing and turns) on branch `claude/legalize`; section 12
+(the `09-mcu-usb-31` lane: `PAIRS`, `RELAX`, power-first placement, the router key) on branch
+`claude/lv2-compact`, which is what let the default flip; section 13 (displacement-minimizing
+legalization) on branch `claude/lv2-legal`, on by default with or without compact; appendix F
+(block-level motion, GP reserves escape-channel room) also on `claude/lv2-legal`. Code:
+`hardware/pnr/pnr/compact_flags.py`
 (the switches, stdlib only) and `hardware/pnr/pnr/place/compact.py` (metrics, cluster box,
 legalizer settings, shrink search); the call sites guard on the switches. Tests:
 `hardware/pnr/tests/test_compact.py`.
@@ -226,7 +229,7 @@ A/B. Shrink passes 23 of 24: on `line-chaser-20` seed 1 a 0.4 mm GND track runs 
 the shrunk edge, through pad cells the router's edge inset leaves open.
 
 The full tables are in the workflow's A/B notes; the ladder documentation
-([compact placement](../regression-ladder.md#compact-placement-opt-in)) summarises them.
+([compact placement](../regression-ladder.md#compact-placement)) summarises them.
 
 Still open: the 0.01 mm courtyard gap (no DRC finding in any arm). The manual `09-mcu-usb-31`
 lane is resolved in section 12.

@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from pnr.board_edge import attach_edges
-from pnr.constraints import compile_constraints, compile_routing_rules
+from pnr.constraints import compile_constraints, compile_routing_rules, infer_series_line_groups
 from pnr.dru_rules import attach_dru
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
@@ -26,7 +26,11 @@ rounds = int(sys.argv[3])
 spec = json.loads((root / "design.json").read_text())
 g = BoardGraph.from_json((root / "source-graph.json").read_text())
 # The rung's tool-neutral side policy (``sides``) as the engine's ``board.sides``.
-c = compile_constraints(with_policy(spec["constraints"], spec.get("sides")), g.refs)
+cons = with_policy(spec["constraints"], spec.get("sides"))
+# A declared diff_pair's two series parts (same footprint, one per leg), where the
+# design leaves them otherwise unconstrained: held side by side (pnr.constraints).
+cons = infer_series_line_groups(cons, g)
+c = compile_constraints(cons, g.refs)
 # Route under the fab profile writeback stamps and KiCad judges (PNR_FAB_PROFILE; legacy: unchanged).
 rules = apply_rules(compile_routing_rules(c, [n.name for n in g.nets]))
 # ladder-v2 A/B (ab-pairs-pool): PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS=1 turns on coupled

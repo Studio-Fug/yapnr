@@ -604,7 +604,9 @@ def _drop_span(vm, stack):
     return drop_span
 
 
-def tie_plane_layers(grid, graph, stack, plan, result, plane_access, via_keepout, net_halo, rule):
+def tie_plane_layers(
+    grid, graph, stack, plan, result, plane_access, via_keepout, net_halo, rule, traced=frozenset()
+):
     """Tie the plane layers of a net with several (two ground planes), whose blind
     or micro drops reach only the plane nearest each pad (pnr.via_policy).
 
@@ -639,7 +641,11 @@ def tie_plane_layers(grid, graph, stack, plan, result, plane_access, via_keepout
     names = vm.model.layers
     last = len(names) - 1
     dedicated = list(stack.dedicated)
-    plane_nets = set(stack.plane_nets)
+    # ``traced``: plane_partition candidates the engine itself routes as ordinary
+    # signal nets (pnr.plane_partition.decide_rails) -- no dedicated-plane drop
+    # exists for them, so they keep none of this function's reference-plane
+    # bookkeeping either.
+    plane_nets = set(stack.plane_nets) - traced
     multi = {net: stack.net_planes(net) for net in sorted(plane_nets)}
     multi = {net: planes for net, planes in multi.items() if len(planes) > 1}
     limit = float((rule or {}).get("max_mm") or 0.0)
@@ -861,6 +867,18 @@ def tie_plane_layers(grid, graph, stack, plan, result, plane_access, via_keepout
     return added, report
 
 
+def via_clear_radius(fab) -> float:
+    """The radius (mm) a default via keeps other copper away by: its copper radius, or
+    ``drill / 2 + hole_clearance - clearance`` where the hole clearance binds first
+    (its ring is thinner than ``hole_clearance - clearance``). Equal to the copper
+    radius for every profile whose rings cover it (legacy, jlc-pofv)."""
+    radius = float(fab["via_diameter_mm"]) / 2.0
+    hole = fab.get("hole_clearance_mm")
+    if hole is None:
+        return radius
+    return max(radius, float(fab["via_drill_mm"]) / 2.0 + float(hole) - float(fab["clearance_mm"]))
+
+
 def detail_pitch(explicit, track_width_mm, clearance_mm):
     """Resolve one pitch for source screening and fixed-copper signal handoff.
 
@@ -923,6 +941,10 @@ def route_board(
     track_width_mm = fab["track_width_mm"] if track_width_mm is None else track_width_mm
     clearance_mm = fab["clearance_mm"]
     via_radius_mm = fab["via_diameter_mm"] / 2.0
+    # The radius a via keeps other copper away by: its copper, or more where the fab's
+    # hole clearance (via hole to other copper) binds before the copper clearance does
+    # (a thin ring under a fine clearance: jlc-6l-hdi's 0.40/0.20 via at 0.09 mm).
+    via_clear_radius_mm = via_clear_radius(fab)
     # Per-net track width from the net classes (type/amperage), default = fab width.
     net_width = _net_widths(rules, track_width_mm)
     pitch = detail_pitch(pitch, track_width_mm, clearance_mm)
@@ -969,16 +991,33 @@ def route_board(
     # must clear by ``via_diameter + clearance`` centre-to-centre, so the nearest
     # allowed other-net via sits ⌈(via_d+clr)/pitch⌉ cells away ⇒ keep-out radius one
     # less. (Default 0.45/0.13/0.30 ⇒ 1; a tighter fab needs a wider halo.)
-    via_keepout = max(1, math.ceil((2 * via_radius_mm + clearance_mm) / pitch) - 1)
+    via_keepout = max(1, math.ceil((2 * via_clear_radius_mm + clearance_mm) / pitch) - 1)
     # A net whose class clearance needs more keeps its own (class_clearance: maze).
     via_keepouts = {}
     for n in sorted(class_of):
-        k = max(via_keepout, math.ceil((2 * via_radius_mm + own_clearance(n)) / pitch) - 1)
+        k = max(via_keepout, math.ceil((2 * via_clear_radius_mm + own_clearance(n)) / pitch) - 1)
         if k > via_keepout:
             via_keepouts[n] = k
 
     width, height = outline_size(graph, constraints)
     layers, planes, stack = layer_plan(graph, rules)
+    # A plane_partition candidate the engine itself decides to trace (current,
+    # budget, terminal count: pnr.plane_partition._rail_decision) is carried into
+    # the routing rules here, not left a dead plane drop: net_class.plane_layer
+    # alone used to decide every net in ``planes`` below, unaware of this per-rail
+    # decision (an owner review on 2026-10-06 found the mismatch -- a traced
+    # candidate kept out of signal_nets and out of every plane's drop planning,
+    # with nowhere left to route it). trace_decisions is the one, early source of
+    # truth; for_route reuses it rather than recomputing from a fuller terminal
+    # count that could, in principle, disagree.
+    trace_decisions: dict = {}
+    traced_nets: Set[str] = set()
+    if rules and rules.get("plane_partition"):
+        from pnr.plane_partition import decide_rails
+
+        trace_decisions = decide_rails(rules, graph, fixed_copper)
+        traced_nets = {n for n, (d, _r) in trace_decisions.items() if d == "trace"}
+        planes = planes - traced_nets
     grid = RouteGrid.from_graph(
         graph,
         width,
@@ -987,7 +1026,7 @@ def route_board(
         layers=layers,
         clearance=clearance_mm,
         track_width=track_width_mm,
-        via_radius=via_radius_mm,
+        via_radius=via_clear_radius_mm,
     )
     grid.net_widths = net_width
     grid.via_model = vm = _via_model(rules, layers, grid, fab, via_keepout, graph)
@@ -1103,7 +1142,11 @@ def route_board(
 
         for comp in graph.components:
             for pad in comp.pads:
-                if pad.net in stack.plane_nets and not pad.through_hole:
+                if (
+                    pad.net in stack.plane_nets
+                    and pad.net not in traced_nets
+                    and not pad.through_hole
+                ):
                     w = terminal_required_width(
                         comp.ref, pad.name, pad.net, rules or {}, neck=False
                     )
@@ -1170,7 +1213,15 @@ def route_board(
         from pnr.plane_partition import for_route
 
         partitions = for_route(
-            grid, graph, rules, stack, width, height, fixed_copper=fixed_copper, fanouts=fanouts
+            grid,
+            graph,
+            rules,
+            stack,
+            width,
+            height,
+            fixed_copper=fixed_copper,
+            fanouts=fanouts,
+            decisions=trace_decisions,
         )
         done = {p.layer for p in partitions}
         regions = [r for r in regions if r.layer not in done]
@@ -1479,6 +1530,7 @@ def route_board(
             via_keepout,
             net_halo,
             vm.model.policy.get("return_tie"),
+            traced=traced_nets,
         )
         plan.diagnostics.update(report)
 
@@ -1618,7 +1670,7 @@ def route_board(
                 net_halo=net_halo,
                 via_keepout=via_keepout,
                 access=net_access,
-                via_radius=via_radius_mm,
+                via_radius=via_clear_radius_mm,
                 fixed_copper=_flat(fixed_copper),
             )
     if dru:

@@ -45,7 +45,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 ENV = "PNR_FAB_PROFILE"
 DEFAULT = "jlc-pofv"
@@ -283,6 +283,72 @@ def apply_fab(fab: Optional[Dict], name: Optional[str] = None) -> Dict:
     return out
 
 
+def _diff_pair_impedance_shift(rules: Dict, dp: Dict, old_mm: float, new_mm: float):
+    """``(z0_old, z0_new)`` single-ended ohms (:mod:`pnr.si.physics`, ranking-grade)
+    for a diff pair's leg at ``old_mm`` and ``new_mm`` width, on its first declared
+    layer (``F.Cu`` without one); None if the model cannot be evaluated (an unknown
+    layer, say) -- never raised, since a track-width floor must still apply."""
+    try:
+        from pnr.si.physics import line, stackup
+
+        st = stackup(rules)
+        layer = (dp.get("layers") or ["F.Cu"])[0]
+        return line(st, layer, old_mm)["z0_ohm"], line(st, layer, new_mm)["z0_ohm"]
+    except Exception:
+        return None
+
+
+def floor_track_widths(rules: Dict, name: Optional[str] = None) -> List[str]:
+    """Raise every track width ``rules`` asks for to the profile's minimum. In place.
+
+    A design's fab block may ask for tracks finer than the selected fab can make
+    (a fine-pitch rung's 0.10 mm default track under a 0.127 mm profile): the
+    default signal track (``fab.track_width_mm``), a net class's ``width_mm`` and a
+    differential pair's ``width_mm`` below the profile's ``min_track_width_mm`` are
+    raised to it, so the engine never draws a track the judge's board setup rejects.
+
+    Raising a diff pair's width (its gap is untouched) changes its characteristic
+    impedance -- the single-ended Z0 shift (:func:`_diff_pair_impedance_shift`,
+    odd-mode coupling not modeled) is folded into that raise's note, and every note
+    also goes to stderr as a warning (an owner review on 2026-10-06 found the raise
+    recorded only in ``rules['fab_adaptations']``, easy to miss, for a change that
+    can move a design off its target impedance). Each raise is recorded there (only
+    when there is one, so a design that fits keeps its bytes) and returned. Legacy
+    and profiles without a minimum change nothing.
+    """
+    import sys
+
+    floor = profile_fab(name).get("min_track_width_mm")
+    notes: List[str] = []
+    if not floor:
+        return notes
+    floor = float(floor)
+
+    def raise_(holder, key, what, *, diff_pair=None):
+        value = holder.get(key)
+        if isinstance(value, (int, float)) and value < floor - 1e-9:
+            note = "%s %.4g -> %.4g mm (fab min_track_width)" % (what, value, floor)
+            if diff_pair is not None:
+                shift = _diff_pair_impedance_shift(rules, diff_pair, value, floor)
+                if shift is not None:
+                    note += (
+                        "; single-ended Z0 %.1f -> %.1f ohm (ranking-grade, odd-mode coupling not modeled)"
+                        % (shift)
+                    )
+            notes.append(note)
+            sys.stderr.write("pnr.fab_profile: warning: %s\n" % note)
+            holder[key] = floor
+
+    raise_(rules.setdefault("fab", {}), "track_width_mm", "fab.track_width_mm")
+    for nc in rules.get("net_classes") or ():
+        raise_(nc, "width_mm", "net_class %s width" % nc.get("name"))
+    for dp in rules.get("diff_pairs") or ():
+        raise_(dp, "width_mm", "diff_pair %s width" % dp.get("name"), diff_pair=dp)
+    if notes:
+        rules["fab_adaptations"] = list(rules.get("fab_adaptations") or ()) + notes
+    return notes
+
+
 def apply_fab_model(model: Optional[Dict], name: Optional[str] = None) -> Dict:
     """An electrical / plane-access fab model (JSON dict) under the profile.
 
@@ -320,6 +386,7 @@ def apply_rules(rules: Dict, name: Optional[str] = None) -> Dict:
         return rules
     out = copy.deepcopy(rules)
     out["fab"] = apply_fab(out.get("fab"), name)
+    floor_track_widths(out, name)
     for key in ("electrical_fab", "plane_access_fab"):
         if isinstance(out.get(key), dict):
             out[key] = apply_fab_model(out[key], name)

@@ -20,6 +20,7 @@ are warnings, not errors, so the file can grow without breaking older boards.
 
 from __future__ import annotations
 
+import copy
 import fnmatch
 import math
 import os
@@ -812,6 +813,133 @@ def _finite_number(value) -> bool:
     import math
 
     return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value)
+
+
+def _series_claimed_refs(doc: Dict, graph) -> set:
+    """Refs a rigid ``line_group`` could not honour anyway (see ``_parse_line_groups``'s
+    own exclusivity list), plus any already a line_group member, plus any locked in
+    the source board: the exact set :func:`infer_series_line_groups` must leave alone."""
+    claimed = {c.ref for c in graph.components if c.locked}
+    claimed.update((doc.get("fixed") or {}).keys())
+    claimed.update((doc.get("orientation") or {}).keys())
+    claimed.update((doc.get("edge_align") or {}).keys())
+    for refs in (doc.get("side") or {}).values():
+        claimed.update(refs or ())
+    for entry in doc.get("row") or []:
+        claimed.update((entry or {}).get("members") or ())
+    for entry in doc.get("line_group") or []:
+        claimed.update((entry or {}).get("members") or ())
+    for entry in doc.get("group") or []:
+        if (entry or {}).get("hard"):
+            claimed.update((entry or {}).get("members") or ())
+            anchor = (entry or {}).get("anchor")
+            if anchor:
+                claimed.add(anchor)
+    for entry in doc.get("keepout") or []:
+        entry = entry or {}
+        if entry.get("ref") and entry.get("extent") and not entry.get("polygon"):
+            claimed.add(entry["ref"])
+    return claimed
+
+
+def infer_series_line_groups(doc: Dict, graph) -> Dict:
+    """Add an implicit ``line_group`` for each declared ``diff_pair`` whose two legs
+    each pass through one two-terminal part before reaching the rest of the board --
+    a series resistor or filter on each leg, the same footprint on both legs -- and
+    hold the two parts side by side at the tightest legal pitch, turned so their own
+    two pads run across the line (perpendicular to it), so a constant-width corridor
+    can continue straight through both: the layout a human lays out by hand instead of
+    leaving the pair wherever the placer's general objective drops them (the owner's
+    review of the BGA ``-rails`` rung, 2026-10-05: "we could use a line constraint to
+    keep the two resistors adjacent to one another, which would produce more
+    human-like corridor routing").
+
+    Pure: returns a new constraints mapping (``doc`` is not mutated); call it on the
+    compiler's input document before :func:`compile_constraints`, with the ingested
+    :class:`pnr.graph.BoardGraph` (whose components carry the pad/net data a
+    ``constraints.yaml`` document never does).
+
+    Skipped per pair with a ``diff_pair`` entry carrying ``infer_series_line: false``
+    (the design's own opt-out); skipped per leg when its bridging part is ambiguous
+    (none, or more than one, two-pad part sits on that net) or the two legs' bridging
+    parts do not share a footprint; and skipped per part already governed by another
+    placement constraint that a rigid line cannot honour -- fixed, a row, an existing
+    line_group, edge-aligned, oriented, given a hard side, the ref of a ref-relative
+    keepout, a hard group's member or anchor, or locked in the source board -- so this
+    never conflicts with, or silently overrides, an authored one.
+    """
+    pairs = doc.get("diff_pair") if doc else None
+    if not pairs:
+        return doc
+    doc = copy.deepcopy(doc)
+    claimed = _series_claimed_refs(doc, graph)
+    pads_by_ref: Dict[str, Dict[str, str]] = {}
+    footprint_by_ref: Dict[str, str] = {}
+    offsets_by_ref: Dict[str, List[Tuple[float, float]]] = {}
+    for comp in graph.components:
+        if comp.ref in claimed or len(comp.pads) != 2:
+            continue
+        nets = [p.net for p in comp.pads]
+        if not all(nets) or len(set(nets)) != 2:
+            continue
+        pads_by_ref[comp.ref] = {p.name: p.net for p in comp.pads}
+        footprint_by_ref[comp.ref] = comp.footprint
+        offsets_by_ref[comp.ref] = [p.offset for p in comp.pads]
+
+    def bridge(net):
+        hits = [ref for ref, pads in pads_by_ref.items() if net in pads.values()]
+        return hits[0] if len(hits) == 1 else None
+
+    groups = list(doc.get("line_group") or [])
+    existing_names = {g.get("name") for g in groups if isinstance(g, dict)}
+    seen_pairs: set = set()
+    made = 0
+    for entry in pairs:
+        if not isinstance(entry, dict) or entry.get("infer_series_line") is False:
+            continue
+        p_net, n_net = entry.get("p"), entry.get("n")
+        if not isinstance(p_net, str) or not isinstance(n_net, str):
+            continue
+        part_p, part_n = bridge(p_net), bridge(n_net)
+        if not part_p or not part_n or part_p == part_n:
+            continue
+        key = frozenset((part_p, part_n))
+        if key in seen_pairs:
+            continue
+        if footprint_by_ref[part_p] != footprint_by_ref[part_n]:
+            continue
+        seen_pairs.add(key)
+        claimed.update(key)
+        (x0, y0), (x1, y1) = offsets_by_ref[part_p]
+        # The footprint's own two pads run along local x at rot 0 (the convention
+        # ``designs.py`` documents for a connector or a passive); turning the line by
+        # 90 degrees from that then turns the pads to run across it (along the pair)
+        # instead of along it. A footprint whose pads already run along local y needs
+        # no extra turn.
+        rot = 90.0 if abs(x1 - x0) >= abs(y1 - y0) else 0.0
+        made += 1
+        name = (entry.get("name") or "pair%d" % made) + "_series_implicit"
+        while name in existing_names:
+            made += 1
+            name = (entry.get("name") or "pair%d" % made) + "_series_implicit_%d" % made
+        existing_names.add(name)
+        groups.append(
+            dict(
+                name=name,
+                members=[part_p, part_n],
+                rot=rot,
+                reason=(
+                    "Inferred: %s and %s are diff_pair %r's two two-terminal series "
+                    "parts (one per leg, same footprint %r); held side by side, pads "
+                    "across the line, so a coupled corridor can run straight through "
+                    "them. Opt out with this pair's infer_series_line: false."
+                    % (part_p, part_n, entry.get("name"), footprint_by_ref[part_p])
+                ),
+            )
+        )
+    if made:
+        doc["line_group"] = groups
+    return doc
 
 
 def _parse_line_groups(raw, known_refs, board, prior) -> List[Constraint]:

@@ -19,6 +19,7 @@ class DataTest(unittest.TestCase):
             [
                 "jlc-4l",
                 "jlc-6l",
+                "jlc-6l-hdi",
                 "jlc-pofv",
                 "oshpark-2l",
                 "oshpark-4l",
@@ -32,7 +33,7 @@ class DataTest(unittest.TestCase):
         drafts = [
             n for n in capability.names("profiles") if capability.profile(n)["status"] == "draft"
         ]
-        self.assertEqual(drafts, ["jlc-6l", "pcbway-hf-2l", "pcbway-std"])
+        self.assertEqual(drafts, ["jlc-6l", "jlc-6l-hdi", "pcbway-hf-2l", "pcbway-std"])
 
     def test_every_source_has_an_https_url_and_an_access_date(self):
         sources = capability.all_sources()

@@ -18,6 +18,7 @@ from designs import PAD_AXIS, designs, showcases
 from run import (
     LISTING,
     acceptance,
+    case_fab_profile,
     constraint_reasons,
     copper_sha,
     engine_revision,
@@ -345,6 +346,14 @@ class RunnerContract(unittest.TestCase):
         )
         with self.assertRaises(SystemExit):
             parser().parse_args(["--out", "x", "--fab-profile", "other"])
+
+    def test_a_case_that_declares_a_fab_profile_is_held_to_it(self):
+        bga = dict(name="bga", fab_profile="jlc-6l-hdi")
+        self.assertEqual(case_fab_profile(bga, "jlc-pofv"), "jlc-6l-hdi")
+        self.assertEqual(case_fab_profile(bga, "oshpark-4l"), "jlc-6l-hdi")
+        # legacy: every design's own fab block, the A/B baseline, declaration or not
+        self.assertEqual(case_fab_profile(bga, "legacy"), "legacy")
+        self.assertEqual(case_fab_profile(dict(name="plain"), "jlc-pofv"), "jlc-pofv")
 
     def test_route_case_routes_under_the_profile_it_is_judged_by(self):
         source = (Path(__file__).resolve().parent / "route_case.py").read_text()

@@ -29,6 +29,7 @@ from copy import deepcopy
 
 from designs import circuit
 from hard_rungs import (
+    BGA_FAB_PROFILE,
     base_checks,
     connected_pads,
     hard,
@@ -499,13 +500,10 @@ def soc_bga():
     cons["board"]["default_clearance_mm"] = 0.2
     # The fine-pitch rules of 11-ufbga201-fanout: 0.10/0.10 mm tracks, 0.40/0.20 mm vias,
     # 0.35/0.15 mm plane drops in the array.
-    # MERGE-TIME TODO (review 2026-10-06, after lv2p2-fabprofile/#76 lands): declare
-    # spec["fab_profile"] = hard_rungs.BGA_FAB_PROFILE ("jlc-6l-hdi") here. #76 makes
-    # the engine adapt to the ladder's active fab profile (default jlc-pofv), which
-    # would otherwise swap these 0.35/0.15 mm drops for jlc-pofv's filled in-pad via
-    # and fail this rung's own via-size check ("fanout-plane-vias" below). Not done
-    # in this branch alone: BGA_FAB_PROFILE and the jlc-6l-hdi profile data do not
-    # exist here yet.
+    # The 0.35/0.15 mm drops need a 0.15 mm drill: declare the BGA fab profile so the
+    # engine's fab adaptation keeps them instead of swapping in the run profile's filled
+    # in-pad via (which would fail "fanout-plane-vias" below), as the UFBGA-201 rungs do.
+    spec["fab_profile"] = BGA_FAB_PROFILE
     cons["fab"] = dict(
         track_width_mm=0.1,
         clearance_mm=0.1,

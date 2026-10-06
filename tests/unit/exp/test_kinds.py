@@ -235,6 +235,22 @@ class RfTest(unittest.TestCase):
 
 
 class LadderOptionsTest(unittest.TestCase):
+    def test_the_bundle_carries_the_fab_profile_data(self):
+        # run.py FAB_DATA_SOURCES and the profiles: a data profile (jlc-6l-hdi, which the
+        # UFBGA-201 rungs declare) resolves from the cell's own checkout, not the image's.
+        from yapnr.exp.kinds.ladder import LadderCell
+
+        self.assertEqual(LadderCell.source_paths, ("hardware/pnr", "hardware/tools"))
+        self.assertEqual(
+            LadderCell.optional_source_paths,
+            (
+                "yapnr/__init__.py",
+                "yapnr/fab/__init__.py",
+                "yapnr/fab/capability.py",
+                "yapnr/fab/data",
+            ),
+        )
+
     def test_compact_shrink_gloss_and_hard_reach_the_runner(self):
         from yapnr.exp.kinds import ladder
 
@@ -274,8 +290,9 @@ class LadderOptionsTest(unittest.TestCase):
         wire = ladder.runner_arguments(dict(legalize_reorient_wire=True))
         self.assertEqual(wire[wire.index("--legalize-reorient") + 1], "wire")
         more = ladder.runner_arguments(
-            dict(legalize_channel_clearance_fab=True, line_satellites=True)
+            dict(legalize_channel_clearance_fab=True, line_satellites=True, channel_layers=True)
         )
+        self.assertIn("--channel-layers", more)
         self.assertEqual(more[more.index("--legalize-channel-clearance") + 1], "fab")
         self.assertIn("--line-satellites", more)
         kind = kinds.get("ladder-cell")

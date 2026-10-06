@@ -385,6 +385,13 @@ def plan(
         if c.get("clearance_mm"):
             for n in c.get("nets", []):
                 net_clearance[n] = max(net_clearance.get(n, 0.0), float(c["clearance_mm"]))
+    if rules.get("dru_routing") and rules.get("dru"):
+        # board.dru_routing: a custom rule's small pair clearance raises one side's, as
+        # route_board does for the maze (a CLK class 0.25 mm from unclassed nets).
+        from pnr.route.detail.dru_apply import raised_clearances
+
+        for n, value in raised_clearances(rules["dru"]).items():
+            net_clearance[n] = max(net_clearance.get(n, 0.0), value)
     # The pads this fanout covers and their tasks.
     fanned = {}
     skipped = {}
@@ -433,6 +440,7 @@ def plan(
         ),
         via_to_pad=g.via_to_smd_pad,
         hole_to_hole=g.hole_to_hole,
+        hole_clearance=g.hole_clearance,
         edge_clearance=g.edge_clearance,
         hole_to_edge=g.hole_to_edge,
         via_classes=spec["via_classes"],

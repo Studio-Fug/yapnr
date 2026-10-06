@@ -130,6 +130,25 @@ class ParseTest(unittest.TestCase):
         )
         self.assertEqual((args.legalize_channel_clearance, args.line_satellites), ("fab", True))
 
+    def test_channel_layers(self):
+        from pnr.graph import BoardGraph
+        from pnr.place.channels import ChannelModel
+
+        graph = BoardGraph("empty", [], [])
+        with flags():
+            self.assertFalse(legalize_flags.channel_layers())
+            self.assertEqual(ChannelModel(graph, {"layers": 4}).share, 1.0)
+        with flags(PNR_CHANNEL_LAYERS="1"):
+            self.assertEqual(legalize_flags.active(), dict(CHANNEL_LAYERS=True))
+            self.assertEqual(ChannelModel(graph, {"layers": 4}).share, 0.25)
+            self.assertEqual(ChannelModel(graph, {"layers": 4}, layers=False).share, 1.0)
+        import run
+
+        self.assertEqual(
+            run.legalize_environment(channel_layers=True), dict(PNR_CHANNEL_LAYERS="1")
+        )
+        self.assertTrue(run.parser().parse_args(["--out", "x", "--channel-layers"]).channel_layers)
+
     def test_channel_clearance_reaches_the_legalizer_model(self):
         from pnr.place import placer
         from pnr.place.channels import ChannelModel

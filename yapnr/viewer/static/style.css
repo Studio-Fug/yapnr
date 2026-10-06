@@ -58,3 +58,34 @@ details label{display:flex;align-items:center;justify-content:space-between;gap:
 .sp-side-btn:hover{color:#9ee6d1}
 #lanes-panel.sp-rail .sp-rail-btn,#explore-panel.sp-rail .sp-rail-btn{position:static;top:auto;right:auto}
 @media(min-width:901px){.sp-side-btn{display:none}}
+/* Experiment browser (lane-tree.js): a collapsible, directory-like tree inside #lanes replacing
+   the old flat lane-button list. .tr-toolbar is built once and never rebuilt (so a typed filter
+   or a chip toggle survives the next poll); .tr-body is the scrollable row list, bounded so a
+   large campaign's hundreds of leaves never push the Inspect panel below it out of reach. */
+.tr-toolbar{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.tr-toolbar input[type=search]{width:100%}
+.tr-chips{display:flex;flex-wrap:wrap;gap:4px}
+.tr-chip{background:#1d2b33;border:1px solid #3b5563;color:#9eb3bf;border-radius:10px;padding:3px 9px;font-size:10px;text-transform:capitalize}
+.tr-chip[aria-pressed="false"]{opacity:.4}
+.tr-chip-running[aria-pressed="true"]{border-color:#f3c875;color:#f3c875}
+.tr-chip-failed[aria-pressed="true"]{border-color:#ed6d70;color:#ed6d70}
+.tr-chip-done[aria-pressed="true"]{border-color:#9ee6d1;color:#9ee6d1}
+.tr-chip-queued[aria-pressed="true"]{border-color:#8a9ea7;color:#9eb3bf}
+.tr-chip-stalled[aria-pressed="true"]{border-color:#c98a3e;color:#c98a3e}
+.tr-chip-rejected[aria-pressed="true"]{border-color:#8da9b6;color:#8da9b6}
+.tr-btns{display:flex;gap:6px}
+.tr-btns button{flex:1;font-size:10px;padding:5px 6px}
+.tr-body{max-height:50vh;overflow:auto;border:1px solid #27383f;border-radius:5px;padding:2px 0}
+.tr-row{padding:4px 6px 4px 0;cursor:pointer;border-left:2px solid transparent;outline:none}
+.tr-row:hover{background:#1a262c}
+.tr-row:focus{background:#1d2b33;border-left-color:#6fbfaa}
+.tr-row.tr-active{background:#26453f;border-left-color:#9ee6d1}
+.tr-row-main{display:flex;align-items:center;gap:5px;min-width:0}
+.tr-twirl{width:16px;height:16px;flex:none;background:transparent;border:0;color:#8a9ea7;padding:0;font-size:10px;line-height:16px}
+.tr-twirl-spacer{display:inline-block}
+.tr-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.tr-count{flex:none;font-size:9px;color:#8a9ea7;white-space:nowrap}
+.tr-bar{flex:none;width:44px;height:6px;border-radius:3px;background:#23343c;overflow:hidden}
+.tr-bar-fill{height:100%;border-radius:3px;transition:width .2s ease}
+.tr-status{margin-left:21px;font-size:10px;color:#94aab5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:480px){.tr-bar{width:30px}.tr-count{font-size:8px;max-width:34px;overflow:hidden;text-overflow:ellipsis}}

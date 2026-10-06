@@ -514,6 +514,83 @@ class RouteTest(unittest.TestCase):
         self.assertNotIn("plane_regions", r.extras())
         self.assertNotIn("plane_partition", r.escape_diagnostics)
 
+    def test_a_candidate_the_engine_traces_still_routes(self):
+        """A candidate ``_rail_decision`` traces (current under the floor, too few
+        terminals) must end up an ordinary routed signal, not a dead plane drop: an
+        owner review on 2026-10-06 found route_board excluded every ``net_class
+        .plane_layer`` net from signal routing and plane drops alike, unaware of
+        this module's own decision -- a traced candidate was then left with no
+        territory *and* no signal route."""
+        from pnr.constraints import compile_constraints, compile_routing_rules
+        from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
+        from pnr.route.detail.router import route_board
+
+        def part(ref, at, nets, pitch=1.0):
+            pads = [
+                Pad(str(k + 1), net, ((k - (len(nets) - 1) / 2) * pitch, 0.0), (0.6, 0.6))
+                for k, net in enumerate(nets)
+            ]
+            return Component(
+                ref, "c", at, 0.0, "top", (len(nets) * pitch, 1.0), (1.0, 1.0), pads=pads
+            )
+
+        comps = [
+            part("J1", (2.0, 6.0), ["V1", "GND", "V2"]),
+            part("C1", (8.0, 3.0), ["V1", "GND"]),
+            part("C2", (16.0, 3.0), ["V1", "GND"]),
+            part("C3", (8.0, 9.0), ["V2", "GND"]),
+            part("C4", (16.0, 9.0), ["V2", "GND"]),
+            # V3: a trickle rail (two terminals, under the current floor): the
+            # engine must trace it, same as VBAT in the real -rails rung.
+            part("T1", (4.0, 10.5), ["V3"]),
+            part("T2", (18.0, 10.5), ["V3"]),
+        ]
+        pins = {}
+        for comp in comps:
+            for p in comp.pads:
+                pins.setdefault(p.net, []).append((comp.ref, p.name))
+        nets = [Net(n, k + 1, p) for k, (n, p) in enumerate(sorted(pins.items()))]
+        g = BoardGraph("traced", comps, nets, BoardOutline(20, 12))
+        g.stack = {
+            "layers": [
+                {"name": "F.Cu", "type": "signal", "zones": [], "copper_mm": 0.035},
+                {"name": "In1.Cu", "type": "power", "zones": [], "copper_mm": 0.0175},
+                {"name": "In2.Cu", "type": "power", "zones": [], "copper_mm": 0.0175},
+                {"name": "B.Cu", "type": "signal", "zones": [], "copper_mm": 0.035},
+            ]
+        }
+        doc = {
+            "schema": "v0",
+            "board": {"outline": {"w": 20, "h": 12}, "layers": 4},
+            "fixed": {c.ref: {"at": list(c.pos), "rot": 0, "side": "top"} for c in comps},
+            "net_class": {
+                "gnd": {"nets": ["GND"], "plane_layer": "In1.Cu"},
+                "v1": {"nets": ["V1"], "plane_layer": "In2.Cu"},
+                "v2": {"nets": ["V2"], "plane_layer": "In2.Cu"},
+                "v3": {"nets": ["V3"], "plane_layer": "In2.Cu"},
+            },
+            "plane_partition": [
+                {
+                    "layer": "In2.Cu",
+                    "nets": ["V*"],
+                    "min_width_mm": 1.0,
+                    "currents": {"V1": 2, "V3": 0.0001},
+                }
+            ],
+        }
+        c = compile_constraints(doc, g.refs)
+        rules = compile_routing_rules(c, [n.name for n in g.nets])
+        r = route_board(g, c, rules, max_iters=4)
+        report = r.escape_diagnostics["plane_partition"][0]
+        self.assertEqual(report["candidates"]["V3"]["decision"], "trace")
+        self.assertNotIn("V3", {row["net"] for row in r.extras()["plane_regions"]})
+        # The real defect: left out of the partition (no territory) *and* out of
+        # signal routing (net_class.plane_layer alone decided ``plane_nets``), V3
+        # had nowhere to route and no via drop either -- dead copper.
+        self.assertNotIn("V3", r.plane_nets)
+        self.assertNotIn("V3", r.result.unrouted)
+        self.assertTrue(r.result.nets["V3"].cells, "V3 must have routed signal copper")
+
 
 class FixedTerminalsTest(unittest.TestCase):
     """E3: a fixed block's through vias of a rail are partition terminals (a blind via

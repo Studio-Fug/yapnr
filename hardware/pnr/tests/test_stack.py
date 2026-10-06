@@ -490,9 +490,18 @@ class RungConsistency(unittest.TestCase):
                         # elsewhere, not a dedicated plane, so it carries no entry here.
                         self.assertNotIn(part["layer"], (layer for layer, _ in stack.dedicated))
                         continue
+                    # part["nets"] lists CANDIDATES (pnr.plane_partition): one the
+                    # rung traces instead of planing (its net_class carries no
+                    # plane_layer, e.g. the rails rung's VBAT) is not dedicated here.
+                    classed = {
+                        n
+                        for c in rules_of(spec).get("net_classes", [])
+                        if c.get("plane_layer") == part["layer"]
+                        for n in c.get("nets", [])
+                    }
                     self.assertEqual(
                         [n for layer, n in stack.dedicated if layer == part["layer"]],
-                        part["nets"],
+                        [n for n in part["nets"] if n in classed],
                     )
                     continue
                 self.assertEqual(

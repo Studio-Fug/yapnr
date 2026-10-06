@@ -28,6 +28,17 @@ py_test(
     deps = [":pnr", ":pnr_place"],
 )
 
+py_test(
+    name = "channel_audit_test",
+    size = "small",
+    srcs = [
+        "regression/channel_audit.py",
+        "tests/test_channel_audit.py",
+    ],
+    main = "tests/test_channel_audit.py",
+    deps = [":pnr", ":pnr_place"],
+)
+
 # The stdlib-only pnr sources the pcbnew steps (ingest, writeback) run under
 # @kicad_python — staged as plain files on PYTHONPATH, NOT the torch py_library
 # (KiCad's python has no torch and doesn't need it). See //hardware/pnr:pnr.bzl.
@@ -869,6 +880,25 @@ py_test(
     ],
 )
 
+# Plane or trace, per candidate rail of a dedicated-plane plane_partition entry
+# (pnr.plane_partition._rail_decision, for_route): the engine's decision and its
+# reason, an outer pour (region) left untouched.
+py_test(
+    name = "rail_candidates_test",
+    size = "medium",
+    srcs = ["tests/test_rail_candidates.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_rail_candidates.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
 # Outer pours (plane_partition with a region, stage 3c E1): whole-land terminals,
 # corridors for other nets' lands, the grid claim, ports and stitching vias.
 py_test(
@@ -972,6 +1002,41 @@ py_test(
     imports = ["."],
     legacy_create_init = False,
     main = "tests/test_partition_fanout.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# The engine adapts a design to the selected fab profile: track widths under its minimum
+# are raised (rules.json fab_adaptations); the jlc-6l-hdi data profile's limits.
+py_test(
+    name = "fab_adapt_test",
+    size = "small",
+    srcs = ["tests/test_fab_adapt.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_fab_adapt.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
+# Joint terminal access never walls a selected exit in (a plane drop sealing a connector's
+# middle pin) and prices a drop stub across another land of its net as a last resort.
+py_test(
+    name = "escape_seal_test",
+    size = "small",
+    srcs = ["tests/test_escape_seal.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_escape_seal.py",
     deps = [
         ":pnr",
         ":pnr_detail",
@@ -1822,6 +1887,25 @@ py_test(
     ],
 )
 
+# The checker's pair_bridge check (a diff pair's two series parts, geometrically
+# coupled across them), KiCad's Python: run it there by hand, python3 -m unittest
+# test_check_pair_bridge in regression/.
+py_test(
+    name = "check_pair_bridge_test",
+    size = "small",
+    srcs = [
+        "regression/check_constraints.py",
+        "regression/test_check_pair_bridge.py",
+    ],
+    imports = ["regression"],
+    main = "regression/test_check_pair_bridge.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+)
+
 py_binary(
     name = "native_regression",
     srcs = [
@@ -2087,6 +2171,18 @@ py_test(
         ":pnr_hier",
         ":pnr_place",
         ":pnr_route",
+    ],
+)
+
+# Implicit line_group for a diff_pair's two series parts (pnr.constraints.infer_series_line_groups).
+py_test(
+    name = "series_line_inference_test",
+    size = "small",
+    srcs = ["tests/test_series_line_inference.py"],
+    imports = ["."],
+    main = "tests/test_series_line_inference.py",
+    deps = [
+        ":pnr",
     ],
 )
 

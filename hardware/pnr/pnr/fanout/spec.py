@@ -333,23 +333,49 @@ def check(spec: Dict, rules: Dict, layers: Sequence[str]) -> List[str]:
     warnings = []
     fab = dict(rules.get("fab") or {})
     g = geometry(rules)
+    min_drill = float(fab.get("min_through_drill_mm", 0.0) or 0.0)
+    annular = float(fab.get("via_annular_mm", 0.0) or 0.0)
+    # The judge's board setup minimum (pnr.fab_profile.board_constraints).
+    min_dia = fab.get("min_via_diameter_mm", fab.get("via_diameter_mm"))
+    # The fab's filled via-in-pad class (jlc-pofv 5B: every via filled and capped):
+    # the smallest via it makes, legal in a pad, between balls or anywhere else.
+    in_pad = _profile_in_pad(g, min_drill, annular, min_dia)
     if not spec["via_classes"]:
         fab_d, fab_h = float(fab.get("via_diameter_mm", 0.45)), float(fab.get("via_drill_mm", 0.25))
+        sites = ["vacant", "outside"]
+        if in_pad is not None:
+            # A part without declared classes escapes by the profile's own smallest
+            # via: in its pads (POFV), between them or beside the array.
+            fab_d, fab_h = in_pad
+            sites = ["in_pad", "interstitial", "vacant", "outside"]
         spec["via_classes"] = [
             dict(
                 name="default",
                 diameter_mm=fab_d,
                 drill_mm=fab_h,
                 nets=[],
-                sites=["vacant", "outside"],
+                sites=sites,
             )
         ]
-    min_drill = float(fab.get("min_through_drill_mm", 0.0) or 0.0)
-    annular = float(fab.get("via_annular_mm", 0.0) or 0.0)
-    # The judge's board setup minimum (pnr.fab_profile.board_constraints).
-    min_dia = fab.get("min_via_diameter_mm", fab.get("via_diameter_mm"))
     for c in spec["via_classes"]:
         w = "%s.via_classes.%s" % (where, c["name"])
+        unmakeable = (
+            c["drill_mm"] < min_drill - 1e-9
+            or (c["diameter_mm"] - c["drill_mm"]) / 2 < annular - 1e-9
+            or (min_dia is not None and c["diameter_mm"] < float(min_dia) - 1e-9)
+        )
+        if unmakeable and in_pad is not None and in_pad[0] <= c["diameter_mm"] + 1e-9:
+            # The fab cannot make the declared via; its filled in-pad via is no wider,
+            # so it fits every site the declared one was meant for. The engine adapts
+            # to the profile and says so (a design whose checks pin the declared
+            # size, or that needs the smaller drill, declares a fab that makes it).
+            warnings.append(
+                "%s: %.3g/%.3g mm via is not made by the fab (min drill %.3g, ring %.3g); "
+                "using its filled in-pad via %.3g/%.3g mm"
+                % (w, c["diameter_mm"], c["drill_mm"], min_drill, annular, in_pad[0], in_pad[1])
+            )
+            c["diameter_mm"], c["drill_mm"] = in_pad
+            continue
         if c["drill_mm"] < min_drill - 1e-9:
             raise FanoutError(
                 "%s: drill %.3f is under the fab's min_through_drill %.3f"
@@ -409,3 +435,18 @@ def check(spec: Dict, rules: Dict, layers: Sequence[str]) -> List[str]:
                     % (where, r["name"], layer)
                 )
     return warnings
+
+
+def _profile_in_pad(g, min_drill, annular, min_dia):
+    """``(diameter, drill)`` of the fab profile's filled via-in-pad class (its first,
+    smallest via pad) when it meets the fab's own via minimums, else None (legacy and
+    profiles without filled vias)."""
+    policy = g.in_pad
+    if policy is None or not policy.diameters:
+        return None
+    diameter, drill = float(policy.diameters[0]), float(policy.drill)
+    if drill < min_drill - 1e-9 or (diameter - drill) / 2 < annular - 1e-9:
+        return None
+    if min_dia is not None and diameter < float(min_dia) - 1e-9:
+        return None
+    return diameter, drill

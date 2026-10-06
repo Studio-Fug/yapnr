@@ -16,17 +16,18 @@ either off for an A/B.
 
 > **Status (2026-10-06):** all eight cases **pass** the gate: 100 % routed, no open connections
 > and no findings in KiCad's DRC, in the runner's own default configuration (compact placement,
-> gloss, the initial placement pool, the engine's own JLCPCB fab profile -- the animations'
+> gloss, the initial placement pool, the fixtures' own legacy fab profile -- the animations'
 > configuration too, so docs and CI agree). The ladder routes and is judged under
-> `--fab-profile jlc-pofv` (the runner's default since ladder-v2), where the router keeps vias
-> 0.127 mm off SMD pads; under the fixtures' own legacy rules (`--fab-profile legacy`), every case
-> passes too (other boards, below).
+> `--fab-profile legacy` (the runner's default; `jlc-pofv` was tried as ladder-v2's default and
+> rolled back, `docs/decisions.md`, "New blocker"); under the engine's own JLCPCB profile
+> (`--fab-profile jlc-pofv`), where the router keeps vias 0.127 mm off SMD pads, every ladder and
+> showcase case passes too (other boards, below).
 
 ## The cases
 
 Seed 0, with the runner's own defaults (the initial placement pool: 8 starts, 3 routed finalists;
-compact placement; the gloss stage; the engine's JLCPCB fab profile); KiCad 10.0.6, engine
-`f362d1e6` (compact placement with the legalizer parts `WIRE`, `TURN`, `SATELLITES`, `PAIRS` and
+compact placement; the gloss stage; the fixtures' own legacy fab profile); KiCad 10.0.6, engine
+`dfe747f1` (compact placement with the legalizer parts `WIRE`, `TURN`, `SATELLITES`, `PAIRS` and
 `RELAX`, and the GP-side escape-channel reservation that keeps block-level legalization from
 moving much; `docs/design/compact-placement.md` sections 12 and 13). "Opens" and "findings" are
 KiCad's DRC counts on the saved board; "Placed" is the bounding box of the placed parts' bodies
@@ -36,14 +37,14 @@ is a fixed overhead).
 
 | Case                                                                | Parts | Nets | Layers | Added difficulty                                       | Routed | Opens | Findings | Vias | Copper (mm) | Placed on board (mm)   | Time (s) | Gate |
 | ------------------------------------------------------------------- | ----: | ---: | -----: | ------------------------------------------------------ | :----: | ----: | -------: | ---: | ----------: | ---------------------- | -------: | ---- |
-| [01 Connector + LED](#01-connector--led)                            |     2 |    2 |      2 | Basic connection; externally current-limited supply    | 100 %  |     0 |        0 |    0 |        6.95 | 5.8 × 6.2 on 18 × 14   |     20.5 | pass |
-| [02 Resistor + LED](#02-resistor--led)                              |     3 |    3 |      2 | Movable series current limiter                         | 100 %  |     0 |        0 |    0 |       15.33 | 8.7 × 7.2 on 20 × 16   |     19.2 | pass |
-| [03 Two LEDs](#03-two-leds)                                         |     5 |    4 |      2 | Shared, branched supply and return                     | 100 %  |     0 |        0 |    0 |       23.71 | 9.3 × 10.5 on 24 × 18  |     22.4 | pass |
-| [04 Inverter indicators](#04-inverter-indicators)                   |     8 |    6 |      2 | SOT-23-5 pin escapes, an unused pad, 3-pin connector   | 100 %  |     0 |        0 |    1 |       70.43 | 11.9 × 15.0 on 26 × 20 |     28.8 | pass |
-| [05 TLC555 blinker](#05-tlc555-blinker)                             |    10 |    7 |      2 | 8-pin IC, RC timing and control, bypass and bulk caps  | 100 %  |     0 |        0 |    3 |      125.34 | 15.9 × 17.6 on 30 × 24 |     32.8 | pass |
-| [06 Two-stage chaser](#06-two-stage-chaser)                         |    14 |   11 |      2 | TLC555 + CD4017B, cross-IC clock and reset, fanout     | 100 %  |     0 |        0 |   11 |      219.99 | 25.4 × 17.2 on 36 × 28 |     39.8 | pass |
-| [07 Five-stage chaser](#07-five-stage-chaser)                       |    20 |   17 |      2 | Five LED/resistor outputs, shared rails, dense routes  | 100 %  |     0 |        0 |   21 |      296.81 | 22.2 × 24.0 on 42 × 32 |     68.7 | pass |
-| [08 Five-stage chaser with plane](#08-five-stage-chaser-with-plane) |    20 |   17 |      4 | Four copper layers, ground plane attachment and refill | 100 %  |     0 |        0 |   26 |      221.81 | 24.4 × 23.4 on 42 × 32 |     48.1 | pass |
+| [01 Connector + LED](#01-connector--led)                            |     2 |    2 |      2 | Basic connection; externally current-limited supply    | 100 %  |     0 |        0 |    0 |        6.95 | 5.8 × 6.2 on 18 × 14   |     18.3 | pass |
+| [02 Resistor + LED](#02-resistor--led)                              |     3 |    3 |      2 | Movable series current limiter                         | 100 %  |     0 |        0 |    0 |       12.40 | 8.2 × 6.4 on 20 × 16   |     18.4 | pass |
+| [03 Two LEDs](#03-two-leds)                                         |     5 |    4 |      2 | Shared, branched supply and return                     | 100 %  |     0 |        0 |    0 |       27.36 | 8.2 × 11.1 on 24 × 18  |     21.0 | pass |
+| [04 Inverter indicators](#04-inverter-indicators)                   |     8 |    6 |      2 | SOT-23-5 pin escapes, an unused pad, 3-pin connector   | 100 %  |     0 |        0 |    1 |       72.24 | 11.9 × 15.0 on 26 × 20 |     26.6 | pass |
+| [05 TLC555 blinker](#05-tlc555-blinker)                             |    10 |    7 |      2 | 8-pin IC, RC timing and control, bypass and bulk caps  | 100 %  |     0 |        0 |    5 |      125.71 | 16.7 × 17.4 on 30 × 24 |     29.0 | pass |
+| [06 Two-stage chaser](#06-two-stage-chaser)                         |    14 |   11 |      2 | TLC555 + CD4017B, cross-IC clock and reset, fanout     | 100 %  |     0 |        0 |   14 |      207.50 | 26.1 × 18.6 on 36 × 28 |     34.1 | pass |
+| [07 Five-stage chaser](#07-five-stage-chaser)                       |    20 |   17 |      2 | Five LED/resistor outputs, shared rails, dense routes  | 100 %  |     0 |        0 |   20 |      294.64 | 23.6 × 20.4 on 42 × 32 |     62.7 | pass |
+| [08 Five-stage chaser with plane](#08-five-stage-chaser-with-plane) |    20 |   17 |      4 | Four copper layers, ground plane attachment and refill | 100 %  |     0 |        0 |   29 |      220.05 | 20.3 × 24.4 on 42 × 32 |     40.1 | pass |
 
 Against the animations they replace (2026-10-03: the same configuration without the legalizer parts,
 engine `cfb7cb3`, on the same Mac), the legalizer now picks each part's slot and turn with its
@@ -203,8 +204,8 @@ machine. The committed animations were made in two steps, a traced ladder run an
 
 ```sh
 # 1. The traced ladder (about 7 minutes on the development Mac); the output must not exist.
-#    The fabrication profile defaults to legacy (--fab-profile); --compact and --gloss are the
-#    animations' opt-in stages (recorded in each animation's config).
+#    --compact, --gloss and the legacy --fab-profile are the runner's own defaults since
+#    ladder-v2 (recorded in each animation's config regardless).
 "$NUMERIC_PYTHON" hardware/pnr/regression/run.py --repo . --out .yapnr/ladder/RUN --seed 0 \
   --trace --initial-pool --initial-starts 8 --initial-finalists 3 --compact --gloss \
   --python "$NUMERIC_PYTHON" --kicad-python "$PNR_KICAD_PYTHON" \
@@ -385,7 +386,7 @@ series parts to face their legs) fixed the lane without losing the rest of the g
 `.github/workflows/ladder.yaml` runs the ladder inside the published arm64 image: cases 01 to 06
 with seed 0 on pull requests that change engine inputs, and nightly all eight cases with seeds 0
 and 1, under the runner's own defaults (ladder-v2: compact, gloss, the initial placement pool,
-coupled diff-pair routing, the jlc-pofv fab profile) and traced -- one configuration, which both
+coupled diff-pair routing, the legacy fab profile) and traced -- one configuration, which both
 decides the job and feeds the animations job, so docs and CI agree. Its animations are uploaded
 as an artifact and its trace hashes are compared with
 <a href="animations/manifest.json"><code>animations/manifest.json</code></a> (a drift is a

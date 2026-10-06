@@ -229,6 +229,7 @@
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Regression ladder</a></li>
 <li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
@@ -311,17 +312,18 @@ either off for an A/B.</p>
 <blockquote>
 <div><p><strong>Status (2026-10-06):</strong> all eight cases <strong>pass</strong> the gate: 100 % routed, no open connections
 and no findings in KiCad’s DRC, in the runner’s own default configuration (compact placement,
-gloss, the initial placement pool, the engine’s own JLCPCB fab profile – the animations’
+gloss, the initial placement pool, the fixtures’ own legacy fab profile – the animations’
 configuration too, so docs and CI agree). The ladder routes and is judged under
-<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> (the runner’s default since ladder-v2), where the router keeps vias
-0.127 mm off SMD pads; under the fixtures’ own legacy rules (<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">legacy</span></code>), every case
-passes too (other boards, below).</p>
+<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">legacy</span></code> (the runner’s default; <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> was tried as ladder-v2’s default and
+rolled back, <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>, “New blocker”); under the engine’s own JLCPCB profile
+(<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code>), where the router keeps vias 0.127 mm off SMD pads, every ladder and
+showcase case passes too (other boards, below).</p>
 </div></blockquote>
 <section id="the-cases">
 <h2>The cases<a class="headerlink" href="#the-cases" title="Link to this heading">¶</a></h2>
 <p>Seed 0, with the runner’s own defaults (the initial placement pool: 8 starts, 3 routed finalists;
-compact placement; the gloss stage; the engine’s JLCPCB fab profile); KiCad 10.0.6, engine
-<code class="docutils literal notranslate"><span class="pre">f362d1e6</span></code> (compact placement with the legalizer parts <code class="docutils literal notranslate"><span class="pre">WIRE</span></code>, <code class="docutils literal notranslate"><span class="pre">TURN</span></code>, <code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code>, <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> and
+compact placement; the gloss stage; the fixtures’ own legacy fab profile); KiCad 10.0.6, engine
+<code class="docutils literal notranslate"><span class="pre">dfe747f1</span></code> (compact placement with the legalizer parts <code class="docutils literal notranslate"><span class="pre">WIRE</span></code>, <code class="docutils literal notranslate"><span class="pre">TURN</span></code>, <code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code>, <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> and
 <code class="docutils literal notranslate"><span class="pre">RELAX</span></code>, and the GP-side escape-channel reservation that keeps block-level legalization from
 moving much; <code class="docutils literal notranslate"><span class="pre">docs/design/compact-placement.md</span></code> sections 12 and 13). “Opens” and “findings” are
 KiCad’s DRC counts on the saved board; “Placed” is the bounding box of the placed parts’ bodies
@@ -358,7 +360,7 @@ is a fixed overhead).</p>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>6.95</p></td>
 <td><p>5.8 × 6.2 on 18 × 14</p></td>
-<td class="text-right"><p>20.5</p></td>
+<td class="text-right"><p>18.3</p></td>
 <td><p>pass</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#resistor-led">02 Resistor + LED</a></p></td>
@@ -370,9 +372,9 @@ is a fixed overhead).</p>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>15.33</p></td>
-<td><p>8.7 × 7.2 on 20 × 16</p></td>
-<td class="text-right"><p>19.2</p></td>
+<td class="text-right"><p>12.40</p></td>
+<td><p>8.2 × 6.4 on 20 × 16</p></td>
+<td class="text-right"><p>18.4</p></td>
 <td><p>pass</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#two-leds">03 Two LEDs</a></p></td>
@@ -384,9 +386,9 @@ is a fixed overhead).</p>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>23.71</p></td>
-<td><p>9.3 × 10.5 on 24 × 18</p></td>
-<td class="text-right"><p>22.4</p></td>
+<td class="text-right"><p>27.36</p></td>
+<td><p>8.2 × 11.1 on 24 × 18</p></td>
+<td class="text-right"><p>21.0</p></td>
 <td><p>pass</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#inverter-indicators">04 Inverter indicators</a></p></td>
@@ -398,9 +400,9 @@ is a fixed overhead).</p>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>1</p></td>
-<td class="text-right"><p>70.43</p></td>
+<td class="text-right"><p>72.24</p></td>
 <td><p>11.9 × 15.0 on 26 × 20</p></td>
-<td class="text-right"><p>28.8</p></td>
+<td class="text-right"><p>26.6</p></td>
 <td><p>pass</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#tlc555-blinker">05 TLC555 blinker</a></p></td>
@@ -411,10 +413,10 @@ is a fixed overhead).</p>
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>3</p></td>
-<td class="text-right"><p>125.34</p></td>
-<td><p>15.9 × 17.6 on 30 × 24</p></td>
-<td class="text-right"><p>32.8</p></td>
+<td class="text-right"><p>5</p></td>
+<td class="text-right"><p>125.71</p></td>
+<td><p>16.7 × 17.4 on 30 × 24</p></td>
+<td class="text-right"><p>29.0</p></td>
 <td><p>pass</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#two-stage-chaser">06 Two-stage chaser</a></p></td>
@@ -425,10 +427,10 @@ is a fixed overhead).</p>
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>11</p></td>
-<td class="text-right"><p>219.99</p></td>
-<td><p>25.4 × 17.2 on 36 × 28</p></td>
-<td class="text-right"><p>39.8</p></td>
+<td class="text-right"><p>14</p></td>
+<td class="text-right"><p>207.50</p></td>
+<td><p>26.1 × 18.6 on 36 × 28</p></td>
+<td class="text-right"><p>34.1</p></td>
 <td><p>pass</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#five-stage-chaser">07 Five-stage chaser</a></p></td>
@@ -439,10 +441,10 @@ is a fixed overhead).</p>
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>21</p></td>
-<td class="text-right"><p>296.81</p></td>
-<td><p>22.2 × 24.0 on 42 × 32</p></td>
-<td class="text-right"><p>68.7</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>294.64</p></td>
+<td><p>23.6 × 20.4 on 42 × 32</p></td>
+<td class="text-right"><p>62.7</p></td>
 <td><p>pass</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#five-stage-chaser-with-plane">08 Five-stage chaser with plane</a></p></td>
@@ -453,10 +455,10 @@ is a fixed overhead).</p>
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>26</p></td>
-<td class="text-right"><p>221.81</p></td>
-<td><p>24.4 × 23.4 on 42 × 32</p></td>
-<td class="text-right"><p>48.1</p></td>
+<td class="text-right"><p>29</p></td>
+<td class="text-right"><p>220.05</p></td>
+<td><p>20.3 × 24.4 on 42 × 32</p></td>
+<td class="text-right"><p>40.1</p></td>
 <td><p>pass</p></td>
 </tr>
 </tbody>
@@ -611,8 +613,8 @@ footprint library. On macOS, use the headless KiCad copy (see
 <a class="reference internal" href="../DEVELOPERS.html#kicad"><span class="std std-ref">DEVELOPERS.md</span></a>), never the application bundle; run niced on a shared
 machine. The committed animations were made in two steps, a traced ladder run and a render:</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. The traced ladder (about 7 minutes on the development Mac); the output must not exist.</span>
-<span class="c1">#    The fabrication profile defaults to legacy (--fab-profile); --compact and --gloss are the</span>
-<span class="c1">#    animations&#39; opt-in stages (recorded in each animation&#39;s config).</span>
+<span class="c1">#    --compact, --gloss and the legacy --fab-profile are the runner&#39;s own defaults since</span>
+<span class="c1">#    ladder-v2 (recorded in each animation&#39;s config regardless).</span>
 <span class="s2">&quot;</span><span class="nv">$NUMERIC_PYTHON</span><span class="s2">&quot;</span><span class="w"> </span>hardware/pnr/regression/run.py<span class="w"> </span>--repo<span class="w"> </span>.<span class="w"> </span>--out<span class="w"> </span>.yapnr/ladder/RUN<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--trace<span class="w"> </span>--initial-pool<span class="w"> </span>--initial-starts<span class="w"> </span><span class="m">8</span><span class="w"> </span>--initial-finalists<span class="w"> </span><span class="m">3</span><span class="w"> </span>--compact<span class="w"> </span>--gloss<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--python<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NUMERIC_PYTHON</span><span class="s2">&quot;</span><span class="w"> </span>--kicad-python<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PNR_KICAD_PYTHON</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
@@ -1064,7 +1066,7 @@ series parts to face their legs) fixed the lane without losing the rest of the g
 <p><code class="docutils literal notranslate"><span class="pre">.github/workflows/ladder.yaml</span></code> runs the ladder inside the published arm64 image: cases 01 to 06
 with seed 0 on pull requests that change engine inputs, and nightly all eight cases with seeds 0
 and 1, under the runner’s own defaults (ladder-v2: compact, gloss, the initial placement pool,
-coupled diff-pair routing, the jlc-pofv fab profile) and traced – one configuration, which both
+coupled diff-pair routing, the legacy fab profile) and traced – one configuration, which both
 decides the job and feeds the animations job, so docs and CI agree. Its animations are uploaded
 as an artifact and its trace hashes are compared with
 <a href="animations/manifest.json"><code>animations/manifest.json</code></a> (a drift is a

@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="yapnr migration plan" href="migration-plan.html"><link rel="prev" title="Regression ladder" href="regression-ladder.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="How plane partition works" href="plane-partition.html"><link rel="prev" title="Regression ladder" href="regression-ladder.html">
         <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
         <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
@@ -229,6 +229,7 @@
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
@@ -302,19 +303,17 @@ blocks. Each animation is recorded engine state, like the <a class="reference in
 global placement snapshots, the legalizer’s order, every net the router commits, the saved KiCad
 boards and KiCad’s verdict.</p>
 <blockquote>
-<div><p>Figures in this page’s tables are from the engine version named in each section and
-predate the ladder-v2 default-profile flip (<code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>): legacy fab profile,
-<code class="docutils literal notranslate"><span class="pre">--compact</span> <span class="pre">--gloss</span></code> passed explicitly. Re-running today’s <code class="docutils literal notranslate"><span class="pre">--no-fab-profile</span></code> default
-(<code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>) changes copper/via counts the same way it does on the public ladder
-(see <a class="reference internal" href="regression-ladder.html#the-cases"><span class="std std-ref">regression-ladder.md</span></a>); the pass/fail verdicts
-are unaffected.</p>
+<div><p>Figures in the <code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> table are from the runner’s own current defaults (legacy
+fab profile, ladder-v2, <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>); the <code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code> and <code class="docutils literal notranslate"><span class="pre">edge-io-12</span></code>/<code class="docutils literal notranslate"><span class="pre">-free</span></code>
+tables above predate the legalizer parts <code class="docutils literal notranslate"><span class="pre">WIRE</span></code>/<code class="docutils literal notranslate"><span class="pre">TURN</span></code>/<code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code>/<code class="docutils literal notranslate"><span class="pre">PAIRS</span></code>/<code class="docutils literal notranslate"><span class="pre">RELAX</span></code> and are not
+yet refreshed. The pass/fail verdicts are unaffected either way.</p>
 </div></blockquote>
 <p>The showcase cases (<code class="docutils literal notranslate"><span class="pre">designs.showcases()</span></code> in
 <a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/designs.py"><code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression/designs.py</span></code></a>) run through the ladder’s runner and its gate, but
 they are not ladder cases: they sit outside the ladder’s gate and its pull-request lane (the
 nightly lane runs them for information). All five cases below come from one traced run: seed 0,
-a placement snapshot every 5 iterations, the engine’s own JLCPCB fabrication profile, KiCad
-10.0.6 on the development Mac (darwin-arm64), engine <code class="docutils literal notranslate"><span class="pre">f362d1e6</span></code>, with the runner’s own defaults
+a placement snapshot every 5 iterations, the fixtures’ own legacy fabrication profile, KiCad
+10.0.6 on the development Mac (darwin-arm64), engine <code class="docutils literal notranslate"><span class="pre">dfe747f1</span></code>, with the runner’s own defaults
 since ladder-v2 (<code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>): <a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">compact placement</span></a>
 (<code class="docutils literal notranslate"><span class="pre">--compact</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=1</span></code>) and the <a class="reference internal" href="design/gloss.html"><span class="std std-doc">gloss pass</span></a> (<code class="docutils literal notranslate"><span class="pre">--gloss</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_GLOSS=1</span></code>).
 The four flat cases use the initial placement pool (8 starts, 3 routed finalists, also the
@@ -662,10 +661,10 @@ montage follows, then KiCad’s writeback, planes, zone refill and verdict.</p><
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>34</p></td>
-<td class="text-right"><p>458.85</p></td>
+<td class="text-right"><p>46</p></td>
+<td class="text-right"><p>571.17</p></td>
 <td class="text-right"><p>320</p></td>
-<td class="text-right"><p>83.7</p></td>
+<td class="text-right"><p>92.0</p></td>
 </tr>
 </tbody>
 </table>
@@ -740,12 +739,12 @@ design is <a class="reference internal" href="design/constraint-and-hier-animati
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="migration-plan.html">
+          <a class="next-page" href="plane-partition.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">yapnr migration plan</div>
+                <div class="title">How plane partition works</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>

@@ -284,6 +284,31 @@ def seed_board_event(root: os.PathLike, geo: dict, candidate: str = "mc0") -> st
     return sha
 
 
+def seed_lane_events(root: os.PathLike, events: Sequence[dict]) -> None:
+    """Drop each of ``events`` into <root>/events/ as its own file (schema ``pnr-live-event-v1``,
+    matching :func:`yapnr.viewer.server.ingest`'s expectations), for tests of the experiment tree
+    and progress bars that need several lanes at various phases/statuses without any board
+    geometry at all. Each dict needs at least ``candidate`` and ``kind``; ``id``/``time`` default
+    to a fresh, increasing value per call so ingestion order matches list order, and every other
+    field (``data``, ``iteration``, ...) is used as given. Files are written one per millisecond
+    apart in id ordering (the real id format, ``<time_ns>-<hex>``) so two events for the same
+    candidate replay in the order this function was called with them.
+    """
+    root = Path(root)
+    (root / "events").mkdir(parents=True, exist_ok=True)
+    for i, event in enumerate(events):
+        eid = event.get("id") or f"{time.time_ns() + i}-seed{i:04d}"
+        body = {
+            "schema": "pnr-live-event-v1",
+            "time": time.time(),
+            "iteration": None,
+            "data": {},
+            **event,
+            "id": eid,  # always matches the filename, even if `events[i]` set its own "id"
+        }
+        (root / "events" / f"{eid}.json").write_text(json.dumps(body))
+
+
 # ---------------------------------------------------------------------- headless Chrome / CDP
 # A minimal, stdlib-only Chrome DevTools Protocol client: tests/e2e/viewer drives a real headless
 # Chrome (touch emulation, Input.dispatchTouchEvent, screenshots) and there is no CDP/WebSocket

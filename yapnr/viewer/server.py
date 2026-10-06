@@ -1322,6 +1322,12 @@ class Handler(BaseHTTPRequestHandler):
     def get_state(self, path):
         return self.send(self.viewer.state_response(self.query()))
 
+    def get_timing(self, path):
+        from yapnr.viewer.timing import aggregate
+
+        scope = (self.query().get("scope") or [""])[0]
+        return self.send(aggregate(self.viewer.root, scope=scope))
+
     def get_geometry(self, path):
         v = self.viewer
         sha = path.rsplit("/", 1)[-1]
@@ -1545,6 +1551,7 @@ GET_ROUTES = {
     "/api/3d/status": Handler.get_3d,
     "/api/controls": Handler.get_controls,
     "/api/state": Handler.get_state,
+    "/api/timing": Handler.get_timing,
 }
 GET_PREFIXES = (
     ("/api/schematic/payload/", Handler.get_schematic_payload),

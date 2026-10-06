@@ -6,6 +6,7 @@
     yapnr exp logs PLAN [TASK] [--limit N]
     yapnr exp fetch PLAN [--full] [--into DIR] [--from DIR] [--allow-mixed]
     yapnr exp live PLAN [--out DIR] [--interval S] [--once]
+    yapnr exp timing CAMPAIGN|LIVE_DIR [--scope PATH] [--json]
     yapnr exp cancel PLAN [--submission N] [--dry-run]
     yapnr exp doctor --backend B [--image-digest D]
     yapnr exp prices [--refresh] [--rerank] [--family F ...]
@@ -321,6 +322,20 @@ def _cmd_live(args) -> int:
     return 0
 
 
+def _cmd_timing(args) -> int:
+    from yapnr.exp.timing import format_table, resolve_live_dir
+    from yapnr.viewer.timing import aggregate
+
+    cfg = _config(args)
+    live_dir = resolve_live_dir(args.target, cfg)
+    result = aggregate(live_dir, scope=args.scope or "")
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(format_table(result))
+    return 0
+
+
 def _cmd_cancel(args) -> int:
     from yapnr.exp import backends
     from yapnr.exp.backends.base import local_records
@@ -565,6 +580,12 @@ def register(commands: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--once", action="store_true", help="poll once and exit, instead of looping")
     p.set_defaults(func=_run(_cmd_live))
+
+    p = sub.add_parser("timing", help="per-stage timing breakdown (table) and the slowest lanes")
+    p.add_argument("target", help="a campaign id, plan directory, or live directory")
+    p.add_argument("--scope", default="", help="a tree path to scope to (default: whole campaign)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_run(_cmd_timing))
 
     p = sub.add_parser("cancel", help="cancel the campaign's jobs")
     p.add_argument("plan", help=PLAN_HELP)

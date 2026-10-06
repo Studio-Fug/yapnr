@@ -130,21 +130,25 @@ def main():
 
     apply_rules_file(rules)
     from pnr.live import emit
+    from pnr.stage_timing import CaseTimer, stage
+
+    timer = CaseTimer()
 
     def run(args, name):
         emit("phase_start", data=dict(phase=name))
         # A phase runs bounded workers in sequence: PNR_PHASE_TIMEOUT; stays in this process group.
         from pnr.proc import phase_timeout, run_checked
 
-        with (work / (name + ".log")).open("w") as log:
-            run_checked(
-                [a.python, "-m", "pnr.profile", "--label", name, "--module", *map(str, args)],
-                timeout=phase_timeout(),
-                session=False,
-                env=env,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-            )
+        with stage(name, timer=timer):
+            with (work / (name + ".log")).open("w") as log:
+                run_checked(
+                    [a.python, "-m", "pnr.profile", "--label", name, "--module", *map(str, args)],
+                    timeout=phase_timeout(),
+                    session=False,
+                    env=env,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                )
 
     # The production order reserves pair/power corridors before ordinary signals.
     # Rebuild from the candidate placement, not a previously filled signal board.
@@ -193,41 +197,42 @@ def main():
         if os.environ.get("PNR_SHOVE") == "1" and os.environ.get("PNR_NATIVE_PLACEMENT") == "1"
         else ["--route-only"]
     )
-    final = native(
-        [
-            str(board),
-            "--repo",
-            str(Path(__file__).resolve().parents[3]),
-            "--rules",
-            str(rules),
-            "--constraints",
-            str(a.constraints.resolve()),
-            "--out-dir",
-            str(work / "native-loop"),
-            "--kicad-python",
-            a.python,
-            "--kicad-cli",
-            a.cli,
-            "--electrical-fab",
-            a.electrical_fab,
-            "--early-pairs",
-            "--early-pair-placement",
-            *route_only,
-            "--cycles",
-            "12",
-            "--route-attempts",
-            "40",
-            "--placement-attempts",
-            "2",
-            "--search-seconds",
-            "90",
-            "--seconds",
-            str(a.seconds),
-            "--phase-dir",
-            str(phases),
-            *annotations,
-        ]
-    )
+    with stage("native-loop", timer=timer):
+        final = native(
+            [
+                str(board),
+                "--repo",
+                str(Path(__file__).resolve().parents[3]),
+                "--rules",
+                str(rules),
+                "--constraints",
+                str(a.constraints.resolve()),
+                "--out-dir",
+                str(work / "native-loop"),
+                "--kicad-python",
+                a.python,
+                "--kicad-cli",
+                a.cli,
+                "--electrical-fab",
+                a.electrical_fab,
+                "--early-pairs",
+                "--early-pair-placement",
+                *route_only,
+                "--cycles",
+                "12",
+                "--route-attempts",
+                "40",
+                "--placement-attempts",
+                "2",
+                "--search-seconds",
+                "90",
+                "--seconds",
+                str(a.seconds),
+                "--phase-dir",
+                str(phases),
+                *annotations,
+            ]
+        )
     rules = work / "native-loop/policy/prepare.json"
     run(
         [
@@ -352,6 +357,7 @@ def main():
         # PNR_GLOSS=1 side fields only (assumptions/SI precedent); the objective vector is unchanged.
         result.update(gloss_side_fields(board, rules, work, annotations, run, native_progress))
     (p / "evaluation.json").write_text(json.dumps(result, indent=2) + "\n")
+    timer.emit_summary()
     emit("candidate_complete", board=board, data=result)
     print(json.dumps(dict(objective=result["objective"], qualified=result["qualified"])))
 

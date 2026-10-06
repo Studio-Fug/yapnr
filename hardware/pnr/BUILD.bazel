@@ -2645,6 +2645,14 @@ py_test(
 )
 
 py_test(
+    name = "stage_timing_test",
+    size = "small",
+    srcs = ["tests/test_stage_timing.py"],
+    main = "tests/test_stage_timing.py",
+    deps = [":pnr"],
+)
+
+py_test(
     name = "pair_portals_test",
     size = "small",
     srcs = ["tests/test_pair_portals.py"],

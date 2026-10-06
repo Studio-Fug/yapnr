@@ -18,6 +18,7 @@ yapnr_py_tests(
         "test_finished_campaign": {"size": "medium"},
         "test_schematic": {"size": "medium"},
         "test_server": {"size": "medium"},
+        "test_timing": {"data": glob(["fixtures/timing/**"])},
         "test_viewer3d": {"size": "medium"},
     },
     deps = [

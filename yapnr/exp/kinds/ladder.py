@@ -27,18 +27,22 @@ CASE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,80}$")
 FAB_PROFILES = ("legacy", "jlc-pofv")
 
 # Seconds per case on the development Mac (Apple M4 performance core) with the initial pool of
-# 8 starts and 3 finalists, from docs/animations/ladder-results.json (2026-10). Without the pool a
-# cell takes about 0.6 of this. Unknown cases (hard rungs, showcases) assume 900 s until
-# ``[config] reference_seconds`` or a calibration says otherwise.
+# 8 starts and 3 finalists, from docs/animations/ladder-results.json (2026-10-06, under the
+# ladder-v2 defaults: compact, gloss, legacy fab profile). These replace an earlier set measured
+# without compact and gloss (finding 3, ladder-v2 review): gloss's ~20 s fixed overhead makes the
+# small cases slower, while compact's legalizer speedups make the dense ones much faster. Without
+# the pool a cell takes about 0.6 of this (unverified against the current engine). Unknown cases
+# (hard rungs, showcases) assume 900 s until ``[config] reference_seconds`` or a calibration says
+# otherwise.
 MAC_SECONDS_WITH_POOL = {
-    "01-connector-led-2": 8.7,
-    "02-resistor-led-3": 8.0,
-    "03-branched-leds-5": 8.7,
-    "04-inverter-leds-8": 17.1,
-    "05-timer-led-10": 30.5,
-    "06-chaser-14": 67.5,
-    "07-chaser-20": 125.8,
-    "08-chaser-20-plane": 202.4,
+    "01-connector-led-2": 18.3,
+    "02-resistor-led-3": 18.4,
+    "03-branched-leds-5": 21.0,
+    "04-inverter-leds-8": 26.6,
+    "05-timer-led-10": 29.0,
+    "06-chaser-14": 34.1,
+    "07-chaser-20": 62.7,
+    "08-chaser-20-plane": 40.1,
 }
 UNKNOWN_CASE_SECONDS = 900.0
 NO_POOL_FACTOR = 0.6
@@ -71,6 +75,7 @@ OPTIONS = {
     "legalize_reorient_wire": bool,
     "legalize_channel_clearance_fab": bool,
     "line_satellites": bool,
+    "legalize_keep": bool,
     "power_first": bool,
     "route_pairs_diff_pairs": bool,
 }
@@ -99,6 +104,11 @@ DEFAULT_ON_FLAGS = {
     "compact": "--compact",
     "gloss": "--gloss",
     "route_pairs_diff_pairs": "--route-pairs-diff-pairs",
+    # On by default in the engine itself (pnr.legalize_flags), with or without --compact; a
+    # campaign must set this to false explicitly to A/B it, since an ambient PNR_LEGALIZE_KEEP=0
+    # would otherwise be stripped by the runner's own scrubbed_suite_env (finding 2, ladder-v2
+    # review).
+    "legalize_keep": "--legalize-keep",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
 WEIGHTS = {"gp_channels": "--gp-channels", "legalize_hpwl": "--legalize-hpwl"}
@@ -136,7 +146,8 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
         str(options.get("timeout", 600)),
     ]
     # Omit --fab-profile entirely unless the campaign names one, so the runner's own default
-    # (jlc-pofv, ladder-v2) is the single source of truth instead of a second copy here.
+    # (legacy; docs/decisions.md, "New blocker") is the single source of truth instead of a
+    # second copy here.
     if options.get("fab_profile") is not None:
         args += ["--fab-profile", options["fab_profile"]]
     for key, flag in FLAGS.items():

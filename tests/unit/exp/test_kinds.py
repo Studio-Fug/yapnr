@@ -304,6 +304,18 @@ class LadderOptionsTest(unittest.TestCase):
             "legacy",
         )
 
+    def test_legalize_keep_can_be_ab_tested_through_the_campaign(self):
+        """Finding 2 (ladder-v2 review): PNR_LEGALIZE_KEEP defaults on in the engine itself with
+        or without --compact, so (like compact/gloss/route_pairs_diff_pairs) a campaign must say
+        ``legalize_keep: false`` explicitly to A/B it -- omitting the key takes the runner's own
+        default, matching DEFAULT_ON_FLAGS."""
+        from yapnr.exp.kinds import ladder
+
+        self.assertNotIn("--legalize-keep", ladder.runner_arguments({}))
+        self.assertNotIn("--no-legalize-keep", ladder.runner_arguments({}))
+        self.assertIn("--legalize-keep", ladder.runner_arguments(dict(legalize_keep=True)))
+        self.assertIn("--no-legalize-keep", ladder.runner_arguments(dict(legalize_keep=False)))
+
     def test_legalizer_switches_reach_the_runner(self):
         from yapnr.exp.kinds import ladder
 

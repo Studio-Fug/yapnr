@@ -6,19 +6,17 @@ blocks. Each animation is recorded engine state, like the [regression ladder](re
 global placement snapshots, the legalizer's order, every net the router commits, the saved KiCad
 boards and KiCad's verdict.
 
-> Figures in this page's tables are from the engine version named in each section and
-> predate the ladder-v2 default-profile flip (`docs/decisions.md`): legacy fab profile,
-> `--compact --gloss` passed explicitly. Re-running today's `--no-fab-profile` default
-> (`jlc-pofv`) changes copper/via counts the same way it does on the public ladder
-> (see [regression-ladder.md](regression-ladder.md#the-cases)); the pass/fail verdicts
-> are unaffected.
+> Figures in the `hier-twin-bank-32` table are from the runner's own current defaults (legacy
+> fab profile, ladder-v2, `docs/decisions.md`); the `line-chaser-20` and `edge-io-12`/`-free`
+> tables above predate the legalizer parts `WIRE`/`TURN`/`SATELLITES`/`PAIRS`/`RELAX` and are not
+> yet refreshed. The pass/fail verdicts are unaffected either way.
 
 The showcase cases (`designs.showcases()` in
 [`hardware/pnr/regression/designs.py`][designs]) run through the ladder's runner and its gate, but
 they are not ladder cases: they sit outside the ladder's gate and its pull-request lane (the
 nightly lane runs them for information). All five cases below come from one traced run: seed 0,
-a placement snapshot every 5 iterations, the engine's own JLCPCB fabrication profile, KiCad
-10.0.6 on the development Mac (darwin-arm64), engine `f362d1e6`, with the runner's own defaults
+a placement snapshot every 5 iterations, the fixtures' own legacy fabrication profile, KiCad
+10.0.6 on the development Mac (darwin-arm64), engine `dfe747f1`, with the runner's own defaults
 since ladder-v2 (`docs/decisions.md`): [compact placement](design/compact-placement.md)
 (`--compact`, `PNR_COMPACT=1`) and the [gloss pass](design/gloss.md) (`--gloss`, `PNR_GLOSS=1`).
 The four flat cases use the initial placement pool (8 starts, 3 routed finalists, also the
@@ -256,7 +254,7 @@ What to watch:
 
 | Case                | Parts | Routed | Opens | Findings | Vias | Copper (mm) | HPWL (mm) | Time (s) |
 | ------------------- | ----: | :----: | ----: | -------: | ---: | ----------: | --------: | -------: |
-| `hier-twin-bank-32` |    32 | 100 %  |     0 |        0 |   34 |      458.85 |       320 |     83.7 |
+| `hier-twin-bank-32` |    32 | 100 %  |     0 |        0 |   46 |      571.17 |       320 |     92.0 |
 
 ## What is interpolated
 

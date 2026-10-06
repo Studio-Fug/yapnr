@@ -273,6 +273,7 @@ Seven switches, each off by default and usable with or without `PNR_COMPACT`
 | `PNR_LEGALIZE_REORIENT=1`            | C2   | After legalization, greedy in-place turns that shorten a part's wirelength, stay legal and do not raise its channel shortage; `=wire` drops the channel guard.                                                        |
 | `PNR_LEGALIZE_CHANNEL_CLEARANCE=fab` | D    | The legalizer's channel model spaces unclassed nets at the fab clearance (the router's) instead of the board's `default_clearance_mm`.                                                                                |
 | `PNR_LINE_SATELLITES=1`              | E    | A line group carries each member's satellite (a free two-pad part on a two-pin net to one member pad) flush beside the member, in line with it.                                                                       |
+| `PNR_CHANNEL_LAYERS=1`               | 14   | The channel model (global placement, the legalizer and its push alike) credits the board's other signal layers: a net that can drop off the surface asks its share of the channel (section 14).                       |
 
 `run.py` takes `--gp-polish`, `--gp-channels L`, `--pool-source-clamp`, `--legalize-hpwl W`,
 `--legalize-reorient [wire]`, `--legalize-channel-clearance fab` and `--line-satellites` (after
@@ -775,3 +776,160 @@ resistor beside the pin. Moving such wrong-side parts back is open (a rescue tri
 them but the board then failed on a router short). Copper is 7.5 % longer with KEEP on (13 to
 18 % on the ladder, showcases and `07-chaser-20` variants, 6 % on the MCU lane, none on the BGA
 rungs): the wirelength packer improves every legal pose, KEEP keeps them.
+
+### H. Detailed placement after legalization (`PNR_DETAIL_PLACE`, on with KEEP; 2026-10-06)
+
+> Owner decision (2026-10-06): the displacement-minimizing legalizer ends wholesale relocations
+> but costs copper; add an order-preserving detailed-placement pass after legalization, then turn
+> KEEP and it on by default once the A/B shows no rung worse and copper restored.
+
+**Why KEEP costs copper.** With KEEP off, `WIRE` re-sites every part by displacement, channels and
+four times its wirelength, over all four turns: 1361 of 1496 parts moved, 4677 mm (3.4 mm each),
+and that is the 7.5 % less copper. With KEEP on every legal part keeps its global pose and turn,
+and `TURN` only turns the parts the legalizer moved.
+
+**Change** (`pnr.place.detail`, its own stage after legalization, the align snap and the
+matched-length pass, before the side moves and routing; `PNR_DETAIL_PLACE=0` turns it off,
+unset it follows `PNR_LEGALIZE_KEEP`):
+
+1. _Compaction._ Every movable part is drawn half way toward the point that minimizes its
+   wirelength (per axis the median of its nets' spans), and the layout is projected, weighted
+   least squares (the KEEP push's solver), onto its present order: two parts side by side keep
+   their order, their slots apart and as much of the routing channel between them as they have;
+   every part stays in the outline and within 3 mm of its legal pose; four rounds, and a pair that
+   comes to overlap keeps the order it had. It is kept only when the legalizer's checker accepts
+   every shifted part (a part it refuses is held where it was and the compaction solved again)
+   and the wiring shortens.
+2. _Greedy moves_, best gain first, each legal by the legalizer's checker (its clearance,
+   spreading, margins, pad-edge rule, regions, aligns, bands, group radii): a turn about the slot
+   centre (every movable part, in place of `TURN`), a slide along x or y within a budget of
+   max(1.5 mm, the larger courtyard side) from where compaction left it (blocked, it shifts up to
+   two parts in front along, in order), a swap of two adjacent parts of one size class with
+   nothing between them (each re-picks its turn), and a wrong-side move: a part whose connection
+   crosses the body of the part it connects to goes beside the edge that pin faces, within that
+   part's extent plus its own plus two cells, only where the other part's channel penalty does
+   not rise. Ball arrays route through their vias and have no far side.
+3. _Cost._ Half-perimeter wirelength (plane nets out) plus the crossing detour (a Manhattan
+   spanning tree per net; a segment a same-side courtyard cuts across, the endpoint's own body
+   behind its pin included, costs the shorter way round) plus the channel penalty at the
+   packer's ratio (25 / 4) and the soft terms. A move must shorten the wiring by more than
+   0.05 mm.
+4. Never moved: fixed, locked and hard-rotated parts, macros, row and line-group members, parts
+   with landing reserves, parts on a pair or length-match net, and parts within 3 mm of a ball
+   array (its escape and fanout are the board's tightest routing). Held parts only turn and slide.
+   A part also keeps out of a ball array's 1.5 mm escape field and stays 1 mm clear of the line
+   between consecutive pins of a matched net, moving no deeper into the box between them (or
+   keeps what it has, if less). Deterministic (fixed orders, float64, exact quarter turns, no
+   random draws; a golden hash).
+
+Its moves are a trace event (`detail`, phase `detailed-placement`), their own animation segment
+and an end-card line, and the record `detail_motion` (moves by kind, parts moved, sum, maximum
+and median distance, wirelength and crossing before and after, channel delta, topology, time) in
+the placement report, `pnr-report.json`, the hierarchical report and `ladder-results.json`.
+`legal_motion` stays the legalizer's own.
+
+**KEEP push.** A cluster whose push is infeasible now moves the conflicting pair needing the
+least shift to its other axis and solves again (up to four times; channel pushes keep their
+axis), and a failing push is retried with a size-scaled reach (0.75, then 1.0 of the larger side,
+at most 4 mm), kept only when it displaces less (area-weighted) than relocating the part it would
+give up. `start-14` of the hierarchical block (`testdata/legalize_keep`): the column under D4 was
+0.12 mm too tall for the outline in y, so D4 went 10.1 mm east; D4 is now pushed 0.76 mm and
+nothing is relocated. `04-inverter-leds-8` seed 1's U1 stays relocated: the outline corner and
+the fixed connector box it in, and no push in its global order exists.
+
+**A/B** (GCP `c4d` us-west4 for both arms, the runner's ladder-v2 defaults, `--legalize-keep
+--detail-place` against `--no-legalize-keep --no-detail-place`; ladder, showcases and all 33 hard
+rungs, seeds 0 and 1, then seeds 2 to 7 of the BGA rungs and buck-pour and 2 to 15 of the BGA
+`-pairs` rung; KEEP alone from the R6 A/B above; campaigns `20261006-ladder-e132b3` (both arms),
+`-9c8a75`, `-931103`, `-56306d`, `-6f8fb4` (detailed placement at the final code) and `-67bfc3`,
+`-6f7476`, `-c18ee3` (KEEP off at the extra seeds)):
+
+| Rungs (seeds 0 and 1)         | Cells | Pass: KEEP+DP / KEEP / off | Copper: KEEP+DP vs off | KEEP alone vs off |
+| ----------------------------- | ----: | -------------------------- | ---------------------: | ----------------: |
+| ladder 01-08                  |    16 | 16 / 16 / 16               |                 -0.8 % |           +15.7 % |
+| showcases                     |     8 | 8 / 8 / 8                  |                 +5.8 % |           +13.7 % |
+| `07-chaser-20` variants       |    28 | 28 / 28 / 28               |                 +3.3 % |           +17.5 % |
+| MCU lane                      |    18 | 18 / 18 / 18               |                 -1.3 % |            +5.8 % |
+| BGA                           |    12 | 11 / 11 / 12               |                 -0.2 % |            +0.0 % |
+| quad-bank, power-switch, buck |     8 | 8 / 7 / 8                  |                 -2.2 % |           +11.4 % |
+| all                           |    90 | 89 / 88 / 90               |                +0.12 % |           +7.84 % |
+
+Copper on the 87 cells all three arms pass; over the 140 cells with the extra seeds KEEP+DP is
+0.9 % shorter than KEEP off. Extra seeds: buck-pour 7 of 8 in both arms (seed 5 fails with
+detailed placement on a pad entry, seed 3 without; on the KEEP-only placement of seed 5,
+`testdata/detail_place`, detailed placement takes R1 off U1's far side); BGA base,
+`-block`, `-classes` and `-partial` 8 of 8 in both arms; `-rails` 7 of 8 against 5 of 8; `-pairs`
+13 of 16 against 15 of 16 with KEEP off and 14 of 16 with KEEP alone (`-4cf25e`): seeds 9 and 12
+fail the LVDS pair's gap rule by one or two findings with KEEP alone too (detailed placement moved
+nothing in their chosen placements), and on seed 1 every finalist the initial pool routed had the
+pair uncoupled or a connection missing, so it took one with the pair as legs. Parts within 3 mm
+of the ball array no longer move, so the BGA rungs gain little copper.
+Detailed placement moved 1174 parts by 2243 mm in the final placements (the median of the cells'
+medians 1.2 mm, mostly compaction; the largest 14 mm), 79 s in all. The
+legalization motion (the legalizer's own, `legal_motion`) is 179 of 1496 parts and 999 mm with 43
+relocated, against 148, 285 mm and 29 with KEEP alone: on four cells the pool now picks the
+source start, whose global placement leaves 4 to 12 parts mostly occluded; without those 155 of
+1455 parts and 283 mm (KEEP alone on the same cells: 131 and 237 mm).
+
+## 14. Layer-aware channel model (`PNR_CHANNEL_LAYERS`, 2026-10-06)
+
+The routing-channel model (`pnr.place.channels.ChannelModel`) prices the gap between two facing
+pad rows as if every externally connected net on both rows ran along it on the surface. Global
+placement (the compact `GP` inflation floor), the legalizer's slot cost and the
+`PNR_LEGALIZE_KEEP` push all read it, so an overestimate spreads parts that the router never
+needed apart, or makes the push give up on channels it cannot open.
+
+**Measurement** (`regression/channel_audit.py`, `pnr.place.channel_audit`). For each channel the
+model prices on a routed board, the audit takes the busiest cut across the gap and counts the
+surface tracks that run along the channel there (tracks crossing straight from row to row do not
+count) and the vias in it, priced the way the model prices its own demand. Each predicted net is
+classed as _surface_ (it ran along the channel), _dropped_ (a via within 1 mm of its pad) or
+_elsewhere_. On the 88 passing cells of the default configuration (ladder, showcases and the 33
+hard rungs, seeds 0 and 1), in the channels the model calls short:
+
+| Copper layers | Short channels | Width used / predicted | Predicted nets on surface / dropped / elsewhere |
+| ------------- | -------------: | ---------------------: | ----------------------------------------------- |
+| 2             |            752 |                   36 % | 23 / 32 / 45 %                                  |
+| 4             |            208 |                   38 % | 13 / 54 / 33 %                                  |
+| 6             |             87 |                   45 % | 13 / 56 / 31 %                                  |
+| 8             |             22 |                   35 % | 11 / 57 / 31 %                                  |
+
+The model is about 2.5 times too conservative at every layer count. Two things account for it:
+nets leave by another face (a two-pad part's pad lies on three faces of its part), and nets
+drop to another layer next to their pad. Dropping grows from a third of the nets on two layers
+to over half on four or more.
+
+**Model.** With `PNR_CHANNEL_LAYERS=1` the model credits the board's other signal layers (copper
+layers less plane layers, `channels.signal_layers`). A net with a drop site off the channel asks
+only its surface share, one over the signal-layer count. A drop site is a through-hole pad, a pad
+that holds a via in pad under the fab's in-pad class, or a pad that also lies on another face of
+its part, whose via can go out that way. A mid-row net may also drop at that share, but then the
+channel pays one shared via row (the via diameter and a clearance). The demand is the cheaper of
+the two options, never more than the surface-only one. It is unchanged on a single signal layer
+and for plane nets. A block's port nets (`block_ports`) keep the surface price, because they must
+reach the block edge where the parent board routes them. Without this rule both seeds of
+`hier-twin-bank-32` lost `CLOCK` at the top level. The change lives in the model itself, so
+global placement, the legalizer and its push price every channel the same way. Repriced on the
+same boards, the short channels fall to 258 / 111 / 49 / 11, and the router still used about half
+of the new predicted width there.
+
+**A/B** (GCP C4D, `claude/lv2-defaults` plus this change, every ladder-v2 default on, the same
+90 cells per arm; hierarchical cells from the rerun with the block-port rule, seeds 0 to 5):
+
+| Arm | Pass  | Copper (86 both-pass cells) | Vias | `channel_short` parts | Legalization motion, cells with the same pool start (47) |
+| --- | ----- | --------------------------- | ---- | --------------------- | -------------------------------------------------------- |
+| on  | 89/90 | 31826 mm (-1.8 %)           | 3696 | 582                   | 56 parts moved, 141 mm, 22 relocated                     |
+| off | 88/90 | 32405 mm                    | 3740 | 1033                  | 71 parts moved, 157 mm, 21 relocated                     |
+
+Both arms fail `11-buck-vqfnhr-4L-SGPS-pour` seed 0 (the open issue in section 11). Off also
+fails `11-ufbga201-...-rails` seed 1. `10-quad-bank-56` loses `CLOCK` on seeds 2 and 3 in both
+arms (a top-level knit issue, independent of the switch). Copper by family: 07 variants -3.9 %,
+MCU lane -1.2 %, BGA -0.1 %, showcases -3.0 %, power -20 %, ladder +3.0 %. The two BGA cells with
+large relocations in the on arm picked the initial pool's source start, whose global placement
+stacks the decoupling capacitors (severe, relocated 74 mm). The off arm picked another start, so
+the full-table motion total (976 against 285 mm) compares different starts. On cells where both
+arms chose the same start, on moves less.
+
+The switch stays off by default here. Turning it on with the other ladder-v2 defaults changes the
+flag-off identity goldens (`compact_test`) and the shortage-driven fixtures (`elastic_test`,
+`region_align_test`), which then need regenerating.

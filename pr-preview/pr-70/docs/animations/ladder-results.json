@@ -5,13 +5,13 @@
       "compactness": {
         "area_mm2": 29.512,
         "bbox_mm": [
-          5.772,
+          5.682,
           6.18
         ],
-        "bbox_mm2": 35.674,
+        "bbox_mm2": 35.115,
         "occupancy": 0.117,
         "outline_mm2": 252.0,
-        "utilization": 0.827
+        "utilization": 0.84
       },
       "config": [
         "--initial-pool",
@@ -22,20 +22,45 @@
         "--compact",
         "--gloss"
       ],
-      "copper_length_mm": 6.95,
+      "copper_length_mm": 6.3,
       "description": "Two parts, external 2mA current source required (no omitted onboard resistor).",
+      "detail_motion": {
+        "channel_delta": 0.0,
+        "compact": 1,
+        "crossing_after": 0.0,
+        "crossing_before": 0.0,
+        "hpwl_after": 6.359,
+        "hpwl_before": 7.935,
+        "max_mm": 0.97,
+        "median_mm": 0.9699,
+        "movable": 1,
+        "moved": 1,
+        "moves": {
+          "compact": 1,
+          "slide": 0,
+          "swap": 0,
+          "turn": 0,
+          "wrong_side": 0
+        },
+        "seconds": 0.001,
+        "sum_mm": 0.97,
+        "topology": 1.0,
+        "topology_global": 1.0,
+        "turned": 0,
+        "wire_saved": 0.0
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
         "accepted": 1,
         "bends": [
-          2,
-          2
+          0,
+          0
         ],
         "kept": true,
         "length_mm": [
-          3.336,
-          3.336
+          3.149,
+          3.149
         ],
         "proposed": 1
       },
@@ -43,6 +68,7 @@
       "legal_motion": {
         "anchored": 1,
         "channel_short": 0,
+        "channel_unopened": 0,
         "clean": 0,
         "count": 1,
         "keep": true,
@@ -50,8 +76,14 @@
         "mean_mm": 0.177,
         "mild": 1,
         "moved": 0,
+        "nudged": 0,
         "pushed": 1,
+        "pushed_far": 0,
         "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
         "severe": 0,
         "sum_mm": 0.177,
         "topology": 1.0,
@@ -63,11 +95,11 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 18.3,
+      "seconds": 36.8,
       "seed": 0,
       "selected_start": "start-04",
       "title": "Connector + LED",
-      "tracks": 27,
+      "tracks": 25,
       "vias": 0,
       "violations": {}
     },
@@ -76,13 +108,13 @@
       "compactness": {
         "area_mm2": 36.378,
         "bbox_mm": [
-          8.165,
-          6.36
+          7.684,
+          6.94
         ],
-        "bbox_mm2": 51.929,
+        "bbox_mm2": 53.33,
         "occupancy": 0.114,
         "outline_mm2": 320.0,
-        "utilization": 0.701
+        "utilization": 0.682
       },
       "config": [
         "--initial-pool",
@@ -93,8 +125,136 @@
         "--compact",
         "--gloss"
       ],
-      "copper_length_mm": 12.4,
+      "copper_length_mm": 13.16,
       "description": "Current-limited LED with movable resistor and LED.",
+      "detail_motion": {
+        "channel_delta": 0.0,
+        "compact": 2,
+        "crossing_after": 0.0,
+        "crossing_before": 0.0,
+        "hpwl_after": 13.828,
+        "hpwl_before": 16.36,
+        "max_mm": 1.42,
+        "median_mm": 1.1342,
+        "movable": 2,
+        "moved": 2,
+        "moves": {
+          "compact": 2,
+          "slide": 1,
+          "swap": 0,
+          "turn": 0,
+          "wrong_side": 0
+        },
+        "seconds": 0.005,
+        "sum_mm": 2.268,
+        "topology": 0.5,
+        "topology_global": 0.5,
+        "turned": 0,
+        "wire_saved": 0.3758
+      },
+      "drc_rules": {},
+      "fab_profile": "legacy",
+      "gloss": {
+        "accepted": 1,
+        "bends": [
+          1,
+          1
+        ],
+        "kept": true,
+        "length_mm": [
+          6.404,
+          6.329
+        ],
+        "proposed": 1
+      },
+      "layers": 2,
+      "legal_motion": {
+        "anchored": 2,
+        "channel_short": 1,
+        "channel_unopened": 0,
+        "clean": 1,
+        "count": 2,
+        "keep": true,
+        "max_mm": 0.216,
+        "mean_mm": 0.142,
+        "mild": 1,
+        "moved": 0,
+        "nudged": 0,
+        "pushed": 1,
+        "pushed_far": 0,
+        "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
+        "severe": 0,
+        "sum_mm": 0.284,
+        "topology": 1.0,
+        "turned": 0
+      },
+      "nets": 3,
+      "opens": 0,
+      "parts": 3,
+      "passed": true,
+      "reasons": [],
+      "routed": true,
+      "seconds": 26.1,
+      "seed": 0,
+      "selected_start": "start-04",
+      "title": "Resistor + LED",
+      "tracks": 40,
+      "vias": 0,
+      "violations": {}
+    },
+    {
+      "case": "03-branched-leds-5",
+      "compactness": {
+        "area_mm2": 50.322,
+        "bbox_mm": [
+          8.439,
+          8.876
+        ],
+        "bbox_mm2": 74.911,
+        "occupancy": 0.116,
+        "outline_mm2": 432.0,
+        "utilization": 0.672
+      },
+      "config": [
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--compact",
+        "--gloss"
+      ],
+      "copper_length_mm": 21.35,
+      "description": "Two independent LED loads sharing supply and return.",
+      "detail_motion": {
+        "channel_delta": -0.65,
+        "compact": 4,
+        "crossing_after": 0.0,
+        "crossing_before": 1.515,
+        "hpwl_after": 21.8634,
+        "hpwl_before": 33.4175,
+        "max_mm": 4.874,
+        "median_mm": 2.5085,
+        "movable": 4,
+        "moved": 4,
+        "moves": {
+          "compact": 4,
+          "slide": 6,
+          "swap": 1,
+          "turn": 0,
+          "wrong_side": 0
+        },
+        "seconds": 0.036,
+        "sum_mm": 11.845,
+        "topology": 0.8333,
+        "topology_global": 0.8333,
+        "turned": 2,
+        "wire_saved": 10.5485
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
@@ -105,97 +265,33 @@
         ],
         "kept": true,
         "length_mm": [
-          3.588,
-          3.588
+          7.087,
+          7.087
         ],
         "proposed": 1
       },
       "layers": 2,
       "legal_motion": {
-        "anchored": 2,
-        "channel_short": 0,
-        "clean": 2,
-        "count": 2,
-        "keep": true,
-        "max_mm": 0.062,
-        "mean_mm": 0.039,
-        "mild": 0,
-        "moved": 0,
-        "pushed": 0,
-        "relocated": 0,
-        "severe": 0,
-        "sum_mm": 0.078,
-        "topology": 1.0,
-        "turned": 0
-      },
-      "nets": 3,
-      "opens": 0,
-      "parts": 3,
-      "passed": true,
-      "reasons": [],
-      "routed": true,
-      "seconds": 18.4,
-      "seed": 0,
-      "selected_start": "start-06",
-      "title": "Resistor + LED",
-      "tracks": 48,
-      "vias": 0,
-      "violations": {}
-    },
-    {
-      "case": "03-branched-leds-5",
-      "compactness": {
-        "area_mm2": 50.322,
-        "bbox_mm": [
-          8.175,
-          11.1
-        ],
-        "bbox_mm2": 90.742,
-        "occupancy": 0.116,
-        "outline_mm2": 432.0,
-        "utilization": 0.555
-      },
-      "config": [
-        "--initial-pool",
-        "--initial-starts",
-        "8",
-        "--initial-finalists",
-        "3",
-        "--compact",
-        "--gloss"
-      ],
-      "copper_length_mm": 27.36,
-      "description": "Two independent LED loads sharing supply and return.",
-      "drc_rules": {},
-      "fab_profile": "legacy",
-      "gloss": {
-        "accepted": 2,
-        "bends": [
-          3,
-          1
-        ],
-        "kept": true,
-        "length_mm": [
-          7.189,
-          7.136
-        ],
-        "proposed": 2
-      },
-      "layers": 2,
-      "legal_motion": {
         "anchored": 4,
-        "channel_short": 2,
-        "clean": 4,
+        "channel_short": 3,
+        "channel_unopened": 1,
+        "clean": 3,
         "count": 4,
         "keep": true,
-        "max_mm": 0.31,
-        "mean_mm": 0.162,
-        "mild": 0,
+        "max_mm": 0.211,
+        "mean_mm": 0.163,
+        "mild": 1,
         "moved": 0,
-        "pushed": 2,
+        "nudged": 0,
+        "pushed": 4,
+        "pushed_far": 0,
         "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
         "severe": 0,
-        "sum_mm": 0.65,
+        "sum_mm": 0.654,
         "topology": 1.0,
         "turned": 0
       },
@@ -205,11 +301,11 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 21.0,
+      "seconds": 26.7,
       "seed": 0,
-      "selected_start": "start-05",
+      "selected_start": "start-04",
       "title": "Two LEDs",
-      "tracks": 100,
+      "tracks": 82,
       "vias": 0,
       "violations": {}
     },
@@ -218,13 +314,13 @@
       "compactness": {
         "area_mm2": 89.087,
         "bbox_mm": [
-          11.942,
-          14.995
+          12.672,
+          12.563
         ],
-        "bbox_mm2": 179.078,
+        "bbox_mm2": 159.198,
         "occupancy": 0.171,
         "outline_mm2": 520.0,
-        "utilization": 0.497
+        "utilization": 0.56
       },
       "config": [
         "--initial-pool",
@@ -235,39 +331,71 @@
         "--compact",
         "--gloss"
       ],
-      "copper_length_mm": 72.24,
+      "copper_length_mm": 55.42,
       "description": "Logic-controlled complementary LED indicators and bypass capacitors.",
+      "detail_motion": {
+        "channel_delta": -0.220137,
+        "compact": 7,
+        "crossing_after": 1.815,
+        "crossing_before": 1.815,
+        "hpwl_after": 46.6523,
+        "hpwl_before": 55.94,
+        "max_mm": 3.245,
+        "median_mm": 1.247,
+        "movable": 7,
+        "moved": 7,
+        "moves": {
+          "compact": 7,
+          "slide": 6,
+          "swap": 1,
+          "turn": 0,
+          "wrong_side": 0
+        },
+        "seconds": 0.087,
+        "sum_mm": 13.462,
+        "topology": 0.8293,
+        "topology_global": 0.8049,
+        "turned": 0,
+        "wire_saved": 5.7716
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
-        "accepted": 4,
+        "accepted": 2,
         "bends": [
-          14,
-          8
+          4,
+          2
         ],
         "kept": true,
         "length_mm": [
-          34.358,
-          33.494
+          17.636,
+          16.49
         ],
-        "proposed": 4
+        "proposed": 2
       },
       "layers": 2,
       "legal_motion": {
         "anchored": 7,
-        "channel_short": 7,
-        "clean": 7,
+        "channel_short": 5,
+        "channel_unopened": 0,
+        "clean": 6,
         "count": 7,
         "keep": true,
-        "max_mm": 0.075,
-        "mean_mm": 0.057,
-        "mild": 0,
-        "moved": 0,
-        "pushed": 0,
+        "max_mm": 0.929,
+        "mean_mm": 0.32,
+        "mild": 1,
+        "moved": 1,
+        "nudged": 0,
+        "pushed": 6,
+        "pushed_far": 0,
         "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
         "severe": 0,
-        "sum_mm": 0.396,
-        "topology": 1.0,
+        "sum_mm": 2.243,
+        "topology": 0.9756,
         "turned": 0
       },
       "nets": 6,
@@ -276,12 +404,12 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 26.6,
+      "seconds": 31.9,
       "seed": 0,
-      "selected_start": "start-02",
+      "selected_start": "start-07",
       "title": "Inverter indicators",
       "tracks": 195,
-      "vias": 1,
+      "vias": 2,
       "violations": {}
     },
     {
@@ -289,13 +417,13 @@
       "compactness": {
         "area_mm2": 120.708,
         "bbox_mm": [
-          16.74,
-          17.42
+          14.349,
+          14.771
         ],
-        "bbox_mm2": 291.611,
+        "bbox_mm2": 211.943,
         "occupancy": 0.168,
         "outline_mm2": 720.0,
-        "utilization": 0.414
+        "utilization": 0.57
       },
       "config": [
         "--initial-pool",
@@ -306,38 +434,70 @@
         "--compact",
         "--gloss"
       ],
-      "copper_length_mm": 125.71,
+      "copper_length_mm": 114.42,
       "description": "TLC555 astable LED blinker with timing, control and supply capacitors.",
+      "detail_motion": {
+        "channel_delta": -1.077064,
+        "compact": 9,
+        "crossing_after": 0.0,
+        "crossing_before": 3.59,
+        "hpwl_after": 86.6867,
+        "hpwl_before": 97.335,
+        "max_mm": 5.333,
+        "median_mm": 1.9261,
+        "movable": 9,
+        "moved": 9,
+        "moves": {
+          "compact": 9,
+          "slide": 4,
+          "swap": 2,
+          "turn": 0,
+          "wrong_side": 0
+        },
+        "seconds": 0.162,
+        "sum_mm": 22.179,
+        "topology": 0.8732,
+        "topology_global": 0.8714,
+        "turned": 1,
+        "wire_saved": 6.9948
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
         "accepted": 4,
         "bends": [
-          33,
-          9
+          18,
+          11
         ],
         "kept": true,
         "length_mm": [
-          56.081,
-          53.18
+          51.556,
+          50.282
         ],
         "proposed": 4
       },
       "layers": 2,
       "legal_motion": {
         "anchored": 9,
-        "channel_short": 8,
+        "channel_short": 9,
+        "channel_unopened": 9,
         "clean": 9,
         "count": 9,
         "keep": true,
-        "max_mm": 1.377,
-        "mean_mm": 0.47,
+        "max_mm": 0.087,
+        "mean_mm": 0.044,
         "mild": 0,
-        "moved": 4,
-        "pushed": 9,
+        "moved": 0,
+        "nudged": 0,
+        "pushed": 0,
+        "pushed_far": 0,
         "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
         "severe": 0,
-        "sum_mm": 4.226,
+        "sum_mm": 0.398,
         "topology": 1.0,
         "turned": 0
       },
@@ -347,12 +507,12 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 29.0,
+      "seconds": 41.8,
       "seed": 0,
-      "selected_start": "start-06",
+      "selected_start": "start-03",
       "title": "TLC555 blinker",
-      "tracks": 370,
-      "vias": 5,
+      "tracks": 333,
+      "vias": 7,
       "violations": {}
     },
     {
@@ -360,13 +520,13 @@
       "compactness": {
         "area_mm2": 221.538,
         "bbox_mm": [
-          26.06,
-          18.55
+          22.755,
+          18.402
         ],
-        "bbox_mm2": 483.413,
+        "bbox_mm2": 418.747,
         "occupancy": 0.22,
         "outline_mm2": 1008.0,
-        "utilization": 0.458
+        "utilization": 0.529
       },
       "config": [
         "--initial-pool",
@@ -377,39 +537,71 @@
         "--compact",
         "--gloss"
       ],
-      "copper_length_mm": 207.5,
+      "copper_length_mm": 183.12,
       "description": "TLC555 clock + CD4017B modulo-2 LED chaser; unused counter outputs intentionally NC.",
+      "detail_motion": {
+        "channel_delta": -6.055389,
+        "compact": 13,
+        "crossing_after": 3.0421,
+        "crossing_before": 6.65,
+        "hpwl_after": 139.453,
+        "hpwl_before": 158.1575,
+        "max_mm": 6.395,
+        "median_mm": 1.8891,
+        "movable": 13,
+        "moved": 13,
+        "moves": {
+          "compact": 13,
+          "slide": 10,
+          "swap": 1,
+          "turn": 0,
+          "wrong_side": 0
+        },
+        "seconds": 0.854,
+        "sum_mm": 30.335,
+        "topology": 0.902,
+        "topology_global": 0.8961,
+        "turned": 0,
+        "wire_saved": 8.089
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
-        "accepted": 5,
+        "accepted": 7,
         "bends": [
-          30,
-          15
+          52,
+          21
         ],
         "kept": true,
         "length_mm": [
-          84.089,
-          83.465
+          91.658,
+          87.407
         ],
-        "proposed": 5
+        "proposed": 7
       },
       "layers": 2,
       "legal_motion": {
-        "anchored": 12,
-        "channel_short": 9,
-        "clean": 12,
+        "anchored": 13,
+        "channel_short": 10,
+        "channel_unopened": 13,
+        "clean": 13,
         "count": 13,
         "keep": true,
-        "max_mm": 0.297,
-        "mean_mm": 0.062,
-        "mild": 1,
+        "max_mm": 0.084,
+        "mean_mm": 0.048,
+        "mild": 0,
         "moved": 0,
+        "nudged": 0,
         "pushed": 0,
-        "relocated": 1,
+        "pushed_far": 0,
+        "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
         "severe": 0,
-        "sum_mm": 0.802,
-        "topology": 1.0,
+        "sum_mm": 0.628,
+        "topology": 0.9935,
         "turned": 0
       },
       "nets": 11,
@@ -418,12 +610,12 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 34.1,
+      "seconds": 88.1,
       "seed": 0,
-      "selected_start": "start-03",
+      "selected_start": "start-02",
       "title": "Two-stage chaser",
-      "tracks": 593,
-      "vias": 14,
+      "tracks": 501,
+      "vias": 11,
       "violations": {}
     },
     {
@@ -431,13 +623,13 @@
       "compactness": {
         "area_mm2": 263.371,
         "bbox_mm": [
-          23.56,
-          20.41
+          21.842,
+          22.787
         ],
-        "bbox_mm2": 480.86,
+        "bbox_mm2": 497.717,
         "occupancy": 0.196,
         "outline_mm2": 1344.0,
-        "utilization": 0.548
+        "utilization": 0.529
       },
       "config": [
         "--initial-pool",
@@ -448,109 +640,70 @@
         "--compact",
         "--gloss"
       ],
-      "copper_length_mm": 294.64,
+      "copper_length_mm": 262.99,
       "description": "TLC555 clock + CD4017B modulo-5 LED chaser; unused counter outputs intentionally NC.",
+      "detail_motion": {
+        "channel_delta": -9.473262,
+        "compact": 19,
+        "crossing_after": 1.5217,
+        "crossing_before": 3.555,
+        "hpwl_after": 208.9537,
+        "hpwl_before": 234.715,
+        "max_mm": 5.005,
+        "median_mm": 0.7061,
+        "movable": 19,
+        "moved": 19,
+        "moves": {
+          "compact": 19,
+          "slide": 13,
+          "swap": 1,
+          "turn": 1,
+          "wrong_side": 0
+        },
+        "seconds": 2.132,
+        "sum_mm": 23.911,
+        "topology": 0.9675,
+        "topology_global": 0.97,
+        "turned": 3,
+        "wire_saved": 13.0647
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
         "accepted": 6,
         "bends": [
-          78,
-          38
+          80,
+          39
         ],
         "kept": true,
         "length_mm": [
-          167.082,
-          162.994
+          165.622,
+          157.869
         ],
         "proposed": 6
       },
       "layers": 2,
       "legal_motion": {
-        "anchored": 18,
-        "channel_short": 19,
-        "clean": 17,
+        "anchored": 19,
+        "channel_short": 17,
+        "channel_unopened": 19,
+        "clean": 16,
         "count": 19,
         "keep": true,
-        "max_mm": 1.18,
-        "mean_mm": 0.106,
-        "mild": 2,
-        "moved": 1,
-        "pushed": 0,
-        "relocated": 1,
+        "max_mm": 0.321,
+        "mean_mm": 0.07,
+        "mild": 3,
+        "moved": 0,
+        "nudged": 0,
+        "pushed": 3,
+        "pushed_far": 0,
+        "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
         "severe": 0,
-        "sum_mm": 2.01,
-        "topology": 1.0,
-        "turned": 0
-      },
-      "nets": 17,
-      "opens": 0,
-      "parts": 20,
-      "passed": true,
-      "reasons": [],
-      "routed": true,
-      "seconds": 62.7,
-      "seed": 0,
-      "selected_start": "start-05",
-      "title": "Five-stage chaser",
-      "tracks": 724,
-      "vias": 20,
-      "violations": {}
-    },
-    {
-      "case": "08-chaser-20-plane",
-      "compactness": {
-        "area_mm2": 263.371,
-        "bbox_mm": [
-          20.31,
-          24.365
-        ],
-        "bbox_mm2": 494.853,
-        "occupancy": 0.196,
-        "outline_mm2": 1344.0,
-        "utilization": 0.532
-      },
-      "config": [
-        "--initial-pool",
-        "--initial-starts",
-        "8",
-        "--initial-finalists",
-        "3",
-        "--compact",
-        "--gloss"
-      ],
-      "copper_length_mm": 220.05,
-      "description": "TLC555 clock + CD4017B modulo-5 LED chaser; unused counter outputs intentionally NC.",
-      "drc_rules": {},
-      "fab_profile": "legacy",
-      "gloss": {
-        "accepted": 5,
-        "bends": [
-          69,
-          29
-        ],
-        "kept": true,
-        "length_mm": [
-          163.191,
-          158.602
-        ],
-        "proposed": 5
-      },
-      "layers": 4,
-      "legal_motion": {
-        "anchored": 17,
-        "channel_short": 16,
-        "clean": 15,
-        "count": 19,
-        "keep": true,
-        "max_mm": 0.805,
-        "mean_mm": 0.1,
-        "mild": 4,
-        "moved": 1,
-        "pushed": 0,
-        "relocated": 2,
-        "severe": 0,
-        "sum_mm": 1.904,
+        "sum_mm": 1.324,
         "topology": 0.997,
         "turned": 0
       },
@@ -560,24 +713,127 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 40.1,
+      "seconds": 177.6,
+      "seed": 0,
+      "selected_start": "start-00",
+      "title": "Five-stage chaser",
+      "tracks": 619,
+      "vias": 16,
+      "violations": {}
+    },
+    {
+      "case": "08-chaser-20-plane",
+      "compactness": {
+        "area_mm2": 263.371,
+        "bbox_mm": [
+          19.182,
+          23.082
+        ],
+        "bbox_mm2": 442.76,
+        "occupancy": 0.196,
+        "outline_mm2": 1344.0,
+        "utilization": 0.595
+      },
+      "config": [
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--compact",
+        "--gloss"
+      ],
+      "copper_length_mm": 211.01,
+      "description": "TLC555 clock + CD4017B modulo-5 LED chaser; unused counter outputs intentionally NC.",
+      "detail_motion": {
+        "channel_delta": -4.567806,
+        "compact": 19,
+        "crossing_after": 3.3056,
+        "crossing_before": 5.555,
+        "hpwl_after": 167.142,
+        "hpwl_before": 193.39,
+        "max_mm": 5.212,
+        "median_mm": 1.043,
+        "movable": 19,
+        "moved": 19,
+        "moves": {
+          "compact": 19,
+          "slide": 16,
+          "swap": 1,
+          "turn": 1,
+          "wrong_side": 0
+        },
+        "seconds": 1.094,
+        "sum_mm": 26.217,
+        "topology": 0.9265,
+        "topology_global": 0.9345,
+        "turned": 2,
+        "wire_saved": 15.3511
+      },
+      "drc_rules": {},
+      "fab_profile": "legacy",
+      "gloss": {
+        "accepted": 5,
+        "bends": [
+          71,
+          27
+        ],
+        "kept": true,
+        "length_mm": [
+          154.552,
+          149.824
+        ],
+        "proposed": 5
+      },
+      "layers": 4,
+      "legal_motion": {
+        "anchored": 19,
+        "channel_short": 16,
+        "channel_unopened": 19,
+        "clean": 15,
+        "count": 19,
+        "keep": true,
+        "max_mm": 0.432,
+        "mean_mm": 0.084,
+        "mild": 4,
+        "moved": 1,
+        "nudged": 0,
+        "pushed": 4,
+        "pushed_far": 0,
+        "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
+        "severe": 0,
+        "sum_mm": 1.594,
+        "topology": 1.0,
+        "turned": 0
+      },
+      "nets": 17,
+      "opens": 0,
+      "parts": 20,
+      "passed": true,
+      "reasons": [],
+      "routed": true,
+      "seconds": 56.1,
       "seed": 0,
       "selected_start": "start-00",
       "title": "Five-stage chaser with plane",
-      "tracks": 402,
-      "vias": 29,
+      "tracks": 412,
+      "vias": 31,
       "violations": {}
     }
   ],
   "generated": {
     "ladder": {
       "engine_dirty": false,
-      "engine_revision": "dfe747f1ad738e2ee2219aee813c1160d5559e36",
+      "engine_revision": "acec578f02983b873439539a29801d928d1c56a5",
       "fab_profile": "legacy",
       "image": null,
       "kicad": "10.0.6",
       "platform": "darwin-arm64",
-      "sources_sha256": "01dfd706ff4c2f07219021908f41673a842a65564f52e1224ef79738617d51cb"
+      "sources_sha256": "cce3b5e1ff74738c506bda974a39b4fc3a5b5d2bdf2ed6362a57909b01da9de7"
     },
     "render": {
       "date": "2026-10-06",
@@ -593,13 +849,13 @@
       "compactness": {
         "area_mm2": 263.371,
         "bbox_mm": [
-          23.56,
-          20.41
+          21.842,
+          22.787
         ],
-        "bbox_mm2": 480.86,
+        "bbox_mm2": 497.717,
         "occupancy": 0.196,
         "outline_mm2": 1344.0,
-        "utilization": 0.548
+        "utilization": 0.529
       },
       "config": [
         "--initial-pool",
@@ -613,39 +869,71 @@
         "--gloss"
       ],
       "constraint_audit": null,
-      "copper_length_mm": 294.64,
+      "copper_length_mm": 262.99,
       "description": "TLC555 clock + CD4017B modulo-5 LED chaser; unused counter outputs intentionally NC.",
+      "detail_motion": {
+        "channel_delta": -9.473262,
+        "compact": 19,
+        "crossing_after": 1.5217,
+        "crossing_before": 3.555,
+        "hpwl_after": 208.9537,
+        "hpwl_before": 234.715,
+        "max_mm": 5.005,
+        "median_mm": 0.7061,
+        "movable": 19,
+        "moved": 19,
+        "moves": {
+          "compact": 19,
+          "slide": 13,
+          "swap": 1,
+          "turn": 1,
+          "wrong_side": 0
+        },
+        "seconds": 0.737,
+        "sum_mm": 23.911,
+        "topology": 0.9675,
+        "topology_global": 0.97,
+        "turned": 3,
+        "wire_saved": 13.0647
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
         "accepted": 6,
         "bends": [
-          78,
-          38
+          80,
+          39
         ],
         "kept": true,
         "length_mm": [
-          167.082,
-          162.994
+          165.622,
+          157.869
         ],
         "proposed": 6
       },
       "layers": 2,
       "legal_motion": {
-        "anchored": 18,
-        "channel_short": 19,
-        "clean": 17,
+        "anchored": 19,
+        "channel_short": 17,
+        "channel_unopened": 19,
+        "clean": 16,
         "count": 19,
         "keep": true,
-        "max_mm": 1.18,
-        "mean_mm": 0.106,
-        "mild": 2,
-        "moved": 1,
-        "pushed": 0,
-        "relocated": 1,
+        "max_mm": 0.321,
+        "mean_mm": 0.07,
+        "mild": 3,
+        "moved": 0,
+        "nudged": 0,
+        "pushed": 3,
+        "pushed_far": 0,
+        "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
         "severe": 0,
-        "sum_mm": 2.01,
-        "topology": 1.0,
+        "sum_mm": 1.324,
+        "topology": 0.997,
         "turned": 0
       },
       "nets": 17,
@@ -654,12 +942,12 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 62.7,
+      "seconds": 69.0,
       "seed": 0,
-      "selected_start": "start-05",
+      "selected_start": "start-00",
       "title": "Five-stage chaser",
-      "tracks": 724,
-      "vias": 20,
+      "tracks": 619,
+      "vias": 16,
       "violations": {}
     },
     {
@@ -667,13 +955,13 @@
       "compactness": {
         "area_mm2": 263.371,
         "bbox_mm": [
-          24.685,
-          24.323
+          25.218,
+          22.84
         ],
-        "bbox_mm2": 600.401,
+        "bbox_mm2": 575.968,
         "occupancy": 0.196,
         "outline_mm2": 1344.0,
-        "utilization": 0.439
+        "utilization": 0.457
       },
       "config": [
         "--initial-pool",
@@ -692,38 +980,70 @@
         ],
         "findings": 0
       },
-      "copper_length_mm": 235.04,
+      "copper_length_mm": 260.99,
       "description": "The 07-chaser-20 chaser with LEDs D1 to D5 held in one line group (3.0 mm pitch), so the sequence reads as a row.",
+      "detail_motion": {
+        "channel_delta": -3.981719,
+        "compact": 3,
+        "crossing_after": 4.38,
+        "crossing_before": 19.715,
+        "hpwl_after": 199.6822,
+        "hpwl_before": 239.605,
+        "max_mm": 3.939,
+        "median_mm": 1.7666,
+        "movable": 9,
+        "moved": 9,
+        "moves": {
+          "compact": 3,
+          "slide": 10,
+          "swap": 1,
+          "turn": 1,
+          "wrong_side": 0
+        },
+        "seconds": 0.293,
+        "sum_mm": 15.196,
+        "topology": 0.9583,
+        "topology_global": 0.9583,
+        "turned": 1,
+        "wire_saved": 51.4265
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
-        "accepted": 7,
+        "accepted": 8,
         "bends": [
-          55,
-          19
+          51,
+          23
         ],
         "kept": true,
         "length_mm": [
-          111.382,
-          106.329
+          132.938,
+          130.925
         ],
-        "proposed": 7
+        "proposed": 9
       },
       "layers": 2,
       "legal_motion": {
         "anchored": 10,
-        "channel_short": 5,
+        "channel_short": 6,
+        "channel_unopened": 10,
         "clean": 10,
         "count": 10,
         "keep": true,
-        "max_mm": 0.068,
-        "mean_mm": 0.05,
+        "max_mm": 0.085,
+        "mean_mm": 0.049,
         "mild": 0,
         "moved": 0,
+        "nudged": 0,
         "pushed": 0,
+        "pushed_far": 0,
         "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
         "severe": 0,
-        "sum_mm": 0.504,
+        "sum_mm": 0.49,
         "topology": 1.0,
         "turned": 0
       },
@@ -733,12 +1053,12 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 44.7,
+      "seconds": 52.4,
       "seed": 0,
-      "selected_start": "start-02",
+      "selected_start": "start-00",
       "title": "Five-stage chaser, LEDs in a line group",
-      "tracks": 676,
-      "vias": 10,
+      "tracks": 694,
+      "vias": 12,
       "violations": {}
     },
     {
@@ -746,13 +1066,13 @@
       "compactness": {
         "area_mm2": 160.253,
         "bbox_mm": [
-          19.478,
-          18.06
+          18.34,
+          16.76
         ],
-        "bbox_mm2": 351.764,
+        "bbox_mm2": 307.377,
         "occupancy": 0.171,
         "outline_mm2": 936.0,
-        "utilization": 0.456
+        "utilization": 0.521
       },
       "config": [
         "--initial-pool",
@@ -766,20 +1086,45 @@
         "--gloss"
       ],
       "constraint_audit": null,
-      "copper_length_mm": 152.93,
+      "copper_length_mm": 131.82,
       "description": "TLC555 blinker that runs while SW1 is held; supply connector, button and LED placed freely.",
+      "detail_motion": {
+        "channel_delta": -0.527988,
+        "compact": 12,
+        "crossing_after": 3.7539,
+        "crossing_before": 8.97,
+        "hpwl_after": 108.637,
+        "hpwl_before": 121.3825,
+        "max_mm": 11.794,
+        "median_mm": 1.5145,
+        "movable": 12,
+        "moved": 12,
+        "moves": {
+          "compact": 12,
+          "slide": 10,
+          "swap": 1,
+          "turn": 0,
+          "wrong_side": 1
+        },
+        "seconds": 0.335,
+        "sum_mm": 28.116,
+        "topology": 0.8939,
+        "topology_global": 0.9008,
+        "turned": 0,
+        "wire_saved": 13.2915
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
         "accepted": 6,
         "bends": [
-          41,
-          17
+          33,
+          11
         ],
         "kept": true,
         "length_mm": [
-          82.894,
-          79.994
+          57.965,
+          56.458
         ],
         "proposed": 6
       },
@@ -787,6 +1132,7 @@
       "legal_motion": {
         "anchored": 12,
         "channel_short": 9,
+        "channel_unopened": 0,
         "clean": 12,
         "count": 12,
         "keep": true,
@@ -794,8 +1140,14 @@
         "mean_mm": 0.198,
         "mild": 0,
         "moved": 2,
+        "nudged": 0,
         "pushed": 10,
+        "pushed_far": 0,
         "relocated": 0,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 0,
+        "relocated_slot_taken": 0,
+        "relocations": {},
         "severe": 0,
         "sum_mm": 2.376,
         "topology": 0.9924,
@@ -807,12 +1159,12 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 33.4,
+      "seconds": 37.9,
       "seed": 0,
       "selected_start": "start-00",
       "title": "Hold-to-blink board, parts placed freely",
-      "tracks": 368,
-      "vias": 8,
+      "tracks": 396,
+      "vias": 5,
       "violations": {}
     },
     {
@@ -820,13 +1172,13 @@
       "compactness": {
         "area_mm2": 160.253,
         "bbox_mm": [
-          26.19,
-          15.452
+          21.95,
+          16.202
         ],
-        "bbox_mm2": 404.701,
+        "bbox_mm2": 355.644,
         "occupancy": 0.171,
         "outline_mm2": 936.0,
-        "utilization": 0.396
+        "utilization": 0.451
       },
       "config": [
         "--initial-pool",
@@ -847,39 +1199,73 @@
         ],
         "findings": 0
       },
-      "copper_length_mm": 138.6,
+      "copper_length_mm": 133.95,
       "description": "TLC555 blinker that runs while SW1 is held; supply connector, button and LED on the south edge (hard edge alignment).",
+      "detail_motion": {
+        "channel_delta": -0.084506,
+        "compact": 9,
+        "crossing_after": 4.4571,
+        "crossing_before": 2.44,
+        "hpwl_after": 115.5023,
+        "hpwl_before": 121.135,
+        "max_mm": 2.168,
+        "median_mm": 1.145,
+        "movable": 9,
+        "moved": 9,
+        "moves": {
+          "compact": 9,
+          "slide": 6,
+          "swap": 0,
+          "turn": 0,
+          "wrong_side": 0
+        },
+        "seconds": 0.191,
+        "sum_mm": 11.235,
+        "topology": 0.9306,
+        "topology_global": 0.9028,
+        "turned": 0,
+        "wire_saved": 3.3034
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
-        "accepted": 5,
+        "accepted": 4,
         "bends": [
-          24,
-          13
+          22,
+          9
         ],
         "kept": true,
         "length_mm": [
-          63.321,
-          61.292
+          58.519,
+          56.723
         ],
-        "proposed": 6
+        "proposed": 4
       },
       "layers": 2,
       "legal_motion": {
-        "anchored": 12,
-        "channel_short": 10,
-        "clean": 12,
+        "anchored": 11,
+        "channel_short": 9,
+        "channel_unopened": 0,
+        "clean": 11,
         "count": 12,
         "keep": true,
-        "max_mm": 0.083,
-        "mean_mm": 0.048,
+        "max_mm": 4.773,
+        "mean_mm": 0.678,
         "mild": 0,
-        "moved": 0,
-        "pushed": 0,
-        "relocated": 0,
-        "severe": 0,
-        "sum_mm": 0.582,
-        "topology": 1.0,
+        "moved": 4,
+        "nudged": 0,
+        "pushed": 8,
+        "pushed_far": 0,
+        "relocated": 1,
+        "relocated_push_infeasible": 0,
+        "relocated_severe": 1,
+        "relocated_slot_taken": 0,
+        "relocations": {
+          "R4": "severe"
+        },
+        "severe": 1,
+        "sum_mm": 8.141,
+        "topology": 0.9618,
         "turned": 0
       },
       "nets": 8,
@@ -888,12 +1274,12 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 32.2,
+      "seconds": 34.4,
       "seed": 0,
-      "selected_start": "start-03",
+      "selected_start": "start-07",
       "title": "Hold-to-blink board, I/O on the south edge",
-      "tracks": 383,
-      "vias": 6,
+      "tracks": 381,
+      "vias": 7,
       "violations": {}
     },
     {
@@ -901,13 +1287,13 @@
       "compactness": {
         "area_mm2": 419.978,
         "bbox_mm": [
-          30.34,
-          35.73
+          42.452,
+          23.172
         ],
-        "bbox_mm2": 1084.048,
+        "bbox_mm2": 983.707,
         "occupancy": 0.187,
         "outline_mm2": 2240.0,
-        "utilization": 0.387
+        "utilization": 0.427
       },
       "config": [
         "--trace-placement-every",
@@ -916,43 +1302,93 @@
         "--gloss"
       ],
       "constraint_audit": null,
-      "copper_length_mm": 533.6,
+      "copper_length_mm": 539.51,
       "description": "TLC555 clock and two CD4017B five-LED banks as three blocks (two templates), placed and routed hierarchically.",
+      "detail_motion": {
+        "block": {
+          "channel_delta": -7.1557,
+          "crossing_after": 6.6601,
+          "crossing_before": 20.69,
+          "hpwl_after": 160.2195,
+          "hpwl_before": 175.185,
+          "max_mm": 3.608,
+          "median_mm": 1.1773,
+          "movable": 18,
+          "moved": 14,
+          "moves": {
+            "compact": 6,
+            "slide": 15,
+            "swap": 2,
+            "turn": 1,
+            "wrong_side": 0
+          },
+          "seconds": 0.514,
+          "sum_mm": 20.971,
+          "topology": 0.8361,
+          "wire_saved": 28.5077
+        },
+        "top": {
+          "channel_delta": 0.0,
+          "compact": "illegal",
+          "crossing_after": 10.595,
+          "crossing_before": 10.595,
+          "hpwl_after": 150.2193,
+          "hpwl_before": 150.2193,
+          "max_mm": 0.0,
+          "median_mm": 0.0,
+          "movable": 1,
+          "moved": 0,
+          "moves": {
+            "compact": 0,
+            "slide": 0,
+            "swap": 0,
+            "turn": 0,
+            "wrong_side": 0
+          },
+          "seconds": 0.012,
+          "sum_mm": 0.0,
+          "topology": 1.0,
+          "topology_global": 1.0,
+          "turned": 0,
+          "wire_saved": 0.0
+        }
+      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
-        "accepted": 7,
+        "accepted": 9,
         "bends": [
-          133,
-          46
+          132,
+          57
         ],
         "kept": true,
         "length_mm": [
-          276.845,
-          265.466
+          259.484,
+          250.728
         ],
-        "proposed": 7
+        "proposed": 9
       },
       "layers": 2,
       "legal_motion": {
         "block": {
           "anchored": 18,
-          "channel_short": 18,
+          "channel_short": 17,
           "channel_unopened": 18,
-          "clean": 13,
+          "clean": 10,
           "count": 18,
-          "max_mm": 0.335,
-          "mean_mm": 0.068,
-          "mild": 5,
-          "moved": 0,
+          "max_mm": 0.49,
+          "mean_mm": 0.121,
+          "mild": 8,
+          "moved": 1,
           "nudged": 0,
-          "pushed": 4,
+          "pushed": 7,
+          "pushed_far": 0,
           "relocated": 0,
           "relocated_push_infeasible": 0,
           "relocated_severe": 0,
           "relocated_slot_taken": 0,
           "severe": 0,
-          "sum_mm": 1.228,
+          "sum_mm": 2.176,
           "topology": 1.0,
           "turned": 0
         },
@@ -963,19 +1399,20 @@
           "clean": 4,
           "count": 4,
           "keep": true,
-          "max_mm": 0.056,
-          "mean_mm": 0.043,
+          "max_mm": 0.068,
+          "mean_mm": 0.046,
           "mild": 0,
           "moved": 0,
           "nudged": 0,
           "pushed": 0,
+          "pushed_far": 0,
           "relocated": 0,
           "relocated_push_infeasible": 0,
           "relocated_severe": 0,
           "relocated_slot_taken": 0,
           "relocations": {},
           "severe": 0,
-          "sum_mm": 0.171,
+          "sum_mm": 0.185,
           "topology": 1.0,
           "turned": 0
         }
@@ -986,24 +1423,24 @@
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 93.7,
+      "seconds": 122.5,
       "seed": 0,
       "selected_start": null,
       "title": "Twin-bank chaser, placed and routed hierarchically",
-      "tracks": 1338,
-      "vias": 52,
+      "tracks": 1454,
+      "vias": 40,
       "violations": {}
     }
   ],
   "showcases_generated": {
     "ladder": {
       "engine_dirty": false,
-      "engine_revision": "dfe747f1ad738e2ee2219aee813c1160d5559e36",
+      "engine_revision": "e008117521a73c8c2292bbb29d322468a42f3623",
       "fab_profile": "legacy",
       "image": null,
       "kicad": "10.0.6",
       "platform": "darwin-arm64",
-      "sources_sha256": "01dfd706ff4c2f07219021908f41673a842a65564f52e1224ef79738617d51cb"
+      "sources_sha256": "dd8a59973746cd87ac27137328da7a19d9cf94d6d5eed196655cadb02cfafb3b"
     },
     "render": {
       "date": "2026-10-06",

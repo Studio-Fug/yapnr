@@ -1,6 +1,0 @@
-{
- "d2-star-s21": "|S21|, |S31| requirement -3.30 dB raw (wave 1: -3.35)",
- "d2-star-guard": "objective band 4.15-5.85 GHz at 9 points (wave 1: 4.25-5.75 at 7): a 0.1 GHz guard",
- "d2-star-sched": "star + sched's schedule (35, 15, 15, 10) and trust_reference best",
- "d2-star-s21-guard": "s21 and guard together"
-}

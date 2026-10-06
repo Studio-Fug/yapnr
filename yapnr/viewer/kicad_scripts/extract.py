@@ -11,6 +11,16 @@ import math
 import sys
 
 
+def arc_sweep(t):
+    """An arc track's signed sweep in radians, start to end.
+
+    KiCad 10 names it ``PCB_ARC.GetAngle()``; ``GetArcAngle()`` is only kept as a fallback for
+    other versions (it does not exist in KiCad 10, which made every board with arc tracks fail).
+    """
+    get = getattr(t, "GetAngle", None) or getattr(t, "GetArcAngle")
+    return get().AsRadians()
+
+
 def tracks_and_vias(k, b, xy):
     tracks = []
     vias = []
@@ -23,7 +33,7 @@ def tracks_and_vias(k, b, xy):
         if t.GetClass() == "PCB_ARC":
             center = t.GetCenter()
             start = t.GetStart()
-            angle = t.GetArcAngle().AsRadians()
+            angle = arc_sweep(t)
             radius = math.hypot(start.x - center.x, start.y - center.y)
             theta = math.atan2(start.y - center.y, start.x - center.x)
             pts = [

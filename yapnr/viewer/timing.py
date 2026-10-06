@@ -63,16 +63,6 @@ _FALLBACK_KINDS = {kind for kind, _ in _FALLBACK_MARKERS}
 _MARKER_LABEL = dict(_FALLBACK_MARKERS)
 
 
-def _candidate_lineage(candidate: str) -> List[str]:
-    """``candidate`` and every ancestor tree path, root ("") last, for scope matching."""
-    segments = [s for s in candidate.split("/") if s]
-    out = []
-    for i in range(len(segments), 0, -1):
-        out.append("/".join(segments[:i]))
-    out.append("")
-    return out
-
-
 def _in_scope(candidate: str, scope: str) -> bool:
     if not scope:
         return True

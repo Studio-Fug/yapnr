@@ -1,15 +1,20 @@
 # radar60 Rev A: N placement starts explored on GCP as one yapnr exp campaign
 # (tools/exp/pnr_explore_plan.py, docs/cloud-experiments.md "Any command as a task").
 #
-# `source`, `fixblocks` (the power-stage library's two blocks posed and fixed in situ) and
-# `prepare` are run once, locally, into `seed_from` below, in that order -- `prepare`'s
-# fanout/hold_out must see the fixed blocks' copper, so it cannot run before `fixblocks`
-# (integrate.py's module docstring). Every task resumes from that snapshot with its own seed,
-# so only `place`/`select`/`finish`/`block`/`route`/`check` run in the cloud. `--library`
-# (power_block.py merge's library.json, copied into the snapshot so `{work}/...` finds it) is
-# shared by every step through `common_args`: `place` places the two blocks as rigid macros and
-# expands them, `block` (a post_step, after `finish`) draws the chosen layouts' routed copper
-# and outer pours into the finished board as fixed groups before `route`/`check` run.
+# `source`, `fixblocks` (the power-stage library's two blocks posed and fixed in situ, floorplan
+# `power_stage.blocks[].site`) and `prepare` are run once, locally, into `seed_from` below, in
+# that order -- `prepare`'s fanout/hold_out must see the fixed blocks' copper, so it cannot run
+# before `fixblocks` (integrate.py's module docstring). Every task resumes from that snapshot
+# with its own seed, so only `place`/`select`/`finish`/`route`/`check` run in the cloud. Each
+# block's own routed copper and outer pours are already drawn in and fixed (fixblocks ran
+# pnr.hier.assemble --zones --group once, locally) -- these are in-situ (`site`) blocks, not
+# free-floating macros the top-level placer places, so integrate.py's `block` step (which acts
+# on a free-floating block the placement itself drew, floorplan `power_stage.blocks[]` without
+# a `site`) does not apply and must not be in `post_steps`: it raises ("the placement drew no
+# block layouts") on every in-situ task. `--library` (power_block.py merge's library.json,
+# copied into the snapshot so `{work}/...` finds it) still goes into `common_args` for
+# provenance: `place` (pnr.mc.halving) snapshots it into the run's own status.json when given
+# one, even when (as here) every block is already fixed and there is nothing left to place.
 # (Stage 3c consolidation, 2026-10-05: `radar60-3c-power`'s blocks merged onto this flow; the
 # pre-power-block wave this comment used to describe is `stage3c/iterate.md`'s Wave 1-3.)
 #
@@ -67,7 +72,7 @@ seed_from = "reva/prepared"
 # (harmless on steps that ignore it; fixblocks already consumed it locally, --library here is
 # for `place` and `block`).
 common_args = ["--work", "{work}", "--out", "{work}/board", "--engine", "{cwd}/src", "--python", "${PYTHON}", "--library", "{work}/power-blocks-library.json"]
-post_steps = [["block"], ["route"], ["check"]]
+post_steps = [["route"], ["check"]]
 collect = ["work/route/candidate.kicad_pcb", "work/board/measure.json", "work/route-diag.json"]
 embed = [["measure", "work/board/measure.json"], ["route_diag", "work/route-diag.json"]]
 

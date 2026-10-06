@@ -29,7 +29,7 @@ max_wall_s = 1800
 work_dir = "work"
 seed_from = "reva/prepared"
 common_args = ["--work", "{work}", "--out", "{work}/board", "--engine", "{cwd}/src", "--python", "${PYTHON}", "--library", "{work}/power-blocks-library.json"]
-post_steps = [["block"], ["route"], ["check"]]
+post_steps = [["route"], ["check"]]
 collect = ["work/route/candidate.kicad_pcb", "work/board/measure.json", "work/route-diag.json"]
 embed = [["measure", "work/board/measure.json"], ["route_diag", "work/route-diag.json"]]
 

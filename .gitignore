@@ -35,3 +35,7 @@ yapnr-out/
 
 # Locally built native FDTD stepper (python -m yapnr.rf.fdtd.native_kernel build)
 yapnr/rf/fdtd/native/libyapnr_fdtd.*
+
+# A local source+fixblocks+prepare snapshot for a GCP exp campaign's `seed_from`
+# (examples/radar60/board/explore_jobs.toml); rebuilt per inputs change, never committed.
+examples/radar60/board/reva/prepared/

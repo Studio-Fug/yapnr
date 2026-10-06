@@ -1,0 +1,48 @@
+yapnr — a circuit tree for a placement and routing engine
+
+THE NAME
+
+yapnr stands for “yet another place and route.” Its slightly fantastical sound
+suggested a second, playful expansion: “Yavanna-Assisted Placement ’N Routing.”
+That backronym was coined for this project.
+
+The namesake is Yavanna, the figure in Tolkien’s legendarium associated with
+growing things and the protection of plants. Her connection to trees inspired
+the logo’s central idea: a tree whose branches are electronic routes.
+
+THE STORY
+
+Imagine a gardener of silicon. First, each cell finds its place; then paths
+grow between them. A floorplan becomes a small, carefully tended forest of
+connections. The engine’s practical work—placing cells and routing signals—
+becomes the quiet craft of giving a circuit room to grow.
+
+“Yet another place and route” remains the everyday expansion. The Yavanna
+backronym gives the project a little woodland mythology to carry alongside it.
+
+THE MARK
+
+The emblem is a compact circuit-tree sigil. Its branching trunk suggests a Y
+for yapnr. Angular branches echo routed wires, while square and diamond pads
+suggest placed cells and connection points. The roots continue the routing
+motif below the trunk.
+
+Forest green carries the woodland theme; gold highlights selected terminals.
+The lowercase wordmark has restrained, leaf-like curves that lend it an
+elvish character while keeping the name readable.
+
+THE ASSET
+
+yapnr-logo.png is a 1254 × 1254 pixel raster PNG with transparency. Its dark
+green lettering is best displayed against a light background. The original
+generation prompt is included as yapnr-logo-prompt.txt.
+
+Created with the built-in image generation tool on September 29, 2026.
+
+NAMESAKE REFERENCE
+
+Yavanna — Tolkien Gateway
+https://tolkiengateway.net/wiki/Yavanna
+
+The gardener-of-silicon story and its application to yapnr are original
+creative framing for this logo.

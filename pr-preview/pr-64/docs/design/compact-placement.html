@@ -1075,6 +1075,73 @@ ran on <code class="docutils literal notranslate"><span class="pre">c4</span></c
 <code class="docutils literal notranslate"><span class="pre">c4d</span></code>. A first version without the channels in the push moved fewer parts still (the core flat
 cases 0 to 43 %) but passed only 40 of 50 compact cells against 44 (the MCU lane 8 of 18), so the
 channels stay.</p>
+<section id="f-block-level-motion-reserving-channel-room-in-gp-not-only-in-the-push">
+<h3>F. Block-level motion: reserving channel room in GP, not only in the push<a class="headerlink" href="#f-block-level-motion-reserving-channel-room-in-gp-not-only-in-the-push" title="Link to this heading">¶</a></h3>
+<p>The above still left the block level moving almost as much as before the push’s channel term
+(<code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> block: 70 % of parts, 16.3 mm; <code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> block: 65 %, 16.3 mm — both
+close to, not below, <code class="docutils literal notranslate"><span class="pre">main</span></code>’s non-compact 65–67 % / 15.0 mm). Mechanically this is because <code class="docutils literal notranslate"><span class="pre">GP</span></code>’s
+density term (<code class="docutils literal notranslate"><span class="pre">w_spread</span> <span class="pre">*</span> <span class="pre">overlap</span></code>, §4) only ever reserves each part’s own courtyard at the global
+spread floor; it has no notion of the escape-channel room classified nets will need between facing
+pads, so the legalizer’s push still has to open that room itself, at legalization time, moving
+parts that were already legal by the courtyard-only measure.</p>
+<p><strong>Fix</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.compact.channel_margin</span></code>, <code class="docutils literal notranslate"><span class="pre">gp_channel_inflation</span></code>; <code class="docutils literal notranslate"><span class="pre">GP</span></code> only, additive): before
+<code class="docutils literal notranslate"><span class="pre">global_place</span></code> runs, a <code class="docutils literal notranslate"><span class="pre">pnr.place.channels.ChannelModel</span></code> is built on the incoming (pre-placement)
+graph — a rough proxy, since <code class="docutils literal notranslate"><span class="pre">GP</span></code> may still turn a part, but good enough for a density floor. For
+each part, <code class="docutils literal notranslate"><span class="pre">channel_margin</span></code> takes the largest single-face demand (mm) its own externally-connected
+pads ask for (half of it: the facing neighbour owes the other half), and <code class="docutils literal notranslate"><span class="pre">gp_channel_inflation</span></code>
+turns that into a multiplier on the part’s own smaller courtyard half-extent, capped at 1.3 (the
+legalizer’s own spread cap). The result merges (<code class="docutils literal notranslate"><span class="pre">max</span></code>) into the existing <code class="docutils literal notranslate"><span class="pre">inflation</span></code> floor
+<code class="docutils literal notranslate"><span class="pre">global_place</span></code> already took from the place-route loop’s congestion feedback (§6) — the same
+mechanism, a different reason to ask for room, so GP’s density term now reserves (part of) the
+channel room up front instead of leaving it entirely to the legalizer’s push.</p>
+<p><strong>Measured</strong> (Mac, seed 0, <code class="docutils literal notranslate"><span class="pre">--compact</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.place.motion</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize-motion/table-final.md</span></code>):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stage</p></th>
+<th class="head text-right"><p><code class="docutils literal notranslate"><span class="pre">main</span></code> (no compact)</p></th>
+<th class="head text-right"><p>§12 push alone</p></th>
+<th class="head text-right"><p>+ this fix</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> block</p></td>
+<td class="text-right"><p>65 % moved, 15.0 mm</p></td>
+<td class="text-right"><p>70 %, 16.3 mm</p></td>
+<td class="text-right"><p><strong>14 %, 3.2 mm</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> top</p></td>
+<td class="text-right"><p>33 %, 30.0 mm</p></td>
+<td class="text-right"><p>17 %, 7.7 mm</p></td>
+<td class="text-right"><p><strong>0 %, 0.3 mm</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> block</p></td>
+<td class="text-right"><p>67 %, 14.9 mm</p></td>
+<td class="text-right"><p>65 %, 16.3 mm</p></td>
+<td class="text-right"><p><strong>18 %, 3.4 mm</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> top</p></td>
+<td class="text-right"><p>19 %, 13.0 mm</p></td>
+<td class="text-right"><p>19 %, 1.2 mm</p></td>
+<td class="text-right"><p><strong>0 %, 0.2 mm</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Block-level motion now sits well below the non-compact baseline instead of at parity with it, and
+top-level motion is essentially zero. The same improvement holds across every ladder and showcase
+case (01–08, the edge-io pair, the line chaser): every one moves less, and by a wider margin, than
+<code class="docutils literal notranslate"><span class="pre">main</span></code> without compact (<code class="docutils literal notranslate"><span class="pre">legalize-motion/gp3-on.out</span></code>, <code class="docutils literal notranslate"><span class="pre">summary-main-off-main-on-v2-on-gp3-on.json</span></code>).
+All 13 cases still pass. The trade-off is a smaller compaction win on 11 of the 13 — copper is
+still below <code class="docutils literal notranslate"><span class="pre">main</span></code>’s non-compact figure by 2–27 % on 11 cases (06–08, the line chaser, both edge-io
+cases, both hierarchical cases), but 2 trivial cases (01, 02: two and three parts) end up a few mm
+<em>longer</em> than uncompacted, since reserving channel room up front leaves GP less free to shrink an
+already-tiny board. Frame strips: <code class="docutils literal notranslate"><span class="pre">legalize-motion/strips/after-gp-*.png</span></code>.</p>
+<p>Not done: the early <code class="docutils literal notranslate"><span class="pre">ChannelModel</span></code> ignores the rotation <code class="docutils literal notranslate"><span class="pre">GP</span></code> may still pick (the final legalizer’s
+own channel push, §12, still uses the correct post-placement one); <code class="docutils literal notranslate"><span class="pre">_place_line_groups</span></code> and
+power-first staged placement do not call this path (compact does not support power-first, and no
+rung currently needs the channel-aware GP floor inside a line group).</p>
+</section>
 </section>
 </section>
 
@@ -1156,7 +1223,10 @@ channels stay.</p>
 <li><a class="reference internal" href="#conflicts-and-open-points">Conflicts and open points</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#displacement-minimizing-legalization-pnr-legalize-keep-on-by-default">12. Displacement-minimizing legalization (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>, on by default)</a></li>
+<li><a class="reference internal" href="#displacement-minimizing-legalization-pnr-legalize-keep-on-by-default">12. Displacement-minimizing legalization (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>, on by default)</a><ul>
+<li><a class="reference internal" href="#f-block-level-motion-reserving-channel-room-in-gp-not-only-in-the-push">F. Block-level motion: reserving channel room in GP, not only in the push</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

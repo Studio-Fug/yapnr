@@ -79,10 +79,42 @@ for(let id of ['changes','labels','air','costs'])$(id).onchange=render;
 async function saveSnapshot(){await pin();let body=annotationBody();backupDraft();let r=await api('/api/snapshot',body);if(pinId===body.pin_id&&draftRevision===body.draft_revision){draftSavedRevision=draftRevision;finalizedRevision=draftRevision;if(draftTimer!==null){clearTimeout(draftTimer);draftTimer=null;}try{window.localStorage?.removeItem(draftKey(pinned.run));}catch(e){}}let a=document.createElement('a');a.href=r.url;a.download=r.id+'.json';a.textContent='Download snapshot JSON';$('saved').replaceChildren(a,document.createElement('br'),document.createTextNode(r.path));}
 $('snapshot').onclick=async()=>{try{await saveSnapshot()}catch(e){$('saved').textContent='Snapshot failed: '+e.message}};
 canvas.onwheel=e=>{e.preventDefault();let r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,p=point(x,y),s=Math.max(1,Math.min(250,view.scale*Math.exp(-e.deltaY*.001)));view={scale:s,x:x-p[0]*s,y:y+p[1]*s};render()};
-canvas.onpointerdown=e=>{canvas.setPointerCapture(e.pointerId);let r=canvas.getBoundingClientRect(),p=[e.clientX-r.left,e.clientY-r.top];drag={start:p,last:p,world:point(...p),view:{...view},draw:drawing,region:regionMode&&!drawing}};
-canvas.onpointermove=e=>{let r=canvas.getBoundingClientRect(),p=[e.clientX-r.left,e.clientY-r.top],q=point(...p);$('coords').textContent=q.map(v=>v.toFixed(2)).join(', ')+' mm';if(drag){drag.last=p;if(!drag.draw&&!drag.region){view.x=drag.view.x+p[0]-drag.start[0];view.y=drag.view.y+p[1]-drag.start[1]}render();return}if(!geo())return;let nb=window.YapnrNotes?.badgeAt?.(p[0],p[1]);if(nb&&canvas.style.cursor!=='pointer'){canvas.dataset.cur=canvas.style.cursor;canvas.style.cursor='pointer'}else if(!nb&&canvas.style.cursor==='pointer')canvas.style.cursor=canvas.dataset.cur||'';if(nb){$('hover').style.display='block';$('hover').textContent=nb.text;return}let hit=hoverText(boardHit(q));$('hover').style.display=hit?'block':'none';$('hover').textContent=hit||''};
+// Touch: Pointer Events fire once per finger (touch-action:none on #board keeps the page itself
+// from scrolling/zooming), so a second finger landing is a pinch, not a second single-finger drag.
+// bTouch tracks every active touch pointer; bPinchPrev is the previous frame's distance/midpoint
+// (incremental, like onwheel is one step per event) so pinch-zoom and two-finger pan compose in
+// one gesture, anchored at the live pinch midpoint. One-finger drag keeps its existing meaning
+// (pans, or draws the armed rectangle/region tool); double-tap zooms in, or back out if already
+// zoomed in, centred on the tap.
+let bTouch=new Map(),bTouchDown=new Map(),bPinchPrev=null,bPinchQ=false,bPinchRaf=0,bDtap=new DoubleTap();
+// Two simultaneous touchmoves arrive as two separate pointermove events (one per finger), so
+// reading both fingers' positions on the first of the two would see one finger already moved and
+// the other stale -- a spurious, momentary distance change. Bookkeeping (bTouch.set) happens on
+// every pointermove; the gesture itself is computed at most once per animation frame, by which
+// point both fingers' events for that frame have already landed.
+function bApplyPinch(){bPinchQ=false;if(bTouch.size<2)return;let d=touchDist(bTouch),m=touchMid(bTouch);
+ if(bPinchPrev){view.x+=m[0]-bPinchPrev.mid[0];view.y+=m[1]-bPinchPrev.mid[1];
+  let wp=point(...m),s=Math.max(1,Math.min(250,view.scale*(bPinchPrev.d>0?d/bPinchPrev.d:1)));
+  view={scale:s,x:m[0]-wp[0]*s,y:m[1]+wp[1]*s}}
+ bPinchPrev={d,mid:m};render()}
+canvas.onpointerdown=e=>{canvas.setPointerCapture(e.pointerId);let r=canvas.getBoundingClientRect(),p=[e.clientX-r.left,e.clientY-r.top];
+ if(e.pointerType==='touch'){bTouch.set(e.pointerId,p);bTouchDown.set(e.pointerId,p);
+  if(bTouch.size>=2){drag=null;bPinchPrev={d:touchDist(bTouch),mid:touchMid(bTouch)};return}} // a second finger lands: baseline now, so the very first move already has one to measure against
+ drag={start:p,last:p,world:point(...p),view:{...view},draw:drawing,region:regionMode&&!drawing}};
+canvas.onpointermove=e=>{let r=canvas.getBoundingClientRect(),p=[e.clientX-r.left,e.clientY-r.top];
+ if(e.pointerType==='touch'&&bTouch.has(e.pointerId)){bTouch.set(e.pointerId,p);
+  if(bTouch.size>=2){if(!bPinchQ){bPinchQ=true;bPinchRaf=requestAnimationFrame(bApplyPinch)}return}}
+ let q=point(...p);$('coords').textContent=q.map(v=>v.toFixed(2)).join(', ')+' mm';if(drag){drag.last=p;if(!drag.draw&&!drag.region){view.x=drag.view.x+p[0]-drag.start[0];view.y=drag.view.y+p[1]-drag.start[1]}render();return}if(!geo())return;let nb=window.YapnrNotes?.badgeAt?.(p[0],p[1]);if(nb&&canvas.style.cursor!=='pointer'){canvas.dataset.cur=canvas.style.cursor;canvas.style.cursor='pointer'}else if(!nb&&canvas.style.cursor==='pointer')canvas.style.cursor=canvas.dataset.cur||'';if(nb){$('hover').style.display='block';$('hover').textContent=nb.text;return}let hit=hoverText(boardHit(q));$('hover').style.display=hit?'block':'none';$('hover').textContent=hit||''};
 canvas.addEventListener('pointerleave',()=>{if(!drag)$('hover').style.display='none'});  // the hover box (part, pad or note badge) does not outlive the pointer
-canvas.onpointerup=e=>{if(drag&&!drag.draw&&!drag.region&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3){let nb=window.YapnrNotes?.badgeAt?.(drag.last[0],drag.last[1]);if(nb){if(e.shiftKey)askAdd(nb.item,' (note badge)');else window.YapnrNotes.showFor(nb.item);drag=null;render();return}}if(drag?.region)finishRegion();else if(drag&&!drag.draw&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3)boardClick(point(...drag.last),e.shiftKey);if(drag?.draw){let a=drag.world,b=point(...drag.last);if(Math.hypot(a[0]-b[0],a[1]-b[1])>.05)annotations.push({bounds:[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])],text:$('note').value||`Issue ${annotations.length+1}`,lane:laneId,phase,board_sha256:phase==='live'?lane()?.board_sha256:lane()?.frames[Number(phase)]?.board_sha256,event_id:lane()?.event_id});annotationChanged();}drag=null;render()};
+function bTouchEnd(e){if(e.pointerType!=='touch')return false;
+ if(bPinchQ){cancelAnimationFrame(bPinchRaf);bApplyPinch()} // flush a still-queued gesture frame before this finger (and its bTouch entry) goes away
+ let was=bTouch.size,down=bTouchDown.get(e.pointerId),r=canvas.getBoundingClientRect(),up=[e.clientX-r.left,e.clientY-r.top];
+ bTouch.delete(e.pointerId);bTouchDown.delete(e.pointerId);
+ if(was>=2){bPinchPrev=null;drag=null;if(bTouch.size<2)render();return true} // ending a pinch/two-finger gesture: never a click or a draw
+ if(was===1&&bTouch.size===0&&down&&bDtap.hit(down,up)){let s=view.scale<40?Math.min(120,view.scale*2.5):8,wp=point(...up);view={scale:s,x:up[0]-wp[0]*s,y:up[1]+wp[1]*s};drag=null;render();return true}
+ return false}
+canvas.addEventListener('pointercancel',e=>bTouchEnd(e));
+canvas.onpointerup=e=>{if(bTouchEnd(e))return;if(drag&&!drag.draw&&!drag.region&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3){let nb=window.YapnrNotes?.badgeAt?.(drag.last[0],drag.last[1]);if(nb){if(e.shiftKey)askAdd(nb.item,' (note badge)');else window.YapnrNotes.showFor(nb.item);drag=null;render();return}}if(drag?.region)finishRegion();else if(drag&&!drag.draw&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3)boardClick(point(...drag.last),e.shiftKey);if(drag?.draw){let a=drag.world,b=point(...drag.last);if(Math.hypot(a[0]-b[0],a[1]-b[1])>.05)annotations.push({bounds:[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])],text:$('note').value||`Issue ${annotations.length+1}`,lane:laneId,phase,board_sha256:phase==='live'?lane()?.board_sha256:lane()?.frames[Number(phase)]?.board_sha256,event_id:lane()?.event_id});annotationChanged();}drag=null;render()};
 $('tree').onclick=e=>{let r=$('tree').getBoundingClientRect(),p=treeHits.find(p=>Math.hypot(p.x-e.clientX+r.left,p.y-e.clientY+r.top)<10);if(p)e.shiftKey?askAdd({kind:'lane',lane:p.id},' (Shift+click)'):select(p.id)};
 $('space').onmousemove=e=>{let r=$('space').getBoundingClientRect(),p=spaceHits.find(p=>Math.hypot(p.x-e.clientX+r.left,p.y-e.clientY+r.top)<5);if(p)$('space').title=JSON.stringify(p.p)};
 $('space').onclick=e=>{let r=$('space').getBoundingClientRect(),p=spaceHits.find(p=>Math.hypot(p.x-e.clientX+r.left,p.y-e.clientY+r.top)<5);if(e.shiftKey){if(p)askAdd(probeItem(p.p));return}preview=p?.p.moves?p.p:null;render()};

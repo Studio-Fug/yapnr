@@ -490,11 +490,35 @@ function schFitIfNeeded(){if(sch.built&&sch.mode!=='pcb'&&!sch.fitKey){if(sch.fo
 let schDrag=null;
 schSvg.addEventListener('wheel',e=>{e.preventDefault();let r=schSvg.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,{x,y,k}=sch.v,wx=x+mx/k,wy=y+my/k;
  let k2=Math.max(.3,Math.min(60,k*Math.exp(-e.deltaY*.0015)));sch.v={k:k2,x:wx-mx/k2,y:wy-my/k2};schApplyView()},{passive:false});
-schSvg.addEventListener('pointerdown',e=>{schSvg.setPointerCapture(e.pointerId);schDrag={x:e.clientX,y:e.clientY,v:{...sch.v},moved:false}});
+// Touch (see app.js's board handlers for the same pattern, including why the gesture is applied
+// at most once per animation frame rather than on every individual pointermove): one Map of
+// active touch pointers, pinch-zoom + two-finger pan, double-tap to zoom. CSS touch-action:none
+// on #sch-svg (schematic.css) keeps the browser page out of the way.
+let sTouch=new Map(),sTouchDown=new Map(),sPinchPrev=null,sPinchQ=false,sPinchRaf=0,sDtap=new DoubleTap();
+const schLocal=e=>{let r=schSvg.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top]};
+function schApplyPinch(){sPinchQ=false;if(sTouch.size<2)return;let d=touchDist(sTouch),m=touchMid(sTouch);
+ if(sPinchPrev){sch.v.x-=(m[0]-sPinchPrev.mid[0])/sch.v.k;sch.v.y-=(m[1]-sPinchPrev.mid[1])/sch.v.k;
+  let {x,y,k}=sch.v,wx=x+m[0]/k,wy=y+m[1]/k,k2=Math.max(.3,Math.min(60,k*(sPinchPrev.d>0?d/sPinchPrev.d:1)));
+  sch.v={k:k2,x:wx-m[0]/k2,y:wy-m[1]/k2};schApplyView()}
+ sPinchPrev={d,mid:m}}
+schSvg.addEventListener('pointerdown',e=>{schSvg.setPointerCapture(e.pointerId);
+ if(e.pointerType==='touch'){let p=schLocal(e);sTouch.set(e.pointerId,p);sTouchDown.set(e.pointerId,p);
+  if(sTouch.size>=2){schDrag=null;sPinchPrev={d:touchDist(sTouch),mid:touchMid(sTouch)};return}}
+ schDrag={x:e.clientX,y:e.clientY,v:{...sch.v},moved:false}});
 schSvg.addEventListener('pointermove',e=>{
+ if(e.pointerType==='touch'&&sTouch.has(e.pointerId)){sTouch.set(e.pointerId,schLocal(e));
+  if(sTouch.size>=2){if(!sPinchQ){sPinchQ=true;sPinchRaf=requestAnimationFrame(schApplyPinch)}return}}
  if(schDrag){let dx=e.clientX-schDrag.x,dy=e.clientY-schDrag.y;if(Math.hypot(dx,dy)>3)schDrag.moved=true;if(schDrag.moved){sch.v={...schDrag.v,x:schDrag.v.x-dx/sch.v.k,y:schDrag.v.y-dy/sch.v.k};schApplyView()}return}
  schHover(e)});
-schSvg.addEventListener('pointerup',e=>{let d=schDrag;schDrag=null;if(!d||d.moved)return;schClick(e)});
+function sTouchEnd(e){if(e.pointerType!=='touch')return false;
+ if(sPinchQ){cancelAnimationFrame(sPinchRaf);schApplyPinch()}
+ let was=sTouch.size,down=sTouchDown.get(e.pointerId),up=schLocal(e);
+ sTouch.delete(e.pointerId);sTouchDown.delete(e.pointerId);
+ if(was>=2){sPinchPrev=null;schDrag=null;return true} // ending a pinch/two-finger gesture: never a click
+ if(was===1&&sTouch.size===0&&down&&sDtap.hit(down,up)){let {x,y,k}=sch.v,wx=x+up[0]/k,wy=y+up[1]/k,k2=k<15?Math.min(60,k*2.5):4;sch.v={k:k2,x:wx-up[0]/k2,y:wy-up[1]/k2};schApplyView();return true}
+ return false}
+schSvg.addEventListener('pointerup',e=>{if(sTouchEnd(e))return;let d=schDrag;schDrag=null;if(!d||d.moved)return;schClick(e)});
+schSvg.addEventListener('pointercancel',e=>sTouchEnd(e));
 schSvg.addEventListener('pointerleave',()=>{$('sch-hover').style.display='none';schSetHoverNet(null)});
 window.addEventListener('resize',()=>{if(sch.mode!=='pcb'&&sch.fitKey&&!sch.fitKey.endsWith(schSvg.clientWidth+'x'+schSvg.clientHeight)){sch.fitKey=null;schFitIfNeeded()}render()});
 

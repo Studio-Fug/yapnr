@@ -2,7 +2,7 @@
    column of <main>; <=1360px: an overlay drawer with a floating toggle. */
 :root{--dk-w:380px}
 #dock{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;padding:0;overflow:hidden;border-right:0;border-left:1px solid #354147;background:#131c21;font-size:12px}
-@media(min-width:1361px){body.dk-on main{grid-template-columns:245px minmax(400px,1fr) 310px var(--dk-w)}body.dk-on.dk-min main{grid-template-columns:245px minmax(400px,1fr) 310px 34px}}
+@media(min-width:1361px){body.dk-on main{grid-template-columns:var(--lanes-w) minmax(0,1fr) var(--explore-w) var(--dk-w)}body.dk-on.dk-min main{grid-template-columns:var(--lanes-w) minmax(0,1fr) var(--explore-w) 34px}}
 #dk-fab{display:none}
 @media(max-width:1360px){
  #dock{position:fixed;top:58px;right:0;bottom:0;height:auto;width:min(var(--dk-w),94vw);z-index:40;box-shadow:-10px 0 30px #0009}
@@ -182,6 +182,10 @@ body.dk-min #dock .dk-rail{display:flex}
 /* the toolbar keeps one row (fixed height): the headline and highlight chips shrink with an ellipsis instead of wrapping,
    so a chip appearing never moves the board or schematic under the pointer */
 .workspace>.toolbar{flex-wrap:nowrap;height:59px;min-height:59px;overflow:hidden}
+/* Narrow screens (phone width and the drawer breakpoint): everything the desktop toolbar
+   clips still has to be reachable, so it scrolls within the toolbar itself -- a nested
+   scrollbar, never the page -- instead of being cut off past the right edge. */
+@media(max-width:900px){.workspace>.toolbar{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}}
 #headline{flex:0 4 auto;min-width:56px;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolbar .tools{display:contents}  /* its buttons and chips become toolbar items: the headline shrinks first, then a chip */
 .toolbar .tools>*{flex:none}
@@ -206,6 +210,9 @@ body.dk-min #dock .dk-rail{display:flex}
 .dk-rail .dk-n{margin:5px 0 0;writing-mode:horizontal-tb}
 #dock .s-open{--sc:#8ec5ff;--sb:#15283a;--sd:#3d5f86}#dock .s-proposed{--sc:#ffd166;--sb:#2a2513;--sd:#6b5a2a}#dock .s-accepted{--sc:#9ee6d1;--sb:#15302b;--sd:#3f7f70}
 #dock .s-applied{--sc:#b8e986;--sb:#1c2a16;--sd:#557a3a}#dock .s-rejected{--sc:#ff9ca3;--sb:#2b171b;--sd:#7a3f46}#dock .s-resolved{--sc:#a7bdc8;--sb:#18242a;--sd:#40545e}
+#dock .s-unscoped{--sc:#8a9ea7;--sb:#18242a;--sd:#40545e}
+.nt-scope{font-size:9.5px;padding:0 6px;border-radius:4px;border:1px solid #3d5f86;color:#8ec5ff;background:#15283a;line-height:15px}
+.nt-scope.unscoped{border-color:#40545e;color:#8a9ea7}
 #dock .dk-chip.k-note,.dk-chip.k-note{color:#ffd166;border-color:#6b5a2a;background:#2a2513;font-family:ui-monospace,monospace;font-weight:600}
 #dock button.dk-note{border-color:#6b5a2a;color:#ffe3a3;background:#221f14}#dock button.dk-note:hover{border-color:#ffd166}
 

@@ -39,6 +39,39 @@ PYTHONPATH=.:hardware/pnr python3 -m yapnr.viewer --root runs/example/live \
 Without the assembled dist the viewer serves its bare static files: everything works except the
 schematic layout (elkjs) and the 3D view (three.js), which say so in the page.
 
+## Touch and panels
+
+**Touch** (Android Chrome, iOS Safari, or a trackpad/mouse — behaviour is unchanged for those):
+pinch with two fingers to zoom the board, the schematic and the 3D view, anchored at the pinch
+centre; a two-finger drag pans; double-tap zooms in (and back out, toggling) centred on the tap.
+One-finger drag keeps its existing meaning on each surface: it pans the board or schematic, except
+while the rectangle-annotation or "Ask region" tool is armed, where it draws that rectangle, same
+as with a mouse. The 3D view's orbit/pan/zoom is three.js `OrbitControls`, wired for touch
+(`controls.touches`) the same way. Every drawing surface sets CSS `touch-action: none` so the
+browser's own page-level pinch-zoom and scroll never fight the gesture; `static/touch.js` holds
+the shared pinch/double-tap math, used by `static/app.js` (the board canvas) and
+`static/schematic.js` (the schematic SVG).
+
+**Dockable panels**: the Experiment lanes column, the Exploration column (tree, placement costs,
+events) and the Inspect/Source/Ask/Notes dock can each be closed and reopened from the small
+toolbar in the header (`static/panels.js`, `static/dock.css`); with all three closed the board (or
+schematic, or 3D view) fills the window. The Inspect/Source/Ask/Notes panel can also collapse to a
+thin rail or be resized (drag its left edge); it is docked to the right edge (not yet to the left
+or bottom — a follow-up). Layout (open/closed, the dock's width and last tab) persists per browser
+in `localStorage` (wrapped in `try`/`catch`, so a private window or blocked storage degrades to
+"nothing remembered", never an error), with a **Reset layout** button next to the toggles. The
+Experiment lanes and Exploration panels can each also collapse to a thin rail (mirroring the
+Inspect/Source/Ask/Notes dock) and dock to either the left or right edge, independent of one
+another, on a wide screen. At ≤900px width (phone and small-tablet widths — a laptop keeps both
+columns) every panel becomes a fixed overlay drawer instead of a grid column, closed by default,
+so a phone opens straight onto the maximized board; opening one slides it in over the board rather
+than squeezing the layout. The Inspect/Source/Ask/Notes dock has its own, wider breakpoint
+(≤1360px), since it is a fourth column rather than two of three. A drawer paints a solid, themed
+background — it must never let the board underneath show through — and a scrim dims the board
+behind it and closes it on a tap outside. Every toggle is a real `<button>`
+(keyboard-activatable, `aria-pressed` reflects state), and the page keeps no horizontal scroll down
+to 360px wide.
+
 ## The live directory
 
 | Path                             | Written by     | What                                                  |
@@ -193,6 +226,35 @@ People create, edit, accept, reject, apply and delete them in the Notes tab; the
 only add notes, comment and edit its own open notes. `design-notes.md` in the same folder is the
 feed for the next design pass, and `python -m yapnr.viewer.notes.store report --dir <notes>`
 prints it (`--status accepted`, `--json`).
+
+### Scope: which lane(s) a note shows on
+
+One experiment (one `--root`) can have many lanes (candidates/trials), each with its own board,
+and the same refdes (`C1`, `U5`, …) names a _different_ instance on each one. A note is therefore
+scoped to the lane it was recorded in, not to the refdes alone: a note about `C1` written while
+looking at lane `r05/c02` is never drawn on, or counted for, lane `r05/c07`'s board, even though
+both boards have their own `C1`.
+
+Every note carries a computed `scope` (`notes/store.py`'s `derive_scope()`, schema
+`yapnr-notes-v2`), from two inputs already on the note:
+
+- `provenance.lane`, recorded automatically from the lane you were viewing when you created the
+  note (via the Inspect panel, a board click, or the Ask agent) — scope `{"kind":"lane","lane":…}`.
+- an explicit, optional **global** field, off by default, you set yourself (the Notes editor's
+  "Show in every experiment" checkbox; only a user can set it, like status) — scope
+  `{"kind":"global"}`.
+- neither: scope `{"kind":"unscoped"}` — a note with no recorded lane (written before scoping
+  existed, or with the board paused on no particular lane). An unscoped note is never drawn on any
+  board; the Notes tab lists it under "Unscoped notes" instead of guessing where it belongs, with
+  a button to tag it with the lane you are currently viewing.
+
+Scope is computed fresh every time a note is read, not stored in `notes.jsonl` — so this needed no
+migration: a note from an older viewer that never had a "scope" or "global" field is classified
+the same way new ones are (by its `provenance.lane`, or unscoped), and nothing in the log is
+rewritten or lost. Board badges (`note-badges`), the Inspect panel's "Notes" section, and the Ask
+agent's dossier (`notes/store.py`'s `relevant()`) all filter by scope against the lane you are
+currently looking at; the Notes tab's own search list still shows every note (each with a scope
+label) so you can find and re-tag an unscoped one.
 
 ## HTTP interface
 

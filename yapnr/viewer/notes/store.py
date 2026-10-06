@@ -25,6 +25,16 @@ renders one-line fields flat and bodies as quotes, so no note can forge a headin
 Ask context item schema; with a resolver (SourceService, a source index or graph.json) an agent's
 refs, pads, nets and source lines must exist.
 
+Scope (v2; see derive_scope()): every note carries a computed, read-only "scope" telling the viewer
+which board(s) it may be shown on — {"kind":"lane","lane":<id>} (the normal case: the lane/candidate
+being viewed when the note was recorded, from provenance.lane), {"kind":"global"} (the note's own
+"global" field, set true by a user; shown on every lane of this experiment), or {"kind":"unscoped"}
+(no provenance.lane and not global — never drawn on a board; the viewer lists these separately
+instead of guessing). This is derived fresh from provenance/global every time a note is read, not
+stored in notes.jsonl, so it is not a migration: notes written before "scope" existed, including by
+an older viewer, are classified the same way as new ones the moment they are replayed, and nothing
+is lost or rewritten. "global" is a user-only field (like status); off by default.
+
 CLI for the engineering loop: python -m yapnr.viewer.notes.store report --dir DIR [--index FILE]
 [--status accepted] [--kind proposal] [--json] (an empty or not yet used store prints empty groups,
 or [] with --json, and exits 0)."""
@@ -42,7 +52,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-SCHEMA = "yapnr-notes-v1"
+SCHEMA = "yapnr-notes-v2"  # v2 adds the derived "scope" field (lane / global / unscoped); see derive_scope()
 KINDS = ("observation", "question", "requirement", "decision", "todo", "proposal")
 STATUSES = ("open", "proposed", "accepted", "rejected", "applied", "resolved")
 USER_ONLY = ("accepted", "rejected", "applied", "resolved")
@@ -50,7 +60,7 @@ PROPOSALS = ("ato", "pnr-annotation", "constraint", "engine", "other")
 LINKS = ("applied_in", "related")
 ITEMS = ("component", "net", "pad", "region", "source", "group", "lane", "event", "probe")
 AGENT_FIELDS = ("title", "body", "kind", "tags", "targets", "proposal", "sources", "links")
-USER_FIELDS = AGENT_FIELDS + ("status", "provenance")
+USER_FIELDS = AGENT_FIELDS + ("status", "provenance", "global")
 MAX = dict(
     title=120,
     body=8000,
@@ -85,6 +95,19 @@ NAME = re.compile(
 )
 FILE = re.compile(r"[A-Za-z0-9_./-]{1,300}\.ato")
 TAG = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _.:/+#-]*")
+
+
+def derive_scope(n):
+    """Which board(s) a note may be shown on, computed from the note alone (see the module
+    docstring's "Scope" section): {"kind":"global"} when its "global" field is true, else
+    {"kind":"lane","lane":<id>} from provenance.lane, else {"kind":"unscoped"}. Pure and cheap:
+    called on every note from _apply() so it is always current and never stored in notes.jsonl."""
+    if n.get("global"):
+        return {"kind": "global"}
+    lane = (n.get("provenance") or {}).get("lane")
+    if lane:
+        return {"kind": "lane", "lane": lane}
+    return {"kind": "unscoped"}
 
 
 class NoteNotFound(LookupError):
@@ -699,6 +722,8 @@ class NotesStore:
         elif op == "delete":
             self.notes.pop(i, None)
             self.deleted[i] = self.rev
+        if op != "delete" and i in self.notes:
+            self.notes[i]["scope"] = derive_scope(self.notes[i])
         self.touched[i] = self.rev
 
     @contextlib.contextmanager
@@ -797,7 +822,11 @@ class NotesStore:
                     self.rev,
                     json.dumps(self.all(), ensure_ascii=False, separators=(",", ":")).encode(),
                 )
-            head = dict(rev=self.rev, **({"skipped": len(self.skipped)} if self.skipped else {}))
+            head = dict(
+                rev=self.rev,
+                schema=SCHEMA,
+                **({"skipped": len(self.skipped)} if self.skipped else {}),
+            )
             if type(since) is int and 0 <= since < self.rev:
                 head.update(
                     changed=sorted(
@@ -880,7 +909,10 @@ class NotesStore:
 
     def relevant(self, selection, lane=None, limit=8, lane_limit=5):
         """([(note, why)] whose targets meet the selection, [recent open/proposed notes of the
-        lane]) for the Ask dossier."""
+        lane]) for the Ask dossier. With a lane, a component/pad/region/group hit is dropped
+        unless its scope is this lane or global (see derive_scope): otherwise a note from another
+        lane with the same refdes would leak into this lane's answer. A net, source or lane target
+        is not instance-specific and is never scope-filtered."""
         refs, nets, src, lanes = target_keys(selection, self.resolver)
         hits = []
         pri = {"accepted": 0, "proposed": 1, "open": 2, "applied": 3, "resolved": 4, "rejected": 5}
@@ -888,8 +920,11 @@ class NotesStore:
         if refs or nets or src or lanes:
             for n in notes:
                 r2, n2, s2, l2 = target_keys(n.get("targets"), self.resolver)
+                scope = n.get("scope") or derive_scope(n)
+                in_scope = not lane or scope["kind"] == "global" or scope.get("lane") == lane
+                ref_hits = sorted(refs & r2) if in_scope else []
                 why = [
-                    *sorted(refs & r2),
+                    *ref_hits,
                     *(f"net {x}" for x in sorted(nets & n2)),
                     *(
                         f"{f}:{a}"
@@ -1036,6 +1071,10 @@ class NotesStore:
                 out[k] = ls
             elif k == "provenance":
                 out[k] = self._prov(v)
+            elif k == "global":
+                if not isinstance(v, bool):
+                    raise ValueError("global must be true or false")
+                out[k] = v
             else:
                 raise ValueError(f"unknown note field {k!r}")
         return out
@@ -1111,6 +1150,7 @@ class NotesStore:
                 tags=f.get("tags", []),
                 status=f["status"],
                 **({"proposal": f["proposal"]} if f.get("proposal") else {}),
+                **({"global": f["global"]} if f.get("global") is not None else {}),
                 sources=f.get("sources", []),
                 provenance=prov,
                 comments=[],

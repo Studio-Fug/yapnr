@@ -63,10 +63,16 @@ guard, the 3D export queue, the cost replay (with torch), the configuration, the
 and the served files.
 
 `tests/e2e/viewer` holds the live checks, tagged `manual`: real Ask turns and net labels (paid;
-`YAPNR_AGENT_LIVE=1`, `YAPNR_NET_LLM_LIVE=1`) and a real headless KiCad export
-(`YAPNR_V3D_LIVE=1`, `YAPNR_V3D_BOARD`).
+`YAPNR_AGENT_LIVE=1`, `YAPNR_NET_LLM_LIVE=1`), a real headless KiCad export
+(`YAPNR_V3D_LIVE=1`, `YAPNR_V3D_BOARD`), and `test_touch_and_panels` -- a real headless Chrome
+driven over the DevTools protocol (`yapnr.viewer.testing`'s `CDP`/`chrome_binary`/`start_chrome`;
+no dependency, a stdlib WebSocket client) against a real viewer server: pinch-zoom/pan/double-tap
+on the board and schematic, the dockable panels (close/reopen/persist/reset, phone-width overlay,
+no horizontal scroll at 360px), and the annotation-scope fix end to end. Skips (never fails) when
+no Chrome/Chromium is on the machine; set `YAPNR_CHROME` if it is not at a usual location, and
+`YAPNR_SCREEN_DIR` to save its screenshots.
 
 There is no JavaScript test runner: the earlier node tests read a captured state from the old
-repository's paths and are not ported, and yapnr has no node toolchain. Browser checks through the Chrome
-DevTools protocol are planned for `tests/e2e`; until then check changes to `static/` in a
-browser, for example against a dev server on a spare port (`--port 8795`).
+repository's paths and are not ported, and yapnr has no node toolchain. For anything
+`test_touch_and_panels` does not cover, check changes to `static/` in a browser, for example
+against a dev server on a spare port (`--port 8795`).

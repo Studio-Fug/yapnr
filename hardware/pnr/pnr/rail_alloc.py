@@ -27,7 +27,8 @@ engine makes decisions -- by enumerating, screening and routing:
    plane rail's drop vias, and the static rule of thumb (:func:`pnr.plane_partition.
    _rail_decision`: a declared budget, 10 mA, 6 terminals) as a small prior only.
 4. **Route the finalists.** The best ``FINALISTS`` (3; ``PNR_RAIL_FINALISTS``)
-   alternatives are each routed by the real router on the same placement, and the one
+   alternatives, each plane / trace split's best first, are each routed by the real
+   router on the same placement, and the one
    with the fewest missing connections and unresolved nets, then the lowest copper
    length plus vias plus partition penalty, wins (ties: the alternative's name).
 
@@ -585,7 +586,22 @@ def decide(graph, constraints, rules, kw, route_once, stack, per_layer, options)
     finals = []
     tried = []
     best = None
-    for score, combo in combos[:k]:
+    # The routed finalists: the best screened alternative of each distinct plane /
+    # trace split first (a leftover variant of a split the router already tries
+    # routes the same signals), then the next best.
+    picked, splits = [], set()
+    for score, combo in combos:
+        split = tuple((c.layer, c.plane, c.trace) for c in combo)
+        if split not in splits and len(picked) < k:
+            splits.add(split)
+            picked.append((score, combo))
+    for item in combos:
+        if len(picked) >= k:
+            break
+        if item not in picked:
+            picked.append(item)
+    picked.sort(key=lambda x: (x[0], tuple(c.key() for c in x[1])))
+    for score, combo in picked:
         alloc = allocation_of(combo, " (routed finalist)")
         board = route_once(graph, constraints, rules, **kw, allocation=alloc)
         layers = {c.layer for c in combo}

@@ -198,6 +198,10 @@ class SearchTest(unittest.TestCase):
         self.assertEqual(router.calls[0], "probe")
         self.assertLessEqual(router.calls.count("route"), rail_alloc.FINALISTS)
         self.assertEqual(len(report["finalists"]), router.calls.count("route"))
+        # Each finalist a different plane / trace split (a leftover variant of a split
+        # already routed would route the same signals).
+        splits = [f["choice"].rsplit(" | leftover", 1)[0] for f in report["finalists"]]
+        self.assertEqual(len(splits), len(set(splits)))
         # The redundant GND fill never wins (GND has In1 to itself).
         for row in report["screened"]:
             if row["choice"].endswith("leftover GND"):

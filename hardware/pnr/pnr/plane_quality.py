@@ -61,11 +61,12 @@ from typing import Dict, List, Optional, Sequence, Tuple
 LIMITS = dict(
     # A region other than the layer's owner (the rail with the most current, or the
     # declared leftover) may hold at most this many times the copper its terminals
-    # need. Good layouts measured at most 3.1; the nonsense VBAT region 41.
+    # need. Good layouts measured at most 3.24 (the -pour rung's VIN); the nonsense
+    # ones 3.6 to 18 (VBAT) and 8.3 up (VDDA).
     area_ratio_max=6.0,
     # A trunk (or a region's geodesic tree, judged) at most this many times the
-    # Euclidean MST of its terminals. Good layouts measured at most 1.25; the
-    # nonsense VDDA trunk 1.9 (round two other rails).
+    # Euclidean MST of its terminals. Good layouts measured at most 1.34; the
+    # nonsense ones up to 3.97.
     detour_max=1.6,
     # Every region serves at least this many terminals (one terminal carries no
     # current anywhere).

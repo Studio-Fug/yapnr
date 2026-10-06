@@ -470,8 +470,16 @@ class RouteTest(unittest.TestCase):
             },
         }
         if partition:
+            # Both rails forced onto the layer (pnr.rail_alloc would otherwise decide):
+            # these tests are about the partition's territories and drops.
             doc["plane_partition"] = [
-                {"layer": "In2.Cu", "nets": ["V*"], "min_width_mm": 1.0, "currents": {"V1": 2}}
+                {
+                    "layer": "In2.Cu",
+                    "nets": ["V*"],
+                    "must_plane": ["V*"],
+                    "min_width_mm": 1.0,
+                    "currents": {"V1": 2},
+                }
             ]
         c = compile_constraints(doc, g.refs)
         return g, c, compile_routing_rules(c, [n.name for n in g.nets])
@@ -515,8 +523,9 @@ class RouteTest(unittest.TestCase):
         self.assertNotIn("plane_partition", r.escape_diagnostics)
 
     def test_a_candidate_the_engine_traces_still_routes(self):
-        """A candidate ``_rail_decision`` traces (current under the floor, too few
-        terminals) must end up an ordinary routed signal, not a dead plane drop: an
+        """A candidate the allocation traces (here forced, ``must_trace``; the
+        allocation search, pnr.rail_alloc, decides otherwise) must end up an ordinary
+        routed signal, not a dead plane drop: an
         owner review on 2026-10-06 found route_board excluded every ``net_class
         .plane_layer`` net from signal routing and plane drops alike, unaware of
         this module's own decision -- a traced candidate was then left with no
@@ -573,6 +582,8 @@ class RouteTest(unittest.TestCase):
                 {
                     "layer": "In2.Cu",
                     "nets": ["V*"],
+                    "must_plane": ["V1", "V2"],
+                    "must_trace": ["V3"],
                     "min_width_mm": 1.0,
                     "currents": {"V1": 2, "V3": 0.0001},
                 }

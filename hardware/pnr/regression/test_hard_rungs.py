@@ -44,6 +44,7 @@ CHECK_KINDS = {
     "unconnected",
     "ir_drop",
     "rail_zones",
+    "plane_quality",
 }
 
 
@@ -193,10 +194,8 @@ class HardRungContract(unittest.TestCase):
                     for p in spec["constraints"].get("plane_partition") or []
                     if not p.get("region")
                 ]
-                # A candidate the rung traces instead of planing (pnr.plane_partition's
-                # own rule, e.g. the rails rung's VBAT) keeps its net_class plain: no
-                # plane_layer, so it adds no class here, unlike a candidate that keeps
-                # the plane.
+                # Every candidate keeps a class naming the layer (the engine, not the
+                # rung, decides which are traced: pnr.rail_alloc).
                 shared = sum(
                     max(
                         sum(
@@ -533,22 +532,27 @@ class HardRungContract(unittest.TestCase):
         rules = compile_routing_rules(c, sorted(nets))
         (part,) = rules["plane_partition"]
         self.assertEqual(part["nets"], ["VDD", "VDDA", "VBAT"])
-        # No fill: a dedicated ground plane already exists elsewhere in this stack
-        # (owner review 2026-10-05), so the layer's leftover is not repeated GND.
+        # No forced fill: the engine chooses the leftover's taker (none, a plane rail,
+        # or GND, offered) and the plane_quality check judges the choice.
         self.assertIsNone(part["fill"])
+        self.assertEqual(part["fill_candidates"], ["GND"])
+        self.assertNotIn("must_plane", part)
+        self.assertNotIn("must_trace", part)
         self.assertTrue(part["protect_fanouts"])
         self.assertEqual([e["net"] for e in rules["ir_drop"]], ["VDD", "VDDA", "VBAT"])
         balls = [e for e in rules["ir_drop"] if e["net"] == "VDDA"][0]["sinks"]
         self.assertEqual(sorted(balls), ["U1:P1", "U1:R1"])
         classes = [x for x in rules["net_classes"] if x.get("plane_layer") == part["layer"]]
-        # VBAT keeps no plane_layer class (it is traced, not planed): only VDD and
-        # VDDA own a class naming this layer.
-        self.assertEqual(sorted(n for x in classes for n in x["nets"]), ["VDD", "VDDA"])
-        # The candidates' plane-or-trace decision (pnr.plane_partition) is checked
-        # by the rail_zones check: the engine's own rule, not a hardcoded fill,
-        # keeps VBAT (0.001 A off a single BGA ball) off the plane.
+        # Every candidate keeps its plane class: no answer is forced by the rung.
+        self.assertEqual(sorted(n for x in classes for n in x["nets"]), ["VBAT", "VDD", "VDDA"])
+        # The checks judge the partition's quality, not which rail is traced.
         (rail_check,) = [c for c in rails["checks"] if c["kind"] == "rail_zones"]
-        self.assertEqual(rail_check["trace_nets"], ["VBAT"])
+        self.assertTrue(rail_check["candidates"])
+        self.assertNotIn("trace_nets", rail_check)
+        (quality,) = [c for c in rails["checks"] if c["kind"] == "plane_quality"]
+        self.assertEqual(quality["layer"], part["layer"])
+        self.assertEqual(quality["candidates"], ["VDD", "VDDA", "VBAT"])
+        self.assertEqual(quality["currents"], {"VDD": 0.15, "VDDA": 0.02, "VBAT": 0.001})
 
     def test_buck_pour_rung(self):
         from pnr.constraints import compile_constraints, compile_routing_rules
@@ -567,6 +571,20 @@ class HardRungContract(unittest.TestCase):
         self.assertEqual((entry["terminals"], entry["connect"]), ("pad", "solid"))
         for ref in ("U1", "L1", "C1"):
             self.assertIn(ref, pour["constraints"]["fixed"])
+        # The pour's pieces are judged for sense too (lands: a land's own piece).
+        (quality,) = [c for c in pour["checks"] if c["kind"] == "plane_quality"]
+        self.assertEqual((quality["layer"], quality["candidates"]), ("F.Cu", entry["nets"]))
+        self.assertTrue(quality["lands"])
+
+    def test_every_partitioned_layer_is_judged_for_sense(self):
+        for spec in self.rungs:
+            for entry in spec["constraints"].get("plane_partition") or ():
+                judged = [
+                    c
+                    for c in spec["checks"]
+                    if c["kind"] == "plane_quality" and c["layer"] == entry["layer"]
+                ]
+                self.assertEqual(len(judged), 1, spec["name"])
 
     def test_runner_offers_the_hard_rungs(self):
         args = parser().parse_args(["--out", "x", "--hard"])

@@ -907,6 +907,16 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--rail-alloc",
+        choices=("search", "static"),
+        default=None,
+        help=(
+            "PNR_RAIL_ALLOC: plane_partition candidates decided by routing the best "
+            "alternatives (search, the engine's default) or by the static rule of thumb "
+            "(static: the A/B arm, pnr.rail_alloc)"
+        ),
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
@@ -1021,6 +1031,8 @@ def main():
         env["PNR_POWER_FIRST"] = "1"
     if args.route_pairs_diff_pairs:
         env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
+    if args.rail_alloc:
+        env["PNR_RAIL_ALLOC"] = args.rail_alloc
     if args.detail_pitch_mm is not None:
         import math
 

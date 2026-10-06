@@ -496,6 +496,11 @@ def draw_plane_regions(board, rows, rules: dict, point, full, net_code=None) -> 
     for r in rows:
         if not r.get("pour"):  # an outer pour keeps the layer's other zones of its net
             nets_of.setdefault(r["layer"], set()).add(r["net"])
+    for entry in (rules or {}).get("plane_partition") or ():
+        if not entry.get("region") and entry.get("layer") in nets_of:
+            # Every candidate of a partitioned layer: one the allocation traced
+            # (pnr.rail_alloc) keeps no source zone there either.
+            nets_of[entry["layer"]] |= set(entry.get("nets") or ())
     for z in list(board.Zones()):
         if z.GetIsRuleArea():
             continue
@@ -1867,6 +1872,13 @@ def writeback(
         stack, warnings = assess(rules, record)
         for text in warnings:
             sys.stderr.write("writeback: stack warning: %s\n" % text)
+        traced = (routes or {}).get("traced_rails")
+        if stack is not None and traced:
+            # plane_partition candidates the router traced (pnr.rail_alloc): ordinary
+            # nets here too, never dog-boned down to a plane they have no copper on.
+            from pnr.stack import without_nets
+
+            stack = without_nets(stack, traced)
     normalize_item_uuids(board)
     # Read the net-name -> code map up front, while the pcbnew session's iterators
     # are reliable (they flake later).

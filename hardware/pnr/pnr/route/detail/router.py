@@ -186,6 +186,9 @@ class BoardRoute:
     # Declared plane partitions only (pnr.plane_partition): the rails' regions, as
     # routes.json ``plane_regions`` rows for writeback.
     plane_regions: List[dict] = field(default_factory=list)
+    # plane_partition candidates the allocation traced (pnr.rail_alloc): writeback
+    # keeps them out of its plane bookkeeping too (no drop to a plane they lack).
+    traced_rails: List[str] = field(default_factory=list)
 
     @property
     def fully_routed(self) -> bool:
@@ -200,6 +203,8 @@ class BoardRoute:
             out["locked"] = self.locked
         if self.plane_regions:
             out["plane_regions"] = self.plane_regions
+        if self.traced_rails:
+            out["traced_rails"] = self.traced_rails
         return out
 
     def summary(self) -> str:
@@ -909,6 +914,22 @@ def route_board(
     graph: BoardGraph,
     constraints: CompiledConstraints,
     rules: Optional[dict] = None,
+    **kw,
+) -> BoardRoute:
+    """Detailed-route the signal nets of a placed ``graph`` (:func:`_route_board`),
+    under the plane allocation :mod:`pnr.rail_alloc` decides for a board whose
+    ``plane_partition`` lists candidate rails of a dedicated plane layer (plane or
+    trace, and who takes the leftover: by routing the best few alternatives);
+    otherwise exactly :func:`_route_board`."""
+    from pnr import rail_alloc
+
+    return rail_alloc.route(graph, constraints, rules, kw, _route_board)
+
+
+def _route_board(
+    graph: BoardGraph,
+    constraints: CompiledConstraints,
+    rules: Optional[dict] = None,
     *,
     pitch: Optional[float] = None,
     track_width_mm: Optional[float] = None,
@@ -918,6 +939,8 @@ def route_board(
     escape_dogbone: bool = True,
     fixed_copper: Optional[dict] = None,
     fixed_copper_own_net: bool = False,
+    allocation: Optional[dict] = None,
+    probe: Optional[dict] = None,
 ) -> BoardRoute:
     """Detailed-route the signal nets of a placed ``graph``.
 
@@ -932,6 +955,11 @@ def route_board(
     ``fixed_copper`` is existing copper kept as it is (:mod:`.fixed`); with
     ``fixed_copper_own_net`` its own net may reach and pass it (the hierarchical
     knit joins pads that block copper already connects), other nets may not.
+
+    ``allocation`` (:mod:`pnr.rail_alloc`): each plane_partition candidate's plane or
+    trace decision and each layer's leftover; None: the static prior. ``probe``: a
+    dict that receives the partitions' inputs (``for_route``'s ``capture``); the call
+    then stops there and returns None (the allocation search's screen).
     """
     if fixed_copper is None and rules and rules.get("fixed_copper"):
         # Fixed blocks' copper carried in the rules (pnr.fixed_block): every route of
@@ -1001,21 +1029,22 @@ def route_board(
 
     width, height = outline_size(graph, constraints)
     layers, planes, stack = layer_plan(graph, rules)
-    # A plane_partition candidate the engine itself decides to trace (current,
-    # budget, terminal count: pnr.plane_partition._rail_decision) is carried into
-    # the routing rules here, not left a dead plane drop: net_class.plane_layer
-    # alone used to decide every net in ``planes`` below, unaware of this per-rail
-    # decision (an owner review on 2026-10-06 found the mismatch -- a traced
-    # candidate kept out of signal_nets and out of every plane's drop planning,
-    # with nowhere left to route it). trace_decisions is the one, early source of
-    # truth; for_route reuses it rather than recomputing from a fuller terminal
-    # count that could, in principle, disagree.
+    # The plane allocation (pnr.rail_alloc: which plane_partition candidates get a
+    # territory and which are traced, and who takes each layer's leftover) is carried
+    # into the routing rules here, not left a dead plane drop: net_class.plane_layer
+    # alone used to decide every net in ``planes`` below (an owner review on
+    # 2026-10-06 found the mismatch -- a traced candidate kept out of signal_nets and
+    # out of every plane's drop planning, with nowhere left to route it). It is the
+    # one, early source of truth; for_route takes the same decisions.
     trace_decisions: dict = {}
     traced_nets: Set[str] = set()
     if rules and rules.get("plane_partition"):
-        from pnr.plane_partition import decide_rails
+        from pnr import rail_alloc
 
-        trace_decisions = decide_rails(rules, graph, fixed_copper)
+        if allocation is None:
+            allocation = rail_alloc.static_allocation(graph, rules, fixed_copper)
+        rules = rail_alloc.with_fills(rules, allocation)
+        trace_decisions = dict(allocation["decisions"])
         traced_nets = {n for n, (d, _r) in trace_decisions.items() if d == "trace"}
         planes = planes - traced_nets
     grid = RouteGrid.from_graph(
@@ -1222,6 +1251,7 @@ def route_board(
             fixed_copper=fixed_copper,
             fanouts=fanouts,
             decisions=trace_decisions,
+            capture=probe,
         )
         done = {p.layer for p in partitions}
         regions = [r for r in regions if r.layer not in done]
@@ -1232,6 +1262,8 @@ def route_board(
             inset=via_radius_mm,
             outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
+    if probe is not None:
+        return None  # the allocation search's screen needs no more than the inputs
     # Outer pours (plane_partition entries with a region, pnr.route.detail.pour): the
     # territories are claimed on their layer, the pads they join need no escape or
     # drop, and a plane net's pour gets its stitching vias. Only when declared.
@@ -1541,6 +1573,7 @@ def route_board(
         failure_sites=trapped_access_sites(grid, plan.net_access, result.unrouted),
         escape_diagnostics=plan.diagnostics,
         stack_warnings=stack_warnings,
+        traced_rails=sorted(traced_nets),
     )
     for net, sites in plan.drop_failures.items():
         # A plane pad without a drop is localized at the pad for the placement loop.
@@ -1563,6 +1596,8 @@ def route_board(
                         set(board.failure_sites.get(net, [])) | set(sites)
                     )
                 _warn_once(info.get("warnings") or (), "pnr.plane_partition")
+            quality = p.report.get("quality") or {}
+            _warn_once([w["message"] for w in quality.get("warnings") or ()], "pnr.plane_quality")
     if os.environ.get("PNR_LOCAL_PRESSURE") == "1":
         from .pressure import localized_pressure
 

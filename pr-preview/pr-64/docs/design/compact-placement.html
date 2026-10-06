@@ -657,6 +657,10 @@ turn together, with wirelength in the cost, puts them upright beside their LEDs.
 <td><p>E</p></td>
 <td><p>A line group carries each member’s satellite (a free two-pad part on a two-pin net to one member pad) flush beside the member, in line with it.</p></td>
 </tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS=1</span></code></p></td>
+<td><p>14</p></td>
+<td><p>The channel model (global placement, the legalizer and its push alike) credits the board’s other signal layers: a net that can drop off the surface asks its share of the channel (section 14).</p></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -1424,6 +1428,249 @@ them but the board then failed on a router short). Copper is 7.5 % longer with K
 18 % on the ladder, showcases and <code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code> variants, 6 % on the MCU lane, none on the BGA
 rungs): the wirelength packer improves every legal pose, KEEP keeps them.</p>
 </section>
+<section id="h-detailed-placement-after-legalization-pnr-detail-place-on-with-keep-2026-10-06">
+<h3>H. Detailed placement after legalization (<code class="docutils literal notranslate"><span class="pre">PNR_DETAIL_PLACE</span></code>, on with KEEP; 2026-10-06)<a class="headerlink" href="#h-detailed-placement-after-legalization-pnr-detail-place-on-with-keep-2026-10-06" title="Link to this heading">¶</a></h3>
+<blockquote>
+<div><p>Owner decision (2026-10-06): the displacement-minimizing legalizer ends wholesale relocations
+but costs copper; add an order-preserving detailed-placement pass after legalization, then turn
+KEEP and it on by default once the A/B shows no rung worse and copper restored.</p>
+</div></blockquote>
+<p><strong>Why KEEP costs copper.</strong> With KEEP off, <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> re-sites every part by displacement, channels and
+four times its wirelength, over all four turns: 1361 of 1496 parts moved, 4677 mm (3.4 mm each),
+and that is the 7.5 % less copper. With KEEP on every legal part keeps its global pose and turn,
+and <code class="docutils literal notranslate"><span class="pre">TURN</span></code> only turns the parts the legalizer moved.</p>
+<p><strong>Change</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.detail</span></code>, its own stage after legalization, the align snap and the
+matched-length pass, before the side moves and routing; <code class="docutils literal notranslate"><span class="pre">PNR_DETAIL_PLACE=0</span></code> turns it off,
+unset it follows <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>):</p>
+<ol class="arabic simple">
+<li><p><em>Compaction.</em> Every movable part is drawn half way toward the point that minimizes its
+wirelength (per axis the median of its nets’ spans), and the layout is projected, weighted
+least squares (the KEEP push’s solver), onto its present order: two parts side by side keep
+their order, their slots apart and as much of the routing channel between them as they have;
+every part stays in the outline and within 3 mm of its legal pose; four rounds, and a pair that
+comes to overlap keeps the order it had. It is kept only when the legalizer’s checker accepts
+every shifted part (a part it refuses is held where it was and the compaction solved again)
+and the wiring shortens.</p></li>
+<li><p><em>Greedy moves</em>, best gain first, each legal by the legalizer’s checker (its clearance,
+spreading, margins, pad-edge rule, regions, aligns, bands, group radii): a turn about the slot
+centre (every movable part, in place of <code class="docutils literal notranslate"><span class="pre">TURN</span></code>), a slide along x or y within a budget of
+max(1.5 mm, the larger courtyard side) from where compaction left it (blocked, it shifts up to
+two parts in front along, in order), a swap of two adjacent parts of one size class with
+nothing between them (each re-picks its turn), and a wrong-side move: a part whose connection
+crosses the body of the part it connects to goes beside the edge that pin faces, within that
+part’s extent plus its own plus two cells, only where the other part’s channel penalty does
+not rise. Ball arrays route through their vias and have no far side.</p></li>
+<li><p><em>Cost.</em> Half-perimeter wirelength (plane nets out) plus the crossing detour (a Manhattan
+spanning tree per net; a segment a same-side courtyard cuts across, the endpoint’s own body
+behind its pin included, costs the shorter way round) plus the channel penalty at the
+packer’s ratio (25 / 4) and the soft terms. A move must shorten the wiring by more than
+0.05 mm.</p></li>
+<li><p>Never moved: fixed, locked and hard-rotated parts, macros, row and line-group members, parts
+with landing reserves, parts on a pair or length-match net, and parts within 3 mm of a ball
+array (its escape and fanout are the board’s tightest routing). Held parts only turn and slide.
+A part also keeps out of a ball array’s 1.5 mm escape field and stays 1 mm clear of the line
+between consecutive pins of a matched net, moving no deeper into the box between them (or
+keeps what it has, if less). Deterministic (fixed orders, float64, exact quarter turns, no
+random draws; a golden hash).</p></li>
+</ol>
+<p>Its moves are a trace event (<code class="docutils literal notranslate"><span class="pre">detail</span></code>, phase <code class="docutils literal notranslate"><span class="pre">detailed-placement</span></code>), their own animation segment
+and an end-card line, and the record <code class="docutils literal notranslate"><span class="pre">detail_motion</span></code> (moves by kind, parts moved, sum, maximum
+and median distance, wirelength and crossing before and after, channel delta, topology, time) in
+the placement report, <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code>, the hierarchical report and <code class="docutils literal notranslate"><span class="pre">ladder-results.json</span></code>.
+<code class="docutils literal notranslate"><span class="pre">legal_motion</span></code> stays the legalizer’s own.</p>
+<p><strong>KEEP push.</strong> A cluster whose push is infeasible now moves the conflicting pair needing the
+least shift to its other axis and solves again (up to four times; channel pushes keep their
+axis), and a failing push is retried with a size-scaled reach (0.75, then 1.0 of the larger side,
+at most 4 mm), kept only when it displaces less (area-weighted) than relocating the part it would
+give up. <code class="docutils literal notranslate"><span class="pre">start-14</span></code> of the hierarchical block (<code class="docutils literal notranslate"><span class="pre">testdata/legalize_keep</span></code>): the column under D4 was
+0.12 mm too tall for the outline in y, so D4 went 10.1 mm east; D4 is now pushed 0.76 mm and
+nothing is relocated. <code class="docutils literal notranslate"><span class="pre">04-inverter-leds-8</span></code> seed 1’s U1 stays relocated: the outline corner and
+the fixed connector box it in, and no push in its global order exists.</p>
+<p><strong>A/B</strong> (GCP <code class="docutils literal notranslate"><span class="pre">c4d</span></code> us-west4 for both arms, the runner’s ladder-v2 defaults, <code class="docutils literal notranslate"><span class="pre">--legalize-keep</span> <span class="pre">--detail-place</span></code> against <code class="docutils literal notranslate"><span class="pre">--no-legalize-keep</span> <span class="pre">--no-detail-place</span></code>; ladder, showcases and all 33 hard
+rungs, seeds 0 and 1, then seeds 2 to 7 of the BGA rungs and buck-pour and 2 to 15 of the BGA
+<code class="docutils literal notranslate"><span class="pre">-pairs</span></code> rung; KEEP alone from the R6 A/B above; campaigns <code class="docutils literal notranslate"><span class="pre">20261006-ladder-e132b3</span></code> (both arms),
+<code class="docutils literal notranslate"><span class="pre">-9c8a75</span></code>, <code class="docutils literal notranslate"><span class="pre">-931103</span></code>, <code class="docutils literal notranslate"><span class="pre">-56306d</span></code>, <code class="docutils literal notranslate"><span class="pre">-6f8fb4</span></code> (detailed placement at the final code) and <code class="docutils literal notranslate"><span class="pre">-67bfc3</span></code>,
+<code class="docutils literal notranslate"><span class="pre">-6f7476</span></code>, <code class="docutils literal notranslate"><span class="pre">-c18ee3</span></code> (KEEP off at the extra seeds)):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rungs (seeds 0 and 1)</p></th>
+<th class="head text-right"><p>Cells</p></th>
+<th class="head"><p>Pass: KEEP+DP / KEEP / off</p></th>
+<th class="head text-right"><p>Copper: KEEP+DP vs off</p></th>
+<th class="head text-right"><p>KEEP alone vs off</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>ladder 01-08</p></td>
+<td class="text-right"><p>16</p></td>
+<td><p>16 / 16 / 16</p></td>
+<td class="text-right"><p>-0.8 %</p></td>
+<td class="text-right"><p>+15.7 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>showcases</p></td>
+<td class="text-right"><p>8</p></td>
+<td><p>8 / 8 / 8</p></td>
+<td class="text-right"><p>+5.8 %</p></td>
+<td class="text-right"><p>+13.7 %</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code> variants</p></td>
+<td class="text-right"><p>28</p></td>
+<td><p>28 / 28 / 28</p></td>
+<td class="text-right"><p>+3.3 %</p></td>
+<td class="text-right"><p>+17.5 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>MCU lane</p></td>
+<td class="text-right"><p>18</p></td>
+<td><p>18 / 18 / 18</p></td>
+<td class="text-right"><p>-1.3 %</p></td>
+<td class="text-right"><p>+5.8 %</p></td>
+</tr>
+<tr class="row-even"><td><p>BGA</p></td>
+<td class="text-right"><p>12</p></td>
+<td><p>11 / 11 / 12</p></td>
+<td class="text-right"><p>-0.2 %</p></td>
+<td class="text-right"><p>+0.0 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>quad-bank, power-switch, buck</p></td>
+<td class="text-right"><p>8</p></td>
+<td><p>8 / 7 / 8</p></td>
+<td class="text-right"><p>-2.2 %</p></td>
+<td class="text-right"><p>+11.4 %</p></td>
+</tr>
+<tr class="row-even"><td><p>all</p></td>
+<td class="text-right"><p>90</p></td>
+<td><p>89 / 88 / 90</p></td>
+<td class="text-right"><p>+0.12 %</p></td>
+<td class="text-right"><p>+7.84 %</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Copper on the 87 cells all three arms pass; over the 140 cells with the extra seeds KEEP+DP is
+0.9 % shorter than KEEP off. Extra seeds: buck-pour 7 of 8 in both arms (seed 5 fails with
+detailed placement on a pad entry, seed 3 without; on the KEEP-only placement of seed 5,
+<code class="docutils literal notranslate"><span class="pre">testdata/detail_place</span></code>, detailed placement takes R1 off U1’s far side); BGA base,
+<code class="docutils literal notranslate"><span class="pre">-block</span></code>, <code class="docutils literal notranslate"><span class="pre">-classes</span></code> and <code class="docutils literal notranslate"><span class="pre">-partial</span></code> 8 of 8 in both arms; <code class="docutils literal notranslate"><span class="pre">-rails</span></code> 7 of 8 against 5 of 8; <code class="docutils literal notranslate"><span class="pre">-pairs</span></code>
+13 of 16 against 15 of 16 with KEEP off and 14 of 16 with KEEP alone (<code class="docutils literal notranslate"><span class="pre">-4cf25e</span></code>): seeds 9 and 12
+fail the LVDS pair’s gap rule by one or two findings with KEEP alone too (detailed placement moved
+nothing in their chosen placements), and on seed 1 every finalist the initial pool routed had the
+pair uncoupled or a connection missing, so it took one with the pair as legs. Parts within 3 mm
+of the ball array no longer move, so the BGA rungs gain little copper.
+Detailed placement moved 1174 parts by 2243 mm in the final placements (the median of the cells’
+medians 1.2 mm, mostly compaction; the largest 14 mm), 79 s in all. The
+legalization motion (the legalizer’s own, <code class="docutils literal notranslate"><span class="pre">legal_motion</span></code>) is 179 of 1496 parts and 999 mm with 43
+relocated, against 148, 285 mm and 29 with KEEP alone: on four cells the pool now picks the
+source start, whose global placement leaves 4 to 12 parts mostly occluded; without those 155 of
+1455 parts and 283 mm (KEEP alone on the same cells: 131 and 237 mm).</p>
+</section>
+</section>
+<section id="layer-aware-channel-model-pnr-channel-layers-2026-10-06">
+<h2>14. Layer-aware channel model (<code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS</span></code>, 2026-10-06)<a class="headerlink" href="#layer-aware-channel-model-pnr-channel-layers-2026-10-06" title="Link to this heading">¶</a></h2>
+<p>The routing-channel model (<code class="docutils literal notranslate"><span class="pre">pnr.place.channels.ChannelModel</span></code>) prices the gap between two facing
+pad rows as if every externally connected net on both rows ran along it on the surface. Global
+placement (the compact <code class="docutils literal notranslate"><span class="pre">GP</span></code> inflation floor), the legalizer’s slot cost and the
+<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> push all read it, so an overestimate spreads parts that the router never
+needed apart, or makes the push give up on channels it cannot open.</p>
+<p><strong>Measurement</strong> (<code class="docutils literal notranslate"><span class="pre">regression/channel_audit.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.place.channel_audit</span></code>). For each channel the
+model prices on a routed board, the audit takes the busiest cut across the gap and counts the
+surface tracks that run along the channel there (tracks crossing straight from row to row do not
+count) and the vias in it, priced the way the model prices its own demand. Each predicted net is
+classed as <em>surface</em> (it ran along the channel), <em>dropped</em> (a via within 1 mm of its pad) or
+<em>elsewhere</em>. On the 88 passing cells of the default configuration (ladder, showcases and the 33
+hard rungs, seeds 0 and 1), in the channels the model calls short:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Copper layers</p></th>
+<th class="head text-right"><p>Short channels</p></th>
+<th class="head text-right"><p>Width used / predicted</p></th>
+<th class="head"><p>Predicted nets on surface / dropped / elsewhere</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>2</p></td>
+<td class="text-right"><p>752</p></td>
+<td class="text-right"><p>36 %</p></td>
+<td><p>23 / 32 / 45 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td class="text-right"><p>208</p></td>
+<td class="text-right"><p>38 %</p></td>
+<td><p>13 / 54 / 33 %</p></td>
+</tr>
+<tr class="row-even"><td><p>6</p></td>
+<td class="text-right"><p>87</p></td>
+<td class="text-right"><p>45 %</p></td>
+<td><p>13 / 56 / 31 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td class="text-right"><p>22</p></td>
+<td class="text-right"><p>35 %</p></td>
+<td><p>11 / 57 / 31 %</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The model is about 2.5 times too conservative at every layer count. Two things account for it:
+nets leave by another face (a two-pad part’s pad lies on three faces of its part), and nets
+drop to another layer next to their pad. Dropping grows from a third of the nets on two layers
+to over half on four or more.</p>
+<p><strong>Model.</strong> With <code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS=1</span></code> the model credits the board’s other signal layers (copper
+layers less plane layers, <code class="docutils literal notranslate"><span class="pre">channels.signal_layers</span></code>). A net with a drop site off the channel asks
+only its surface share, one over the signal-layer count. A drop site is a through-hole pad, a pad
+that holds a via in pad under the fab’s in-pad class, or a pad that also lies on another face of
+its part, whose via can go out that way. A mid-row net may also drop at that share, but then the
+channel pays one shared via row (the via diameter and a clearance). The demand is the cheaper of
+the two options, never more than the surface-only one. It is unchanged on a single signal layer
+and for plane nets. A block’s port nets (<code class="docutils literal notranslate"><span class="pre">block_ports</span></code>) keep the surface price, because they must
+reach the block edge where the parent board routes them. Without this rule both seeds of
+<code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> lost <code class="docutils literal notranslate"><span class="pre">CLOCK</span></code> at the top level. The change lives in the model itself, so
+global placement, the legalizer and its push price every channel the same way. Repriced on the
+same boards, the short channels fall to 258 / 111 / 49 / 11, and the router still used about half
+of the new predicted width there.</p>
+<p><strong>A/B</strong> (GCP C4D, <code class="docutils literal notranslate"><span class="pre">claude/lv2-defaults</span></code> plus this change, every ladder-v2 default on, the same
+90 cells per arm; hierarchical cells from the rerun with the block-port rule, seeds 0 to 5):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Arm</p></th>
+<th class="head"><p>Pass</p></th>
+<th class="head"><p>Copper (86 both-pass cells)</p></th>
+<th class="head"><p>Vias</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">channel_short</span></code> parts</p></th>
+<th class="head"><p>Legalization motion, cells with the same pool start (47)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>on</p></td>
+<td><p>89/90</p></td>
+<td><p>31826 mm (-1.8 %)</p></td>
+<td><p>3696</p></td>
+<td><p>582</p></td>
+<td><p>56 parts moved, 141 mm, 22 relocated</p></td>
+</tr>
+<tr class="row-odd"><td><p>off</p></td>
+<td><p>88/90</p></td>
+<td><p>32405 mm</p></td>
+<td><p>3740</p></td>
+<td><p>1033</p></td>
+<td><p>71 parts moved, 157 mm, 21 relocated</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Both arms fail <code class="docutils literal notranslate"><span class="pre">11-buck-vqfnhr-4L-SGPS-pour</span></code> seed 0 (the open issue in section 11). Off also
+fails <code class="docutils literal notranslate"><span class="pre">11-ufbga201-...-rails</span></code> seed 1. <code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> loses <code class="docutils literal notranslate"><span class="pre">CLOCK</span></code> on seeds 2 and 3 in both
+arms (a top-level knit issue, independent of the switch). Copper by family: 07 variants -3.9 %,
+MCU lane -1.2 %, BGA -0.1 %, showcases -3.0 %, power -20 %, ladder +3.0 %. The two BGA cells with
+large relocations in the on arm picked the initial pool’s source start, whose global placement
+stacks the decoupling capacitors (severe, relocated 74 mm). The off arm picked another start, so
+the full-table motion total (976 against 285 mm) compares different starts. On cells where both
+arms chose the same start, on moves less.</p>
+<p>The switch stays off by default here. Turning it on with the other ladder-v2 defaults changes the
+flag-off identity goldens (<code class="docutils literal notranslate"><span class="pre">compact_test</span></code>) and the shortage-driven fixtures (<code class="docutils literal notranslate"><span class="pre">elastic_test</span></code>,
+<code class="docutils literal notranslate"><span class="pre">region_align_test</span></code>), which then need regenerating.</p>
 </section>
 </section>
 
@@ -1509,8 +1756,10 @@ rungs): the wirelength packer improves every legal pose, KEEP keeps them.</p>
 <li><a class="reference internal" href="#displacement-minimizing-legalization-pnr-legalize-keep-on-by-default">13. Displacement-minimizing legalization (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>, on by default)</a><ul>
 <li><a class="reference internal" href="#f-block-level-motion-reserving-channel-room-in-gp-not-only-in-the-push">F. Block-level motion: reserving channel room in GP, not only in the push</a></li>
 <li><a class="reference internal" href="#g-a-slight-overlap-is-nudged-never-re-placed-2026-10-06">G. A slight overlap is nudged, never re-placed (2026-10-06)</a></li>
+<li><a class="reference internal" href="#h-detailed-placement-after-legalization-pnr-detail-place-on-with-keep-2026-10-06">H. Detailed placement after legalization (<code class="docutils literal notranslate"><span class="pre">PNR_DETAIL_PLACE</span></code>, on with KEEP; 2026-10-06)</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#layer-aware-channel-model-pnr-channel-layers-2026-10-06">14. Layer-aware channel model (<code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS</span></code>, 2026-10-06)</a></li>
 </ul>
 </li>
 </ul>

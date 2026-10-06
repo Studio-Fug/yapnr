@@ -21,6 +21,7 @@ the compactness bucket after the completion keys (route_rank), as halving's scre
 """
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -54,6 +55,9 @@ graph = BoardGraph.from_json((root / "source-graph.json").read_text())
 doc = with_policy(spec["constraints"], spec.get("sides"))
 constraints = compile_constraints(doc, graph.refs)
 rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
+# ladder-v2 A/B (ab-pairs-pool): as route_case.py.
+if os.environ.get("PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS") == "1" and rules.get("diff_pairs"):
+    rules["route_pairs"] = "coupled"
 # As route_case.py: the rung's via policy on its board (none: through vias only).
 via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules, graph=graph)
 if via_policy:

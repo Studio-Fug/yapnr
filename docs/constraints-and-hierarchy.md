@@ -254,7 +254,7 @@ What to watch:
 
 | Case                | Parts | Routed | Opens | Findings | Vias | Copper (mm) | HPWL (mm) | Time (s) |
 | ------------------- | ----: | :----: | ----: | -------: | ---: | ----------: | --------: | -------: |
-| `hier-twin-bank-32` |    32 | 100 %  |     0 |        0 |   46 |      571.17 |       320 |     92.0 |
+| `hier-twin-bank-32` |    32 | 100 %  |     0 |        0 |   52 |      533.60 |       320 |     93.7 |
 
 ## What is interpolated
 

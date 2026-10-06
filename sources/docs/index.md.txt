@@ -46,6 +46,9 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
   CD4017B LED chaser, with an animation of each board's place and route.
 - [Constraints and hierarchy](constraints-and-hierarchy.md): a line of LEDs, parts held on the
   board edge and a board built from reused blocks, each animated from the engine's own record.
+- [How plane partition works](plane-partition.md): how yapnr divides a shared plane layer among
+  several supply rails, stage by stage with stills and an animation of a real board, the checks
+  it reports, its limits, and where the method sits in the published literature.
 - [Architecture](architecture.md): the planned layout of the package, the test tiers and the
   pipeline.
 - [Migration plan](migration-plan.md): how the engine moves out of Splanc, PR by PR.
@@ -93,6 +96,7 @@ cloud-experiments
 architecture
 regression-ladder
 constraints-and-hierarchy
+plane-partition
 migration-plan
 decisions
 design/animations

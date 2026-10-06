@@ -87,7 +87,13 @@ function boot(){return S.boot||=(async()=>{
   renderer=new T.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:Q.get('v3shot')==='1'});renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));
   scene=new T.Scene();scene.background=new T.Color(0x0c1418);
   cam=new T.PerspectiveCamera(30,1,.05,5000);cam.up.set(0,0,1);
-  controls=new OrbitControls(cam,cv);controls.screenSpacePanning=true;controls.zoomToCursor=true;controls.minDistance=1;controls.maxDistance=3000;controls.addEventListener('change',()=>{clip();pxAll();hideHover();draw()});
+  controls=new OrbitControls(cam,cv);controls.screenSpacePanning=true;controls.zoomToCursor=true;controls.minDistance=1;controls.maxDistance=3000;
+  // Touch: one finger orbits, two fingers pinch-zoom and pan (OrbitControls' own Pointer Event
+  // handling, which needs CSS touch-action:none on the canvas -- viewer3d.css already sets it --
+  // so the browser page does not scroll/zoom instead). Spelled out rather than left to the
+  // library default so it stays correct across a three.js upgrade.
+  controls.touches={ONE:T.TOUCH.ROTATE,TWO:T.TOUCH.DOLLY_PAN};
+  controls.addEventListener('change',()=>{clip();pxAll();hideHover();draw()});
   controls.addEventListener('start',()=>{S.moved=true;if(!S.hinted){S.hinted=true;setTimeout(()=>$('v3-hint').classList.add('gone'),8000)}});
   scene.add(new T.HemisphereLight(0xeef4ff,0x2a3236,1.9));
   let d1=new T.DirectionalLight(0xffffff,2.3);d1.position.set(-60,-90,160);scene.add(d1);let d2=new T.DirectionalLight(0xdfe8ff,.9);d2.position.set(80,70,-140);scene.add(d2);

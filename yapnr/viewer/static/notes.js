@@ -26,6 +26,16 @@ const BADGE={proposed:'#ffd166',open:'#8ec5ff',accepted:'#9ee6d1'},LIVE=['open',
 const N={list:[],by:new Map(),rev:-1,ok:null,err:null,timer:0,tok:0,fast:false,loaded:false,removed:new Set(),seen:new Set(),open:new Set(),form:{},drafts:{},msg:{},
  flt:Object.assign({status:'all',kind:'',author:''},store.get('yapnr-notes-filter',{}),{q:''}),forItem:null,ui:null,ed:null,hits:[],dirty:false,badges:store.get('yapnr-notes-badges',true)!==false};
 const st=n=>n?.status||'open',upd=n=>tms(n.updated)||tms(n.created)||0;
+// Scope: which lane(s) ("experiments") a note may appear on. The server computes and sends it
+// (note.scope); this mirrors that derivation client-side for a note not yet round-tripped (just
+// created/edited) and as a defensive fallback. See notes/store.py derive_scope().
+function scopeOf(n){if(n?.scope)return n.scope;if(n?.global)return {kind:'global'};let lane=n?.provenance?.lane;return lane?{kind:'lane',lane}:{kind:'unscoped'}}
+const curLane=()=>V()?.lane?.()||null;
+// A note shows on a given lane's board (badges, the Inspect "Notes" section, forItem view) only
+// if it is global or was recorded in that same lane -- never a different lane's note of the same
+// refdes, and never an unscoped note (no lane recorded): those are listed separately instead of
+// guessing where they belong.
+function inLane(n,lane){let s=scopeOf(n);return s.kind==='global'||(s.kind==='lane'&&!!lane&&s.lane===lane)}
 // as the assistant left it: nobody decided, edited or answered it yet (the inline Undo of a live Ask turn is only offered then)
 const pristine=n=>!!n&&n.author==='agent'&&(st(n)==='open'||st(n)==='proposed')&&!n.status_by&&n.updated_by?.kind!=='user'&&!(n.comments||[]).some(c=>c.author==='user');
 
@@ -92,7 +102,7 @@ function sourceLines(file){let out=new Map(),ix=SS()?.index?.();const add=(l,n)=
 
 // ------------------------------------------------------------------ board badges (drawn by app.js render() through drawBadges)
 function badgesFor(lane){let comp=new Map(),out=[];const top=s=>LIVE.slice().sort((a,b)=>RANK[a]-RANK[b]).find(x=>s.has(x));
- for(let n of N.list){let s=st(n);if(!BADGE[s])continue;
+ for(let n of N.list){let s=st(n);if(!BADGE[s])continue;if(!inLane(n,lane))continue; // scope: never this lane's badge for another lane's note
   for(let t of n.targets||[]){
    if((t.kind==='component'||t.kind==='pad')&&t.ref){let b=comp.get(t.ref);if(!b)comp.set(t.ref,b={kind:'component',ref:t.ref,ids:[],sts:new Set(),item:{kind:'component',ref:t.ref}});if(!b.ids.includes(n.id))b.ids.push(n.id);b.sts.add(s)}
    else if(t.kind==='region'&&Array.isArray(t.bbox)&&t.bbox.length===4&&(!t.lane||!lane||t.lane===lane))out.push({kind:'region',bbox:t.bbox,lane:t.lane||null,ids:[n.id],sts:new Set([s]),item:clone(t)})}}
@@ -153,8 +163,11 @@ function card(x,opt={}){let id=typeof x==='string'?x:x?.id,n=typeof x==='string'
  if(!n)return h('div',{class:'nt-card nt-gone'+(opt.compact?' compact':''),'data-id':id||''},h('span',{class:'nt-id'},id||'note'),N.removed.has(id)?' removed':N.loaded?' deleted or not visible':' loading…');
  const s=st(n),big=!opt.compact&&N.open.has(n.id),el=h('div',{class:`nt-card s-${s}`+(opt.compact?' compact':'')+(big?' open':''),'data-id':n.id});el.addEventListener('click',chipClick);
  const rer=()=>{let e2=card(n.id,opt);el.replaceWith(e2);return e2},form=opt.compact?null:N.form[n.id];
+ const scope=scopeOf(n),scopeTip={lane:'Shown only on lane '+scope.lane,global:'Shown on every lane of this experiment',unscoped:'No lane recorded: never shown on a board'}[scope.kind];
  el.append(h('div',{class:'nt-h'},opt.caption?h('span',{class:'nt-cap'},opt.caption):null,h('button',{class:'nt-id',type:'button',title:opt.compact?'Open in Notes':'Copy reference '+n.id,onclick:e=>{e.stopPropagation();if(opt.compact)openNote(n.id);else copyRef(n,e.currentTarget)}},n.id),
-  h('span',{class:'nt-kind'},KL[n.kind]||n.kind||'note'),n.author==='agent'&&!opt.caption?h('span',{class:'nt-by',title:'Written by the assistant'},'Claude'):null,h('span',{class:'dk-sp'}),
+  h('span',{class:'nt-kind'},KL[n.kind]||n.kind||'note'),
+  h('span',{class:'nt-scope'+(scope.kind==='unscoped'?' unscoped':''),title:scopeTip},scope.kind==='lane'?'lane '+scope.lane:scope.kind),
+  n.author==='agent'&&!opt.caption?h('span',{class:'nt-by',title:'Written by the assistant'},'Claude'):null,h('span',{class:'dk-sp'}),
   h('span',{class:'nt-st s-'+s},SL[s]||s),opt.compact?null:h('span',{class:'nt-when',title:'Created '+when(n.created)+(n.updated&&n.updated!==n.created?'\nUpdated '+when(n.updated):'')},ago(n.updated||n.created))));
  el.append(h(opt.compact?'div':'button',{class:'nt-t',type:opt.compact?null:'button',title:opt.compact?n.title:big?'Collapse':'Expand',onclick:opt.compact?()=>openNote(n.id):()=>{big?N.open.delete(n.id):N.open.add(n.id);rer()}},n.title||'(untitled)'));
  if(!opt.compact&&n.body){let long=n.body.length>230||n.body.split('\n').length>3,b=mdEl(n.body,'nt-body'+(big||!long?'':' clamp'));el.append(b);if(!big&&long)el.append(h('button',{class:'dk-more nt-mo',type:'button',onclick:()=>{N.open.add(n.id);rer()}},'More'))}
@@ -206,7 +219,9 @@ function discuss(n){let A=AG();if(!A||A.enabled?.()===false)return;for(let t of 
 // ------------------------------------------------------------------ Notes tab
 function textOf(n){return [n.id,n.title,n.body,KL[n.kind],SL[st(n)],(n.tags||[]).join(' '),(n.targets||[]).map(t=>[tLabel(t),t.ref,t.name,t.file].join(' ')).join(' '),(n.comments||[]).map(c=>c.text).join(' '),n.proposal?.summary,n.author==='agent'?'claude agent':'you user',(n.sources||[]).map(s=>s.title+' '+s.url).join(' ')].join('\n').toLowerCase()}
 function filtered(){let f=N.flt,w=f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
- return N.list.filter(n=>(f.status==='all'||(f.status==='active'?LIVE.includes(st(n)):st(n)===f.status))&&(!f.kind||n.kind===f.kind)&&(!f.author||n.author===f.author)&&(!N.forItem||matches(n,N.forItem))&&(!w.length||(t=>w.every(x=>t.includes(x)))(textOf(n))))}
+ // "Notes for <item>" (reached from a board badge or Inspect): the same board-scoped set as
+ // inspectSection()/badgesFor() show, so the count here matches what the board implied.
+ return N.list.filter(n=>(f.status==='all'||(f.status==='active'?LIVE.includes(st(n)):st(n)===f.status))&&(!f.kind||n.kind===f.kind)&&(!f.author||n.author===f.author)&&(!N.forItem||(matches(n,N.forItem)&&inLane(n,curLane())))&&(!w.length||(t=>w.every(x=>t.includes(x)))(textOf(n))))}
 function build(){const K=DK(),panel=K?.el('notes');if(!panel||N.ui)return;panel.innerHTML='';
  const sel=(v,opts,title)=>{let s=h('select',{class:'dk-input nt-sel',title},opts.map(([k,l])=>h('option',{value:k,selected:k===v||undefined},l)));return s};
  const u=N.ui={q:h('input',{class:'dk-input',type:'search',placeholder:'Search notes, parts, nets, tags…',spellcheck:'false'}),newb:h('button',{class:'dk-ask',type:'button',title:'New note (targets: the Ask context, else the inspected item)'},'New note'),
@@ -237,8 +252,15 @@ function renderList(force){let u=N.ui;if(!u||N.ed)return;let a=D.activeElement;i
  else if(!N.list.length){if(N.ok!==false)out.push(h('div',{class:'dk-empty'},h('b',null,'No notes yet'),h('p',null,'Notes keep what you and the assistant conclude about the circuit — observations, questions, requirements, decisions, to-dos and proposals — tied to parts, nets, pads, regions and source lines.'),
   h('p',null,'Ask the assistant to “record this as a note”, use Save as note under an answer, Add note in Inspect, or New note above. Accepted notes are the input for the next design pass (Export md).'),h('button',{type:'button',class:'dk-ask',onclick:()=>newNote()},'New note')))}
  else if(!all.length)out.push(h('div',{class:'dk-empty'},'No notes match these filters. ',h('button',{type:'button',onclick:()=>{N.flt={status:'all',kind:'',author:'',q:''};N.forItem=null;u.q.value='';u.st.value='all';u.kind.value='';u.au.value='';renderList(true)}},'Clear filters')));
- else{let groups=[...GROUPS,...[...new Set(all.map(st))].filter(s=>!(s in RANK)).map(s=>[s,s])];
-  for(let [s,label] of groups){let g=all.filter(n=>st(n)===s);if(!g.length)continue;out.push(h('h3',{class:'nt-gh s-'+s},h('i'),label+' · '+g.length),...g.map(n=>card(n)))}}
+ else{
+  // Unscoped first, regardless of status: no lane was recorded for these (written before scoping,
+  // or outside a lane), so they are never drawn on a board; shown here instead of guessing one.
+  let unscoped=N.forItem?[]:all.filter(n=>scopeOf(n).kind==='unscoped'),scoped=all.filter(n=>!unscoped.includes(n));
+  if(unscoped.length)out.push(h('h3',{class:'nt-gh s-unscoped'},h('i'),'Unscoped notes · '+unscoped.length),
+   h('p',{class:'dk-muted'},'No experiment (lane) recorded for these, so they never appear on a board. Edit one to tag it with a lane, or make it global.'),
+   ...unscoped.map(n=>card(n)));
+  let groups=[...GROUPS,...[...new Set(scoped.map(st))].filter(s=>!(s in RANK)).map(s=>[s,s])];
+  for(let [s,label] of groups){let g=scoped.filter(n=>st(n)===s);if(!g.length)continue;out.push(h('h3',{class:'nt-gh s-'+s},h('i'),label+' · '+g.length),...g.map(n=>card(n)))}}
  u.list.replaceChildren(...out);u.list.scrollTop=top}
 function openNote(id){let K=DK();if(N.ed&&N.ed.dirty){K?.tab('notes');return}N.ed=null;if(N.ui){N.ui.ed.hidden=true;N.ui.list.hidden=false;N.ui.head.hidden=false}
  let n=N.by.get(id);if(n&&!filtered().includes(n)){N.flt={status:'all',kind:'',author:'',q:''};N.forItem=null;let u=N.ui;if(u){u.q.value='';u.st.value='all';u.kind.value='';u.au.value=''}}
@@ -266,19 +288,22 @@ function renderEditor(){let u=N.ui,E=N.ed;if(!u||!E)return;let f=E.f,base=E.id?N
   tgRow.replaceChildren(...[...f.targets.map((t,i)=>tChip(t,()=>{f.targets.splice(i,1);dirty();drawT()})),f.targets.length?null:h('span',{class:'dk-muted'},'No targets: the note is not tied to the board. '),
    ctx.some(x=>!have.has(key(x)))?h('button',{class:'dk-more',type:'button',title:'Add the items in the Ask context',onclick:()=>{for(let x of ctx)if(!have.has(key(x))&&f.targets.length<40)f.targets.push(clone(x));dirty();drawT()}},'+ Ask context ('+ctx.length+')'):null,
    it&&!have.has(key(it))?h('button',{class:'dk-more',type:'button',title:'Add the item shown in Inspect',onclick:()=>{f.targets.push(clone(it));dirty();drawT()}},'+ Inspect: '+shortLabel(it)):null].filter(Boolean))};drawT();
+ let curLaneId=curLane(),gOn=h('input',{type:'checkbox',checked:f.global||undefined}),tagErr=h('span',{class:'dk-err'});
+ let tagBtn=(E.id&&base&&scopeOf(base).kind==='unscoped'&&curLaneId)?h('button',{class:'dk-more',type:'button',title:'Record this note as belonging to the lane you are currently viewing',onclick:async()=>{tagBtn.disabled=true;tagErr.textContent='';try{let updated=await update(E.id,{provenance:{...(base.provenance||{}),lane:curLaneId}});base=updated;renderEditor()}catch(e){tagErr.textContent='Tag failed: '+e.message;tagBtn.disabled=false}}},'Tag with current lane ('+curLaneId+')'):null;
  let pOn=h('input',{type:'checkbox',checked:E.prop||undefined}),ptype=h('select',{class:'dk-input'},PTYPES.map(p=>h('option',{value:p,selected:p===(f.proposal?.type||'ato')||undefined},PL[p]))),
   psum=h('input',{class:'dk-input',maxlength:'400',placeholder:'What should change, in one sentence',value:f.proposal?.summary||''}),pdiff=h('textarea',{class:'dk-input nt-mono',rows:'5',wrap:'off',placeholder:'Optional diff or snippet (unified diff renders coloured)'});pdiff.value=f.proposal?.diff||'';
  let pBox=h('div',{class:'nt-pbox',hidden:!E.prop},lab('Change in',ptype),lab('Summary',psum),lab('Diff',pdiff));
  pOn.onchange=()=>{E.prop=pOn.checked;pBox.hidden=!E.prop;if(E.prop&&status.value==='open'){status.value='proposed'}dirty()};
  kind.onchange=()=>{if(kind.value==='proposal'&&!E.prop){pOn.checked=true;pOn.onchange()}if(kind.value==='proposal'&&status.value==='open')status.value='proposed';dirty()};
- for(let el of [title,body,tags,srcs,psum,pdiff])el.addEventListener('input',()=>{dirty();cc()});status.onchange=ptype.onchange=dirty;
+ for(let el of [title,body,tags,srcs,psum,pdiff])el.addEventListener('input',()=>{dirty();cc()});status.onchange=ptype.onchange=gOn.onchange=dirty;
  let err=h('div',{class:'dk-err nt-e'}),save=h('button',{class:'primary nt-save',type:'button'},E.id?'Save changes':'Save note');
  save.onclick=async()=>{let out={kind:kind.value,status:status.value,title:title.value.trim(),body:body.value.replace(/\s+$/,''),targets:f.targets.slice(0,40),tags:[...new Set(tags.value.split(/[,\n]/).map(t=>t.trim().replace(/^#/,'')).filter(Boolean))].slice(0,20),sources:[]};
   for(let l of srcs.value.split('\n').map(x=>x.trim()).filter(Boolean)){let m=/^(\S+)\s*(.*)$/.exec(l);if(!/^https?:\/\/\S+$/i.test(m[1])){err.textContent='Sources must be http(s) URLs: '+m[1];return}out.sources.push(m[2]?{url:m[1],title:m[2].slice(0,200)}:{url:m[1]})}
   if(!out.title){err.textContent='A title is required.';title.focus();return}
   if(E.prop){if(!psum.value.trim()){err.textContent='A proposal needs a summary (or untick “Attach a proposal”).';psum.focus();return}out.proposal={type:ptype.value,summary:psum.value.trim(),...(pdiff.value.trim()?{diff:pdiff.value.replace(/\s+$/,'')}:{})}}else out.proposal=null;
+  out.global=gOn.checked;
   err.textContent='';save.disabled=true;save.textContent='Saving…';
-  try{let n;if(E.id){let o=E.orig||{},fields={};for(let k of ['kind','status','title','body','targets','tags','sources','proposal'])if(JSON.stringify(out[k]??null)!==JSON.stringify(o[k]??(k==='proposal'?null:k==='body'||k==='title'?'':[])))fields[k]=out[k];
+  try{let n;if(E.id){let o=E.orig||{},fields={};for(let k of ['kind','status','title','body','targets','tags','sources','proposal','global'])if(JSON.stringify(out[k]??null)!==JSON.stringify(k==='global'?!!o[k]:o[k]??(k==='proposal'?null:k==='body'||k==='title'?'':[])))fields[k]=out[k];
     n=Object.keys(fields).length?await update(E.id,fields,typeof o.rev==='number'?{expect_rev:o.rev}:null):base}
    else{let v=V(),call=g=>{try{return g?.()??undefined}catch(e){return undefined}},p={lane:call(v?.lane),phase:call(v?.phase),board_sha:call(v?.boardSha),viewer_port:+location.port||undefined};
     for(let k of Object.keys(p))if(p[k]==null||p[k]==='')delete p[k];if(!out.proposal)delete out.proposal;n=await create({...out,provenance:{...p,...(f.provenance||{})}})}
@@ -287,13 +312,17 @@ function renderEditor(){let u=N.ui,E=N.ed;if(!u||!E)return;let f=E.f,base=E.id?N
  let cancel=h('button',{type:'button',onclick:()=>closeEditor()},'Cancel');
  u.ed.replaceChildren(h('div',{class:'nt-eh'},h('b',null,E.id?'Edit '+E.id:'New note'),E.id&&base?.author==='agent'?h('span',{class:'nt-by'},'written by Claude'):h('span',{class:'dk-muted'},E.id?'':'you are the author'),h('span',{class:'dk-sp'}),h('button',{class:'dk-xs',type:'button',title:'Close (Esc)',onclick:()=>closeEditor()},'×')),
   h('div',{class:'nt-eb'},h('div',{class:'nt-frow'},lab('Kind',kind),lab('Status',status)),lab('Title',title,tcnt),lab('Body',body,bcnt),h('div',{class:'nt-fl'},h('span',null,'Targets'),tgRow),lab('Tags',tags),
-   h('label',{class:'nt-chk'},pOn,' Attach a proposal (a change for a human to apply: atopile source, PnR annotation, constraint or engine)'),pBox,lab('Web sources',srcs),
+   h('label',{class:'nt-chk'},pOn,' Attach a proposal (a change for a human to apply: atopile source, PnR annotation, constraint or engine)'),pBox,
+   h('label',{class:'nt-chk'},gOn,' Show in every experiment (lane) — off by default: a note is normally tied to the lane it was written in'+
+     (E.id?(scopeOf(base).kind==='lane'?' (currently lane '+scopeOf(base).lane+')':scopeOf(base).kind==='unscoped'?' (currently unscoped: no lane recorded)':''):(curLaneId?' (currently lane '+curLaneId+')':' (no lane selected right now: this note will be unscoped unless you tick this)'))),
+   tagBtn?h('div',{class:'nt-mini'},tagBtn,tagErr):null,
+   lab('Web sources',srcs),
    h('p',{class:'dk-muted'},'Accepted, rejected and applied are your decisions; the assistant can only propose. Accepted notes feed the next design pass through design-notes.md.')),
   h('div',{class:'nt-ef'},err,h('span',{class:'dk-sp'}),cancel,save));
  setTimeout(()=>(E.id?body:title).focus(),0)}
 
 // ------------------------------------------------------------------ Inspect section (source.js calls YapnrNotes.inspectSection(item))
-function inspectSection(item){if(!item)return null;let list=forItem(item),live=list.filter(n=>LIVE.includes(st(n)));if(!list.length)return null;
+function inspectSection(item){if(!item)return null;let list=forItem(item).filter(n=>inLane(n,curLane())),live=list.filter(n=>LIVE.includes(st(n)));if(!list.length)return null;
  let show=list.slice(0,4);
  return h('div',{class:'dk-sec nt-insp'},h('h3',null,'Notes · '+list.length+(live.length&&live.length<list.length?' ('+live.length+' open)':'')),show.map(n=>card(n,{compact:true,discuss:true})),
   list.length>show.length?h('button',{class:'dk-more',type:'button',onclick:()=>showFor(item)},'Show all '+list.length+' in Notes'):null)}

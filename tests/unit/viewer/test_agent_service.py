@@ -1256,6 +1256,9 @@ class WebNotesTest(Base):
         store.create(
             dict(title="U5 max VIN 36 V", targets=[dict(kind="pad", ref="U5", pad="13")]),
             dict(kind="user"),
+            provenance=dict(
+                lane="x"
+            ),  # the dossier below asks about lane x; an unscoped note would not show there
         )
         A.max_context = 3000
         d = A.dossier(

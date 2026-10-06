@@ -130,7 +130,7 @@ class StoreTest(Base):
         j = json.loads((self.dir / "notes/notes.json").read_text())
         self.assertEqual(
             (j["schema"], j["rev"], [n["id"] for n in j["notes"]]),
-            ("yapnr-notes-v1", 7, ["N-0001", "N-0002", "N-0004"]),
+            ("yapnr-notes-v2", 7, ["N-0001", "N-0002", "N-0004"]),
         )
         md = (self.dir / "notes/design-notes.md").read_text()
         for needle in (
@@ -369,6 +369,144 @@ class StoreTest(Base):
         self.assertEqual([n["id"] for n in s.find(ref="C17")], ["N-0001"])
         self.assertEqual([n["id"] for n in s.find(author="user")], ["N-0002"])
         self.assertEqual(len(s.find(status="open", limit=1)), 1)
+
+    def test_scope_and_migration(self):
+        """Annotation scoping (the cross-experiment leak fix) and the derived-scope "migration":
+        a note's scope comes from provenance.lane / its own "global" field, computed fresh from
+        whatever is in notes.jsonl -- including lines written before "scope" or "global" existed,
+        with nothing lost or rewritten."""
+        s = self.store()
+        # Two lanes ("experiments") both place a C17: a note recorded while looking at one must
+        # not show up as relevant when the agent (or the board) is looking at the other.
+        a = s.create(
+            dict(
+                title="C17 too close to U5 on this candidate",
+                targets=[dict(kind="component", ref="C17")],
+            ),
+            USER,
+            provenance=dict(lane="r05/c02"),
+        )
+        b = s.create(
+            dict(title="C17 fine here", targets=[dict(kind="component", ref="C17")]),
+            USER,
+            provenance=dict(lane="r05/c07"),
+        )
+        self.assertEqual(a["scope"], dict(kind="lane", lane="r05/c02"))
+        self.assertEqual(b["scope"], dict(kind="lane", lane="r05/c07"))
+        hits_a = dict(
+            (n["id"], w) for n, w in s.relevant([dict(kind="component", ref="C17")], "r05/c02")[0]
+        )
+        hits_b = dict(
+            (n["id"], w) for n, w in s.relevant([dict(kind="component", ref="C17")], "r05/c07")[0]
+        )
+        self.assertEqual(set(hits_a), {a["id"]})  # b's note about the same refdes does not leak in
+        self.assertEqual(set(hits_b), {b["id"]})
+        # a net target is not instance-specific: it is never scope-filtered even with a lane given
+        s.create(dict(title="rail note", targets=[dict(kind="net", name="p5v-hv")]), USER)
+        hits_any_lane = dict(
+            (n["id"], w)
+            for n, w in s.relevant([dict(kind="pad", ref="C17", pad="1")], "r05/c99")[0]
+        )
+        self.assertIn(
+            "N-0003", hits_any_lane
+        )  # the net hit, from a lane with no C17 note of its own
+        self.assertNotIn(a["id"], hits_any_lane)  # but not the other lanes' component notes
+        # no lane recorded at all: unscoped, never leaked onto any board, listed separately instead
+        c = s.create(
+            dict(title="predates lane tracking", targets=[dict(kind="component", ref="C99")]), USER
+        )
+        self.assertEqual(c["scope"], dict(kind="unscoped"))
+        self.assertNotIn(
+            c["id"],
+            dict(
+                (n["id"], w)
+                for n, w in s.relevant([dict(kind="component", ref="C99")], "r05/c02")[0]
+            ),
+        )
+        # explicit opt-in: shown in every experiment regardless of lane
+        d = s.create(
+            dict(
+                title="always relevant",
+                targets=[dict(kind="component", ref="C5")],
+                **{"global": True},
+            ),
+            USER,
+        )
+        self.assertEqual(d["scope"], dict(kind="global"))
+        for lane in ("r05/c02", "anything/else"):
+            self.assertIn(
+                d["id"],
+                dict(
+                    (n["id"], w) for n, w in s.relevant([dict(kind="component", ref="C5")], lane)[0]
+                ),
+            )
+        # the agent cannot set it (same authority as status): only a user decides visibility scope
+        self.assertRaises(
+            ValueError,
+            s.create,
+            dict(title="x", **{"global": True}),
+            AGENT,
+        )
+        self.assertRaises(ValueError, s.update, d["id"], {"global": "yes"}, USER)  # must be a bool
+        e = s.update(d["id"], {"global": False}, USER)
+        self.assertEqual(
+            e["scope"]["kind"], "lane" if e.get("provenance", {}).get("lane") else "unscoped"
+        )
+
+    def test_scope_survives_old_log_lines(self):
+        """notes.jsonl written before "scope"/"global" existed: every create/update line already
+        looks exactly like this (no new keys), so replaying it with the upgraded store classifies
+        every old note correctly without a migration step rewriting the log."""
+        d = self.dir / "notes"
+        d.mkdir()
+        lines = [
+            dict(
+                rev=1,
+                op="create",
+                id="N-0001",
+                ts=notes_store.now(),
+                actor=USER,
+                fields=dict(
+                    title="old lane note",
+                    status="open",
+                    kind="observation",
+                    author="user",
+                    body="",
+                    targets=[dict(kind="component", ref="C3")],
+                    tags=[],
+                    sources=[],
+                    provenance=dict(lane="legacy/run1"),
+                    comments=[],
+                    links=[],
+                ),
+            ),
+            dict(
+                rev=2,
+                op="create",
+                id="N-0002",
+                ts=notes_store.now(),
+                actor=USER,
+                fields=dict(
+                    title="old note, no lane recorded",
+                    status="open",
+                    kind="observation",
+                    author="user",
+                    body="",
+                    targets=[dict(kind="component", ref="C4")],
+                    tags=[],
+                    sources=[],
+                    provenance={},
+                    comments=[],
+                    links=[],
+                ),
+            ),
+        ]
+        (d / "notes.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+        s = NotesStore(d, resolver=INDEX)
+        all_notes = {n["id"]: n for n in s.all()}
+        self.assertEqual(all_notes["N-0001"]["scope"], dict(kind="lane", lane="legacy/run1"))
+        self.assertEqual(all_notes["N-0002"]["scope"], dict(kind="unscoped"))
+        self.assertEqual(len(all_notes), 2)  # nothing lost
 
     def test_shared_directory_concurrency_and_crash(self):
         s1 = self.store()

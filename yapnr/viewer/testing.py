@@ -6,11 +6,18 @@ test folders hold only ``test_*.py`` files.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 import os
+import re
 import shlex
+import struct
 import subprocess
 import sys
+import threading
 import time
+import urllib.request
 from pathlib import Path
 from typing import Optional, Sequence, Tuple
 
@@ -50,6 +57,28 @@ def fixture_copy(*parts: str) -> Path:
     dest = tmp / src.name
     shutil.copytree(src, dest, symlinks=False)
     return dest
+
+
+def viewer_dist_dir() -> Path:
+    """What to pass as ``--dist``: the assembled ``//yapnr/viewer:dist`` if a test declared it in
+    `data` (elkjs/three.js included, from Bazel runfiles), else the bare `static/` source
+    directory (works too -- the schematic layout and 3D view just report their library missing,
+    same as docs/viewer.md describes for a plain checkout). Works under `bazel test` and under a
+    plain `python3 -m unittest` from the checkout, like fixture() above."""
+    roots = []
+    srcdir = os.environ.get("TEST_SRCDIR")
+    if srcdir:
+        roots.append(Path(srcdir) / os.environ.get("TEST_WORKSPACE", "_main"))
+    roots.append(Path(__file__).parent.parent.parent)
+    for root in roots:
+        p = root / "yapnr/viewer/dist"
+        if p.is_dir():
+            return p.absolute()
+    for root in roots:
+        p = root / "yapnr/viewer/static"
+        if p.is_dir():
+            return p.absolute()
+    raise FileNotFoundError("neither yapnr/viewer/dist nor yapnr/viewer/static found")
 
 
 def child_env(**extra: str) -> dict:
@@ -135,3 +164,294 @@ def wait_for(fn, timeout: float = 20, step: float = 0.05):
 
 def argv_value(argv: Sequence[str], flag: str) -> str:
     return argv[list(argv).index(flag) + 1]
+
+
+# ---------------------------------------------------------------------- headless Chrome / CDP
+# A minimal, stdlib-only Chrome DevTools Protocol client: tests/e2e/viewer drives a real headless
+# Chrome (touch emulation, Input.dispatchTouchEvent, screenshots) and there is no CDP/WebSocket
+# client in the pypi lock, so this does the WebSocket opening handshake and frame (de)masking by
+# hand. Good enough for a test driver, nothing more: text frames only, one in-flight call per id,
+# a background thread demuxing unsolicited events from call replies.
+
+CHROME_PATHS = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+)
+
+
+def chrome_binary() -> Optional[Path]:
+    """The headless Chrome/Chromium to drive, or None (YAPNR_CHROME, else PATH, else the usual
+    install locations). Tests skip (never fail) when this is None: Chrome is a local convenience
+    for tests/e2e/viewer, not something CI is guaranteed to have."""
+    import shutil
+
+    env = os.environ.get("YAPNR_CHROME")
+    if env:
+        p = Path(env).expanduser()
+        return p if p.exists() else None
+    for name in ("google-chrome", "chromium", "chromium-browser"):
+        found = shutil.which(name)
+        if found:
+            return Path(found)
+    for p in CHROME_PATHS:
+        if Path(p).exists():
+            return Path(p)
+    return None
+
+
+class CDPError(RuntimeError):
+    pass
+
+
+class _WS:
+    """One ws:// connection: the RFC 6455 client handshake, then masked text frames."""
+
+    def __init__(self, url: str, timeout: float = 20):
+        import socket
+
+        assert url.startswith("ws://"), url
+        rest = url[len("ws://") :]
+        host_port, _, path = rest.partition("/")
+        path = "/" + path
+        host, _, port = host_port.partition(":")
+        port = int(port or 80)
+        self.sock = socket.create_connection((host, port), timeout=timeout)
+        self.sock.settimeout(timeout)
+        key = base64.b64encode(os.urandom(16)).decode()
+        req = (
+            f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n"
+            f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        )
+        self.sock.sendall(req.encode())
+        resp = b""
+        while b"\r\n\r\n" not in resp:
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise CDPError("socket closed during the WebSocket handshake")
+            resp += chunk
+        head, _, rest = resp.partition(b"\r\n\r\n")
+        if b"101" not in head.split(b"\r\n", 1)[0]:
+            raise CDPError("WebSocket handshake failed: " + head.decode(errors="replace"))
+        accept = base64.b64encode(
+            hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()
+        ).decode()
+        if accept.encode() not in head:
+            raise CDPError("bad Sec-WebSocket-Accept")
+        self._buf = bytearray(rest)
+
+    def _recv_exact(self, n: int) -> bytes:
+        while len(self._buf) < n:
+            chunk = self.sock.recv(max(4096, n))
+            if not chunk:
+                raise CDPError("websocket closed")
+            self._buf += chunk
+        out = bytes(self._buf[:n])
+        del self._buf[:n]
+        return out
+
+    def send_text(self, text: str):
+        payload = text.encode()
+        mask = os.urandom(4)
+        masked = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+        n = len(payload)
+        if n < 126:
+            header = struct.pack("!BB", 0x81, 0x80 | n)
+        elif n < (1 << 16):
+            header = struct.pack("!BBH", 0x81, 0x80 | 126, n)
+        else:
+            header = struct.pack("!BBQ", 0x81, 0x80 | 127, n)
+        self.sock.sendall(header + mask + masked)
+
+    def recv_text(self) -> str:
+        parts = []
+        while True:
+            b0, b1 = self._recv_exact(2)
+            fin, opcode, masked, ln = b0 & 0x80, b0 & 0x0F, b1 & 0x80, b1 & 0x7F
+            if ln == 126:
+                (ln,) = struct.unpack("!H", self._recv_exact(2))
+            elif ln == 127:
+                (ln,) = struct.unpack("!Q", self._recv_exact(8))
+            mask = self._recv_exact(4) if masked else None
+            data = self._recv_exact(ln)
+            if mask:
+                data = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+            if opcode == 0x9:  # ping -> pong (same payload)
+                n = len(data)
+                pmask = os.urandom(4)
+                self.sock.sendall(
+                    struct.pack("!BB", 0x8A, 0x80 | n)
+                    + pmask
+                    + bytes(b ^ pmask[i % 4] for i, b in enumerate(data))
+                )
+                continue
+            if opcode == 0x8:
+                raise CDPError("websocket closed by peer")
+            parts.append(data)
+            if fin:
+                break
+        return b"".join(parts).decode()
+
+    def close(self):
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+class CDP:
+    """One CDP target (the browser endpoint, or one page's own): call() sends {id,method,params}
+    and blocks for the matching {id,result|error}; wait_event() scans unsolicited {method,params}
+    notifications a background reader thread appends as they arrive."""
+
+    def __init__(self, ws_url: str, timeout: float = 20):
+        self.ws = _WS(ws_url, timeout=timeout)
+        self.timeout = timeout
+        self._id = 0
+        self._lock = threading.Lock()
+        self._pending = {}
+        self._events = []
+        self._ev_lock = threading.Lock()
+        self._stop = False
+        self._thread = threading.Thread(target=self._reader, daemon=True)
+        self._thread.start()
+
+    def _reader(self):
+        try:
+            while not self._stop:
+                obj = json.loads(self.ws.recv_text())
+                if "id" in obj:
+                    with self._lock:
+                        box = self._pending.pop(obj["id"], None)
+                    if box is not None:
+                        box[1] = obj
+                        box[0].set()
+                else:
+                    with self._ev_lock:
+                        self._events.append(obj)
+        except Exception as e:  # the socket died or close() ran: wake up anyone still waiting
+            with self._lock:
+                for box in self._pending.values():
+                    box[1] = {"error": {"message": str(e)}}
+                    box[0].set()
+
+    def call(self, method: str, params=None, session_id=None, timeout=None):
+        with self._lock:
+            self._id += 1
+            mid = self._id
+            done = threading.Event()
+            box = [done, None]
+            self._pending[mid] = box
+        msg = {"id": mid, "method": method, "params": params or {}}
+        if session_id:
+            msg["sessionId"] = session_id
+        self.ws.send_text(json.dumps(msg))
+        if not done.wait(timeout or self.timeout):
+            with self._lock:
+                self._pending.pop(mid, None)
+            raise CDPError(f"timed out waiting for {method}")
+        resp = box[1]
+        if "error" in resp:
+            raise CDPError(f"{method}: {resp['error']}")
+        return resp.get("result", {})
+
+    def wait_event(self, method: str, predicate=None, timeout: float = 10):
+        end = time.monotonic() + timeout
+        seen = 0
+        while time.monotonic() < end:
+            with self._ev_lock:
+                new, seen = self._events[seen:], len(self._events)
+            for e in new:
+                if e.get("method") == method and (
+                    predicate is None or predicate(e.get("params", {}))
+                ):
+                    return e.get("params", {})
+            time.sleep(0.02)
+        raise CDPError(f"timed out waiting for event {method}")
+
+    def eval(self, expression: str, timeout: float = 20):
+        """Runtime.evaluate, awaited, returned by value (a JS error becomes a CDPError)."""
+        r = self.call(
+            "Runtime.evaluate",
+            {"expression": expression, "returnByValue": True, "awaitPromise": True},
+            timeout=timeout,
+        )
+        if r.get("exceptionDetails"):
+            raise CDPError(r["exceptionDetails"].get("text") or str(r["exceptionDetails"]))
+        return r.get("result", {}).get("value")
+
+    def close(self):
+        self._stop = True
+        self.ws.close()
+
+
+def http_json(url: str, timeout: float = 10):
+    with urllib.request.urlopen(url, timeout=timeout) as r:
+        return json.loads(r.read().decode())
+
+
+def start_chrome(
+    user_data_dir: os.PathLike, extra_args: Sequence[str] = ()
+) -> Tuple[subprocess.Popen, str]:
+    """A headless Chrome with an isolated profile; (process, its http://127.0.0.1:<port>/json base
+    URL). Finds its own free port (``--remote-debugging-port=0``, parsed off stderr) rather than
+    one this caller picked, so it never collides with another viewer or test on the machine."""
+    binary = chrome_binary()
+    if binary is None:
+        raise RuntimeError("no Chrome/Chromium found (see chrome_binary())")
+    proc = subprocess.Popen(
+        [
+            str(binary),
+            "--headless=new",
+            "--remote-debugging-port=0",
+            "--no-sandbox",
+            "--disable-gpu",
+            "--disable-extensions",
+            "--disable-component-extensions-with-background-pages",
+            "--disable-sync",
+            "--disable-background-networking",
+            "--no-first-run",
+            "--no-default-browser-check",
+            f"--user-data-dir={user_data_dir}",
+            *extra_args,
+            "about:blank",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    end = time.monotonic() + 15
+    port = None
+    buf = ""
+    while time.monotonic() < end:
+        line = proc.stderr.readline()
+        if not line:
+            if proc.poll() is not None:
+                raise RuntimeError(f"chrome exited early (code {proc.returncode}): {buf[-2000:]}")
+            continue
+        buf += line
+        m = re.search(r"DevTools listening on ws://127\.0\.0\.1:(\d+)/", line)
+        if m:
+            port = int(m.group(1))
+            break
+    if port is None:
+        proc.kill()
+        raise RuntimeError(f"chrome never printed its DevTools port: {buf[-2000:]}")
+    return proc, f"http://127.0.0.1:{port}"
+
+
+def new_chrome_page(base_url: str, timeout: float = 20) -> CDP:
+    """A CDP session on the about:blank page/tab a start_chrome() browser already opened (its own
+    WebSocket, simpler than multiplexing everything through the browser-level socket). start_chrome
+    always launches with that one URL, so /json/list already has it -- no need for /json/new
+    (a POST-only endpoint in current Chrome; GET answers 405)."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        targets = http_json(f"{base_url}/json/list", timeout=timeout)
+        pages = [t for t in targets if t.get("type") == "page"]
+        if pages:
+            return CDP(pages[0]["webSocketDebuggerUrl"], timeout=timeout)
+        time.sleep(0.1)
+    raise CDPError("chrome never exposed a page target on /json/list")

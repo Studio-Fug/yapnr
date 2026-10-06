@@ -130,4 +130,5 @@ produced under the DRU's 3 mm, so nothing changes for them.
 
 ## Commits
 
-- Content commit: `CONTENT_SHA` (this README is updated in the following commit).
+- Content commit: `56d1d37a2fec650659dfb62020170b3fba92f2c6`
+  (this README is updated in the following commit).

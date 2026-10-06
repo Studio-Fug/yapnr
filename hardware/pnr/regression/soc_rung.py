@@ -8,10 +8,13 @@ terminations, MDI terminations, its own crystal and a magnetics header, USB full
 (Micro-B with an ESD array) and a microSD socket on SDMMC1. Four supply domains: the
 USB 5 V input, a buck to 3.3 V (TLV62569) that owns the supply plane, and two LDOs
 (AP2112K-3.3) for the MCU's analog supply (VDDA, VREF+) and the PHY's analog supply,
-both routed on signal layers (only the main rail gets a plane: the owner's rule for
-the ``-rails`` rung). Six layers (S G S G P S), the BGA fanout of ``11-ufbga201-fanout``
-(interstitial 0.35/0.15 mm plane drops: an HDI-capable profile's drill), its
-fine-pitch fab rules, and per-domain decoupling.
+both routed on signal layers: the whole supply plane goes to the main rail, as a layout
+engineer would allocate it. Six layers (S G S G P S), the BGA fanout of
+``11-ufbga201-fanout`` (interstitial 0.35/0.15 mm plane drops: an HDI-capable profile's
+drill), its fine-pitch fab rules, and per-domain decoupling. The MCU, the SDRAM, the USB
+receptacle, the magnetics header and the holes are fixed; three connectors are locked to
+their edges; hard proximity groups (``SOC_GROUPS``) keep each part's support parts beside
+it (decoupling, crystals, terminations, the regulators' capacitors).
 
 Pin maps: the MCU's balls are KiCad 10's ``MCU_ST_STM32F7:STM32F746IGKx`` symbol (ST
 DS10916, table 10); the alternate functions picked are the ones that symbol lists for
@@ -147,6 +150,43 @@ SIGNALS = {**FMC, **QSPI, **RMII, **OTHER}
 # (PD0, PD1) leave from the north-east corner, as on the reference board.
 LANE = ["FMC_D%d" % i for i in range(8, 16)]
 LANE_TOLERANCE_MM = 1.0
+
+# The designer's placement intent, as hard proximity groups (name, anchor, anchor pad or
+# None for the anchor's origin, members, radius in mm, origin to origin): each part's
+# support parts beside it, as a layout engineer would ask of a placer.
+SOC_GROUPS = [
+    # Every MCU decoupling capacitor, the bulk capacitor and the BOOT0 resistor around the
+    # array (its courtyard alone reaches 6 mm from its centre).
+    ("mcu-decoupling", "U1", None, ["C%d" % i for i in range(1, 23)] + ["R1"], 12.0),
+    # The HSE crystal and its load capacitors at the oscillator balls (G1 OSC_IN, west edge).
+    ("hse", "U1", "G1", ["Y1", "C23", "C24"], 7.0),
+    # The MCU-driven RMII series terminations at the MCU.
+    ("rmii-mcu-series", "U1", None, ["R11", "R12", "R13"], 12.0),
+    # The SDRAM's decoupling along its body (22.2 mm long).
+    ("sdram-decoupling", "U2", None, ["C%d" % i for i in range(25, 33)], 14.0),
+    ("flash", "U3", None, ["C33", "R3"], 6.0),
+    # The PHY's crystal, decoupling, bias, pull-ups, PHY-driven series terminations, MDI
+    # terminations and link LEDs around it.
+    (
+        "phy",
+        "U4",
+        None,
+        ["Y2"]
+        + ["C%d" % i for i in range(34, 43)]
+        + ["R%d" % i for i in range(4, 11)]
+        + ["R%d" % i for i in range(14, 20)]
+        + ["D1", "D2"],
+        10.0,
+    ),
+    # The PHY near the magnetics header (its MDI pairs stay short).
+    ("phy-magnetics", "J2", None, ["U4"], 16.0),
+    ("usb", "J1", None, ["U8", "F1", "C43"], 10.0),
+    ("buck", "U5", None, ["L1", "C44", "C45", "C46", "R20", "R21"], 7.0),
+    ("ldo-analog", "U6", None, ["C47", "C48"], 4.0),
+    ("ldo-phy", "U7", None, ["C49", "C50"], 4.0),
+    # The card's pull-ups and decoupling beside the socket (17.7 mm long).
+    ("sd", "J3", None, ["R%d" % i for i in range(22, 27)] + ["C51", "C52"], 14.0),
+]
 
 SOC_SIZE = (70, 50)
 SOC_HOLES = {"H1": [3.0, 3.0], "H2": [67.0, 3.0], "H3": [3.0, 47.0], "H4": [67.0, 47.0]}
@@ -500,6 +540,12 @@ def soc_bga():
         "J4": dict(edge="north", hard=True, tolerance_mm=1.0),
         "J5": dict(edge="south", hard=True, tolerance_mm=1.0),
     }
+    cons["group"] = []
+    for _name, anchor, pad, members, radius in SOC_GROUPS:
+        group = dict(members=list(members), anchor=anchor, hard=True, radius_mm=radius)
+        if pad is not None:
+            group["anchor_pad"] = pad
+        cons["group"].append(group)
     cons["diff_pair"] = [
         dict(name="usb", p="USB_DP", n="USB_DN", width_mm=0.15, gap_mm=0.15, skew_mm=1.0),
         dict(name="eth_tx", p="ETH_TXP", n="ETH_TXN", width_mm=0.15, gap_mm=0.15, skew_mm=1.0),
@@ -533,6 +579,18 @@ def soc_bga():
         )
         for ref, r in sorted(cons["edge_align"].items())
     ]
+    for name, anchor, pad, members, radius in SOC_GROUPS:
+        check = dict(
+            id="near-" + name,
+            kind="proximity",
+            anchor=anchor,
+            refs=list(members),
+            max_mm=radius,
+            engine="group",
+        )
+        if pad is not None:
+            check["anchor_pad"] = pad
+        spec["checks"].append(check)
     spec["checks"] += [
         dict(
             id="fanout-plane-vias",

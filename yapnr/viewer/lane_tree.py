@@ -39,7 +39,17 @@ def _natural_key(segment: str):
     return [int(p) if p.isdigit() else p for p in parts]
 
 
-_STATE_PRIORITY = {"failed": 0, "running": 1, "queued": 2, "done": 3}
+# The full set of states yapnr.viewer.progress.classify can return, listed once here so a new
+# state only needs adding in this one place (plus the matching bucket in COUNT_STATES below).
+STATES = ("running", "stalled", "failed", "rejected", "queued", "done")
+
+# Lower number wins when picking a group's `best_leaf` (the "select this group, show one board"
+# representative): prefer whatever is still actively happening (running, then stalled) over a
+# terminal outcome, and among terminal outcomes prefer the one most worth a user's attention
+# (failed, then rejected, then queued, then done last). Deliberately *not* "failed first" -- a
+# single failed leaf in an otherwise-healthy, still-running group must not steal the group's
+# selection away from the work actually in progress.
+_STATE_PRIORITY = {state: i for i, state in enumerate(STATES)}
 
 
 def _new_node(node_id: str, name: str) -> dict:
@@ -57,15 +67,17 @@ def build_tree(lanes: dict) -> dict:
     - ``children``: ``{segment: node}``, already in display order (see ``order``).
     - ``order``: ``children``'s keys, in the order a browser should render them (natural sort,
       with the standalone id if any renders first before its own children).
-    - ``counts``: leaf-descendant counts by :mod:`yapnr.viewer.progress` state (``queued``,
-      ``running``, ``done``, ``failed``) plus ``total``; a leaf counts itself.
+    - ``counts``: leaf-descendant counts by :mod:`yapnr.viewer.progress` state (one key per
+      :data:`STATES` -- ``running``, ``stalled``, ``failed``, ``rejected``, ``queued``, ``done``)
+      plus ``total``; a leaf counts itself.
     - ``fraction``: the aggregate progress bar fill for this node, 0..1 -- the mean of every
       descendant leaf's own fraction (a group with 3 lanes done and 1 lane 50% routed reads as
       0.875, not just "3 of 4 done").
     - ``best_leaf``: a representative descendant lane id for "select this group, show one board":
-      the first *running* leaf in display order, else the first leaf at all; ``None`` for an
-      otherwise-empty group (should not happen for a node reachable from the root, but a defensive
-      default costs nothing).
+      the first leaf still actively running (or stalled) in display order, else the first leaf at
+      all in :data:`STATES` priority order (failed, then rejected, then queued, then done last);
+      ``None`` for an otherwise-empty group (should not happen for a node reachable from the root,
+      but a defensive default costs nothing).
     """
     root = _new_node("", "")
     for lane_id in lanes:
@@ -97,33 +109,41 @@ def _annotate(node: dict, lanes: dict) -> None:
     """Fill in ``counts``/``fraction``/``best_leaf`` for ``node`` from its already-annotated
     children plus its own lane (if it is also a leaf); post-order, so a node's aggregate always
     reflects its whole subtree."""
-    counts = {"queued": 0, "running": 0, "done": 0, "failed": 0, "total": 0}
+    counts = {state: 0 for state in STATES}
+    counts["total"] = 0
     fraction_sum = 0.0
     best: Optional[str] = None
     best_rank = None
 
     def consider(lane_id: str, state: str, fraction: float):
         nonlocal fraction_sum, best, best_rank
-        counts[state] += 1
+        counts[state] = counts.get(state, 0) + 1
         counts["total"] += 1
         fraction_sum += fraction
-        rank = _STATE_PRIORITY.get(state, 1)
+        rank = _STATE_PRIORITY.get(state, 0)
         if best is None or rank < best_rank:
             best, best_rank = lane_id, rank
 
     if node["lane_id"] is not None:
         lane = lanes.get(node["lane_id"], {})
-        classified = classify_lane(lane)
+        # Use the lane's own already-computed classification (yapnr.viewer.server annotates every
+        # lane with `progress` before building the tree, each poll) when there is one, rather than
+        # recomputing classify_lane here: recomputing would feed the lane's *current* `progress`
+        # back into classify() as its own held-over state (apply_event/annotate already moved
+        # `lane["progress"]` forward to "now" by the time build_tree runs), double-applying the
+        # round/lap-compounding carry-over every poll. Tests that build lane dicts directly
+        # (without a running server) fall back to computing it fresh.
+        classified = lane.get("progress") or classify_lane(lane)
         consider(node["lane_id"], classified["state"], classified["fraction"])
 
     for seg in node["order"]:
         child = node["children"][seg]
-        for state in ("queued", "running", "done", "failed"):
+        for state in STATES:
             counts[state] += child["counts"][state]
         counts["total"] += child["counts"]["total"]
         fraction_sum += child["fraction"] * child["counts"]["total"]
         if child["best_leaf"] is not None:
-            rank = _STATE_PRIORITY.get(_leaf_state(child), 1)
+            rank = _STATE_PRIORITY.get(_leaf_state(child), 0)
             if best is None or rank < best_rank:
                 best, best_rank = child["best_leaf"], rank
 
@@ -134,9 +154,10 @@ def _annotate(node: dict, lanes: dict) -> None:
 
 def _leaf_state(node: dict) -> str:
     """The state of ``node["best_leaf"]`` purely from the counts already folded into ``node``
-    (cheapest non-``running`` state present, else ``running``), used only to rank a child
-    subtree's representative leaf against its siblings without re-walking it."""
-    for state in ("failed", "running", "queued", "done"):
+    (the highest-priority non-zero bucket present -- see :data:`STATES`/``_STATE_PRIORITY`` --
+    else ``running``), used only to rank a child subtree's representative leaf against its
+    siblings without re-walking it."""
+    for state in STATES:
         if node["counts"][state]:
             return state
     return "running"

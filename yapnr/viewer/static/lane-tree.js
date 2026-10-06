@@ -19,7 +19,8 @@ const store={
  get(k,d){try{let v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},
 };
-let run=null,expandOverride={},filterText='',filterStates=new Set(['queued','running','done','failed']);
+const ALL_STATES=['queued','running','stalled','done','failed','rejected'];
+let run=null,expandOverride={},filterText='',filterStates=new Set(ALL_STATES);
 function expandKey(){return 'yapnr-tree-expand-v1:'+(run||'')}
 function loadExpand(){expandOverride=store.get(expandKey(),{})}
 function saveExpand(){store.set(expandKey(),expandOverride)}
@@ -50,7 +51,7 @@ function matches(node){
  }
  return true;
 }
-function anyFiltering(){return !!filterText||filterStates.size<4}
+function anyFiltering(){return !!filterText||filterStates.size<ALL_STATES.length}
 
 // ------------------------------------------------------------------ rows (flat, visible-order)
 // Walks the tree once per render into a flat array of {node, depth, lane, visible, forceOpen,
@@ -83,14 +84,16 @@ function flatten(tree, lanes){
 }
 
 // ------------------------------------------------------------------ progress bar + status text
-const STATE_COLOR={queued:'#53636d',running:'#f3c875',done:'#9ee6d1',failed:'#ed6d70'};
+const STATE_COLOR={queued:'#53636d',running:'#f3c875',stalled:'#c98a3e',done:'#9ee6d1',failed:'#ed6d70',rejected:'#8da9b6'};
+// Priority order for "what is this group's overall state": prefer whatever's still actively
+// happening (running, then stalled) over a terminal outcome, mirroring lane_tree.py's
+// _STATE_PRIORITY -- a single failed/rejected leaf in an otherwise-running group must not read
+// as the group being "failed".
+const STATE_PRIORITY=['running','stalled','failed','rejected','queued','done'];
 function dominantState(node){
  let c=node.counts;
- if(c.failed)return 'failed';
- if(c.running)return 'running';
- if(c.queued&&!c.done)return 'queued';
- if(c.done===c.total&&c.total>0)return 'done';
- return c.running||c.queued?'running':'done';
+ for(let s of STATE_PRIORITY)if(c[s])return s;
+ return 'running';
 }
 function bar(fraction,color,title){
  let wrap=document.createElement('div');wrap.className='tr-bar';wrap.title=title;
@@ -102,7 +105,7 @@ function bar(fraction,color,title){
 function countBadge(counts){return `${counts.done}/${counts.total}`}
 function countDetail(counts){
  let bits=[];
- for(let s of ['running','failed','queued'])if(counts[s])bits.push(counts[s]+' '+s);
+ for(let s of ['running','stalled','failed','rejected','queued'])if(counts[s])bits.push(counts[s]+' '+s);
  return `${counts.done} of ${counts.total} done`+(bits.length?' · '+bits.join(', '):'');
 }
 
@@ -163,12 +166,20 @@ function spacer(){let s=document.createElement('span');s.className='tr-twirl tr-
 function renderBody(){
  let s=display&&display();
  let tree=s?.tree,lanes=s?.lanes||{};
+ // Live polling rebuilds every row on every update (buildRow makes new DOM nodes each time), so
+ // replaceChildren() below always detaches whatever was focused and the browser falls back to
+ // focusing <body> -- breaking arrow-key navigation mid-stream. Find the same node again by id
+ // (its *position* in `rows` can shift as lanes come and go) and refocus it if it had focus.
+ let hadFocus=!!(document.activeElement&&body.contains(document.activeElement));
+ let focusedId=rows[focusIndex]?.node.id;
  if(!tree){body.textContent='Waiting for experiment events…';rows=[];return}
  rows=flatten(tree,lanes);
- if(!rows.length){body.textContent=filterText||filterStates.size<4?'No lanes match this filter.':'No experiments yet.';return}
+ if(!rows.length){body.textContent=filterText||filterStates.size<ALL_STATES.length?'No lanes match this filter.':'No experiments yet.';return}
+ if(focusedId){let idx=rows.findIndex(r=>r.node.id===focusedId);if(idx>=0)focusIndex=idx}
  if(focusIndex<0||focusIndex>=rows.length)focusIndex=rows.findIndex(r=>r.node.lane_id===laneId);
  if(focusIndex<0)focusIndex=0;
  body.replaceChildren(...rows.map((r,i)=>buildRow(r,i)));
+ if(hadFocus)document.getElementById('tr-row-'+focusIndex)?.focus();
 }
 
 function activate(i){
@@ -211,11 +222,11 @@ function buildToolbar(){
  search.setAttribute('aria-label','Filter experiments by name');
  search.oninput=()=>{filterText=search.value.trim().toLowerCase();renderBody()};
  let chipWrap=document.createElement('div');chipWrap.className='tr-chips';
- for(let s of ['running','failed','done','queued']){
+ for(let s of ALL_STATES){
   let b=document.createElement('button');b.type='button';b.className='tr-chip tr-chip-'+s;
   b.textContent=s;b.setAttribute('aria-pressed','true');
   b.onclick=()=>{filterStates.has(s)?filterStates.delete(s):filterStates.add(s);
-   if(!filterStates.size)filterStates=new Set(['queued','running','done','failed']);
+   if(!filterStates.size)filterStates=new Set(ALL_STATES);
    b.setAttribute('aria-pressed',String(filterStates.has(s)));renderBody()};
   chips[s]=b;chipWrap.append(b);
  }

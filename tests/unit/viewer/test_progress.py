@@ -86,9 +86,60 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(failed["state"], "failed")
         self.assertEqual(failed["fraction"], running["fraction"])
 
-    def test_rejected_iteration_is_failed_state(self):
+    def test_rejected_iteration_is_its_own_state_not_failed(self):
+        # A rejected Monte Carlo candidate (halving/beam-search discarding a losing branch) is a
+        # normal search outcome, not a failure -- it must not be painted the same red "failed".
         c = classify(dict(id="a", status="rejected", kind="iteration_complete", phase="result"))
-        self.assertEqual(c["state"], "failed")
+        self.assertEqual(c["state"], "rejected")
+        self.assertNotEqual(c["state"], "failed")
+
+    def test_stalled_lane_reads_stalled_not_running_when_idle_past_the_threshold(self):
+        from yapnr.viewer.progress import STALE_SECONDS
+
+        lane = dict(id="a", status="start", kind="candidate_start", phase="routed", time=1000.0)
+        fresh = classify(lane, now=1000.0 + STALE_SECONDS - 1)
+        stale = classify(lane, now=1000.0 + STALE_SECONDS + 1)
+        self.assertEqual(fresh["state"], "running")
+        self.assertEqual(stale["state"], "stalled")
+        # Phase/fraction are unaffected -- only the state changes.
+        self.assertEqual(stale["phase_key"], fresh["phase_key"])
+
+    def test_route_result_kind_with_no_phase_classifies_as_route_not_check(self):
+        # A route_result event with no phase string falls back to classifying `kind`, and the
+        # literal string "route_result" contains "result" as a substring -- it must not be
+        # misread as the generic check-family "result" keyword.
+        c = classify(dict(id="a", status="start", kind="route_result", phase=None))
+        self.assertEqual(c["phase_key"], "route")
+
+    def test_source_pr_round_phase_is_classifiable_not_waiting_for_placement(self):
+        c = classify(
+            dict(id="a", status=None, kind="source_round_start", phase="source P/R round 1")
+        )
+        self.assertIsNotNone(c["phase_key"])
+
+    def test_repeated_round_never_makes_the_bar_go_backwards(self):
+        # Round 1 reaches "check" (near the end of the pipeline); round 2 restarts at "generate".
+        # The lap-compounding model must keep the displayed fraction monotonically increasing.
+        round1_mid = classify(
+            dict(id="a", status=None, kind="candidate_start", phase="congestion", round=1)
+        )
+        round1_done = classify(
+            dict(id="a", status=None, kind="candidate_start", phase="drc", round=1),
+            held_over=round1_mid,
+        )
+        round2_start = classify(
+            dict(id="a", status=None, kind="candidate_start", phase="initial-placement", round=2),
+            held_over=round1_done,
+        )
+        self.assertGreaterEqual(round2_start["fraction"], round1_done["fraction"])
+        # And it should still be visibly less than fully done.
+        self.assertLess(round2_start["fraction"], 1.0)
+
+    def test_a_lane_that_never_repeats_rounds_is_unaffected_by_lap_compounding(self):
+        # No `round` field at all: behaves exactly like before this model was added.
+        c = classify(dict(id="a", status="start", kind="candidate_start", phase="global-placement"))
+        index = PHASE_KEYS.index("place")
+        self.assertAlmostEqual(c["fraction"], (index + 0.5) / len(PHASE_KEYS))
 
     def test_unknown_phase_string_does_not_crash_and_has_no_phase_key(self):
         c = classify(
@@ -158,8 +209,25 @@ class HumanizeTest(unittest.TestCase):
         self.assertEqual(humanize(lane), "Done: all connected, DRC clean, 12.4 s")
 
     def test_done_text_without_duration_data_omits_it(self):
-        lane = dict(status="complete", kind="candidate_complete", phase="result", violations=0)
+        lane = dict(
+            status="complete", kind="candidate_complete", phase="result", opens=0, violations=0
+        )
         self.assertEqual(humanize(lane), "Done: all connected, DRC clean")
+
+    def test_done_text_never_claims_all_connected_when_connections_are_missing(self):
+        # A finished lane that still has missing connections (opens > 0) must not read "all
+        # connected" just because it reached state "done".
+        lane = dict(
+            status="complete", kind="candidate_complete", phase="result", opens=2, violations=0
+        )
+        self.assertEqual(humanize(lane), "Done: 2 unconnected, DRC clean")
+
+    def test_done_text_never_claims_drc_clean_when_drc_never_ran(self):
+        # No `opens`/`violations` on the lane at all (a screening-only run that never extracted a
+        # board, so DRC never ran): must not claim "all connected, DRC clean" -- that is a real
+        # fact the telemetry does not have.
+        lane = dict(status="complete", kind="candidate_complete", phase="result")
+        self.assertEqual(humanize(lane), "Done: finished")
 
     def test_waiting_text_for_a_lane_with_no_phase_yet(self):
         lane = dict(status=None, kind="source_round_start", phase=None)

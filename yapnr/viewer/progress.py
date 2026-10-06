@@ -56,6 +56,13 @@ PHASE_INDEX = {key: i for i, key in enumerate(PHASE_KEYS)}
 # generic "placement" bucket a naive single-pass match might prefer. Collected from the engine's
 # own `phase=` call sites (hardware/pnr/pnr/{trace,provenance,native_loop,gloss,...}.py) and real
 # live-directory samples, not guessed; see docs/viewer.md for the full table and how to extend it.
+#
+# The route-family keywords are listed *before* the generic check-family ones (`result`,
+# `screening complete`, ...) on purpose: a ``route_result`` event with no fine-grained ``phase``
+# string falls back to classifying its ``kind``, and the literal string ``"route_result"``
+# contains both "route" and "result" as substrings. Checking "result" first would file every
+# such event under "check" instead of "route" -- a real bug this ordering fixes; see
+# ``test_route_result_kind_with_no_phase_classifies_as_route`` in test_progress.py.
 _KEYWORDS = (
     ("legal", "legalize"),
     ("detail", "detail"),
@@ -69,11 +76,10 @@ _KEYWORDS = (
     ("gloss", "gloss"),
     ("power-bank", "gloss"),
     ("transaction-via-cleanup", "gloss"),
-    ("congestion", "check"),
-    ("selection", "check"),
-    ("drc", "check"),
-    ("result", "check"),
-    ("screening complete", "check"),
+    # A feedback round (pnr.route.feedback) restarts the whole generate->check pipeline for one
+    # more pass; see the lap-compounding logic in `classify` for how its lane's bar still moves
+    # forward instead of visibly resetting to the start of the bar each round.
+    ("source p/r", "place"),
     ("native-refinement", "route"),
     ("native-phase", "route"),
     ("usb-pairs", "route"),
@@ -84,6 +90,11 @@ _KEYWORDS = (
     ("routed", "route"),
     ("routing", "route"),
     ("route", "route"),
+    ("congestion", "check"),
+    ("selection", "check"),
+    ("drc", "check"),
+    ("screening complete", "check"),
+    ("result", "check"),
 )
 
 
@@ -122,8 +133,14 @@ def _route_fraction(lane: dict) -> Optional[float]:
 # at either end: "in this phase" is known, "how far through it" is not.
 _PHASE_FRACTION_UNKNOWN = 0.5
 
+# A running lane that has not produced an event in this long is more useful described as stalled
+# than left reading whatever phase it last reported forever (a viewer restart, a dead worker, a
+# campaign that finished hours ago all look identical otherwise). 10 minutes: long enough that a
+# slow route/gloss pass on a big board does not false-positive, short enough to be useful.
+STALE_SECONDS = 600.0
 
-def classify(lane: dict, held_over: Optional[dict] = None) -> dict:
+
+def classify(lane: dict, held_over: Optional[dict] = None, now: Optional[float] = None) -> dict:
     """Where ``lane`` is on the canonical pipeline right now.
 
     Returns a dict: ``state`` (one of ``queued``/``running``/``done``/``failed``), ``phase_key``
@@ -134,9 +151,17 @@ def classify(lane: dict, held_over: Optional[dict] = None) -> dict:
     for a tooltip).
 
     ``held_over`` is the previous call's result for this same lane (``classify_lane`` passes the
-    lane's own last-stored ``progress``), used only so that an event with no phase information at
-    all (a bare ``worker_config_applied``, say) keeps the lane's last known phase instead of
-    reporting "generate" every time something unrelated updates it.
+    lane's own last-stored ``progress``), used so that an event with no phase information at all
+    (a bare ``worker_config_applied``, say) keeps the lane's last known phase instead of
+    reporting "generate" every time something unrelated updates it, and so a lane whose pipeline
+    restarts for another feedback round (``source_round`` incrementing) keeps its bar moving
+    forward -- see the lap-compounding block below -- instead of visibly dropping back toward
+    zero every round.
+
+    ``now`` is the current wall-clock time (``time.time()``); when given and ``lane["time"]`` (its
+    last event) is more than :data:`STALE_SECONDS` behind it, a lane that would otherwise read
+    ``running`` instead reads ``stalled`` -- a lane with no final event is not distinguishable
+    from a dead worker or a viewer restart otherwise.
     """
     status = lane.get("status")
     raw_phase = lane.get("phase")
@@ -150,13 +175,24 @@ def classify(lane: dict, held_over: Optional[dict] = None) -> dict:
             phase_fraction=0.0,
             fraction=0.0,
             raw_phase=raw_phase,
+            round=None,
+            round_floor=0.0,
+            idle_seconds=None,
         )
 
-    if status == "failed" or kind == "candidate_failed" or status == "rejected":
-        # A failed/rejected lane keeps whatever fraction it had reached -- "it got this far, then
-        # failed" is more informative than snapping the bar back to zero or forward to full.
+    if status == "failed" or kind == "candidate_failed":
+        # A failed lane keeps whatever fraction it had reached -- "it got this far, then failed"
+        # is more informative than snapping the bar back to zero or forward to full.
         prior = classify({**lane, "status": None, "kind": None}, held_over)
         return dict(prior, state="failed", raw_phase=raw_phase)
+
+    if status == "rejected":
+        # A rejected Monte Carlo candidate is a normal outcome of the search (halving/beam-search
+        # discarding a losing branch), not a failure -- it ran fine and was simply not kept. Same
+        # "keep the reached fraction" treatment as failed, but its own distinct state so the
+        # front end does not paint a normal search outcome red.
+        prior = classify({**lane, "status": None, "kind": None}, held_over)
+        return dict(prior, state="rejected", raw_phase=raw_phase)
 
     if status in ("complete", "accepted"):
         return dict(
@@ -166,21 +202,36 @@ def classify(lane: dict, held_over: Optional[dict] = None) -> dict:
             phase_fraction=1.0,
             fraction=1.0,
             raw_phase=raw_phase,
+            round=(held_over or {}).get("round"),
+            round_floor=1.0,
+            idle_seconds=None,
         )
 
     # Running (or not started but not explicitly queued either): find the phase.
     phase_key = _phase_key_for(raw_phase) or _phase_key_for(kind)
-    if phase_key is None and held_over and held_over.get("phase_key"):
+    held_over = held_over or {}
+    if phase_key is None and held_over.get("phase_key"):
         phase_key = held_over["phase_key"]  # an event this lane's phase bucket survives (fallback)
+
+    state = "running"
+    idle_seconds = None
+    if now is not None and isinstance(lane.get("time"), (int, float)):
+        idle_seconds = now - lane["time"]
+        if idle_seconds > STALE_SECONDS:
+            state = "stalled"
+
     if phase_key is None:
         # Never seen a classifiable event yet: at the very start of the pipeline, not nowhere.
         return dict(
-            state="running",
+            state=state,
             phase_key=None,
             phase_label=None,
             phase_fraction=0.0,
             fraction=0.0,
             raw_phase=raw_phase,
+            round=held_over.get("round"),
+            round_floor=held_over.get("round_floor", 0.0),
+            idle_seconds=idle_seconds,
         )
 
     # A phase in progress, with no finer within-phase signal, reads as half full -- "started, not
@@ -192,14 +243,41 @@ def classify(lane: dict, held_over: Optional[dict] = None) -> dict:
         fine = _route_fraction(lane)
         phase_fraction = fine if fine is not None else _PHASE_FRACTION_UNKNOWN
     index = PHASE_INDEX[phase_key]
-    fraction = (index + phase_fraction) / len(PHASE_KEYS)
+    local_fraction = max(0.0, min(1.0, (index + phase_fraction) / len(PHASE_KEYS)))
+
+    # Lap compounding: a lane whose engine re-runs the whole pipeline for another feedback round
+    # (`lane["round"]`, set by the server from `source_round`) would otherwise have its bar drop
+    # back toward "generate" every round, which reads as the bar going backwards even though the
+    # lane is making real progress across rounds. Once a round completes (this round's number is
+    # higher than the held-over one), fold the fraction it reached into a floor -- raised toward
+    # 1.0 asymptotically, never past it -- that this round's own progress is then added on top of,
+    # so the bar always moves forward within a round and never drops when the next one starts.
+    # A lane that never repeats (no `round` field at all) has `round_floor` pinned at 0.0 forever,
+    # so this is a no-op for the common single-pass case: `fraction` reduces to `local_fraction`.
+    cur_round = lane.get("round")
+    prior_round = held_over.get("round")
+    round_floor = float(held_over.get("round_floor") or 0.0)
+    if (
+        isinstance(cur_round, (int, float))
+        and isinstance(prior_round, (int, float))
+        and cur_round > prior_round
+    ):
+        prior_fraction = float(held_over.get("fraction") or round_floor)
+        round_floor = round_floor + (1.0 - round_floor) * prior_fraction
+    if cur_round is None:
+        cur_round = prior_round  # keep whatever round we last knew about, for the next held_over
+    fraction = round_floor + (1.0 - round_floor) * local_fraction
+    fraction = max(local_fraction, min(1.0, fraction))  # never below the plain in-pipeline read
     return dict(
-        state="running",
+        state=state,
         phase_key=phase_key,
         phase_label=PHASE_LABELS[phase_key],
         phase_fraction=phase_fraction,
-        fraction=max(0.0, min(1.0, fraction)),
+        fraction=fraction,
         raw_phase=raw_phase,
+        round=cur_round,
+        round_floor=round_floor,
+        idle_seconds=idle_seconds,
     )
 
 
@@ -250,6 +328,14 @@ def humanize(lane: dict, classified: Optional[dict] = None) -> str:
 
     if state == "queued":
         return "Queued"
+    if state == "stalled":
+        secs = classified.get("idle_seconds")
+        if isinstance(secs, (int, float)):
+            return f"Stalled: idle {max(1, int(secs / 60))} min"
+        return "Stalled"
+    if state == "rejected":
+        label = classified.get("phase_label")
+        return f"Rejected candidate (reached {label})" if label else "Rejected candidate"
     if state == "failed":
         bits = []
         if isinstance(opens, (int, float)) and opens:
@@ -258,11 +344,20 @@ def humanize(lane: dict, classified: Optional[dict] = None) -> str:
             bits.append(f"{int(violations)} DRC error" + ("s" if violations != 1 else ""))
         return "Failed: " + ", ".join(bits) if bits else "Failed"
     if state == "done":
-        bits = ["all connected"]
-        if violations in (0, None):
+        # Only claim a fact the telemetry actually backs up -- a finished lane with no board
+        # extracted (a screening-only run) or with real missing connections/violations must not
+        # read "all connected, DRC clean" just because it reached state "done".
+        bits = []
+        if opens == 0:
+            bits.append("all connected")
+        elif isinstance(opens, (int, float)) and opens:
+            bits.append(f"{int(opens)} unconnected")
+        if violations == 0:
             bits.append("DRC clean")
-        else:
+        elif isinstance(violations, (int, float)) and violations:
             bits.append(f"{int(violations)} DRC warning" + ("s" if violations != 1 else ""))
+        if not bits:
+            bits.append("finished")
         started, ended = lane.get("started_at"), lane.get("time")
         if (
             isinstance(started, (int, float))
@@ -292,9 +387,10 @@ def humanize(lane: dict, classified: Optional[dict] = None) -> str:
     return PHASE_LABELS[phase_key]
 
 
-def classify_lane(lane: dict) -> dict:
+def classify_lane(lane: dict, now: Optional[float] = None) -> dict:
     """``classify`` + ``humanize`` together, carrying over the lane's own previous ``progress``
     (if any) as the held-over phase bucket. The one function :mod:`yapnr.viewer.server` calls per
-    lane per poll; it does not mutate ``lane``."""
-    classified = classify(lane, held_over=lane.get("progress"))
+    lane per poll; it does not mutate ``lane``. ``now`` (``time.time()``), when given, is how a
+    running lane with no recent event gets classified ``stalled`` instead of ``running`` forever."""
+    classified = classify(lane, held_over=lane.get("progress"), now=now)
     return dict(classified, status_text=humanize(lane, classified))

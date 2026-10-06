@@ -79,20 +79,32 @@ class RealShapeTest(unittest.TestCase):
         ]
         self.assertEqual(case["order"], ["s0", "s1"])
 
-    def test_best_leaf_prefers_failed_over_running_over_queued_over_done(self):
+    def test_best_leaf_prefers_running_over_failed_over_queued_over_done(self):
+        # s0 itself is a still-running source_round_start lane with a done and a failed child
+        # underneath it; s1 has only a queued child. A single failed leaf must not steal the
+        # selection away from the subtree that is still actively running.
         case = self.tree["children"]["ladder"]["children"]["keep-on"]["children"][
             "09-mcu-usb-31-6L-SGSGPS"
         ]
-        self.assertEqual(
-            case["best_leaf"], "ladder/keep-on/09-mcu-usb-31-6L-SGSGPS/s0/initial-start-01"
-        )
+        self.assertEqual(case["best_leaf"], "ladder/keep-on/09-mcu-usb-31-6L-SGSGPS/s0")
+
+    def test_best_leaf_prefers_failed_over_queued_when_nothing_is_running(self):
+        lanes = {
+            "g/a": lane("g/a", **FAILED),
+            "g/b": lane("g/b", **QUEUED),
+        }
+        tree = build_tree(lanes)
+        self.assertEqual(tree["children"]["g"]["best_leaf"], "g/a")
 
 
 class OddShapeTest(unittest.TestCase):
     def test_empty_lanes_is_an_empty_root(self):
         tree = build_tree({})
         self.assertEqual(tree["children"], {})
-        self.assertEqual(tree["counts"], dict(queued=0, running=0, done=0, failed=0, total=0))
+        self.assertEqual(
+            tree["counts"],
+            dict(queued=0, running=0, stalled=0, rejected=0, done=0, failed=0, total=0),
+        )
         self.assertEqual(tree["fraction"], 0.0)
         self.assertIsNone(tree["best_leaf"])
 
@@ -116,18 +128,47 @@ class OddShapeTest(unittest.TestCase):
         self.assertEqual(set(tree["children"]), {"a"})
         self.assertEqual(tree["children"]["a"]["children"]["b"]["lane_id"], "//a//b/")
 
-    def test_mc_halving_style_round_candidate_ids(self):
-        # pnr.mc.halving-shaped ids: a round, then numbered candidates within it.
+    def test_real_halving_style_parent_candidate_stage_ids(self):
+        # The real pnr.mc.halving shape (hardware/pnr/pnr/mc/halving.py, PNR_LIVE_CANDIDATE =
+        # f"{parent}/{cand.name}/{stage}"): a parent generation, numbered candidates within it,
+        # each running a named stage -- not the "round"-as-a-path-segment shape a made-up fixture
+        # once assumed. Grouping by generation/candidate falls straight out of the id split.
         lanes = {
-            f"mc/round1/candidate{i}": lane(
-                f"mc/round1/candidate{i}", iteration=1, **(DONE if i else FAILED)
-            )
-            for i in range(3)
+            "mc/cand00/screen": lane("mc/cand00/screen", iteration=1, **FAILED),
+            "mc/cand01/screen": lane("mc/cand01/screen", iteration=1, **RUNNING),
+            "mc/cand01/place": lane("mc/cand01/place", iteration=1, **RUNNING),
+            "mc/cand02/screen": lane("mc/cand02/screen", iteration=1, **DONE),
         }
         tree = build_tree(lanes)
-        round1 = tree["children"]["mc"]["children"]["round1"]
-        self.assertEqual(round1["counts"]["total"], 3)
-        self.assertEqual(set(round1["order"]), {"candidate0", "candidate1", "candidate2"})
+        mc = tree["children"]["mc"]
+        self.assertEqual(set(mc["order"]), {"cand00", "cand01", "cand02"})
+        self.assertEqual(mc["counts"]["total"], 4)
+        cand01 = mc["children"]["cand01"]
+        self.assertEqual(set(cand01["order"]), {"screen", "place"})
+        self.assertEqual(cand01["counts"]["running"], 2)
+
+    def test_radar_style_flat_candidate_ids(self):
+        # The radar60 campaign's Monte Carlo lanes are flat: mc/s0..mc/s3, no per-stage nesting
+        # at all. build_tree must not assume any particular depth.
+        lanes = {
+            f"mc/s{i}": lane(f"mc/s{i}", iteration=1, **(DONE if i else RUNNING)) for i in range(4)
+        }
+        tree = build_tree(lanes)
+        mc = tree["children"]["mc"]
+        self.assertEqual(mc["counts"]["total"], 4)
+        self.assertEqual(set(mc["order"]), {"s0", "s1", "s2", "s3"})
+        for seg in mc["order"]:
+            self.assertEqual(mc["children"][seg]["children"], {})  # leaves, no nesting
+
+    def test_rejected_and_stalled_states_are_counted_separately_from_failed(self):
+        lanes = {
+            "g/a": lane("g/a", status="rejected", kind="iteration_complete", phase="result"),
+            "g/b": lane("g/b", **FAILED),
+        }
+        tree = build_tree(lanes)
+        g = tree["children"]["g"]
+        self.assertEqual(g["counts"]["rejected"], 1)
+        self.assertEqual(g["counts"]["failed"], 1)
 
     def test_single_lane_with_no_slashes_at_all(self):
         tree = build_tree({"solo": lane("solo", **RUNNING)})

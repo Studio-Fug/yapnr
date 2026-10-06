@@ -78,19 +78,25 @@ The Experiment lanes panel (`#lanes`) is a collapsible, directory-like tree of e
 live directory has — a campaign's arms, a board case, a seed, and its placement/routing
 candidates — built from the lane ids themselves, not hard-coded to one campaign's shape. A lane
 id is slash-separated and already hierarchical in practice (`ladder/keep-on/09-mcu-usb-31-6L-
-SGSGPS/s0/initial-start-04`, a bare `controller`, a Monte Carlo halving round's `mc/round3/
-candidate2`); `yapnr/viewer/lane_tree.py`'s `build_tree()` splits each id on `/` and walks a trie
+SGSGPS/s0/initial-start-04`, a bare `controller`, the real `pnr.mc.halving` shape
+`<parent>/<candidate>/<stage>` such as `mc/cand03/screen`, or radar's flat `mc/s0`..`mc/s3` with
+no per-stage nesting at all); `yapnr/viewer/lane_tree.py`'s `build_tree()` splits each id on `/`
+and walks a trie
 into a nested tree, shipped once per poll as `state["tree"]` (`/api/state`) so the front end never
 re-derives the hierarchy. A lane id that is itself a prefix of other lane ids (`.../s0` is both a
 lane and the parent of `.../s0/initial-start-00`) becomes a node that is simultaneously a leaf and
 a group; there is no fixed depth limit. The candidate-search audit's own bookkeeping lanes
 (`r03/search`) are excluded, same as the old flat list excluded them.
 
-Every node carries `counts` (queued/running/done/failed leaf-descendants, and a `total`) and a
-`fraction` (the mean of every descendant leaf's own progress fraction — a group with 3 lanes done
-and 1 lane half-routed reads as 0.875, not just "3 of 4 done") and `best_leaf` (the most relevant
-descendant: failed ranks ahead of running, then queued, then done — "select this group, show one
-board"). `static/lane-tree.js` renders it: a toolbar (name filter, state filter chips, Expand
+Every node carries `counts` (leaf-descendants by state — `running`/`stalled`/`failed`/`rejected`/
+`queued`/`done`, see `lane_tree.STATES` — and a `total`) and a `fraction` (the mean of every
+descendant leaf's own progress fraction — a group with 3 lanes done and 1 lane half-routed reads
+as 0.875, not just "3 of 4 done") and `best_leaf` (the most relevant descendant: whatever is still
+actively happening ranks first — running, then stalled — ahead of a terminal outcome; among
+terminal outcomes, failed, then rejected, then queued, then done last — "select this group, show
+one board"; deliberately _not_ "failed first": a single failed leaf in an otherwise-running group
+must not steal the selection away from the work actually in progress). `static/lane-tree.js`
+renders it: a toolbar (name filter, state filter chips, Expand
 all/Collapse all) built once, then the row list, rebuilt each poll. Expand/collapse persists per
 node per browser in `localStorage` (`yapnr-tree-expand-v1:<run>`, wrapped in `try`/`catch`); a
 fresh page opens the top two levels and leaves deeper candidates collapsed. Arrow keys move
@@ -121,22 +127,41 @@ past the stage it stopped at:
 
 A lane's overall `fraction` is `(phase_index + phase_fraction) / len(PHASES)`. The raw phase/kind
 string is matched against a keyword table gathered from the engine's own `phase=` call sites
-(`hardware/pnr/pnr/{trace,provenance,native_loop,gloss,...}.py`) and real live-directory samples —
-`"legalization"` → `legalize`, `"global-placement"`/`"placement"` → `place`, `"routed"`/
+(`hardware/pnr/pnr/{trace,provenance,native_loop,gloss,route/feedback,...}.py`) and real
+live-directory samples — `"legalization"` → `legalize`, `"global-placement"`/`"placement"` →
+`place`, `"source p/r"` (a feedback round restarting the pipeline) → `place`, `"routed"`/
 `"commit"`/`"native-phase"`/`"usb-pairs"` → `route`, `"gloss"`/`"power-bank"` → `gloss`,
 `"congestion"`/`"selection"`/`"drc"`/`"result"` → `check`, and so on (`progress.py`'s `_KEYWORDS`
-is authoritative). **A phase string this has never seen before is never an error**: it falls back
-to the lane's last known phase bucket (held over from its previous poll) or, for a lane with no
-classifiable event at all yet, to "running, 0% " — never a crash, never a reset to zero for an
-unrelated event (a `worker_config_applied` mid-route keeps the route phase). `status="queued"` /
-`kind="candidate_queued"` is the zero-fraction `queued` state; `candidate_complete`/an accepted
-`iteration_complete` is `done` (fraction 1.0); `candidate_failed`/a rejected `iteration_complete`
-is `failed`, keeping whatever fraction the lane had reached rather than resetting it — "it got
-this far, then failed" is more informative than snapping back to zero.
+is authoritative; the route family is checked _before_ the check family on purpose, since a bare
+`route_result` event's `kind` string contains "result" as a substring — checking "result" first
+would misfile it as `check`). **A phase string this has never seen before is never an error**: it
+falls back to the lane's last known phase bucket (held over from its previous poll — this is a
+_per-poll_, not per-event, fallback: several raw events folded into one poll only leave their
+_last_ phase visible to it) or, for a lane with no classifiable event at all yet, to "running, 0%"
+— never a crash, never a reset to zero for an unrelated event (a `worker_config_applied`
+mid-route keeps the route phase). `status="queued"`/`kind="candidate_queued"` is the
+zero-fraction `queued` state; `candidate_complete`/an accepted `iteration_complete` is `done`
+(fraction 1.0); `candidate_failed` is `failed`, keeping whatever fraction the lane had reached
+rather than resetting it — "it got this far, then failed" is more informative than snapping back
+to zero. A **rejected** Monte Carlo candidate (`status="rejected"`, halving/beam-search discarding
+a losing branch) gets its own `rejected` state the same way — it is a normal search outcome, not
+a failure, and must not read as one. A **running** lane whose last event is more than
+`STALE_SECONDS` (10 minutes) old reads `stalled` instead — a dead worker, a finished campaign the
+viewer never got a final event for, and a lane actually mid-phase are otherwise indistinguishable.
+
+**Repeated rounds never make the bar go backwards.** A feedback round (`pnr.route.feedback`,
+`data.source_round`, mirrored onto `lane["round"]` by `apply_event`) restarts the whole
+generate→check pipeline for another pass; naively re-mapping that onto the same 0..1 pipeline
+fraction would make the bar visibly drop back toward "generate" every round. Instead, once a
+round completes (`round` increments), the fraction it reached is folded into a `round_floor` —
+raised toward 1.0 asymptotically (`floor + (1-floor) * this_round's_fraction`), never past it —
+that the next round's own within-pipeline progress is added on top of. A lane that never repeats
+a round (no `round` field at all, the common single-pass case) has its floor pinned at 0.0
+forever, so this is a no-op for it: `fraction` is exactly the plain in-pipeline read, unchanged.
 
 A group node's bar is the mean of its descendant leaves' fractions, coloured by the most urgent
-state present (failed, else running, else queued, else done) — the width says how far along, the
-colour says whether something needs attention.
+state present — the same running-first priority as `best_leaf` above — the width says how far
+along, the colour says whether something needs attention.
 
 ### Status text
 
@@ -148,20 +173,31 @@ narrow lanes panel; the raw phase/kind and full counts are in each row's `title`
 - `Generating` / `Placing` / `Legalizing: pass 2` / `Glossing` — mid-phase, no finer detail
 - `Routing: 412 of 530 connections (78%)` — from `data.progress` on the latest `route_result`
 - `Checking: 2 opens / 0 violations`
+- `Stalled: idle 23 min` — a running lane with no event in over `STALE_SECONDS`
+- `Rejected candidate (reached Routing)` — a normal Monte Carlo search outcome, not a failure
 - `Failed: 3 unconnected, 1 DRC error` — from the lane's `opens`/`violations` (a routed/checked
   candidate) or, for a screening-only candidate that never got a board extracted, from its own
   `candidate_failed`/`candidate_complete` payload (`data.missing_connections`/`data.opens`,
   `data.violations`; stored as `lane["last_candidate"]` by `apply_event`)
-- `Done: all connected, DRC clean, 12.4 s` — the duration is `lane["time"] - lane["started_at"]`
-  (`started_at`: the lane's first event time, tracked per-lane server-side); omitted when either
-  is unavailable
+- `Done: all connected, DRC clean, 12.4 s` — **only when the telemetry actually says so**: `opens`
+  must be exactly `0` for "all connected" (otherwise it reports the real count, or omits the claim
+  entirely if unknown — a screening-only run that never extracted a board never ran DRC, so it
+  must not claim "DRC clean" either, and reads plain `Done: finished` instead). The duration is
+  `lane["time"] - lane["started_at"]` (`started_at`: the lane's first event time, tracked per-lane
+  server-side, mirrored onto the lane dict itself since `humanize()` is a pure function of the
+  lane alone); omitted when either timestamp is unavailable.
 
 Tests: `tests/unit/viewer/test_lane_tree.py` and `test_progress.py` (hermetic, against lane-id and
 lane-dict samples drawn from real live directories plus odd shapes — a lane that is both leaf and
-group, empty input, very deep nesting, an unrecognised phase string); `tests/e2e/viewer/
-test_experiment_tree.py` (headless Chrome: the tree renders/collapses/expands and persists,
-filtering, keyboard navigation, progress bar widths against this file's model, status text, board
-selection via a leaf or a group's best leaf, and phone width).
+group, empty input, very deep nesting, an unrecognised phase string, the real `pnr.mc.halving`
+`<parent>/<candidate>/<stage>` shape and radar's flat `mc/s0..s3`, stalled/rejected states, and
+the round-repeat lap-compounding model); `tests/e2e/viewer/test_experiment_tree.py` (headless
+Chrome: the tree renders/collapses/expands and persists, filtering, keyboard navigation (including
+that focus survives a live rebuild, not falling back to `<body>`), progress bar widths against
+this file's model, status text, board selection via a leaf or a group's best leaf, and phone
+width). The `tests/e2e/viewer` package is tagged `manual` (see its `BUILD.bazel`) and needs a real
+Chrome/Chromium on the machine; it is **not** run by CI's `bazel test //...` and must be run
+explicitly (`bazel test //tests/e2e/viewer:test_experiment_tree`) before relying on it.
 
 ## Rendering and performance
 

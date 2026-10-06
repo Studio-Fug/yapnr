@@ -231,6 +231,30 @@ class ExperimentTreeTest(unittest.TestCase):
         )
         wait_for(lambda: ("initial-start-00" in (self.page.eval("laneId") or "")) or None, 5)
 
+    def test_keyboard_focus_survives_a_live_update(self):
+        # renderBody() rebuilds every row's DOM node on every poll; focus must follow the same
+        # tree node across that rebuild instead of falling back to <body> (which would silently
+        # break arrow-key navigation every time a live campaign streams in new events).
+        self.goto(width=1400, height=900)
+        self.page.eval("document.querySelector('.tr-btns button').click();1")
+        wait_for(lambda: ("initial-start-00" in self.row_texts()) or None, 5)
+        self.page.eval("document.getElementById('tr-row-0').focus();1")
+        focused_id_before = self.page.eval("YapnrTree.rows()[0].node.id")
+        # Force the same rebuild a live poll triggers on every new event (renderBody() always
+        # replaces every row's DOM node) without waiting on a real poll cycle.
+        self.page.eval("YapnrTree.update();1")
+        wait_for(
+            lambda: (
+                self.page.eval("document.activeElement&&document.activeElement.id") or ""
+            ).startswith("tr-row")
+            or None,
+            5,
+        )
+        focused_id_after = self.page.eval(
+            "YapnrTree.rows()[Number((document.activeElement.id||'tr-row--1').slice(7))].node.id"
+        )
+        self.assertEqual(focused_id_after, focused_id_before)
+
     # ------------------------------------------------------------------ board selection still works
     def test_selecting_a_leaf_drives_the_board_like_before(self):
         self.goto(width=1400, height=900)
@@ -253,9 +277,10 @@ class ExperimentTreeTest(unittest.TestCase):
             "el.click()})"
         )
         wait_for(lambda: (self.page.eval("laneId")) or None, 5)
-        # the best leaf is the failed one (failed ranks ahead of running/queued/done)
-        self.assertTrue(self.page.eval("laneId").endswith("initial-start-01"))
-        self.assertTrue("legalization" not in self.page.eval("laneId"))
+        # the best leaf is whatever's still actively running (s1/initial-start-01, mid route) --
+        # a single failed sibling elsewhere in the group must not steal the selection away from
+        # the work actually in progress.
+        self.assertTrue(self.page.eval("laneId").endswith("s1/initial-start-01"))
 
     # ------------------------------------------------------------------ phone width
     def test_phone_width_tree_lives_in_the_experiments_drawer(self):

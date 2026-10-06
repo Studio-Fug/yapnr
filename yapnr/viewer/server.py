@@ -264,9 +264,11 @@ class Viewer:
         # Native board paths / final objectives per lane, also outside /api/state: the Ask
         # context reads them.
         self.lane_meta = {}
-        # First event time seen per lane, also outside /api/state: humanize() (progress.py)
-        # reads it to report a finished lane's wall-clock duration without the lane dict itself
-        # needing to carry a mutable "start" the UI could accidentally treat as telemetry.
+        # First event time seen per lane. apply_event mirrors this onto the lane itself as
+        # lane["started_at"] (so it IS visible in /api/state) because humanize() (progress.py)
+        # is a pure function of the lane dict alone and has no access to server state; this dict
+        # is the source of truth that survives across lane_started.setdefault calls regardless of
+        # what apply_event later does to the lane dict's other fields.
         self.lane_started = {}
         self.dist, self.dist_missing = find_dist(cfg.dist)
         self.runtime = runtime.engine_runtime(cfg.engine_runtime)
@@ -792,6 +794,11 @@ class Viewer:
             )
         if data.get("phase"):
             lane["phase"] = data["phase"]
+        if isinstance(data.get("source_round"), (int, float)):
+            # yapnr.viewer.progress's lap-compounding model: a feedback round restarting the
+            # whole pipeline (pnr.route.feedback's "source P/R round N") must not visibly drop
+            # the lane's progress bar back toward zero every round.
+            lane["round"] = data["source_round"]
         if kind == "controls_applied":
             state["active_controls"] = data
         if kind == "worker_config_applied":
@@ -859,11 +866,17 @@ class Viewer:
         """Fold each lane's raw telemetry into the phase/progress model (yapnr.viewer.progress),
         in place on ``self.state["lanes"]`` (lock held), so a lane with no classifiable event in
         this poll still has its last-known phase to hold over into the next one. Cheap (a handful
-        of dict lookups and string comparisons per lane) and idempotent; called at the top of
-        every :func:`current`, not from :func:`apply_event`, so it runs at most once per served
-        revision rather than once per raw event folded into that revision."""
+        of dict lookups and string comparisons per lane); called at the top of every
+        :func:`current`, not from :func:`apply_event`, so it runs at most once per served
+        revision rather than once per raw event folded into that revision -- a lane that got
+        several raw events in between two polls only has its *last* one's phase visible to the
+        held-over fallback, not each intermediate one; see yapnr.viewer.progress's module
+        docstring. ``now`` (``time.time()``) is threaded through so a lane with no event in the
+        last :data:`yapnr.viewer.progress.STALE_SECONDS` classifies ``stalled`` instead of
+        ``running`` forever."""
+        now = time.time()
         for lane in self.state["lanes"].values():
-            classified = classify_lane(lane)
+            classified = classify_lane(lane, now=now)
             lane["status_text"] = classified.pop("status_text")
             lane["progress"] = classified
 

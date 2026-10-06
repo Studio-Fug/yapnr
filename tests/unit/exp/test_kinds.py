@@ -331,8 +331,9 @@ class LadderOptionsTest(unittest.TestCase):
         wire = ladder.runner_arguments(dict(legalize_reorient_wire=True))
         self.assertEqual(wire[wire.index("--legalize-reorient") + 1], "wire")
         more = ladder.runner_arguments(
-            dict(legalize_channel_clearance_fab=True, line_satellites=True)
+            dict(legalize_channel_clearance_fab=True, line_satellites=True, channel_layers=True)
         )
+        self.assertIn("--channel-layers", more)
         self.assertEqual(more[more.index("--legalize-channel-clearance") + 1], "fab")
         self.assertIn("--line-satellites", more)
         kind = kinds.get("ladder-cell")

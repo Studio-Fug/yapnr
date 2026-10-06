@@ -304,12 +304,14 @@ def legalize_environment(
     channel_clearance=None,
     line_satellites=False,
     legalize_keep=True,
+    channel_layers=False,
 ):
     """The PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP / PNR_LEGALIZE_HPWL /
     PNR_LEGALIZE_REORIENT / PNR_LEGALIZE_CHANNEL_CLEARANCE / PNR_LINE_SATELLITES / PNR_LEGALIZE_KEEP
     variables of ``--gp-polish``, ``--gp-channels``, ``--pool-source-clamp``, ``--legalize-hpwl``,
     ``--legalize-reorient``, ``--legalize-channel-clearance``, ``--line-satellites`` and
-    ``--legalize-keep``/``--no-legalize-keep`` (``pnr.legalize_flags``; set after the ambient
+    ``--legalize-keep``/``--no-legalize-keep``
+    (and ``--channel-layers``: PNR_CHANNEL_LAYERS) (``pnr.legalize_flags``; set after the ambient
     PNR_* variables are stripped, so provenance records them). ``reorient`` is ``"1"`` (guarded),
     ``"wire"`` or None; ``channel_clearance`` is ``"fab"`` or None. ``legalize_keep`` true (the
     default, matching the engine's own default) sets nothing, like every other switch here;
@@ -339,6 +341,8 @@ def legalize_environment(
         env["PNR_LEGALIZE_CHANNEL_CLEARANCE"] = channel_clearance
     if line_satellites:
         env["PNR_LINE_SATELLITES"] = "1"
+    if channel_layers:
+        env["PNR_CHANNEL_LAYERS"] = "1"
     return env
 
 
@@ -897,6 +901,14 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--channel-layers",
+        action="store_true",
+        help=(
+            "PNR_CHANNEL_LAYERS=1: the routing-channel model (global placement, the legalizer "
+            "and its push) credits the board's other signal layers"
+        ),
+    )
+    ap.add_argument(
         "--shrink",
         action="store_true",
         help=(
@@ -1055,6 +1067,7 @@ def main():
                 args.legalize_channel_clearance,
                 args.line_satellites,
                 args.legalize_keep,
+                args.channel_layers,
             )
         )
     except ValueError as error:

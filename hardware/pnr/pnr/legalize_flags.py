@@ -30,6 +30,12 @@ default and works with or without ``PNR_COMPACT``:
     The legalizer's routing-channel model (:class:`pnr.place.channels.ChannelModel`) spaces the
     tracks of nets without a class at the fab clearance (``fab.clearance_mm``, the router's)
     instead of the board's ``default_clearance_mm``.
+``PNR_CHANNEL_LAYERS=1``
+    The routing-channel model (:class:`pnr.place.channels.ChannelModel`, used by global
+    placement, the legalizer and its push alike) credits the board's other signal layers: a net
+    that can drop off the surface asks only its share of the channel (one over the signal-layer
+    count), and a drop that needs a via in the channel pays one shared via row there
+    (:mod:`pnr.place.channels`, "Layer-aware demand").
 ``PNR_LINE_SATELLITES=1``
     A line group (:mod:`pnr.place.line_group`) carries its members' satellites: a free two-pad
     part joined to one member pad by a two-pin net sits flush beside that member, in line with
@@ -77,6 +83,7 @@ FLAGS = (
     "PNR_LEGALIZE_CHANNEL_CLEARANCE",
     "PNR_LINE_SATELLITES",
     "PNR_LEGALIZE_KEEP",
+    "PNR_CHANNEL_LAYERS",
 )
 
 
@@ -169,6 +176,11 @@ def legalize_keep() -> bool:
     raise ValueError("PNR_LEGALIZE_KEEP takes 0 or 1, got %r" % (raw,))
 
 
+def channel_layers() -> bool:
+    """True with ``PNR_CHANNEL_LAYERS=1``: the channel model credits the other signal layers."""
+    return os.environ.get("PNR_CHANNEL_LAYERS") == "1"
+
+
 def active() -> dict:
     """The active switches and their values, for provenance and the trace (empty when off)."""
     out = {}
@@ -188,4 +200,6 @@ def active() -> dict:
         out["LINE_SATELLITES"] = True
     if not legalize_keep():
         out["LEGALIZE_KEEP"] = False  # the default (on) is not listed
+    if channel_layers():
+        out["CHANNEL_LAYERS"] = True
     return out

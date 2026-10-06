@@ -20,6 +20,7 @@ from hard_rungs import (
     ufbga_base,
 )
 from run import fab_profiles, parser
+from soc_rung import soc_bga
 
 CHECK_KINDS = {
     "inside_board",
@@ -63,7 +64,7 @@ class HardRungContract(unittest.TestCase):
         declared = {r["name"]: r.get("fab_profile") for r in self.rungs if r.get("fab_profile")}
         self.assertEqual(
             sorted(declared),
-            sorted(r["name"] for r in self.rungs if r["base"] == "ufbga201-fanout"),
+            sorted(r["name"] for r in self.rungs if r["base"] in ("ufbga201-fanout", "soc-bga")),
         )
         for name, profile in declared.items():
             self.assertIn(profile, fab_profiles(), name)
@@ -98,8 +99,12 @@ class HardRungContract(unittest.TestCase):
                 self.assertEqual(
                     spec["constraints"]["board"]["layers"], spec["stackup"]["copper_layers"]
                 )
-                self.assertIn(spec["ci"]["lane"], ("nightly", "manual"))
+                self.assertIn(spec["ci"]["lane"], ("ladder", "nightly", "manual"))
                 self.assertGreater(spec["ci"]["minutes"], 0)
+                if "target" in spec["ci"]:  # a manual-lane target for a queued engine feature
+                    self.assertEqual(spec["ci"]["lane"], "manual")
+                    self.assertTrue(spec["ci"]["target"]["feature"])
+                    self.assertTrue(spec["ci"]["target"]["reason"])
                 self.assertEqual(spec["tier"], "hard")
 
     def test_checks_are_well_formed(self):
@@ -126,7 +131,14 @@ class HardRungContract(unittest.TestCase):
         bga = ufbga_base()
         # Nor is the buck stage's (its hot-rod stage is drawn on four layers).
         buck = buck_pour()
-        bases = {"chaser-20": chaser, "ufbga201-fanout": bga, "buck-vqfnhr": buck}
+        # The top rung is a base of its own on six layers, without variants.
+        soc = soc_bga()
+        bases = {
+            "chaser-20": chaser,
+            "ufbga201-fanout": bga,
+            "buck-vqfnhr": buck,
+            "soc-bga": soc,
+        }
         for spec in self.rungs:
             dims = spec["dims"]
             if all(
@@ -150,6 +162,8 @@ class HardRungContract(unittest.TestCase):
                 "chaser-20",
                 "ufbga201-fanout",
                 "buck-vqfnhr",
+                "shove-channel",
+                "soc-bga",
             },
         )
         family = {}
@@ -157,7 +171,7 @@ class HardRungContract(unittest.TestCase):
             family.setdefault(spec["base"], []).append(spec)
         for spec in self.rungs:
             base = bases[spec["base"]]
-            if spec is base:
+            if spec["name"] == base["name"]:
                 continue
             with self.subTest(spec=spec["name"]):
                 # a parent (the base or a sibling) differs from it in exactly one dimension
@@ -229,9 +243,17 @@ class HardRungContract(unittest.TestCase):
                     self.assertEqual(banned, kind not in allowed)
                 for layer, net in plane_layers(spec):
                     self.assertIn('(layer "%s")' % layer, text)
+                groups = [
+                    g
+                    for g in spec["constraints"].get("length_match") or []
+                    if g.get("tolerance_mm") is not None
+                ]
                 self.assertEqual(
-                    text.count("constraint skew"), len(spec["constraints"].get("diff_pair") or [])
+                    text.count("constraint skew"),
+                    len(spec["constraints"].get("diff_pair") or []) + len(groups),
                 )
+                for g in groups:
+                    self.assertIn('(rule "group %s skew"' % g["name"], text)
                 self.assertEqual(text.count("(rule"), text.count("(constraint"))
         self.assertIsNone(dru_text(designs()[0]))
 
@@ -571,7 +593,8 @@ class HardRungContract(unittest.TestCase):
     def test_runner_offers_the_hard_rungs(self):
         args = parser().parse_args(["--out", "x", "--hard"])
         self.assertTrue(args.hard)
-        self.assertEqual(parser().parse_args(["--out", "x", "--lane", "nightly"]).lane, "nightly")
+        args = parser().parse_args(["--out", "x", "--lane", "ladder", "--lane", "nightly"])
+        self.assertEqual(args.lane, ["ladder", "nightly"])
 
 
 if __name__ == "__main__":

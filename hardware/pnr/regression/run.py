@@ -780,8 +780,12 @@ def parser():
     )
     ap.add_argument(
         "--lane",
-        choices=("nightly", "manual"),
-        help="Run the hard rungs whose ci.lane is LANE (with any --case given); implies --hard",
+        action="append",
+        choices=("ladder", "nightly", "manual"),
+        help=(
+            "Run the hard rungs whose ci.lane is LANE (repeatable; with any --case given); "
+            "implies --hard. The ladder lane is the hard rungs promoted to the public ladder"
+        ),
     )
     ap.add_argument(
         "--gloss",
@@ -953,7 +957,7 @@ def main():
     for path in args.design_json:
         allcases += json.loads(Path(path).read_text())
     if args.lane:
-        lane = {c["name"] for c in hard if c["ci"]["lane"] == args.lane}
+        lane = {c["name"] for c in hard if c["ci"]["lane"] in args.lane}
         cases = [c for c in allcases if c["name"] in lane or c["name"] in args.case]
     else:
         cases = [c for c in allcases if not args.case or c["name"] in args.case]

@@ -590,6 +590,8 @@ py_test(
     srcs = [
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/stackup.py",
         "tests/test_stack.py",
     ],
@@ -631,6 +633,8 @@ py_test(
     srcs = [
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/stackup.py",
         "tests/test_via_policy.py",
     ],
@@ -1802,6 +1806,8 @@ py_test(
         "regression/animate_ladder.py",
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/run.py",
         "regression/test_contract.py",
         "regression/trace_native.py",
@@ -1826,6 +1832,8 @@ py_test(
     srcs = [
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/run.py",
         "regression/test_hard_rungs.py",
     ],
@@ -1844,6 +1852,8 @@ py_test(
         "regression/check_constraints.py",
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/native.py",
         "regression/run.py",
         "regression/stackup.py",
@@ -1901,6 +1911,8 @@ py_binary(
     srcs = [
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/run.py",
     ],
     main = "regression/run.py",

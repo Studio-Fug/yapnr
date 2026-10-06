@@ -153,7 +153,10 @@ objectives and the winning rung's native phases).
 CI (`.github/workflows/ladder.yaml`, informational) runs cases 01 to 06 on pull
 requests that change engine inputs, and all cases with seeds 0 and 1 nightly,
 inside the arm64 image, plus a traced pool run (with the committed animations'
-`--compact --gloss`) whose animations are uploaded as an artifact.
+`--compact --gloss`) whose animations are uploaded as an artifact. Nightly it also
+runs the hard rungs of the `ladder` lane (`hard_rungs.LADDER_RUNGS`: the six hard rungs
+promoted to the public ladder, rows 09 to 11 of the docs page) and of the `nightly` lane,
+seed 0 (`run.py --lane ladder --lane nightly`).
 
 ## Showcases
 
@@ -252,9 +255,46 @@ fanout's escape exits (`pnr.route.detail.pair_route`). The judge's custom rules 
 skew, uncoupled length (3 mm) and gap (0.14-0.16 mm), and the `net_vias` check holds it to
 no via (F.Cu only).
 
+## Top rung
+
+`12-soc-bga-113` (`soc_rung.py`, manual lane) is a purpose-built single-board computer
+around an STM32F746 in the same 0.65 mm UFBGA176+25 as the BGA fanout rung, with the
+buses of a Cortex-M7 board: a 16-bit SDRAM on the FMC (IS42S16400J, TSOP-II-54) whose
+high data byte lane (DQ8-DQ15) is a `length_match` group (1.0 mm), a quad-SPI NOR flash,
+an RMII Ethernet PHY (LAN8742A) with 22 ohm series terminations, 49.9 ohm MDI
+terminations and two MDI differential pairs to a magnetics header, USB full speed (Micro-B,
+ESD array; a differential pair), a microSD socket on SDMMC1, SWD and I/O connectors and
+RGB/power LEDs: 113 parts. Four supply domains: USB 5 V, a buck to 3.3 V that owns the
+supply plane (In4), and two LDOs for the MCU's analog supply (VDDA, VREF+) and the PHY's,
+both routed on signal layers. Six layers (S G S G P S), the BGA rung's fine-pitch rules and
+fanout (interstitial 0.35/0.15 mm plane drops: an HDI-capable profile's drill). The MCU,
+the SDRAM, the USB receptacle, the magnetics header and four holes are fixed; the microSD
+socket, the debug header and the I/O connector are locked to their edges; the rest is
+placed by the engine, with hard proximity groups keeping each part's support parts
+(decoupling, crystals, terminations, regulator capacitors) beside it. Ball functions come
+from KiCad's `STM32F746IGKx` symbol. It is a target (`ci.target`): on 2026-10-06 the router
+left about a third of its nets open, did not match the SDRAM lane, and crossed the keep-outs
+that the microSD and QFN footprints carry (the router does not read footprint rule areas).
+
+## Push-and-shove rungs
+
+`11-shove-channel-14` and `11-shove-channel-lm-14` (`shove_rungs.py`, manual lane) are
+small two-layer boards split by a copper wall (a track and via keep-out on both layers,
+judged by `no_copper` checks) with one 4.25 mm channel: a 10-net bus runs between
+connectors fixed on the west and east edges, and four late nets cross it from a connector
+north-west of the wall to one south-east of it. Nine tracks fit per layer at the fab's
+pitch (eight on a 0.25 mm routing grid) and fourteen nets need the channel, so a router
+that commits early nets to the middle of the channel on both layers must push them aside to
+finish. The `-lm` variant moves the east connector 7 mm north and matches the bus to 0.5 mm,
+so the bus needs meander room where the late nets pass. Every part is fixed. Both carry a
+`ci.target` (`push-and-shove`): the current router leaves nets open on them, and they wait
+for the queued push-and-shove router.
+
 ## Length-matching scratch designs
 
-No ladder case or hard rung declares a length-match group, so
+`12-soc-bga-113` and `11-shove-channel-lm-14` declare length-match groups; a group with a
+budget in mm gets a KiCad `skew` rule in the rung's custom rules (`dru_text`), so KiCad's
+DRC judges it. For the router's length tuning alone,
 `lenmatch_scratch.py write OUT.json` writes scratch designs for the router's
 length tuning: an 8-net bus from a fixed SMD connector to an SOIC (a group, 0.5 mm)
 and a differential pair whose pins swap between its connectors (1.0 mm skew), on two

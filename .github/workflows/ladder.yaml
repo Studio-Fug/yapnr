@@ -12,8 +12,9 @@ name: Ladder
 #                     manifest.json), so their trace hashes are comparable; then the opt-in gloss
 #                     stage (run.py --gloss, PNR_GLOSS) on 04-inverter-leds-8 and 07-chaser-20,
 #                     seed 0: no other run exercises it while the flag is off by default; then
-#                     the hard rungs of the nightly lane (hard_rungs.py, ci.lane == nightly), seed 0
-#                     (informational: a hard rung never decides the job)
+#                     the hard rungs of the ladder lane (the public ladder's rungs 09 to 12,
+#                     docs/regression-ladder.md) and of the nightly lane (hard_rungs.py, ci.lane),
+#                     seed 0 (informational: a hard rung never decides the job)
 #   manual            cases, seeds, animations, showcases, the gloss stage and a hard-rung lane
 #                     as given
 #
@@ -55,9 +56,9 @@ on:
         type: boolean
         default: false
       hard_lane:
-        description: Also run the hard rungs of this CI lane (hard_rungs.py), seed 0, informational
+        description: Also run the hard rungs of these CI lanes (hard_rungs.py), seed 0, informational
         type: choice
-        options: [none, nightly, manual]
+        options: [none, ladder, nightly, ladder nightly, manual]
         default: none
       gloss:
         description: Also run the opt-in gloss stage (run.py --gloss) on two cases
@@ -138,7 +139,7 @@ jobs:
             seeds="0 1"
             animate=true
             showcases=true
-            hard_lane=nightly
+            hard_lane="ladder nightly"
             gloss=true
           else
             cases="${INPUT_CASES}"
@@ -171,13 +172,14 @@ jobs:
             timeout=$((timeout + showcase_minutes))
           fi
           # The hard rungs' budget is the sum of their own per-seed budgets (ci.minutes in
-          # hard_rungs.py, measured on the development Mac), added only when a lane runs.
+          # hard_rungs.py, measured on the development Mac) over the lanes run (a space-separated
+          # list), added only when a lane runs.
           hard_minutes=0
           if [ "${hard_lane}" != none ]; then
             hard_minutes="$(HARD_LANE="${hard_lane}" python3 -c 'import os, sys
           sys.path.insert(0, "hardware/pnr/regression")
           from hard_rungs import hard_rungs
-          print(sum(r["ci"]["minutes"] for r in hard_rungs() if r["ci"]["lane"] == os.environ["HARD_LANE"]))')"
+          print(sum(r["ci"]["minutes"] for r in hard_rungs() if r["ci"]["lane"] in os.environ["HARD_LANE"].split()))')"
             if [ "${hard_minutes}" -gt 90 ]; then
               # GitHub-hosted jobs stop at 360 minutes; the per-seed budgets in hard_rungs.py were
               # measured before the router speed work (the lane takes about 9 CPU minutes on x86).
@@ -376,8 +378,8 @@ jobs:
             echo "::notice::the showcases did not all pass (informational: they never decide the job)"
           fi
 
-      # Informational: the hard rungs of one CI lane (hardware/pnr/regression/hard_rungs.py), seed 0,
-      # with the initial pool. A failure or a timeout is a notice, never the job.
+      # Informational: the hard rungs of the CI lanes given (hardware/pnr/regression/hard_rungs.py),
+      # seed 0, with the initial pool. A failure or a timeout is a notice, never the job.
       - name: Run the hard rungs (informational)
         if: always() && needs.plan.outputs.hard_lane != 'none'
         env:
@@ -385,6 +387,8 @@ jobs:
           MINUTES: ${{ needs.plan.outputs.hard_minutes }}
         run: |
           status=0
+          lanes=()
+          for lane in ${LANE}; do lanes+=(--lane "${lane}"); done
           timeout --kill-after=60 "${MINUTES}m" \
             docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work \
               --shm-size 1g --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
@@ -392,8 +396,8 @@ jobs:
                 --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
                 --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
                 --timeout 3600 --seed 0 --initial-pool --initial-starts 8 --initial-finalists 3 \
-                --lane "${LANE}" || status=$?
-          python3 tools/ci/ladder_summary.py out/hard --title "Hard rungs, ${LANE} lane (informational)" \
+                "${lanes[@]}" || status=$?
+          python3 tools/ci/ladder_summary.py out/hard --title "Hard rungs, lanes: ${LANE} (informational)" \
             >> "${GITHUB_STEP_SUMMARY}" || true
           if [ "${status}" != 0 ]; then
             echo "::notice::the hard rungs did not all pass (informational: they never decide the job)"

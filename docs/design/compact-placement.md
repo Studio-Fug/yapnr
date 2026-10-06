@@ -612,19 +612,26 @@ snap offset beyond half a grid cell.
   penetration, a side-by-side pair keeps its order), solved as the weighted least-squares
   projection of the global centres (Dykstra, per axis), with the outline, fixed parts and the
   parts the push may not move (regions, aligns, edge bands, hard discs, hull macros) as bounds.
-  A pair's distance includes the escape channel the packer's channel model asks between facing
-  pad rows (the channel is part of the clearance), and a part short of one is pushed like a mild
-  overlap. A cluster whose push goes beyond a part's reach (1.5 mm or half its smaller side) gives
-  up its most occluded part to relocation and is pushed again.
+  The physical overlap is cleared first: a cluster whose push goes beyond a part's reach (1.5 mm
+  or half its smaller side) gives up its most occluded mild part (`push_infeasible`) and is pushed
+  again. Then the escape channel the packer's channel model asks between facing pad rows is a soft
+  goal: each pair's distance grows by the largest share of its channel (all of it, or five
+  bisection steps between none and all) that the push still meets within every part's reach. A
+  channel never makes the push give up a part; a part short of one is pushed like a mild overlap.
 - _Anchors._ Held parts (hard groups, aligns, regions, edge bands, hard discs) are placed first as
   before; then every part that is not severe takes the free slot nearest its (pushed) pose within
-  1.5 grid cells, at its global turn, without the channel or wirelength terms. Only a part whose
-  slot is taken, and the severe ones, go through the packer's full search (its cost, `WIRE` and
-  turns). `TURN` turns only the parts the legalizer moved. If the result leaves a part without a
-  slot, the board is legalized again with the plain packer (`keep_fallback`).
+  1.5 grid cells, at its global turn, without the channel or wirelength terms. A part whose slot
+  is taken (`slot_taken`) or that the push gave up (`push_infeasible`) then takes the nearest free
+  slot in rings expanding from its global pose (radius 3, 6, 12, ... grid cells; its global turn
+  first at each ring, then its other turns), never the full search. Only the severe parts go
+  through the packer's full search (its cost, `WIRE` and turns). `TURN` turns only the parts the
+  legalizer moved. If the result leaves a part without a slot, the board is legalized again with
+  the plain packer (`keep_fallback`).
 - _Metric._ Every legalization records its motion: parts moved (beyond 0.4 mm or turned),
   displacement sum and maximum, turns, topology kept (the fraction of pairwise left/right and
-  above/below relations of the global poses that the legal poses keep) and the triage counts. It
+  above/below relations of the global poses that the legal poses keep), the triage counts and,
+  per part that left its pose, the reason (`relocations`; `relocated_severe`,
+  `relocated_push_infeasible`, `relocated_slot_taken`, `nudged`, `channel_partial`). It
   is in the placement report, `pnr-report.json` (`legal_motion`; `block` and `top` for the
   hierarchical driver), `ladder-results.json`, the trace's `legal` events and the animation's end
   card ("legalization moved ...").

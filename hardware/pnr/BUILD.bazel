@@ -2133,6 +2133,7 @@ py_test(
     name = "legalize_keep_test",
     size = "small",
     srcs = ["tests/test_legalize_keep.py"],
+    data = ["testdata/legalize_keep/hier-twin-bank-32-start-13.json"],
     imports = ["."],
     main = "tests/test_legalize_keep.py",
     deps = [

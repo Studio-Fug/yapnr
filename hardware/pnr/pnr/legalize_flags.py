@@ -42,8 +42,10 @@ One switch is on by default and turns off with ``0`` (for A/B runs):
 ``PNR_LEGALIZE_KEEP``
     Displacement-minimizing legalization (:mod:`pnr.place.keep`): a part legal at its
     global-placement pose keeps it (a grid snap) and its turn, a slightly overlapping one and its
-    neighbours are pushed apart in their global order, and only a mostly occluded part (or one
-    the push cannot fit) is relocated by the packer's cost and turn search; with
+    neighbours are pushed apart in their global order (the overlap first; routing channels as far
+    as the push reaches), a part the push cannot clear or whose slot is taken takes the nearest
+    free slot around its pose, and only a mostly occluded part is relocated by the packer's cost
+    and turn search; with
     ``PNR_LEGALIZE_REORIENT`` (or ``TURN``) only the parts the legalizer moved turn afterwards.
     ``0`` restores the plain nearest-free-slot packer for every part.
 

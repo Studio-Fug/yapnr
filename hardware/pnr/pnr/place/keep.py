@@ -20,19 +20,25 @@ push, the outline).
    of the GP centres (weight: slot area, so a small part gives way to a big one) onto those
    constraints and each slot's bounds (the outline and the obstacles it faces), computed per axis
    by Dykstra's alternating projections. Pairs that come to overlap get a constraint on the axis
-   they were apart on at GP, and the solve repeats (:data:`ROUNDS`). Where the legalizer's
-   routing-channel model asks for an escape channel between two facing pad rows, the pair's
-   distance includes it (the channel is part of the clearance the parts need), so a push opens
-   the channels the packer's channel cost would have opened, and a part short of one at its GP
-   pose is pushed like a mild overlap. A part pushed further than its cascade bound
-   (:func:`reach`), or a solve that cannot meet its constraints, fails the spreading of its
-   cluster; the caller then makes the most occluded mild part of that cluster
-   severe and spreads again.
+   they were apart on at GP, and the solve repeats (:data:`ROUNDS`). A part pushed further than
+   its cascade bound (:func:`reach`), or a solve that cannot meet its constraints, fails the
+   spreading.
+3. :func:`resolve` spreads each cluster of nearby parts in two steps. First the physical overlap
+   alone (slots side by side): when that fails, the cluster's most occluded mild part is given up
+   (``push_infeasible``) and the rest spread again. Then, where the legalizer's routing-channel
+   model asks for an escape channel between two facing pad rows, the channel is a *soft* goal:
+   the pair's distance grows by the largest share of the channel (:data:`SHARE_STEPS` bisection
+   steps between none and all of it) that the push still meets within every part's reach. A
+   channel never makes the push give up, and a part short of one at its GP pose is pushed like a
+   mild overlap.
 
 The legalizer then takes, for every part that is not severe, the slot nearest its (spread) pose
-within a grid snap and keeps its GP turn, and only when no such slot is free does the part fall
-back to the packer's full search; the severe parts are relocated last by the packer's own cost
-(displacement, routing channels, wirelength) and turn search.
+within a grid snap at its GP turn; a part that cannot have it (its slot is taken:
+``slot_taken``) or that the push gave up (``push_infeasible``) takes the nearest free slot in
+rings expanding from its GP pose (:data:`RING_GROWTH`), its GP turn first, never the packer's
+full search. Only the severe parts are relocated wholesale, last, by the packer's own cost
+(displacement, routing channels, wirelength) and turn search. The legalizer's motion record
+names each relocated part's reason (:data:`REASONS`).
 """
 
 from __future__ import annotations
@@ -50,6 +56,15 @@ TOL = 1e-6
 # The least cascade bound (mm), and the share of a slot's smaller side that bounds it otherwise.
 REACH_MM = 1.5
 REACH_SHARE = 0.5
+# Bisection steps of :func:`resolve` on the share of the routing channels a push opens.
+SHARE_STEPS = 5
+# The nearest-first search of a part that keeps no slot at its pose: rings of radius
+# ``snap * RING_GROWTH ** k`` around its GP pose (pnr.place.legalize).
+RING_GROWTH = 2.0
+# Why a part left its (pushed) GP pose: half or more of it occluded (relocated wholesale), the
+# push could not clear it (nearest-first rings), or its slot was taken (nearest-first rings).
+SEVERE_REASON, PUSH_REASON, SLOT_REASON = "severe", "push_infeasible", "slot_taken"
+REASONS = (SEVERE_REASON, PUSH_REASON, SLOT_REASON)
 
 
 class Box:
@@ -136,9 +151,9 @@ def reach(box: Box) -> float:
     return max(REACH_MM, REACH_SHARE * min(box.w, box.h))
 
 
-def _axis_pairs(slots, obstacles, need=None):
+def _axis_pairs(slots, obstacles, need=None, share=1.0):
     """Initial constraints: ``{(i, j): (axis, first, need)}`` over slot indices (obstacles
-    indexed after the slots), ``first`` the index in front on ``axis`` (``need``: see
+    indexed after the slots), ``first`` the index in front on ``axis`` (``need``, ``share``: see
     :func:`spread`)."""
     boxes = list(slots) + list(obstacles)
     n = len(slots)
@@ -159,22 +174,23 @@ def _axis_pairs(slots, obstacles, need=None):
                 axis = 1  # one above the other: keep the order
             else:
                 continue
-            out[(i, j)] = (axis,) + _order(a, b, i, j, axis, need)
+            out[(i, j)] = (axis,) + _order(a, b, i, j, axis, need, share)
     return out
 
 
-def _order(a, b, i, j, axis, need=None):
+def _order(a, b, i, j, axis, need=None, share=1.0):
     """``(first, need)``: which of ``a`` (index i) and ``b`` (j) is in front on ``axis`` at the
     GP poses (a tie: the lower index) and the centre distance the pair needs there: their slots
-    side by side, or more where ``need(front, back, axis)`` (refs) asks more (a routing channel)."""
+    side by side, or more where ``need(front, back, axis)`` (refs) asks more (a routing channel),
+    by ``share`` (0 to 1) of the difference."""
     ca, cb = (a.x, b.x) if axis == 0 else (a.y, b.y)
     gap = (a.w + b.w) / 2.0 if axis == 0 else (a.h + b.h) / 2.0
     first = i if ca <= cb else j
     if need is not None and a.ref is not None and b.ref is not None:
         front, back = (a, b) if first == i else (b, a)
         extra = need(front.ref, back.ref, axis)
-        if extra is not None:
-            gap = max(gap, float(extra))
+        if extra is not None and float(extra) > gap:
+            gap += share * (float(extra) - gap)
     return first, gap
 
 
@@ -213,19 +229,20 @@ def _solve_axis(targets, weights, lo, hi, cons, sweeps=SWEEPS, tol=TOL):
 
 
 def spread(
-    slots: Sequence[Box], obstacles: Sequence[Box], rounds: int = ROUNDS, need=None
+    slots: Sequence[Box], obstacles: Sequence[Box], rounds: int = ROUNDS, need=None, share=1.0
 ) -> Tuple[Dict[str, Tuple[float, float]], List[str]]:
     """``({ref: (x, y)} new centres, [refs pushed past their reach or left in conflict])`` for
     the movable ``slots`` among the fixed ``obstacles`` (the module docstring). ``need(front, back,
     axis)`` (refs; None: none) is a larger centre distance a pair needs along ``axis``, such as
-    the routing channel between their facing pad rows. An empty failure
+    the routing channel between their facing pad rows; the pair asks ``share`` (0 to 1) of the
+    extra distance. An empty failure
     list means every slot is clear of every other slot and obstacle on a shared plane, inside its
     bounds and within its reach."""
     n = len(slots)
     if n == 0:
         return {}, []
     boxes = list(slots) + list(obstacles)
-    pairs = _axis_pairs(slots, obstacles, need)
+    pairs = _axis_pairs(slots, obstacles, need, share)
     xs = [s.x for s in slots]
     ys = [s.y for s in slots]
     failed: List[str] = []
@@ -271,7 +288,7 @@ def spread(
                 gx = abs(ga.x - gb.x) - (ga.w + gb.w) / 2.0
                 gy = abs(ga.y - gb.y) - (ga.h + gb.h) / 2.0
                 axis = 0 if gx >= gy else 1
-                pairs[(i, j)] = (axis,) + _order(ga, gb, i, j, axis, need)
+                pairs[(i, j)] = (axis,) + _order(ga, gb, i, j, axis, need, share)
                 added = True
         if not added:
             failed = [] if ok_all else [s.ref for s in slots]
@@ -322,13 +339,17 @@ def resolve(
     occlusion: Optional[Dict[str, float]] = None,
     need=None,
     short=(),
+    shares: Optional[Dict[str, float]] = None,
 ) -> Tuple[Dict[str, Tuple[float, float]], List[str]]:
-    """Spread ``slots`` (none severe); while a cluster fails, its most occluded mild part
-    (``occlusion``; ties: the smaller, then the later reference) joins the returned list of parts to
-    relocate and the cluster is spread again without it. Returns ``({ref: (x, y)}, [refs to
-    relocate])``; parts with no overlap and nothing to push them keep their centres. ``need`` (see
-    :func:`spread`) adds routing channels to the pairs' distances, and a cluster holding a part of
-    ``short`` (refs short of a channel at their GP poses) is spread like one with an overlap."""
+    """Spread ``slots`` (none severe) cluster by cluster (:func:`clusters`), the physical overlap
+    first: while a cluster's push fails, its most occluded mild part (``occlusion``; ties: the
+    smaller, then the later reference) joins the returned list of parts the push gave up and the
+    cluster is spread again without it. ``need`` (see :func:`spread`) then widens the pairs'
+    distances by their routing channels, as large a share of them (all, or the largest of
+    :data:`SHARE_STEPS` bisection steps) as the push still meets: a channel is a soft goal and
+    never gives a part up. A cluster with no overlap is left as it is unless it holds a part of
+    ``short`` (refs short of a channel at their GP poses). Returns ``({ref: (x, y)}, [refs the
+    push gave up])``; ``shares`` (a dict, when given) receives each spread part's channel share."""
     occlusion = dict(occlusion or occlusions(slots, obstacles, width, height))
     drop: List[str] = []
     out: Dict[str, Tuple[float, float]] = {}
@@ -339,18 +360,36 @@ def resolve(
             out.update({s.ref: (s.x, s.y) for s in live})
             continue
         while live:
-            centres, bad = spread(live, obstacles, need=need)
-            if not bad:
-                out.update(centres)
-                break
-            mild = [s for s in live if occlusion.get(s.ref, 0.0) > 0]
-            if not mild:
-                # Nothing overlaps any more but a bound fails: leave the cluster as it was.
-                out.update({s.ref: (s.x, s.y) for s in live})
-                break
-            worst = max(mild, key=lambda s: (occlusion[s.ref], -s.w * s.h, str(s.ref)))
-            drop.append(worst.ref)
-            live = [s for s in live if s is not worst]
-            occlusion = dict(occlusion)
-            occlusion.update(occlusions(live, obstacles, width, height))
+            centres, bad = spread(live, obstacles)
+            if bad:
+                mild = [s for s in live if occlusion.get(s.ref, 0.0) > 0]
+                if not mild:
+                    # Nothing overlaps any more but a bound fails: leave the cluster as it was.
+                    out.update({s.ref: (s.x, s.y) for s in live})
+                    break
+                worst = max(mild, key=lambda s: (occlusion[s.ref], -s.w * s.h, str(s.ref)))
+                drop.append(worst.ref)
+                live = [s for s in live if s is not worst]
+                occlusion = dict(occlusion)
+                occlusion.update(occlusions(live, obstacles, width, height))
+                continue
+            share = 0.0
+            if need is not None:
+                got, bad = spread(live, obstacles, need=need)
+                if not bad:
+                    centres, share = got, 1.0
+                else:
+                    lo, hi = 0.0, 1.0
+                    for _ in range(SHARE_STEPS):
+                        mid = (lo + hi) / 2.0
+                        got, bad = spread(live, obstacles, need=need, share=mid)
+                        if bad:
+                            hi = mid
+                        else:
+                            centres, lo = got, mid
+                    share = lo
+            out.update(centres)
+            if shares is not None:
+                shares.update({s.ref: share for s in live})
+            break
     return out, drop

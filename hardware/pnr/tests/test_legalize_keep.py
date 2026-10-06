@@ -3,25 +3,33 @@
 A part or a block macro that is legal at its global pose keeps it (a grid snap) and its turn, even
 with the wirelength term and its turn search on; a slight overlap is resolved by pushing the
 parts apart in their global order (the neighbour beyond is pushed too, nothing else moves); a
-part buried under another is relocated while the other stays; ``PNR_LEGALIZE_KEEP=0`` restores
+part buried under another is relocated while the other stays; a part the push cannot clear or
+whose slot is taken takes the nearest free slot around its pose (never the full search), and the
+record names why; routing channels are a soft goal that never makes the push give up (the
+hier-twin-bank-32 start-13 block: R6 overlapping D4 stays put); ``PNR_LEGALIZE_KEEP=0`` restores
 the plain packer; the motion record (moved count, displacement, topology kept) and the triage
 counts; the spreading solver on its own.
 """
 
 from __future__ import annotations
 
+import json
+import math
 import os
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from pnr import legalize_flags
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.place import keep as keepmod
+from pnr.place.geometry import courtyard_rect
 from pnr.place.legalize import legalize
 from pnr.place.metrics import outside_outline, overlap_pairs
 from pnr.place.motion import combine, motion, occlusion
 
 GRID = 0.25
+DATA = Path(__file__).resolve().parent.parent / "testdata" / "legalize_keep"
 
 
 def part(ref, nets, pos, size=(2.0, 1.0), rot=0.0, footprint="R_0603"):
@@ -184,6 +192,103 @@ class OverlapTest(unittest.TestCase):
         self.assertIn("keep", placed.legal_motion)
 
 
+class NearestFirstTest(unittest.TestCase):
+    def test_a_part_the_push_cannot_clear_lands_nearest_its_pose(self):
+        # A sits in a 2 mm gap between two fixed parts, just over F1: no push clears it (the
+        # fixed parts do not move), so it takes the nearest free slot (here a quarter turn in the
+        # gap, nearer than any slot at its own turn), not a slot the full search would score (the
+        # wire term pulls it to R1 across the board).
+        g = board(
+            [
+                part("F1", ["A", "B"], (6.0, 10.0), size=(4.0, 4.0)),
+                part("F2", ["B", "C"], (12.0, 10.0), size=(4.0, 4.0)),
+                part("A", ["C", "D"], (8.6, 10.0), size=(2.4, 1.0)),
+                part("R1", ["D", "A"], (26.0, 3.0)),
+            ]
+        )
+        placed = run(g, keep=True, fixed=("F1", "F2"), wire_weight=4.0)
+        self.assertEqual(overlap_pairs(placed, clearance=0.2), [])
+        record = placed.legal_motion
+        self.assertEqual(record["relocations"], {"A": "push_infeasible"})
+        self.assertEqual(
+            (record["relocated_push_infeasible"], record["relocated_severe"], record["nudged"]),
+            (1, 0, 1),
+        )
+        a, b = g.component("A"), placed.component("A")
+        self.assertLess(math.dist(a.pos, b.pos), 1.0)
+
+    def test_a_part_whose_slot_is_taken_lands_nearest_its_pose(self):
+        # With the push switched off, the smaller of two overlapping parts finds its slot taken
+        # by the bigger one (anchored first) and takes the nearest free slot at its turn.
+        g = board(
+            [
+                part("U1", ["A", "B"], (10.0, 10.0), size=(4.0, 3.0)),
+                part("R1", ["B", "C"], (12.2, 10.0), size=(2.0, 1.0), rot=90.0),
+                part("R2", ["C", "A"], (26.0, 3.0)),
+            ]
+        )
+
+        def unpushed(slots, obstacles, *a, **kw):
+            return {s.ref: (s.x, s.y) for s in slots}, []
+
+        with mock.patch.object(keepmod, "resolve", unpushed):
+            placed = run(g, keep=True, wire_weight=4.0)
+        self.assertEqual(overlap_pairs(placed, clearance=0.2), [])
+        record = placed.legal_motion
+        self.assertEqual(record["relocations"], {"R1": "slot_taken"})
+        self.assertEqual(record["relocated_slot_taken"], 1)
+        self.assertLessEqual(math.dist(placed.component("U1").pos, (10.0, 10.0)), GRID)
+        self.assertLess(math.dist(placed.component("R1").pos, (12.2, 10.0)), 2.0)
+        self.assertEqual(placed.component("R1").rot, 90.0)
+
+
+class BlockRegressionTest(unittest.TestCase):
+    """hier-twin-bank-32 seed 0, block top.bank_a trial start-13 (testdata/legalize_keep): R6
+    overlaps D4 slightly at its global pose, and every part is short of an escape channel. The
+    push used to give up (the channels exceeded the cascade bound) and R6 went to the full search,
+    10.7 mm away, north of the SOIC, with a quarter turn."""
+
+    def legalize(self, keep):
+        from pnr.place.channels import ChannelModel
+
+        doc = json.loads((DATA / "hier-twin-bank-32-start-13.json").read_text())
+        g = BoardGraph.from_json(json.dumps(doc["graph"]))
+        kw = dict(doc["legalize"], pad_edge=tuple(doc["legalize"]["pad_edge"]))
+        with mock.patch.dict(os.environ, {"PNR_COMPACT": "1"}):
+            out = legalize(
+                g,
+                doc["width"],
+                doc["height"],
+                channel_model=ChannelModel(g, doc["rules"]),
+                fixed={},
+                keepouts=[],
+                keep=keep,
+                **kw,
+            )
+            self.overlaps = overlap_pairs(out, clearance=0.0)
+        return g, out
+
+    def test_r6_stays_by_its_global_pose(self):
+        g, placed = self.legalize(True)
+        self.assertEqual(self.overlaps, [])
+        self.assertEqual(outside_outline(placed, g.outline.width, g.outline.height), [])
+        before, after = g.component("R6"), placed.component("R6")
+        rect = courtyard_rect(before)
+        width = max(rect.w, rect.h)
+        self.assertLessEqual(math.dist(before.pos, after.pos), width)
+        self.assertEqual(after.rot, before.rot)
+        record = placed.legal_motion
+        self.assertEqual(record["relocated"], 0)
+        self.assertGreater(record["pushed"], 0)
+        self.assertGreater(record["channel_short"], 0)
+        self.assertLess(record["max_mm"], 2.0)
+
+    def test_the_plain_packer_still_differs(self):
+        # The fixture still exercises the case: the plain packer moves R6 far.
+        g, placed = self.legalize(False)
+        self.assertGreater(math.dist(g.component("R6").pos, placed.component("R6").pos), 2.0)
+
+
 class MotionTest(unittest.TestCase):
     def test_counts_distance_turns_and_topology(self):
         before = {"A": (0, 0, 0), "B": (10, 0, 0), "C": (5, 5, 90)}
@@ -246,12 +351,38 @@ class SpreadTest(unittest.TestCase):
         self.assertEqual(bad, [])
         self.assertAlmostEqual(centres["B"][0] - centres["A"][0], 5.0, places=3)
         self.assertGreaterEqual(centres["C"][0] - centres["B"][0], 4.0 - 1e-4)
-        moved, drop = keepmod.resolve(slots, [], 30, 20, need=need, short={"A"})
+        shares = {}
+        moved, drop = keepmod.resolve(slots, [], 30, 20, need=need, short={"A"}, shares=shares)
         self.assertEqual(drop, [])
         self.assertAlmostEqual(moved["B"][0] - moved["A"][0], 5.0, places=3)
+        self.assertEqual(set(shares.values()), {1.0})
         # Without a short part or an overlap the cluster is left as it is.
         still, _ = keepmod.resolve(slots, [], 30, 20, need=need)
         self.assertEqual(still["B"], (9.0, 5.0))
+
+    def test_a_channel_is_a_soft_goal_that_never_gives_a_part_up(self):
+        # A overlaps B by 0.5 mm between two walls with 1.5 mm to spare: the overlap is cleared,
+        # but the 4 mm channel A-B asks cannot open within the walls, so the push opens what it
+        # can and gives up no part.
+        walls = [
+            keepmod.Box(None, 1.0, 10.0, 2.0, 20.0, ("top",)),
+            keepmod.Box(None, 12.5, 10.0, 2.0, 20.0, ("top",)),
+        ]
+        slots = [self.box("A", 4.5, 10.0), self.box("B", 8.0, 10.0)]
+
+        def need(front, back, axis):
+            return 8.0 if (front, back, axis) == ("A", "B", 0) else None
+
+        _, bad = keepmod.spread(slots, walls, need=need)
+        self.assertNotEqual(bad, [])  # the whole channel is out of reach
+        shares = {}
+        moved, drop = keepmod.resolve(slots, walls, 30, 20, need=need, shares=shares)
+        self.assertEqual(drop, [])
+        gap = moved["B"][0] - moved["A"][0]
+        self.assertGreaterEqual(gap, 4.0 - 1e-4)  # the overlap is cleared
+        self.assertLess(gap, 8.0)
+        self.assertGreater(min(shares.values()), 0.0)
+        self.assertLess(max(shares.values()), 1.0)
 
     def test_an_obstacle_does_not_move_and_a_bound_holds(self):
         wall = keepmod.Box(None, 1.0, 5.0, 2.0, 10.0, ("top",))

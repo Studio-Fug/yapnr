@@ -567,8 +567,48 @@ def _keep_obstacles(fixed_parts, keepouts, margins, clearance, occupancy):
     return out
 
 
+def _channel_need(channel_model, by_ref, shift_of):
+    """PNR_LEGALIZE_KEEP: ``need(front, back, axis)`` for :func:`pnr.place.keep.spread`, the slot
+    centre distance at which the escape channel the ``channel_model`` asks between the facing
+    pad rows of ``front`` and ``back`` (east or north of it) is open, from their present poses
+    (None: no facing rows), and ``short(comp, others)``: the part is short of a channel there."""
+    cache = {}
+
+    def need(front, back, axis):
+        key = (front, back, axis)
+        if key not in cache:
+            a, b = by_ref.get(front), by_ref.get(back)
+            got = None
+            if a is not None and b is not None:
+                label = "east" if axis == 0 else "north"
+                for direction, gap, overlap, required, _nets in channel_model.interactions(a, b):
+                    if direction == label and float(overlap) > 0 and float(required) > 0:
+                        sa, sb = shift_of(a), shift_of(b)
+                        centre = (b.pos[axis] + sb[axis]) - (a.pos[axis] + sa[axis])
+                        got = centre + float(required) - float(gap)
+            cache[key] = got
+        return cache[key]
+
+    def short(comp, others):
+        return float(channel_model.penalty(comp, others, comp.pos[0], comp.pos[1])) > 1e-9
+
+    return need, short
+
+
 def _keep_plan(
-    movable, *, obstacles, grid, extent, outline, slot, planes, box, pushable, free=None
+    movable,
+    *,
+    obstacles,
+    grid,
+    extent,
+    outline,
+    slot,
+    planes,
+    box,
+    pushable,
+    free=None,
+    channels=None,
+    fixed_parts=(),
 ):
     """PNR_LEGALIZE_KEEP before the packer (:mod:`pnr.place.keep`): triage the ``movable``
     parts at their global poses, push the mild overlaps apart, move every pushed part's
@@ -579,7 +619,11 @@ def _keep_plan(
     ``extent`` is the raster's size and ``outline`` the board's. A part not ``pushable`` (held by
     a region, an align, an edge band or a hard group disc, a hull macro, a part with landing
     reserves) is an obstacle to the push where it is; it is still triaged and anchored. ``free``
-    ({ref: 1} for a part that may take either side) breaks triage ties toward relocating it."""
+    ({ref: 1} for a part that may take either side) breaks triage ties toward relocating it.
+    ``channels`` (the packer's :class:`pnr.place.channels.ChannelModel`; None: none) widens each
+    pair's distance in a push by the escape channel it asks (:func:`_channel_need`; the
+    ``fixed_parts`` count as neighbours), and a part short of one at its pose (``channel_short``)
+    is pushed like a mild overlap: the channel is part of the clearance it needs."""
     from .keep import Box, resolve, triage
 
     slots, shifts, rigid = [], {}, []
@@ -606,7 +650,21 @@ def _keep_plan(
     severe_set = set(severe)
     held = [s for s in slots if s.ref not in severe_set and s.ref in rigid]
     push = [s for s in slots if s.ref not in severe_set and s.ref not in rigid]
-    centres, dropped = resolve(push, list(obstacles) + held, outline[0], outline[1], occlusion)
+    need, short = None, set()
+    if channels is not None:
+        everyone = list(movable) + list(fixed_parts)
+        need, is_short = _channel_need(
+            channels, {c.ref: c for c in everyone}, lambda c: shifts.get(c.ref, (0.0, 0.0))
+        )
+        live = [c for c in everyone if c.ref not in severe_set]
+        short = {
+            c.ref
+            for c in movable
+            if c.ref not in severe_set and is_short(c, [o for o in live if o is not c])
+        }
+    centres, dropped = resolve(
+        push, list(obstacles) + held, outline[0], outline[1], occlusion, need=need, short=short
+    )
     by_ref = {c.ref: c for c in movable}
     pushed = 0
     for ref, (x, y) in centres.items():
@@ -619,6 +677,7 @@ def _keep_plan(
     relocate = severe_set | set(dropped)
     clean = sum(1 for s in slots if occlusion.get(s.ref, 0.0) <= 0.0)
     counts = dict(
+        channel_short=len(short),
         clean=clean,
         mild=len(slots) - clean - len(severe),
         severe=len(severe),
@@ -1527,6 +1586,8 @@ def legalize(
                 or (landing and comp.reserves)
             ),
             free={ref: 1 for ref, opts in (side_options or {}).items() if len(opts) > 1},
+            channels=channel_model,
+            fixed_parts=[by_ref[r] for r in fixed if r in by_ref],
         )
     snap_radius = KEEP_SNAP_CELLS * g
 

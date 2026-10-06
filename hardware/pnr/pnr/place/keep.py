@@ -20,9 +20,13 @@ push, the outline).
    of the GP centres (weight: slot area, so a small part gives way to a big one) onto those
    constraints and each slot's bounds (the outline and the obstacles it faces), computed per axis
    by Dykstra's alternating projections. Pairs that come to overlap get a constraint on the axis
-   they were apart on at GP, and the solve repeats (:data:`ROUNDS`). A part pushed further than
-   its cascade bound (:func:`reach`), or a solve that cannot meet its constraints, fails the
-   spreading of its cluster; the caller then makes the most occluded mild part of that cluster
+   they were apart on at GP, and the solve repeats (:data:`ROUNDS`). Where the legalizer's
+   routing-channel model asks for an escape channel between two facing pad rows, the pair's
+   distance includes it (the channel is part of the clearance the parts need), so a push opens
+   the channels the packer's channel cost would have opened, and a part short of one at its GP
+   pose is pushed like a mild overlap. A part pushed further than its cascade bound
+   (:func:`reach`), or a solve that cannot meet its constraints, fails the spreading of its
+   cluster; the caller then makes the most occluded mild part of that cluster
    severe and spreads again.
 
 The legalizer then takes, for every part that is not severe, the slot nearest its (spread) pose
@@ -132,9 +136,10 @@ def reach(box: Box) -> float:
     return max(REACH_MM, REACH_SHARE * min(box.w, box.h))
 
 
-def _axis_pairs(slots, obstacles):
+def _axis_pairs(slots, obstacles, need=None):
     """Initial constraints: ``{(i, j): (axis, first, need)}`` over slot indices (obstacles
-    indexed after the slots), ``first`` the index in front on ``axis``."""
+    indexed after the slots), ``first`` the index in front on ``axis`` (``need``: see
+    :func:`spread`)."""
     boxes = list(slots) + list(obstacles)
     n = len(slots)
     out = {}
@@ -154,17 +159,23 @@ def _axis_pairs(slots, obstacles):
                 axis = 1  # one above the other: keep the order
             else:
                 continue
-            out[(i, j)] = (axis,) + _order(a, b, i, j, axis)
+            out[(i, j)] = (axis,) + _order(a, b, i, j, axis, need)
     return out
 
 
-def _order(a, b, i, j, axis):
+def _order(a, b, i, j, axis, need=None):
     """``(first, need)``: which of ``a`` (index i) and ``b`` (j) is in front on ``axis`` at the
-    GP poses (a tie: the lower index) and the centre distance the pair needs there."""
+    GP poses (a tie: the lower index) and the centre distance the pair needs there: their slots
+    side by side, or more where ``need(front, back, axis)`` (refs) asks more (a routing channel)."""
     ca, cb = (a.x, b.x) if axis == 0 else (a.y, b.y)
-    need = (a.w + b.w) / 2.0 if axis == 0 else (a.h + b.h) / 2.0
+    gap = (a.w + b.w) / 2.0 if axis == 0 else (a.h + b.h) / 2.0
     first = i if ca <= cb else j
-    return first, need
+    if need is not None and a.ref is not None and b.ref is not None:
+        front, back = (a, b) if first == i else (b, a)
+        extra = need(front.ref, back.ref, axis)
+        if extra is not None:
+            gap = max(gap, float(extra))
+    return first, gap
 
 
 def _solve_axis(targets, weights, lo, hi, cons, sweeps=SWEEPS, tol=TOL):
@@ -202,17 +213,19 @@ def _solve_axis(targets, weights, lo, hi, cons, sweeps=SWEEPS, tol=TOL):
 
 
 def spread(
-    slots: Sequence[Box], obstacles: Sequence[Box], rounds: int = ROUNDS
+    slots: Sequence[Box], obstacles: Sequence[Box], rounds: int = ROUNDS, need=None
 ) -> Tuple[Dict[str, Tuple[float, float]], List[str]]:
     """``({ref: (x, y)} new centres, [refs pushed past their reach or left in conflict])`` for
-    the movable ``slots`` among the fixed ``obstacles`` (the module docstring). An empty failure
+    the movable ``slots`` among the fixed ``obstacles`` (the module docstring). ``need(front, back,
+    axis)`` (refs; None: none) is a larger centre distance a pair needs along ``axis``, such as
+    the routing channel between their facing pad rows. An empty failure
     list means every slot is clear of every other slot and obstacle on a shared plane, inside its
     bounds and within its reach."""
     n = len(slots)
     if n == 0:
         return {}, []
     boxes = list(slots) + list(obstacles)
-    pairs = _axis_pairs(slots, obstacles)
+    pairs = _axis_pairs(slots, obstacles, need)
     xs = [s.x for s in slots]
     ys = [s.y for s in slots]
     failed: List[str] = []
@@ -226,18 +239,18 @@ def spread(
                 lo.append(b[2 * axis])
                 hi.append(b[2 * axis + 1])
             cons = []
-            for (i, j), (ax, first, need) in pairs.items():
+            for (i, j), (ax, first, dist) in pairs.items():
                 if ax != axis:
                     continue
                 if j >= n:  # an obstacle: a bound on the slot
                     o = boxes[j]
                     oc = o.x if axis == 0 else o.y
                     if first == i:
-                        hi[i] = min(hi[i], oc - need)
+                        hi[i] = min(hi[i], oc - dist)
                     else:
-                        lo[i] = max(lo[i], oc + need)
+                        lo[i] = max(lo[i], oc + dist)
                     continue
-                cons.append((i, j, need) if first == i else (j, i, need))
+                cons.append((i, j, dist) if first == i else (j, i, dist))
             target = [s.x if axis == 0 else s.y for s in slots]
             x, ok = _solve_axis(target, [s.weight for s in slots], lo, hi, cons)
             ok_all = ok_all and ok
@@ -258,7 +271,7 @@ def spread(
                 gx = abs(ga.x - gb.x) - (ga.w + gb.w) / 2.0
                 gy = abs(ga.y - gb.y) - (ga.h + gb.h) / 2.0
                 axis = 0 if gx >= gy else 1
-                pairs[(i, j)] = (axis,) + _order(ga, gb, i, j, axis)
+                pairs[(i, j)] = (axis,) + _order(ga, gb, i, j, axis, need)
                 added = True
         if not added:
             failed = [] if ok_all else [s.ref for s in slots]
@@ -307,22 +320,26 @@ def resolve(
     width: float,
     height: float,
     occlusion: Optional[Dict[str, float]] = None,
+    need=None,
+    short=(),
 ) -> Tuple[Dict[str, Tuple[float, float]], List[str]]:
     """Spread ``slots`` (none severe); while a cluster fails, its most occluded mild part
     (``occlusion``; ties: the smaller, then the later reference) joins the returned list of parts to
     relocate and the cluster is spread again without it. Returns ``({ref: (x, y)}, [refs to
-    relocate])``; parts with no overlap and nothing to push them keep their centres."""
+    relocate])``; parts with no overlap and nothing to push them keep their centres. ``need`` (see
+    :func:`spread`) adds routing channels to the pairs' distances, and a cluster holding a part of
+    ``short`` (refs short of a channel at their GP poses) is spread like one with an overlap."""
     occlusion = dict(occlusion or occlusions(slots, obstacles, width, height))
     drop: List[str] = []
     out: Dict[str, Tuple[float, float]] = {}
     by_ref = {s.ref: s for s in slots}
     for group in clusters(slots, obstacles):
         live = [by_ref[r] for r in group]
-        if not any(occlusion.get(s.ref, 0.0) > 0 for s in live):
+        if not any(occlusion.get(s.ref, 0.0) > 0 or s.ref in short for s in live):
             out.update({s.ref: (s.x, s.y) for s in live})
             continue
         while live:
-            centres, bad = spread(live, obstacles)
+            centres, bad = spread(live, obstacles, need=need)
             if not bad:
                 out.update(centres)
                 break

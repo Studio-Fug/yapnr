@@ -765,7 +765,9 @@ def legal_motion(synth, seeds, chosen):
     if blocks:
         out["block"] = combine(blocks)
     for record in seeds:
-        if record["id"] == chosen and record.get("legal_motion") is not None:
+        # The chosen route's id is its seed's (``top-NN``) plus ``-route`` (and a retry suffix).
+        ours = chosen == record["id"] or str(chosen).startswith(record["id"] + "-")
+        if ours and record.get("legal_motion") is not None:
             out["top"] = record["legal_motion"]
     return out
 

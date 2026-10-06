@@ -131,6 +131,24 @@ class HierCaseTest(unittest.TestCase):
     def load(self):
         return hier_case.load(self.root)
 
+    def test_the_report_carries_the_legalization_motion(self):
+        """pnr-report.json's ``legal_motion``: the chosen block trials combined and the chosen
+        top seed's macro legalization (pnr.place.motion)."""
+        motion = self.report["legal_motion"]
+        self.assertEqual(set(motion), {"block", "top"})
+        for stage in motion.values():
+            self.assertLessEqual(stage["moved"], stage["count"])
+            self.assertTrue(0.0 <= stage["topology"] <= 1.0)
+        rec = dict(count=2, moved=1, turned=0, sum_mm=1.0, max_mm=1.0, topology=1.0)
+        seeds = [
+            dict(id="top-00", legal_motion=dict(rec, moved=0)),
+            dict(id="top-01", legal_motion=rec),
+        ]
+        synth = [dict(chosen=dict(legal_motion=rec)), dict(chosen=dict(legal_motion=rec))]
+        got = hier_case.legal_motion(synth, seeds, "top-01-route")
+        self.assertEqual(got["top"], rec)
+        self.assertEqual((got["block"]["count"], got["block"]["moved"]), (4, 2))
+
     def test_twins_share_a_template_and_one_layout(self):
         templates = self.report["hier"]["templates"]
         self.assertEqual(sorted(len(t["blocks"]) for t in templates), [1, 2])

@@ -233,6 +233,26 @@ class SpreadTest(unittest.TestCase):
         self.assertAlmostEqual(centres["A"][0], 5 - 1 / 3, places=3)
         self.assertAlmostEqual(centres["C"][1], 5.0)
 
+    def test_a_channel_need_widens_the_push(self):
+        # A and B just apart along x; a channel of 1 mm between them pushes them apart, C
+        # (side by side with B, which moves) is pushed on in order; with a new conflict the solve
+        # repeats with the need too.
+        slots = [self.box("A", 5, 5), self.box("B", 9, 5), self.box("C", 13.2, 5)]
+
+        def need(front, back, axis):
+            return 5.0 if (front, back, axis) == ("A", "B", 0) else None
+
+        centres, bad = keepmod.spread(slots, [], need=need)
+        self.assertEqual(bad, [])
+        self.assertAlmostEqual(centres["B"][0] - centres["A"][0], 5.0, places=3)
+        self.assertGreaterEqual(centres["C"][0] - centres["B"][0], 4.0 - 1e-4)
+        moved, drop = keepmod.resolve(slots, [], 30, 20, need=need, short={"A"})
+        self.assertEqual(drop, [])
+        self.assertAlmostEqual(moved["B"][0] - moved["A"][0], 5.0, places=3)
+        # Without a short part or an overlap the cluster is left as it is.
+        still, _ = keepmod.resolve(slots, [], 30, 20, need=need)
+        self.assertEqual(still["B"], (9.0, 5.0))
+
     def test_an_obstacle_does_not_move_and_a_bound_holds(self):
         wall = keepmod.Box(None, 1.0, 5.0, 2.0, 10.0, ("top",))
         slots = [self.box("A", 3.5, 5, bounds=(2, 28, 2, 18))]

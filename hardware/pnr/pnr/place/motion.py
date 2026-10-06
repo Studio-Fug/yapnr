@@ -155,7 +155,7 @@ def summary(record: dict) -> dict:
 
 
 # The PNR_LEGALIZE_KEEP triage counts a legalizer record carries (pnr.place.legalize).
-TRIAGE = ("clean", "mild", "severe", "pushed", "relocated", "anchored")
+TRIAGE = ("clean", "mild", "severe", "pushed", "relocated", "anchored", "channel_short")
 
 
 def combine(records: List[dict]) -> dict:

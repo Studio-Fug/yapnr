@@ -1,0 +1,626 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../../../../genindex.html"><link rel="search" title="Search" href="../../../../../search.html">
+        <link rel="prefetch" href="../../../../../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../../../../../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../../../../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>D1 re-optimization under the fixed corner-gap DRC (part 4/5) - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../../../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../../../../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../../../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/rf/order0/predictions/D1-d1c/README.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/rf/order0/predictions/D1-d1c/README.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="d1-re-optimization-under-the-fixed-corner-gap-drc-part-4-5">
+<h1>D1 re-optimization under the fixed corner-gap DRC (part 4/5)<a class="headerlink" href="#d1-re-optimization-under-the-fixed-corner-gap-drc-part-4-5" title="Link to this heading">¶</a></h1>
+<p>Status: done 2026-10-05. Campaigns <code class="docutils literal notranslate"><span class="pre">20261005-mceval-f1e549</span></code> (submission 1) and
+<code class="docutils literal notranslate"><span class="pre">20261005-mceval-451407</span></code> (the resubmission of f1e549’s four timed-out D1 lines, with a longer
+end window; see below), under this workflow’s separate $8 GCP cap (<code class="docutils literal notranslate"><span class="pre">../../../../order0/gcp-spend.md</span></code>).</p>
+<p>Evidence labels: <strong>[S]</strong> solver output, logs or records; <strong>[D]</strong> derived here (arithmetic,
+judgement); nothing here is measured (no board has been fabricated).</p>
+<section id="why-this-exists">
+<h2>Why this exists<a class="headerlink" href="#why-this-exists" title="Link to this heading">¶</a></h2>
+<p>The committed <code class="docutils literal notranslate"><span class="pre">d1-star</span></code> (<code class="docutils literal notranslate"><span class="pre">docs/rf/order0/predictions/D1/</span></code>, part 2) reproduces two 0.100 mm
+corner-gap violations against OSH Park’s 0.127 mm rule under the exact corner-gap DRC checker
+PR #53 added. O0-D cannot ship with a board that fails its own fab DRC, so D1 was re-optimized
+from the same four formulations (base, robust, star, sched), same specs/criteria
+(<code class="docutils literal notranslate"><span class="pre">docs/rf/order0/inputs/specs/d1-*.json</span></code>, <code class="docutils literal notranslate"><span class="pre">criteria/d1.json</span></code>), same pre-declared selection rule
+(<code class="docutils literal notranslate"><span class="pre">part2/select.py</span></code>), under commit <code class="docutils literal notranslate"><span class="pre">ad2bda7</span></code> (PR #53, the fixed DRC; D2/O0-W’s later changes
+in PR #54 do not touch the RF solver or this spec/criteria set).</p>
+</section>
+<section id="campaign-history">
+<h2>Campaign history<a class="headerlink" href="#campaign-history" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">20261005-mceval-f1e549</span></code> (submitted 2026-10-05 05:00 UTC, c4-highcpu-16 Spot
+northamerica-northeast1, <code class="docutils literal notranslate"><span class="pre">--attempt-s</span> <span class="pre">10350</span> <span class="pre">--end-s</span> <span class="pre">3450</span></code>, <code class="docutils literal notranslate"><span class="pre">max_retries</span> <span class="pre">1</span></code>): the 2 R1
+references passed; base/robust/star/sched all exited 75 (timeout) after both attempts — this
+workflow’s own plan directory for this campaign was lost to a host disk-full event partway
+through (recovered byte-for-byte from <code class="docutils literal notranslate"><span class="pre">gs://yapnr-experiments-runs/campaigns/20261005-mceval-f1e549/</span></code>,
+which <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">submit</span></code> had already copied there; this is why the resubmission below is a new
+campaign id rather than a second submission of f1e549 — that campaign’s <code class="docutils literal notranslate"><span class="pre">tasks.jsonl</span></code> is
+immutable once submitted, and a longer <code class="docutils literal notranslate"><span class="pre">--end-s</span></code> needs a different one).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">20261005-mceval-451407</span></code> (order0-d1-resume, submitted 2026-10-05 11:38 UTC, same image digest,
+same commit/specs/criteria, <code class="docutils literal notranslate"><span class="pre">--end-s</span> <span class="pre">6000</span></code> instead of 3450 — part 2 found the end phase
+(export, coarse, fine, finer) needs 5093-5100 s for a D1-size grid): base, sched and star all
+finished (SUCCEEDED); <strong>robust timed out again</strong> (reached iteration 69 of its schedule and the
+fine re-validation before the hard 10800 s wall, per its log tail) even with the longer window,
+and is reported <strong>inconclusive</strong>, not re-run further (the task asked for one resubmission).
+Checkpoints (<code class="docutils literal notranslate"><span class="pre">g45</span></code>/<code class="docutils literal notranslate"><span class="pre">g49</span></code>/<code class="docutils literal notranslate"><span class="pre">g47</span></code>/<code class="docutils literal notranslate"><span class="pre">g49</span></code> for base/robust/sched/star) were copied GCS-to-GCS from
+f1e549’s checkpoint store before submitting, so every run resumed mid-optimization rather than
+starting over.</p></li>
+</ul>
+</section>
+<section id="outcome-d1-star-ships-again">
+<h2>Outcome: <code class="docutils literal notranslate"><span class="pre">d1-star</span></code> ships again<a class="headerlink" href="#outcome-d1-star-ships-again" title="Link to this heading">¶</a></h2>
+<p>Applying the pre-declared rule exactly (<code class="docutils literal notranslate"><span class="pre">part2/select.py</span></code>, <code class="docutils literal notranslate"><span class="pre">selection.json</span></code> in this directory):
+among the runs whose exported design passes every check on coarse, fine and finer, the largest
+worst-case fine/finer margin; ties within 0.05 dB broken by fewest repaired pixels, then order.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>run</p></th>
+<th class="head"><p>ok</p></th>
+<th class="head"><p>coarse |S11|/|S21| (dB)</p></th>
+<th class="head"><p>fine</p></th>
+<th class="head"><p>finer</p></th>
+<th class="head"><p>fine/finer margin (dB)</p></th>
+<th class="head"><p>repaired px</p></th>
+<th class="head"><p>DRC</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">d1-base</span></code></p></td>
+<td><p>fail</p></td>
+<td><p>-7.46 / -4.16</p></td>
+<td><p>-7.57 / -4.16</p></td>
+<td><p>-7.59 / -4.15</p></td>
+<td><p>-7.428</p></td>
+<td><p>239</p></td>
+<td><p><strong>fails</strong> (new)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">d1-robust</span></code></p></td>
+<td><p>fail (coarse; timeout)</p></td>
+<td><p>-0.19 / -65.6</p></td>
+<td><p>— (timeout)</p></td>
+<td><p>— (timeout)</p></td>
+<td><p>—</p></td>
+<td><p>373</p></td>
+<td><p><strong>fails</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">d1-star</span></code></p></td>
+<td><p><strong>pass</strong></p></td>
+<td><p>-20.38 / -3.26</p></td>
+<td><p>-20.77 / -3.27</p></td>
+<td><p>-20.77 / -3.26</p></td>
+<td><p><strong>0.282</strong></p></td>
+<td><p>134</p></td>
+<td><p>ok</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">d1-sched</span></code></p></td>
+<td><p>fail</p></td>
+<td><p>-8.60 / -3.97</p></td>
+<td><p>-8.74 / -3.97</p></td>
+<td><p>-8.77 / -3.96</p></td>
+<td><p>-6.259</p></td>
+<td><p>328</p></td>
+<td><p><strong>fails</strong> (new)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">d1-robust</span></code> timed out before its fine/finer re-validation, but its exported design (iteration 60)
+had already been simulated on the coarse grid [S] (<code class="docutils literal notranslate"><span class="pre">result.json</span></code> in the fetched task,
+<code class="docutils literal notranslate"><span class="pre">~/yapnr-runs/fetched/20261005-mceval-451407/tasks/mc~d1-robust/</span></code>): worst |S11| −0.19 dB and
+|S21| −57 to −66 dB over 4.25-5.75 GHz (worst −65.6 dB; essentially no transmission),
+and its export DRC fails (one 0.2 mm corner gap). It cannot pass the coarse check, so the rule
+could not have picked it whatever its fine/finer results; the outcome does not depend on the
+timeout.</p>
+<p><code class="docutils literal notranslate"><span class="pre">d1-star</span></code> is the only run that passes on all three grids, so it ships without a tie-break — the
+same formulation part 2 shipped, now with a clean footprint export under the fixed DRC (the
+width/space repair changed 134 px here, vs 30 in part 2’s run; islands 25, 24 floating, vs 15/14
+before — same topology, a different repaired boundary). <code class="docutils literal notranslate"><span class="pre">result.json</span></code> sha256
+<code class="docutils literal notranslate"><span class="pre">7e070ca8e32dfa1c8d6755302681f3538e51ee65e90c361086badf1cc329c4b8</span></code>, so the label is
+<code class="docutils literal notranslate"><span class="pre">O0</span> <span class="pre">D1</span> <span class="pre">divider-osh-m</span> <span class="pre">7e070ca8</span></code> (supersedes part 2’s <code class="docutils literal notranslate"><span class="pre">O0</span> <span class="pre">D1</span> <span class="pre">divider-osh-m</span> <span class="pre">ad20e643</span></code>). Under the
+new DRC, <code class="docutils literal notranslate"><span class="pre">d1-base</span></code> and <code class="docutils literal notranslate"><span class="pre">d1-sched</span></code> additionally <strong>fail export DRC</strong> (<code class="docutils literal notranslate"><span class="pre">drc_ok:</span> <span class="pre">false</span></code>), not only
+the S-parameter checks — they were DRC-clean under the old checker.</p>
+<p><code class="docutils literal notranslate"><span class="pre">d1-star</span></code>’s full numbers [S] (coarse / fine / finer, raw):</p>
+<ul class="simple">
+<li><p>|S11| max: -20.38 / -20.77 / -20.77 dB</p></li>
+<li><p>|S21| = |S31| min: -3.261 / -3.268 / -3.263 dB</p></li>
+<li><p>fine/finer margin over the re-validation criteria (-15/-3.55 dB): 0.282 dB</p></li>
+</ul>
+</section>
+<section id="validation-on-the-other-two-substrates-campaign-20261005-mceval-c70352">
+<h2>Validation on the other two substrates (campaign <code class="docutils literal notranslate"><span class="pre">20261005-mceval-c70352</span></code>)<a class="headerlink" href="#validation-on-the-other-two-substrates-campaign-20261005-mceval-c70352" title="Link to this heading">¶</a></h2>
+<p>The shipped footprint re-validated coarse/fine/finer on M-eq (wide 3-7 GHz pulse), M-nom and
+M-eq-em528 (<code class="docutils literal notranslate"><span class="pre">variants/</span></code>), mirroring part 2’s <code class="docutils literal notranslate"><span class="pre">20261004-mceval-81c8f7</span></code> [S]:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>substrate</p></th>
+<th class="head"><p>coarse |S11|/|S21| (dB)</p></th>
+<th class="head"><p>fine</p></th>
+<th class="head"><p>finer</p></th>
+<th class="head"><p>re-validation criteria (-17/-15 dB)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M-eq (wide pulse)</p></td>
+<td><p>-20.36 / -3.259</p></td>
+<td><p>-20.72 / -3.265</p></td>
+<td><p>-20.74 / -3.263</p></td>
+<td><p>pass</p></td>
+</tr>
+<tr class="row-odd"><td><p>M-nom</p></td>
+<td><p>-19.70 / -3.273</p></td>
+<td><p>-20.02 / -3.276</p></td>
+<td><p>-20.05 / -3.277</p></td>
+<td><p>pass</p></td>
+</tr>
+<tr class="row-even"><td><p>M-eq-em528</p></td>
+<td><p>-19.45 / -3.223</p></td>
+<td><p>-19.80 / -3.230</p></td>
+<td><p>-19.81 / -3.231</p></td>
+<td><p>pass</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>All three substrates and all three grids pass the re-validation’s own (looser, -17/-15 dB)
+sanity criteria. Against the Order 0 design’s actual -20 dB |S11| spec: M-eq and M-nom clear
+it with a thin margin (M-nom’s worst point, -19.70 dB coarse / -20.05 dB finer, is close to the
+line); EM528 misses by 0.19-0.55 dB, the same pattern part 2 found (R1 misses there too, by
+about the same amount — see below). This repeats part 2’s finding almost exactly: the new
+export’s numbers are all within about 0.2 dB of the old ones.</p>
+</section>
+<section id="r1-the-textbook-reference-for-comparison-unchanged">
+<h2>R1 (the textbook reference, for comparison): unchanged<a class="headerlink" href="#r1-the-textbook-reference-for-comparison-unchanged" title="Link to this heading">¶</a></h2>
+<p>R1 is a fixed hand-drawn geometry, not affected by the DRC fix, so it was only re-run as a
+forward check (not re-optimized): M-nom |S11| -21.74 dB / |S21| -3.282 dB, M-eq-em528 |S11|
+-19.78 dB / |S21| -3.249 dB [S] (coarse, 20261005-mceval-f1e549) — both within about 0.1 dB of
+part 2’s numbers (-21.64 / -19.69 dB), consistent with run-to-run solver noise rather than any
+real change.</p>
+</section>
+<section id="openems-independent-3d-fdtd-43-m-pec-copper-nominal-fr408hr">
+<h2>openEMS (independent 3D FDTD, 43 µm PEC copper, nominal FR408HR)<a class="headerlink" href="#openems-independent-3d-fdtd-43-m-pec-copper-nominal-fr408hr" title="Link to this heading">¶</a></h2>
+<p>Campaign <code class="docutils literal notranslate"><span class="pre">20261005-mceval-5bb031</span></code> (order0-openems-d1-new-r05): the new D1 only, at 0.05 mm, P1
+and P2 excited (P3 by mirror symmetry, <code class="docutils literal notranslate"><span class="pre">post.py</span></code>), exact end criteria — same method as part 2’s
+<code class="docutils literal notranslate"><span class="pre">20261004-mceval-11b741</span></code>/<code class="docutils literal notranslate"><span class="pre">e04335</span></code>. <strong>R1 was not re-run</strong>: it is a fixed geometry unaffected by
+the DRC fix, so part 2’s openEMS R1 predictions
+(<code class="docutils literal notranslate"><span class="pre">../openems/r1-openems-r0{5,25}-loss-corrected.s3p</span></code>, <code class="docutils literal notranslate"><span class="pre">-19.69</span></code>/<code class="docutils literal notranslate"><span class="pre">-20.47</span></code> dB |S11|,
+<code class="docutils literal notranslate"><span class="pre">-3.295</span></code>/<code class="docutils literal notranslate"><span class="pre">-3.294</span></code> dB |S21|) are reused as-is rather than re-run. <strong>Only the 0.05 mm mesh was
+run here</strong> (not the 0.025 mm mesh-convergence pair part 2 also had for D1): this workflow’s $8
+cap left no safe room for both it and a Palace run after the resubmission and the 3-substrate
+validation (see “Budget” below), and Palace — the independent <em>second</em> solver, separate from
+openEMS — was prioritized for the remaining headroom instead of a convergence check on the
+solver already run.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>raw |S11| max (dB)</p></th>
+<th class="head"><p>raw |S21|/|S31| min (dB)</p></th>
+<th class="head"><p>loss-corrected |S21|/|S31| (dB) [D]</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>New D1 (this campaign)</p></td>
+<td><p>-17.10</p></td>
+<td><p>-3.217 / -3.213</p></td>
+<td><p>-3.329 / -3.325</p></td>
+</tr>
+<tr class="row-odd"><td><p>Old D1 (part 2, for comparison)</p></td>
+<td><p>-17.42</p></td>
+<td><p>-3.210 / -3.206</p></td>
+<td><p>-3.322 / -3.317</p></td>
+</tr>
+<tr class="row-even"><td><p>yapnr.rf (new D1, <strong>M-nom</strong>, coarse / fine / finer): like for like with openEMS</p></td>
+<td><p>-19.70 / -20.02 / -20.05</p></td>
+<td><p>-3.273 / -3.276 / -3.277</p></td>
+<td><p>n/a (see part 2’s method)</p></td>
+</tr>
+<tr class="row-odd"><td><p>yapnr.rf (new D1, M-eq, finer): the design substrate, not like for like</p></td>
+<td><p>-20.77</p></td>
+<td><p>-3.263 / -3.263</p></td>
+<td><p>n/a</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The loss correction [D] reuses part 2’s Δα/ratio from the 0.40 mm M line (unaffected by D1’s
+export change, since it is a property of the substrate and the solver’s own line, not of D1’s
+footprint): +0.112 dB of additional loss on |S21|/|S31|, the same offset part 2 derived and
+applied.</p>
+<p><strong>Like for like</strong> (openEMS on nominal FR408HR with 43 µm copper against yapnr.rf’s M-nom
+re-validation, the same nominal substrate; both raw) [D]: openEMS’s worst |S11| is −17.10 dB,
+a <strong>2.9 dB miss</strong> of the −20 dB spec; yapnr.rf’s M-nom result is −19.70 / −20.02 / −20.05 dB
+(coarse / fine / finer), i.e. <strong>at the spec line, not a clean pass</strong> (0.30 dB over it on the
+coarse grid, 0.02-0.05 dB under it on fine/finer). The two solvers differ by 2.6-3.0 dB in worst
+|S11|, and openEMS puts the in-band |S11| minimum at 5.42 GHz against yapnr.rf’s
+4.83-4.85 GHz (about 12 % higher). They agree on transmission to 0.13-0.14 dB (max |ΔS21| over
+the band, raw, per frequency). The M-eq row (−20.77 dB) is yapnr.rf on its in-job design
+substrate and is shown for reference only; part 2’s 2.7-3.5 dB “gap” was quoted against M-eq.
+This is registered as a design that <strong>is marginal on yapnr.rf at nominal and misses on
+openEMS</strong>, essentially part 2’s finding carried over to the DRC-fixed export (the repair’s 134
+changed pixels did not change the picture). D1’s floating-copper suspect from part 2’s note is
+unchanged (more floating islands after this repair, not fewer).</p>
+</section>
+<section id="palace-independent-3d-fem-not-run">
+<h2>Palace (independent 3D FEM): not run<a class="headerlink" href="#palace-independent-3d-fem-not-run" title="Link to this heading">¶</a></h2>
+<p>This workflow’s $8 cap (separate from part 2’s own $15 cap) was reached by the f1e549 submission
+($3.74), its resubmission ($2.50), and the 3-substrate validation ($1.29) before the openEMS
+run; after openEMS’s reduced-scope run ($0.34) only about $0.13 of ceiling remained — not enough
+for even a minimal Palace campaign’s ceiling once Batch’s own retry/attempt accounting is
+included. Running Palace on D1 would also need a <code class="docutils literal notranslate"><span class="pre">divider</span></code>-shaped planar adapter (none of the
+existing Palace cases — feed, launch, column — fit a 3-port MSL divider in a 12×15 mm window),
+which was not attempted given the budget was already exhausted. <strong>D1 and R1 have no Palace
+comparison in this round</strong>; this is an open item for a follow-up with its own budget.</p>
+</section>
+<section id="files">
+<h2>Files<a class="headerlink" href="#files" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">runs/d1-star/</span></code>, <code class="docutils literal notranslate"><span class="pre">runs/d1-base/</span></code>, <code class="docutils literal notranslate"><span class="pre">runs/d1-sched/</span></code>: spec, <code class="docutils literal notranslate"><span class="pre">result.json</span></code>, <code class="docutils literal notranslate"><span class="pre">validation.json</span></code>,
+footprint and (for <code class="docutils literal notranslate"><span class="pre">d1-star</span></code>) the re-validation Touchstone files and optimizer history, from
+<code class="docutils literal notranslate"><span class="pre">20261005-mceval-451407</span></code>. <code class="docutils literal notranslate"><span class="pre">d1-robust</span></code>’s files are not included (timed out; its coarse
+result is quoted above from the fetched task).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">variants/d1-star-{m-eq,m-nom,m-eq-em528}/</span></code>: the 3-substrate re-validation, from
+<code class="docutils literal notranslate"><span class="pre">20261005-mceval-c70352</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">openems/d1-new-openems-r05.s3p</span></code>: the raw (not loss-corrected) S-matrix of the new D1 at
+0.05 mm, from <code class="docutils literal notranslate"><span class="pre">20261005-mceval-5bb031</span></code>, assembled by <code class="docutils literal notranslate"><span class="pre">docs/rf/order0/openems/post.py</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">selection.json</span></code>: <code class="docutils literal notranslate"><span class="pre">part2/select.py</span></code>’s output over this round’s four formulations.</p></li>
+<li><p>Fetched results: <code class="docutils literal notranslate"><span class="pre">~/yapnr-runs/fetched/{20261005-mceval-f1e549,20261005-mceval-451407,20261005-mceval-c70352,20261005-mceval-5bb031}/</span></code>.</p></li>
+<li><p>Run summary and three-solver table: <code class="docutils literal notranslate"><span class="pre">../../../order0/part5/run.md</span></code> (outside this repo, in the
+Splanc workspace) and this file.</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">D1 re-optimization under the fixed corner-gap DRC (part 4/5)</a><ul>
+<li><a class="reference internal" href="#why-this-exists">Why this exists</a></li>
+<li><a class="reference internal" href="#campaign-history">Campaign history</a></li>
+<li><a class="reference internal" href="#outcome-d1-star-ships-again">Outcome: <code class="docutils literal notranslate"><span class="pre">d1-star</span></code> ships again</a></li>
+<li><a class="reference internal" href="#validation-on-the-other-two-substrates-campaign-20261005-mceval-c70352">Validation on the other two substrates (campaign <code class="docutils literal notranslate"><span class="pre">20261005-mceval-c70352</span></code>)</a></li>
+<li><a class="reference internal" href="#r1-the-textbook-reference-for-comparison-unchanged">R1 (the textbook reference, for comparison): unchanged</a></li>
+<li><a class="reference internal" href="#openems-independent-3d-fdtd-43-m-pec-copper-nominal-fr408hr">openEMS (independent 3D FDTD, 43 µm PEC copper, nominal FR408HR)</a></li>
+<li><a class="reference internal" href="#palace-independent-3d-fem-not-run">Palace (independent 3D FEM): not run</a></li>
+<li><a class="reference internal" href="#files">Files</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../../../../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../../../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../../../../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

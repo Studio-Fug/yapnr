@@ -19,8 +19,9 @@ Check kinds: ``inside_board``, ``side``, ``fixed``, ``edge``, ``orientation``,
 ``via_class`` (the size and site of a part's plane vias), ``escape`` (each listed ball's
 copper reaches a via or leaves the courtyard) and ``pad_distance`` (parts' pads near their
 net's pads on an anchor); for supplies ``unconnected`` (exactly the listed pads are cut off
-from the rest of their net), ``rail_zones`` (each rail of a shared plane layer fills as one
-piece) and ``ir_drop`` (a rail's DC drop within its budget, measured by pnr.ir_extract).
+from the rest of their net), ``rail_zones`` (each rail of ``nets`` fills as one piece; a
+candidate the engine decided to trace, named in ``trace_nets``, fills none) and ``ir_drop``
+(a rail's DC drop within its budget, measured by pnr.ir_extract).
 
     python3 check_constraints.py BOARD.kicad_pcb --spec SPEC.json --out OUT.json
 
@@ -634,12 +635,15 @@ def check_unconnected(b, c):
 
 
 def check_rail_zones(b, c):
-    """Each rail of ``nets`` fills ``layer`` as one piece of at least ``min_area_mm2``,
-    and no other net (but the ``fill`` net) pours there."""
+    """Each rail of ``nets`` fills ``layer`` as one piece of at least ``min_area_mm2``;
+    a candidate the engine decided to trace (``trace_nets``, a subset of ``nets``)
+    fills none there, confirming the engine left it out of the partition. No other
+    net (but the ``fill`` net) pours on the layer."""
     board = b.board
     lid = board.GetLayerID(c["layer"])
     _filled(board)
     zones = [z for z in board.Zones() if not z.GetIsRuleArea() and z.IsOnLayer(lid)]
+    trace_nets = set(c.get("trace_nets") or ())
     measured = {}
     ok = True
     for net in c["nets"]:
@@ -650,14 +654,21 @@ def check_rail_zones(b, c):
                 pieces += fill.OutlineCount()
                 area += mm(mm(fill.Area()))
         measured[net] = dict(pieces=pieces, area_mm2=round(area, 3))
-        ok = ok and pieces == 1 and area >= c["min_area_mm2"]
+        if net in trace_nets:
+            ok = ok and pieces == 0
+        else:
+            ok = ok and pieces == 1 and area >= c["min_area_mm2"]
     foreign = sorted(
         {z.GetNetname() or "<no net>" for z in zones}
         - set(c["nets"])
         - ({c["fill"]} if c.get("fill") else set())
     )
     measured["foreign"] = foreign
-    return ok and not foreign, measured, dict(pieces=1, min_area_mm2=c["min_area_mm2"])
+    return (
+        ok and not foreign,
+        measured,
+        dict(pieces=1, min_area_mm2=c["min_area_mm2"], trace_nets=sorted(trace_nets)),
+    )
 
 
 def check_ir_drop(b, c):

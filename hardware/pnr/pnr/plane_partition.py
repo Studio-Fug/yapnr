@@ -6,6 +6,14 @@ whose balls spread over the same package overlap, and the smaller box wins. A
 partition instead gives each rail a **connected territory** built from its own
 terminals:
 
+0. ``entry["nets"]`` lists **candidate** rails, not a guarantee: :func:`for_route`
+   decides each one plane or trace (its own IR budget, else its share of the
+   layer's declared current, else its terminal count; :func:`_rail_decision`) and
+   drops a traced one from the partition before step 1 (its terminals become
+   foreign copper, as for any net the entry does not name; the router then routes
+   it as an ordinary trace, as it already does for every other net). An entry with
+   a ``region`` (an outer pour) is unaffected: every one of its candidates keeps a
+   piece of the pour;
 1. the layer is rasterized at ``h_mm`` (0.1 mm) inside the outline less the edge
    clearance; foreign through copper is blocked with its clearance (other nets'
    planned vias, fixed vias, plated holes, mounting holes), and so are keepouts
@@ -1429,6 +1437,56 @@ def _fixed_lands(polygons, layer, terms):
     return out
 
 
+CANDIDATE_CURRENT_FLOOR_A = 0.01  # a rail under this declared current gets no
+# territory unless it has enough terminals to need a mesh (below) or its own IR
+# budget (above): a trickle rail (a coin-cell backup, a sense line) is as well
+# served by a trace
+CANDIDATE_TERMINALS_MIN = 6  # a rail under the current floor still gets a
+# territory at this many terminals or more: a mesh serves them better than a tree
+# of traces
+
+
+def _rail_decision(n_candidates, n_terms, current, budget):
+    """Plane or trace for one candidate rail sharing a dedicated plane layer's
+    ``plane_partition`` entry (:func:`for_route`; an entry with a ``region`` is an
+    outer pour and never goes through this: those candidates keep today's rule,
+    every one of them a piece of the pour). A design's own IR budget for the rail
+    earns a territory outright, as does a current worth the trouble (undeclared
+    current is kept a plane too: absence of a number is not evidence the rail does
+    not need one); short of that, enough terminals still earn one (a mesh beats a
+    tree of traces for many connection points); otherwise the rail is as well
+    served by a trace, and is left out of the partition (its terminals become
+    foreign copper, same as any net this layer's candidates leave out). Returns
+    ``(decision, reason)``."""
+    if n_candidates <= 1:
+        return "plane", "the only candidate on this layer"
+    if budget:
+        return "plane", "a declared IR budget (%.3g mOhm) needs a plane's low resistance" % budget
+    if current is None:
+        return "plane", "current not declared: kept a plane, not guessed a trace"
+    if current >= CANDIDATE_CURRENT_FLOOR_A:
+        return "plane", "%.3g A (>= %.3g A): worth a plane's low resistance" % (
+            current,
+            CANDIDATE_CURRENT_FLOOR_A,
+        )
+    if n_terms >= CANDIDATE_TERMINALS_MIN:
+        return "plane", "%d terminals (>= %d) despite %.3g A: a mesh beats a tree of traces" % (
+            n_terms,
+            CANDIDATE_TERMINALS_MIN,
+            current,
+        )
+    return (
+        "trace",
+        "%.3g A (< %.3g A) and %d terminal(s) (< %d): a trace serves this rail as well as a plane"
+        % (
+            current,
+            CANDIDATE_CURRENT_FLOOR_A,
+            n_terms,
+            CANDIDATE_TERMINALS_MIN,
+        ),
+    )
+
+
 def for_route(
     grid, graph, rules, stack, width, height, *, fixed_copper=None, fanouts=None, outer=False
 ):
@@ -1543,7 +1601,8 @@ def for_route(
                 continue
             keepouts.append(([poly], frozenset(spec.get("allowed_nets") or ())))
         currents = {n: rail_current(rules, n, (entry.get("currents") or {}).get(n)) for n in nets}
-        budgets = dict(entry.get("budgets_mohm") or {})
+        explicit_budgets = dict(entry.get("budgets_mohm") or {})
+        budgets = dict(explicit_budgets)
         for ir in rules.get("ir_drop") or []:
             n = ir["net"]
             if n in terms and n not in budgets:
@@ -1552,6 +1611,23 @@ def for_route(
                     budgets[n] = ir["budget_mohm"]
                 elif ir.get("budget_mv") and amps:
                     budgets[n] = ir["budget_mv"] / amps
+        # Candidates, decided: ``nets`` lists candidate rails for this layer, not a
+        # guarantee. A candidate the rule leaves off (see :func:`_rail_decision`) is
+        # not partitioned at all: its terminals become foreign copper (blocking the
+        # rails that do get a territory, same as any other net's), and the router
+        # routes it as a normal trace elsewhere, as it already does for every net
+        # this layer's partition does not name. The decision looks only at a budget
+        # the entry itself declares (``budgets_mohm``), not one merged in from a
+        # plain ``ir_drop`` check: a design verifying every rail's drop is no reason
+        # to plane every rail.
+        decisions = {
+            n: _rail_decision(len(nets), len(terms[n]), currents.get(n), explicit_budgets.get(n))
+            for n in nets
+        }
+        traced = [n for n in nets if decisions[n][0] == "trace"]
+        for n in traced:
+            for t in terms.pop(n):
+                blocked.append((t.at, t.radius + gap_to(n)))
         sources = {}
         for n, text in (entry.get("sources") or {}).items():
             sources[n] = text.replace(":", ".", 1)
@@ -1570,6 +1646,11 @@ def for_route(
             via_drill_mm=via_h,
             fill_min_mm=fill_min,
         )
+        part.report["candidates"] = {
+            n: dict(decision=d, reason=r) for n, (d, r) in sorted(decisions.items())
+        }
+        if traced:
+            part.report["traced_nets"] = sorted(traced)
         if skipped:
             part.report["not_plane_nets"] = skipped
         if entry.get("core_no_vias", True):

@@ -865,6 +865,25 @@ py_test(
     ],
 )
 
+# Plane or trace, per candidate rail of a dedicated-plane plane_partition entry
+# (pnr.plane_partition._rail_decision, for_route): the engine's decision and its
+# reason, an outer pour (region) left untouched.
+py_test(
+    name = "rail_candidates_test",
+    size = "medium",
+    srcs = ["tests/test_rail_candidates.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_rail_candidates.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
 # Outer pours (plane_partition with a region, stage 3c E1): whole-land terminals,
 # corridors for other nets' lands, the grid claim, ports and stitching vias.
 py_test(

@@ -7,11 +7,24 @@ routing rules carry under the same names, only when declared.
 
     plane_partition:
       - layer: In3.Cu
-        nets: [1V0_RF1, 1V0_RF2, 1V2]   # names or globs, each a plane net of the layer
+        nets: [1V0_RF1, 1V0_RF2, 1V2]   # names or globs: CANDIDATE rails of the layer.
+                                        # Without a region (below), the engine decides
+                                        # each one plane or trace (pnr.plane_partition
+                                        # for_route, _rail_decision): a declared IR
+                                        # budget or a worthwhile share of the layer's
+                                        # current earns a territory outright; short of
+                                        # that, enough terminals still does; otherwise
+                                        # the rail is left to route as a plain trace,
+                                        # reported with the reason. A region (an outer
+                                        # pour) is unaffected: every candidate keeps a
+                                        # piece of it.
         order: current                  # current (default) or listed
         split_gap_mm: 0.3               # copper gap between two rails
         min_width_mm: 1.0               # a rail's narrowest trunk
-        fill: GND                       # what is left (a net), or none
+        fill: GND                       # what is left of a plane net's own territory
+                                        # (a net), or none: never a default, so a plane
+                                        # already backed by a dedicated ground layer
+                                        # need not repeat it here
         core_no_vias: true              # other nets' vias stay out of each trunk core
         terminal_reach_mm: 0.8          # a pad's drop lands within this of it
         neck_mm: 0                      # a trunk may narrow this close to its terminals

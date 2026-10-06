@@ -1059,6 +1059,23 @@ Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`,
   (version 3) plays the gloss stage's saved board as a before/after: the copper the stage
   replaced in red, its new copper in green, marked by geometry, not by track rows.
 
+Compact placement before ladder v2 makes it the default (2026-10-06,
+[design, section 12](design/compact-placement.md)):
+
+- **Compact as far as the board routes (`RELAX`):** a place-route round that leaves a net open or
+  a declared pair or group out of its budget is not converged, and the rounds after it run
+  without compact placement, the first of them exactly as the run without compact does (the
+  initial pool again, at the run's seed). A board keeps its compact layout wherever that routes;
+  where it does not, it gets the layout it had before, one round later. This, not reserving room
+  around pairs, is what makes the `09-mcu-usb-31` lane pass under compact (32 of 32 cells on
+  seeds 0 to 3, against 21 of 32 before and 26 of 32 without compact).
+- **Pair parts turn to face their legs (`PAIRS`):** the matched-length pass may turn a pair's
+  series parts (or a line group's macro); a rigid twin of the two resistors, coupled pair routing
+  and lengthening the short leg through free space were tried and rejected (section 12).
+- **Compact is part of the router key** (`compact`, a digest of the parts and the legalizer
+  switches; absent with everything off, so earlier keys are unchanged), and power-first
+  placement runs with compact instead of refusing it.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

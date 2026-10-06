@@ -1,0 +1,4 @@
+symbolic lead,pad/ball,net (atopile pinout),net (atopile board),net (routed s0),net (routed s1),net (routed s2),net (routed s3)
+G,1,NERROR_OUT,NERROR_OUT,NERROR_OUT,NERROR_OUT,NERROR_OUT,NERROR_OUT
+S,2,GND,GND,GND,GND,GND,GND
+D,3,led_k,led_k,led_k,led_k,led_k,led_k

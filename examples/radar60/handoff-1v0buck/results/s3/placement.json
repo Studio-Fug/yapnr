@@ -1,0 +1,1689 @@
+{
+  "schema": "radar60-handoff-placement-v1",
+  "source": "routed board (KiCad frame, y down)",
+  "parts": [
+    {
+      "ref": "C1",
+      "footprint": "Radar60_C_4n7_0402_DNP:C_0402_1005Metric",
+      "x_mm": 63.125,
+      "y_mm": 62.775,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C10",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 35.375,
+      "y_mm": 63.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C11",
+      "footprint": "Radar60_C_22u_0805_DNP:C_0805_2012Metric",
+      "x_mm": 38.875,
+      "y_mm": 31.025,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C12",
+      "footprint": "Radar60_C_22u_0805_DNP:C_0805_2012Metric",
+      "x_mm": 53.125,
+      "y_mm": 59.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C13",
+      "footprint": "Radar60_C_22u_0805_DNP:C_0805_2012Metric",
+      "x_mm": 66.125,
+      "y_mm": 55.275,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C14",
+      "footprint": "Radar60_C_10u_0805:C_0805_2012Metric",
+      "x_mm": 86.625,
+      "y_mm": 66.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C15",
+      "footprint": "Radar60_C_10u_0805:C_0805_2012Metric",
+      "x_mm": 77.375,
+      "y_mm": 66.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C16",
+      "footprint": "Radar60_C_10u_0805:C_0805_2012Metric",
+      "x_mm": 86.625,
+      "y_mm": 63.025,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C17",
+      "footprint": "Radar60_C_10u_0805:C_0805_2012Metric",
+      "x_mm": 77.375,
+      "y_mm": 63.025,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C18",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 71.625,
+      "y_mm": 53.275,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C19",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 73.875,
+      "y_mm": 52.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C2",
+      "footprint": "Radar60_C_1u_0402:C_0402_1005Metric",
+      "x_mm": 60.875,
+      "y_mm": 65.025,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C20",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 81.875,
+      "y_mm": 52.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C21",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 76.125,
+      "y_mm": 53.775,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C22",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 81.125,
+      "y_mm": 45.275,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C23",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 65.875,
+      "y_mm": 57.275,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C24",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 38.875,
+      "y_mm": 44.525,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C25",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 30.875,
+      "y_mm": 46.025,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C26",
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "x_mm": 73.625,
+      "y_mm": 74.025,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C27",
+      "footprint": "Radar60_C_390p_0402:C_0402_1005Metric",
+      "x_mm": 73.875,
+      "y_mm": 69.275,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C28",
+      "footprint": "Radar60_C_390p_0402:C_0402_1005Metric",
+      "x_mm": 80.875,
+      "y_mm": 69.275,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C29",
+      "footprint": "Radar60_C_390p_0402:C_0402_1005Metric",
+      "x_mm": 70.625,
+      "y_mm": 61.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C3",
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "x_mm": 65.375,
+      "y_mm": 58.775,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C30",
+      "footprint": "Radar60_C_390p_0402:C_0402_1005Metric",
+      "x_mm": 87.375,
+      "y_mm": 57.275,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C31",
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "x_mm": 79.625,
+      "y_mm": 69.275,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C32",
+      "footprint": "Radar60_C_470p_0402:C_0402_1005Metric",
+      "x_mm": 34.625,
+      "y_mm": 44.025,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C33",
+      "footprint": "Radar60_C_10u_0805:C_0805_2012Metric",
+      "x_mm": 39.425,
+      "y_mm": 75.875,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C34",
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "x_mm": 46.925,
+      "y_mm": 71.125,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C35",
+      "footprint": "Radar60_C_1n_0402:C_0402_1005Metric",
+      "x_mm": 33.375,
+      "y_mm": 44.025,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C36",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 47.675,
+      "y_mm": 72.875,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C37",
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "x_mm": 40.675,
+      "y_mm": 73.625,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C38",
+      "footprint": "Radar60_C_1u_0402:C_0402_1005Metric",
+      "x_mm": 60.3062,
+      "y_mm": 49.3187,
+      "rotation_deg": 90.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C39",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 45.625,
+      "y_mm": 45.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C4",
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "x_mm": 62.625,
+      "y_mm": 64.775,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C40",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 47.375,
+      "y_mm": 45.525,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C41",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 67.375,
+      "y_mm": 52.525,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C42",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 43.125,
+      "y_mm": 48.275,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C43",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 50.875,
+      "y_mm": 59.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C44",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 48.875,
+      "y_mm": 54.275,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C45",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 56.875,
+      "y_mm": 56.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C46",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 63.625,
+      "y_mm": 57.275,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C47",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 51.875,
+      "y_mm": 56.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C48",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 48.875,
+      "y_mm": 57.775,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C49",
+      "footprint": "Radar60_C_2u2_0402:C_0402_1005Metric",
+      "x_mm": 45.625,
+      "y_mm": 48.025,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C5",
+      "footprint": "Radar60_C_1u_0402:C_0402_1005Metric",
+      "x_mm": 44.125,
+      "y_mm": 53.025,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C50",
+      "footprint": "Radar60_C_10n_0402:C_0402_1005Metric",
+      "x_mm": 45.875,
+      "y_mm": 50.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C51",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 50.625,
+      "y_mm": 57.275,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C52",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 62.375,
+      "y_mm": 56.275,
+      "rotation_deg": -90.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C53",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 62.875,
+      "y_mm": 52.775,
+      "rotation_deg": -90.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C54",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 60.625,
+      "y_mm": 47.025,
+      "rotation_deg": -90.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C55",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 50.375,
+      "y_mm": 60.775,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C56",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 69.375,
+      "y_mm": 53.275,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C57",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 57.2188,
+      "y_mm": 47.45,
+      "rotation_deg": 0.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C58",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 64.375,
+      "y_mm": 56.275,
+      "rotation_deg": -90.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C59",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 66.375,
+      "y_mm": 55.275,
+      "rotation_deg": -90.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C6",
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "x_mm": 41.875,
+      "y_mm": 54.525,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C60",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 57.625,
+      "y_mm": 44.775,
+      "rotation_deg": 180.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C61",
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "x_mm": 52.6687,
+      "y_mm": 47.6125,
+      "rotation_deg": 0.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C62",
+      "footprint": "Radar60_C_1u_0402:C_0402_1005Metric",
+      "x_mm": 63.125,
+      "y_mm": 54.025,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C63",
+      "footprint": "Radar60_C_47n_0402:C_0402_1005Metric",
+      "x_mm": 58.925,
+      "y_mm": 49.6438,
+      "rotation_deg": 90.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C64",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 55.35,
+      "y_mm": 46.8812,
+      "rotation_deg": 90.0,
+      "side": "bottom",
+      "locked": false
+    },
+    {
+      "ref": "C65",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 46.375,
+      "y_mm": 53.275,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C66",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 46.375,
+      "y_mm": 54.525,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C67",
+      "footprint": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "x_mm": 47.375,
+      "y_mm": 56.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C68",
+      "footprint": "Radar60_C_2u2_0402:C_0402_1005Metric",
+      "x_mm": 49.125,
+      "y_mm": 56.025,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C69",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 64.625,
+      "y_mm": 60.275,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C7",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 34.375,
+      "y_mm": 67.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C70",
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "x_mm": 47.375,
+      "y_mm": 48.275,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C71",
+      "footprint": "Radar60_C_4p7_0402:C_0402_1005Metric",
+      "x_mm": 58.875,
+      "y_mm": 56.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C72",
+      "footprint": "Radar60_C_4p7_0402:C_0402_1005Metric",
+      "x_mm": 60.625,
+      "y_mm": 56.275,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C8",
+      "footprint": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "x_mm": 40.875,
+      "y_mm": 37.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "C9",
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "x_mm": 88.875,
+      "y_mm": 45.775,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "D1",
+      "footprint": "Radar60_ESD2CAN24DBZRQ1:SOT-23",
+      "x_mm": 66.125,
+      "y_mm": 68.525,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "D2",
+      "footprint": "Radar60_TPD2E2U06DCKR:SOT-323_SC-70",
+      "x_mm": 62.875,
+      "y_mm": 69.025,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "D3",
+      "footprint": "Radar60_SMF5V0A:D_SMF",
+      "x_mm": 48.925,
+      "y_mm": 75.375,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "D4",
+      "footprint": "Radar60_LED_Green_0603:LED_0603_1608Metric",
+      "x_mm": 43.0,
+      "y_mm": 51.4,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "FB1",
+      "footprint": "Radar60_FB_MPZ2012S101A:L_0805_2012Metric",
+      "x_mm": 81.25,
+      "y_mm": 75.9,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "FB2",
+      "footprint": "Radar60_FB_MPZ2012S101A:L_0805_2012Metric",
+      "x_mm": 40.75,
+      "y_mm": 34.15,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "FB3",
+      "footprint": "Radar60_FB_MPZ2012S101A:L_0805_2012Metric",
+      "x_mm": 56.5,
+      "y_mm": 58.65,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "FB4",
+      "footprint": "Radar60_FB_MPZ2012S101A:L_0805_2012Metric",
+      "x_mm": 64.0,
+      "y_mm": 51.9,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "FB5",
+      "footprint": "Radar60_FB_MPZ2012S101A:L_0805_2012Metric",
+      "x_mm": 49.0,
+      "y_mm": 46.4,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "FID1",
+      "footprint": "Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm",
+      "x_mm": 79.5,
+      "y_mm": 42.65,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "FID2",
+      "footprint": "Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm",
+      "x_mm": 31.5,
+      "y_mm": 69.15,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "FID3",
+      "footprint": "Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm",
+      "x_mm": 43.5,
+      "y_mm": 45.9,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "J1",
+      "footprint": "Radar60_JST_SM08B_GHS_TB:JST_GH_SM08B-GHS-TB_1x08-1MP_P1.25mm_Horizontal",
+      "x_mm": 60.0,
+      "y_mm": 74.155,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "J2",
+      "footprint": "Radar60_QTH_030_01_L_D_A:Samtec_QTH-030-01-L-D-A_2x30_P0.5mm_Vertical",
+      "x_mm": 49.75,
+      "y_mm": 65.9,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "J3",
+      "footprint": "Radar60_ARM10_1p27_DNP:PinHeader_2x05_P1.27mm_Vertical_SMD",
+      "x_mm": 34.625,
+      "y_mm": 57.65,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "L1",
+      "footprint": "Radar60_L_0u47_MCKK2012:L_0805_2012Metric",
+      "x_mm": 77.0,
+      "y_mm": 69.65,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "L2",
+      "footprint": "Radar60_L_0u47_MCKK2012:L_0805_2012Metric",
+      "x_mm": 85.0,
+      "y_mm": 69.65,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "L3",
+      "footprint": "Radar60_L_0u47_IHLP1616BZ:L_Vishay_IHLP-1616",
+      "x_mm": 73.75,
+      "y_mm": 63.9,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "L4",
+      "footprint": "Radar60_L_0u47_IHLP1616BZ:L_Vishay_IHLP-1616",
+      "x_mm": 83.25,
+      "y_mm": 58.4,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "MH1",
+      "footprint": "Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad",
+      "x_mm": 33.5,
+      "y_mm": 73.9,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "MH2",
+      "footprint": "Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad",
+      "x_mm": 86.5,
+      "y_mm": 73.9,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "MH3",
+      "footprint": "Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad",
+      "x_mm": 33.5,
+      "y_mm": 33.5,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "MH4",
+      "footprint": "Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad",
+      "x_mm": 86.5,
+      "y_mm": 33.5,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "Q1",
+      "footprint": "Radar60_2N7002:SOT-23",
+      "x_mm": 69.625,
+      "y_mm": 72.525,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R1",
+      "footprint": "Radar60_R_0_0402_DNP:R_0402_1005Metric",
+      "x_mm": 69.375,
+      "y_mm": 57.025,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R10",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 47.625,
+      "y_mm": 59.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R11",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 47.375,
+      "y_mm": 60.275,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R12",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 44.125,
+      "y_mm": 54.525,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R13",
+      "footprint": "Radar60_R_0_0402:R_0402_1005Metric",
+      "x_mm": 84.875,
+      "y_mm": 54.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R14",
+      "footprint": "Radar60_R_0_0402_DNP:R_0402_1005Metric",
+      "x_mm": 68.625,
+      "y_mm": 63.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R15",
+      "footprint": "Radar60_R_0R22_0402_DNP:R_0402_1005Metric",
+      "x_mm": 38.125,
+      "y_mm": 33.275,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R16",
+      "footprint": "Radar60_R_0R22_0402_DNP:R_0402_1005Metric",
+      "x_mm": 55.375,
+      "y_mm": 60.275,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R17",
+      "footprint": "Radar60_R_0R22_0402_DNP:R_0402_1005Metric",
+      "x_mm": 65.375,
+      "y_mm": 53.525,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R18",
+      "footprint": "Radar60_R_10k_0402_DNP:R_0402_1005Metric",
+      "x_mm": 86.625,
+      "y_mm": 55.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R19",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 83.625,
+      "y_mm": 54.525,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R2",
+      "footprint": "Radar60_R_0_0402:R_0402_1005Metric",
+      "x_mm": 69.375,
+      "y_mm": 59.275,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R20",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 68.625,
+      "y_mm": 66.025,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R21",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 69.375,
+      "y_mm": 68.275,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R22",
+      "footprint": "Radar60_R_0_0402:R_0402_1005Metric",
+      "x_mm": 82.125,
+      "y_mm": 72.025,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R23",
+      "footprint": "Radar60_R_0_0402_DNP:R_0402_1005Metric",
+      "x_mm": 79.625,
+      "y_mm": 53.775,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R24",
+      "footprint": "Radar60_R_0_0402_DNP:R_0402_1005Metric",
+      "x_mm": 72.375,
+      "y_mm": 71.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R25",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 74.375,
+      "y_mm": 71.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R26",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 76.125,
+      "y_mm": 71.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R27",
+      "footprint": "Radar60_R_0_0402:R_0402_1005Metric",
+      "x_mm": 72.375,
+      "y_mm": 74.025,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R28",
+      "footprint": "Radar60_R_4k99_0402:R_0402_1005Metric",
+      "x_mm": 77.625,
+      "y_mm": 71.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R29",
+      "footprint": "Radar60_R_4k99_0402:R_0402_1005Metric",
+      "x_mm": 75.375,
+      "y_mm": 73.775,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R3",
+      "footprint": "Radar60_R_0_0402:R_0402_1005Metric",
+      "x_mm": 63.125,
+      "y_mm": 66.275,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R30",
+      "footprint": "Radar60_R_3R9_0402:R_0402_1005Metric",
+      "x_mm": 75.125,
+      "y_mm": 68.025,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R31",
+      "footprint": "Radar60_R_3R9_0402:R_0402_1005Metric",
+      "x_mm": 82.375,
+      "y_mm": 69.275,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R32",
+      "footprint": "Radar60_R_3R9_0402:R_0402_1005Metric",
+      "x_mm": 70.625,
+      "y_mm": 64.275,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R33",
+      "footprint": "Radar60_R_3R9_0402:R_0402_1005Metric",
+      "x_mm": 87.375,
+      "y_mm": 59.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R34",
+      "footprint": "Radar60_R_1k65_0402:R_0402_1005Metric",
+      "x_mm": 35.875,
+      "y_mm": 65.025,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R35",
+      "footprint": "Radar60_R_11k_0402:R_0402_1005Metric",
+      "x_mm": 38.125,
+      "y_mm": 62.775,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R36",
+      "footprint": "Radar60_R_39k_0402:R_0402_1005Metric",
+      "x_mm": 30.625,
+      "y_mm": 65.275,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R37",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 73.125,
+      "y_mm": 76.275,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R38",
+      "footprint": "Radar60_R_39k_0402:R_0402_1005Metric",
+      "x_mm": 36.125,
+      "y_mm": 67.525,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R39",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 38.125,
+      "y_mm": 65.775,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R4",
+      "footprint": "Radar60_R_62_0402_DNP:R_0402_1005Metric",
+      "x_mm": 68.125,
+      "y_mm": 57.775,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R40",
+      "footprint": "Radar60_R_24k_0402:R_0402_1005Metric",
+      "x_mm": 32.125,
+      "y_mm": 67.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R41",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 40.875,
+      "y_mm": 48.025,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R42",
+      "footprint": "Radar60_R_24k_0402:R_0402_1005Metric",
+      "x_mm": 41.375,
+      "y_mm": 45.775,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R43",
+      "footprint": "Radar60_R_1k_0402:R_0402_1005Metric",
+      "x_mm": 36.125,
+      "y_mm": 47.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R44",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 35.625,
+      "y_mm": 70.025,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R45",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 88.875,
+      "y_mm": 56.525,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R46",
+      "footprint": "Radar60_R_0_0402:R_0402_1005Metric",
+      "x_mm": 63.125,
+      "y_mm": 55.525,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R47",
+      "footprint": "Radar60_R_0_0402:R_0402_1005Metric",
+      "x_mm": 43.625,
+      "y_mm": 49.775,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R48",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 41.875,
+      "y_mm": 53.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R49",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 87.125,
+      "y_mm": 46.525,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R5",
+      "footprint": "Radar60_R_62_0402_DNP:R_0402_1005Metric",
+      "x_mm": 67.125,
+      "y_mm": 60.025,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R50",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 60.875,
+      "y_mm": 67.275,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R51",
+      "footprint": "Radar60_R_100k_0402:R_0402_1005Metric",
+      "x_mm": 38.125,
+      "y_mm": 64.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R52",
+      "footprint": "Radar60_R_100k_0402:R_0402_1005Metric",
+      "x_mm": 88.625,
+      "y_mm": 65.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R53",
+      "footprint": "Radar60_R_100k_0402:R_0402_1005Metric",
+      "x_mm": 81.375,
+      "y_mm": 73.775,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R54",
+      "footprint": "Radar60_R_0_0402:R_0402_1005Metric",
+      "x_mm": 41.375,
+      "y_mm": 41.275,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R55",
+      "footprint": "Radar60_R_10k_0402_DNP:R_0402_1005Metric",
+      "x_mm": 78.625,
+      "y_mm": 52.275,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R56",
+      "footprint": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "x_mm": 60.875,
+      "y_mm": 69.525,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R57",
+      "footprint": "Radar60_R_1k_0402:R_0402_1005Metric",
+      "x_mm": 40.125,
+      "y_mm": 54.025,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R58",
+      "footprint": "Radar60_R_1k_0402:R_0402_1005Metric",
+      "x_mm": 70.625,
+      "y_mm": 75.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R6",
+      "footprint": "Radar60_R_0_0402_DNP:R_0402_1005Metric",
+      "x_mm": 60.875,
+      "y_mm": 62.775,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R7",
+      "footprint": "Radar60_R_0_0402:R_0402_1005Metric",
+      "x_mm": 69.375,
+      "y_mm": 61.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R8",
+      "footprint": "Radar60_R_0_0402_DNP:R_0402_1005Metric",
+      "x_mm": 71.875,
+      "y_mm": 76.275,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "R9",
+      "footprint": "Radar60_R_22_0402:R_0402_1005Metric",
+      "x_mm": 46.375,
+      "y_mm": 52.025,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "RFM1",
+      "footprint": "radar60:RFM1_Macro",
+      "x_mm": 56.0,
+      "y_mm": 49.4,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": true
+    },
+    {
+      "ref": "RL1",
+      "footprint": "RadomeStandoffLand_3mm",
+      "x_mm": 33.5,
+      "y_mm": 50.4,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "RL2",
+      "footprint": "RadomeStandoffLand_3mm",
+      "x_mm": 86.5,
+      "y_mm": 50.4,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "RT1",
+      "footprint": "radar60:R_0201_0603Metric_LOAD",
+      "x_mm": 49.495,
+      "y_mm": 42.3818,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": true
+    },
+    {
+      "ref": "RT2",
+      "footprint": "radar60:R_0201_0603Metric_LOAD",
+      "x_mm": 71.076,
+      "y_mm": 44.06,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": true
+    },
+    {
+      "ref": "R_SH1",
+      "footprint": "Radar60_R_2m_0612:Vishay_WFCP0612_1632Metric",
+      "x_mm": 75.0,
+      "y_mm": 58.275,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP1",
+      "footprint": "Radar60_KelvinSense_2Pad:Radar60_KelvinSense_2Pad_P1.27mm",
+      "x_mm": 78.625,
+      "y_mm": 59.775,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP10",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 79.25,
+      "y_mm": 31.15,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP11",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 68.75,
+      "y_mm": 75.65,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP12",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 79.75,
+      "y_mm": 71.9,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP13",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 88.5,
+      "y_mm": 37.9,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP14",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 38.0,
+      "y_mm": 68.15,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP15",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 37.5,
+      "y_mm": 50.4,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP16",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 85.25,
+      "y_mm": 46.4,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP17",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 84.25,
+      "y_mm": 43.9,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP18",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 40.0,
+      "y_mm": 50.4,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP19",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 75.5,
+      "y_mm": 75.65,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP2",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 41.25,
+      "y_mm": 43.15,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP20",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 78.0,
+      "y_mm": 74.4,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP3",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 86.75,
+      "y_mm": 42.65,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP4",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 82.25,
+      "y_mm": 39.9,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP5",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 38.75,
+      "y_mm": 47.9,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP6",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 32.5,
+      "y_mm": 64.4,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP7",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 36.5,
+      "y_mm": 45.15,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP8",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 36.5,
+      "y_mm": 42.65,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "TP9",
+      "footprint": "Radar60_TestPad_D1:TestPoint_Pad_D1.0mm",
+      "x_mm": 33.75,
+      "y_mm": 46.4,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "U1",
+      "footprint": "Radar60_IWR6843AQGABLR:TI_ABL0161B_FCBGA-161_10.4x10.4mm_Layout15x15_P0.65mm",
+      "x_mm": 56.0,
+      "y_mm": 49.4,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": true
+    },
+    {
+      "ref": "U2",
+      "footprint": "Radar60_LP87524JRNFRQ1:TI_RNF0026C_VQFN-HR-26_4.5x4mm_P0.5mm",
+      "x_mm": 82.0,
+      "y_mm": 64.9,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "U3",
+      "footprint": "Radar60_MX25V1635FZNQ:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4mm",
+      "x_mm": 42.375,
+      "y_mm": 58.15,
+      "rotation_deg": 0.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "U4",
+      "footprint": "Radar60_TCAN1044AVDRBRQ1:Texas_DRB0008A",
+      "x_mm": 65.875,
+      "y_mm": 63.525,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "U5",
+      "footprint": "Radar60_TPS259474ARPWR:TI_RPW0010A_VQFN-HR-10_2x2mm_P0.45mm",
+      "x_mm": 43.55,
+      "y_mm": 72.75,
+      "rotation_deg": -90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "U6",
+      "footprint": "Radar60_TPS22917DBVR_DNP:SOT-23-6",
+      "x_mm": 80.0,
+      "y_mm": 48.65,
+      "rotation_deg": 90.0,
+      "side": "top",
+      "locked": false
+    },
+    {
+      "ref": "Y1",
+      "footprint": "Radar60_CX3225SA40000D0PTWCC:Crystal_SMD_3225-4Pin_3.2x2.5mm",
+      "x_mm": 60.75,
+      "y_mm": 59.65,
+      "rotation_deg": 180.0,
+      "side": "top",
+      "locked": false
+    }
+  ]
+}

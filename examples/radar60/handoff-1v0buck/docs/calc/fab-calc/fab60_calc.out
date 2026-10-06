@@ -1,0 +1,42 @@
+f = 62 GHz, lambda0 = 4.835 mm; Cu skin depth = 0.265 um; Rs Cu = 65.0 mOhm, Ni = 130.8 mOhm
+
+50-ohm microstrip at 62 GHz (mask-free; t = finished Cu):
+stackup                                                     w50 mm  eeff  lg mm    a_d    a_c  dB/mm 6mm dB dZ +-25um w dZ +17.5% h
+RO4835 LoPro 4 mil (Dk 3.56*, Df .0037) ImAg                 0.200  2.70  2.942  0.030  0.139  0.169   1.02        +3.5        +5.0
+RO4835 LoPro 4 mil, ENIG                                     0.200  2.70  2.942  0.030  0.182  0.212   1.27        +3.5        +5.0
+RO3003 5 mil (Dk 3.00, Df .0010) ImAg                        0.289  2.39  3.127  0.008  0.096  0.104   0.62        +2.5        +5.2
+RO4835 6.6 mil (Dk 3.66, Df .0037) ImAg                      0.337  2.88  2.851  0.032  0.083  0.114   0.69        +2.1        +5.0
+FR408HR 2x1067 5 mil (TI LEVM: Dk 3.33, Df .0095) ImAg       0.265  2.59  3.004  0.076  0.105  0.181   1.09        +2.7        +5.1
+OSH Park 6L FR408HR 106 4.36 mil (Dk 3.23, Df .011) ENIG     0.233  2.50  3.056  0.085  0.156  0.241   1.45        +3.0        +5.1
+JLC 6L 3313 prepreg 0.0994 mm (Dk 4.1, Df ~.02) ENIG         0.175  3.02  2.785  0.173  0.208  0.381   2.29        +3.8        +4.8
+(RF-04 check: 40 um path error on RO4835 4 mil = 4.9 deg)
+
+Rectangular patch at 62 GHz (TL model; Jackson-Alexopoulos VSWR<2 BW):
+  RO4835 4 mil                                 W=1.601 L=1.246 mm  BW~2.1%  (+/-13 um L -> +/-1.0% f0 = 0.65 GHz; +/-25 um -> +/-1.24 GHz)
+  RO3003 5 mil                                 W=1.710 L=1.341 mm  BW~2.8%  (+/-13 um L -> +/-1.0% f0 = 0.60 GHz; +/-25 um -> +/-1.16 GHz)
+  FR408HR 5 mil                                W=1.643 L=1.274 mm  BW~2.7%  (+/-13 um L -> +/-1.0% f0 = 0.63 GHz; +/-25 um -> +/-1.22 GHz)
+  RO4835 6.6 mil                               W=1.584 L=1.193 mm  BW~3.5%  (+/-13 um L -> +/-1.1% f0 = 0.68 GHz; +/-25 um -> +/-1.30 GHz)
+  RO4835 4 mil + RO4450F 4 mil (L2 cleared)    W=1.603 L=1.190 mm  BW~4.3%  (+/-13 um L -> +/-1.1% f0 = 0.68 GHz; +/-25 um -> +/-1.30 GHz)
+  RO4835 10 mil                                W=1.584 L=1.140 mm  BW~5.5%  (+/-13 um L -> +/-1.1% f0 = 0.71 GHz; +/-25 um -> +/-1.36 GHz)
+  ANT-02 band 60.3-63.8 GHz = 5.6% fractional
+
+Patch radiation efficiency, Q model: 1/Q = 1/Qrad + tand + ROUGH*delta/h, Qrad = 1/(sqrt2*BW):
+  RO3003 5 mil                   BW 2.8%  eta ~89% (-0.5 dB)
+  RO4835 4 mil                   BW 2.1%  eta ~77% (-1.1 dB)
+  RO4835 4 mil + RO4450F 4 mil   BW 4.3%  eta ~91% (-0.4 dB)
+  FR408HR 5 mil                  BW 2.7%  eta ~74% (-1.3 dB)
+  JLC FR-4 3313 0.0994 mm        BW 1.9%  eta ~51% (-2.9 dB)
+
+IWR6843 BGA escape (0.65 mm pitch, 0.32 mm land):
+  TI LEVM 0.20/0.457 pad                 interstitial gap    71 um (FAIL vs 102 um rule); depopulated-site gap  261 um
+  JLC 0.15/0.25                          interstitial gap   175 um (ok vs 90 um rule); depopulated-site gap  365 um
+  JLC 0.20/0.40                          interstitial gap   100 um (ok vs 90 um rule); depopulated-site gap  290 um
+  PCBWay 0.20 + 4 mil ring = 0.40        interstitial gap   100 um (FAIL vs 100 um rule); depopulated-site gap  290 um
+  PCBWay std 0.20 + 6 mil ring = 0.50    interstitial gap    50 um (FAIL vs 100 um rule); depopulated-site gap  240 um
+  OSH Park 6L 0.203 + 4 mil = 0.406      interstitial gap    97 um (FAIL vs 127 um rule); depopulated-site gap  287 um
+  Eurocircuits 0.10 FHS + 0.30 = 0.40    interstitial gap   100 um (FAIL vs 100 um rule); depopulated-site gap  290 um
+  one trace between balls (JLC 0.09/0.09): needs 0.270 mm of 0.330 mm -> ok
+  one trace between balls (PCBWay/Eurocircuits 0.10/0.10): needs 0.300 mm of 0.330 mm -> ok
+  one trace between balls (OSH Park 0.127/0.127): needs 0.381 mm of 0.330 mm -> FAIL
+
+OSH Park 6L bare-board cost, 70 x 60 mm: 6.51 sq in x $15 = $97.65 per 3 boards

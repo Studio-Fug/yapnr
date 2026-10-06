@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_vbgap",
+  "atoAddress": "radio.c_vbgap",
+  "designator": "C63",
+  "descriptor": "C63 \u2014 radio.c_vbgap",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vbgap|parts/Radar60_C_47n_0402/Radar60_C_47n_0402.ato::Radar60_C_47n_0402",
+  "footprintUuid": "e4300e42-40a5-4294-a55b-b7054642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "VBGAP",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

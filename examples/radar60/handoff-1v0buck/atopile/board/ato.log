@@ -1,0 +1,1852 @@
+08:50:16.068  W  …pile.model.sqlite  Created new empty SQLite database during init: ${ATO_BUILD}
+08:50:16.086  W  …pile.model.sqlite  Created new empty SQLite database during init: ${ATO_BUILD}
+08:50:16.088  I  …model.build_queue  BuildQueue: Started
+08:50:16.090  I  …model.build_queue  Build 94be368668df8c72: starting worker - build=rev-a, cwd=${ATO_BUILD}
+08:50:16.090  I  …model.build_queue  BuildQueue: Started 94be368668df8c72
+══ BUILD START: rev-a [94be368668df8c72] ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+08:50:17.204  I  atopile.config  Creating new layout at ${ATO_BUILD}/project/elec/layou
+08:50:17.520  I  atopile.buildutil  Build targets config: include=['build-design', 'bom', 'variable-report', 'power-tree', 'pinout'] exclude=['default', 'datash
+08:50:17.520  I  atopile.buildutil  Resolved build targets: ['bom', 'build-design', 'pinout', 'power-tree', 'variable-report']
+
+08:50:17.581  I  …ject.dependencies  Syncing versions...
+08:50:20.218  I  …bryk.libs.app.erc  Verifying interface connection graph structure
+08:50:20.231  I  …bryk.libs.app.erc  Checking for ERC violations
+08:50:20.242  I  …bryk.libs.app.erc  Checking 0 elements for shorts
+08:50:20.243  I  …bryk.libs.app.erc  Grouped 0 electricals into 0 buses
+08:50:20.243  I  …bryk.libs.app.erc  Checking for power source shorts
+08:50:21.056  I  …ibs.picker.picker  Picking 0 modules
+08:50:21.056  I  …ibs.picker.picker  pick_parts_recursively took 27.34 ms and used 1.75 MB
+08:50:21.057  I  ….libs.app.picking  Saving part info to PCB
+08:50:21.228  I  ….libs.app.picking  Part info saved to PCB
+08:50:21.229  I  …tation.datasheets  Skipping datasheet downloads in CI
+08:50:21.234  I  …opile.build_steps  Preparing nets
+08:50:21.268  I  …s.app.designators  Setting designator C1(prefix='C') to radar60.ato::Radar60.can|can_fd.ato::CanFd.c_term|parts/Radar60_C_4n7_0402_DNP/Radar60
+08:50:21.269  I  …s.app.designators  Setting designator C2(prefix='C') to radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vcc_bulk|parts/Radar60_C_1u_0402/Radar60_
+08:50:21.269  I  …s.app.designators  Setting designator C3(prefix='C') to radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vcc|parts/Radar60_C_100n_0402/Radar60_C_1
+08:50:21.270  I  …s.app.designators  Setting designator C4(prefix='C') to radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vio|parts/Radar60_C_100n_0402/Radar60_C_1
+08:50:21.271  I  …s.app.designators  Setting designator R1(prefix='R') to radar60.ato::Radar60.can|can_fd.ato::CanFd.r_rx_d13|parts/Radar60_R_0_0402_DNP/Radar60
+08:50:21.271  I  …s.app.designators  Setting designator R2(prefix='R') to radar60.ato::Radar60.can|can_fd.ato::CanFd.r_rx_f14|parts/Radar60_R_0_0402/Radar60_R_0
+08:50:21.272  I  …s.app.designators  Setting designator R3(prefix='R') to radar60.ato::Radar60.can|can_fd.ato::CanFd.r_stb|parts/Radar60_R_0_0402/Radar60_R_0_04
+08:50:21.272  I  …s.app.designators  Setting designator R4(prefix='R') to radar60.ato::Radar60.can|can_fd.ato::CanFd.r_term_h|parts/Radar60_R_62_0402_DNP/Radar6
+08:50:21.273  I  …s.app.designators  Setting designator R5(prefix='R') to radar60.ato::Radar60.can|can_fd.ato::CanFd.r_term_l|parts/Radar60_R_62_0402_DNP/Radar6
+08:50:21.274  I  …s.app.designators  Setting designator R6(prefix='R') to radar60.ato::Radar60.can|can_fd.ato::CanFd.r_tx_e14|parts/Radar60_R_0_0402_DNP/Radar60
+08:50:21.274  I  …s.app.designators  Setting designator R7(prefix='R') to radar60.ato::Radar60.can|can_fd.ato::CanFd.r_tx_h14|parts/Radar60_R_0_0402/Radar60_R_0
+08:50:21.275  I  …s.app.designators  Setting designator R8(prefix='R') to radar60.ato::Radar60.debug|debug.ato::Debug.r_dca_rst|parts/Radar60_R_0_0402_DNP/Radar
+08:50:21.276  I  …s.app.designators  Setting designator C5(prefix='C') to radar60.ato::Radar60.flash|flash_qspi.ato::Flash.c_vcc_bulk|parts/Radar60_C_1u_0402/Ra
+08:50:21.276  I  …s.app.designators  Setting designator C6(prefix='C') to radar60.ato::Radar60.flash|flash_qspi.ato::Flash.c_vcc|parts/Radar60_C_100n_0402/Radar
+08:50:21.277  I  …s.app.designators  Setting designator R9(prefix='R') to radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_clk|parts/Radar60_R_22_0402/Radar60
+08:50:21.278  I  …s.app.designators  Setting designator R10(prefix='R') to radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_cs_pu|parts/Radar60_R_10k_0402/Rad
+08:50:21.278  I  …s.app.designators  Setting designator R11(prefix='R') to radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_d2_pu|parts/Radar60_R_10k_0402/Rad
+08:50:21.279  I  …s.app.designators  Setting designator R12(prefix='R') to radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_d3_pu|parts/Radar60_R_10k_0402/Rad
+08:50:21.280  I  …s.app.designators  Setting designator FID1(prefix='FID') to radar60.ato::Radar60.mech|mech.ato::Mech.fid[0]|parts/Radar60_Fiducial_1mm/Radar60
+08:50:21.280  I  …s.app.designators  Setting designator FID2(prefix='FID') to radar60.ato::Radar60.mech|mech.ato::Mech.fid[1]|parts/Radar60_Fiducial_1mm/Radar60
+08:50:21.281  I  …s.app.designators  Setting designator FID3(prefix='FID') to radar60.ato::Radar60.mech|mech.ato::Mech.fid[2]|parts/Radar60_Fiducial_1mm/Radar60
+08:50:21.282  I  …s.app.designators  Setting designator MH1(prefix='MH') to radar60.ato::Radar60.mech|mech.ato::Mech.mh[0]|parts/Radar60_MountingHole_M2p5/Radar
+08:50:21.283  I  …s.app.designators  Setting designator MH2(prefix='MH') to radar60.ato::Radar60.mech|mech.ato::Mech.mh[1]|parts/Radar60_MountingHole_M2p5/Radar
+08:50:21.283  I  …s.app.designators  Setting designator MH3(prefix='MH') to radar60.ato::Radar60.mech|mech.ato::Mech.mh[2]|parts/Radar60_MountingHole_M2p5/Radar
+08:50:21.284  I  …s.app.designators  Setting designator MH4(prefix='MH') to radar60.ato::Radar60.mech|mech.ato::Mech.mh[3]|parts/Radar60_MountingHole_M2p5/Radar
+08:50:21.285  I  …s.app.designators  Setting designator C7(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v2_a|parts/Radar60_C_22u_0805/Rad
+08:50:21.285  I  …s.app.designators  Setting designator C8(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v2_b|parts/Radar60_C_10u_0603/Rad
+08:50:21.286  I  …s.app.designators  Setting designator C9(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v8_a|parts/Radar60_C_22u_0805/Rad
+08:50:21.287  I  …s.app.designators  Setting designator C10(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v8_b|parts/Radar60_C_10u_0603/Ra
+08:50:21.287  I  …s.app.designators  Setting designator C11(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_damp_1v8|parts/Radar60_C_22u_0805
+08:50:21.288  I  …s.app.designators  Setting designator C12(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_damp_rf1|parts/Radar60_C_22u_0805
+08:50:21.289  I  …s.app.designators  Setting designator C13(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_damp_rf2|parts/Radar60_C_22u_0805
+08:50:21.289  I  …s.app.designators  Setting designator C14(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[0]|parts/Radar60_C_10u_0805/Ra
+08:50:21.290  I  …s.app.designators  Setting designator C15(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[1]|parts/Radar60_C_10u_0805/Ra
+08:50:21.291  I  …s.app.designators  Setting designator C16(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[2]|parts/Radar60_C_10u_0805/Ra
+08:50:21.291  I  …s.app.designators  Setting designator C17(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[3]|parts/Radar60_C_10u_0805/Ra
+08:50:21.292  I  …s.app.designators  Setting designator C18(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b0|parts/Radar60_C_22u_0805/R
+08:50:21.293  I  …s.app.designators  Setting designator C19(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b1|parts/Radar60_C_22u_0805/R
+08:50:21.293  I  …s.app.designators  Setting designator C20(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b2|parts/Radar60_C_22u_0805/R
+08:50:21.294  I  …s.app.designators  Setting designator C21(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b3|parts/Radar60_C_22u_0805/R
+08:50:21.295  I  …s.app.designators  Setting designator C22(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf1_a|parts/Radar60_C_22u_0805/Ra
+08:50:21.296  I  …s.app.designators  Setting designator C23(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf1_b|parts/Radar60_C_10u_0603/Ra
+08:50:21.296  I  …s.app.designators  Setting designator C24(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf2_a|parts/Radar60_C_22u_0805/Ra
+08:50:21.297  I  …s.app.designators  Setting designator C25(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf2_b|parts/Radar60_C_10u_0603/Ra
+08:50:21.298  I  …s.app.designators  Setting designator C26(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rst|parts/Radar60_C_100n_0402/Rad
+08:50:21.298  I  …s.app.designators  Setting designator C27(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb0|parts/Radar60_C_390p_0402/Ra
+08:50:21.299  I  …s.app.designators  Setting designator C28(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb1|parts/Radar60_C_390p_0402/Ra
+08:50:21.299  I  …s.app.designators  Setting designator C29(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb2|parts/Radar60_C_390p_0402/Ra
+08:50:21.300  I  …s.app.designators  Setting designator C30(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb3|parts/Radar60_C_390p_0402/Ra
+08:50:21.301  I  …s.app.designators  Setting designator C31(prefix='C') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_vana|parts/Radar60_C_100n_0402/Ra
+08:50:21.301  I  …s.app.designators  Setting designator FB1(prefix='FB') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_1v2|parts/Radar60_FB_MPZ2012S10
+08:50:21.302  I  …s.app.designators  Setting designator FB2(prefix='FB') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_1v8|parts/Radar60_FB_MPZ2012S10
+08:50:21.303  I  …s.app.designators  Setting designator FB3(prefix='FB') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf1|parts/Radar60_FB_MPZ2012S10
+08:50:21.303  I  …s.app.designators  Setting designator FB4(prefix='FB') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf2_a|parts/Radar60_FB_MPZ2012S
+08:50:21.305  I  …s.app.designators  Setting designator FB5(prefix='FB') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf2_b|parts/Radar60_FB_MPZ2012S
+08:50:21.306  I  …s.app.designators  Setting designator L1(prefix='L') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b0|parts/Radar60_L_0u47_MCKK2012/R
+08:50:21.306  I  …s.app.designators  Setting designator L2(prefix='L') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b1|parts/Radar60_L_0u47_MCKK2012/R
+08:50:21.307  I  …s.app.designators  Setting designator L3(prefix='L') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b2|parts/Radar60_L_0u47_IHLP1616BZ
+08:50:21.308  I  …s.app.designators  Setting designator L4(prefix='L') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b3|parts/Radar60_L_0u47_IHLP1616BZ
+08:50:21.308  I  …s.app.designators  Setting designator R13(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_clkin_gnd|parts/Radar60_R_0_0402/
+08:50:21.309  I  …s.app.designators  Setting designator R14(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_clkin_sync|parts/Radar60_R_0_0402
+08:50:21.310  I  …s.app.designators  Setting designator R15(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_damp_1v8|parts/Radar60_R_0R22_040
+08:50:21.310  I  …s.app.designators  Setting designator R16(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_damp_rf1|parts/Radar60_R_0R22_040
+08:50:21.311  I  …s.app.designators  Setting designator R17(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_damp_rf2|parts/Radar60_R_0R22_040
+08:50:21.312  I  …s.app.designators  Setting designator R18(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en1_pd|parts/Radar60_R_10k_0402_D
+08:50:21.312  I  …s.app.designators  Setting designator R19(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en1_pu|parts/Radar60_R_10k_0402/R
+08:50:21.313  I  …s.app.designators  Setting designator R20(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en2_pu|parts/Radar60_R_10k_0402/R
+08:50:21.314  I  …s.app.designators  Setting designator R21(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en3_pu|parts/Radar60_R_10k_0402/R
+08:50:21.314  I  …s.app.designators  Setting designator R22(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_fb2_local|parts/Radar60_R_0_0402/
+08:50:21.315  I  …s.app.designators  Setting designator R23(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_fb2_remote|parts/Radar60_R_0_0402
+08:50:21.316  I  …s.app.designators  Setting designator R24(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_gpio2_ls|parts/Radar60_R_0_0402_D
+08:50:21.316  I  …s.app.designators  Setting designator R25(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_nint_pu|parts/Radar60_R_10k_0402/
+08:50:21.317  I  …s.app.designators  Setting designator R26(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_pgood_pu|parts/Radar60_R_10k_0402
+08:50:21.317  I  …s.app.designators  Setting designator R27(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_rst|parts/Radar60_R_0_0402/Radar6
+08:50:21.318  I  …s.app.designators  Setting designator R28(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_scl_pu|parts/Radar60_R_4k99_0402/
+08:50:21.319  I  …s.app.designators  Setting designator R29(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_sda_pu|parts/Radar60_R_4k99_0402/
+08:50:21.319  I  …s.app.designators  Setting designator R30(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb0|parts/Radar60_R_3R9_0402/Rad
+08:50:21.320  I  …s.app.designators  Setting designator R31(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb1|parts/Radar60_R_3R9_0402/Rad
+08:50:21.321  I  …s.app.designators  Setting designator R32(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb2|parts/Radar60_R_3R9_0402/Rad
+08:50:21.321  I  …s.app.designators  Setting designator R33(prefix='R') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb3|parts/Radar60_R_3R9_0402/Rad
+08:50:21.322  I  …s.app.designators  Setting designator TP1(prefix='TP') to radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.tp_isns|parts/Radar60_KelvinSense_
+08:50:21.323  I  …s.app.designators  Setting designator C32(prefix='C') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_dvdt|parts/Radar60_C_470p_0402/
+08:50:21.323  I  …s.app.designators  Setting designator C33(prefix='C') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_in_bulk|parts/Radar60_C_10u_080
+08:50:21.324  I  …s.app.designators  Setting designator C34(prefix='C') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_in_hf|parts/Radar60_C_100n_0402
+08:50:21.325  I  …s.app.designators  Setting designator C35(prefix='C') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_itimer|parts/Radar60_C_1n_0402/
+08:50:21.325  I  …s.app.designators  Setting designator C36(prefix='C') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_sys_bulk|parts/Radar60_C_22u_08
+08:50:21.326  I  …s.app.designators  Setting designator C37(prefix='C') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_sys_hf|parts/Radar60_C_100n_040
+08:50:21.327  I  …s.app.designators  Setting designator R34(prefix='R') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ilm|parts/Radar60_R_1k65_0402/R
+08:50:21.327  I  …s.app.designators  Setting designator R35(prefix='R') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ov_bot|parts/Radar60_R_11k_0402
+08:50:21.328  I  …s.app.designators  Setting designator R36(prefix='R') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ov_top|parts/Radar60_R_39k_0402
+08:50:21.328  I  …s.app.designators  Setting designator R37(prefix='R') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_bot|parts/Radar60_R_10k_0402
+08:50:21.329  I  …s.app.designators  Setting designator R38(prefix='R') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_div|parts/Radar60_R_39k_0402
+08:50:21.330  I  …s.app.designators  Setting designator R39(prefix='R') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_pu|parts/Radar60_R_10k_0402/
+08:50:21.330  I  …s.app.designators  Setting designator R40(prefix='R') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_top|parts/Radar60_R_24k_0402
+08:50:21.331  I  …s.app.designators  Setting designator R41(prefix='R') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_uv_bot|parts/Radar60_R_10k_0402
+08:50:21.332  I  …s.app.designators  Setting designator R42(prefix='R') to radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_uv_top|parts/Radar60_R_24k_0402
+08:50:21.332  I  …s.app.designators  Setting designator C38(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_apll|parts/Radar60_C_1u_0402/Ra
+08:50:21.333  I  …s.app.designators  Setting designator C39(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb[0]|parts/Radar60_C_220n_0402
+08:50:21.334  I  …s.app.designators  Setting designator C40(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb[1]|parts/Radar60_C_220n_0402
+08:50:21.334  I  …s.app.designators  Setting designator C41(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb_bulk|parts/Radar60_C_10u_060
+08:50:21.335  I  …s.app.designators  Setting designator C42(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_clk_bulk|parts/Radar60_C_10u_06
+08:50:21.336  I  …s.app.designators  Setting designator C43(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_clk|parts/Radar60_C_220n_0402/R
+08:50:21.336  I  …s.app.designators  Setting designator C44(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_diff|parts/Radar60_C_220n_0402/
+08:50:21.337  I  …s.app.designators  Setting designator C45(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[0]|parts/Radar60_C_220n_040
+08:50:21.337  I  …s.app.designators  Setting designator C46(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[1]|parts/Radar60_C_220n_040
+08:50:21.338  I  …s.app.designators  Setting designator C47(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[2]|parts/Radar60_C_220n_040
+08:50:21.339  I  …s.app.designators  Setting designator C48(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[3]|parts/Radar60_C_220n_040
+08:50:21.339  I  …s.app.designators  Setting designator C49(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig_2u2|parts/Radar60_C_2u2_040
+08:50:21.340  I  …s.app.designators  Setting designator C50(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig_10n|parts/Radar60_C_10n_040
+08:50:21.341  I  …s.app.designators  Setting designator C51(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_io18|parts/Radar60_C_220n_0402/
+08:50:21.341  I  …s.app.designators  Setting designator C52(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa_10u|parts/Radar60_C_10u_0603
+08:50:21.342  I  …s.app.designators  Setting designator C53(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa_22u|parts/Radar60_C_22u_0805
+08:50:21.342  I  …s.app.designators  Setting designator C54(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa|parts/Radar60_C_220n_0402/Ra
+08:50:21.343  I  …s.app.designators  Setting designator C55(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1_10u|parts/Radar60_C_10u_060
+08:50:21.344  I  …s.app.designators  Setting designator C56(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1_22u|parts/Radar60_C_22u_080
+08:50:21.344  I  …s.app.designators  Setting designator C57(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1|parts/Radar60_C_220n_0402/R
+08:50:21.345  I  …s.app.designators  Setting designator C58(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf2_10u|parts/Radar60_C_10u_060
+08:50:21.346  I  …s.app.designators  Setting designator C59(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf2_22u|parts/Radar60_C_22u_080
+08:50:21.346  I  …s.app.designators  Setting designator C60(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf2|parts/Radar60_C_220n_0402/R
+08:50:21.347  I  …s.app.designators  Setting designator C61(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_sram|parts/Radar60_C_100n_0402/
+08:50:21.349  I  …s.app.designators  Setting designator C62(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_synth|parts/Radar60_C_1u_0402/R
+08:50:21.349  I  …s.app.designators  Setting designator C63(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vbgap|parts/Radar60_C_47n_0402/
+08:50:21.350  I  …s.app.designators  Setting designator C64(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vco|parts/Radar60_C_220n_0402/R
+08:50:21.351  I  …s.app.designators  Setting designator C65(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[0]|parts/Radar60_C_220n_040
+08:50:21.351  I  …s.app.designators  Setting designator C66(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[1]|parts/Radar60_C_220n_040
+08:50:21.352  I  …s.app.designators  Setting designator C67(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[2]|parts/Radar60_C_220n_040
+08:50:21.352  I  …s.app.designators  Setting designator C68(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio_2u2|parts/Radar60_C_2u2_040
+08:50:21.353  I  …s.app.designators  Setting designator C69(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio_10u|parts/Radar60_C_10u_060
+08:50:21.354  I  …s.app.designators  Setting designator C70(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vnwa|parts/Radar60_C_100n_0402/
+08:50:21.354  I  …s.app.designators  Setting designator C71(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_xm|parts/Radar60_C_4p7_0402/Rad
+08:50:21.355  I  …s.app.designators  Setting designator C72(prefix='C') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_xp|parts/Radar60_C_4p7_0402/Rad
+08:50:21.356  I  …s.app.designators  Setting designator R43(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_led|parts/Radar60_R_1k_0402/Rad
+08:50:21.356  I  …s.app.designators  Setting designator R44(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_nerr_in_pu|parts/Radar60_R_10k_
+08:50:21.357  I  …s.app.designators  Setting designator R45(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_nerr_out_pu|parts/Radar60_R_10k
+08:50:21.358  I  …s.app.designators  Setting designator R46(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_pa|parts/Radar60_R_0_0402/Radar
+08:50:21.358  I  …s.app.designators  Setting designator R47(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_pmic_int|parts/Radar60_R_0_0402
+08:50:21.359  I  …s.app.designators  Setting designator R48(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop0_pu|parts/Radar60_R_10k_040
+08:50:21.359  I  …s.app.designators  Setting designator R49(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop1_pd|parts/Radar60_R_10k_040
+08:50:21.360  I  …s.app.designators  Setting designator R50(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop2_pd|parts/Radar60_R_10k_040
+08:50:21.361  I  …s.app.designators  Setting designator R51(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_spia_cs_pu|parts/Radar60_R_100k
+08:50:21.361  I  …s.app.designators  Setting designator R52(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sync_in_pd|parts/Radar60_R_100k
+08:50:21.362  I  …s.app.designators  Setting designator R53(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_uart_rx_pu|parts/Radar60_R_100k
+08:50:21.363  I  …s.app.designators  Setting designator R54(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_vio_bypass|parts/Radar60_R_0_04
+08:50:21.363  I  …s.app.designators  Setting designator R55(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_vio_ls_on|parts/Radar60_R_10k_0
+08:50:21.364  I  …s.app.designators  Setting designator R56(prefix='R') to radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_warm_pu|parts/Radar60_R_10k_040
+08:50:21.365  I  …s.app.designators  Setting designator RFM1(prefix='RFM') to radar60.ato::Radar60.rf_macro|rf_macro.ato::RfMacro.rfm1|parts/Radar60_RFM1_Placeh
+08:50:21.365  I  …s.app.designators  Setting designator TP2(prefix='TP') to radar60.ato::Radar60.tp_1v0|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60
+08:50:21.366  I  …s.app.designators  Setting designator TP3(prefix='TP') to radar60.ato::Radar60.tp_1v2|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60
+08:50:21.366  I  …s.app.designators  Setting designator TP4(prefix='TP') to radar60.ato::Radar60.tp_1v8|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60
+08:50:21.367  I  …s.app.designators  Setting designator TP5(prefix='TP') to radar60.ato::Radar60.tp_3v3|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60
+08:50:21.368  I  …s.app.designators  Setting designator TP6(prefix='TP') to radar60.ato::Radar60.tp_5v|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_
+08:50:21.368  I  …s.app.designators  Setting designator TP7(prefix='TP') to radar60.ato::Radar60.tp_efuse_pg|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Ra
+08:50:21.369  I  …s.app.designators  Setting designator TP8(prefix='TP') to radar60.ato::Radar60.tp_frame|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar
+08:50:21.369  I  …s.app.designators  Setting designator TP9(prefix='TP') to radar60.ato::Radar60.tp_gnd_a|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar
+08:50:21.370  I  …s.app.designators  Setting designator TP10(prefix='TP') to radar60.ato::Radar60.tp_gnd_b|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Rada
+08:50:21.371  I  …s.app.designators  Setting designator TP11(prefix='TP') to radar60.ato::Radar60.tp_nerror|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Rad
+08:50:21.371  I  …s.app.designators  Setting designator TP12(prefix='TP') to radar60.ato::Radar60.tp_nreset|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Rad
+08:50:21.372  I  …s.app.designators  Setting designator TP13(prefix='TP') to radar60.ato::Radar60.tp_pgood|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Rada
+08:50:21.373  I  …s.app.designators  Setting designator TP14(prefix='TP') to radar60.ato::Radar60.tp_pmic_nint|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::
+08:50:21.373  I  …s.app.designators  Setting designator TP15(prefix='TP') to radar60.ato::Radar60.tp_sop0|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar
+08:50:21.374  I  …s.app.designators  Setting designator TP16(prefix='TP') to radar60.ato::Radar60.tp_sop1|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar
+08:50:21.375  I  …s.app.designators  Setting designator TP17(prefix='TP') to radar60.ato::Radar60.tp_sop2|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar
+08:50:21.375  I  …s.app.designators  Setting designator TP18(prefix='TP') to radar60.ato::Radar60.tp_uart_rx|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Ra
+08:50:21.376  I  …s.app.designators  Setting designator TP19(prefix='TP') to radar60.ato::Radar60.tp_uart_tx|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Ra
+08:50:21.377  I  …s.app.designators  Setting designator TP20(prefix='TP') to radar60.ato::Radar60.tp_warm_reset|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato:
+08:50:21.377  I  …s.app.designators  Setting designator R57(prefix='R') to radar60.ato::Radar60.uart|uart.ato::Uart.r_rx|parts/Radar60_R_1k_0402/Radar60_R_1k_04
+08:50:21.378  I  …s.app.designators  Setting designator R58(prefix='R') to radar60.ato::Radar60.uart|uart.ato::Uart.r_tx|parts/Radar60_R_1k_0402/Radar60_R_1k_04
+08:50:21.379  I  …s.app.designators  182 prefix designators assigned
+08:50:21.422  I  faebryk.core.node  Grouping bus Radar60.debug.j2.53 complete. Elements: 12
+08:50:21.423  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb3.1 complete. Elements: 7
+08:50:21.424  I  faebryk.core.node  Grouping bus Radar60.radio.r_nerr_in_pu.1 complete. Elements: 65
+08:50:21.428  I  faebryk.core.node  Grouping bus Radar60.can.u4.2 complete. Elements: 326
+08:50:21.436  I  faebryk.core.node  Grouping bus Radar60.tp_1v2.1 complete. Elements: 36
+08:50:21.438  I  faebryk.core.node  Grouping bus Radar60.flash.r_d2_pu.2 complete. Elements: 8
+08:50:21.439  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R11 complete. Elements: 6
+08:50:21.440  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B10 complete. Elements: 4
+08:50:21.441  I  faebryk.core.node  Grouping bus Radar60.debug.j2.27 complete. Elements: 2
+08:50:21.442  I  faebryk.core.node  Grouping bus Radar60.flash.u3.1 complete. Elements: 8
+08:50:21.443  I  faebryk.core.node  Grouping bus Radar60.debug.j2.1 complete. Elements: 2
+08:50:21.444  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.26 complete. Elements: 48
+08:50:21.446  I  faebryk.core.node  Grouping bus Radar60.radio.c_pa_10u.1 complete. Elements: 14
+08:50:21.447  I  faebryk.core.node  Grouping bus Radar60.pmic.tp_isns.2 complete. Elements: 11
+08:50:21.448  I  faebryk.core.node  Grouping bus Radar60.power_in.r_uv_bot.1 complete. Elements: 7
+08:50:21.449  I  faebryk.core.node  Grouping bus Radar60.radio.u1.N15 complete. Elements: 2
+08:50:21.450  I  faebryk.core.node  Grouping bus Radar60.pmic.r_pgood_pu.2 complete. Elements: 13
+08:50:21.451  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb3.2 complete. Elements: 5
+08:50:21.452  I  faebryk.core.node  Grouping bus Radar60.radio.r_nerr_in_pu.2 complete. Elements: 5
+08:50:21.453  I  faebryk.core.node  Grouping bus Radar60.power_in.c_in_hf.1 complete. Elements: 18
+08:50:21.454  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R12 complete. Elements: 6
+08:50:21.455  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B11 complete. Elements: 40
+08:50:21.457  I  faebryk.core.node  Grouping bus Radar60.debug.j2.28 complete. Elements: 6
+08:50:21.457  I  faebryk.core.node  Grouping bus Radar60.pmic.r_clkin_sync.1 complete. Elements: 6
+08:50:21.458  I  faebryk.core.node  Grouping bus Radar60.flash.u3.2 complete. Elements: 6
+08:50:21.459  I  faebryk.core.node  Grouping bus Radar60.debug.j2.2 complete. Elements: 2
+08:50:21.460  I  faebryk.core.node  Grouping bus Radar60.debug.j3.10 complete. Elements: 16
+08:50:21.461  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P1 complete. Elements: 2
+08:50:21.462  I  faebryk.core.node  Grouping bus Radar60.tp_warm_reset.1 complete. Elements: 7
+08:50:21.463  I  faebryk.core.node  Grouping bus Radar60.debug.j2.55 complete. Elements: 14
+08:50:21.464  I  faebryk.core.node  Grouping bus Radar60.can.u4.4 complete. Elements: 7
+08:50:21.465  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.1 complete. Elements: 7
+08:50:21.466  I  faebryk.core.node  Grouping bus Radar60.radio.r_vio_ls_on.1 complete. Elements: 15
+08:50:21.468  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R13 complete. Elements: 6
+08:50:21.468  I  faebryk.core.node  Grouping bus Radar60.radio.d_led.1 complete. Elements: 5
+08:50:21.469  I  faebryk.core.node  Grouping bus Radar60.debug.j2.29 complete. Elements: 2
+08:50:21.470  I  faebryk.core.node  Grouping bus Radar60.pmic.r_clkin_sync.2 complete. Elements: 10
+08:50:21.471  I  faebryk.core.node  Grouping bus Radar60.power_in.c_dvdt.1 complete. Elements: 5
+08:50:21.472  I  faebryk.core.node  Grouping bus Radar60.pmic.r_gpio2_ls.1 complete. Elements: 7
+08:50:21.473  I  faebryk.core.node  Grouping bus Radar60.radio.u1.E13 complete. Elements: 6
+08:50:21.474  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb1.1 complete. Elements: 7
+08:50:21.475  I  faebryk.core.node  Grouping bus Radar60.radio.c_xp.1 complete. Elements: 7
+08:50:21.476  I  faebryk.core.node  Grouping bus Radar60.debug.j2.3 complete. Elements: 2
+08:50:21.477  I  faebryk.core.node  Grouping bus Radar60.radio.u1.H13 complete. Elements: 2
+08:50:21.478  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P2 complete. Elements: 2
+08:50:21.479  I  faebryk.core.node  Grouping bus Radar60.tp_sop0.1 complete. Elements: 10
+08:50:21.480  I  faebryk.core.node  Grouping bus Radar60.pmic.l_b3.2 complete. Elements: 9
+08:50:21.481  I  faebryk.core.node  Grouping bus Radar60.pmic.r_damp_rf2.1 complete. Elements: 26
+08:50:21.482  I  faebryk.core.node  Grouping bus Radar60.debug.j2.56 complete. Elements: 6
+08:50:21.486  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.2 complete. Elements: 4
+08:50:21.487  I  faebryk.core.node  Grouping bus Radar60.radio.r_vio_ls_on.2 complete. Elements: 8
+08:50:21.488  I  faebryk.core.node  Grouping bus Radar60.radio.d_led.2 complete. Elements: 5
+08:50:21.489  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B13 complete. Elements: 4
+08:50:21.490  I  faebryk.core.node  Grouping bus Radar60.pmic.c_rf1_b.1 complete. Elements: 21
+08:50:21.491  I  faebryk.core.node  Grouping bus Radar60.uart.esd.1 complete. Elements: 7
+08:50:21.492  I  faebryk.core.node  Grouping bus Radar60.radio.u1.E14 complete. Elements: 9
+08:50:21.493  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb1.2 complete. Elements: 5
+08:50:21.494  I  faebryk.core.node  Grouping bus Radar60.debug.j2.4 complete. Elements: 2
+08:50:21.495  I  faebryk.core.node  Grouping bus Radar60.radio.u1.H14 complete. Elements: 6
+08:50:21.496  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P3 complete. Elements: 2
+08:50:21.497  I  faebryk.core.node  Grouping bus Radar60.pmic.r_damp_rf2.2 complete. Elements: 5
+08:50:21.498  I  faebryk.core.node  Grouping bus Radar60.debug.j2.57 complete. Elements: 12
+08:50:21.499  I  faebryk.core.node  Grouping bus Radar60.can.u4.6 complete. Elements: 10
+08:50:21.500  I  faebryk.core.node  Grouping bus Radar60.debug.j2.31 complete. Elements: 2
+08:50:21.501  I  faebryk.core.node  Grouping bus Radar60.uart.esd.2 complete. Elements: 7
+08:50:21.502  I  faebryk.core.node  Grouping bus Radar60.radio.u1.E15 complete. Elements: 8
+08:50:21.503  I  faebryk.core.node  Grouping bus Radar60.debug.j2.5 complete. Elements: 2
+08:50:21.504  I  faebryk.core.node  Grouping bus Radar60.pmic.c_out_b2.1 complete. Elements: 11
+08:50:21.505  I  faebryk.core.node  Grouping bus Radar60.can.esd.1 complete. Elements: 10
+08:50:21.506  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P4 complete. Elements: 5
+08:50:21.507  I  faebryk.core.node  Grouping bus Radar60.debug.j2.58 complete. Elements: 6
+08:50:21.507  I  faebryk.core.node  Grouping bus Radar60.debug.j2.32 complete. Elements: 2
+08:50:21.508  I  faebryk.core.node  Grouping bus Radar60.radio.u1.F2 complete. Elements: 6
+08:50:21.510  I  faebryk.core.node  Grouping bus Radar60.flash.u3.6 complete. Elements: 5
+08:50:21.511  I  faebryk.core.node  Grouping bus Radar60.power_in.r_pg_pu.2 complete. Elements: 12
+08:50:21.512  I  faebryk.core.node  Grouping bus Radar60.debug.j2.6 complete. Elements: 2
+08:50:21.513  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P5 complete. Elements: 2
+08:50:21.513  I  faebryk.core.node  Grouping bus Radar60.debug.j2.59 complete. Elements: 5
+08:50:21.514  I  faebryk.core.node  Grouping bus Radar60.can.u4.8 complete. Elements: 4
+08:50:21.515  I  faebryk.core.node  Grouping bus Radar60.flash.r_d3_pu.2 complete. Elements: 8
+08:50:21.516  I  faebryk.core.node  Grouping bus Radar60.debug.j2.33 complete. Elements: 2
+08:50:21.517  I  faebryk.core.node  Grouping bus Radar60.tp_sop1.1 complete. Elements: 7
+08:50:21.518  I  faebryk.core.node  Grouping bus Radar60.radio.u1.L13 complete. Elements: 2
+08:50:21.519  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P6 complete. Elements: 2
+08:50:21.520  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.6 complete. Elements: 12
+08:50:21.521  I  faebryk.core.node  Grouping bus Radar60.debug.j2.34 complete. Elements: 2
+08:50:21.522  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P13 complete. Elements: 6
+08:50:21.523  I  faebryk.core.node  Grouping bus Radar60.debug.j2.21 complete. Elements: 2
+08:50:21.524  I  faebryk.core.node  Grouping bus Radar60.debug.j2.8 complete. Elements: 2
+08:50:21.524  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R5 complete. Elements: 2
+08:50:21.525  I  faebryk.core.node  Grouping bus Radar60.radio.u1.L14 complete. Elements: 6
+08:50:21.526  I  faebryk.core.node  Grouping bus Radar60.rf_macro.rfm1.tx3 complete. Elements: 6
+08:50:21.527  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B4 complete. Elements: 6
+08:50:21.528  I  faebryk.core.node  Grouping bus Radar60.radio.u1.A10 complete. Elements: 4
+08:50:21.529  I  faebryk.core.node  Grouping bus Radar60.debug.j2.41 complete. Elements: 2
+08:50:21.530  I  faebryk.core.node  Grouping bus Radar60.pmic.r_damp_rf1.2 complete. Elements: 5
+08:50:21.531  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb2.1 complete. Elements: 7
+08:50:21.532  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P7 complete. Elements: 2
+08:50:21.533  I  faebryk.core.node  Grouping bus Radar60.tp_frame.1 complete. Elements: 5
+08:50:21.534  I  faebryk.core.node  Grouping bus Radar60.power_in.r_ov_top.2 complete. Elements: 7
+08:50:21.535  I  faebryk.core.node  Grouping bus Radar60.radio.u1.C13 complete. Elements: 2
+08:50:21.535  I  faebryk.core.node  Grouping bus Radar60.debug.j2.15 complete. Elements: 2
+08:50:21.536  I  faebryk.core.node  Grouping bus Radar60.pmic.r_nint_pu.2 complete. Elements: 10
+08:50:21.537  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.7 complete. Elements: 6
+08:50:21.538  I  faebryk.core.node  Grouping bus Radar60.rf_macro.rfm1.rx1 complete. Elements: 6
+08:50:21.539  I  faebryk.core.node  Grouping bus Radar60.can.r_rx_f14.2 complete. Elements: 6
+08:50:21.540  I  faebryk.core.node  Grouping bus Radar60.radio.r_nerr_out_pu.2 complete. Elements: 9
+08:50:21.541  I  faebryk.core.node  Grouping bus Radar60.debug.j2.35 complete. Elements: 2
+08:50:21.542  I  faebryk.core.node  Grouping bus Radar60.can.r_term_l.1 complete. Elements: 7
+08:50:21.543  I  faebryk.core.node  Grouping bus Radar60.debug.j2.22 complete. Elements: 2
+08:50:21.544  I  faebryk.core.node  Grouping bus Radar60.radio.c_xm.1 complete. Elements: 7
+08:50:21.545  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.14 complete. Elements: 9
+08:50:21.546  I  faebryk.core.node  Grouping bus Radar60.power_in.efuse.9 complete. Elements: 5
+08:50:21.547  I  faebryk.core.node  Grouping bus Radar60.radio.u1.L15 complete. Elements: 6
+08:50:21.548  I  faebryk.core.node  Grouping bus Radar60.can.r_tx_e14.2 complete. Elements: 7
+08:50:21.549  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb2.2 complete. Elements: 5
+08:50:21.550  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P8 complete. Elements: 2
+08:50:21.550  I  faebryk.core.node  Grouping bus Radar60.debug.j2.16 complete. Elements: 2
+08:50:21.551  I  faebryk.core.node  Grouping bus Radar60.debug.j3.4 complete. Elements: 6
+08:50:21.552  I  faebryk.core.node  Grouping bus Radar60.radio.u1.N10 complete. Elements: 6
+08:50:21.553  I  faebryk.core.node  Grouping bus Radar60.debug.j2.49 complete. Elements: 2
+08:50:21.554  I  faebryk.core.node  Grouping bus Radar60.rf_macro.rfm1.rx2 complete. Elements: 6
+08:50:21.555  I  faebryk.core.node  Grouping bus Radar60.debug.j2.23 complete. Elements: 2
+08:50:21.556  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R7 complete. Elements: 2
+08:50:21.556  I  faebryk.core.node  Grouping bus Radar60.power_in.c_itimer.1 complete. Elements: 5
+08:50:21.557  I  faebryk.core.node  Grouping bus Radar60.radio.u6.4 complete. Elements: 2
+08:50:21.558  I  faebryk.core.node  Grouping bus Radar60.radio.u1.A14 complete. Elements: 2
+08:50:21.559  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B6 complete. Elements: 6
+08:50:21.560  I  faebryk.core.node  Grouping bus Radar60.pmic.c_snb0.1 complete. Elements: 5
+08:50:21.561  I  faebryk.core.node  Grouping bus Radar60.debug.j2.43 complete. Elements: 2
+08:50:21.562  I  faebryk.core.node  Grouping bus Radar60.debug.j2.17 complete. Elements: 2
+08:50:21.563  I  faebryk.core.node  Grouping bus Radar60.radio.r_pmic_int.2 complete. Elements: 5
+08:50:21.564  I  faebryk.core.node  Grouping bus Radar60.power_in.efuse.4 complete. Elements: 7
+08:50:21.564  I  faebryk.core.node  Grouping bus Radar60.debug.j2.50 complete. Elements: 6
+08:50:21.565  I  faebryk.core.node  Grouping bus Radar60.rf_macro.rfm1.rx3 complete. Elements: 6
+08:50:21.566  I  faebryk.core.node  Grouping bus Radar60.debug.j2.37 complete. Elements: 2
+08:50:21.567  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb0.1 complete. Elements: 7
+08:50:21.568  I  faebryk.core.node  Grouping bus Radar60.pmic.c_damp_1v8.1 complete. Elements: 5
+08:50:21.569  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R8 complete. Elements: 2
+08:50:21.570  I  faebryk.core.node  Grouping bus Radar60.debug.j2.11 complete. Elements: 9
+08:50:21.571  I  faebryk.core.node  Grouping bus Radar60.radio.u6.5 complete. Elements: 2
+08:50:21.572  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R2 complete. Elements: 2
+08:50:21.572  I  faebryk.core.node  Grouping bus Radar60.debug.j2.38 complete. Elements: 2
+08:50:21.573  I  faebryk.core.node  Grouping bus Radar60.debug.j2.25 complete. Elements: 2
+08:50:21.574  I  faebryk.core.node  Grouping bus Radar60.radio.u1.M14 complete. Elements: 6
+08:50:21.575  I  faebryk.core.node  Grouping bus Radar60.debug.j2.45 complete. Elements: 2
+08:50:21.576  I  faebryk.core.node  Grouping bus Radar60.debug.j2.19 complete. Elements: 2
+08:50:21.577  I  faebryk.core.node  Grouping bus Radar60.debug.j3.7 complete. Elements: 2
+08:50:21.577  I  faebryk.core.node  Grouping bus Radar60.debug.j2.52 complete. Elements: 6
+08:50:21.581  I  faebryk.core.node  Grouping bus Radar60.debug.j2.39 complete. Elements: 2
+08:50:21.582  I  faebryk.core.node  Grouping bus Radar60.radio.u1.D14 complete. Elements: 2
+08:50:21.583  I  faebryk.core.node  Grouping bus Radar60.debug.j2.20 complete. Elements: 2
+08:50:21.583  I  faebryk.core.node  Grouping bus Radar60.radio.u1.N14 complete. Elements: 2
+08:50:21.584  I  faebryk.core.node  Grouping bus Radar60.radio.u1.J13 complete. Elements: 2
+08:50:21.585  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R4 complete. Elements: 2
+08:50:21.586  I  faebryk.core.node  Grouping bus Radar60.debug.j2.40 complete. Elements: 2
+08:50:21.587  I  faebryk.core.node  Grouping bus Radar60.debug.j2.14 complete. Elements: 2
+08:50:21.588  I  faebryk.core.node  Grouping bus Radar60.debug.j2.47 complete. Elements: 2
+08:50:21.846  I  …opile.build_steps  Running checks
+08:50:21.852  I  …kicad.transformer  Adding `Radar60_JST_SM08B_GHS_TB:JST_GH_SM08B-GHS-TB_1x08-1MP_P1.25mm_Horizontal` as `Radar60.j1` (J1)
+08:50:21.866  I  …kicad.transformer  Adding `Radar60_SMF5V0A:D_SMF` as `Radar60.power_in.tvs` (D3)
+08:50:21.869  I  …kicad.transformer  Adding `Radar60_C_10u_0805:C_0805_2012Metric` as `Radar60.power_in.c_in_bulk` (C33)
+08:50:21.873  I  …kicad.transformer  Adding `Radar60_C_100n_0402:C_0402_1005Metric` as `Radar60.power_in.c_in_hf` (C34)
+08:50:21.876  I  …kicad.transformer  Adding `Radar60_TPS259474ARPWR:TI_RPW0010A_VQFN-HR-10_2x2mm_P0.45mm` as `Radar60.power_in.efuse` (U5)
+08:50:21.883  I  …kicad.transformer  Adding `Radar60_R_24k_0402:R_0402_1005Metric` as `Radar60.power_in.r_uv_top` (R42)
+08:50:21.887  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.power_in.r_uv_bot` (R41)
+08:50:21.891  I  …kicad.transformer  Adding `Radar60_R_39k_0402:R_0402_1005Metric` as `Radar60.power_in.r_ov_top` (R36)
+08:50:21.907  I  …kicad.transformer  Adding `Radar60_R_11k_0402:R_0402_1005Metric` as `Radar60.power_in.r_ov_bot` (R35)
+08:50:21.911  I  …kicad.transformer  Adding `Radar60_R_24k_0402:R_0402_1005Metric` as `Radar60.power_in.r_pg_top` (R40)
+08:50:21.914  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.power_in.r_pg_bot` (R37)
+08:50:21.918  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.power_in.r_pg_pu` (R39)
+08:50:21.921  I  …kicad.transformer  Adding `Radar60_R_39k_0402:R_0402_1005Metric` as `Radar60.power_in.r_pg_div` (R38)
+08:50:21.924  I  …kicad.transformer  Adding `Radar60_R_1k65_0402:R_0402_1005Metric` as `Radar60.power_in.r_ilm` (R34)
+08:50:21.928  I  …kicad.transformer  Adding `Radar60_C_1n_0402:C_0402_1005Metric` as `Radar60.power_in.c_itimer` (C35)
+08:50:21.931  I  …kicad.transformer  Adding `Radar60_C_470p_0402:C_0402_1005Metric` as `Radar60.power_in.c_dvdt` (C32)
+08:50:21.935  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.power_in.c_sys_bulk` (C36)
+08:50:21.938  I  …kicad.transformer  Adding `Radar60_C_100n_0402:C_0402_1005Metric` as `Radar60.power_in.c_sys_hf` (C37)
+08:50:21.942  I  …kicad.transformer  Adding `Radar60_LP87524JRNFRQ1:TI_RNF0026C_VQFN-HR-26_4.5x4mm_P0.5mm` as `Radar60.pmic.u2` (U2)
+08:50:21.953  I  …kicad.transformer  Adding `Radar60_C_100n_0402:C_0402_1005Metric` as `Radar60.pmic.c_vana` (C31)
+08:50:21.956  I  …kicad.transformer  Adding `Radar60_C_10u_0805:C_0805_2012Metric` as `Radar60.pmic.c_in[0]` (C14)
+08:50:21.960  I  …kicad.transformer  Adding `Radar60_C_10u_0805:C_0805_2012Metric` as `Radar60.pmic.c_in[1]` (C15)
+08:50:21.963  I  …kicad.transformer  Adding `Radar60_C_10u_0805:C_0805_2012Metric` as `Radar60.pmic.c_in[2]` (C16)
+08:50:21.967  I  …kicad.transformer  Adding `Radar60_C_10u_0805:C_0805_2012Metric` as `Radar60.pmic.c_in[3]` (C17)
+08:50:21.970  I  …kicad.transformer  Adding `Radar60_L_0u47_MCKK2012:L_0805_2012Metric` as `Radar60.pmic.l_b0` (L1)
+08:50:21.973  I  …kicad.transformer  Adding `Radar60_L_0u47_MCKK2012:L_0805_2012Metric` as `Radar60.pmic.l_b1` (L2)
+08:50:21.977  I  …kicad.transformer  Adding `Radar60_L_0u47_IHLP1616BZ:L_Vishay_IHLP-1616` as `Radar60.pmic.l_b2` (L3)
+08:50:21.980  I  …kicad.transformer  Adding `Radar60_L_0u47_IHLP1616BZ:L_Vishay_IHLP-1616` as `Radar60.pmic.l_b3` (L4)
+08:50:21.983  I  …kicad.transformer  Adding `Radar60_R_0_0402:R_0402_1005Metric` as `Radar60.pmic.r_fb2_local` (R22)
+08:50:21.987  I  …kicad.transformer  Adding `Radar60_R_0_0402_DNP:R_0402_1005Metric` as `Radar60.pmic.r_fb2_remote` (R23)
+08:50:21.989  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.pmic.c_out_b0` (C18)
+08:50:21.992  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.pmic.c_out_b1` (C19)
+08:50:21.995  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.pmic.c_out_b2` (C20)
+08:50:21.999  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.pmic.c_out_b3` (C21)
+08:50:22.002  I  …kicad.transformer  Adding `Radar60_R_3R9_0402:R_0402_1005Metric` as `Radar60.pmic.r_snb0` (R30)
+08:50:22.005  I  …kicad.transformer  Adding `Radar60_C_390p_0402:C_0402_1005Metric` as `Radar60.pmic.c_snb0` (C27)
+08:50:22.009  I  …kicad.transformer  Adding `Radar60_R_3R9_0402:R_0402_1005Metric` as `Radar60.pmic.r_snb1` (R31)
+08:50:22.012  I  …kicad.transformer  Adding `Radar60_C_390p_0402:C_0402_1005Metric` as `Radar60.pmic.c_snb1` (C28)
+08:50:22.015  I  …kicad.transformer  Adding `Radar60_R_3R9_0402:R_0402_1005Metric` as `Radar60.pmic.r_snb2` (R32)
+08:50:22.019  I  …kicad.transformer  Adding `Radar60_C_390p_0402:C_0402_1005Metric` as `Radar60.pmic.c_snb2` (C29)
+08:50:22.022  I  …kicad.transformer  Adding `Radar60_R_3R9_0402:R_0402_1005Metric` as `Radar60.pmic.r_snb3` (R33)
+08:50:22.026  I  …kicad.transformer  Adding `Radar60_C_390p_0402:C_0402_1005Metric` as `Radar60.pmic.c_snb3` (C30)
+08:50:22.029  I  …kicad.transformer  Adding `Radar60_FB_MPZ2012S101A:L_0805_2012Metric` as `Radar60.pmic.fb_1v2` (FB1)
+08:50:22.033  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.pmic.c_1v2_a` (C7)
+08:50:22.036  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.pmic.c_1v2_b` (C8)
+08:50:22.039  I  …kicad.transformer  Adding `Radar60_FB_MPZ2012S101A:L_0805_2012Metric` as `Radar60.pmic.fb_1v8` (FB2)
+08:50:22.043  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.pmic.c_1v8_a` (C9)
+08:50:22.046  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.pmic.c_1v8_b` (C10)
+08:50:22.050  I  …kicad.transformer  Adding `Radar60_R_2m_0612:Vishay_WFCP0612_1632Metric` as `Radar60.pmic.r_sh` (R_SH1)
+08:50:22.053  I  …kicad.transformer  Adding `Radar60_KelvinSense_2Pad:Radar60_KelvinSense_2Pad_P1.27mm` as `Radar60.pmic.tp_isns` (TP1)
+08:50:22.055  I  …kicad.transformer  Adding `Radar60_FB_MPZ2012S101A:L_0805_2012Metric` as `Radar60.pmic.fb_rf1` (FB3)
+08:50:22.058  I  …kicad.transformer  Adding `Radar60_FB_MPZ2012S101A:L_0805_2012Metric` as `Radar60.pmic.fb_rf2_a` (FB4)
+08:50:22.062  I  …kicad.transformer  Adding `Radar60_FB_MPZ2012S101A:L_0805_2012Metric` as `Radar60.pmic.fb_rf2_b` (FB5)
+08:50:22.065  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.pmic.c_rf1_a` (C22)
+08:50:22.068  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.pmic.c_rf1_b` (C23)
+08:50:22.072  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.pmic.c_rf2_a` (C24)
+08:50:22.075  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.pmic.c_rf2_b` (C25)
+08:50:22.079  I  …kicad.transformer  Adding `Radar60_R_0R22_0402_DNP:R_0402_1005Metric` as `Radar60.pmic.r_damp_rf1` (R16)
+08:50:22.081  I  …kicad.transformer  Adding `Radar60_C_22u_0805_DNP:C_0805_2012Metric` as `Radar60.pmic.c_damp_rf1` (C12)
+08:50:22.082  I  …kicad.transformer  Adding `Radar60_R_0R22_0402_DNP:R_0402_1005Metric` as `Radar60.pmic.r_damp_rf2` (R17)
+08:50:22.084  I  …kicad.transformer  Adding `Radar60_C_22u_0805_DNP:C_0805_2012Metric` as `Radar60.pmic.c_damp_rf2` (C13)
+08:50:22.086  I  …kicad.transformer  Adding `Radar60_R_0R22_0402_DNP:R_0402_1005Metric` as `Radar60.pmic.r_damp_1v8` (R15)
+08:50:22.088  I  …kicad.transformer  Adding `Radar60_C_22u_0805_DNP:C_0805_2012Metric` as `Radar60.pmic.c_damp_1v8` (C11)
+08:50:22.090  I  …kicad.transformer  Adding `Radar60_R_0_0402:R_0402_1005Metric` as `Radar60.pmic.r_clkin_gnd` (R13)
+08:50:22.093  I  …kicad.transformer  Adding `Radar60_R_0_0402_DNP:R_0402_1005Metric` as `Radar60.pmic.r_clkin_sync` (R14)
+08:50:22.095  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.pmic.r_en1_pu` (R19)
+08:50:22.099  I  …kicad.transformer  Adding `Radar60_R_10k_0402_DNP:R_0402_1005Metric` as `Radar60.pmic.r_en1_pd` (R18)
+08:50:22.100  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.pmic.r_en2_pu` (R20)
+08:50:22.104  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.pmic.r_en3_pu` (R21)
+08:50:22.107  I  …kicad.transformer  Adding `Radar60_R_0_0402_DNP:R_0402_1005Metric` as `Radar60.pmic.r_gpio2_ls` (R24)
+08:50:22.109  I  …kicad.transformer  Adding `Radar60_R_4k99_0402:R_0402_1005Metric` as `Radar60.pmic.r_scl_pu` (R28)
+08:50:22.113  I  …kicad.transformer  Adding `Radar60_R_4k99_0402:R_0402_1005Metric` as `Radar60.pmic.r_sda_pu` (R29)
+08:50:22.117  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.pmic.r_nint_pu` (R25)
+08:50:22.120  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.pmic.r_pgood_pu` (R26)
+08:50:22.124  I  …kicad.transformer  Adding `Radar60_R_0_0402:R_0402_1005Metric` as `Radar60.pmic.r_rst` (R27)
+08:50:22.127  I  …kicad.transformer  Adding `Radar60_C_100n_0402:C_0402_1005Metric` as `Radar60.pmic.c_rst` (C26)
+08:50:22.131  I  …kicad.transformer  Adding `Radar60_IWR6843AQGABLR:TI_ABL0161B_FCBGA-161_10.4x10.4mm_Layout15x15_P0.65mm` as `Radar60.radio.u1` (U1)
+08:50:22.192  I  …kicad.transformer  Adding `Radar60_R_0_0402:R_0402_1005Metric` as `Radar60.radio.r_pa` (R46)
+08:50:22.196  I  …kicad.transformer  Adding `Radar60_R_0_0402:R_0402_1005Metric` as `Radar60.radio.r_vio_bypass` (R54)
+08:50:22.199  I  …kicad.transformer  Adding `Radar60_TPS22917DBVR_DNP:SOT-23-6` as `Radar60.radio.u6` (U6)
+08:50:22.202  I  …kicad.transformer  Adding `Radar60_R_10k_0402_DNP:R_0402_1005Metric` as `Radar60.radio.r_vio_ls_on` (R55)
+08:50:22.204  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_bb[0]` (C39)
+08:50:22.208  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_bb[1]` (C40)
+08:50:22.211  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.radio.c_bb_bulk` (C41)
+08:50:22.214  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_diff` (C44)
+08:50:22.218  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_io18` (C51)
+08:50:22.221  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_vco` (C64)
+08:50:22.225  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_clk` (C43)
+08:50:22.228  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.radio.c_clk_bulk` (C42)
+08:50:22.231  I  …kicad.transformer  Adding `Radar60_C_47n_0402:C_0402_1005Metric` as `Radar60.radio.c_vbgap` (C63)
+08:50:22.235  I  …kicad.transformer  Adding `Radar60_C_1u_0402:C_0402_1005Metric` as `Radar60.radio.c_apll` (C38)
+08:50:22.238  I  …kicad.transformer  Adding `Radar60_C_1u_0402:C_0402_1005Metric` as `Radar60.radio.c_synth` (C62)
+08:50:22.242  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_pa` (C54)
+08:50:22.245  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.radio.c_pa_10u` (C52)
+08:50:22.249  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.radio.c_pa_22u` (C53)
+08:50:22.252  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_rf1` (C57)
+08:50:22.256  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.radio.c_rf1_10u` (C55)
+08:50:22.259  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.radio.c_rf1_22u` (C56)
+08:50:22.262  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_rf2` (C60)
+08:50:22.266  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.radio.c_rf2_10u` (C58)
+08:50:22.269  I  …kicad.transformer  Adding `Radar60_C_22u_0805:C_0805_2012Metric` as `Radar60.radio.c_rf2_22u` (C59)
+08:50:22.272  I  …kicad.transformer  Adding `Radar60_C_10u_0603:C_0603_1608Metric` as `Radar60.radio.c_vio_10u` (C69)
+08:50:22.276  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_vio[0]` (C65)
+08:50:22.279  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_vio[1]` (C66)
+08:50:22.283  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_vio[2]` (C67)
+08:50:22.286  I  …kicad.transformer  Adding `Radar60_C_2u2_0402:C_0402_1005Metric` as `Radar60.radio.c_vio_2u2` (C68)
+08:50:22.289  I  …kicad.transformer  Adding `Radar60_C_100n_0402:C_0402_1005Metric` as `Radar60.radio.c_vnwa` (C70)
+08:50:22.293  I  …kicad.transformer  Adding `Radar60_C_100n_0402:C_0402_1005Metric` as `Radar60.radio.c_sram` (C61)
+08:50:22.296  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_dig[0]` (C45)
+08:50:22.299  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_dig[1]` (C46)
+08:50:22.303  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_dig[2]` (C47)
+08:50:22.306  I  …kicad.transformer  Adding `Radar60_C_220n_0402:C_0402_1005Metric` as `Radar60.radio.c_dig[3]` (C48)
+08:50:22.309  I  …kicad.transformer  Adding `Radar60_C_2u2_0402:C_0402_1005Metric` as `Radar60.radio.c_dig_2u2` (C49)
+08:50:22.313  I  …kicad.transformer  Adding `Radar60_C_10n_0402:C_0402_1005Metric` as `Radar60.radio.c_dig_10n` (C50)
+08:50:22.316  I  …kicad.transformer  Adding `Radar60_CX3225SA40000D0PTWCC:Crystal_SMD_3225-4Pin_3.2x2.5mm` as `Radar60.radio.y1` (Y1)
+08:50:22.320  I  …kicad.transformer  Adding `Radar60_C_4p7_0402:C_0402_1005Metric` as `Radar60.radio.c_xp` (C72)
+08:50:22.323  I  …kicad.transformer  Adding `Radar60_C_4p7_0402:C_0402_1005Metric` as `Radar60.radio.c_xm` (C71)
+08:50:22.327  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.radio.r_warm_pu` (R56)
+08:50:22.330  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.radio.r_nerr_out_pu` (R45)
+08:50:22.334  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.radio.r_nerr_in_pu` (R44)
+08:50:22.337  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.radio.r_sop0_pu` (R48)
+08:50:22.340  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.radio.r_sop1_pd` (R49)
+08:50:22.344  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.radio.r_sop2_pd` (R50)
+08:50:22.347  I  …kicad.transformer  Adding `Radar60_R_100k_0402:R_0402_1005Metric` as `Radar60.radio.r_sync_in_pd` (R52)
+08:50:22.351  I  …kicad.transformer  Adding `Radar60_R_100k_0402:R_0402_1005Metric` as `Radar60.radio.r_uart_rx_pu` (R53)
+08:50:22.354  I  …kicad.transformer  Adding `Radar60_R_100k_0402:R_0402_1005Metric` as `Radar60.radio.r_spia_cs_pu` (R51)
+08:50:22.358  I  …kicad.transformer  Adding `Radar60_R_0_0402:R_0402_1005Metric` as `Radar60.radio.r_pmic_int` (R47)
+08:50:22.361  I  …kicad.transformer  Adding `Radar60_2N7002:SOT-23` as `Radar60.radio.q_led` (Q1)
+08:50:22.365  I  …kicad.transformer  Adding `Radar60_LED_Green_0603:LED_0603_1608Metric` as `Radar60.radio.d_led` (D4)
+08:50:22.368  I  …kicad.transformer  Adding `Radar60_R_1k_0402:R_0402_1005Metric` as `Radar60.radio.r_led` (R43)
+08:50:22.372  I  …kicad.transformer  Adding `Radar60_MX25V1635FZNQ:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4mm` as `Radar60.flash.u3` (U3)
+08:50:22.378  I  …kicad.transformer  Adding `Radar60_R_22_0402:R_0402_1005Metric` as `Radar60.flash.r_clk` (R9)
+08:50:22.381  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.flash.r_cs_pu` (R10)
+08:50:22.385  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.flash.r_d2_pu` (R11)
+08:50:22.389  I  …kicad.transformer  Adding `Radar60_R_10k_0402:R_0402_1005Metric` as `Radar60.flash.r_d3_pu` (R12)
+08:50:22.392  I  …kicad.transformer  Adding `Radar60_C_100n_0402:C_0402_1005Metric` as `Radar60.flash.c_vcc` (C6)
+08:50:22.396  I  …kicad.transformer  Adding `Radar60_C_1u_0402:C_0402_1005Metric` as `Radar60.flash.c_vcc_bulk` (C5)
+08:50:22.399  I  …kicad.transformer  Adding `Radar60_TCAN1044AVDRBRQ1:Texas_DRB0008A` as `Radar60.can.u4` (U4)
+08:50:22.404  I  …kicad.transformer  Adding `Radar60_R_0_0402:R_0402_1005Metric` as `Radar60.can.r_stb` (R3)
+08:50:22.408  I  …kicad.transformer  Adding `Radar60_C_100n_0402:C_0402_1005Metric` as `Radar60.can.c_vcc` (C3)
+08:50:22.411  I  …kicad.transformer  Adding `Radar60_C_1u_0402:C_0402_1005Metric` as `Radar60.can.c_vcc_bulk` (C2)
+08:50:22.415  I  …kicad.transformer  Adding `Radar60_C_100n_0402:C_0402_1005Metric` as `Radar60.can.c_vio` (C4)
+08:50:22.418  I  …kicad.transformer  Adding `Radar60_R_0_0402:R_0402_1005Metric` as `Radar60.can.r_tx_h14` (R7)
+08:50:22.421  I  …kicad.transformer  Adding `Radar60_R_0_0402_DNP:R_0402_1005Metric` as `Radar60.can.r_tx_e14` (R6)
+08:50:22.423  I  …kicad.transformer  Adding `Radar60_R_0_0402:R_0402_1005Metric` as `Radar60.can.r_rx_f14` (R2)
+08:50:22.427  I  …kicad.transformer  Adding `Radar60_R_0_0402_DNP:R_0402_1005Metric` as `Radar60.can.r_rx_d13` (R1)
+08:50:22.429  I  …kicad.transformer  Adding `Radar60_ESD2CAN24DBZRQ1:SOT-23` as `Radar60.can.esd` (D1)
+08:50:22.432  I  …kicad.transformer  Adding `Radar60_R_62_0402_DNP:R_0402_1005Metric` as `Radar60.can.r_term_h` (R4)
+08:50:22.434  I  …kicad.transformer  Adding `Radar60_R_62_0402_DNP:R_0402_1005Metric` as `Radar60.can.r_term_l` (R5)
+08:50:22.436  I  …kicad.transformer  Adding `Radar60_C_4n7_0402_DNP:C_0402_1005Metric` as `Radar60.can.c_term` (C1)
+08:50:22.438  I  …kicad.transformer  Adding `Radar60_TPD2E2U06DCKR:SOT-323_SC-70` as `Radar60.uart.esd` (D2)
+08:50:22.442  I  …kicad.transformer  Adding `Radar60_R_1k_0402:R_0402_1005Metric` as `Radar60.uart.r_tx` (R58)
+08:50:22.446  I  …kicad.transformer  Adding `Radar60_R_1k_0402:R_0402_1005Metric` as `Radar60.uart.r_rx` (R57)
+08:50:22.449  I  …kicad.transformer  Adding `Radar60_QTH_030_01_L_D_A:Samtec_QTH-030-01-L-D-A_2x30_P0.5mm_Vertical` as `Radar60.debug.j2` (J2)
+08:50:22.485  I  …kicad.transformer  Adding `Radar60_R_0_0402_DNP:R_0402_1005Metric` as `Radar60.debug.r_dca_rst` (R8)
+08:50:22.487  I  …kicad.transformer  Adding `Radar60_ARM10_1p27_DNP:PinHeader_2x05_P1.27mm_Vertical_SMD` as `Radar60.debug.j3` (J3)
+08:50:22.491  I  …kicad.transformer  Adding `Radar60_RFM1_Placeholder:Radar60_RFM1_Placeholder` as `Radar60.rf_macro.rfm1` (RFM1)
+08:50:22.495  I  …kicad.transformer  Adding `Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad` as `Radar60.mech.mh[0]` (MH1)
+08:50:22.496  I  …kicad.transformer  Adding `Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad` as `Radar60.mech.mh[1]` (MH2)
+08:50:22.498  I  …kicad.transformer  Adding `Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad` as `Radar60.mech.mh[2]` (MH3)
+08:50:22.500  I  …kicad.transformer  Adding `Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad` as `Radar60.mech.mh[3]` (MH4)
+08:50:22.501  I  …kicad.transformer  Adding `Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm` as `Radar60.mech.fid[0]` (FID1)
+08:50:22.503  I  …kicad.transformer  Adding `Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm` as `Radar60.mech.fid[1]` (FID2)
+08:50:22.505  I  …kicad.transformer  Adding `Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm` as `Radar60.mech.fid[2]` (FID3)
+08:50:22.506  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_5v` (TP6)
+08:50:22.508  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_3v3` (TP5)
+08:50:22.510  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_1v8` (TP4)
+08:50:22.511  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_1v2` (TP3)
+08:50:22.513  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_1v0` (TP2)
+08:50:22.515  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_gnd_a` (TP9)
+08:50:22.516  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_gnd_b` (TP10)
+08:50:22.518  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_nreset` (TP12)
+08:50:22.520  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_pgood` (TP13)
+08:50:22.522  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_efuse_pg` (TP7)
+08:50:22.523  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_pmic_nint` (TP14)
+08:50:22.525  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_sop0` (TP15)
+08:50:22.527  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_sop1` (TP16)
+08:50:22.529  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_sop2` (TP17)
+08:50:22.531  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_uart_tx` (TP19)
+08:50:22.532  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_uart_rx` (TP18)
+08:50:22.534  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_frame` (TP8)
+08:50:22.536  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_nerror` (TP11)
+08:50:22.537  I  …kicad.transformer  Adding `Radar60_TestPad_D1:TestPoint_Pad_D1.0mm` as `Radar60.tp_warm_reset` (TP20)
+08:50:22.560  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 1
+  name: "CANH"
+}
+`
+08:50:22.561  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 2
+  name: "CAN_RX"
+}
+`
+08:50:22.562  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 3
+  name: "CAN_TERM_MID"
+}
+`
+08:50:22.562  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 4
+  name: "CAN_TXD"
+}
+`
+08:50:22.563  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 5
+  name: "GND"
+}
+`
+08:50:22.568  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 6
+  name: "CAN_RXD"
+}
+`
+08:50:22.569  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 7
+  name: "CANL"
+}
+`
+08:50:22.570  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 8
+  name: "STB"
+}
+`
+08:50:22.571  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 9
+  name: "1"
+}
+`
+08:50:22.571  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 10
+  name: "SPIA_MOSI"
+}
+`
+08:50:22.572  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 11
+  name: "14"
+}
+`
+08:50:22.573  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 12
+  name: "15"
+}
+`
+08:50:22.573  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 13
+  name: "16"
+}
+`
+08:50:22.574  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 14
+  name: "17"
+}
+`
+08:50:22.574  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 15
+  name: "19"
+}
+`
+08:50:22.575  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 16
+  name: "2"
+}
+`
+08:50:22.576  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 17
+  name: "20"
+}
+`
+08:50:22.577  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 18
+  name: "21"
+}
+`
+08:50:22.577  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 19
+  name: "22"
+}
+`
+08:50:22.578  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 20
+  name: "23"
+}
+`
+08:50:22.578  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 21
+  name: "25"
+}
+`
+08:50:22.579  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 22
+  name: "27"
+}
+`
+08:50:22.580  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 23
+  name: "LVDS_FRCLK_N"
+}
+`
+08:50:22.580  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 24
+  name: "29"
+}
+`
+08:50:22.581  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 25
+  name: "3"
+}
+`
+08:50:22.581  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 26
+  name: "31"
+}
+`
+08:50:22.582  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 27
+  name: "32"
+}
+`
+08:50:22.583  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 28
+  name: "33"
+}
+`
+08:50:22.583  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 29
+  name: "34"
+}
+`
+08:50:22.584  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 30
+  name: "35"
+}
+`
+08:50:22.584  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 31
+  name: "37"
+}
+`
+08:50:22.585  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 32
+  name: "38"
+}
+`
+08:50:22.586  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 33
+  name: "39"
+}
+`
+08:50:22.586  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 34
+  name: "4"
+}
+`
+08:50:22.587  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 35
+  name: "40"
+}
+`
+08:50:22.587  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 36
+  name: "41"
+}
+`
+08:50:22.588  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 37
+  name: "43"
+}
+`
+08:50:22.588  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 38
+  name: "45"
+}
+`
+08:50:22.589  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 39
+  name: "47"
+}
+`
+08:50:22.590  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 40
+  name: "49"
+}
+`
+08:50:22.590  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 41
+  name: "5"
+}
+`
+08:50:22.591  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 42
+  name: "LVDS_TX1_P"
+}
+`
+08:50:22.591  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 43
+  name: "LVDS_TX1_N"
+}
+`
+08:50:22.592  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 44
+  name: "I2C_SCL"
+}
+`
+08:50:22.593  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 45
+  name: "UART_RX"
+}
+`
+08:50:22.593  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 46
+  name: "LVDS_TX0_P"
+}
+`
+08:50:22.594  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 47
+  name: "UART_TX"
+}
+`
+08:50:22.595  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 48
+  name: "LVDS_TX0_N"
+}
+`
+08:50:22.595  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 49
+  name: "DCA_RST_N"
+}
+`
+08:50:22.596  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 50
+  name: "6"
+}
+`
+08:50:22.597  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 51
+  name: "8"
+}
+`
+08:50:22.597  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 52
+  name: "NRESET"
+}
+`
+08:50:22.598  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 53
+  name: "JTAG_TCK"
+}
+`
+08:50:22.598  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 54
+  name: "7"
+}
+`
+08:50:22.599  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 55
+  name: "QSPI_D2"
+}
+`
+08:50:22.600  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 56
+  name: "QSPI_D3"
+}
+`
+08:50:22.600  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 57
+  name: "QSPI_CS_N"
+}
+`
+08:50:22.601  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 58
+  name: "QSPI_D1"
+}
+`
+08:50:22.602  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 59
+  name: "QSPI_CLK_FLASH"
+}
+`
+08:50:22.602  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 60
+  name: "DAMP_1V8"
+}
+`
+08:50:22.603  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 61
+  name: "1V0_BUCK"
+}
+`
+08:50:22.604  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 62
+  name: "1V0_RF1"
+}
+`
+08:50:22.605  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 63
+  name: "snb0"
+}
+`
+08:50:22.605  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 64
+  name: "1V8_BUCK"
+}
+`
+08:50:22.606  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 65
+  name: "pmic-1"
+}
+`
+08:50:22.606  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 66
+  name: "SOP2_PMIC_CLKOUT"
+}
+`
+08:50:22.607  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 67
+  name: "DAMP_1V0_RF1"
+}
+`
+08:50:22.608  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 68
+  name: "1V0_RF2"
+}
+`
+08:50:22.609  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 69
+  name: "DAMP_1V0_RF2"
+}
+`
+08:50:22.609  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 70
+  name: "PMIC_EN2_GPIO2"
+}
+`
+08:50:22.610  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 71
+  name: "PMIC_NINT"
+}
+`
+08:50:22.610  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 72
+  name: "PMIC_PGOOD"
+}
+`
+08:50:22.611  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 73
+  name: "PMIC_SW_B0"
+}
+`
+08:50:22.612  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 74
+  name: "PMIC_SW_B1"
+}
+`
+08:50:22.612  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 75
+  name: "snb1"
+}
+`
+08:50:22.613  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 76
+  name: "PMIC_SW_B2"
+}
+`
+08:50:22.614  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 77
+  name: "snb2"
+}
+`
+08:50:22.614  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 78
+  name: "PMIC_SW_B3"
+}
+`
+08:50:22.615  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 79
+  name: "snb3"
+}
+`
+08:50:22.616  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 80
+  name: "1V0_SH"
+}
+`
+08:50:22.616  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 81
+  name: "PMIC_FB_B2"
+}
+`
+08:50:22.617  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 82
+  name: "1V2_BUCK"
+}
+`
+08:50:22.618  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 83
+  name: "pmic-2"
+}
+`
+08:50:22.618  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 84
+  name: "5V_SYS"
+}
+`
+08:50:22.619  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 85
+  name: "I2C_SDA"
+}
+`
+08:50:22.620  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 86
+  name: "pmic-1-1"
+}
+`
+08:50:22.621  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 87
+  name: "EFUSE_DVDT"
+}
+`
+08:50:22.621  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 88
+  name: "VIN_5V"
+}
+`
+08:50:22.622  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 89
+  name: "EFUSE_ITIMER"
+}
+`
+08:50:22.623  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 90
+  name: "EFUSE_PGTH"
+}
+`
+08:50:22.623  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 91
+  name: "EFUSE_ILM"
+}
+`
+08:50:22.624  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 92
+  name: "EFUSE_OVLO"
+}
+`
+08:50:22.625  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 93
+  name: "EFUSE_PG"
+}
+`
+08:50:22.625  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 94
+  name: "EFUSE_EN_UVLO"
+}
+`
+08:50:22.626  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 95
+  name: "1V0_PA"
+}
+`
+08:50:22.627  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 96
+  name: "XTAL_N"
+}
+`
+08:50:22.627  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 97
+  name: "XTAL_P"
+}
+`
+08:50:22.628  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 98
+  name: "led_k"
+}
+`
+08:50:22.629  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 99
+  name: "led_a"
+}
+`
+08:50:22.629  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 100
+  name: "3V3_RADIO_IO"
+}
+`
+08:50:22.631  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 101
+  name: "NERROR_IN"
+}
+`
+08:50:22.631  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 102
+  name: "NERROR_OUT"
+}
+`
+08:50:22.632  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 103
+  name: "RADIO_GPIO_2"
+}
+`
+08:50:22.632  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 104
+  name: "3V3"
+}
+`
+08:50:22.633  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 105
+  name: "VIO_LS_ON"
+}
+`
+08:50:22.634  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 106
+  name: "VOUT_14APLL"
+}
+`
+08:50:22.634  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 107
+  name: "OSC_CLKOUT"
+}
+`
+08:50:22.635  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 108
+  name: "VBGAP"
+}
+`
+08:50:22.636  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 109
+  name: "1V8"
+}
+`
+08:50:22.637  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 110
+  name: "VOUT_14SYNTH"
+}
+`
+08:50:22.637  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 111
+  name: "RF_TX1"
+}
+`
+08:50:22.638  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 112
+  name: "RF_TX2"
+}
+`
+08:50:22.638  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 113
+  name: "C13"
+}
+`
+08:50:22.639  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 114
+  name: "D14"
+}
+`
+08:50:22.640  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 115
+  name: "SPIA_CLK"
+}
+`
+08:50:22.640  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 116
+  name: "SPIA_MISO"
+}
+`
+08:50:22.641  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 117
+  name: "SPIA_CS_N"
+}
+`
+08:50:22.641  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 118
+  name: "RF_RX4"
+}
+`
+08:50:22.642  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 119
+  name: "GPIO_0"
+}
+`
+08:50:22.643  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 120
+  name: "CAN_TX"
+}
+`
+08:50:22.643  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 121
+  name: "GPIO_1"
+}
+`
+08:50:22.644  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 122
+  name: "VPP"
+}
+`
+08:50:22.645  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 123
+  name: "LVDS_CLK_P"
+}
+`
+08:50:22.645  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 124
+  name: "LVDS_CLK_N"
+}
+`
+08:50:22.646  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 125
+  name: "LVDS_FRCLK_P"
+}
+`
+08:50:22.647  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 126
+  name: "JTAG_TMS"
+}
+`
+08:50:22.647  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 127
+  name: "DMM_SYNC"
+}
+`
+08:50:22.648  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 128
+  name: "GPIO_47"
+}
+`
+08:50:22.648  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 129
+  name: "GPADC1"
+}
+`
+08:50:22.649  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 130
+  name: "SPI_HOST_INTR"
+}
+`
+08:50:22.650  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 131
+  name: "GPADC2"
+}
+`
+08:50:22.650  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 132
+  name: "GPADC3"
+}
+`
+08:50:22.651  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 133
+  name: "SYNC_IN"
+}
+`
+08:50:22.651  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 134
+  name: "GPIO_32"
+}
+`
+08:50:22.652  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 135
+  name: "GPIO_34"
+}
+`
+08:50:22.652  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 136
+  name: "GPIO_36"
+}
+`
+08:50:22.653  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 137
+  name: "GPIO_38"
+}
+`
+08:50:22.654  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 138
+  name: "JTAG_TDI"
+}
+`
+08:50:22.654  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 139
+  name: "QSPI_CLK"
+}
+`
+08:50:22.655  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 140
+  name: "QSPI_D0"
+}
+`
+08:50:22.655  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 141
+  name: "GPADC4"
+}
+`
+08:50:22.656  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 142
+  name: "GPIO_31"
+}
+`
+08:50:22.657  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 143
+  name: "GPIO_33"
+}
+`
+08:50:22.657  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 144
+  name: "GPIO_35"
+}
+`
+08:50:22.658  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 145
+  name: "GPIO_37"
+}
+`
+08:50:22.658  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 146
+  name: "CT"
+}
+`
+08:50:22.659  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 147
+  name: "QOD"
+}
+`
+08:50:22.660  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 148
+  name: "RF_RX1"
+}
+`
+08:50:22.660  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 149
+  name: "RF_RX2"
+}
+`
+08:50:22.661  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 150
+  name: "RF_RX3"
+}
+`
+08:50:22.661  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 151
+  name: "RF_TX3"
+}
+`
+08:50:22.662  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 152
+  name: "1V2"
+}
+`
+08:50:22.663  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 153
+  name: "FRAME_START"
+}
+`
+08:50:22.664  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 154
+  name: "SOP0_TDO"
+}
+`
+08:50:22.664  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 155
+  name: "SOP1"
+}
+`
+08:50:22.665  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 156
+  name: "WARM_RESET"
+}
+`
+08:50:22.666  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 157
+  name: "UART_TX_J1"
+}
+`
+08:50:22.666  I  …kicad.transformer  Adding net `kicad.pcb.Net {
+  number: 158
+  name: "UART_RX_J1"
+}
+`
+08:50:22.673  W  …kicad.transformer  fp:Radar60_RFM1_Placeholder:Radar60_RFM1_Placeholder|RFM1 has no silk outline
+08:50:22.674  W  …kicad.transformer  fp:Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad|MH1 has no silk outline
+08:50:22.674  W  …kicad.transformer  fp:Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad|MH2 has no silk outline
+08:50:22.675  W  …kicad.transformer  fp:Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad|MH3 has no silk outline
+08:50:22.675  W  …kicad.transformer  fp:Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad|MH4 has no silk outline
+08:50:22.676  W  …kicad.transformer  fp:Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm|FID1 has no silk outline
+08:50:22.676  W  …kicad.transformer  fp:Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm|FID2 has no silk outline
+08:50:22.677  W  …kicad.transformer  fp:Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm|FID3 has no silk outline
+08:50:22.678  I  …opile.build_steps  Backing up layout to ${ATO_BUILD}/project/build/bu
+08:50:22.679  I  …opile.build_steps  Updating layout ${ATO_BUILD}/project/elec/layout/r
+08:50:22.701  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vcc|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_1
+08:50:22.703  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vcc_bulk|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Radar60_C_
+08:50:22.704  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vio|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_1
+08:50:22.706  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.can|can_fd.ato::CanFd.esd|parts/Radar60_ESD2CAN24DBZRQ1/Radar60_ESD2CAN24DBZRQ1.ato::Radar
+08:50:22.707  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.can|can_fd.ato::CanFd.r_rx_f14|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_04
+08:50:22.709  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.can|can_fd.ato::CanFd.r_stb|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402
+08:50:22.710  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.can|can_fd.ato::CanFd.r_tx_h14|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_04
+08:50:22.712  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.can|can_fd.ato::CanFd.u4|parts/Radar60_TCAN1044AVDRBRQ1/Radar60_TCAN1044AVDRBRQ1.ato::Rada
+08:50:22.714  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.debug|debug.ato::Debug.j2|parts/Radar60_QTH_030_01_L_D_A/Radar60_QTH_030_01_L_D_A.ato::Rad
+08:50:22.717  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.flash|flash_qspi.ato::Flash.c_vcc|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar
+08:50:22.719  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.flash|flash_qspi.ato::Flash.c_vcc_bulk|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Rada
+08:50:22.721  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_clk|parts/Radar60_R_22_0402/Radar60_R_22_0402.ato::Radar60_R
+08:50:22.722  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_cs_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar
+08:50:22.724  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_d2_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar
+08:50:22.725  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_d3_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar
+08:50:22.727  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.flash|flash_qspi.ato::Flash.u3|parts/Radar60_MX25V1635FZNQ/Radar60_MX25V1635FZNQ.ato::Rada
+08:50:22.728  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.j1|parts/Radar60_JST_SM08B_GHS_TB/Radar60_JST_SM08B_GHS_TB.ato::Radar60_JST_SM08B_GHS_TB o
+08:50:22.730  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v2_a|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Rada
+08:50:22.731  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v2_b|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Rada
+08:50:22.733  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v8_a|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Rada
+08:50:22.734  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v8_b|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Rada
+08:50:22.736  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[0]|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::Rada
+08:50:22.737  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[1]|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::Rada
+08:50:22.739  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[2]|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::Rada
+08:50:22.741  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[3]|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::Rada
+08:50:22.742  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b0|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Rad
+08:50:22.744  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b1|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Rad
+08:50:22.745  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b2|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Rad
+08:50:22.747  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b3|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Rad
+08:50:22.748  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf1_a|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Rada
+08:50:22.750  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf1_b|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Rada
+08:50:22.751  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf2_a|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Rada
+08:50:22.753  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf2_b|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Rada
+08:50:22.754  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rst|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Rada
+08:50:22.756  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb0|parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato::Rad
+08:50:22.757  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb1|parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato::Rad
+08:50:22.759  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb2|parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato::Rad
+08:50:22.760  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb3|parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato::Rad
+08:50:22.762  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_vana|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Rad
+08:50:22.764  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_1v2|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.
+08:50:22.765  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_1v8|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.
+08:50:22.766  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf1|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.
+08:50:22.768  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf2_a|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101
+08:50:22.770  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf2_b|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101
+08:50:22.771  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b0|parts/Radar60_L_0u47_MCKK2012/Radar60_L_0u47_MCKK2012.at
+08:50:22.773  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b1|parts/Radar60_L_0u47_MCKK2012/Radar60_L_0u47_MCKK2012.at
+08:50:22.774  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b2|parts/Radar60_L_0u47_IHLP1616BZ/Radar60_L_0u47_IHLP1616B
+08:50:22.776  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b3|parts/Radar60_L_0u47_IHLP1616BZ/Radar60_L_0u47_IHLP1616B
+08:50:22.777  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_clkin_gnd|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Rada
+08:50:22.779  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en1_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Rad
+08:50:22.780  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en2_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Rad
+08:50:22.782  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en3_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Rad
+08:50:22.783  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_fb2_local|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Rada
+08:50:22.785  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_nint_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Ra
+08:50:22.786  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_pgood_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::R
+08:50:22.788  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_rst|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_
+08:50:22.789  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_scl_pu|parts/Radar60_R_4k99_0402/Radar60_R_4k99_0402.ato::R
+08:50:22.791  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_sda_pu|parts/Radar60_R_4k99_0402/Radar60_R_4k99_0402.ato::R
+08:50:22.793  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_sh|parts/Radar60_R_2m_0612/Radar60_R_2m_0612.ato::Radar60_R
+08:50:22.794  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb0|parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato::Radar
+08:50:22.796  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb1|parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato::Radar
+08:50:22.797  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb2|parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato::Radar
+08:50:22.799  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb3|parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato::Radar
+08:50:22.800  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.u2|parts/Radar60_LP87524JRNFRQ1/Radar60_LP87524JRNFRQ1.ato::R
+08:50:22.802  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_dvdt|parts/Radar60_C_470p_0402/Radar60_C_470p_0402.ato::R
+08:50:22.803  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_in_bulk|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::
+08:50:22.805  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_in_hf|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::
+08:50:22.806  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_itimer|parts/Radar60_C_1n_0402/Radar60_C_1n_0402.ato::Rad
+08:50:22.808  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_sys_bulk|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato:
+08:50:22.810  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_sys_hf|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato:
+08:50:22.811  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.efuse|parts/Radar60_TPS259474ARPWR/Radar60_TPS259474ARPWR.a
+08:50:22.813  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ilm|parts/Radar60_R_1k65_0402/Radar60_R_1k65_0402.ato::Ra
+08:50:22.814  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ov_bot|parts/Radar60_R_11k_0402/Radar60_R_11k_0402.ato::R
+08:50:22.816  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ov_top|parts/Radar60_R_39k_0402/Radar60_R_39k_0402.ato::R
+08:50:22.817  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_bot|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::R
+08:50:22.819  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_div|parts/Radar60_R_39k_0402/Radar60_R_39k_0402.ato::R
+08:50:22.820  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Ra
+08:50:22.822  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_top|parts/Radar60_R_24k_0402/Radar60_R_24k_0402.ato::R
+08:50:22.823  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_uv_bot|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::R
+08:50:22.825  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_uv_top|parts/Radar60_R_24k_0402/Radar60_R_24k_0402.ato::R
+08:50:22.826  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.power_in|power_in.ato::PowerIn.tvs|parts/Radar60_SMF5V0A/Radar60_SMF5V0A.ato::Radar60_SMF5
+08:50:22.828  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_apll|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Radar
+08:50:22.829  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb[0]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::
+08:50:22.831  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb[1]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::
+08:50:22.832  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb_bulk|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::
+08:50:22.834  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_clk|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Ra
+08:50:22.835  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_clk_bulk|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato:
+08:50:22.837  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_diff|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::R
+08:50:22.838  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[0]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato:
+08:50:22.840  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[1]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato:
+08:50:22.842  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[2]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato:
+08:50:22.843  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[3]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato:
+08:50:22.845  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig_10n|parts/Radar60_C_10n_0402/Radar60_C_10n_0402.ato::
+08:50:22.846  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig_2u2|parts/Radar60_C_2u2_0402/Radar60_C_2u2_0402.ato::
+08:50:22.848  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_io18|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::R
+08:50:22.849  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Rad
+08:50:22.851  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa_10u|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::R
+08:50:22.852  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa_22u|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::R
+08:50:22.854  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Ra
+08:50:22.855  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1_10u|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::
+08:50:22.857  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1_22u|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::
+08:50:22.858  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf2|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Ra
+08:50:22.860  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf2_10u|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::
+08:50:22.861  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf2_22u|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::
+08:50:22.863  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_sram|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::R
+08:50:22.864  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_synth|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Rada
+08:50:22.866  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vbgap|parts/Radar60_C_47n_0402/Radar60_C_47n_0402.ato::Ra
+08:50:22.867  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vco|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Ra
+08:50:22.869  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[0]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato:
+08:50:22.871  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[1]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato:
+08:50:22.872  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[2]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato:
+08:50:22.874  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio_10u|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::
+08:50:22.876  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio_2u2|parts/Radar60_C_2u2_0402/Radar60_C_2u2_0402.ato::
+08:50:22.877  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vnwa|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::R
+08:50:22.879  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_xm|parts/Radar60_C_4p7_0402/Radar60_C_4p7_0402.ato::Radar
+08:50:22.880  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_xp|parts/Radar60_C_4p7_0402/Radar60_C_4p7_0402.ato::Radar
+08:50:22.882  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.d_led|parts/Radar60_LED_Green_0603/Radar60_LED_Green_0603.a
+08:50:22.883  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.q_led|parts/Radar60_2N7002/Radar60_2N7002.ato::Radar60_2N70
+08:50:22.885  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_led|parts/Radar60_R_1k_0402/Radar60_R_1k_0402.ato::Radar6
+08:50:22.887  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_nerr_in_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.at
+08:50:22.888  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_nerr_out_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.a
+08:50:22.890  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_pa|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R
+08:50:22.891  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_pmic_int|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Rad
+08:50:22.893  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop0_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::
+08:50:22.894  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop1_pd|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::
+08:50:22.896  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop2_pd|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::
+08:50:22.897  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_spia_cs_pu|parts/Radar60_R_100k_0402/Radar60_R_100k_0402.
+08:50:22.899  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sync_in_pd|parts/Radar60_R_100k_0402/Radar60_R_100k_0402.
+08:50:22.901  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_uart_rx_pu|parts/Radar60_R_100k_0402/Radar60_R_100k_0402.
+08:50:22.902  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_vio_bypass|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::R
+08:50:22.904  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_warm_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::
+08:50:22.905  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.u1|parts/Radar60_IWR6843AQGABLR/Radar60_IWR6843AQGABLR.ato:
+08:50:22.907  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.y1|parts/Radar60_CX3225SA40000D0PTWCC/Radar60_CX3225SA40000
+08:50:22.909  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.uart|uart.ato::Uart.esd|parts/Radar60_TPD2E2U06DCKR/Radar60_TPD2E2U06DCKR.ato::Radar60_TPD
+08:50:22.911  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.uart|uart.ato::Uart.r_rx|parts/Radar60_R_1k_0402/Radar60_R_1k_0402.ato::Radar60_R_1k_0402
+08:50:22.913  I  …orters.bom.jlcpcb  BOMLine for radar60.ato::Radar60.uart|uart.ato::Uart.r_tx|parts/Radar60_R_1k_0402/Radar60_R_1k_0402.ato::Radar60_R_1k_0402
+08:50:23.073  I  …ters.bom.json_bom  Wrote JSON BOM to ${ATO_BUILD}/project/build/build
+08:50:23.094  I  …s.json_parameters  JSON Variables: Found 193 modules, 1367 interfaces
+08:50:23.142  I  …s.json_parameters  JSON Variables: 1560 total nodes, 0 with params, 0 total params
+08:50:23.146  I  …s.json_parameters  JSON Variables: Built tree with 0 root nodes
+08:50:23.147  I  …s.json_parameters  Wrote variables to ${ATO_BUILD}/project/build/buil
+08:50:23.172  I  faebryk.core.node  Grouping bus Radar60.debug.j2.53 complete. Elements: 13
+08:50:23.173  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb3.1 complete. Elements: 8
+08:50:23.174  I  faebryk.core.node  Grouping bus Radar60.radio.r_nerr_in_pu.1 complete. Elements: 66
+08:50:23.178  I  faebryk.core.node  Grouping bus Radar60.can.u4.2 complete. Elements: 327
+08:50:23.186  I  faebryk.core.node  Grouping bus Radar60.tp_1v2.1 complete. Elements: 37
+08:50:23.188  I  faebryk.core.node  Grouping bus Radar60.flash.r_d2_pu.2 complete. Elements: 9
+08:50:23.194  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R11 complete. Elements: 7
+08:50:23.195  I  faebryk.core.node  Grouping bus Radar60.debug.j2.27 complete. Elements: 3
+08:50:23.196  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B10 complete. Elements: 5
+08:50:23.197  I  faebryk.core.node  Grouping bus Radar60.flash.u3.1 complete. Elements: 9
+08:50:23.198  I  faebryk.core.node  Grouping bus Radar60.debug.j2.1 complete. Elements: 3
+08:50:23.199  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.26 complete. Elements: 49
+08:50:23.207  I  faebryk.core.node  Grouping bus Radar60.radio.c_pa_10u.1 complete. Elements: 15
+08:50:23.212  I  faebryk.core.node  Grouping bus Radar60.pmic.tp_isns.2 complete. Elements: 12
+08:50:23.218  I  faebryk.core.node  Grouping bus Radar60.power_in.r_uv_bot.1 complete. Elements: 8
+08:50:23.222  I  faebryk.core.node  Grouping bus Radar60.radio.u1.N15 complete. Elements: 3
+08:50:23.231  I  faebryk.core.node  Grouping bus Radar60.pmic.r_pgood_pu.2 complete. Elements: 14
+08:50:23.237  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb3.2 complete. Elements: 6
+08:50:23.238  I  faebryk.core.node  Grouping bus Radar60.radio.r_nerr_in_pu.2 complete. Elements: 6
+08:50:23.239  I  faebryk.core.node  Grouping bus Radar60.power_in.c_in_hf.1 complete. Elements: 19
+08:50:23.240  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R12 complete. Elements: 7
+08:50:23.241  I  faebryk.core.node  Grouping bus Radar60.debug.j2.28 complete. Elements: 7
+08:50:23.242  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B11 complete. Elements: 41
+08:50:23.244  I  faebryk.core.node  Grouping bus Radar60.pmic.r_clkin_sync.1 complete. Elements: 7
+08:50:23.245  I  faebryk.core.node  Grouping bus Radar60.flash.u3.2 complete. Elements: 7
+08:50:23.245  I  faebryk.core.node  Grouping bus Radar60.debug.j2.2 complete. Elements: 3
+08:50:23.246  I  faebryk.core.node  Grouping bus Radar60.debug.j3.10 complete. Elements: 17
+08:50:23.247  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P1 complete. Elements: 3
+08:50:23.248  I  faebryk.core.node  Grouping bus Radar60.tp_warm_reset.1 complete. Elements: 8
+08:50:23.249  I  faebryk.core.node  Grouping bus Radar60.debug.j2.55 complete. Elements: 15
+08:50:23.251  I  faebryk.core.node  Grouping bus Radar60.can.u4.4 complete. Elements: 8
+08:50:23.252  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.1 complete. Elements: 8
+08:50:23.253  I  faebryk.core.node  Grouping bus Radar60.radio.r_vio_ls_on.1 complete. Elements: 16
+08:50:23.254  I  faebryk.core.node  Grouping bus Radar60.radio.d_led.1 complete. Elements: 6
+08:50:23.255  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R13 complete. Elements: 7
+08:50:23.256  I  faebryk.core.node  Grouping bus Radar60.debug.j2.29 complete. Elements: 3
+08:50:23.257  I  faebryk.core.node  Grouping bus Radar60.pmic.r_clkin_sync.2 complete. Elements: 11
+08:50:23.258  I  faebryk.core.node  Grouping bus Radar60.power_in.c_dvdt.1 complete. Elements: 6
+08:50:23.259  I  faebryk.core.node  Grouping bus Radar60.pmic.r_gpio2_ls.1 complete. Elements: 8
+08:50:23.260  I  faebryk.core.node  Grouping bus Radar60.radio.u1.E13 complete. Elements: 7
+08:50:23.261  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb1.1 complete. Elements: 8
+08:50:23.262  I  faebryk.core.node  Grouping bus Radar60.radio.c_xp.1 complete. Elements: 8
+08:50:23.263  I  faebryk.core.node  Grouping bus Radar60.debug.j2.3 complete. Elements: 3
+08:50:23.263  I  faebryk.core.node  Grouping bus Radar60.radio.u1.H13 complete. Elements: 3
+08:50:23.264  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P2 complete. Elements: 3
+08:50:23.265  I  faebryk.core.node  Grouping bus Radar60.tp_sop0.1 complete. Elements: 11
+08:50:23.266  I  faebryk.core.node  Grouping bus Radar60.pmic.l_b3.2 complete. Elements: 10
+08:50:23.267  I  faebryk.core.node  Grouping bus Radar60.debug.j2.56 complete. Elements: 7
+08:50:23.268  I  faebryk.core.node  Grouping bus Radar60.pmic.r_damp_rf2.1 complete. Elements: 27
+08:50:23.270  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.2 complete. Elements: 5
+08:50:23.271  I  faebryk.core.node  Grouping bus Radar60.radio.r_vio_ls_on.2 complete. Elements: 9
+08:50:23.272  I  faebryk.core.node  Grouping bus Radar60.radio.d_led.2 complete. Elements: 6
+08:50:23.272  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B13 complete. Elements: 5
+08:50:23.273  I  faebryk.core.node  Grouping bus Radar60.pmic.c_rf1_b.1 complete. Elements: 22
+08:50:23.275  I  faebryk.core.node  Grouping bus Radar60.uart.esd.1 complete. Elements: 8
+08:50:23.276  I  faebryk.core.node  Grouping bus Radar60.radio.u1.E14 complete. Elements: 10
+08:50:23.277  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb1.2 complete. Elements: 6
+08:50:23.278  I  faebryk.core.node  Grouping bus Radar60.debug.j2.4 complete. Elements: 3
+08:50:23.278  I  faebryk.core.node  Grouping bus Radar60.radio.u1.H14 complete. Elements: 7
+08:50:23.279  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P3 complete. Elements: 3
+08:50:23.280  I  faebryk.core.node  Grouping bus Radar60.debug.j2.57 complete. Elements: 13
+08:50:23.281  I  faebryk.core.node  Grouping bus Radar60.pmic.r_damp_rf2.2 complete. Elements: 6
+08:50:23.282  I  faebryk.core.node  Grouping bus Radar60.can.u4.6 complete. Elements: 11
+08:50:23.283  I  faebryk.core.node  Grouping bus Radar60.debug.j2.31 complete. Elements: 3
+08:50:23.284  I  faebryk.core.node  Grouping bus Radar60.uart.esd.2 complete. Elements: 8
+08:50:23.285  I  faebryk.core.node  Grouping bus Radar60.radio.u1.E15 complete. Elements: 9
+08:50:23.286  I  faebryk.core.node  Grouping bus Radar60.debug.j2.5 complete. Elements: 3
+08:50:23.287  I  faebryk.core.node  Grouping bus Radar60.pmic.c_out_b2.1 complete. Elements: 12
+08:50:23.288  I  faebryk.core.node  Grouping bus Radar60.can.esd.1 complete. Elements: 11
+08:50:23.289  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P4 complete. Elements: 6
+08:50:23.290  I  faebryk.core.node  Grouping bus Radar60.debug.j2.58 complete. Elements: 7
+08:50:23.291  I  faebryk.core.node  Grouping bus Radar60.debug.j2.32 complete. Elements: 3
+08:50:23.292  I  faebryk.core.node  Grouping bus Radar60.radio.u1.F2 complete. Elements: 7
+08:50:23.293  I  faebryk.core.node  Grouping bus Radar60.flash.u3.6 complete. Elements: 6
+08:50:23.293  I  faebryk.core.node  Grouping bus Radar60.power_in.r_pg_pu.2 complete. Elements: 13
+08:50:23.295  I  faebryk.core.node  Grouping bus Radar60.debug.j2.6 complete. Elements: 3
+08:50:23.295  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P5 complete. Elements: 3
+08:50:23.296  I  faebryk.core.node  Grouping bus Radar60.debug.j2.59 complete. Elements: 6
+08:50:23.297  I  faebryk.core.node  Grouping bus Radar60.can.u4.8 complete. Elements: 5
+08:50:23.298  I  faebryk.core.node  Grouping bus Radar60.flash.r_d3_pu.2 complete. Elements: 9
+08:50:23.299  I  faebryk.core.node  Grouping bus Radar60.debug.j2.33 complete. Elements: 3
+08:50:23.300  I  faebryk.core.node  Grouping bus Radar60.tp_sop1.1 complete. Elements: 8
+08:50:23.301  I  faebryk.core.node  Grouping bus Radar60.radio.u1.L13 complete. Elements: 3
+08:50:23.302  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P6 complete. Elements: 3
+08:50:23.303  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.6 complete. Elements: 13
+08:50:23.304  I  faebryk.core.node  Grouping bus Radar60.debug.j2.34 complete. Elements: 3
+08:50:23.304  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P13 complete. Elements: 7
+08:50:23.305  I  faebryk.core.node  Grouping bus Radar60.debug.j2.21 complete. Elements: 3
+08:50:23.306  I  faebryk.core.node  Grouping bus Radar60.debug.j2.8 complete. Elements: 3
+08:50:23.307  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R5 complete. Elements: 3
+08:50:23.308  I  faebryk.core.node  Grouping bus Radar60.radio.u1.L14 complete. Elements: 7
+08:50:23.309  I  faebryk.core.node  Grouping bus Radar60.rf_macro.rfm1.tx3 complete. Elements: 7
+08:50:23.310  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B4 complete. Elements: 7
+08:50:23.311  I  faebryk.core.node  Grouping bus Radar60.radio.u1.A10 complete. Elements: 5
+08:50:23.312  I  faebryk.core.node  Grouping bus Radar60.debug.j2.41 complete. Elements: 3
+08:50:23.312  I  faebryk.core.node  Grouping bus Radar60.pmic.r_damp_rf1.2 complete. Elements: 6
+08:50:23.313  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb2.1 complete. Elements: 8
+08:50:23.314  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P7 complete. Elements: 3
+08:50:23.317  I  faebryk.core.node  Grouping bus Radar60.tp_frame.1 complete. Elements: 6
+08:50:23.318  I  faebryk.core.node  Grouping bus Radar60.power_in.r_ov_top.2 complete. Elements: 8
+08:50:23.319  I  faebryk.core.node  Grouping bus Radar60.radio.u1.C13 complete. Elements: 3
+08:50:23.320  I  faebryk.core.node  Grouping bus Radar60.debug.j2.15 complete. Elements: 3
+08:50:23.321  I  faebryk.core.node  Grouping bus Radar60.pmic.r_nint_pu.2 complete. Elements: 11
+08:50:23.322  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.7 complete. Elements: 7
+08:50:23.323  I  faebryk.core.node  Grouping bus Radar60.rf_macro.rfm1.rx1 complete. Elements: 7
+08:50:23.324  I  faebryk.core.node  Grouping bus Radar60.can.r_rx_f14.2 complete. Elements: 7
+08:50:23.325  I  faebryk.core.node  Grouping bus Radar60.radio.r_nerr_out_pu.2 complete. Elements: 10
+08:50:23.326  I  faebryk.core.node  Grouping bus Radar60.debug.j2.35 complete. Elements: 3
+08:50:23.326  I  faebryk.core.node  Grouping bus Radar60.can.r_term_l.1 complete. Elements: 8
+08:50:23.327  I  faebryk.core.node  Grouping bus Radar60.debug.j2.22 complete. Elements: 3
+08:50:23.328  I  faebryk.core.node  Grouping bus Radar60.radio.c_xm.1 complete. Elements: 8
+08:50:23.329  I  faebryk.core.node  Grouping bus Radar60.pmic.u2.14 complete. Elements: 10
+08:50:23.330  I  faebryk.core.node  Grouping bus Radar60.power_in.efuse.9 complete. Elements: 6
+08:50:23.331  I  faebryk.core.node  Grouping bus Radar60.radio.u1.L15 complete. Elements: 7
+08:50:23.332  I  faebryk.core.node  Grouping bus Radar60.can.r_tx_e14.2 complete. Elements: 8
+08:50:23.333  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb2.2 complete. Elements: 6
+08:50:23.334  I  faebryk.core.node  Grouping bus Radar60.radio.u1.P8 complete. Elements: 3
+08:50:23.335  I  faebryk.core.node  Grouping bus Radar60.debug.j2.16 complete. Elements: 3
+08:50:23.336  I  faebryk.core.node  Grouping bus Radar60.debug.j3.4 complete. Elements: 7
+08:50:23.336  I  faebryk.core.node  Grouping bus Radar60.radio.u1.N10 complete. Elements: 7
+08:50:23.337  I  faebryk.core.node  Grouping bus Radar60.debug.j2.49 complete. Elements: 3
+08:50:23.338  I  faebryk.core.node  Grouping bus Radar60.rf_macro.rfm1.rx2 complete. Elements: 7
+08:50:23.339  I  faebryk.core.node  Grouping bus Radar60.debug.j2.23 complete. Elements: 3
+08:50:23.340  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R7 complete. Elements: 3
+08:50:23.341  I  faebryk.core.node  Grouping bus Radar60.power_in.c_itimer.1 complete. Elements: 6
+08:50:23.342  I  faebryk.core.node  Grouping bus Radar60.radio.u6.4 complete. Elements: 3
+08:50:23.343  I  faebryk.core.node  Grouping bus Radar60.radio.u1.A14 complete. Elements: 3
+08:50:23.343  I  faebryk.core.node  Grouping bus Radar60.radio.u1.B6 complete. Elements: 7
+08:50:23.344  I  faebryk.core.node  Grouping bus Radar60.pmic.c_snb0.1 complete. Elements: 6
+08:50:23.345  I  faebryk.core.node  Grouping bus Radar60.debug.j2.43 complete. Elements: 3
+08:50:23.346  I  faebryk.core.node  Grouping bus Radar60.debug.j2.17 complete. Elements: 3
+08:50:23.347  I  faebryk.core.node  Grouping bus Radar60.radio.r_pmic_int.2 complete. Elements: 6
+08:50:23.348  I  faebryk.core.node  Grouping bus Radar60.power_in.efuse.4 complete. Elements: 8
+08:50:23.349  I  faebryk.core.node  Grouping bus Radar60.debug.j2.50 complete. Elements: 7
+08:50:23.350  I  faebryk.core.node  Grouping bus Radar60.rf_macro.rfm1.rx3 complete. Elements: 7
+08:50:23.351  I  faebryk.core.node  Grouping bus Radar60.debug.j2.37 complete. Elements: 3
+08:50:23.351  I  faebryk.core.node  Grouping bus Radar60.pmic.r_snb0.1 complete. Elements: 8
+08:50:23.352  I  faebryk.core.node  Grouping bus Radar60.pmic.c_damp_1v8.1 complete. Elements: 6
+08:50:23.353  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R8 complete. Elements: 3
+08:50:23.354  I  faebryk.core.node  Grouping bus Radar60.debug.j2.11 complete. Elements: 10
+08:50:23.355  I  faebryk.core.node  Grouping bus Radar60.radio.u6.5 complete. Elements: 3
+08:50:23.356  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R2 complete. Elements: 3
+08:50:23.357  I  faebryk.core.node  Grouping bus Radar60.debug.j2.38 complete. Elements: 3
+08:50:23.358  I  faebryk.core.node  Grouping bus Radar60.debug.j2.25 complete. Elements: 3
+08:50:23.359  I  faebryk.core.node  Grouping bus Radar60.radio.u1.M14 complete. Elements: 7
+08:50:23.360  I  faebryk.core.node  Grouping bus Radar60.debug.j2.45 complete. Elements: 3
+08:50:23.360  I  faebryk.core.node  Grouping bus Radar60.debug.j2.19 complete. Elements: 3
+08:50:23.361  I  faebryk.core.node  Grouping bus Radar60.debug.j3.7 complete. Elements: 3
+08:50:23.362  I  faebryk.core.node  Grouping bus Radar60.debug.j2.52 complete. Elements: 7
+08:50:23.363  I  faebryk.core.node  Grouping bus Radar60.debug.j2.39 complete. Elements: 3
+08:50:23.364  I  faebryk.core.node  Grouping bus Radar60.radio.u1.D14 complete. Elements: 3
+08:50:23.365  I  faebryk.core.node  Grouping bus Radar60.debug.j2.20 complete. Elements: 3
+08:50:23.365  I  faebryk.core.node  Grouping bus Radar60.radio.u1.N14 complete. Elements: 3
+08:50:23.366  I  faebryk.core.node  Grouping bus Radar60.radio.u1.J13 complete. Elements: 3
+08:50:23.367  I  faebryk.core.node  Grouping bus Radar60.radio.u1.R4 complete. Elements: 3
+08:50:23.368  I  faebryk.core.node  Grouping bus Radar60.debug.j2.40 complete. Elements: 3
+08:50:23.369  I  faebryk.core.node  Grouping bus Radar60.debug.j2.14 complete. Elements: 3
+08:50:23.370  I  faebryk.core.node  Grouping bus Radar60.debug.j2.47 complete. Elements: 3
+08:50:23.604  I  …ers.pinout.pinout  Skipping pinout for mech.fid[0]
+08:50:23.613  I  …ers.pinout.pinout  Skipping pinout for mech.fid[1]
+08:50:23.622  I  …ers.pinout.pinout  Skipping pinout for mech.fid[2]
+08:50:24.791  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.792  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.793  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.794  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.795  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.795  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.796  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.797  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.797  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.798  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.798  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.799  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.800  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.800  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.801  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.802  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.802  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.803  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.804  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.804  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.805  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.806  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.806  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.807  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.808  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.808  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.809  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.809  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.810  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.811  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.811  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.812  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.813  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.813  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.814  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.815  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.815  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.816  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.816  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.817  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.818  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.818  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.819  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.820  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.820  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.821  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.822  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.822  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.823  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.823  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.824  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.825  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.825  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.826  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.827  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.827  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.828  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.829  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.829  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.830  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.831  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.831  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.832  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.833  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.833  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.834  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.835  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.835  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.836  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.836  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.837  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.838  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.838  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.839  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.840  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.840  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.841  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.842  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.842  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.843  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.844  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.844  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.845  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.846  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.846  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.847  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.848  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.848  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.849  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.850  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.850  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.851  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.851  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.852  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.853  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.853  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.854  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.855  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.855  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.856  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.856  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.857  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.858  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.858  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.859  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.860  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.860  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.861  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.862  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.862  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.863  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.864  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.864  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.865  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.865  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.866  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.867  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.867  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.868  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.869  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.869  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.871  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.871  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.872  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.873  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.873  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.874  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.874  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.875  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.876  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.876  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.877  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.877  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.878  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.879  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.879  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.880  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.881  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.881  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.882  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.882  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.883  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.884  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.884  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.885  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.886  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.886  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.887  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.887  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.888  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.889  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.889  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.890  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.891  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.892  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.892  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.893  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.894  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.894  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.895  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.896  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.896  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.897  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.897  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.898  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.899  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.899  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.900  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.900  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.901  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.902  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.902  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.903  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.904  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.904  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.905  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.905  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.906  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.907  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:24.907  I  …ers.pinout.pinout  Wrote pinout JSON to ${ATO_BUILD}/project/build/bu
+08:50:25.192  I  …model.build_queue  BuildQueue: Build 94be368668df8c72 completed with status BuildStatus.SUCCESS
+══ ✓ BUILD COMPLETE: rev-a [9.2s] ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+╭─ Build Summary ──────────────────────────────────────────────────────────────────────╮
+│ ✓ rev-a  [94be368668df8c72]                                                          │
+│                                                                                      │
+│ Stages:                                                                              │
+│   ✓ Resolving dependencies [0.06s]                                                   │
+│   ✓ Initializing build context [2.33s]                                               │
+│   ✓ Modify type graph [0.00s]                                                        │
+│   ✓ Instantiate app [0.29s]                                                          │
+│   ✓ Preparing build [0.01s]                                                          │
+│   ✓ Verify instance graph [0.01s]                                                    │
+│   ✓ Modify instance graph [0.00s]                                                    │
+│   ✓ Verify electrical design [0.01s]                                                 │
+│   ✓ Loading PCB [0.78s]                                                              │
+│   ✓ Picking parts [0.20s]                                                            │
+│   ✓ Preparing nets [0.61s]                                                           │
+│   ✓ Running post-solve checks [0.00s]                                                │
+│   ✓ Updating PCB [0.84s]                                                             │
+│   ✓ Running post-pcb checks [0.00s]                                                  │
+│   ✓ bom [0.39s]                                                                      │
+│   ✓ variable-report [0.07s]                                                          │
+│   ✓ pinout [1.76s]                                                                   │
+│   ✓ power-tree [0.00s]                                                               │
+│                                                                                      │
+│ Warnings (8):                                                                        │
+│   • fp:Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm|FID3 has no silk outline            │
+│   • fp:Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm|FID2 has no silk outline            │
+│   • fp:Radar60_Fiducial_1mm:Fiducial_1mm_Mask2mm|FID1 has no silk outline            │
+│   • fp:Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad|MH4 has no silk outline │
+│   • fp:Radar60_MountingHole_M2p5:MountingHole_2.7mm_M2.5_Pad|MH3 has no silk outline │
+│   ... and 3 more warnings                                                            │
+│                                                                                      │
+│ Total: 8.83s                                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+
+08:50:25.298  I  atopile.cli.build  Build successful! 🚀

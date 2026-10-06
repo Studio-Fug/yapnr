@@ -1,0 +1,19 @@
+{
+  "name": "tp_gnd_b",
+  "atoAddress": "tp_gnd_b",
+  "designator": "TP10",
+  "descriptor": "TP10 \u2014 tp_gnd_b",
+  "typeName": "radar60.ato::Radar60.tp_gnd_b|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "98c08e86-ac98-45ff-95f4-9b7b4642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

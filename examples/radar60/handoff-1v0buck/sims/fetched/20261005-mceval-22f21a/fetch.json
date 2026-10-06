@@ -1,0 +1,12 @@
+{
+  "assembled": {
+    "missing": ["mc/cell-c1b-0-r20", "mc/cell-c1b-4-r20"],
+    "paths": ["<local-path>"],
+    "tasks": 4,
+    "warnings": []
+  },
+  "campaign": "20261005-mceval-22f21a",
+  "done": 6,
+  "missing": [],
+  "tasks": 6
+}

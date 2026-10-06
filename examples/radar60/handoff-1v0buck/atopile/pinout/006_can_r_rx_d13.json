@@ -1,0 +1,27 @@
+{
+  "name": "can.r_rx_d13",
+  "atoAddress": "can.r_rx_d13",
+  "designator": "R1",
+  "descriptor": "R1 \u2014 can.r_rx_d13",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.r_rx_d13|parts/Radar60_R_0_0402_DNP/Radar60_R_0_0402_DNP.ato::Radar60_R_0_0402_DNP",
+  "footprintUuid": "cb347440-7986-4694-a023-e15e4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "CAN_RXD",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "SPIA_MOSI",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    }
+  ],
+  "warnings": ["1 unconnected lead(s)"]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "flash.r_d2_pu",
+  "atoAddress": "flash.r_d2_pu",
+  "designator": "R11",
+  "descriptor": "R11 \u2014 flash.r_d2_pu",
+  "typeName": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_d2_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+  "footprintUuid": "ac436345-9fc4-4c78-8ec0-9cd04642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "QSPI_D2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

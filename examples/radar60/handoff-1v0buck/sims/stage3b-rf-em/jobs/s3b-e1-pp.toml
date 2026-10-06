@@ -1,0 +1,73 @@
+# stage 3b E1 (s3b-e1-pp): written by openems/stage3b_em.py jobs; estimates [D] from the
+# rf-uniform references scaled by cells and smallest cell: 1.79 VM-h, about $0.14 expected (boot and preemption extra)
+name = "s3b-e1-pp"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 14400
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "pp-A-r27"
+script = "w/openems/pp_sim.py"
+args = ["models/pp-A.json", "--out", "{out}", "--threads", "{threads}", "--res", "0.027", "--t-ns", "4"]
+# estimate 4 min on c4
+
+[[jobs]]
+id = "pp-A-r20"
+script = "w/openems/pp_sim.py"
+args = ["models/pp-A.json", "--out", "{out}", "--threads", "{threads}", "--res", "0.02", "--t-ns", "4"]
+# estimate 10 min on c4
+
+[[jobs]]
+id = "pp-A-r15"
+script = "w/openems/pp_sim.py"
+args = ["models/pp-A.json", "--out", "{out}", "--threads", "{threads}", "--res", "0.015", "--t-ns", "4"]
+# estimate 22 min on c4
+
+[[jobs]]
+id = "pp-B-r27"
+script = "w/openems/pp_sim.py"
+args = ["models/pp-B.json", "--out", "{out}", "--threads", "{threads}", "--res", "0.027", "--t-ns", "4"]
+# estimate 4 min on c4
+
+[[jobs]]
+id = "pp-B-r20"
+script = "w/openems/pp_sim.py"
+args = ["models/pp-B.json", "--out", "{out}", "--threads", "{threads}", "--res", "0.02", "--t-ns", "4"]
+# estimate 10 min on c4
+
+[[jobs]]
+id = "pp-B-r15"
+script = "w/openems/pp_sim.py"
+args = ["models/pp-B.json", "--out", "{out}", "--threads", "{threads}", "--res", "0.015", "--t-ns", "4"]
+# estimate 22 min on c4
+
+[[jobs]]
+id = "pp-C-r27"
+script = "w/openems/pp_sim.py"
+args = ["models/pp-C.json", "--out", "{out}", "--threads", "{threads}", "--res", "0.027", "--t-ns", "4"]
+# estimate 4 min on c4
+
+[[jobs]]
+id = "pp-C-r20"
+script = "w/openems/pp_sim.py"
+args = ["models/pp-C.json", "--out", "{out}", "--threads", "{threads}", "--res", "0.02", "--t-ns", "4"]
+# estimate 10 min on c4
+
+[[jobs]]
+id = "pp-C-r15"
+script = "w/openems/pp_sim.py"
+args = ["models/pp-C.json", "--out", "{out}", "--threads", "{threads}", "--res", "0.015", "--t-ns", "4"]
+# estimate 22 min on c4

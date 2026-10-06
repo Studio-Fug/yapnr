@@ -1,0 +1,27 @@
+{
+  "name": "pmic.c_rst",
+  "atoAddress": "pmic.c_rst",
+  "designator": "C26",
+  "descriptor": "C26 \u2014 pmic.c_rst",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rst|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+  "footprintUuid": "c18e714c-f36e-4010-8999-65b04642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "NRESET",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

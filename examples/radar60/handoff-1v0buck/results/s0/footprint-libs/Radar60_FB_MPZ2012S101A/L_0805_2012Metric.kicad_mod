@@ -1,0 +1,195 @@
+(footprint "L_0805_2012Metric"
+	(version 20260206)
+	(generator "pcbnew")
+	(generator_version "10.0")
+	(layer "F.Cu")
+	(descr "Inductor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 80, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf)")
+	(tags "inductor")
+	(property "Reference" "FB1"
+		(at -0.499622 0 0)
+		(layer "F.Fab")
+		(uuid "8012f7c1-c188-420b-ba8e-27cf7daacf27")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+			(justify right)
+		)
+	)
+	(property "Value" ""
+		(at 0 1.55 0)
+		(layer "F.Fab")
+		(uuid "db572c97-ffb8-42bb-b21a-2973aa3bb88e")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "589edea6-f6f5-40e5-93ef-f12443629d8f")
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "67cb6531-40fa-4f03-bfe6-362150ffd560")
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "KiLib_Generator" "SMD_2terminal_chip_molded"
+		(at 0 0 0)
+		(layer "F.SilkS")
+		(hide yes)
+		(uuid "f017fc19-c910-4dae-95c9-a2565afdf5b5")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "LCSC" "C15957"
+		(at 0 0 0)
+		(layer "User.9")
+		(hide yes)
+		(uuid "f613fb74-93ea-4062-879a-214b4642524b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Manufacturer" "TDK"
+		(at 0 0 0)
+		(layer "User.9")
+		(hide yes)
+		(uuid "e0746570-89bc-47f5-8b3d-d4024642524b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Partnumber" "MPZ2012S101AT000"
+		(at 0 0 0)
+		(layer "User.9")
+		(hide yes)
+		(uuid "fa7639b6-3cdc-45de-bbf7-44ac4642524b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "atopile_address" "pmic.fb_1v2"
+		(at 0 0 0)
+		(layer "User.9")
+		(hide yes)
+		(uuid "73ff88e7-e95c-4443-bf28-dae74642524b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "lcsc_id" "C15957"
+		(at 0 0 0)
+		(layer "User.9")
+		(hide yes)
+		(uuid "8bac5b1c-a567-46ff-a556-e20f4642524b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(duplicate_pad_numbers_are_jumpers no)
+	(fp_line
+		(start -0.399622 -0.56)
+		(end 0.399622 -0.56)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "df854493-ed84-43cf-bbbe-a973426b671d")
+	)
+	(fp_line
+		(start -0.399622 0.56)
+		(end 0.399622 0.56)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "1ec2fbe9-b6c9-49ca-a43f-dce1efc709d5")
+	)
+	(fp_rect
+		(start -1.75 -0.85)
+		(end 1.75 0.85)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "e1b4d961-0eb0-43b5-86da-c0a51fd17873")
+	)
+	(fp_rect
+		(start -1 -0.45)
+		(end 1 0.45)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+		(uuid "018174fe-e97e-4c3c-aa4d-bf077602bdc3")
+	)
+	(pad "1" smd roundrect
+		(at -1.0625 0)
+		(size 0.875 1.2)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(roundrect_rratio 0.25)
+		(uuid "8bc28907-ce31-409b-b5b6-c03886db26ca")
+	)
+	(pad "2" smd roundrect
+		(at 1.0625 0)
+		(size 0.875 1.2)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(roundrect_rratio 0.25)
+		(uuid "817085ff-3386-48e5-a436-39f7cb38d672")
+	)
+	(embedded_fonts no)
+	(model "${KICAD10_3DMODEL_DIR}/Inductor_SMD.3dshapes/L_0805_2012Metric.step"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
+)

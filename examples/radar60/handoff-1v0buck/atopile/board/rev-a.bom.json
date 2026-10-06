@@ -1,0 +1,1370 @@
+{
+  "version": "1.0",
+  "build_id": "94be368668df8c72",
+  "components": [
+    {
+      "id": "c25744",
+      "lcsc": "C25744",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1002TCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_10k_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 17,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_cs_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R10"
+        },
+        {
+          "address": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_d2_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R11"
+        },
+        {
+          "address": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_d3_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R12"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en1_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R19"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en2_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R20"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_en3_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R21"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_nint_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R25"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_pgood_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R26"
+        },
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_bot|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R37"
+        },
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R39"
+        },
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_uv_bot|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R41"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_nerr_in_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R44"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_nerr_out_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R45"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop0_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R48"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop1_pd|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R49"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop2_pd|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R50"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_warm_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+          "designator": "R56"
+        }
+      ]
+    },
+    {
+      "id": "c16772",
+      "lcsc": "C16772",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05B224KO5NNNC",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_220n_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 16,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb[0]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C39"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb[1]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C40"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_clk|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C43"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_diff|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C44"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[0]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C45"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[1]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C46"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[2]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C47"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig[3]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C48"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_io18|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C51"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C54"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C57"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf2|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C60"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vco|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C64"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[0]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C65"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[1]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C66"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[2]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+          "designator": "C67"
+        }
+      ]
+    },
+    {
+      "id": "c45783",
+      "lcsc": "C45783",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL21A226MAQNNNE",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "description": null,
+      "quantity": 12,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v2_a|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C7"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v8_a|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C9"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b0|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C18"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b1|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C19"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b2|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C20"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b3|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C21"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf1_a|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C22"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf2_a|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C24"
+        },
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_sys_bulk|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C36"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa_22u|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C53"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1_22u|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C56"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf2_22u|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+          "designator": "C59"
+        }
+      ]
+    },
+    {
+      "id": "c19702",
+      "lcsc": "C19702",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL10A106KP8NNNC",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_10u_0603:C_0603_1608Metric",
+      "description": null,
+      "quantity": 10,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v2_b|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C8"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_1v8_b|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C10"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf1_b|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C23"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf2_b|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C25"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb_bulk|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C41"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_clk_bulk|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C42"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa_10u|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C52"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1_10u|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C55"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf2_10u|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C58"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio_10u|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+          "designator": "C69"
+        }
+      ]
+    },
+    {
+      "id": "c1525",
+      "lcsc": "C1525",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05B104KO5NNNC",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 9,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vcc|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+          "designator": "C3"
+        },
+        {
+          "address": "radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vio|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+          "designator": "C4"
+        },
+        {
+          "address": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.c_vcc|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+          "designator": "C6"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rst|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+          "designator": "C26"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_vana|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+          "designator": "C31"
+        },
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_in_hf|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+          "designator": "C34"
+        },
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_sys_hf|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+          "designator": "C37"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_sram|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+          "designator": "C61"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vnwa|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+          "designator": "C70"
+        }
+      ]
+    },
+    {
+      "id": "c17168",
+      "lcsc": "C17168",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF0000TCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_0_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 9,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.can|can_fd.ato::CanFd.r_rx_f14|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+          "designator": "R2"
+        },
+        {
+          "address": "radar60.ato::Radar60.can|can_fd.ato::CanFd.r_stb|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+          "designator": "R3"
+        },
+        {
+          "address": "radar60.ato::Radar60.can|can_fd.ato::CanFd.r_tx_h14|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+          "designator": "R7"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_clkin_gnd|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+          "designator": "R13"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_fb2_local|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+          "designator": "R22"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_rst|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+          "designator": "R27"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_pa|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+          "designator": "R46"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_pmic_int|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+          "designator": "R47"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_vio_bypass|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+          "designator": "R54"
+        }
+      ]
+    },
+    {
+      "id": "c15850",
+      "lcsc": "C15850",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL21A106KAYNNNE",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_10u_0805:C_0805_2012Metric",
+      "description": null,
+      "quantity": 5,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[0]|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::Radar60_C_10u_0805",
+          "designator": "C14"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[1]|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::Radar60_C_10u_0805",
+          "designator": "C15"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[2]|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::Radar60_C_10u_0805",
+          "designator": "C16"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_in[3]|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::Radar60_C_10u_0805",
+          "designator": "C17"
+        },
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_in_bulk|parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato::Radar60_C_10u_0805",
+          "designator": "C33"
+        }
+      ]
+    },
+    {
+      "id": "c15957",
+      "lcsc": "C15957",
+      "manufacturer": "TDK",
+      "mpn": "MPZ2012S101AT000",
+      "type": "inductor",
+      "value": "",
+      "package": "Radar60_FB_MPZ2012S101A:L_0805_2012Metric",
+      "description": null,
+      "quantity": 5,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_1v2|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.ato::Radar60_FB_MPZ2012S101A",
+          "designator": "FB1"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_1v8|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.ato::Radar60_FB_MPZ2012S101A",
+          "designator": "FB2"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf1|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.ato::Radar60_FB_MPZ2012S101A",
+          "designator": "FB3"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf2_a|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.ato::Radar60_FB_MPZ2012S101A",
+          "designator": "FB4"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf2_b|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.ato::Radar60_FB_MPZ2012S101A",
+          "designator": "FB5"
+        }
+      ]
+    },
+    {
+      "id": "c3988797",
+      "lcsc": "C3988797",
+      "manufacturer": "Vishay Dale",
+      "mpn": "CRCW04023R90JNED",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_3R9_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 4,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb0|parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato::Radar60_R_3R9_0402",
+          "designator": "R30"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb1|parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato::Radar60_R_3R9_0402",
+          "designator": "R31"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb2|parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato::Radar60_R_3R9_0402",
+          "designator": "R32"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb3|parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato::Radar60_R_3R9_0402",
+          "designator": "R33"
+        }
+      ]
+    },
+    {
+      "id": "c52923",
+      "lcsc": "C52923",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05A105KA5NQNC",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_1u_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 4,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vcc_bulk|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Radar60_C_1u_0402",
+          "designator": "C2"
+        },
+        {
+          "address": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.c_vcc_bulk|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Radar60_C_1u_0402",
+          "designator": "C5"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_apll|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Radar60_C_1u_0402",
+          "designator": "C38"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_synth|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Radar60_C_1u_0402",
+          "designator": "C62"
+        }
+      ]
+    },
+    {
+      "id": "c723890",
+      "lcsc": "C723890",
+      "manufacturer": "Murata",
+      "mpn": "GCM1555C1H391JA16D",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_390p_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 4,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb0|parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato::Radar60_C_390p_0402",
+          "designator": "C27"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb1|parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato::Radar60_C_390p_0402",
+          "designator": "C28"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb2|parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato::Radar60_C_390p_0402",
+          "designator": "C29"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb3|parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato::Radar60_C_390p_0402",
+          "designator": "C30"
+        }
+      ]
+    },
+    {
+      "id": "c11702",
+      "lcsc": "C11702",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1001TCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_1k_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 3,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_led|parts/Radar60_R_1k_0402/Radar60_R_1k_0402.ato::Radar60_R_1k_0402",
+          "designator": "R43"
+        },
+        {
+          "address": "radar60.ato::Radar60.uart|uart.ato::Uart.r_rx|parts/Radar60_R_1k_0402/Radar60_R_1k_0402.ato::Radar60_R_1k_0402",
+          "designator": "R57"
+        },
+        {
+          "address": "radar60.ato::Radar60.uart|uart.ato::Uart.r_tx|parts/Radar60_R_1k_0402/Radar60_R_1k_0402.ato::Radar60_R_1k_0402",
+          "designator": "R58"
+        }
+      ]
+    },
+    {
+      "id": "c25741",
+      "lcsc": "C25741",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1003TCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_100k_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 3,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_spia_cs_pu|parts/Radar60_R_100k_0402/Radar60_R_100k_0402.ato::Radar60_R_100k_0402",
+          "designator": "R51"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sync_in_pd|parts/Radar60_R_100k_0402/Radar60_R_100k_0402.ato::Radar60_R_100k_0402",
+          "designator": "R52"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_uart_rx_pu|parts/Radar60_R_100k_0402/Radar60_R_100k_0402.ato::Radar60_R_100k_0402",
+          "designator": "R53"
+        }
+      ]
+    },
+    {
+      "id": "c12530",
+      "lcsc": "C12530",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05A225MQ5NSNC",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_2u2_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 2,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig_2u2|parts/Radar60_C_2u2_0402/Radar60_C_2u2_0402.ato::Radar60_C_2u2_0402",
+          "designator": "C49"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio_2u2|parts/Radar60_C_2u2_0402/Radar60_C_2u2_0402.ato::Radar60_C_2u2_0402",
+          "designator": "C68"
+        }
+      ]
+    },
+    {
+      "id": "c1569",
+      "lcsc": "C1569",
+      "manufacturer": "FH (Guangdong Fenghua)",
+      "mpn": "0402CG4R7C500NT",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_4p7_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 2,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_xm|parts/Radar60_C_4p7_0402/Radar60_C_4p7_0402.ato::Radar60_C_4p7_0402",
+          "designator": "C71"
+        },
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_xp|parts/Radar60_C_4p7_0402/Radar60_C_4p7_0402.ato::Radar60_C_4p7_0402",
+          "designator": "C72"
+        }
+      ]
+    },
+    {
+      "id": "c25769",
+      "lcsc": "C25769",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF2402TCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_24k_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 2,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_top|parts/Radar60_R_24k_0402/Radar60_R_24k_0402.ato::Radar60_R_24k_0402",
+          "designator": "R40"
+        },
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_uv_top|parts/Radar60_R_24k_0402/Radar60_R_24k_0402.ato::Radar60_R_24k_0402",
+          "designator": "R42"
+        }
+      ]
+    },
+    {
+      "id": "c25783",
+      "lcsc": "C25783",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF3902TCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_39k_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 2,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ov_top|parts/Radar60_R_39k_0402/Radar60_R_39k_0402.ato::Radar60_R_39k_0402",
+          "designator": "R36"
+        },
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_div|parts/Radar60_R_39k_0402/Radar60_R_39k_0402.ato::Radar60_R_39k_0402",
+          "designator": "R38"
+        }
+      ]
+    },
+    {
+      "id": "c25903",
+      "lcsc": "C25903",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF4991TCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_4k99_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 2,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_scl_pu|parts/Radar60_R_4k99_0402/Radar60_R_4k99_0402.ato::Radar60_R_4k99_0402",
+          "designator": "R28"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_sda_pu|parts/Radar60_R_4k99_0402/Radar60_R_4k99_0402.ato::Radar60_R_4k99_0402",
+          "designator": "R29"
+        }
+      ]
+    },
+    {
+      "id": "c655211",
+      "lcsc": "C655211",
+      "manufacturer": "Taiyo Yuden",
+      "mpn": "MCKK2012TR47M",
+      "type": "inductor",
+      "value": "",
+      "package": "Radar60_L_0u47_MCKK2012:L_0805_2012Metric",
+      "description": null,
+      "quantity": 2,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b0|parts/Radar60_L_0u47_MCKK2012/Radar60_L_0u47_MCKK2012.ato::Radar60_L_0u47_MCKK2012",
+          "designator": "L1"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b1|parts/Radar60_L_0u47_MCKK2012/Radar60_L_0u47_MCKK2012.ato::Radar60_L_0u47_MCKK2012",
+          "designator": "L2"
+        }
+      ]
+    },
+    {
+      "id": "c844982",
+      "lcsc": "C844982",
+      "manufacturer": "Vishay Dale",
+      "mpn": "IHLP1616BZERR47M11",
+      "type": "inductor",
+      "value": "",
+      "package": "Radar60_L_0u47_IHLP1616BZ:L_Vishay_IHLP-1616",
+      "description": null,
+      "quantity": 2,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b2|parts/Radar60_L_0u47_IHLP1616BZ/Radar60_L_0u47_IHLP1616BZ.ato::Radar60_L_0u47_IHLP1616BZ",
+          "designator": "L3"
+        },
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.l_b3|parts/Radar60_L_0u47_IHLP1616BZ/Radar60_L_0u47_IHLP1616BZ.ato::Radar60_L_0u47_IHLP1616BZ",
+          "designator": "L4"
+        }
+      ]
+    },
+    {
+      "id": "c151296",
+      "lcsc": "C151296",
+      "manufacturer": "Littelfuse",
+      "mpn": "SMF5.0A",
+      "type": "diode",
+      "value": "",
+      "package": "Radar60_SMF5V0A:D_SMF",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.tvs|parts/Radar60_SMF5V0A/Radar60_SMF5V0A.ato::Radar60_SMF5V0A",
+          "designator": "D3"
+        }
+      ]
+    },
+    {
+      "id": "c15195",
+      "lcsc": "C15195",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05B103KB5NNNC",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_10n_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig_10n|parts/Radar60_C_10n_0402/Radar60_C_10n_0402.ato::Radar60_C_10n_0402",
+          "designator": "C50"
+        }
+      ]
+    },
+    {
+      "id": "c1523",
+      "lcsc": "C1523",
+      "manufacturer": "FH (Guangdong Fenghua)",
+      "mpn": "0402B102K500NT",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_1n_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_itimer|parts/Radar60_C_1n_0402/Radar60_C_1n_0402.ato::Radar60_C_1n_0402",
+          "designator": "C35"
+        }
+      ]
+    },
+    {
+      "id": "c1537",
+      "lcsc": "C1537",
+      "manufacturer": "FH (Guangdong Fenghua)",
+      "mpn": "0402B471K500NT",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_470p_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_dvdt|parts/Radar60_C_470p_0402/Radar60_C_470p_0402.ato::Radar60_C_470p_0402",
+          "designator": "C32"
+        }
+      ]
+    },
+    {
+      "id": "c1855726",
+      "lcsc": "C1855726",
+      "manufacturer": "Texas Instruments",
+      "mpn": "TPD2E2U06DCKR",
+      "type": "diode",
+      "value": "",
+      "package": "Radar60_TPD2E2U06DCKR:SOT-323_SC-70",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.uart|uart.ato::Uart.esd|parts/Radar60_TPD2E2U06DCKR/Radar60_TPD2E2U06DCKR.ato::Radar60_TPD2E2U06DCKR",
+          "designator": "D2"
+        }
+      ]
+    },
+    {
+      "id": "c25092",
+      "lcsc": "C25092",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF220JTCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_22_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_clk|parts/Radar60_R_22_0402/Radar60_R_22_0402.ato::Radar60_R_22_0402",
+          "designator": "R9"
+        }
+      ]
+    },
+    {
+      "id": "c25749",
+      "lcsc": "C25749",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1102TCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_11k_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ov_bot|parts/Radar60_R_11k_0402/Radar60_R_11k_0402.ato::Radar60_R_11k_0402",
+          "designator": "R35"
+        }
+      ]
+    },
+    {
+      "id": "c25869",
+      "lcsc": "C25869",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1651TCE",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_1k65_0402:R_0402_1005Metric",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ilm|parts/Radar60_R_1k65_0402/Radar60_R_1k65_0402.ato::Radar60_R_1k65_0402",
+          "designator": "R34"
+        }
+      ]
+    },
+    {
+      "id": "c265111",
+      "lcsc": "C265111",
+      "manufacturer": "JST",
+      "mpn": "SM08B-GHS-TB(LF)(SN)",
+      "type": "connector",
+      "value": "",
+      "package": "Radar60_JST_SM08B_GHS_TB:JST_GH_SM08B-GHS-TB_1x08-1MP_P1.25mm_Horizontal",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.j1|parts/Radar60_JST_SM08B_GHS_TB/Radar60_JST_SM08B_GHS_TB.ato::Radar60_JST_SM08B_GHS_TB",
+          "designator": "J1"
+        }
+      ]
+    },
+    {
+      "id": "c2843756",
+      "lcsc": "C2843756",
+      "manufacturer": "Samtec",
+      "mpn": "QTH-030-01-L-D-A",
+      "type": "connector",
+      "value": "",
+      "package": "Radar60_QTH_030_01_L_D_A:Samtec_QTH-030-01-L-D-A_2x30_P0.5mm_Vertical",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.debug|debug.ato::Debug.j2|parts/Radar60_QTH_030_01_L_D_A/Radar60_QTH_030_01_L_D_A.ato::Radar60_QTH_030_01_L_D_A",
+          "designator": "J2"
+        }
+      ]
+    },
+    {
+      "id": "c2866258",
+      "lcsc": "C2866258",
+      "manufacturer": "Texas Instruments",
+      "mpn": "IWR6843AQGABLR",
+      "type": "ic",
+      "value": "",
+      "package": "Radar60_IWR6843AQGABLR:TI_ABL0161B_FCBGA-161_10.4x10.4mm_Layout15x15_P0.65mm",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.u1|parts/Radar60_IWR6843AQGABLR/Radar60_IWR6843AQGABLR.ato::Radar60_IWR6843AQGABLR",
+          "designator": "U1"
+        }
+      ]
+    },
+    {
+      "id": "c2908116",
+      "lcsc": "C2908116",
+      "manufacturer": "Kyocera AVX",
+      "mpn": "CX3225SA40000D0PTWCC",
+      "type": "crystal",
+      "value": "",
+      "package": "Radar60_CX3225SA40000D0PTWCC:Crystal_SMD_3225-4Pin_3.2x2.5mm",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.y1|parts/Radar60_CX3225SA40000D0PTWCC/Radar60_CX3225SA40000D0PTWCC.ato::Radar60_CX3225SA40000D0PTWCC",
+          "designator": "Y1"
+        }
+      ]
+    },
+    {
+      "id": "c2908148",
+      "lcsc": "C2908148",
+      "manufacturer": "Macronix",
+      "mpn": "MX25V1635FZNQ",
+      "type": "ic",
+      "value": "",
+      "package": "Radar60_MX25V1635FZNQ:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4mm",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.u3|parts/Radar60_MX25V1635FZNQ/Radar60_MX25V1635FZNQ.ato::Radar60_MX25V1635FZNQ",
+          "designator": "U3"
+        }
+      ]
+    },
+    {
+      "id": "c3234119",
+      "lcsc": "C3234119",
+      "manufacturer": "Texas Instruments",
+      "mpn": "TCAN1044AVDRBRQ1",
+      "type": "ic",
+      "value": "",
+      "package": "Radar60_TCAN1044AVDRBRQ1:Texas_DRB0008A",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.can|can_fd.ato::CanFd.u4|parts/Radar60_TCAN1044AVDRBRQ1/Radar60_TCAN1044AVDRBRQ1.ato::Radar60_TCAN1044AVDRBRQ1",
+          "designator": "U4"
+        }
+      ]
+    },
+    {
+      "id": "c3662807",
+      "lcsc": "C3662807",
+      "manufacturer": "Texas Instruments",
+      "mpn": "TPS259474ARPWR",
+      "type": "ic",
+      "value": "",
+      "package": "Radar60_TPS259474ARPWR:TI_RPW0010A_VQFN-HR-10_2x2mm_P0.45mm",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.efuse|parts/Radar60_TPS259474ARPWR/Radar60_TPS259474ARPWR.ato::Radar60_TPS259474ARPWR",
+          "designator": "U5"
+        }
+      ]
+    },
+    {
+      "id": "c3917256",
+      "lcsc": "C3917256",
+      "manufacturer": "Vishay Dale",
+      "mpn": "WFCP06122L000FE66",
+      "type": "resistor",
+      "value": "",
+      "package": "Radar60_R_2m_0612:Vishay_WFCP0612_1632Metric",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_sh|parts/Radar60_R_2m_0612/Radar60_R_2m_0612.ato::Radar60_R_2m_0612",
+          "designator": "R_SH1"
+        }
+      ]
+    },
+    {
+      "id": "c5736151",
+      "lcsc": "C5736151",
+      "manufacturer": "Texas Instruments",
+      "mpn": "ESD2CAN24DBZRQ1",
+      "type": "diode",
+      "value": "",
+      "package": "Radar60_ESD2CAN24DBZRQ1:SOT-23",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.can|can_fd.ato::CanFd.esd|parts/Radar60_ESD2CAN24DBZRQ1/Radar60_ESD2CAN24DBZRQ1.ato::Radar60_ESD2CAN24DBZRQ1",
+          "designator": "D1"
+        }
+      ]
+    },
+    {
+      "id": "c701982",
+      "lcsc": "C701982",
+      "manufacturer": "Texas Instruments",
+      "mpn": "LP87524JRNFRQ1",
+      "type": "ic",
+      "value": "",
+      "package": "Radar60_LP87524JRNFRQ1:TI_RNF0026C_VQFN-HR-26_4.5x4mm_P0.5mm",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.u2|parts/Radar60_LP87524JRNFRQ1/Radar60_LP87524JRNFRQ1.ato::Radar60_LP87524JRNFRQ1",
+          "designator": "U2"
+        }
+      ]
+    },
+    {
+      "id": "c72043",
+      "lcsc": "C72043",
+      "manufacturer": "Everlight",
+      "mpn": "19-217/GHC-YR1S2/3T",
+      "type": "diode",
+      "value": "",
+      "package": "Radar60_LED_Green_0603:LED_0603_1608Metric",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.d_led|parts/Radar60_LED_Green_0603/Radar60_LED_Green_0603.ato::Radar60_LED_Green_0603",
+          "designator": "D4"
+        }
+      ]
+    },
+    {
+      "id": "c77017",
+      "lcsc": "C77017",
+      "manufacturer": "Murata",
+      "mpn": "GRM155R71E473KA88D",
+      "type": "capacitor",
+      "value": "",
+      "package": "Radar60_C_47n_0402:C_0402_1005Metric",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vbgap|parts/Radar60_C_47n_0402/Radar60_C_47n_0402.ato::Radar60_C_47n_0402",
+          "designator": "C63"
+        }
+      ]
+    },
+    {
+      "id": "c8545",
+      "lcsc": "C8545",
+      "manufacturer": "JSCJ",
+      "mpn": "2N7002",
+      "type": "transistor",
+      "value": "",
+      "package": "Radar60_2N7002:SOT-23",
+      "description": null,
+      "quantity": 1,
+      "unitCost": null,
+      "stock": null,
+      "isBasic": null,
+      "isPreferred": null,
+      "source": "manual",
+      "datasheet": null,
+      "parameters": [],
+      "usages": [
+        {
+          "address": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.q_led|parts/Radar60_2N7002/Radar60_2N7002.ato::Radar60_2N7002",
+          "designator": "Q1"
+        }
+      ]
+    }
+  ]
+}

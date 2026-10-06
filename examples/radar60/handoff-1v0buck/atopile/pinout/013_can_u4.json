@@ -1,0 +1,83 @@
+{
+  "name": "can.u4",
+  "atoAddress": "can.u4",
+  "designator": "U4",
+  "descriptor": "U4 \u2014 can.u4",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.u4|parts/Radar60_TCAN1044AVDRBRQ1/Radar60_TCAN1044AVDRBRQ1.ato::Radar60_TCAN1044AVDRBRQ1",
+  "footprintUuid": "23bd8bd0-2819-4972-8a85-17754642524b",
+  "leads": [
+    {
+      "leadDesignator": "TXD",
+      "padNumbers": ["1"],
+      "netName": "CAN_TXD",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "9",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VCC",
+      "padNumbers": ["3"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "RXD",
+      "padNumbers": ["4"],
+      "netName": "CAN_RXD",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VIO",
+      "padNumbers": ["5"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "CANL",
+      "padNumbers": ["6"],
+      "netName": "CANL",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "CANH",
+      "padNumbers": ["7"],
+      "netName": "CANH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "STB",
+      "padNumbers": ["8"],
+      "netName": "STB",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "2",
+      "padNumbers": ["9"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

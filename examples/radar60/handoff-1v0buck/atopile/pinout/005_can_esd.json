@@ -1,0 +1,35 @@
+{
+  "name": "can.esd",
+  "atoAddress": "can.esd",
+  "designator": "D1",
+  "descriptor": "D1 \u2014 can.esd",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.esd|parts/Radar60_ESD2CAN24DBZRQ1/Radar60_ESD2CAN24DBZRQ1.ato::Radar60_ESD2CAN24DBZRQ1",
+  "footprintUuid": "f29d8b0c-e188-48f6-a3d5-cdba4642524b",
+  "leads": [
+    {
+      "leadDesignator": "IO1",
+      "padNumbers": ["1"],
+      "netName": "CANH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "IO2",
+      "padNumbers": ["2"],
+      "netName": "CANL",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GND",
+      "padNumbers": ["3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

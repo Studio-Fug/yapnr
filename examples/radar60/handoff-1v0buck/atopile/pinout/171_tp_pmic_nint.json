@@ -1,0 +1,19 @@
+{
+  "name": "tp_pmic_nint",
+  "atoAddress": "tp_pmic_nint",
+  "designator": "TP14",
+  "descriptor": "TP14 \u2014 tp_pmic_nint",
+  "typeName": "radar60.ato::Radar60.tp_pmic_nint|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "e8eb809f-8755-44c1-94ab-7d9e4642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "PMIC_NINT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

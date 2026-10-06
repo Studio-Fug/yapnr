@@ -1,0 +1,27 @@
+{
+  "name": "can.c_vcc_bulk",
+  "atoAddress": "can.c_vcc_bulk",
+  "designator": "C2",
+  "descriptor": "C2 \u2014 can.c_vcc_bulk",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vcc_bulk|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Radar60_C_1u_0402",
+  "footprintUuid": "e9e15e40-eeec-4ddf-a545-4f2c4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

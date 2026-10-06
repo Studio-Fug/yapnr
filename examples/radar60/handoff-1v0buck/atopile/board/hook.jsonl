@@ -1,0 +1,11 @@
+{"event": "patched", "module": "faebryk.libs.git", "pid": 75585}
+{"event": "patched", "module": "faebryk.libs.kicad.paths", "pid": 75585}
+{"event": "patched", "module": "faebryk.libs.kicad.ipc", "pid": 75585}
+{"event": "patched", "module": "faebryk.libs.git", "pid": 75613}
+{"event": "patched", "module": "kicadcliwrapper.lib", "pid": 75613}
+{"event": "patched", "module": "faebryk.libs.kicad.paths", "pid": 75613}
+{"event": "patched", "module": "faebryk.libs.picker.lcsc", "pid": 75613}
+{"event": "patched", "module": "faebryk.libs.part_lifecycle", "pid": 75613}
+{"event": "patched", "module": "faebryk.libs.kicad.ipc", "pid": 75613}
+{"event": "patched", "module": "faebryk.libs.picker.api.api", "pid": 75613}
+{"event": "kicad-reload-skipped", "pid": 75585}

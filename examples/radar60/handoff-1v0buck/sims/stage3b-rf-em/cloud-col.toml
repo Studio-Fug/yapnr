@@ -1,0 +1,49 @@
+# stage-3b RF column/feeds track: owner config with C4 Montreal pinned, max_retries 1, 6 h. Private: never commit.
+[gcp]
+project = "yapnr-experiments"
+home_region = "us-west4"
+regions = ["us-west4", "northamerica-northeast1"]
+inputs_bucket = "yapnr-experiments-inputs"
+runs_bucket = "yapnr-experiments-runs"
+submit_service_account = "yapnr-submit"
+runner_service_account = "yapnr-runner"
+registry = "{region}-docker.pkg.dev/{project}/ghcr"
+subnetwork = "projects/{project}/regions/{region}/subnetworks/yapnr-{region}"
+template = "yapnr-{shape}-{model}-{region}"
+template_families = ["c4d", "c4", "c4a", "n4"]
+gcloud = "gcloud"
+gcloud_configuration = "yapnr"
+price_api_key_command = ["security", "find-generic-password", "-s", "yapnr-billing-catalog", "-w"]
+# Submit places each class on the first pair whose region has Spot quota for one more VM
+# (2026-10-04 catalog prices: c4d-highcpu-16 us-west4 $0.139/h, c4-highcpu-16 Montreal $0.095/h).
+# C4D first: the home region (buckets, openEMS images), the calibrated openEMS shape, and the
+# machine type of earlier PnR campaigns. C4 in us-west4 has no templates (1.9x C4D per VM-hour,
+# same quota), so it is not ranked.
+ranking = [["c4", "northamerica-northeast1"]]
+queue_timeout_s = 1800
+container_user = "0:0"
+gcsfuse_options = ["--implicit-dirs"]
+boot_disk_gb = 30
+
+# Owner-approved phase-1 guards (2026-10-02)
+[limits]
+max_tasks = 2000
+max_parallel_vcpus = 64
+max_task_wall_s = 14400
+max_campaign_hours = 6
+max_retries = 1
+confirm_usd = 5
+refuse_usd = 25
+hard_refuse_usd = 100
+allow_on_demand = false
+
+[local]
+store = "~/yapnr-runs"
+private_results_root = "~/yapnr-private-runs"
+workers = 4
+nice = 10
+python = "<local-path>"
+kicad_cli = "~<app-path>"
+kicad_python = "~<app-path>"
+footprints = "~<app-path>"
+isolate_home = true

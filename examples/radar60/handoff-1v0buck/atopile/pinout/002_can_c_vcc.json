@@ -1,0 +1,27 @@
+{
+  "name": "can.c_vcc",
+  "atoAddress": "can.c_vcc",
+  "designator": "C3",
+  "descriptor": "C3 \u2014 can.c_vcc",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vcc|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+  "footprintUuid": "fd1683f2-b907-4280-a601-b8fa4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

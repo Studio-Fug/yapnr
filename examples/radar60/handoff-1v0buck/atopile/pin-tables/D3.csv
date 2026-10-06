@@ -1,0 +1,3 @@
+symbolic lead,pad/ball,net (atopile pinout),net (atopile board),net (routed s0),net (routed s1),net (routed s2),net (routed s3)
+K,1,VIN_5V,VIN_5V,VIN_5V,VIN_5V,VIN_5V,VIN_5V
+A,2,GND,GND,GND,GND,GND,GND

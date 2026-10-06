@@ -1,0 +1,22 @@
+# Written by tools/exp/palace_plan.py; plan it with `yapnr exp plan`.
+schema = "yapnr-campaign-v1"
+kind = "mc-eval"
+name = "palace-review-r1"
+source = "none"  # the models and scripts come as inputs of the stage plan
+image = "us-west4-docker.pkg.dev/yapnr-experiments/images/palace:b797ea8-x86-64-v3@sha256:9d15737769150ad368cce02dd9c1ca4c27c64ecdfd3969cf3d01dc94c1aae194"
+visibility = "public"
+determinism = "seeded"
+
+# The Palace image is not a yapnr image: its interpreter, no KiCad launcher.
+[runtime]
+entrypoint = ""
+python = "/opt/palace/venv/bin/python"
+
+[config]
+stage_plan = "stage.jsonl"
+
+[placement]
+families = ["c4"]
+packing = "core"
+template = false
+vm_vcpus = 16

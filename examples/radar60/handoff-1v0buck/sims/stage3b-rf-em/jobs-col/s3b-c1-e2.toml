@@ -1,0 +1,37 @@
+# E2 column wave: K1 (solid L2, cavity closed) L sweep at 20 um, finer around the wall-bound
+# target. c1-k's L 1.06/1.09/1.12 overshot (band center fell to 56.9-59.3 GHz); the wall-bound
+# run (cell-c1a-0{7,10,13}-r20-wall, cavity blocked by a model-only PEC wall) puts the resonance
+# at 63.95-65.0 GHz at L=1.0, so a much smaller L increase should bring K1's closed-cavity band
+# back to 62.05 GHz. inset=0.4, w35=0.353, t_y=0.37 match c1-k for a clean comparison.
+name = "s3b-c1-e2"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 7200
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "cell-c1k-100-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1k-100.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-c1k-101.json,models/cell-c1k-103.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-c1k-101-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1k-101.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-c1k-100.json,models/cell-c1k-103.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-c1k-103-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1k-103.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-c1k-100.json,models/cell-c1k-101.json", "--fspan", "54", "70"]

@@ -1,0 +1,27 @@
+{
+  "name": "pmic.r_damp_1v8",
+  "atoAddress": "pmic.r_damp_1v8",
+  "designator": "R15",
+  "descriptor": "R15 \u2014 pmic.r_damp_1v8",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_damp_1v8|parts/Radar60_R_0R22_0402_DNP/Radar60_R_0R22_0402_DNP.ato::Radar60_R_0R22_0402_DNP",
+  "footprintUuid": "7a20b004-6c78-4667-95db-4c214642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "DAMP_1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_pa",
+  "atoAddress": "radio.r_pa",
+  "designator": "R46",
+  "descriptor": "R46 \u2014 radio.r_pa",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_pa|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+  "footprintUuid": "c6d6b22a-2a08-4aeb-bd74-15674642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V0_RF2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "1V0_PA",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

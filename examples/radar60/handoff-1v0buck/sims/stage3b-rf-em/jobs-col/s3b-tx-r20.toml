@@ -1,0 +1,78 @@
+# TX1-3 feeds P0->P1, options x lossy/lossless, 20 um, 8 z-cells
+name = "s3b-tx-r20"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 14400
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "txa-T0-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T0.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8"]
+
+[[jobs]]
+id = "txa-T0-ll-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T0.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8", "--lossless"]
+
+[[jobs]]
+id = "txa-T2-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T2.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8"]
+
+[[jobs]]
+id = "txa-T2-ll-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T2.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8", "--lossless"]
+
+[[jobs]]
+id = "txa-T4-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T4.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8"]
+
+[[jobs]]
+id = "txa-T4-ll-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T4.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8", "--lossless"]
+
+[[jobs]]
+id = "txa-S1-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-S1.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8"]
+
+[[jobs]]
+id = "txa-S1-ll-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-S1.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8", "--lossless"]
+
+[[jobs]]
+id = "txa-B-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-B.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8"]
+
+[[jobs]]
+id = "txa-B-ll-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-B.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8", "--lossless"]
+
+[[jobs]]
+id = "txa-C-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-C.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8"]
+
+[[jobs]]
+id = "txa-C-ll-r20nz8"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-C.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--nz-core", "8", "--lossless"]

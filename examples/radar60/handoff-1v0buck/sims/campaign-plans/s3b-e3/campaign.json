@@ -1,0 +1,163 @@
+{
+  "backend": {
+    "home_region": "us-west4",
+    "name": "gcp-batch"
+  },
+  "bundles": [
+    "1e54db6783a277214b4aa6b6c281b879676e998d53e3994d9e17b0747cd173a0",
+    "b03c56c834c1594e7edb677da71ec3b678957d59ab97a8fadfcda6abc474b528",
+    "b329b3bc3caeb2d4db7cd8938c0fc215ed7d20182a6807680382bd2f10ea835c"
+  ],
+  "calibration": null,
+  "candidates": {
+    "c8m8": [
+      {
+        "arch": "x86_64",
+        "boot_disk": "hyperdisk-balanced",
+        "ceiling_usd": 3.5295,
+        "cpu_milli": 8000,
+        "expected_usd": 0.5137,
+        "family": "c4",
+        "gb_price": 0.000549,
+        "memory_mib": 8192,
+        "model": "spot",
+        "price_source": "table 2026-10-04 northamerica-northeast1",
+        "region": "northamerica-northeast1",
+        "shape": "c4-highcpu-8",
+        "speed": 0.438,
+        "speed_source": "table (PassMark single-thread ratio), SMT-shared core (x0.6 assumed)",
+        "tasks_per_vm": 1,
+        "template": true,
+        "threads_per_core": 2,
+        "vcpu_price": 0.00483,
+        "vm_hour_usd": 0.04742,
+        "vm_memory_gb": 16.0,
+        "vm_vcpus": 8
+      }
+    ]
+  },
+  "caps": {
+    "confirm": false,
+    "limit_usd": 25,
+    "refusals": []
+  },
+  "classes": [
+    {
+      "cpus": 8,
+      "disk_gb": 16.0,
+      "image": "us-west4-docker.pkg.dev/yapnr-experiments/images/openems@sha256:d468ed9a6b31469504a4046e214b7b098d16f9cee77a55813b6f0d949735deb0",
+      "lines": [0, 1, 2, 3, 4, 5, 6, 7],
+      "max_wall_s": 7200,
+      "memory_gb": 8.0,
+      "name": "c8m8",
+      "reference_s": [1800.0, 1800.0, 1800.0, 1800.0, 1800.0, 1800.0, 1800.0, 1800.0]
+    }
+  ],
+  "created": "2026-10-05",
+  "determinism": "seeded",
+  "estimate": {
+    "assumptions": [
+      "c8m8: c4-highcpu-8 in northamerica-northeast1, 1 tasks per VM, spot; prices: table 2026-10-04 northamerica-northeast1; speed 0.44 (table (PassMark single-thread ratio), SMT-shared core (x0.6 assumed))",
+      "expected = reference wall time / speed x (1 + 8% preemption rework and start-up), boot disks included; egress and storage excluded"
+    ],
+    "backend": "gcp-batch",
+    "ceiling_usd": 3.5295,
+    "classes": [
+      {
+        "ceiling_usd": 3.5295,
+        "disk_hour_usd": 0.00329,
+        "expected_task_hours": 9.863,
+        "expected_usd": 0.5137,
+        "makespan_h": 1.2662,
+        "max_task_hours": 69.3333,
+        "name": "c8m8",
+        "parallel_tasks": 8,
+        "tasks": 8,
+        "vm_hour_usd": 0.04742,
+        "vm_hours": 10.1297
+      }
+    ],
+    "core_hours": 39.452,
+    "expected_usd": 0.5137,
+    "makespan_h": 1.266
+  },
+  "id": "20261005-mceval-1f3598",
+  "image": {
+    "digest": "sha256:d468ed9a6b31469504a4046e214b7b098d16f9cee77a55813b6f0d949735deb0",
+    "ref": "us-west4-docker.pkg.dev/yapnr-experiments/images/openems@sha256:d468ed9a6b31469504a4046e214b7b098d16f9cee77a55813b6f0d949735deb0",
+    "repository": "us-west4-docker.pkg.dev/yapnr-experiments/images/openems",
+    "requested": "us-west4-docker.pkg.dev/yapnr-experiments/images/openems:0.37.0-rc3-x86-64-v4@sha256:d468ed9a6b31469504a4046e214b7b098d16f9cee77a55813b6f0d949735deb0",
+    "runtime": {
+      "entrypoint": "",
+      "python": "/opt/openEMS/venv/bin/python"
+    }
+  },
+  "kind": "mc-eval",
+  "name": "s3b-e3",
+  "placements": {
+    "c8m8": {
+      "arch": "x86_64",
+      "boot_disk": "hyperdisk-balanced",
+      "cpu_milli": 8000,
+      "family": "c4",
+      "gb_price": 0.000549,
+      "memory_mib": 8192,
+      "model": "spot",
+      "price_source": "table 2026-10-04 northamerica-northeast1",
+      "region": "northamerica-northeast1",
+      "shape": "c4-highcpu-8",
+      "speed": 0.438,
+      "speed_source": "table (PassMark single-thread ratio), SMT-shared core (x0.6 assumed)",
+      "tasks_per_vm": 1,
+      "template": true,
+      "threads_per_core": 2,
+      "vcpu_price": 0.00483,
+      "vm_hour_usd": 0.04742,
+      "vm_memory_gb": 16.0,
+      "vm_vcpus": 8
+    }
+  },
+  "prices": {
+    "accessed": "2026-10-04",
+    "table": "yapnr/exp/data/gcp-spot-prices.json (committed snapshot)"
+  },
+  "schema": "yapnr-campaign-plan-v1",
+  "source": null,
+  "spec": {
+    "config": {
+      "stage_plan": "stage.jsonl"
+    },
+    "determinism": "seeded",
+    "image": "us-west4-docker.pkg.dev/yapnr-experiments/images/openems:0.37.0-rc3-x86-64-v4@sha256:d468ed9a6b31469504a4046e214b7b098d16f9cee77a55813b6f0d949735deb0",
+    "kind": "mc-eval",
+    "name": "s3b-e3",
+    "placement": {
+      "families": ["c4"],
+      "packing": "vcpu",
+      "vm_vcpus": 8
+    },
+    "runtime": {
+      "entrypoint": "",
+      "python": "/opt/openEMS/venv/bin/python"
+    },
+    "schema": "yapnr-campaign-v1",
+    "source": "none",
+    "visibility": "public"
+  },
+  "spec_sha256": "c8d023bc6d90863668e4d63a46e9193dae63d45e3c10c2b8aafb9d12031de957",
+  "task_count": 8,
+  "task_hashes": {
+    "mc/cell-k0l-100-r20": "6cf5dbbac84e0c5b297b4251ba96e22325d66efaefe56a7d4f9931960cc2e519",
+    "mc/cell-k0l-1015-r20": "52e1a94ac9e21cd5877ce42c84119d679f17dfea7ce670c9021a39d9002d2a56",
+    "mc/cell-k0l-103-r20": "91ecc09e9cfde4022a407386debfdd84e652ee1c7970e27afaace010d09cc6ba",
+    "mc/cell-k1l-100-r20": "0fc309b072ceea3d8b917e4ee7931a18fb9ecc41df9fe8da518fb234967914db",
+    "mc/cell-k1l-1015-r20": "6a487f3e1ebea234a1d816563fa4f925ab0765b89bcb6fd136e47043dd01b41b",
+    "mc/cell-k1l-103-r20": "dc32273357954d00ace1a01a9ee787ea7feb6aec64ea1b339acc8ebd8efe0dca",
+    "mc/pa-pa-rx4-fence4-port-u20": "f2a8ef8856856ca69ceb1e1c5025db5806bee55aeb6ad43bad59bf47857fd2c7",
+    "mc/pa-pa-tx1-fence4-port-u20": "0a7e47f20e8d59fec12ecfd48f929e2105a6bedd5889c33318c7fe0a5430b92d"
+  },
+  "visibility": "public",
+  "wrapper": {
+    "sha256": "c0143616f4148dab7ea6d7b4e4de028bf7bbae7def97f8e63b73966bb33f4528"
+  }
+}

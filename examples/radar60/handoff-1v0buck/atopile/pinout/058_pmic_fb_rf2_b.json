@@ -1,0 +1,27 @@
+{
+  "name": "pmic.fb_rf2_b",
+  "atoAddress": "pmic.fb_rf2_b",
+  "designator": "FB5",
+  "descriptor": "FB5 \u2014 pmic.fb_rf2_b",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.fb_rf2_b|parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.ato::Radar60_FB_MPZ2012S101A",
+  "footprintUuid": "a1e09bba-04dd-41ce-a41c-267c4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V0_SH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "1V0_RF2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

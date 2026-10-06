@@ -1,0 +1,35 @@
+{
+  "name": "uart.esd",
+  "atoAddress": "uart.esd",
+  "designator": "D2",
+  "descriptor": "D2 \u2014 uart.esd",
+  "typeName": "radar60.ato::Radar60.uart|uart.ato::Uart.esd|parts/Radar60_TPD2E2U06DCKR/Radar60_TPD2E2U06DCKR.ato::Radar60_TPD2E2U06DCKR",
+  "footprintUuid": "4a2ab2b5-4da9-43d6-b442-a0784642524b",
+  "leads": [
+    {
+      "leadDesignator": "IO1",
+      "padNumbers": ["1"],
+      "netName": "UART_TX_J1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "IO2",
+      "padNumbers": ["2"],
+      "netName": "UART_RX_J1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GND",
+      "padNumbers": ["3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    }
+  ],
+  "warnings": ["1 unconnected lead(s)"]
+}

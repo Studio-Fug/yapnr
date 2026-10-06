@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_vio_ls_on",
+  "atoAddress": "radio.r_vio_ls_on",
+  "designator": "R55",
+  "descriptor": "R55 \u2014 radio.r_vio_ls_on",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_vio_ls_on|parts/Radar60_R_10k_0402_DNP/Radar60_R_10k_0402_DNP.ato::Radar60_R_10k_0402_DNP",
+  "footprintUuid": "b16fc0d5-b114-4c34-bf5c-7e5e4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "VIO_LS_ON",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

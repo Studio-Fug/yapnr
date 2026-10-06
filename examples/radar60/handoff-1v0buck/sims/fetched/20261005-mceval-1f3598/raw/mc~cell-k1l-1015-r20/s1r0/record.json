@@ -1,0 +1,62 @@
+{
+  "attempt": "s1r0",
+  "backend": "gcp-batch",
+  "campaign": "20261005-mceval-1f3598",
+  "campaign_spec_sha256": "c8d023bc6d90863668e4d63a46e9193dae63d45e3c10c2b8aafb9d12031de957",
+  "cpu_s": 10259.0,
+  "exit_code": 0,
+  "finished": "2026-10-05T15:09:28Z",
+  "image": {
+    "ref": "us-west4-docker.pkg.dev/yapnr-experiments/images/openems@sha256:d468ed9a6b31469504a4046e214b7b098d16f9cee77a55813b6f0d949735deb0",
+    "sif_sha256": null,
+    "source_revision": null,
+    "toolchain": "image"
+  },
+  "kind": "mc-eval",
+  "labels": {
+    "candidate": "cell-k1l-1015-r20",
+    "model": "cell-k1l-1015-r20",
+    "threads": "8"
+  },
+  "load_avg_end": [5.42919921875, 5.69580078125, 4.75390625],
+  "load_avg_start": [0.6416015625, 0.17041015625, 0.05712890625],
+  "machine": {
+    "cpu_model": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+    "hostname_hash": "402ec986a5ad",
+    "kernel": "6.6.153+",
+    "machine_type": "c4-highcpu-8",
+    "platform": "linux-x86_64",
+    "provisioning_model": "SPOT",
+    "region": "northamerica-northeast1",
+    "threads_per_core": 2,
+    "vcpus": 8,
+    "vcpus_available": 8,
+    "zone": "northamerica-northeast1-b"
+  },
+  "peak_rss_mb": 898.9,
+  "pruned": 0,
+  "python": "3.12.3",
+  "resources": {
+    "cpus": 8,
+    "disk_gb": 16,
+    "max_wall_s": 7200,
+    "memory_gb": 8
+  },
+  "retry": 0,
+  "schema": "yapnr-task-record-v1",
+  "source": null,
+  "started": "2026-10-05T14:42:29Z",
+  "submission": 1,
+  "summary_files": [
+    "cell-k1l-1015-r20.job.json",
+    "cell-k1l-1015-r20.log",
+    "cell-k1l-1015-r20/result.json",
+    "cell-k1l-1015-r20/s.csv"
+  ],
+  "task": "mc/cell-k1l-1015-r20",
+  "task_spec_sha256": "6a487f3e1ebea234a1d816563fa4f925ab0765b89bcb6fd136e47043dd01b41b",
+  "timed_out": false,
+  "verdict": "pass",
+  "wall_s": 1619.198,
+  "wrapper_version": 1
+}

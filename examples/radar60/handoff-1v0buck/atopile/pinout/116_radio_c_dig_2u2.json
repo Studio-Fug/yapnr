@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_dig_2u2",
+  "atoAddress": "radio.c_dig_2u2",
+  "designator": "C49",
+  "descriptor": "C49 \u2014 radio.c_dig_2u2",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_dig_2u2|parts/Radar60_C_2u2_0402/Radar60_C_2u2_0402.ato::Radar60_C_2u2_0402",
+  "footprintUuid": "5f468c35-9351-4e4c-a6ce-59884642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

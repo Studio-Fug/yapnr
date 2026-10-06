@@ -1,0 +1,27 @@
+{
+  "orig": {
+    "by_type": {
+      "isolated_copper": 2,
+      "length_out_of_range": 1,
+      "lib_footprint_issues": 185,
+      "shorting_items": 1,
+      "via_dangling": 10
+    },
+    "violations": 199,
+    "unconnected": 152,
+    "footprint_issues": 0
+  },
+  "stripped": {
+    "by_type": {
+      "isolated_copper": 2,
+      "length_out_of_range": 1,
+      "lib_footprint_issues": 185,
+      "shorting_items": 1,
+      "via_dangling": 10
+    },
+    "violations": 199,
+    "unconnected": 152,
+    "footprint_issues": 0
+  },
+  "equivalent": true
+}

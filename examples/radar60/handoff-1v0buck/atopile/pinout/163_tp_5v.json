@@ -1,0 +1,19 @@
+{
+  "name": "tp_5v",
+  "atoAddress": "tp_5v",
+  "designator": "TP6",
+  "descriptor": "TP6 \u2014 tp_5v",
+  "typeName": "radar60.ato::Radar60.tp_5v|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "3f033d75-951e-4155-b652-9f5f4642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

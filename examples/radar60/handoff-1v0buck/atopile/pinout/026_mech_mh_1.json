@@ -1,0 +1,19 @@
+{
+  "name": "mech.mh[1]",
+  "atoAddress": "mech.mh[1]",
+  "designator": "MH2",
+  "descriptor": "MH2 \u2014 mech.mh[1]",
+  "typeName": "radar60.ato::Radar60.mech|mech.ato::Mech.mh[1]|parts/Radar60_MountingHole_M2p5/Radar60_MountingHole_M2p5.ato::Radar60_MountingHole_M2p5",
+  "footprintUuid": "ea59a4fa-9d98-4329-addc-513a4642524b",
+  "leads": [
+    {
+      "leadDesignator": "MH",
+      "padNumbers": ["1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

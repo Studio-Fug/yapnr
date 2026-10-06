@@ -1,0 +1,91 @@
+{
+  "name": "power_in.efuse",
+  "atoAddress": "power_in.efuse",
+  "designator": "U5",
+  "descriptor": "U5 \u2014 power_in.efuse",
+  "typeName": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.efuse|parts/Radar60_TPS259474ARPWR/Radar60_TPS259474ARPWR.ato::Radar60_TPS259474ARPWR",
+  "footprintUuid": "9020cc4c-29e7-4d78-9e01-85014642524b",
+  "leads": [
+    {
+      "leadDesignator": "EN_UVLO",
+      "padNumbers": ["1"],
+      "netName": "EFUSE_EN_UVLO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "ITIMER",
+      "padNumbers": ["10"],
+      "netName": "EFUSE_ITIMER",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "OVLO",
+      "padNumbers": ["2"],
+      "netName": "EFUSE_OVLO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "PG",
+      "padNumbers": ["3"],
+      "netName": "EFUSE_PG",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "PGTH",
+      "padNumbers": ["4"],
+      "netName": "EFUSE_PGTH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "IN",
+      "padNumbers": ["5"],
+      "netName": "VIN_5V",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "OUT",
+      "padNumbers": ["6"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "DVDT",
+      "padNumbers": ["7"],
+      "netName": "EFUSE_DVDT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GND",
+      "padNumbers": ["8"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "ILM",
+      "padNumbers": ["9"],
+      "netName": "EFUSE_ILM",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

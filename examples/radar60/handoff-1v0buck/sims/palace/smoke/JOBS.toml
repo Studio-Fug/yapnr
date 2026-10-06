@@ -1,0 +1,14 @@
+# Palace image smoke: one task running Palace's own coplanar-waveguide example (driven, 4 wave
+# ports with ARPACK mode solves, GMRES + AMS, probes through GSLIB) from the image, compared with
+# Palace's regression reference port-S.csv. tools/exp/palace_plan.py plan pins the image digest.
+name = "palace-smoke"
+image = "palace:b797ea8-x86-64-v3"
+ranks = 8                 # c4d-highcpu-16: 8 physical cores, ranks bound to them
+models_per_vm = 1
+memory_gb = 12
+max_wall_s = 1800
+
+[[jobs]]
+id = "cpw-wave-uniform-r8"
+config = "/opt/palace/share/palace/examples/cpw/cpw_wave_uniform.json"
+reference = "/opt/palace/share/palace/regression/cpw/wave_uniform"

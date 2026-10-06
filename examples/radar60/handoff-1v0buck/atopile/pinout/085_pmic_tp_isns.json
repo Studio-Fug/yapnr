@@ -1,0 +1,27 @@
+{
+  "name": "pmic.tp_isns",
+  "atoAddress": "pmic.tp_isns",
+  "designator": "TP1",
+  "descriptor": "TP1 \u2014 pmic.tp_isns",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.tp_isns|parts/Radar60_KelvinSense_2Pad/Radar60_KelvinSense_2Pad.ato::Radar60_KelvinSense_2Pad",
+  "footprintUuid": "453e338f-f787-44c9-971f-6c5d4642524b",
+  "leads": [
+    {
+      "leadDesignator": "SP",
+      "padNumbers": ["1"],
+      "netName": "1V0_BUCK",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SN",
+      "padNumbers": ["2"],
+      "netName": "1V0_SH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

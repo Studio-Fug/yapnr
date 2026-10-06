@@ -1,0 +1,27 @@
+{
+  "name": "pmic.r_sda_pu",
+  "atoAddress": "pmic.r_sda_pu",
+  "designator": "R29",
+  "descriptor": "R29 \u2014 pmic.r_sda_pu",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_sda_pu|parts/Radar60_R_4k99_0402/Radar60_R_4k99_0402.ato::Radar60_R_4k99_0402",
+  "footprintUuid": "72880e0f-3127-4fc8-90ab-d3284642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "I2C_SDA",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

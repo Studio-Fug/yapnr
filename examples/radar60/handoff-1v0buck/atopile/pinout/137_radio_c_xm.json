@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_xm",
+  "atoAddress": "radio.c_xm",
+  "designator": "C71",
+  "descriptor": "C71 \u2014 radio.c_xm",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_xm|parts/Radar60_C_4p7_0402/Radar60_C_4p7_0402.ato::Radar60_C_4p7_0402",
+  "footprintUuid": "7e68bab3-4d89-470f-ae08-ad934642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "XTAL_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_led",
+  "atoAddress": "radio.r_led",
+  "designator": "R43",
+  "descriptor": "R43 \u2014 radio.r_led",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_led|parts/Radar60_R_1k_0402/Radar60_R_1k_0402.ato::Radar60_R_1k_0402",
+  "footprintUuid": "e25669db-ea6f-45be-b327-e1b74642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "led_a",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

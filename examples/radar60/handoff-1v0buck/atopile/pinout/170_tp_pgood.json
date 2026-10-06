@@ -1,0 +1,19 @@
+{
+  "name": "tp_pgood",
+  "atoAddress": "tp_pgood",
+  "designator": "TP13",
+  "descriptor": "TP13 \u2014 tp_pgood",
+  "typeName": "radar60.ato::Radar60.tp_pgood|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "739b08e6-f519-4757-87e6-e5bf4642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "PMIC_PGOOD",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

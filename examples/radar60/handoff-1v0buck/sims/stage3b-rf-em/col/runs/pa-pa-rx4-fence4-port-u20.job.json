@@ -1,0 +1,46 @@
+{
+  "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+  "attempt": "s1r0",
+  "command": [
+    "w/openems/pa_sim.py",
+    "models/pa-pa-rx4-fence4.json",
+    "--out",
+    "{out}",
+    "--excite",
+    "RX4.Pb",
+    "--pa",
+    "port",
+    "--threads",
+    "{threads}",
+    "--res",
+    "0.0125",
+    "--mesh-ref",
+    "models/pa-pa-rx4.json"
+  ],
+  "cpu": {
+    "avx512f": true,
+    "count": 8,
+    "model": "x86_64"
+  },
+  "engines": ["compressed SSE + multi-threading"],
+  "exit": 0,
+  "id": "pa-pa-rx4-fence4-port-u20",
+  "max_rss_mb": 329.7,
+  "ok": true,
+  "openems_options": {
+    "exact_endcriteria": true
+  },
+  "openems_runs": [
+    {
+      "cells": 1682660.0,
+      "iterations": 19110,
+      "mcells_per_s": 240.21,
+      "seconds": 133.86
+    }
+  ],
+  "schema": "yapnr-openems-job-v1",
+  "sys_s": 46.169,
+  "threads": 8,
+  "user_s": 706.406,
+  "wall_s": 140.979
+}

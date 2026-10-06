@@ -1,0 +1,27 @@
+{
+  "name": "can.r_term_h",
+  "atoAddress": "can.r_term_h",
+  "designator": "R4",
+  "descriptor": "R4 \u2014 can.r_term_h",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.r_term_h|parts/Radar60_R_62_0402_DNP/Radar60_R_62_0402_DNP.ato::Radar60_R_62_0402_DNP",
+  "footprintUuid": "597ace66-a3d6-4461-84ce-d02f4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "CANH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "CAN_TERM_MID",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

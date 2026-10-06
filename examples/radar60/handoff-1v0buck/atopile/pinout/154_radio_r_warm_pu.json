@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_warm_pu",
+  "atoAddress": "radio.r_warm_pu",
+  "designator": "R56",
+  "descriptor": "R56 \u2014 radio.r_warm_pu",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_warm_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+  "footprintUuid": "e6a319de-d78f-4ad5-bbf2-19b34642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "WARM_RESET",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

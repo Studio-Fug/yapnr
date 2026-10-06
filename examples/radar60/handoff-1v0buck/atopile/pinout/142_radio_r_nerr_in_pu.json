@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_nerr_in_pu",
+  "atoAddress": "radio.r_nerr_in_pu",
+  "designator": "R44",
+  "descriptor": "R44 \u2014 radio.r_nerr_in_pu",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_nerr_in_pu|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+  "footprintUuid": "0732f0e2-b5f3-46e1-a60b-adf14642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "NERROR_IN",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

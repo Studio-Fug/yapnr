@@ -1,0 +1,38 @@
+# Adversarial review (engineering) of the Palace track, 2026-10-04: re-run of two comparisons with
+# the committed runner (palace_job.py --stage/--mesh-from, never used on GCP by the validation,
+# which chained stages with val/code/chain.py), plus the solid-copper line mode solves (the
+# validation's open item 2) against the 2D solver (val/xsec_ref.json).
+name = "palace-review-r1"
+image = "palace:b797ea8-x86-64-v3"
+ranks = 8
+models_per_vm = 1
+families = ["c4"]                       # Montreal: us-west4 has two other tracks' jobs running
+memory_gb = 48
+max_wall_s = 1800
+
+[inputs]
+models = "models"
+
+[[jobs]]                                # w4a line-msl-5mm-amr, through the committed stage runner
+id = "rev-msl5-stages"
+stages = ["models/line-msl-5mm/palace-uniform.json", "models/line-msl-5mm/palace-amr.json"]
+mesh_from = "models/line-msl-5mm/palace-amr.json"
+config = "models/line-msl-5mm/palace-sweep.json"
+
+[[jobs]]                                # 1 GHz PEC p3 port face (validation: 2.7327 / 52.65 ohm)
+id = "rev-mode-msl-sheet"
+stages = ["models/line-msl-5mm/palace-mode-62GHz-p3.json"]
+config = "models/line-msl-5mm/palace-mode-1GHz-pec-p3.json"
+max_wall_s = 600
+
+[[jobs]]                                # 35 um solid copper: against xsec 49.31 ohm / 2.589 (port box)
+id = "rev-mode-msl-solid"
+stages = ["models/line-msl-5mm-solid/palace-mode-62GHz-p3.json"]
+config = "models/line-msl-5mm-solid/palace-mode-1GHz-pec-p3.json"
+max_wall_s = 600
+
+[[jobs]]                                # 35 um solid copper: against xsec 48.41 ohm / 2.528 (port box)
+id = "rev-mode-gcpw-solid"
+stages = ["models/line-gcpw-5mm-solid/palace-mode-62GHz-p3.json"]
+config = "models/line-gcpw-5mm-solid/palace-mode-1GHz-pec-p3.json"
+max_wall_s = 600

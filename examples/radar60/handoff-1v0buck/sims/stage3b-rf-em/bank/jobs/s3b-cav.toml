@@ -1,0 +1,43 @@
+# stage 3b EM bank and ground (s3b-cav); written by em/bank/make_jobs.py
+name = "s3b-cav"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4d"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 10800
+
+[inputs]
+w = "<notes>/radar60/stage3b-rf/em/bank/code/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/bank/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "tri-K0-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K0.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000", "--mesh-ref", "models/tri-K2.json,models/tri-K1.json", "--probe-bond"]
+
+[[jobs]]
+id = "tri-K0-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K0.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/tri-K2.json,models/tri-K1.json", "--probe-bond"]
+
+[[jobs]]
+id = "tri-K2-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K2.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000", "--mesh-ref", "models/tri-K0.json,models/tri-K1.json", "--probe-bond"]
+
+[[jobs]]
+id = "tri-K2-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K2.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/tri-K0.json,models/tri-K1.json", "--probe-bond"]
+
+[[jobs]]
+id = "tri-K1-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K1.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000", "--mesh-ref", "models/tri-K0.json,models/tri-K2.json", "--probe-bond"]

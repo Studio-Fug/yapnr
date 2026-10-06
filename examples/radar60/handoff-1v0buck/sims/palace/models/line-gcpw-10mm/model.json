@@ -1,0 +1,438 @@
+{
+  "schema": "yapnr-planar-v1",
+  "name": "line-gcpw-10mm",
+  "units": "mm",
+  "stack": {
+    "dielectrics": [
+      {
+        "name": "RO4835",
+        "z0": 0.0,
+        "z1": 0.1016,
+        "eps_r": 3.56,
+        "tan_d": 0.0037
+      }
+    ],
+    "layers": [
+      {
+        "name": "L1",
+        "z": 0.1016,
+        "t": 0.035,
+        "sigma": 58000000.0,
+        "rough_k": 1.8062,
+        "model": "sheet"
+      }
+    ]
+  },
+  "conductors": [
+    {
+      "layer": "L1",
+      "net": "SIG",
+      "polygons": [
+        {
+          "outer": [
+            [0.0, -0.1],
+            [11.0, -0.1],
+            [11.0, 0.1],
+            [0.0, 0.1]
+          ],
+          "holes": []
+        }
+      ]
+    },
+    {
+      "layer": "L1",
+      "net": "GND",
+      "polygons": [
+        {
+          "outer": [
+            [0.0, 0.30000000000000004],
+            [11.0, 0.30000000000000004],
+            [11.0, 1.5],
+            [0.0, 1.5]
+          ],
+          "holes": []
+        },
+        {
+          "outer": [
+            [0.0, -1.5],
+            [11.0, -1.5],
+            [11.0, -0.30000000000000004],
+            [0.0, -0.30000000000000004]
+          ],
+          "holes": []
+        }
+      ]
+    }
+  ],
+  "vias": [
+    {
+      "at": [0.45, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [0.45, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [0.9, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [0.9, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [1.35, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [1.35, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [1.8, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [1.8, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [2.25, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [2.25, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [2.7, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [2.7, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [3.15, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [3.15, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [3.6, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [3.6, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [4.05, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [4.05, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [4.5, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [4.5, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [4.95, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [4.95, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [5.4, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [5.4, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [5.85, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [5.85, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [6.3, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [6.3, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [6.75, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [6.75, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [7.2, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [7.2, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [7.65, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [7.65, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [8.1, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [8.1, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [8.55, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [8.55, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [9.0, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [9.0, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [9.45, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [9.45, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [9.9, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [9.9, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [10.35, 0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    },
+    {
+      "at": [10.35, -0.5],
+      "drill": 0.15,
+      "from": "zmin",
+      "to": "L1",
+      "net": "GND"
+    }
+  ],
+  "ports": [
+    {
+      "name": "P1",
+      "kind": "wave",
+      "net": "SIG",
+      "layer": "L1",
+      "ref": "zmin",
+      "at": [0.5, 0.0],
+      "dir": "+x",
+      "width": 0.2,
+      "z0": 50.0,
+      "excite": true
+    },
+    {
+      "name": "P2",
+      "kind": "wave",
+      "net": "SIG",
+      "layer": "L1",
+      "ref": "zmin",
+      "at": [10.5, 0.0],
+      "dir": "-x",
+      "width": 0.2,
+      "z0": 50.0,
+      "excite": false
+    }
+  ],
+  "domain": {
+    "box": [0.0, 11.0, -1.5, 1.5, 0.0, 1.4016],
+    "boundaries": {
+      "xmin": "abc1",
+      "xmax": "abc1",
+      "ymin": "abc1",
+      "ymax": "abc1",
+      "zmin": "pec",
+      "zmax": "abc1"
+    }
+  },
+  "mesh": {
+    "f_max_ghz": 70.0
+  },
+  "features": [],
+  "provenance": {
+    "source": "generated",
+    "generator": "yapnr.rf.planar.adapters.line_model",
+    "kind": "gcpw",
+    "length": 10.0
+  }
+}

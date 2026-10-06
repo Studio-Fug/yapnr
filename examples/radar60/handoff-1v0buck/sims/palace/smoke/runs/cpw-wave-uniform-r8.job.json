@@ -1,0 +1,106 @@
+{
+  "amr": [],
+  "amr_completed": {
+    "indicator": 0.5348,
+    "iterations": 0,
+    "unknowns": 117764
+  },
+  "assembled_unknowns": [117764],
+  "attempt": "s1r0",
+  "bind": "core",
+  "config": "/opt/palace/share/palace/examples/cpw/cpw_wave_uniform.json",
+  "cpu": {
+    "avx2": true,
+    "avx512f": true,
+    "count": 16,
+    "model": "x86_64"
+  },
+  "exit": 0,
+  "failed": null,
+  "id": "cpw-wave-uniform-r8",
+  "image": {
+    "arch-flags.txt": "-march=x86-64-v3 -mtune=znver4",
+    "palace.commit": "b797ea8060a52241cd9ab1176199f06af8585816",
+    "palace.version": "v0.18.1-160-gb797ea8"
+  },
+  "max_rss_mb": 224.3,
+  "mem_total_gb": 29.38,
+  "ok": true,
+  "palace": {
+    "amr_iterations": 1,
+    "dofs": 117764,
+    "durations_s": {
+      "Adaptation": 0.0,
+      "CoarseSolve": 2.613125233999998,
+      "Construction": 0.19007254899999998,
+      "DiskIO": 0.024619399999999996,
+      "Div.-FreeProjection": 0.0,
+      "Eigenproblem": 0.24773207200000003,
+      "EigenvalueSolve": 0.0,
+      "Estimation": 0.05096592900000002,
+      "FarFields": 0.0,
+      "Fieldreconstruction": 7.3179e-5,
+      "Gridfunction": 0.0,
+      "Initialization": 0.014075464999999999,
+      "LinearSolve": 3.5300947400000022,
+      "MeshPreprocessing": 0.207699349,
+      "Modepostprocessing": 0.02571094699999999,
+      "OperatorConstruction": 0.33272226900000007,
+      "PROMConstruction": 0.0,
+      "PROMSolve": 0.0,
+      "Paraview": 0.10525559500000001,
+      "Postprocessing": 0.15102557400000013,
+      "Preconditioner": 16.550140317000004,
+      "Rebalancing": 0.0,
+      "Setup": 4.9581282490000005,
+      "Solve": 4.828398952999999,
+      "TimeStepping": 0.0,
+      "Total": 33.876110887,
+      "WavePorts": 0.0005504200000000002
+    },
+    "elapsed_s": 33.876110887,
+    "git_tag": "v0.18.1-160-gb797ea8",
+    "linear_iterations": 486,
+    "linear_solves": 14,
+    "mesh_elements": 16097,
+    "mpi_size": 8,
+    "multigrid_dofs": [23464, 117764],
+    "peak_memory_mb_max_rank": 224.33203125,
+    "peak_memory_mb_sum": 1724.6796875,
+    "peak_node_memory_mb_sum": 1724.6796875
+  },
+  "palace_version": "Palace version: v0.18.1-160-gb797ea8\nSchema version: 2-1-0",
+  "prepare": null,
+  "ranks": 8,
+  "reference": {
+    "at": {
+      "f_ghz": 20.0,
+      "s": "S[2][1]"
+    },
+    "dir": "/opt/palace/share/palace/regression/cpw/wave_uniform",
+    "frequencies": 7,
+    "max_abs_ds": 5.8824530004169726e-8,
+    "ok": true,
+    "tol": 0.01,
+    "values": 56
+  },
+  "schema": "yapnr-palace-job-v1",
+  "sets": {},
+  "stages": {
+    "dry_run": {
+      "exit": 0,
+      "wall_s": 0.091
+    },
+    "solve": {
+      "exit": 0,
+      "wall_s": 33.955
+    },
+    "version": {
+      "exit": 0,
+      "wall_s": 0.092
+    }
+  },
+  "sys_s": 0.862,
+  "user_s": 270.271,
+  "wall_s": 34.139
+}

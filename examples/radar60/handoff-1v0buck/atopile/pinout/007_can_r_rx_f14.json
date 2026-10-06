@@ -1,0 +1,27 @@
+{
+  "name": "can.r_rx_f14",
+  "atoAddress": "can.r_rx_f14",
+  "designator": "R2",
+  "descriptor": "R2 \u2014 can.r_rx_f14",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.r_rx_f14|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+  "footprintUuid": "1e12acfe-5d4f-4f49-be3c-96fd4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "CAN_RXD",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "CAN_RX",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    }
+  ],
+  "warnings": ["1 unconnected lead(s)"]
+}

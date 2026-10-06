@@ -1,0 +1,33 @@
+# C1 L sweep at 15 um (critical path)
+name = "s3b-c1-r15"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 14400
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "cell-c1a-07-r15"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-07.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.009375", "--max-steps", "400000", "--mesh-ref", "models/cell-c1a-10.json,models/cell-c1a-13.json,models/cell-c1a-09.json,models/cell-c1a-11.json,models/cell-c1w-030.json,models/cell-c1w-042.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-c1a-10-r15"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-10.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.009375", "--max-steps", "400000", "--mesh-ref", "models/cell-c1a-07.json,models/cell-c1a-13.json,models/cell-c1a-09.json,models/cell-c1a-11.json,models/cell-c1w-030.json,models/cell-c1w-042.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-c1a-13-r15"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-13.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.009375", "--max-steps", "400000", "--mesh-ref", "models/cell-c1a-07.json,models/cell-c1a-10.json,models/cell-c1a-09.json,models/cell-c1a-11.json,models/cell-c1w-030.json,models/cell-c1w-042.json", "--fspan", "54", "70"]

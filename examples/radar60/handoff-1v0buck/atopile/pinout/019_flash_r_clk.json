@@ -1,0 +1,27 @@
+{
+  "name": "flash.r_clk",
+  "atoAddress": "flash.r_clk",
+  "designator": "R9",
+  "descriptor": "R9 \u2014 flash.r_clk",
+  "typeName": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.r_clk|parts/Radar60_R_22_0402/Radar60_R_22_0402.ato::Radar60_R_22_0402",
+  "footprintUuid": "f640b2db-29ab-43c5-b684-2ba14642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "QSPI_CLK",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "QSPI_CLK_FLASH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": ["1 unconnected lead(s)"]
+}

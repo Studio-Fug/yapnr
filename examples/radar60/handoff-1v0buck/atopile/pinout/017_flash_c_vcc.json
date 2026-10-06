@@ -1,0 +1,27 @@
+{
+  "name": "flash.c_vcc",
+  "atoAddress": "flash.c_vcc",
+  "designator": "C6",
+  "descriptor": "C6 \u2014 flash.c_vcc",
+  "typeName": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.c_vcc|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+  "footprintUuid": "abd163b1-d117-4894-be83-12a84642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

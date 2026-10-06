@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_vio[2]",
+  "atoAddress": "radio.c_vio[2]",
+  "designator": "C67",
+  "descriptor": "C67 \u2014 radio.c_vio[2]",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vio[2]|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+  "footprintUuid": "ac0dd743-ea79-44e3-abfb-81654642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

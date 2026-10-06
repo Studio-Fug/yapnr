@@ -1,0 +1,665 @@
+{
+  "parts": [
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "1 nF 50 V X7R 0402",
+      "kind": "capacitor",
+      "lcsc": "C1523",
+      "manufacturer": "FH (Guangdong Fenghua)",
+      "mpn": "0402B102K500NT",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 1e-9,
+        "voltage_max_v": 50.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "100 nF 16 V X7R 0402",
+      "kind": "capacitor",
+      "lcsc": "C1525",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05B104KO5NNNC",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 1e-7,
+        "voltage_max_v": 16.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "470 pF 50 V X7R 0402",
+      "kind": "capacitor",
+      "lcsc": "C1537",
+      "manufacturer": "FH (Guangdong Fenghua)",
+      "mpn": "0402B471K500NT",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 4.7e-10,
+        "voltage_max_v": 50.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "4.7 pF 50 V C0G 0402",
+      "kind": "capacitor",
+      "lcsc": "C1569",
+      "manufacturer": "FH (Guangdong Fenghua)",
+      "mpn": "0402CG4R7C500NT",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 4.7e-12,
+        "voltage_max_v": 50.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "N-channel 60 V MOSFET, SOT-23",
+      "kind": "transistor",
+      "lcsc": "C8545",
+      "manufacturer": "JSCJ",
+      "mpn": "2N7002",
+      "package": "SOT-23",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "1 kOhm 1 % 0402",
+      "kind": "resistor",
+      "lcsc": "C11702",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1001TCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 1000.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "2.2 uF 6.3 V X5R 0402",
+      "kind": "capacitor",
+      "lcsc": "C12530",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05A225MQ5NSNC",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 2.2e-6,
+        "voltage_max_v": 6.3
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "10 nF 50 V X7R 0402",
+      "kind": "capacitor",
+      "lcsc": "C15195",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05B103KB5NNNC",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 1e-8,
+        "voltage_max_v": 50.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "10 uF 25 V X5R 0805",
+      "kind": "capacitor",
+      "lcsc": "C15850",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL21A106KAYNNNE",
+      "package": "0805",
+      "params": {
+        "capacitance_f": 1e-5,
+        "voltage_max_v": 25.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "ferrite bead 100 Ohm at 100 MHz, 4 A, 20 mOhm, 0805 (TI ISK Rev D LC filters)",
+      "kind": "inductor",
+      "lcsc": "C15957",
+      "manufacturer": "TDK",
+      "mpn": "MPZ2012S101AT000",
+      "package": "0805",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "220 nF 16 V X7R 0402",
+      "kind": "capacitor",
+      "lcsc": "C16772",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05B224KO5NNNC",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 2.2e-7,
+        "voltage_max_v": 16.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "0 Ohm jumper 0402",
+      "kind": "resistor",
+      "lcsc": "C17168",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF0000TCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 0.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "10 uF 10 V X5R 0603",
+      "kind": "capacitor",
+      "lcsc": "C19702",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL10A106KP8NNNC",
+      "package": "0603",
+      "params": {
+        "capacitance_f": 1e-5,
+        "voltage_max_v": 10.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "22 Ohm 1 % 0402",
+      "kind": "resistor",
+      "lcsc": "C25092",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF220JTCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 22.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "100 kOhm 1 % 0402",
+      "kind": "resistor",
+      "lcsc": "C25741",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1003TCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 100000.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "10 kOhm 1 % 0402",
+      "kind": "resistor",
+      "lcsc": "C25744",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1002TCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 10000.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "11 kOhm 1 % 0402",
+      "kind": "resistor",
+      "lcsc": "C25749",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1102TCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 11000.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "24 kOhm 1 % 0402",
+      "kind": "resistor",
+      "lcsc": "C25769",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF2402TCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 24000.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "39 kOhm 1 % 0402",
+      "kind": "resistor",
+      "lcsc": "C25783",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF3902TCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 39000.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "1.65 kOhm 1 % 0402 (eFuse ILM)",
+      "kind": "resistor",
+      "lcsc": "C25869",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF1651TCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 1650.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "4.99 kOhm 1 % 0402",
+      "kind": "resistor",
+      "lcsc": "C25903",
+      "manufacturer": "UNI-ROYAL",
+      "mpn": "0402WGF4991TCE",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 4990.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "22 uF 25 V X5R 0805",
+      "kind": "capacitor",
+      "lcsc": "C45783",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL21A226MAQNNNE",
+      "package": "0805",
+      "params": {
+        "capacitance_f": 2.2e-5,
+        "voltage_max_v": 25.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "1 uF 25 V X5R 0402",
+      "kind": "capacitor",
+      "lcsc": "C52923",
+      "manufacturer": "Samsung Electro-Mechanics",
+      "mpn": "CL05A105KA5NQNC",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 1e-6,
+        "voltage_max_v": 25.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "green LED 0603",
+      "kind": "led",
+      "lcsc": "C72043",
+      "manufacturer": "Everlight",
+      "mpn": "19-217/GHC-YR1S2/3T",
+      "package": "0603",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "47 nF 25 V X7R 0402 (VBGAP, errata ANA#19 example part)",
+      "kind": "capacitor",
+      "lcsc": "C77017",
+      "manufacturer": "Murata",
+      "mpn": "GRM155R71E473KA88D",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 4.7e-8,
+        "voltage_max_v": 25.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "5.0 V standoff unidirectional TVS, SOD-123F (SMF)",
+      "kind": "diode",
+      "lcsc": "C151296",
+      "manufacturer": "Littelfuse",
+      "mpn": "SMF5.0A",
+      "package": "SOD-123F",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "JST GH 8-pin 1.25 mm right-angle SMD header (power, CAN-FD, UART)",
+      "kind": "connector",
+      "lcsc": "C265111",
+      "manufacturer": "JST",
+      "mpn": "SM08B-GHS-TB(LF)(SN)",
+      "package": "GH-8",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "0.47 uH 4.5 A (Isat) 32 mOhm buck inductor 0805 (Buck0/Buck1: forward current limit <= 3.0 A)",
+      "kind": "inductor",
+      "lcsc": "C655211",
+      "manufacturer": "Taiyo Yuden",
+      "mpn": "MCKK2012TR47M",
+      "package": "0805",
+      "params": {
+        "inductance_h": 4.7e-7
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "LP87524J-Q1 four 4-MHz bucks (OTP: 3.3 V/1.2 V/1.0 V/1.8 V), VQFN-HR-26 RNF0026C",
+      "kind": "ic",
+      "lcsc": "C701982",
+      "manufacturer": "Texas Instruments",
+      "mpn": "LP87524JRNFRQ1",
+      "package": "VQFN-HR-26",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "390 pF 50 V C0G 0402 (snubber, SNVSAW2B Table 56)",
+      "kind": "capacitor",
+      "lcsc": "C723890",
+      "manufacturer": "Murata",
+      "mpn": "GCM1555C1H391JA16D",
+      "package": "0402",
+      "params": {
+        "capacitance_f": 3.9e-10,
+        "voltage_max_v": 50.0
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "0.47 uH 7.0 A (Isat, typ.) 16 mOhm (max) shielded buck inductor, IHLP-1616BZ-11, 4.06x4.45x2.0 mm",
+      "kind": "inductor",
+      "lcsc": "C844982",
+      "manufacturer": "Vishay Dale",
+      "mpn": "IHLP1616BZERR47M11",
+      "package": "IHLP-1616BZ",
+      "params": {
+        "inductance_h": 4.7e-7
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "2-channel ESD diode for the UART, SC-70-3",
+      "kind": "diode",
+      "lcsc": "C1855726",
+      "manufacturer": "Texas Instruments",
+      "mpn": "TPD2E2U06DCKR",
+      "package": "SC-70",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "Samtec QTH 60-pin 0.5 mm header for the DCA1000EVM (development fit)",
+      "kind": "connector",
+      "lcsc": "C2843756",
+      "manufacturer": "Samtec",
+      "mpn": "QTH-030-01-L-D-A",
+      "package": "QTH-030",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "IWR6843 60-64 GHz radar SoC, 3TX/4RX, FCBGA-161 ABL0161B (silicon PG2.0, Q, G, reel)",
+      "kind": "ic",
+      "lcsc": "C2866258",
+      "manufacturer": "Texas Instruments",
+      "mpn": "IWR6843AQGABLR",
+      "package": "FCBGA-161",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "40 MHz crystal, CL 8 pF, 3.2x2.5 mm (the TI ISK Rev D part)",
+      "kind": "crystal",
+      "lcsc": "C2908116",
+      "manufacturer": "Kyocera AVX",
+      "mpn": "CX3225SA40000D0PTWCC",
+      "package": "3225",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "16 Mbit 2.3-3.6 V quad SPI NOR flash, 8-WSON 6x5 mm (TI-tested for xWR boot, SPRACH9)",
+      "kind": "ic",
+      "lcsc": "C2908148",
+      "manufacturer": "Macronix",
+      "mpn": "MX25V1635FZNQ",
+      "package": "WSON-8",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "TCAN1044AV-Q1 CAN FD transceiver with VIO, VSON-8 DRB",
+      "kind": "ic",
+      "lcsc": "C3234119",
+      "manufacturer": "Texas Instruments",
+      "mpn": "TCAN1044AVDRBRQ1",
+      "package": "VSON-8",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "TPS259474A eFuse: adjustable OVLO, circuit breaker, auto-retry, PG; VQFN-HR-10 RPW0010A",
+      "kind": "ic",
+      "lcsc": "C3662807",
+      "manufacturer": "Texas Instruments",
+      "mpn": "TPS259474ARPWR",
+      "package": "VQFN-HR-10",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "2 mOhm 1 % 2 W 0612 wide-terminal metal-foil current shunt (development fit)",
+      "kind": "resistor",
+      "lcsc": "C3917256",
+      "manufacturer": "Vishay Dale",
+      "mpn": "WFCP06122L000FE66",
+      "package": "0612",
+      "params": {
+        "resistance_ohm": 0.002
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "3.9 Ohm 5 % 0402 (snubber, SNVSAW2B Table 56)",
+      "kind": "resistor",
+      "lcsc": "C3988797",
+      "manufacturer": "Vishay Dale",
+      "mpn": "CRCW04023R90JNED",
+      "package": "0402",
+      "params": {
+        "resistance_ohm": 3.9
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "1 mOhm 1 % 2 W 0612 wide-terminal metal-foil resistor in the 1.0 V shunt footprint (product fit, in place of a 0 Ohm jumper)",
+      "kind": "resistor",
+      "lcsc": "C4231187",
+      "manufacturer": "Vishay Dale",
+      "mpn": "WFCP06121L000FE66",
+      "package": "0612",
+      "params": {
+        "resistance_ohm": 0.001
+      },
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    },
+    {
+      "basic": false,
+      "datasheet_url": "",
+      "description": "2-channel 24 V CAN bus ESD diode, SOT-23",
+      "kind": "diode",
+      "lcsc": "C5736151",
+      "manufacturer": "Texas Instruments",
+      "mpn": "ESD2CAN24DBZRQ1",
+      "package": "SOT-23",
+      "params": {},
+      "preferred": false,
+      "price": null,
+      "stock": "unknown"
+    }
+  ],
+  "provenance": {
+    "source": "yapnr atopile build (merged)"
+  },
+  "schema": "yapnr-picker-catalog-v1"
+}

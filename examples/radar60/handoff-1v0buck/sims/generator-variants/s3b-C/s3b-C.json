@@ -1,0 +1,1999 @@
+{
+  "params": {
+    "variant": 0,
+    "bracket_step": 0.018,
+    "mirror_x": false,
+    "w50": 0.2,
+    "gap": 0.2,
+    "fence_offset": 0.5,
+    "fence_pitch": 0.45,
+    "antipad_r": 0.3,
+    "l2_cut_r": 0.38,
+    "l3_cut_margin": 0.3,
+    "launch_len": 1.3,
+    "patch_w": 1.45,
+    "patch_l": null,
+    "inset": 0.3,
+    "fullwave_l_scale": 0.967,
+    "fullwave_ref": "results/openems/patch-c-i30 (C0a single-patch sweep)",
+    "notch": 0.1,
+    "spacing": 2.9,
+    "window_margin": 0.15,
+    "windows": true,
+    "w35": 0.353,
+    "t_y": 0.37,
+    "in_x": 1.171,
+    "p1_y": -2.3,
+    "rx_col_y": 9.5,
+    "tx_col_x0": 8.0,
+    "tx_col_y": 6.1,
+    "bend_r_tx": 0.6,
+    "rx_bend_r_range": [0.4, 1.6],
+    "rx_bump_r": [0.3, 0.4, 0.5],
+    "rx_tail": 0.4,
+    "guard_band": 0.85,
+    "runin_out": 0.9,
+    "meander_r": 0.5,
+    "dummies": "both",
+    "dummy_load": {
+      "value": "50R 0201 thin film",
+      "pad": [0.46, 0.4],
+      "pitch": 0.64,
+      "pad1_dy": 0.45,
+      "vias": [
+        [-0.5, -1.09],
+        [0.5, -1.09],
+        [-0.58, -0.5],
+        [0.58, -0.5],
+        [0.0, -1.62]
+      ],
+      "zone": [0.66, 1.35],
+      "via_zone": [0.66, 1.65],
+      "mask": [0.78, 1.82, 0.05]
+    },
+    "bank_strip": 2.0,
+    "pour_clear_ant": 1.0,
+    "pour_clear_feed": 0.45,
+    "stitch_pitch": 0.6,
+    "stitch_inset": 0.3,
+    "runin_inset": 0.4,
+    "fence_start": 0.25,
+    "ring_inset": 0.35,
+    "stitch_reach": 0.45,
+    "edge_band": 0.3,
+    "d15": "C",
+    "pour_mode": "strips",
+    "stitch_grid": 1.0,
+    "stitch_dmax": 0.45,
+    "l23_pitch": 1.0,
+    "l23_dmax": 0.75,
+    "strip_margin": 0.1,
+    "dummy_term": "load",
+    "l23_cavity": "K0",
+    "post_clear": 0.6,
+    "post_line_clear": 0.45,
+    "post_pitch": 0.5,
+    "div_l_scale": 1.0,
+    "column": "corporate",
+    "ser_link_scale": 1.0,
+    "ser_link_w": 0.1,
+    "tx_eq": "T0",
+    "meander_r_nw": 0.5,
+    "tx_skew_budget_ps": 0.0,
+    "tx_order": ["TX1", "TX2", "TX3"],
+    "pa_feed": true,
+    "pa_net": "1V0_PA",
+    "pa_balls": ["A2", "B2"],
+    "pa_i_peak": 2.5,
+    "pa_i_rms": 1.0,
+    "pa_via": [0.2, 0.4],
+    "pa_vias": 4,
+    "pa_via_i_max": 1.0,
+    "pa_ir_max": 0.01,
+    "pa_clear": 0.15,
+    "pa_plating_um": 20.0,
+    "pa_copper_margin": 0.05,
+    "pa_antipad_feed_min": 0.5
+  },
+  "dims": {
+    "f0_target_ghz": 62.05,
+    "band_ghz": [60.3, 63.8],
+    "lambda0_mm": 4.8315,
+    "window": {
+      "h_mm": 0.2151,
+      "er_composite": 3.5388
+    },
+    "patch": {
+      "w": 1.45,
+      "l": 1.1506,
+      "l_nominal": 1.1899,
+      "l_closed_form": 1.1899,
+      "fullwave_l_scale": 0.967,
+      "fullwave_ref": "results/openems/patch-c-i30 (C0a single-patch sweep)",
+      "length_scale": 1.0,
+      "f0_ghz": 62.05,
+      "bw_vswr2": 0.0415,
+      "bw_ghz": 2.573,
+      "edge_r_ohm": 336.6781,
+      "g1_s": 0.0009,
+      "g12_s": 0.0005,
+      "inset": 0.3,
+      "inset_closed_form": 0.4451,
+      "w_over_l": 1.2602,
+      "efficiency": 0.9061,
+      "directivity_dbi": 6.4185
+    },
+    "column": {
+      "spacing": 2.9,
+      "spacing_lambda0": 0.6002,
+      "directivity_dbi": 10.0639,
+      "divider_loss_db": null
+    },
+    "lines": {
+      "source": "2D solver (yapnr.rf.coupons.xsec) + KJ82 dispersion",
+      "z50_ms": 50.0427,
+      "z50_gcpw": 48.834,
+      "z35": 35.4174,
+      "lambda_g50": 2.9379,
+      "lambda_g50_gcpw": 2.9808,
+      "lambda_g35": 2.84,
+      "quarter35": 0.71,
+      "half50": 1.469,
+      "alpha50_db_mm": 0.0744,
+      "alpha50_gcpw_db_mm": 0.0742
+    },
+    "floorplan": {
+      "rx_entry_y": 8.6882,
+      "tx_entry_y": 6.8,
+      "rx_col_y": 11.9882,
+      "tx_col_y": 10.1,
+      "p0_rx_y": 5.2,
+      "p0_tx_x": 5.2,
+      "tx_dx_bank": 3.547
+    }
+  },
+  "feeds": {
+    "RX1": {
+      "ball_to_p1_mm": 6.5936,
+      "p0_to_p1_mm": 5.2936,
+      "p0_to_pg_mm": 3.3936,
+      "p0_to_p1_line_loss_db": 0.393,
+      "ball_to_p0_mm": 1.3
+    },
+    "RX2": {
+      "ball_to_p1_mm": 6.5936,
+      "p0_to_p1_mm": 5.2936,
+      "p0_to_pg_mm": 3.3936,
+      "p0_to_p1_line_loss_db": 0.393,
+      "ball_to_p0_mm": 1.3
+    },
+    "RX3": {
+      "ball_to_p1_mm": 6.5936,
+      "p0_to_p1_mm": 5.2936,
+      "p0_to_pg_mm": 3.3936,
+      "p0_to_p1_line_loss_db": 0.393,
+      "ball_to_p0_mm": 1.3
+    },
+    "RX4": {
+      "ball_to_p1_mm": 6.5936,
+      "p0_to_p1_mm": 5.2936,
+      "p0_to_pg_mm": 3.3936,
+      "p0_to_p1_line_loss_db": 0.393,
+      "ball_to_p0_mm": 1.3
+    },
+    "TX1": {
+      "ball_to_p1_mm": 19.8735,
+      "p0_to_p1_mm": 18.5735,
+      "p0_to_pg_mm": 16.6735,
+      "p0_to_p1_line_loss_db": 1.379,
+      "ball_to_p0_mm": 1.3
+    },
+    "TX2": {
+      "ball_to_p1_mm": 19.8735,
+      "p0_to_p1_mm": 18.5735,
+      "p0_to_pg_mm": 16.6735,
+      "p0_to_p1_line_loss_db": 1.379,
+      "ball_to_p0_mm": 1.3
+    },
+    "TX3": {
+      "ball_to_p1_mm": 19.8735,
+      "p0_to_p1_mm": 18.5735,
+      "p0_to_pg_mm": 16.6735,
+      "p0_to_p1_line_loss_db": 1.379,
+      "ball_to_p0_mm": 1.3
+    }
+  },
+  "columns": {
+    "RXD0": {
+      "phase_centre": [-7.676, 11.9882],
+      "p1": [-6.505, 9.6882],
+      "input_side": "east",
+      "dummy": true,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "RX1": {
+      "phase_centre": [-5.334, 11.9882],
+      "p1": [-4.163, 9.6882],
+      "input_side": "east",
+      "dummy": false,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "RX2": {
+      "phase_centre": [-2.992, 11.9882],
+      "p1": [-1.821, 9.6882],
+      "input_side": "east",
+      "dummy": false,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "RX3": {
+      "phase_centre": [-0.65, 11.9882],
+      "p1": [0.521, 9.6882],
+      "input_side": "east",
+      "dummy": false,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "RX4": {
+      "phase_centre": [1.692, 11.9882],
+      "p1": [2.863, 9.6882],
+      "input_side": "east",
+      "dummy": false,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "RXD5": {
+      "phase_centre": [4.034, 11.9882],
+      "p1": [5.205, 9.6882],
+      "input_side": "east",
+      "dummy": true,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "TXD0": {
+      "phase_centre": [10.376, 10.1],
+      "p1": [9.205, 7.8],
+      "input_side": "west",
+      "dummy": true,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "TX1": {
+      "phase_centre": [12.718, 10.1],
+      "p1": [11.547, 7.8],
+      "input_side": "west",
+      "dummy": false,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "TX2": {
+      "phase_centre": [15.06, 10.1],
+      "p1": [13.889, 7.8],
+      "input_side": "west",
+      "dummy": false,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "TX3": {
+      "phase_centre": [17.402, 10.1],
+      "p1": [16.231, 7.8],
+      "input_side": "west",
+      "dummy": false,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "TXD4": {
+      "phase_centre": [19.744, 10.1],
+      "p1": [18.573, 7.8],
+      "input_side": "west",
+      "dummy": true,
+      "arms": {
+        "north": 0.8047,
+        "south": 2.2737,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    }
+  },
+  "loads": {
+    "RXD0": {
+      "ref": "RT1",
+      "centre": [-6.505, 7.0182],
+      "vias": [
+        [-7.005, 6.6982],
+        [-6.005, 6.6982],
+        [-7.085, 7.2882],
+        [-5.925, 7.2882],
+        [-6.505, 6.1682]
+      ]
+    },
+    "RXD5": {
+      "ref": "RT2",
+      "centre": [5.205, 7.0182],
+      "vias": [
+        [4.705, 6.6982],
+        [5.705, 6.6982],
+        [4.625, 7.2882],
+        [5.785, 7.2882],
+        [5.205, 6.1682]
+      ]
+    },
+    "TXD0": {
+      "ref": "RT3",
+      "centre": [9.205, 5.13],
+      "vias": [
+        [8.705, 4.81],
+        [9.705, 4.81],
+        [8.625, 5.4],
+        [9.785, 5.4],
+        [9.205, 4.28]
+      ]
+    },
+    "TXD4": {
+      "ref": "RT4",
+      "centre": [18.573, 5.13],
+      "vias": [
+        [18.073, 4.81],
+        [19.073, 4.81],
+        [17.993, 5.4],
+        [19.153, 5.4],
+        [18.573, 4.28]
+      ]
+    }
+  },
+  "cutouts_u1_mm": {
+    "RX": [-9.401, 8.6882, 6.205, 15.0238],
+    "TX": [8.205, 6.8, 21.469, 13.1357]
+  },
+  "banks": {
+    "RX": {
+      "E": 8.6882,
+      "Pg": 7.7882,
+      "top": 15.0238,
+      "mirror": false,
+      "inputs": {
+        "RXD0": -6.505,
+        "RX1": -4.163,
+        "RX2": -1.821,
+        "RX3": 0.521,
+        "RX4": 2.863,
+        "RXD5": 5.205
+      },
+      "origin_y": 11.9882
+    },
+    "TX": {
+      "E": 6.8,
+      "Pg": 5.9,
+      "top": 13.1357,
+      "mirror": true,
+      "inputs": {
+        "TXD0": 9.205,
+        "TX1": 11.547,
+        "TX2": 13.889,
+        "TX3": 16.231,
+        "TXD4": 18.573
+      },
+      "origin_y": 10.1
+    }
+  },
+  "fit": {
+    "rx": {
+      "R_out": 0.9,
+      "R_in": 0.6,
+      "bump_r": 0.3,
+      "rise_p0_pg": 2.5882,
+      "E": 8.6882,
+      "candidates_tried": 38,
+      "lines": {
+        "RX1": {
+          "R": 0.9,
+          "rise": 1.7843,
+          "bump_rise": 0.0,
+          "tail": 0.4
+        },
+        "RX2": {
+          "R": 0.6,
+          "rise": 0.9894,
+          "bump_rise": 1.1988,
+          "tail": 0.4
+        },
+        "RX3": {
+          "R": 0.6,
+          "rise": 0.9894,
+          "bump_rise": 1.1988,
+          "tail": 0.4
+        },
+        "RX4": {
+          "R": 0.9,
+          "rise": 1.7843,
+          "bump_rise": 0.0,
+          "tail": 0.4
+        }
+      }
+    },
+    "tx": {
+      "dx_bank": 3.547,
+      "E": 6.8,
+      "equalizers": {
+        "TX1": {
+          "lane_fingers": 1,
+          "nw_fingers": 1,
+          "nw_r": 0.5,
+          "nw_a": 2.1584,
+          "nw_apex_y": 5.7584
+        },
+        "TX2": {
+          "lane_fingers": 2,
+          "a": 0.3397
+        },
+        "TX3": {
+          "lane_fingers": 0
+        },
+        "alloc": [null, 1, "lane"]
+      },
+      "rejected": {
+        "paths": 450,
+        "load": 2
+      },
+      "skew_budget_mm": 0.0,
+      "order_planarity": {
+        "orders": {
+          "TX1-TX2-TX3": {
+            "crossing": []
+          },
+          "TX1-TX3-TX2": {
+            "crossing": ["TX2xTX3"]
+          },
+          "TX2-TX1-TX3": {
+            "crossing": ["TX1xTX2"]
+          },
+          "TX2-TX3-TX1": {
+            "crossing": ["TX1xTX2", "TX1xTX3"]
+          },
+          "TX3-TX1-TX2": {
+            "crossing": ["TX1xTX3", "TX2xTX3"]
+          },
+          "TX3-TX2-TX1": {
+            "crossing": ["TX1xTX2", "TX1xTX3", "TX2xTX3"]
+          }
+        },
+        "planar": ["TX1-TX2-TX3"]
+      }
+    },
+    "dummies": ["RXD0", "RXD5", "TXD0", "TXD4"]
+  },
+  "ports": {
+    "RX1.Pb": {
+      "at": [-2.6, 3.9],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "RX1.P0": {
+      "at": [-2.6, 5.2],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX1.Pg": {
+      "at": [-4.163, 7.7882],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX1.P1": {
+      "at": [-4.163, 9.6882],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX2.Pb": {
+      "at": [-1.3, 3.9],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "RX2.P0": {
+      "at": [-1.3, 5.2],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX2.Pg": {
+      "at": [-1.821, 7.7882],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX2.P1": {
+      "at": [-1.821, 9.6882],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX3.Pb": {
+      "at": [0.0, 3.9],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "RX3.P0": {
+      "at": [0.0, 5.2],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX3.Pg": {
+      "at": [0.521, 7.7882],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX3.P1": {
+      "at": [0.521, 9.6882],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX4.Pb": {
+      "at": [1.3, 3.9],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "RX4.P0": {
+      "at": [1.3, 5.2],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX4.Pg": {
+      "at": [2.863, 7.7882],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX4.P1": {
+      "at": [2.863, 9.6882],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "TX1.Pb": {
+      "at": [3.9, 2.6],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "TX1.P0": {
+      "at": [5.2, 2.6],
+      "heading_deg": 0.0,
+      "z0": 50.0
+    },
+    "TX1.Pg": {
+      "at": [11.547, 5.9],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "TX1.P1": {
+      "at": [11.547, 7.8],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "TX2.Pb": {
+      "at": [3.9, 1.3],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "TX2.P0": {
+      "at": [5.2, 1.3],
+      "heading_deg": 0.0,
+      "z0": 50.0
+    },
+    "TX2.Pg": {
+      "at": [13.889, 5.9],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "TX2.P1": {
+      "at": [13.889, 7.8],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "TX3.Pb": {
+      "at": [3.9, -0.0],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "TX3.P0": {
+      "at": [5.2, 0.0],
+      "heading_deg": 0.0,
+      "z0": 50.0
+    },
+    "TX3.Pg": {
+      "at": [16.231, 5.9],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "TX3.P1": {
+      "at": [16.231, 7.8],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "vout_pa_pocket": {
+      "rect": [3.557, 5.45, 5.25, 6.2]
+    },
+    "iso_fence_x": {
+      "at": [7.205, 0.0]
+    }
+  },
+  "region_u1_mm": {
+    "x": [-13.401, 25.469],
+    "y": [-1.3, 19.0238]
+  },
+  "status": "placeholder: geometry for integration only; the column's match is not converged and sits high (rf-uniform: RL-10 64.35-66 GHz at 15 um against 60.3-63.8); stage 3b's C1 retune, the D15 pour and S1/S2 choice, the L2-L3 cavity option and the PA-feed EM come before it is frozen",
+  "vias": {
+    "launch": 14,
+    "ring": 282,
+    "runin": 44,
+    "load": 20,
+    "fence": 206,
+    "isolation": 21,
+    "stitch": 172,
+    "l23": 204,
+    "fill": 23,
+    "total": 986
+  },
+  "checks": [
+    {
+      "check": "equal length P0->P1 RX",
+      "lengths_mm": {
+        "RX1": 5.2936,
+        "RX2": 5.2936,
+        "RX3": 5.2936,
+        "RX4": 5.2936
+      },
+      "p0_to_pg_mm": {
+        "RX1": 3.3936,
+        "RX2": 3.3936,
+        "RX3": 3.3936,
+        "RX4": 3.3936
+      },
+      "spread_mm": 0.0,
+      "limit_mm": 0.036,
+      "skew_budget_ps": 0.0,
+      "ok": true
+    },
+    {
+      "check": "equal length P0->P1 TX",
+      "lengths_mm": {
+        "TX1": 18.5735,
+        "TX2": 18.5735,
+        "TX3": 18.5735
+      },
+      "p0_to_pg_mm": {
+        "TX1": 16.6735,
+        "TX2": 16.6735,
+        "TX3": 16.6735
+      },
+      "spread_mm": 0.0,
+      "limit_mm": 0.036,
+      "skew_budget_ps": 0.0,
+      "ok": true
+    },
+    {
+      "check": "ball to P1 lengths",
+      "lengths_mm": {
+        "RX1": 6.594,
+        "RX2": 6.594,
+        "RX3": 6.594,
+        "RX4": 6.594,
+        "TX1": 19.873,
+        "TX2": 19.873,
+        "TX3": 19.873
+      }
+    },
+    {
+      "check": "feed corridor separation",
+      "min_mm": 0.922,
+      "pair": ["RX1", "RX2"],
+      "limit_mm": 0.92,
+      "ok": true
+    },
+    {
+      "check": "column input line to L2 window edge (both sides)",
+      "clearance_mm": 0.196,
+      "limit_mm": 0.1524,
+      "ok": true
+    },
+    {
+      "check": "divider arms",
+      "north": 0.8047,
+      "south": 2.2737,
+      "diff": 1.469,
+      "target": 1.469
+    },
+    {
+      "check": "patch to L1 pour (cut-out edge)",
+      "min_mm": 1.0,
+      "limit_mm": 1.0,
+      "ok": true
+    },
+    {
+      "check": "G1 entry contact and guard band",
+      "lines": {
+        "RX1": {
+          "band_min_mm": 0.9,
+          "at": [-4.163, 7.788],
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.6,
+          "ok": true
+        },
+        "RX2": {
+          "band_min_mm": 0.9,
+          "at": [-1.821, 7.788],
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.601,
+          "ok": true
+        },
+        "RX3": {
+          "band_min_mm": 0.9,
+          "at": [0.521, 7.788],
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.601,
+          "ok": true
+        },
+        "RX4": {
+          "band_min_mm": 0.9,
+          "at": [2.863, 7.788],
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.601,
+          "ok": true
+        },
+        "TX1": {
+          "band_min_mm": 0.9,
+          "at": [12.047, 5.9],
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.601,
+          "ok": true
+        },
+        "TX2": {
+          "band_min_mm": 0.9,
+          "at": [14.729, 5.9],
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.601,
+          "ok": true
+        },
+        "TX3": {
+          "band_min_mm": 0.9,
+          "at": [16.231, 5.9],
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.601,
+          "ok": true
+        },
+        "RXD0": {
+          "band_min_mm": 0.9,
+          "at": null,
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.6,
+          "ok": true
+        },
+        "RXD5": {
+          "band_min_mm": 0.9,
+          "at": null,
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.6,
+          "ok": true
+        },
+        "TXD0": {
+          "band_min_mm": 0.9,
+          "at": null,
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.601,
+          "ok": true
+        },
+        "TXD4": {
+          "band_min_mm": 0.9,
+          "at": null,
+          "runin_straight": true,
+          "on_input_axis": true,
+          "contact_span_mm": 0.601,
+          "ok": true
+        }
+      },
+      "foreign_vias_in_band": [],
+      "vias_in_cutouts": 0,
+      "ok": true
+    },
+    {
+      "check": "G2 column congruence",
+      "reference": "RX2",
+      "window_column_frame": [-3.799, -4.2, 3.799, 4.0357],
+      "declared_difference_column_frame": [
+        [-4.183, -4.21, -2.843, -3.3],
+        [-3.823, -3.3, -3.203, 4.0357]
+      ],
+      "vias_in_window": 56,
+      "columns": {
+        "RX1": {
+          "copper_xor_mm2": 0.0,
+          "gnd_xor_mm2": 0.0,
+          "via_mismatch": 0,
+          "l2_window_mismatch": 0,
+          "open_end": true,
+          "declared_difference": {
+            "what": "second-neighbour input at -1.5 d absent (open bank end)",
+            "copper_xor_mm2": 0.9459,
+            "gnd_xor_mm2": 0.531,
+            "via_mismatch": 2
+          }
+        },
+        "RX3": {
+          "copper_xor_mm2": 0.0,
+          "gnd_xor_mm2": 0.0,
+          "via_mismatch": 0,
+          "l2_window_mismatch": 0,
+          "open_end": false
+        },
+        "RX4": {
+          "copper_xor_mm2": 0.0,
+          "gnd_xor_mm2": 0.0,
+          "via_mismatch": 0,
+          "l2_window_mismatch": 0,
+          "open_end": false
+        },
+        "TX1": {
+          "copper_xor_mm2": 0.0,
+          "gnd_xor_mm2": 0.0,
+          "via_mismatch": 0,
+          "l2_window_mismatch": 0,
+          "open_end": false
+        },
+        "TX2": {
+          "copper_xor_mm2": 0.0,
+          "gnd_xor_mm2": 0.0,
+          "via_mismatch": 0,
+          "l2_window_mismatch": 0,
+          "open_end": false
+        },
+        "TX3": {
+          "copper_xor_mm2": 0.0,
+          "gnd_xor_mm2": 0.0,
+          "via_mismatch": 0,
+          "l2_window_mismatch": 0,
+          "open_end": true,
+          "declared_difference": {
+            "what": "second-neighbour input at -1.5 d absent (open bank end)",
+            "copper_xor_mm2": 0.9459,
+            "gnd_xor_mm2": 0.531,
+            "via_mismatch": 2
+          }
+        }
+      },
+      "edge_columns_declared": {},
+      "worst": {
+        "copper_xor_mm2": 0.0,
+        "gnd_xor_mm2": 0.0,
+        "via_mismatch": 0,
+        "l2_window_mismatch": 0
+      },
+      "ok": true
+    },
+    {
+      "check": "G3 unstitched GND",
+      "d15": "C",
+      "pour_mode": "strips",
+      "reach_mm": 0.45,
+      "edge_band_mm": 0.3,
+      "interior_dmax_mm": 0.45,
+      "l23_dmax_mm": 0.75,
+      "raster_mm": 0.01,
+      "gnd_area_mm2": 148.7,
+      "unreached_pieces": [],
+      "made_gap": [
+        {
+          "at": [-1.727, 5.282],
+          "long_mm": 0.31,
+          "area_mm2": 0.0409
+        },
+        {
+          "at": [-1.928, 6.785],
+          "long_mm": 0.19,
+          "area_mm2": 0.0089
+        },
+        {
+          "at": [0.632, 6.785],
+          "long_mm": 0.18,
+          "area_mm2": 0.0081
+        },
+        {
+          "at": [-0.652, 5.216],
+          "long_mm": 0.24,
+          "area_mm2": 0.0066
+        },
+        {
+          "at": [4.299, 6.942],
+          "long_mm": 0.08,
+          "area_mm2": 0.0015
+        },
+        {
+          "at": [8.299, 5.062],
+          "long_mm": 0.08,
+          "area_mm2": 0.0015
+        },
+        {
+          "at": [0.311, 5.219],
+          "long_mm": 0.05,
+          "area_mm2": 0.0011
+        },
+        {
+          "at": [13.605, 0.306],
+          "long_mm": 0.06,
+          "area_mm2": 0.0008
+        }
+      ],
+      "l23_domain_mm2": 376.375,
+      "l23_unstitched": [],
+      "ok": true
+    },
+    {
+      "check": "stitch metrics (D15)",
+      "mode": "strips",
+      "preset": "C",
+      "l1_gnd_mm2": 148.7,
+      "l1_edge_mm2": 102.62,
+      "l1_dmax_edge_mm": 0.461,
+      "l1_dmax_interior_mm": 0.422,
+      "l1_area_beyond_mm2": {
+        "0.45": 0.0,
+        "0.60": 0.0,
+        "0.75": 0.0
+      },
+      "l23_largest_gap_radius_mm": 0.744,
+      "l23_largest_gap_at": [17.446, 3.507],
+      "vias_by_role": {
+        "launch": 14,
+        "ring": 282,
+        "runin": 44,
+        "load": 20,
+        "fence": 206,
+        "isolation": 21,
+        "stitch": 172,
+        "l23": 204,
+        "fill": 23
+      },
+      "vias_0p15_drill": 986,
+      "cutoff_ghz": {
+        "lattice_l1l2": 81.2,
+        "lattice_l2l3": 81.7,
+        "largest_gap_l2l3": 59.7,
+        "note": "[D] post-wall (SIW) equivalent width; the gap bound takes 2 r - d as the span"
+      }
+    },
+    {
+      "check": "G4 fence continuity",
+      "limit_mm": 0.5,
+      "rows": {
+        "RX1.L": {
+          "max_spacing_mm": 0.497,
+          "over_limit": [],
+          "openings": []
+        },
+        "RX1.R": {
+          "max_spacing_mm": 0.464,
+          "over_limit": [],
+          "openings": []
+        },
+        "RX2.L": {
+          "max_spacing_mm": 0.48,
+          "over_limit": [],
+          "openings": []
+        },
+        "RX2.R": {
+          "max_spacing_mm": 0.493,
+          "over_limit": [],
+          "openings": []
+        },
+        "RX3.L": {
+          "max_spacing_mm": 0.493,
+          "over_limit": [],
+          "openings": []
+        },
+        "RX3.R": {
+          "max_spacing_mm": 0.498,
+          "over_limit": [],
+          "openings": []
+        },
+        "RX4.L": {
+          "max_spacing_mm": 0.498,
+          "over_limit": [],
+          "openings": []
+        },
+        "RX4.R": {
+          "max_spacing_mm": 0.497,
+          "over_limit": [],
+          "openings": []
+        },
+        "TX1.L": {
+          "max_spacing_mm": 0.474,
+          "over_limit": [],
+          "openings": []
+        },
+        "TX1.R": {
+          "max_spacing_mm": 0.493,
+          "over_limit": [],
+          "openings": []
+        },
+        "TX2.L": {
+          "max_spacing_mm": 0.498,
+          "over_limit": [],
+          "openings": []
+        },
+        "TX2.R": {
+          "max_spacing_mm": 0.481,
+          "over_limit": [],
+          "openings": []
+        },
+        "TX3.L": {
+          "max_spacing_mm": 0.48,
+          "over_limit": [],
+          "openings": []
+        },
+        "TX3.R": {
+          "max_spacing_mm": 0.46,
+          "over_limit": [],
+          "openings": []
+        }
+      },
+      "runin_pairs_missing": [],
+      "ok": true
+    },
+    {
+      "check": "G5 via accounting",
+      "counts": {
+        "launch": 14,
+        "ring": 282,
+        "runin": 44,
+        "load": 20,
+        "fence": 206,
+        "isolation": 21,
+        "stitch": 172,
+        "l23": 204,
+        "fill": 23
+      },
+      "total": 986,
+      "merged": 16,
+      "merged_detail": [
+        {
+          "role": "fence",
+          "at": [12.047, 5.9],
+          "into": "runin",
+          "d": 0.05
+        },
+        {
+          "role": "fence",
+          "at": [14.389, 3.9],
+          "into": "fence",
+          "d": 0.0
+        },
+        {
+          "role": "fence",
+          "at": [14.389, 5.9],
+          "into": "runin",
+          "d": 0.05
+        },
+        {
+          "role": "l23",
+          "at": [-10.0, 8.0],
+          "into": "ring",
+          "d": 0.0962
+        },
+        {
+          "role": "l23",
+          "at": [3.0, 6.0],
+          "into": "fence",
+          "d": 0.0506
+        },
+        {
+          "role": "l23",
+          "at": [8.0, -1.0],
+          "into": "stitch",
+          "d": 0.0814
+        },
+        {
+          "role": "l23",
+          "at": [8.0, 2.0],
+          "into": "fence",
+          "d": 0.0856
+        },
+        {
+          "role": "l23",
+          "at": [9.0, -1.0],
+          "into": "stitch",
+          "d": 0.078
+        },
+        {
+          "role": "l23",
+          "at": [9.0, 2.0],
+          "into": "fence",
+          "d": 0.0513
+        },
+        {
+          "role": "l23",
+          "at": [11.0, 4.0],
+          "into": "fence",
+          "d": 0.0252
+        },
+        {
+          "role": "l23",
+          "at": [12.0, -1.0],
+          "into": "stitch",
+          "d": 0.0236
+        },
+        {
+          "role": "l23",
+          "at": [12.0, 3.0],
+          "into": "fence",
+          "d": 0.0678
+        },
+        {
+          "role": "l23",
+          "at": [16.0, -1.0],
+          "into": "stitch",
+          "d": 0.0341
+        },
+        {
+          "role": "l23",
+          "at": [19.0, -1.0],
+          "into": "stitch",
+          "d": 0.0675
+        },
+        {
+          "role": "l23",
+          "at": [20.0, -1.0],
+          "into": "stitch",
+          "d": 0.0918
+        },
+        {
+          "role": "l23",
+          "at": [23.0, -1.0],
+          "into": "stitch",
+          "d": 0.0098
+        }
+      ],
+      "conflicts": [],
+      "row_gaps": [
+        {
+          "row": "RX1.L",
+          "points": 1,
+          "skipped": 0,
+          "first": [-4.663, 7.1412]
+        },
+        {
+          "row": "RX2.L",
+          "points": 7,
+          "skipped": 0,
+          "first": [-2.0499, 5.3768]
+        },
+        {
+          "row": "RX2.R",
+          "points": 1,
+          "skipped": 0,
+          "first": [-1.3646, 7.1277]
+        },
+        {
+          "row": "RX3.L",
+          "points": 1,
+          "skipped": 0,
+          "first": [0.0646, 7.1277]
+        },
+        {
+          "row": "RX3.R",
+          "points": 11,
+          "skipped": 0,
+          "first": [1.0432, 6.0436]
+        },
+        {
+          "row": "RX4.L",
+          "points": 6,
+          "skipped": 0,
+          "first": [1.7565, 6.7026]
+        },
+        {
+          "row": "RX4.R",
+          "points": 1,
+          "skipped": 0,
+          "first": [3.363, 7.1412]
+        },
+        {
+          "row": "TX1.L",
+          "points": 0,
+          "skipped": 1,
+          "first": null
+        },
+        {
+          "row": "TX1.R",
+          "points": 7,
+          "skipped": 5,
+          "first": [6.6896, 2.4506]
+        },
+        {
+          "row": "TX2.L",
+          "points": 56,
+          "skipped": 7,
+          "first": [6.1188, 1.8]
+        },
+        {
+          "row": "TX2.R",
+          "points": 7,
+          "skipped": 1,
+          "first": [14.6488, 3.9]
+        },
+        {
+          "row": "TX3.L",
+          "points": 35,
+          "skipped": 1,
+          "first": [15.7309, 0.5967]
+        },
+        {
+          "row": "ring RX 0.35",
+          "points": 1,
+          "skipped": 0,
+          "first": [-8.6017, 8.3382]
+        },
+        {
+          "row": "ring RX 0.85",
+          "points": 7,
+          "skipped": 0,
+          "first": [6.924, 8.2348]
+        },
+        {
+          "row": "ring TX 0.85",
+          "points": 8,
+          "skipped": 0,
+          "first": [7.4969, 13.6058]
+        }
+      ],
+      "dropped_optional": {
+        "l23": {
+          "pour edge": 208,
+          "spacing": 93,
+          "guard band": 65,
+          "cut-out": 210,
+          "load pad": 5,
+          "package": 88,
+          "line": 54,
+          "pa feed": 2,
+          "load zone": 1
+        }
+      },
+      "boundary_row_pitch_mm": {
+        "west": 0.5793,
+        "north": 0.5798,
+        "east": 0.5795
+      },
+      "stitch_pitch_max_mm": 0.6,
+      "fill_rounds": [28, 8, 8],
+      "made_gap": [
+        {
+          "at": [-1.727, 5.282],
+          "long_mm": 0.31,
+          "area_mm2": 0.0409
+        },
+        {
+          "at": [-1.928, 6.785],
+          "long_mm": 0.19,
+          "area_mm2": 0.0089
+        },
+        {
+          "at": [0.632, 6.785],
+          "long_mm": 0.18,
+          "area_mm2": 0.0081
+        },
+        {
+          "at": [-0.652, 5.216],
+          "long_mm": 0.24,
+          "area_mm2": 0.0066
+        },
+        {
+          "at": [4.299, 6.942],
+          "long_mm": 0.08,
+          "area_mm2": 0.0015
+        },
+        {
+          "at": [8.299, 5.062],
+          "long_mm": 0.08,
+          "area_mm2": 0.0015
+        },
+        {
+          "at": [0.311, 5.219],
+          "long_mm": 0.05,
+          "area_mm2": 0.0011
+        },
+        {
+          "at": [13.605, 0.306],
+          "long_mm": 0.06,
+          "area_mm2": 0.0008
+        }
+      ],
+      "lattice_sites": {
+        "RX": 122,
+        "TX": 104
+      },
+      "ok": true
+    },
+    {
+      "check": "G7 dummy load cells",
+      "declared_vias": 5,
+      "smd_via_clear_mm": 0.1,
+      "loads": {
+        "RXD0": {
+          "ref": "RT1",
+          "vias_in_zone": 5,
+          "mismatch": 0,
+          "vias_at_lands": [],
+          "lines_under_mask": [],
+          "ok": true
+        },
+        "RXD5": {
+          "ref": "RT2",
+          "vias_in_zone": 5,
+          "mismatch": 0,
+          "vias_at_lands": [],
+          "lines_under_mask": [],
+          "ok": true
+        },
+        "TXD0": {
+          "ref": "RT3",
+          "vias_in_zone": 5,
+          "mismatch": 0,
+          "vias_at_lands": [],
+          "lines_under_mask": [],
+          "ok": true
+        },
+        "TXD4": {
+          "ref": "RT4",
+          "vias_in_zone": 5,
+          "mismatch": 0,
+          "vias_at_lands": [],
+          "lines_under_mask": [],
+          "ok": true
+        }
+      },
+      "ok": true
+    },
+    {
+      "check": "G8 PA feed (D14)",
+      "net": "1V0_PA",
+      "balls": ["A2", "B2"],
+      "vias": 4,
+      "min_to_foreign_land_mm": 0.15,
+      "min_to_gnd_via_pad_mm": 0.15,
+      "min_hole_to_hole_mm": 0.3992,
+      "min_to_rf_copper_mm": 0.71,
+      "bar_to_tx_launch_ground_mm": 0.15,
+      "copper_outside_pocket_or_package": [],
+      "vias_outside_pocket": [],
+      "l2_antipad_to_feed_centreline_mm": 0.7217,
+      "l2_antipad_radius_mm": 0.35,
+      "electrical": {
+        "sheet_mohm_per_sq": 0.4914,
+        "squares": {
+          "neck": 4.304,
+          "bar_to_outer": 0.918,
+          "outer_to_inner": 1.327
+        },
+        "via_mohm_each_l1_l4": 0.924,
+        "via_array_and_patch_mohm": 0.476,
+        "vias": 4,
+        "i_peak_per_via_a": 0.625,
+        "i_rms_per_via_a": 0.25,
+        "ir_drop_mv": {
+          "outer": 7.61,
+          "inner": 8.42
+        },
+        "neck_width_mm": 0.28,
+        "bar_width_mm": 0.49,
+        "neck_ipc2221_10c_a": 0.95,
+        "via_self_inductance_nh_each": 0.972,
+        "via_inductance_parallel_nh_no_mutual": 0.243,
+        "note": "copper at 20 C, 35 um L1, equal split between the balls; the via barrels to the L4 pour; sized for the whole 1.0 V rail (2.5 A peak, 1.0 A RMS)"
+      },
+      "limits": {
+        "clearance_mm": 0.15,
+        "via_i_max_a": 1.0,
+        "ir_max_mv": 10.0,
+        "antipad_feed_min_mm": 0.5,
+        "hole_to_hole_mm": 0.28,
+        "gnd_via_pad_r": 0.16
+      },
+      "geometry": {
+        "bar": [3.74, 3.75, 5.14, 4.24],
+        "neck": [4.86, 3.75, 5.14, 5.45],
+        "vias": [
+          [4.89, 5.45],
+          [4.39, 5.45],
+          [3.89, 5.45],
+          [3.89, 5.95]
+        ],
+        "via": [0.2, 0.4],
+        "pocket": [3.557, 5.2, 5.25, 6.2],
+        "lattice": {
+          "lattice_step_mm": 0.5,
+          "rejected_sites": {
+            "fixed via": 3,
+            "load mask island": 2
+          },
+          "wanted": 4
+        }
+      },
+      "failed": [],
+      "ok": true
+    },
+    {
+      "check": "G9 L2-L3 cavity",
+      "option": "K0",
+      "windows": true,
+      "posts": 0,
+      "banks": {
+        "RX": {
+          "cavity_mm": [16.306, 7.036],
+          "largest_via_free_radius_mm": 3.555,
+          "tm_modes_57_70ghz": {
+            "count": 26,
+            "lowest_ghz": 4.9,
+            "first": [
+              [2, 5, 57.62],
+              [11, 2, 58.49],
+              [3, 5, 58.65],
+              [12, 0, 58.8],
+              [10, 3, 59.68],
+              [12, 1, 59.88]
+            ]
+          },
+          "posts_inside": 0,
+          "excited": "through the L2 windows (rf-uniform: -10 to -25 dB)"
+        },
+        "TX": {
+          "cavity_mm": [13.964, 7.036],
+          "largest_via_free_radius_mm": 3.555,
+          "tm_modes_57_70ghz": {
+            "count": 24,
+            "lowest_ghz": 5.72,
+            "first": [
+              [8, 3, 57.06],
+              [1, 5, 57.07],
+              [10, 0, 57.21],
+              [2, 5, 57.92],
+              [10, 1, 58.33],
+              [3, 5, 59.32]
+            ]
+          },
+          "posts_inside": 0,
+          "excited": "through the L2 windows (rf-uniform: -10 to -25 dB)"
+        }
+      },
+      "failed": [],
+      "ok": true
+    },
+    {
+      "check": "T3 TX ball-to-column orders (L-routes on L1) [D]",
+      "planar": ["TX1-TX2-TX3"],
+      "crossing": {
+        "TX1-TX3-TX2": ["TX2xTX3"],
+        "TX2-TX1-TX3": ["TX1xTX2"],
+        "TX2-TX3-TX1": ["TX1xTX2", "TX1xTX3"],
+        "TX3-TX1-TX2": ["TX1xTX3", "TX2xTX3"],
+        "TX3-TX2-TX1": ["TX1xTX2", "TX1xTX3", "TX2xTX3"]
+      },
+      "used": "TX1-TX2-TX3"
+    },
+    {
+      "check": "G6 fits and D12",
+      "equalizers": {
+        "rx": {
+          "R_out": 0.9,
+          "R_in": 0.6,
+          "bump_r": 0.3,
+          "rise_p0_pg": 2.5882,
+          "E": 8.6882,
+          "candidates_tried": 38,
+          "lines": {
+            "RX1": {
+              "R": 0.9,
+              "rise": 1.7843,
+              "bump_rise": 0.0,
+              "tail": 0.4
+            },
+            "RX2": {
+              "R": 0.6,
+              "rise": 0.9894,
+              "bump_rise": 1.1988,
+              "tail": 0.4
+            },
+            "RX3": {
+              "R": 0.6,
+              "rise": 0.9894,
+              "bump_rise": 1.1988,
+              "tail": 0.4
+            },
+            "RX4": {
+              "R": 0.9,
+              "rise": 1.7843,
+              "bump_rise": 0.0,
+              "tail": 0.4
+            }
+          }
+        },
+        "tx": {
+          "dx_bank": 3.547,
+          "E": 6.8,
+          "equalizers": {
+            "TX1": {
+              "lane_fingers": 1,
+              "nw_fingers": 1,
+              "nw_r": 0.5,
+              "nw_a": 2.1584,
+              "nw_apex_y": 5.7584
+            },
+            "TX2": {
+              "lane_fingers": 2,
+              "a": 0.3397
+            },
+            "TX3": {
+              "lane_fingers": 0
+            },
+            "alloc": [null, 1, "lane"]
+          },
+          "rejected": {
+            "paths": 450,
+            "load": 2
+          },
+          "skew_budget_mm": 0.0,
+          "order_planarity": {
+            "orders": {
+              "TX1-TX2-TX3": {
+                "crossing": []
+              },
+              "TX1-TX3-TX2": {
+                "crossing": ["TX2xTX3"]
+              },
+              "TX2-TX1-TX3": {
+                "crossing": ["TX1xTX2"]
+              },
+              "TX2-TX3-TX1": {
+                "crossing": ["TX1xTX2", "TX1xTX3"]
+              },
+              "TX3-TX1-TX2": {
+                "crossing": ["TX1xTX3", "TX2xTX3"]
+              },
+              "TX3-TX2-TX1": {
+                "crossing": ["TX1xTX2", "TX1xTX3", "TX2xTX3"]
+              }
+            },
+            "planar": ["TX1-TX2-TX3"]
+          }
+        },
+        "dummies": ["RXD0", "RXD5", "TXD0", "TXD4"]
+      },
+      "band_margin_mm": 0.9,
+      "layout_sha256_per_variant": {
+        "-1": "ee9d7c9490d0e73e0ff945ebbb814abada218ac20ff3bc57629b6f4db4798ee0",
+        "0": "ee9d7c9490d0e73e0ff945ebbb814abada218ac20ff3bc57629b6f4db4798ee0",
+        "1": "ee9d7c9490d0e73e0ff945ebbb814abada218ac20ff3bc57629b6f4db4798ee0"
+      },
+      "outside_cutouts_sha256": "9a8a272037e9395be6b150d4c54014206589d1c115ed36e1cf20a8a1efd6124f",
+      "ok": true
+    }
+  ],
+  "geometry_sha256": "99813dcd237050d722f4cedffa2c2839ebc60bee71e29d58b2a68588546056ae",
+  "outside_cutouts_sha256": "9a8a272037e9395be6b150d4c54014206589d1c115ed36e1cf20a8a1efd6124f",
+  "board_frame": {
+    "u1_at": [26.0, 28.0],
+    "phase_centres": {
+      "RX1": [20.666, 39.9882],
+      "RX2": [23.008, 39.9882],
+      "RX3": [25.35, 39.9882],
+      "RX4": [27.692, 39.9882],
+      "TX1": [38.718, 38.1],
+      "TX2": [41.06, 38.1],
+      "TX3": [43.402, 38.1]
+    },
+    "dummy_phase_centres": {
+      "RXD0": [18.324, 39.9882],
+      "RXD5": [30.034, 39.9882],
+      "TXD0": [36.376, 38.1],
+      "TXD4": [45.744, 38.1]
+    },
+    "rx_patch_bbox": [19.941, 37.9629, 28.417, 42.0135],
+    "tx_patch_bbox": [37.993, 36.0747, 44.127, 40.1253],
+    "rx_patch_bbox_with_dummies": [17.599, 37.9629, 30.759, 42.0135],
+    "tx_patch_bbox_with_dummies": [35.651, 36.0747, 46.469, 40.1253],
+    "l1_cutouts": {
+      "RX": [16.599, 36.6882, 32.205, 43.0238],
+      "TX": [34.205, 34.8, 47.469, 41.1357]
+    },
+    "entries_y": {
+      "RX": 36.6882,
+      "TX": 34.8
+    },
+    "region_bbox": [12.599, 26.7, 51.469, 47.0238],
+    "r4_guard_x": [7.599, 56.469],
+    "board_height_min": 47.3488,
+    "rx_tx_nearest_phase_centres": 11.1865,
+    "dummy_loads": {
+      "RT1": {
+        "column": "RXD0",
+        "centre": [19.495, 35.0182],
+        "axis": "y",
+        "via_zone": [18.835, 34.1382, 20.155, 35.7882],
+        "mask_island": [18.715, 33.9682, 20.275, 35.7382]
+      },
+      "RT2": {
+        "column": "RXD5",
+        "centre": [31.205, 35.0182],
+        "axis": "y",
+        "via_zone": [30.545, 34.1382, 31.865, 35.7882],
+        "mask_island": [30.425, 33.9682, 31.985, 35.7382]
+      },
+      "RT3": {
+        "column": "TXD0",
+        "centre": [35.205, 33.13],
+        "axis": "y",
+        "via_zone": [34.545, 32.25, 35.865, 33.9],
+        "mask_island": [34.425, 32.08, 35.985, 33.85]
+      },
+      "RT4": {
+        "column": "TXD4",
+        "centre": [44.573, 33.13],
+        "axis": "y",
+        "via_zone": [43.913, 32.25, 45.233, 33.9],
+        "mask_island": [43.793, 32.08, 45.353, 33.85]
+      }
+    },
+    "vout_pa_pocket": [29.557, 33.45, 31.25, 34.2],
+    "pa_feed": {
+      "net": "1V0_PA",
+      "skip_pads": ["A2", "B2"],
+      "vias": [
+        [30.89, 33.45],
+        [30.39, 33.45],
+        [29.89, 33.45],
+        [29.89, 33.95]
+      ],
+      "via_drill_pad": [0.2, 0.4],
+      "l1_copper": [
+        [29.74, 31.75, 31.14, 32.24],
+        [30.86, 31.75, 31.14, 33.45],
+        [30.64, 33.2, 31.14, 33.7],
+        [30.14, 33.2, 30.64, 33.7],
+        [29.64, 33.2, 30.14, 33.7],
+        [29.64, 33.7, 30.14, 34.2],
+        [30.14, 33.2, 31.14, 33.7],
+        [29.64, 33.2, 30.64, 33.7],
+        [29.64, 33.2, 30.14, 34.2]
+      ],
+      "pocket": [29.557, 33.2, 31.25, 34.2],
+      "mask_island": [29.59, 33.2, 31.19, 34.25],
+      "antipad_radius_l2_l3_l5": 0.35,
+      "l4_tie": "In3.Cu 1V0_PA pour over the vias (integration); the macro preview draws the pocket + 0.5 mm as a stand-in",
+      "bottom_caps": "VOUT_PA caps on B.Cu at the vias, pads by the integration's decoupling audit"
+    },
+    "options": {
+      "d15": "C",
+      "dummies": "both",
+      "dummy_term": "load",
+      "l23_cavity": "K0",
+      "column": "corporate",
+      "tx_eq": "T0"
+    },
+    "in2_gnd_polygons": [
+      [
+        [12.599, 33.2],
+        [51.469, 33.2],
+        [51.469, 47.0238],
+        [12.599, 47.0238]
+      ],
+      [
+        [31.2, 26.7],
+        [51.469, 26.7],
+        [51.469, 33.2],
+        [31.2, 33.2]
+      ],
+      [
+        [22.4, 31.09],
+        [28.3, 31.09],
+        [28.3, 33.2],
+        [22.4, 33.2]
+      ],
+      [
+        [29.09, 27.0],
+        [31.2, 27.0],
+        [31.2, 31.6],
+        [29.09, 31.6]
+      ],
+      [
+        [24.08, 31.9],
+        [24.0669, 32.0327],
+        [24.0282, 32.1602],
+        [23.9654, 32.2778],
+        [23.8808, 32.3808],
+        [23.7778, 32.4654],
+        [23.6602, 32.5282],
+        [23.5327, 32.5669],
+        [23.4, 32.58],
+        [23.2673, 32.5669],
+        [23.1398, 32.5282],
+        [23.0222, 32.4654],
+        [22.9192, 32.3808],
+        [22.8346, 32.2778],
+        [22.7718, 32.1602],
+        [22.7331, 32.0327],
+        [22.72, 31.9],
+        [22.7331, 31.7673],
+        [22.7718, 31.6398],
+        [22.8346, 31.5222],
+        [22.9192, 31.4192],
+        [23.0222, 31.3346],
+        [23.1398, 31.2718],
+        [23.2673, 31.2331],
+        [23.4, 31.22],
+        [23.5327, 31.2331],
+        [23.6602, 31.2718],
+        [23.7778, 31.3346],
+        [23.8808, 31.4192],
+        [23.9654, 31.5222],
+        [24.0282, 31.6398],
+        [24.0669, 31.7673]
+      ],
+      [
+        [25.38, 31.9],
+        [25.3669, 32.0327],
+        [25.3282, 32.1602],
+        [25.2654, 32.2778],
+        [25.1808, 32.3808],
+        [25.0778, 32.4654],
+        [24.9602, 32.5282],
+        [24.8327, 32.5669],
+        [24.7, 32.58],
+        [24.5673, 32.5669],
+        [24.4398, 32.5282],
+        [24.3222, 32.4654],
+        [24.2192, 32.3808],
+        [24.1346, 32.2778],
+        [24.0718, 32.1602],
+        [24.0331, 32.0327],
+        [24.02, 31.9],
+        [24.0331, 31.7673],
+        [24.0718, 31.6398],
+        [24.1346, 31.5222],
+        [24.2192, 31.4192],
+        [24.3222, 31.3346],
+        [24.4398, 31.2718],
+        [24.5673, 31.2331],
+        [24.7, 31.22],
+        [24.8327, 31.2331],
+        [24.9602, 31.2718],
+        [25.0778, 31.3346],
+        [25.1808, 31.4192],
+        [25.2654, 31.5222],
+        [25.3282, 31.6398],
+        [25.3669, 31.7673]
+      ],
+      [
+        [26.68, 31.9],
+        [26.6669, 32.0327],
+        [26.6282, 32.1602],
+        [26.5654, 32.2778],
+        [26.4808, 32.3808],
+        [26.3778, 32.4654],
+        [26.2602, 32.5282],
+        [26.1327, 32.5669],
+        [26.0, 32.58],
+        [25.8673, 32.5669],
+        [25.7398, 32.5282],
+        [25.6222, 32.4654],
+        [25.5192, 32.3808],
+        [25.4346, 32.2778],
+        [25.3718, 32.1602],
+        [25.3331, 32.0327],
+        [25.32, 31.9],
+        [25.3331, 31.7673],
+        [25.3718, 31.6398],
+        [25.4346, 31.5222],
+        [25.5192, 31.4192],
+        [25.6222, 31.3346],
+        [25.7398, 31.2718],
+        [25.8673, 31.2331],
+        [26.0, 31.22],
+        [26.1327, 31.2331],
+        [26.2602, 31.2718],
+        [26.3778, 31.3346],
+        [26.4808, 31.4192],
+        [26.5654, 31.5222],
+        [26.6282, 31.6398],
+        [26.6669, 31.7673]
+      ],
+      [
+        [27.98, 31.9],
+        [27.9669, 32.0327],
+        [27.9282, 32.1602],
+        [27.8654, 32.2778],
+        [27.7808, 32.3808],
+        [27.6778, 32.4654],
+        [27.5602, 32.5282],
+        [27.4327, 32.5669],
+        [27.3, 32.58],
+        [27.1673, 32.5669],
+        [27.0398, 32.5282],
+        [26.9222, 32.4654],
+        [26.8192, 32.3808],
+        [26.7346, 32.2778],
+        [26.6718, 32.1602],
+        [26.6331, 32.0327],
+        [26.62, 31.9],
+        [26.6331, 31.7673],
+        [26.6718, 31.6398],
+        [26.7346, 31.5222],
+        [26.8192, 31.4192],
+        [26.9222, 31.3346],
+        [27.0398, 31.2718],
+        [27.1673, 31.2331],
+        [27.3, 31.22],
+        [27.4327, 31.2331],
+        [27.5602, 31.2718],
+        [27.6778, 31.3346],
+        [27.7808, 31.4192],
+        [27.8654, 31.5222],
+        [27.9282, 31.6398],
+        [27.9669, 31.7673]
+      ],
+      [
+        [30.58, 30.6],
+        [30.5669, 30.7327],
+        [30.5282, 30.8602],
+        [30.4654, 30.9778],
+        [30.3808, 31.0808],
+        [30.2778, 31.1654],
+        [30.1602, 31.2282],
+        [30.0327, 31.2669],
+        [29.9, 31.28],
+        [29.7673, 31.2669],
+        [29.6398, 31.2282],
+        [29.5222, 31.1654],
+        [29.4192, 31.0808],
+        [29.3346, 30.9778],
+        [29.2718, 30.8602],
+        [29.2331, 30.7327],
+        [29.22, 30.6],
+        [29.2331, 30.4673],
+        [29.2718, 30.3398],
+        [29.3346, 30.2222],
+        [29.4192, 30.1192],
+        [29.5222, 30.0346],
+        [29.6398, 29.9718],
+        [29.7673, 29.9331],
+        [29.9, 29.92],
+        [30.0327, 29.9331],
+        [30.1602, 29.9718],
+        [30.2778, 30.0346],
+        [30.3808, 30.1192],
+        [30.4654, 30.2222],
+        [30.5282, 30.3398],
+        [30.5669, 30.4673]
+      ],
+      [
+        [30.58, 29.3],
+        [30.5669, 29.4327],
+        [30.5282, 29.5602],
+        [30.4654, 29.6778],
+        [30.3808, 29.7808],
+        [30.2778, 29.8654],
+        [30.1602, 29.9282],
+        [30.0327, 29.9669],
+        [29.9, 29.98],
+        [29.7673, 29.9669],
+        [29.6398, 29.9282],
+        [29.5222, 29.8654],
+        [29.4192, 29.7808],
+        [29.3346, 29.6778],
+        [29.2718, 29.5602],
+        [29.2331, 29.4327],
+        [29.22, 29.3],
+        [29.2331, 29.1673],
+        [29.2718, 29.0398],
+        [29.3346, 28.9222],
+        [29.4192, 28.8192],
+        [29.5222, 28.7346],
+        [29.6398, 28.6718],
+        [29.7673, 28.6331],
+        [29.9, 28.62],
+        [30.0327, 28.6331],
+        [30.1602, 28.6718],
+        [30.2778, 28.7346],
+        [30.3808, 28.8192],
+        [30.4654, 28.9222],
+        [30.5282, 29.0398],
+        [30.5669, 29.1673]
+      ],
+      [
+        [30.58, 28.0],
+        [30.5669, 28.1327],
+        [30.5282, 28.2602],
+        [30.4654, 28.3778],
+        [30.3808, 28.4808],
+        [30.2778, 28.5654],
+        [30.1602, 28.6282],
+        [30.0327, 28.6669],
+        [29.9, 28.68],
+        [29.7673, 28.6669],
+        [29.6398, 28.6282],
+        [29.5222, 28.5654],
+        [29.4192, 28.4808],
+        [29.3346, 28.3778],
+        [29.2718, 28.2602],
+        [29.2331, 28.1327],
+        [29.22, 28.0],
+        [29.2331, 27.8673],
+        [29.2718, 27.7398],
+        [29.3346, 27.6222],
+        [29.4192, 27.5192],
+        [29.5222, 27.4346],
+        [29.6398, 27.3718],
+        [29.7673, 27.3331],
+        [29.9, 27.32],
+        [30.0327, 27.3331],
+        [30.1602, 27.3718],
+        [30.2778, 27.4346],
+        [30.3808, 27.5192],
+        [30.4654, 27.6222],
+        [30.5282, 27.7398],
+        [30.5669, 27.8673]
+      ]
+    ]
+  },
+  "schema": "radar60-rfmacro/1",
+  "overrides": {
+    "d15": "C"
+  },
+  "files": {
+    "pcb": "s3b-C.kicad_pcb",
+    "pro": "s3b-C.kicad_pro",
+    "dru": "s3b-C.kicad_dru"
+  }
+}

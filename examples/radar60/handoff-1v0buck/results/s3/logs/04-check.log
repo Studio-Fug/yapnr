@@ -1,0 +1,29 @@
++ /usr/bin/python3 -m pnr.planes /tmp/yapnr-work/yapnr-task-4672z4zx/work/route/candidate.kicad_pcb --rules /tmp/yapnr-work/yapnr-task-4672z4zx/work/inputs/rules.json --refill-only
++ /usr/bin/python3 /tmp/yapnr-work/yapnr-task-4672z4zx/src/examples/radar60/board/kicad_ops.py measure /tmp/yapnr-work/yapnr-task-4672z4zx/work/route/candidate.kicad_pcb /tmp/yapnr-work/yapnr-task-4672z4zx/work/finish.json /tmp/yapnr-work/yapnr-task-4672z4zx/work/check-params.json /tmp/yapnr-work/yapnr-task-4672z4zx/work/measure-kicad.json
++ /usr/bin/python3 -m pnr.ir_extract /tmp/yapnr-work/yapnr-task-4672z4zx/work/route/candidate.kicad_pcb --rules /tmp/yapnr-work/yapnr-task-4672z4zx/work/inputs/rules.json --out /tmp/yapnr-work/yapnr-task-4672z4zx/work/check-ir
+{
+ "drc_by_type": {
+  "via_dangling": 12,
+  "isolated_copper": 2
+ },
+ "unconnected": 153,
+ "drc_ignored_by_default": {
+  "footprint_type_mismatch": 1,
+  "missing_courtyard": 3,
+  "track_not_centered_on_via": 7
+ },
+ "r1_macro": {
+  "board_sha256": "15dbe8694fba2cff258c66c832eb5d2209576e68d434e80b46fe34d09692cc46",
+  "counts": {
+   "copper": 1508,
+   "load_pads": 4,
+   "mask_polygons": 11
+  },
+  "equal": true,
+  "want": "15dbe8694fba2cff258c66c832eb5d2209576e68d434e80b46fe34d09692cc46"
+ },
+ "nets_connected": 4,
+ "nets_total": 7,
+ "diff_pairs_connected_legs": 0,
+ "diff_pairs_total_legs": 8
+}

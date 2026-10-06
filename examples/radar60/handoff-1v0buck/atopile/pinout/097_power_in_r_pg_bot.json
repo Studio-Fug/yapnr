@@ -1,0 +1,27 @@
+{
+  "name": "power_in.r_pg_bot",
+  "atoAddress": "power_in.r_pg_bot",
+  "designator": "R37",
+  "descriptor": "R37 \u2014 power_in.r_pg_bot",
+  "typeName": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_pg_bot|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+  "footprintUuid": "5537a101-350b-4056-bc42-40b24642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "EFUSE_PGTH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

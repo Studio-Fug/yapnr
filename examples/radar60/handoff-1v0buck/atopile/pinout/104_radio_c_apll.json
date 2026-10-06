@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_apll",
+  "atoAddress": "radio.c_apll",
+  "designator": "C38",
+  "descriptor": "C38 \u2014 radio.c_apll",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_apll|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Radar60_C_1u_0402",
+  "footprintUuid": "c5fbf3fa-adc6-4730-b99e-d93f4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "VOUT_14APLL",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

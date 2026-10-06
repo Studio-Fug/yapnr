@@ -1,0 +1,27 @@
+{
+  "name": "power_in.c_dvdt",
+  "atoAddress": "power_in.c_dvdt",
+  "designator": "C32",
+  "descriptor": "C32 \u2014 power_in.c_dvdt",
+  "typeName": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_dvdt|parts/Radar60_C_470p_0402/Radar60_C_470p_0402.ato::Radar60_C_470p_0402",
+  "footprintUuid": "67437778-f4fc-45a9-9161-96334642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "EFUSE_DVDT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

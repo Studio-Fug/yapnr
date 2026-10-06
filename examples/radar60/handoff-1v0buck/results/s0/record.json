@@ -1,0 +1,57 @@
+{
+  "attempt": "s1r0",
+  "backend": "gcp-batch",
+  "campaign": "20261006-mceval-5818f8",
+  "campaign_spec_sha256": "06b533aa13ed2be53d19a6cc17715e34cf1aab4c2c000ce202733e56c2da9178",
+  "cpu_s": 1505.247,
+  "exit_code": 0,
+  "finished": "2026-10-06T02:00:22Z",
+  "image": {
+    "ref": "ghcr.io/studio-fug/yapnr@sha256:a6928c0a4b3051b8f677d91fc19c13f71dc1418023268e3ec58d4d9b2025cf94",
+    "sif_sha256": null,
+    "source_revision": "586857d33d0de9db861929c8a5bba5ad6e6eceb6",
+    "toolchain": "image"
+  },
+  "kind": "mc-eval",
+  "labels": {
+    "candidate": "s0",
+    "kind": "seed",
+    "task": "s0"
+  },
+  "load_avg_end": [3.79833984375, 3.11181640625, 2.04052734375],
+  "load_avg_start": [0.98388671875, 0.240234375, 0.08056640625],
+  "machine": {
+    "cpu_model": "AMD EPYC 9B45",
+    "hostname_hash": "a90dac573296",
+    "kernel": "6.6.153+",
+    "machine_type": "c4d-highcpu-16",
+    "platform": "linux-x86_64",
+    "provisioning_model": "SPOT",
+    "region": "us-west4",
+    "threads_per_core": 2,
+    "vcpus": 16,
+    "vcpus_available": 16,
+    "zone": "us-west4-a"
+  },
+  "peak_rss_mb": 1806.3,
+  "pruned": 0,
+  "python": "3.11.15",
+  "resources": {
+    "cpus": 2,
+    "disk_gb": 8,
+    "max_wall_s": 1800,
+    "memory_gb": 4
+  },
+  "retry": 0,
+  "schema": "yapnr-task-record-v1",
+  "source": null,
+  "started": "2026-10-06T01:42:44Z",
+  "submission": 1,
+  "summary_files": ["s0/result.json"],
+  "task": "mc/s0",
+  "task_spec_sha256": "3bdd3fbd440d3ca612965e875bfec2505b7e9081d65a76ca9acb5a3234938855",
+  "timed_out": false,
+  "verdict": "pass",
+  "wall_s": 1057.861,
+  "wrapper_version": 1
+}

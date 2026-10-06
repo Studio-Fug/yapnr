@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_pa_22u",
+  "atoAddress": "radio.c_pa_22u",
+  "designator": "C53",
+  "descriptor": "C53 \u2014 radio.c_pa_22u",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_pa_22u|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+  "footprintUuid": "783295b8-773c-4743-8544-af3e4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V0_PA",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

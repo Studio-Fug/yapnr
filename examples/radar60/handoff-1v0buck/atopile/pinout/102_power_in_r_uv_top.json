@@ -1,0 +1,27 @@
+{
+  "name": "power_in.r_uv_top",
+  "atoAddress": "power_in.r_uv_top",
+  "designator": "R42",
+  "descriptor": "R42 \u2014 power_in.r_uv_top",
+  "typeName": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_uv_top|parts/Radar60_R_24k_0402/Radar60_R_24k_0402.ato::Radar60_R_24k_0402",
+  "footprintUuid": "39506ee5-60a5-44f0-93cc-f6a84642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "VIN_5V",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "EFUSE_EN_UVLO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

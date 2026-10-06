@@ -1,0 +1,19 @@
+{
+  "name": "tp_gnd_a",
+  "atoAddress": "tp_gnd_a",
+  "designator": "TP9",
+  "descriptor": "TP9 \u2014 tp_gnd_a",
+  "typeName": "radar60.ato::Radar60.tp_gnd_a|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "c5932273-2dc3-4fc9-ac8c-2b404642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

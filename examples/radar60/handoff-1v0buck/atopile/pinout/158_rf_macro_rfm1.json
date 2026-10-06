@@ -1,0 +1,75 @@
+{
+  "name": "rf_macro.rfm1",
+  "atoAddress": "rf_macro.rfm1",
+  "designator": "RFM1",
+  "descriptor": "RFM1 \u2014 rf_macro.rfm1",
+  "typeName": "radar60.ato::Radar60.rf_macro|rf_macro.ato::RfMacro.rfm1|parts/Radar60_RFM1_Placeholder/Radar60_RFM1_Placeholder.ato::Radar60_RFM1_Placeholder",
+  "footprintUuid": "73101bc1-d404-4864-a983-07154642524b",
+  "leads": [
+    {
+      "leadDesignator": "GND",
+      "padNumbers": ["gnd"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "RX1",
+      "padNumbers": ["rx1"],
+      "netName": "RF_RX1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "RX2",
+      "padNumbers": ["rx2"],
+      "netName": "RF_RX2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "RX3",
+      "padNumbers": ["rx3"],
+      "netName": "RF_RX3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "RX4",
+      "padNumbers": ["rx4"],
+      "netName": "RF_RX4",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "TX1",
+      "padNumbers": ["tx1"],
+      "netName": "RF_TX1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "TX2",
+      "padNumbers": ["tx2"],
+      "netName": "RF_TX2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "TX3",
+      "padNumbers": ["tx3"],
+      "netName": "RF_TX3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    }
+  ],
+  "warnings": ["8 unconnected lead(s)"]
+}

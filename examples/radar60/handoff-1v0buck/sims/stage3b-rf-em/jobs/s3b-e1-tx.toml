@@ -1,0 +1,91 @@
+# stage 3b E1 (s3b-e1-tx): written by openems/stage3b_em.py jobs; estimates [D] from the
+# rf-uniform references scaled by cells and smallest cell: 4.02 VM-h, about $0.31 expected (boot and preemption extra)
+name = "s3b-e1-tx"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 14400
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "txa-T0-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T0.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 20 min on c4
+
+[[jobs]]
+id = "txa-T0-ll-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T0.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--lossless"]
+# estimate 20 min on c4
+
+[[jobs]]
+id = "txa-T2-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T2.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 22 min on c4
+
+[[jobs]]
+id = "txa-T2-ll-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T2.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--lossless"]
+# estimate 22 min on c4
+
+[[jobs]]
+id = "txa-T4-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T4.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 21 min on c4
+
+[[jobs]]
+id = "txa-T4-ll-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-T4.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--lossless"]
+# estimate 21 min on c4
+
+[[jobs]]
+id = "txa-S1-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-S1.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 15 min on c4
+
+[[jobs]]
+id = "txa-S1-ll-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-S1.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--lossless"]
+# estimate 15 min on c4
+
+[[jobs]]
+id = "txa-B-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-B.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 20 min on c4
+
+[[jobs]]
+id = "txa-B-ll-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-B.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--lossless"]
+# estimate 20 min on c4
+
+[[jobs]]
+id = "txa-C-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-C.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 22 min on c4
+
+[[jobs]]
+id = "txa-C-ll-r20"
+script = "w/openems/feed_sim.py"
+args = ["models/txa-C.json", "--out", "{out}", "--excite", "all", "--threads", "{threads}", "--res", "0.0125", "--lossless"]
+# estimate 22 min on c4

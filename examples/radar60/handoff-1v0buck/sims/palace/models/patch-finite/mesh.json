@@ -1,0 +1,148 @@
+{
+  "schema": "yapnr-palace-mesh-v1",
+  "model": "patch-finite",
+  "geometry_sha256": "2d94700e358d037029e7c618002551fc76ba98ba69f47db288de1a82be1cce3a",
+  "gmsh": "4.15.2",
+  "units": "mm",
+  "options": {
+    "algorithm3d": 1,
+    "binary": true,
+    "edge_h": 0.04,
+    "f_max_ghz": 70.0,
+    "grade": 0.35,
+    "lam_frac": 6.0,
+    "optimize_netgen": true,
+    "port_h": 0.1,
+    "slab_cap": 1.5,
+    "threads": 1
+  },
+  "sizes": {
+    "edge_h": 0.04,
+    "air": 0.7138,
+    "RO4450F": 0.1703,
+    "RO4835": 0.1524,
+    "edge_curves": 24
+  },
+  "groups": {
+    "air": {
+      "dim": 3,
+      "tag": 1,
+      "entities": 1,
+      "elements": 122269
+    },
+    "diel:RO4450F": {
+      "dim": 3,
+      "tag": 2,
+      "entities": 1,
+      "elements": 34979
+    },
+    "diel:RO4835": {
+      "dim": 3,
+      "tag": 3,
+      "entities": 1,
+      "elements": 32578
+    },
+    "port:P1": {
+      "dim": 2,
+      "tag": 4,
+      "entities": 1,
+      "elements": 20
+    },
+    "cond:L1:RF": {
+      "dim": 2,
+      "tag": 5,
+      "entities": 1,
+      "elements": 1271
+    },
+    "cond:L2:GND": {
+      "dim": 2,
+      "tag": 6,
+      "entities": 1,
+      "elements": 9162
+    },
+    "cond:L3:GND": {
+      "dim": 2,
+      "tag": 7,
+      "entities": 1,
+      "elements": 8234
+    },
+    "wall:xmax": {
+      "dim": 2,
+      "tag": 8,
+      "entities": 1,
+      "elements": 178
+    },
+    "wall:xmin": {
+      "dim": 2,
+      "tag": 9,
+      "entities": 1,
+      "elements": 178
+    },
+    "wall:ymax": {
+      "dim": 2,
+      "tag": 10,
+      "entities": 1,
+      "elements": 159
+    },
+    "wall:ymin": {
+      "dim": 2,
+      "tag": 11,
+      "entities": 1,
+      "elements": 159
+    },
+    "wall:zmax": {
+      "dim": 2,
+      "tag": 12,
+      "entities": 1,
+      "elements": 600
+    },
+    "wall:zmin": {
+      "dim": 2,
+      "tag": 13,
+      "entities": 1,
+      "elements": 1142
+    }
+  },
+  "nodes": 31994,
+  "tetrahedra": 189826,
+  "edges": 223027,
+  "faces": 380860,
+  "dofs_estimate": {
+    "1": 223027,
+    "2": 1207774,
+    "3": 3523719
+  },
+  "quality": {
+    "gamma_min": 0.1823,
+    "gamma_p01": 0.3546,
+    "gamma_median": 0.7643,
+    "gamma_below_0_1": 0,
+    "sicn_min": 0.183,
+    "sicn_below_0": 0
+  },
+  "mesh_seconds": 4.36,
+  "ports": {
+    "P1": {
+      "kind": "lumped",
+      "rect": [
+        [-0.1, -0.9253, 0.1135],
+        [0.1, -0.9253, 0.1135],
+        [0.1, -0.9253, 0.2151],
+        [-0.1, -0.9253, 0.2151]
+      ],
+      "offset": 0.0,
+      "voltage_path": [
+        [0.0, -0.9253, 0.2151],
+        [0.0, -0.9253, 0.1135]
+      ],
+      "z_sig": 0.2151,
+      "z_ref": 0.1135,
+      "half_width_actual": [0.1, 0.1]
+    }
+  },
+  "optimizer": "gmsh",
+  "seconds": 5.01,
+  "file": "mesh.msh",
+  "bytes": 9248925,
+  "configs": ["palace-amr.json", "palace-sweep.json", "palace-uniform.json"]
+}

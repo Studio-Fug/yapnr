@@ -1,0 +1,19 @@
+{
+  "name": "tp_frame",
+  "atoAddress": "tp_frame",
+  "designator": "TP8",
+  "descriptor": "TP8 \u2014 tp_frame",
+  "typeName": "radar60.ato::Radar60.tp_frame|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "3a588aae-c3b5-4d82-97d9-2a5e4642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "FRAME_START",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

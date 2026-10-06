@@ -1,0 +1,27 @@
+{
+  "name": "pmic.r_clkin_gnd",
+  "atoAddress": "pmic.r_clkin_gnd",
+  "designator": "R13",
+  "descriptor": "R13 \u2014 pmic.r_clkin_gnd",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_clkin_gnd|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+  "footprintUuid": "52052449-72ef-42d8-a63c-f1634642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "pmic-1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

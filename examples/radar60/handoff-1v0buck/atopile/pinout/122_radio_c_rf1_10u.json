@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_rf1_10u",
+  "atoAddress": "radio.c_rf1_10u",
+  "designator": "C55",
+  "descriptor": "C55 \u2014 radio.c_rf1_10u",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_rf1_10u|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+  "footprintUuid": "35168b3f-cb8b-4bc4-a159-19e84642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V0_RF1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

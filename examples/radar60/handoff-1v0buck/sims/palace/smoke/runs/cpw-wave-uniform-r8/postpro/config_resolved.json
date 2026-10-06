@@ -1,0 +1,284 @@
+{
+  "Boundaries": {
+    "Absorbing": {
+      "Attributes": [10],
+      "Order": 1
+    },
+    "PEC": {
+      "Attributes": [8, 9, 11]
+    },
+    "Postprocessing": {
+      "Dielectric": [
+        {
+          "Attributes": [12],
+          "Index": 1,
+          "LossTan": 1.0,
+          "Permittivity": 10.0,
+          "Thickness": 0.002,
+          "Type": "SA"
+        },
+        {
+          "Attributes": [11],
+          "Index": 2,
+          "LossTan": 1.0,
+          "Permittivity": 10.0,
+          "Thickness": 0.002,
+          "Type": "MS"
+        },
+        {
+          "Attributes": [11],
+          "Index": 3,
+          "LossTan": 1.0,
+          "Permittivity": 10.0,
+          "Thickness": 0.002,
+          "Type": "MA"
+        }
+      ],
+      "SurfaceFlux": [
+        {
+          "Attributes": [11],
+          "Index": 1,
+          "TwoSided": true,
+          "Type": "Electric"
+        },
+        {
+          "Attributes": [10],
+          "Index": 2,
+          "TwoSided": false,
+          "Type": "Power"
+        },
+        {
+          "Attributes": [4, 6, 8],
+          "Center": [-2000, 0, 0],
+          "Index": 3,
+          "TwoSided": false,
+          "Type": "Power"
+        },
+        {
+          "Attributes": [5, 7, 9],
+          "Center": [2000, 0, 0],
+          "Index": 4,
+          "TwoSided": false,
+          "Type": "Power"
+        }
+      ]
+    },
+    "WavePort": [
+      {
+        "Active": true,
+        "Attributes": [4],
+        "EigenTol": 1e-6,
+        "Excitation": 1,
+        "IncludeInSynthesis": true,
+        "Index": 1,
+        "KSPTol": 1e-8,
+        "MaxIts": 30,
+        "MaxSize": 16,
+        "Mode": 1,
+        "NSamples": 100,
+        "Offset": 0.0,
+        "SolverType": "ARPACK",
+        "Verbose": 0
+      },
+      {
+        "Active": true,
+        "Attributes": [5],
+        "EigenTol": 1e-6,
+        "Excitation": 2,
+        "IncludeInSynthesis": true,
+        "Index": 2,
+        "KSPTol": 1e-8,
+        "MaxIts": 30,
+        "MaxSize": 16,
+        "Mode": 1,
+        "NSamples": 100,
+        "Offset": 0.0,
+        "SolverType": "ARPACK",
+        "Verbose": 0
+      },
+      {
+        "Active": true,
+        "Attributes": [6],
+        "EigenTol": 1e-6,
+        "Excitation": 0,
+        "IncludeInSynthesis": true,
+        "Index": 3,
+        "KSPTol": 1e-8,
+        "MaxIts": 30,
+        "MaxSize": 16,
+        "Mode": 1,
+        "NSamples": 100,
+        "Offset": 0.0,
+        "SolverType": "ARPACK",
+        "Verbose": 0
+      },
+      {
+        "Active": true,
+        "Attributes": [7],
+        "EigenTol": 1e-6,
+        "Excitation": 0,
+        "IncludeInSynthesis": true,
+        "Index": 4,
+        "KSPTol": 1e-8,
+        "MaxIts": 30,
+        "MaxSize": 16,
+        "Mode": 1,
+        "NSamples": 100,
+        "Offset": 0.0,
+        "SolverType": "ARPACK",
+        "Verbose": 0
+      }
+    ]
+  },
+  "Domains": {
+    "Materials": [
+      {
+        "Attributes": [1],
+        "Conductivity": 0.0,
+        "LondonDepth": 0.0,
+        "LossTan": 0.0,
+        "Permeability": 1.0,
+        "Permittivity": 1.0
+      },
+      {
+        "Attributes": [2],
+        "Conductivity": 0.0,
+        "LondonDepth": 0.0,
+        "LossTan": [3e-5, 3e-5, 8.6e-5],
+        "MaterialAxes": [
+          [0.8, 0.6, 0.0],
+          [-0.6, 0.8, 0.0],
+          [0.0, 0.0, 1.0]
+        ],
+        "Permeability": [0.99999975, 0.99999975, 0.99999979],
+        "Permittivity": [9.3, 9.3, 11.5]
+      }
+    ],
+    "Postprocessing": {
+      "Energy": [
+        {
+          "Attributes": [2],
+          "Index": 1
+        }
+      ],
+      "Probe": [
+        {
+          "Center": [2000, 833, 30],
+          "Index": 1
+        },
+        {
+          "Center": [2000, 833, -30],
+          "Index": 2
+        }
+      ]
+    }
+  },
+  "Model": {
+    "AddInterfaceBoundaryElements": true,
+    "CleanUnusedElements": true,
+    "CrackDisplacementFactor": 1e-12,
+    "CrackInternalBoundaryElements": true,
+    "ExportPrerefinedMesh": false,
+    "L0": 1e-6,
+    "MakeHexahedral": false,
+    "MakeSimplex": false,
+    "Mesh": "/opt/palace/share/palace/examples/cpw/mesh/cpw_wave_0.msh",
+    "RefineCrackElements": true,
+    "Refinement": {
+      "MaxIts": 0,
+      "MaxNCLevels": 1,
+      "MaxSize": 0,
+      "MaximumImbalance": 1.1,
+      "Nonconformal": true,
+      "SaveAdaptIterations": true,
+      "SaveAdaptMesh": false,
+      "SerialUniformLevels": 0,
+      "Tol": 0.01,
+      "UniformLevels": 0,
+      "UpdateFraction": 0.7
+    },
+    "RemoveCurvature": false,
+    "ReorderElements": false,
+    "ReorientTetMesh": false
+  },
+  "Problem": {
+    "Output": "/tmp/yapnr-work/yapnr-task-0cnz4h3o/out/cpw-wave-uniform-r8/postpro",
+    "OutputFormats": {
+      "GridFunction": false,
+      "Paraview": true
+    },
+    "Type": "Driven",
+    "Verbose": 2
+  },
+  "Solver": {
+    "Device": "CPU",
+    "Driven": {
+      "AdaptiveCircuitSynthesis": false,
+      "AdaptiveCircuitSynthesisDomainOrthogonalization": "Energy",
+      "AdaptiveConvergenceMemory": 2,
+      "AdaptiveGSOrthogonalization": "CGS2",
+      "AdaptiveMaxSamples": 20,
+      "AdaptiveTol": 0.0,
+      "Restart": 1,
+      "Samples": [
+        {
+          "FreqStep": 6.0,
+          "MaxFreq": 32.0,
+          "MinFreq": 2.0,
+          "Type": "Linear"
+        },
+        {
+          "Freq": [17.0],
+          "SaveStep": 1,
+          "Type": "Point"
+        }
+      ],
+      "Save": [2.0, 32.0]
+    },
+    "Linear": {
+      "AMGAggressiveCoarsening": false,
+      "AMSMaxIts": 2,
+      "AMSSingularOperator": false,
+      "AMSVectorInterpolation": false,
+      "ColumnOrdering": "Default",
+      "ComplexCoarseSolve": false,
+      "DivFreeMaxIts": 1000,
+      "DivFreeTol": 1e-12,
+      "DropSmallEntries": false,
+      "EstimatorMG": false,
+      "EstimatorMaxIts": 10000,
+      "EstimatorTol": 1e-6,
+      "GSOrthogonalization": "MGS",
+      "InitialGuess": true,
+      "KSPType": "GMRES",
+      "LondonPCShift": 0.1,
+      "MGAuxiliarySmoother": true,
+      "MGCoarsenType": "Logarithmic",
+      "MGCycleIts": 1,
+      "MGMaxLevels": 100,
+      "MGSmoothChebyshev4th": true,
+      "MGSmoothEigScaleMax": 1.0,
+      "MGSmoothEigScaleMin": 0.0,
+      "MGSmoothIts": 1,
+      "MGSmoothOrder": 4,
+      "MGUseMesh": true,
+      "MaxIts": 200,
+      "MaxSize": 200,
+      "PCMatReal": false,
+      "PCMatShifted": false,
+      "PCSide": "Default",
+      "ReorderingReuse": true,
+      "STRUMPACKButterflyLevels": 1,
+      "STRUMPACKCompressionTol": 0.001,
+      "STRUMPACKCompressionType": "None",
+      "STRUMPACKLossyPrecision": 16,
+      "SuperLU3DCommunicator": false,
+      "Tol": 1e-8,
+      "Type": "SuperLU"
+    },
+    "Order": 2,
+    "PartialAssemblyOrder": 1,
+    "QuadratureOrderExtra": 0,
+    "QuadratureOrderJacobian": false
+  }
+}

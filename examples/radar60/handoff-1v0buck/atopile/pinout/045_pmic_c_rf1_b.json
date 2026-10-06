@@ -1,0 +1,27 @@
+{
+  "name": "pmic.c_rf1_b",
+  "atoAddress": "pmic.c_rf1_b",
+  "designator": "C23",
+  "descriptor": "C23 \u2014 pmic.c_rf1_b",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_rf1_b|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+  "footprintUuid": "ae2ca1ae-6165-4455-88fe-8b364642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V0_RF1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

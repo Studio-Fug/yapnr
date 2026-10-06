@@ -1,0 +1,66 @@
+{
+ "rule": "legal and audit pass; then the engine's stage-0 key (proxy score, cheap score); then HPWL; then id",
+ "starts": 8,
+ "legal": 2,
+ "audit_pass": 2,
+ "winner": "p000"
+}
+ [
+ {
+  "id": "p000",
+  "seed": 2,
+  "start_kind": "legacy-global",
+  "status": "legal",
+  "seconds": 38.1,
+  "proxy_score": 40109.8309921761,
+  "cheap_score": 19.349604982094764,
+  "hpwl_mm": 2821.3,
+  "audit_pass": true,
+  "audit_failures": [],
+  "rank": 1
+ },
+ {
+  "id": "p003",
+  "seed": 314189,
+  "start_kind": "latin-global",
+  "status": "legal",
+  "seconds": 38.3,
+  "proxy_score": 50137.481287717994,
+  "cheap_score": 20.63449402918387,
+  "hpwl_mm": 2875.0,
+  "audit_pass": true,
+  "audit_failures": [],
+  "rank": 2
+ },
+ {
+  "id": "p001",
+  "seed": 104731,
+  "start_kind": "source-start",
+  "status": "failed",
+  "seconds": 65.0,
+  "reason": "LegalizationError('R11: no free slot inside hard group radius')"
+ },
+ {
+  "id": "p002",
+  "seed": 209460,
+  "start_kind": "stratified-global",
+  "status": "failed",
+  "seconds": 59.7,
+  "reason": "LegalizationError('D2: no free slot inside its edge band, region and align band')"
+ },
+ {
+  "id": "p004",
+  "seed": 418918,
+  "start_kind": "stratified-global",
+  "status": "failed",
+  "seconds": 64.4,
+  "reason": "LegalizationError('C65: no free slot inside hard group radius')"
+ }
+]
+top-1 candidates: [
+ {
+  "rank": 1,
+  "id": "p000",
+  "dir": "/tmp/yapnr-work/yapnr-task-cd_cb3ce/work/board/candidates/rank1"
+ }
+]

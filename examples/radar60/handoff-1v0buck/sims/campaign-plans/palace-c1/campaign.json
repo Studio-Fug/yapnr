@@ -1,0 +1,155 @@
+{
+  "backend": {
+    "home_region": "us-west4",
+    "name": "gcp-batch"
+  },
+  "bundles": [
+    "0720d91fc9f92a2cb352e285066a91c5562acbf798dbcdf8669f677fcd6441a3",
+    "82d3907d2b3ea9920687d6380c3c3abb80bc36aa8846801ead1fa2a9a34f024e"
+  ],
+  "calibration": null,
+  "candidates": {
+    "c8m24": [
+      {
+        "arch": "x86_64",
+        "boot_disk": "hyperdisk-balanced",
+        "ceiling_usd": 0.668,
+        "cpu_milli": 16000,
+        "expected_usd": 0.1019,
+        "family": "c4d",
+        "gb_price": 0.000772,
+        "memory_mib": 24576,
+        "model": "spot",
+        "price_source": "table 2026-10-04 us-west4",
+        "region": "us-west4",
+        "shape": "c4d-highcpu-16",
+        "speed": 0.79,
+        "speed_source": "table (PassMark single-thread ratio)",
+        "tasks_per_vm": 1,
+        "template": true,
+        "threads_per_core": 2,
+        "vcpu_price": 0.00723,
+        "vm_hour_usd": 0.13884,
+        "vm_memory_gb": 30.0,
+        "vm_vcpus": 16
+      }
+    ]
+  },
+  "caps": {
+    "confirm": false,
+    "limit_usd": 25,
+    "refusals": []
+  },
+  "classes": [
+    {
+      "cpus": 8,
+      "disk_gb": 10.0,
+      "image": "us-west4-docker.pkg.dev/yapnr-experiments/images/palace@sha256:604f0796d670d1fd46fd888ba6dc121f82920d4c631eea41503b284a00842d93",
+      "lines": [0],
+      "max_wall_s": 3600,
+      "memory_gb": 24.0,
+      "name": "c8m24",
+      "reference_s": [1800.0]
+    }
+  ],
+  "created": "2026-10-05",
+  "determinism": "seeded",
+  "estimate": {
+    "assumptions": [
+      "c8m24: c4d-highcpu-16 in us-west4, 1 tasks per VM, spot; prices: table 2026-10-04 us-west4; speed 0.79 (table (PassMark single-thread ratio))",
+      "expected = reference wall time / speed x (1 + 8% preemption rework and start-up), boot disks included; egress and storage excluded"
+    ],
+    "backend": "gcp-batch",
+    "ceiling_usd": 0.668,
+    "classes": [
+      {
+        "ceiling_usd": 0.668,
+        "disk_hour_usd": 0.00329,
+        "expected_task_hours": 0.6835,
+        "expected_usd": 0.1019,
+        "makespan_h": 0.7169,
+        "max_task_hours": 4.6667,
+        "name": "c8m24",
+        "parallel_tasks": 1,
+        "tasks": 1,
+        "vm_hour_usd": 0.13884,
+        "vm_hours": 0.7169
+      }
+    ],
+    "core_hours": 5.468,
+    "expected_usd": 0.1019,
+    "makespan_h": 0.717
+  },
+  "id": "20261005-mceval-f13ef3",
+  "image": {
+    "digest": "sha256:604f0796d670d1fd46fd888ba6dc121f82920d4c631eea41503b284a00842d93",
+    "ref": "us-west4-docker.pkg.dev/yapnr-experiments/images/palace@sha256:604f0796d670d1fd46fd888ba6dc121f82920d4c631eea41503b284a00842d93",
+    "repository": "us-west4-docker.pkg.dev/yapnr-experiments/images/palace",
+    "requested": "us-west4-docker.pkg.dev/yapnr-experiments/images/palace:b797ea8-pts-x86-64-v3@sha256:604f0796d670d1fd46fd888ba6dc121f82920d4c631eea41503b284a00842d93",
+    "runtime": {
+      "entrypoint": "",
+      "python": "/opt/palace/venv/bin/python"
+    }
+  },
+  "kind": "mc-eval",
+  "name": "s3b-palace-c1",
+  "placements": {
+    "c8m24": {
+      "arch": "x86_64",
+      "boot_disk": "hyperdisk-balanced",
+      "cpu_milli": 16000,
+      "family": "c4d",
+      "gb_price": 0.000772,
+      "memory_mib": 24576,
+      "model": "spot",
+      "price_source": "table 2026-10-04 us-west4",
+      "region": "us-west4",
+      "shape": "c4d-highcpu-16",
+      "speed": 0.79,
+      "speed_source": "table (PassMark single-thread ratio)",
+      "tasks_per_vm": 1,
+      "template": true,
+      "threads_per_core": 2,
+      "vcpu_price": 0.00723,
+      "vm_hour_usd": 0.13884,
+      "vm_memory_gb": 30.0,
+      "vm_vcpus": 16
+    }
+  },
+  "prices": {
+    "accessed": "2026-10-04",
+    "table": "yapnr/exp/data/gcp-spot-prices.json (committed snapshot)"
+  },
+  "schema": "yapnr-campaign-plan-v1",
+  "source": null,
+  "spec": {
+    "config": {
+      "stage_plan": "stage.jsonl"
+    },
+    "determinism": "seeded",
+    "image": "us-west4-docker.pkg.dev/yapnr-experiments/images/palace:b797ea8-pts-x86-64-v3@sha256:604f0796d670d1fd46fd888ba6dc121f82920d4c631eea41503b284a00842d93",
+    "kind": "mc-eval",
+    "name": "s3b-palace-c1",
+    "placement": {
+      "families": ["c4d"],
+      "packing": "core",
+      "vm_vcpus": 16
+    },
+    "runtime": {
+      "entrypoint": "",
+      "python": "/opt/palace/venv/bin/python"
+    },
+    "schema": "yapnr-campaign-v1",
+    "source": "none",
+    "visibility": "public"
+  },
+  "spec_sha256": "7b967c2920555de9e208c44ce675cdc29fc4a2126b0a10b3fdbe141979f43ba2",
+  "task_count": 1,
+  "task_hashes": {
+    "mc/patch-c1-l1023": "f1b3ee1443fed5aa8e4625f1d28c8490c15cd9bc5872941d49d27febaa3958ad"
+  },
+  "visibility": "public",
+  "wrapper": {
+    "sha256": "c0143616f4148dab7ea6d7b4e4de028bf7bbae7def97f8e63b73966bb33f4528"
+  }
+}

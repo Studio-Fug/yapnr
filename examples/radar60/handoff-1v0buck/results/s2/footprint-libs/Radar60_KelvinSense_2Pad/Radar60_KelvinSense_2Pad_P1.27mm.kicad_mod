@@ -1,0 +1,112 @@
+(footprint "Radar60_KelvinSense_2Pad_P1.27mm"
+	(version 20260206)
+	(generator "pcbnew")
+	(generator_version "10.0")
+	(layer "F.Cu")
+	(descr "Kelvin sense pad pair, 0.8 mm pads at 1.27 mm")
+	(tags "kelvin sense test")
+	(property "Reference" "TP1"
+		(at -0.935 -0.95 0)
+		(layer "F.Fab")
+		(uuid "7ddb2b44-63c6-40dc-8fe0-020d4280c065")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+			(justify right)
+		)
+	)
+	(property "Value" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(uuid "93b1ad89-08a8-4cd3-a242-ab14eb9ecf21")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "459f863a-9002-44b2-a6be-ab42ca5b6ec0")
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "2629e8c6-b88b-466f-9fd4-712f13c9b387")
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "atopile_address" "pmic.tp_isns"
+		(at 0 0 0)
+		(layer "User.9")
+		(hide yes)
+		(uuid "571d9579-b55c-440b-835c-10384642524b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd exclude_from_pos_files exclude_from_bom)
+	(duplicate_pad_numbers_are_jumpers no)
+	(fp_line
+		(start -0.835 -0.95)
+		(end -0.435 -0.95)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "4f08a22f-b01b-4148-b029-a9e1e11225a4")
+	)
+	(fp_line
+		(start -0.635 -0.75)
+		(end -0.635 -1.15)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "7123a8b2-a6eb-4fb6-ac6d-7398d46af23a")
+	)
+	(fp_poly
+		(pts
+			(xy -1.2 -0.65) (xy 1.2 -0.65) (xy 1.2 0.65) (xy -1.2 0.65)
+		)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "1f1f68d6-5916-4901-a8b6-1f0a58123e03")
+	)
+	(pad "1" smd circle
+		(at -0.635 0)
+		(size 0.8 0.8)
+		(layers "F.Cu" "F.Mask")
+		(uuid "7977a87e-6a03-4fe5-b41c-0b2133e3c31d")
+	)
+	(pad "2" smd circle
+		(at 0.635 0)
+		(size 0.8 0.8)
+		(layers "F.Cu" "F.Mask")
+		(uuid "9e5ab2c2-bc98-4032-a1dd-e06e71567303")
+	)
+	(embedded_fonts no)
+)

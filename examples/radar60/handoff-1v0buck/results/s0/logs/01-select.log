@@ -1,0 +1,71 @@
+{
+ "rule": "legal and audit pass; then the engine's stage-0 key (proxy score, cheap score); then HPWL; then id",
+ "starts": 8,
+ "legal": 3,
+ "audit_pass": 3,
+ "winner": "p005"
+}
+ [
+ {
+  "id": "p005",
+  "seed": 523645,
+  "start_kind": "latin-global",
+  "status": "legal",
+  "seconds": 35.7,
+  "proxy_score": 40163.50938990685,
+  "cheap_score": 19.66198124429694,
+  "hpwl_mm": 2793.1,
+  "audit_pass": true,
+  "audit_failures": [],
+  "rank": 1
+ },
+ {
+  "id": "p007",
+  "seed": 733103,
+  "start_kind": "latin-global",
+  "status": "legal",
+  "seconds": 36.2,
+  "proxy_score": 40165.70116907891,
+  "cheap_score": 17.646262608288357,
+  "hpwl_mm": 2763.4,
+  "audit_pass": true,
+  "audit_failures": [],
+  "rank": 2
+ },
+ {
+  "id": "p000",
+  "seed": 0,
+  "start_kind": "legacy-global",
+  "status": "legal",
+  "seconds": 36.6,
+  "proxy_score": 50140.11929880616,
+  "cheap_score": 19.346210181133888,
+  "hpwl_mm": 2808.2,
+  "audit_pass": true,
+  "audit_failures": [],
+  "rank": 3
+ },
+ {
+  "id": "p001",
+  "seed": 104729,
+  "start_kind": "source-start",
+  "status": "failed",
+  "seconds": 63.7,
+  "reason": "LegalizationError('C48: no free slot inside hard group radius')"
+ },
+ {
+  "id": "p002",
+  "seed": 209458,
+  "start_kind": "stratified-global",
+  "status": "failed",
+  "seconds": 68.1,
+  "reason": "LegalizationError('D2: no free slot inside its edge band, region and align band')"
+ }
+]
+top-1 candidates: [
+ {
+  "rank": 1,
+  "id": "p005",
+  "dir": "/tmp/yapnr-work/yapnr-task-6cy7fd42/work/board/candidates/rank1"
+ }
+]

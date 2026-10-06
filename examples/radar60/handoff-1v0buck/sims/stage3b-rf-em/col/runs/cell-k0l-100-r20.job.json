@@ -1,0 +1,49 @@
+{
+  "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+  "attempt": "s1r0",
+  "command": [
+    "w/openems/ant_sim.py",
+    "models/cell-k0l-100.json",
+    "--out",
+    "{out}",
+    "--excite",
+    "T1.Pg",
+    "--threads",
+    "{threads}",
+    "--res",
+    "0.0125",
+    "--max-steps",
+    "400000",
+    "--mesh-ref",
+    "models/cell-k0l-1015.json,models/cell-k0l-103.json",
+    "--fspan",
+    "54",
+    "70"
+  ],
+  "cpu": {
+    "avx512f": true,
+    "count": 8,
+    "model": "x86_64"
+  },
+  "engines": ["compressed SSE + multi-threading"],
+  "exit": 0,
+  "id": "cell-k0l-100-r20",
+  "max_rss_mb": 908.7,
+  "ok": true,
+  "openems_options": {
+    "exact_endcriteria": true
+  },
+  "openems_runs": [
+    {
+      "cells": 4663848.0,
+      "iterations": 183015,
+      "mcells_per_s": 224.47,
+      "seconds": 3802.51
+    }
+  ],
+  "schema": "yapnr-openems-job-v1",
+  "sys_s": 451.872,
+  "threads": 8,
+  "user_s": 23646.956,
+  "wall_s": 3818.338
+}

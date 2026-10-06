@@ -1,0 +1,227 @@
+{
+  "name": "pmic.u2",
+  "atoAddress": "pmic.u2",
+  "designator": "U2",
+  "descriptor": "U2 \u2014 pmic.u2",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.u2|parts/Radar60_LP87524JRNFRQ1/Radar60_LP87524JRNFRQ1.ato::Radar60_LP87524JRNFRQ1",
+  "footprintUuid": "f98a1b2d-f448-4cbb-a02f-569a4642524b",
+  "leads": [
+    {
+      "leadDesignator": "FB_B2",
+      "padNumbers": ["1"],
+      "netName": "PMIC_FB_B2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SW_B0",
+      "padNumbers": ["10"],
+      "netName": "PMIC_SW_B0",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "17",
+      "padNumbers": ["11"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SW_B1",
+      "padNumbers": ["12"],
+      "netName": "PMIC_SW_B1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VIN_B2",
+      "padNumbers": ["13"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "FB_B1",
+      "padNumbers": ["14"],
+      "netName": "1V2_BUCK",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "EN2",
+      "padNumbers": ["15"],
+      "netName": "PMIC_EN2_GPIO2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "PGOOD",
+      "padNumbers": ["16"],
+      "netName": "PMIC_PGOOD",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "27",
+      "padNumbers": ["17"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VIN_B2",
+      "padNumbers": ["18"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "nINT",
+      "padNumbers": ["19"],
+      "netName": "PMIC_NINT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "EN3",
+      "padNumbers": ["2"],
+      "netName": "pmic-2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "NRST",
+      "padNumbers": ["20"],
+      "netName": "EFUSE_PG",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "FB_B3",
+      "padNumbers": ["21"],
+      "netName": "1V8_BUCK",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VIN_B2",
+      "padNumbers": ["22"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SW_B3",
+      "padNumbers": ["23"],
+      "netName": "PMIC_SW_B3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "17",
+      "padNumbers": ["24"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SW_B2",
+      "padNumbers": ["25"],
+      "netName": "PMIC_SW_B2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VIN_B2",
+      "padNumbers": ["26"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "17",
+      "padNumbers": ["27"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "CLKIN",
+      "padNumbers": ["3"],
+      "netName": "pmic-1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "17",
+      "padNumbers": ["4"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SCL",
+      "padNumbers": ["5"],
+      "netName": "I2C_SCL",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SDA",
+      "padNumbers": ["6"],
+      "netName": "I2C_SDA",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "EN1",
+      "padNumbers": ["7"],
+      "netName": "pmic-1-1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "FB_B0",
+      "padNumbers": ["8"],
+      "netName": "3V3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VIN_B2",
+      "padNumbers": ["9"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": ["1 unconnected lead(s)"]
+}

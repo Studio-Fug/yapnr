@@ -1,0 +1,4 @@
+symbolic lead,pad/ball,net (atopile pinout),net (atopile board),net (routed s0),net (routed s1),net (routed s2),net (routed s3)
+IO1,1,UART_TX_J1,UART_TX_J1,UART_TX_J1,UART_TX_J1,UART_TX_J1,UART_TX_J1
+IO2,2,UART_RX_J1,UART_RX_J1,UART_RX_J1,UART_RX_J1,UART_RX_J1,UART_RX_J1
+GND,3,GND,GND,GND,GND,GND,GND

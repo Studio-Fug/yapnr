@@ -1,0 +1,19 @@
+{
+  "name": "tp_1v0",
+  "atoAddress": "tp_1v0",
+  "designator": "TP2",
+  "descriptor": "TP2 \u2014 tp_1v0",
+  "typeName": "radar60.ato::Radar60.tp_1v0|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "e98c4900-c6c6-456d-96eb-7fde4642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "1V0_PA",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

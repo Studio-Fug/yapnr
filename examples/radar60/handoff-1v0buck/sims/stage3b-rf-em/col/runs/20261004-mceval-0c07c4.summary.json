@@ -1,0 +1,28 @@
+{
+  "campaign": "20261004-mceval-0c07c4",
+  "missing": [
+    "cell-c1a-07-r27",
+    "cell-c1a-10-r27",
+    "cell-c1a-13-r27",
+    "cell-c1k-109-r20",
+    "cell-c1k-112-r20",
+    "cell-ser-1-r20",
+    "cell-ser-2-r20",
+    "cell-ser-8-r20"
+  ],
+  "models": {
+    "cell-c1k-106-r20": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 899.6,
+      "mcells_per_s": [204.24],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 1245.436
+    }
+  }
+}

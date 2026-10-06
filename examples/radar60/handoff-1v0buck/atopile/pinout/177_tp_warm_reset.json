@@ -1,0 +1,19 @@
+{
+  "name": "tp_warm_reset",
+  "atoAddress": "tp_warm_reset",
+  "designator": "TP20",
+  "descriptor": "TP20 \u2014 tp_warm_reset",
+  "typeName": "radar60.ato::Radar60.tp_warm_reset|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "99e768c5-ad08-48a2-a6db-a15a4642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "WARM_RESET",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

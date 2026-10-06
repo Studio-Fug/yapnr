@@ -1,0 +1,27 @@
+{
+  "name": "pmic.c_out_b0",
+  "atoAddress": "pmic.c_out_b0",
+  "designator": "C18",
+  "descriptor": "C18 \u2014 pmic.c_out_b0",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_out_b0|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+  "footprintUuid": "3a2f0be3-5fd1-4789-b270-cd274642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

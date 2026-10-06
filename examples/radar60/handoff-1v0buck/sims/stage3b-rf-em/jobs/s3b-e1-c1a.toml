@@ -1,0 +1,109 @@
+# stage 3b E1 (s3b-e1-c1a): written by openems/stage3b_em.py jobs; estimates [D] from the
+# rf-uniform references scaled by cells and smallest cell: 9.04 VM-h, about $0.71 expected (boot and preemption extra)
+name = "s3b-e1-c1a"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 14400
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "cell-c1a-00-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-00.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 37 min on c4
+
+[[jobs]]
+id = "cell-c1a-01-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-01.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 37 min on c4
+
+[[jobs]]
+id = "cell-c1a-02-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-02.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 37 min on c4
+
+[[jobs]]
+id = "cell-c1a-03-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-03.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 35 min on c4
+
+[[jobs]]
+id = "cell-c1a-04-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-04.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 35 min on c4
+
+[[jobs]]
+id = "cell-c1a-05-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-05.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 35 min on c4
+
+[[jobs]]
+id = "cell-c1a-06-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-06.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 35 min on c4
+
+[[jobs]]
+id = "cell-c1a-07-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-07.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 35 min on c4
+
+[[jobs]]
+id = "cell-c1a-08-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-08.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 35 min on c4
+
+[[jobs]]
+id = "cell-c1a-09-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-09.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 38 min on c4
+
+[[jobs]]
+id = "cell-c1a-10-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-10.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 38 min on c4
+
+[[jobs]]
+id = "cell-c1a-11-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-11.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 38 min on c4
+
+[[jobs]]
+id = "cell-c1a-12-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-12.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 35 min on c4
+
+[[jobs]]
+id = "cell-c1a-13-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-13.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 35 min on c4
+
+[[jobs]]
+id = "cell-c1a-14-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1a-14.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 35 min on c4

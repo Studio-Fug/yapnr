@@ -1,0 +1,83 @@
+{
+  "name": "flash.u3",
+  "atoAddress": "flash.u3",
+  "designator": "U3",
+  "descriptor": "U3 \u2014 flash.u3",
+  "typeName": "radar60.ato::Radar60.flash|flash_qspi.ato::Flash.u3|parts/Radar60_MX25V1635FZNQ/Radar60_MX25V1635FZNQ.ato::Radar60_MX25V1635FZNQ",
+  "footprintUuid": "2db1e3c4-9508-4b27-a9c0-7a0e4642524b",
+  "leads": [
+    {
+      "leadDesignator": "CS_N",
+      "padNumbers": ["1"],
+      "netName": "QSPI_CS_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SIO1",
+      "padNumbers": ["2"],
+      "netName": "QSPI_D1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "SIO2",
+      "padNumbers": ["3"],
+      "netName": "QSPI_D2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "EP",
+      "padNumbers": ["4"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SIO0",
+      "padNumbers": ["5"],
+      "netName": "QSPI_D0",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "SCLK",
+      "padNumbers": ["6"],
+      "netName": "QSPI_CLK_FLASH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SIO3",
+      "padNumbers": ["7"],
+      "netName": "QSPI_D3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VCC",
+      "padNumbers": ["8"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "EP",
+      "padNumbers": ["9"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": ["2 unconnected lead(s)"]
+}

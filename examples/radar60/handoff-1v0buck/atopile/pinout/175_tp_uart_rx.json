@@ -1,0 +1,19 @@
+{
+  "name": "tp_uart_rx",
+  "atoAddress": "tp_uart_rx",
+  "designator": "TP18",
+  "descriptor": "TP18 \u2014 tp_uart_rx",
+  "typeName": "radar60.ato::Radar60.tp_uart_rx|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "e378cf0e-fa2c-432e-a311-be794642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "UART_RX",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

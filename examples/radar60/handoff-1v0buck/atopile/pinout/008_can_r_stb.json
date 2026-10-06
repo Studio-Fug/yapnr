@@ -1,0 +1,27 @@
+{
+  "name": "can.r_stb",
+  "atoAddress": "can.r_stb",
+  "designator": "R3",
+  "descriptor": "R3 \u2014 can.r_stb",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.r_stb|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+  "footprintUuid": "da69a3ec-fc6c-4c2b-baed-07f54642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "STB",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

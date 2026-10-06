@@ -1,0 +1,45 @@
+{
+  "campaign": "20261004-mceval-8cdf38",
+  "missing": [],
+  "models": {
+    "cell-c1a-07-r15": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 1345.0,
+      "mcells_per_s": [184.09],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 7998.794
+    },
+    "cell-c1a-10-r15": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 1339.0,
+      "mcells_per_s": [170.55],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 8994.921
+    },
+    "cell-c1a-13-r15": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 1345.2,
+      "mcells_per_s": [174.36],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 9221.541
+    }
+  }
+}

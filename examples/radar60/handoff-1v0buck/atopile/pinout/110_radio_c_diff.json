@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_diff",
+  "atoAddress": "radio.c_diff",
+  "designator": "C44",
+  "descriptor": "C44 \u2014 radio.c_diff",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_diff|parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato::Radar60_C_220n_0402",
+  "footprintUuid": "d4a50c02-0af7-454a-974e-cc344642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

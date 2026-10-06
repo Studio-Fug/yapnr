@@ -1,0 +1,67 @@
+# stage 3b E1 (s3b-e1-ser): written by openems/stage3b_em.py jobs; estimates [D] from the
+# rf-uniform references scaled by cells and smallest cell: 4.47 VM-h, about $0.35 expected (boot and preemption extra)
+name = "s3b-e1-ser"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 14400
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "cell-ser-0-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-ser-0.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 34 min on c4
+
+[[jobs]]
+id = "cell-ser-1-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-ser-1.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 34 min on c4
+
+[[jobs]]
+id = "cell-ser-2-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-ser-2.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 33 min on c4
+
+[[jobs]]
+id = "cell-ser-3-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-ser-3.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 33 min on c4
+
+[[jobs]]
+id = "cell-ser-4-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-ser-4.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 34 min on c4
+
+[[jobs]]
+id = "cell-ser-5-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-ser-5.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 34 min on c4
+
+[[jobs]]
+id = "cell-ser-6-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-ser-6.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 34 min on c4
+
+[[jobs]]
+id = "cell-ser-7-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-ser-7.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 33 min on c4

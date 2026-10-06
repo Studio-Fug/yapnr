@@ -1,0 +1,62 @@
+{
+  "attempt": "s1r0",
+  "backend": "gcp-batch",
+  "campaign": "20261005-mceval-22f21a",
+  "campaign_spec_sha256": "260ab579260815c19cd6ad773a41b49c63274e9e2ad040bc036670c14c6c5785",
+  "cpu_s": 33510.631,
+  "exit_code": 0,
+  "finished": "2026-10-05T08:04:30Z",
+  "image": {
+    "ref": "us-west4-docker.pkg.dev/yapnr-experiments/images/openems@sha256:d468ed9a6b31469504a4046e214b7b098d16f9cee77a55813b6f0d949735deb0",
+    "sif_sha256": null,
+    "source_revision": null,
+    "toolchain": "image"
+  },
+  "kind": "mc-eval",
+  "labels": {
+    "candidate": "cell-c1b-2-r20",
+    "model": "cell-c1b-2-r20",
+    "threads": "8"
+  },
+  "load_avg_end": [6.78515625, 6.6474609375, 6.70751953125],
+  "load_avg_start": [0.50048828125, 0.1142578125, 0.03759765625],
+  "machine": {
+    "cpu_model": "AMD EPYC 9B45",
+    "hostname_hash": "3959aec71aaf",
+    "kernel": "6.6.153+",
+    "machine_type": "c4d-highcpu-8",
+    "platform": "linux-x86_64",
+    "provisioning_model": "SPOT",
+    "region": "us-west4",
+    "threads_per_core": 2,
+    "vcpus": 8,
+    "vcpus_available": 8,
+    "zone": "us-west4-a"
+  },
+  "peak_rss_mb": 893.5,
+  "pruned": 0,
+  "python": "3.12.3",
+  "resources": {
+    "cpus": 8,
+    "disk_gb": 16,
+    "max_wall_s": 7200,
+    "memory_gb": 8
+  },
+  "retry": 0,
+  "schema": "yapnr-task-record-v1",
+  "source": null,
+  "started": "2026-10-05T06:44:43Z",
+  "submission": 1,
+  "summary_files": [
+    "cell-c1b-2-r20.job.json",
+    "cell-c1b-2-r20.log",
+    "cell-c1b-2-r20/result.json",
+    "cell-c1b-2-r20/s.csv"
+  ],
+  "task": "mc/cell-c1b-2-r20",
+  "task_spec_sha256": "f0e777654a28c90d0bc682a600c6ed5668e0ccc7f9830418bd75f0e245aa736a",
+  "timed_out": false,
+  "verdict": "pass",
+  "wall_s": 4787.88,
+  "wrapper_version": 1
+}

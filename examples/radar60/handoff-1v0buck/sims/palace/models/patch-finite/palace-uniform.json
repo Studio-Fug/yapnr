@@ -1,0 +1,82 @@
+{
+  "Problem": {
+    "Type": "Driven",
+    "Verbose": 2,
+    "Output": "postpro-uniform"
+  },
+  "Model": {
+    "Mesh": "mesh.msh",
+    "L0": 0.001,
+    "Refinement": {}
+  },
+  "Domains": {
+    "Materials": [
+      {
+        "Attributes": [1],
+        "Permeability": 1.0,
+        "Permittivity": 1.0,
+        "LossTan": 0.0
+      },
+      {
+        "Attributes": [2],
+        "Permeability": 1.0,
+        "Permittivity": 3.52,
+        "LossTan": 0.004
+      },
+      {
+        "Attributes": [3],
+        "Permeability": 1.0,
+        "Permittivity": 3.56,
+        "LossTan": 0.0037
+      }
+    ]
+  },
+  "Boundaries": {
+    "PEC": {
+      "Attributes": [6, 7]
+    },
+    "Absorbing": {
+      "Attributes": [8, 9, 10, 11, 12, 13],
+      "Order": 1
+    },
+    "Conductivity": [
+      {
+        "Attributes": [5],
+        "Conductivity": 17778549.18970829,
+        "Thickness": 0.035,
+        "External": false
+      }
+    ],
+    "LumpedPort": [
+      {
+        "Index": 1,
+        "Attributes": [4],
+        "R": 50.0,
+        "Direction": "-Z",
+        "Excitation": 1
+      }
+    ]
+  },
+  "Solver": {
+    "Order": 2,
+    "Device": "CPU",
+    "Driven": {
+      "Samples": [
+        {
+          "Type": "Linear",
+          "MinFreq": 58.0,
+          "MaxFreq": 66.0,
+          "FreqStep": 0.05,
+          "SaveStep": 0
+        }
+      ],
+      "AdaptiveTol": 0.0001
+    },
+    "Linear": {
+      "Type": "Default",
+      "KSPType": "GMRES",
+      "Tol": 1e-6,
+      "MaxIts": 400
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "pmic.r_sh",
+  "atoAddress": "pmic.r_sh",
+  "designator": "R_SH1",
+  "descriptor": "R_SH1 \u2014 pmic.r_sh",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_sh|parts/Radar60_R_2m_0612/Radar60_R_2m_0612.ato::Radar60_R_2m_0612",
+  "footprintUuid": "d6befee7-dea3-4295-bd7d-2e464642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V0_BUCK",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "1V0_SH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

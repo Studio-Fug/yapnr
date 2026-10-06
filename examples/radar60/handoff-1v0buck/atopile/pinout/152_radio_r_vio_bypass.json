@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_vio_bypass",
+  "atoAddress": "radio.r_vio_bypass",
+  "designator": "R54",
+  "descriptor": "R54 \u2014 radio.r_vio_bypass",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_vio_bypass|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+  "footprintUuid": "b308c108-0b7f-452c-8874-7bbf4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

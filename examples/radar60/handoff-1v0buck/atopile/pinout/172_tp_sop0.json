@@ -1,0 +1,19 @@
+{
+  "name": "tp_sop0",
+  "atoAddress": "tp_sop0",
+  "designator": "TP15",
+  "descriptor": "TP15 \u2014 tp_sop0",
+  "typeName": "radar60.ato::Radar60.tp_sop0|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "5fc9179d-6871-4882-9e93-122c4642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "SOP0_TDO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,110 @@
+{
+  "campaign": "20261004-mceval-3afe96",
+  "missing": [],
+  "models": {
+    "pa-pa-rx4-open": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 324.7,
+      "mcells_per_s": [263.1],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 126.75
+    },
+    "pa-pa-rx4-port": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 325.2,
+      "mcells_per_s": [252.28],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 131.961
+    },
+    "pa-pa-rx4-short": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 321.1,
+      "mcells_per_s": [250.77],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 128.784
+    },
+    "pa-pa-tx1-open": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 225.8,
+      "mcells_per_s": [219.71],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 95.355
+    },
+    "pa-pa-tx1-port": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 225.9,
+      "mcells_per_s": [221.41],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 94.653
+    },
+    "pa-pa-tx1-short": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 223.0,
+      "mcells_per_s": [217.33],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 95.546
+    },
+    "pa-pa0-rx4-short": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 315.3,
+      "mcells_per_s": [249.91],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 114.427
+    },
+    "pa-pa0-tx1-short": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 219.7,
+      "mcells_per_s": [213.26],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 68.437
+    }
+  }
+}

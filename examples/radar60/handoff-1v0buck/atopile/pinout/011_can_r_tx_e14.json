@@ -1,0 +1,27 @@
+{
+  "name": "can.r_tx_e14",
+  "atoAddress": "can.r_tx_e14",
+  "designator": "R6",
+  "descriptor": "R6 \u2014 can.r_tx_e14",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.r_tx_e14|parts/Radar60_R_0_0402_DNP/Radar60_R_0_0402_DNP.ato::Radar60_R_0_0402_DNP",
+  "footprintUuid": "4f6fa441-d80c-406b-83ec-93c24642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "SPIA_MISO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "CAN_TXD",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": ["1 unconnected lead(s)"]
+}

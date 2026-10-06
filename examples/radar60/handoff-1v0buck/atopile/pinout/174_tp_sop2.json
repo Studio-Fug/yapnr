@@ -1,0 +1,19 @@
+{
+  "name": "tp_sop2",
+  "atoAddress": "tp_sop2",
+  "designator": "TP17",
+  "descriptor": "TP17 \u2014 tp_sop2",
+  "typeName": "radar60.ato::Radar60.tp_sop2|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "37a251c7-be7e-4686-99ea-db034642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "SOP2_PMIC_CLKOUT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

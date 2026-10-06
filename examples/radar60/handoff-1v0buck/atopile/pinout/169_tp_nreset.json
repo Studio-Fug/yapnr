@@ -1,0 +1,19 @@
+{
+  "name": "tp_nreset",
+  "atoAddress": "tp_nreset",
+  "designator": "TP12",
+  "descriptor": "TP12 \u2014 tp_nreset",
+  "typeName": "radar60.ato::Radar60.tp_nreset|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "d424cb71-95e4-45de-a25e-e6894642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "NRESET",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

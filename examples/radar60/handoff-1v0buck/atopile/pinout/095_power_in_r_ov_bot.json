@@ -1,0 +1,27 @@
+{
+  "name": "power_in.r_ov_bot",
+  "atoAddress": "power_in.r_ov_bot",
+  "designator": "R35",
+  "descriptor": "R35 \u2014 power_in.r_ov_bot",
+  "typeName": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.r_ov_bot|parts/Radar60_R_11k_0402/Radar60_R_11k_0402.ato::Radar60_R_11k_0402",
+  "footprintUuid": "335564e4-d63b-4c03-b650-18644642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "EFUSE_OVLO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

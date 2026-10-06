@@ -1,0 +1,49 @@
+# stage 3b E1 (s3b-e1-cav): written by openems/stage3b_em.py jobs; estimates [D] from the
+# rf-uniform references scaled by cells and smallest cell: 10.79 VM-h, about $0.85 expected (boot and preemption extra)
+name = "s3b-e1-cav"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 14400
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "tri-K0-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K0.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 86 min on c4
+
+[[jobs]]
+id = "tri-K0-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K0.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000"]
+# estimate 194 min on c4
+
+[[jobs]]
+id = "tri-K2-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K2.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 87 min on c4
+
+[[jobs]]
+id = "tri-K2-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K2.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000"]
+# estimate 194 min on c4
+
+[[jobs]]
+id = "tri-K1-r27"
+script = "w/openems/ant_sim.py"
+args = ["models/tri-K1.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.016875", "--max-steps", "400000"]
+# estimate 87 min on c4

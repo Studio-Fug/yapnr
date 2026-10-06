@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_spia_cs_pu",
+  "atoAddress": "radio.r_spia_cs_pu",
+  "designator": "R51",
+  "descriptor": "R51 \u2014 radio.r_spia_cs_pu",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_spia_cs_pu|parts/Radar60_R_100k_0402/Radar60_R_100k_0402.ato::Radar60_R_100k_0402",
+  "footprintUuid": "ca37ffbf-8feb-4961-811c-dbda4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "SPIA_CS_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

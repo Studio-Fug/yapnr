@@ -1,0 +1,82 @@
+{
+  "s3b-e1-bank-a": {
+    "family": "c4d",
+    "runs": 7,
+    "vm_hours": 14.85,
+    "expected_usd": 1.18,
+    "longest_min": 146.9,
+    "unsized": []
+  },
+  "s3b-e1-bank-b": {
+    "family": "c4d",
+    "runs": 7,
+    "vm_hours": 14.85,
+    "expected_usd": 1.18,
+    "longest_min": 146.9,
+    "unsized": []
+  },
+  "s3b-e1-bank-c": {
+    "family": "c4d",
+    "runs": 7,
+    "vm_hours": 14.85,
+    "expected_usd": 1.18,
+    "longest_min": 146.9,
+    "unsized": []
+  },
+  "s3b-e1-bank-s1": {
+    "family": "c4d",
+    "runs": 5,
+    "vm_hours": 8.58,
+    "expected_usd": 0.68,
+    "longest_min": 126.5,
+    "unsized": []
+  },
+  "s3b-e1-c1a": {
+    "family": "c4",
+    "runs": 15,
+    "vm_hours": 9.04,
+    "expected_usd": 0.71,
+    "longest_min": 38.2,
+    "unsized": []
+  },
+  "s3b-e1-ser": {
+    "family": "c4",
+    "runs": 8,
+    "vm_hours": 4.47,
+    "expected_usd": 0.35,
+    "longest_min": 34.3,
+    "unsized": []
+  },
+  "s3b-e1-cav": {
+    "family": "c4",
+    "runs": 5,
+    "vm_hours": 10.79,
+    "expected_usd": 0.85,
+    "longest_min": 194.0,
+    "unsized": []
+  },
+  "s3b-e1-pp": {
+    "family": "c4",
+    "runs": 9,
+    "vm_hours": 1.79,
+    "expected_usd": 0.14,
+    "longest_min": 21.9,
+    "unsized": []
+  },
+  "s3b-e1-tx": {
+    "family": "c4",
+    "runs": 12,
+    "vm_hours": 4.02,
+    "expected_usd": 0.31,
+    "longest_min": 22.1,
+    "unsized": []
+  },
+  "s3b-e1-pa": {
+    "family": "c4",
+    "runs": 8,
+    "vm_hours": 0.82,
+    "expected_usd": 0.06,
+    "longest_min": 8.0,
+    "unsized": []
+  }
+}

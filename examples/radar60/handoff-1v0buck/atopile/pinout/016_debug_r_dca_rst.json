@@ -1,0 +1,27 @@
+{
+  "name": "debug.r_dca_rst",
+  "atoAddress": "debug.r_dca_rst",
+  "designator": "R8",
+  "descriptor": "R8 \u2014 debug.r_dca_rst",
+  "typeName": "radar60.ato::Radar60.debug|debug.ato::Debug.r_dca_rst|parts/Radar60_R_0_0402_DNP/Radar60_R_0_0402_DNP.ato::Radar60_R_0_0402_DNP",
+  "footprintUuid": "9b5d331b-a6a0-4d6f-9c4f-d26a4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "DCA_RST_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "NRESET",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

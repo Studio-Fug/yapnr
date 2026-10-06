@@ -1,0 +1,13 @@
+{
+  "image": "us-west4-docker.pkg.dev/yapnr-experiments/images/palace:b797ea8-x86-64-v3@sha256:9d15737769150ad368cce02dd9c1ca4c27c64ecdfd3969cf3d01dc94c1aae194",
+  "inputs": {},
+  "jobs": ["cpw-wave-uniform-r8"],
+  "models_per_vm": 1,
+  "placement": {
+    "families": ["c4d"],
+    "packing": "core",
+    "vm_vcpus": 16
+  },
+  "ranks": 8,
+  "schema": "yapnr-palace-plan-v1"
+}

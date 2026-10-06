@@ -1,0 +1,27 @@
+{
+  "name": "power_in.c_sys_bulk",
+  "atoAddress": "power_in.c_sys_bulk",
+  "designator": "C36",
+  "descriptor": "C36 \u2014 power_in.c_sys_bulk",
+  "typeName": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_sys_bulk|parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato::Radar60_C_22u_0805",
+  "footprintUuid": "e470ee5d-70b9-41ce-b08d-9f074642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Unpack this handoff bundle into a working directory on this machine.
 
-Copies the bundle to OUT, gunzips every ``*.gz`` file (they were compressed to stay under the
-repository's file-size limit) and replaces the two path placeholders in every text file:
+Copies the bundle to OUT, decompresses every ``*.gz`` and ``*.xz`` file (compressed to stay under
+the repository's file-size limit; the routed boards also have their zone fills stripped) and
+replaces the two path placeholders in every text file:
 
 ``${HANDOFF}``  the unpacked bundle (OUT)
 ``${REPO}``     the yapnr checkout the flow runs from (default: this file's repository)
@@ -12,6 +13,7 @@ Usage: python3 localize.py OUT [--repo PATH]
 
 import argparse
 import gzip
+import lzma
 import shutil
 from pathlib import Path
 
@@ -31,6 +33,12 @@ def main():
         with gzip.open(gz, "rb") as src, open(gz.with_suffix(""), "wb") as dst:
             shutil.copyfileobj(src, dst)
         gz.unlink()
+    # The routed boards ship as .xz with their zone fills stripped (to stay under the repository's
+    # 600 KB file limit); DRC with --refill-zones, or pcbnew's zone filler, restores the fills.
+    for xz in sorted(out.rglob("*.xz")):
+        with lzma.open(xz, "rb") as src, open(xz.with_suffix(""), "wb") as dst:
+            shutil.copyfileobj(src, dst)
+        xz.unlink()
     subs = {"${HANDOFF}": str(out), "${REPO}": str(a.repo.resolve())}
     for p in out.rglob("*"):
         if not p.is_file():

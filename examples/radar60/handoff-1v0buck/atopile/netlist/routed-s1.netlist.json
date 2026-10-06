@@ -1,0 +1,4745 @@
+{
+  "board": "candidate.kicad_pcb",
+  "kicad": "10.0.6",
+  "pads": [
+    {
+      "ref": "C1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_TERM_MID"
+    },
+    {
+      "ref": "C1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C10",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C10",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C11",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "DAMP_1V8"
+    },
+    {
+      "ref": "C11",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C12",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "DAMP_1V0_RF1"
+    },
+    {
+      "ref": "C12",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C13",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "DAMP_1V0_RF2"
+    },
+    {
+      "ref": "C13",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C14",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "C14",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C15",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "C15",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C16",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "C16",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C17",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "C17",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C18",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3"
+    },
+    {
+      "ref": "C18",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C19",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2_BUCK"
+    },
+    {
+      "ref": "C19",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "C2",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C20",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_BUCK"
+    },
+    {
+      "ref": "C20",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C21",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8_BUCK"
+    },
+    {
+      "ref": "C21",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C22",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "C22",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C23",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "C23",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C24",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "C24",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C25",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "C25",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C26",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NRESET"
+    },
+    {
+      "ref": "C26",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C27",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "snb0"
+    },
+    {
+      "ref": "C27",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C28",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "snb1"
+    },
+    {
+      "ref": "C28",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C29",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "snb2"
+    },
+    {
+      "ref": "C29",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C3",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "C3",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C30",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "snb3"
+    },
+    {
+      "ref": "C30",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C31",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "C31",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C32",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_DVDT"
+    },
+    {
+      "ref": "C32",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C33",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIN_5V"
+    },
+    {
+      "ref": "C33",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C34",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIN_5V"
+    },
+    {
+      "ref": "C34",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C35",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_ITIMER"
+    },
+    {
+      "ref": "C35",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C36",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "C36",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C37",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "C37",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C38",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VOUT_14APLL"
+    },
+    {
+      "ref": "C38",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C39",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C39",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C4",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "C4",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C40",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C40",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C41",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C41",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C42",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C42",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C43",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C43",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C44",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C44",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C45",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C45",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C46",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C46",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C47",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C47",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C48",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C48",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C49",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C49",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C5",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "C5",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C50",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C50",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C51",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C51",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C52",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_PA"
+    },
+    {
+      "ref": "C52",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C53",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_PA"
+    },
+    {
+      "ref": "C53",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C54",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_PA"
+    },
+    {
+      "ref": "C54",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C55",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "C55",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C56",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "C56",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C57",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "C57",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C58",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "C58",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C59",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "C59",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C6",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "C6",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C60",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "C60",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C61",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C61",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C62",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VOUT_14SYNTH"
+    },
+    {
+      "ref": "C62",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C63",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VBGAP"
+    },
+    {
+      "ref": "C63",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C64",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C64",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C65",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "C65",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C66",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "C66",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C67",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "C67",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C68",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "C68",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C69",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "C69",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C7",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C7",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C70",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C70",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C71",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "XTAL_N"
+    },
+    {
+      "ref": "C71",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C72",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "XTAL_P"
+    },
+    {
+      "ref": "C72",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C8",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "C8",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "C9",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "C9",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "D1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CANH"
+    },
+    {
+      "ref": "D1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CANL"
+    },
+    {
+      "ref": "D1",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "D2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_TX_J1"
+    },
+    {
+      "ref": "D2",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_RX_J1"
+    },
+    {
+      "ref": "D2",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "D3",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIN_5V"
+    },
+    {
+      "ref": "D3",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "D4",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "led_k"
+    },
+    {
+      "ref": "D4",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "led_a"
+    },
+    {
+      "ref": "FB1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2_BUCK"
+    },
+    {
+      "ref": "FB1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "FB2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8_BUCK"
+    },
+    {
+      "ref": "FB2",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "FB3",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_SH"
+    },
+    {
+      "ref": "FB3",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "FB4",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_SH"
+    },
+    {
+      "ref": "FB4",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "FB5",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_SH"
+    },
+    {
+      "ref": "FB5",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "FID1",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "FID2",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "FID3",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "J1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIN_5V"
+    },
+    {
+      "ref": "J1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIN_5V"
+    },
+    {
+      "ref": "J1",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J1",
+      "pad": "4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J1",
+      "pad": "5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CANH"
+    },
+    {
+      "ref": "J1",
+      "pad": "6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CANL"
+    },
+    {
+      "ref": "J1",
+      "pad": "7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_TX_J1"
+    },
+    {
+      "ref": "J1",
+      "pad": "8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_RX_J1"
+    },
+    {
+      "ref": "J1",
+      "pad": "MP",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J1",
+      "pad": "MP",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "J2",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "J2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1"
+    },
+    {
+      "ref": "J2",
+      "pad": "10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPI_HOST_INTR"
+    },
+    {
+      "ref": "J2",
+      "pad": "11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_MOSI"
+    },
+    {
+      "ref": "J2",
+      "pad": "12",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_MISO"
+    },
+    {
+      "ref": "J2",
+      "pad": "13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_PGOOD"
+    },
+    {
+      "ref": "J2",
+      "pad": "14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "14"
+    },
+    {
+      "ref": "J2",
+      "pad": "15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "15"
+    },
+    {
+      "ref": "J2",
+      "pad": "16",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "16"
+    },
+    {
+      "ref": "J2",
+      "pad": "17",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "17"
+    },
+    {
+      "ref": "J2",
+      "pad": "18",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "19",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "19"
+    },
+    {
+      "ref": "J2",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "2"
+    },
+    {
+      "ref": "J2",
+      "pad": "20",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "20"
+    },
+    {
+      "ref": "J2",
+      "pad": "21",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "21"
+    },
+    {
+      "ref": "J2",
+      "pad": "22",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "22"
+    },
+    {
+      "ref": "J2",
+      "pad": "23",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "23"
+    },
+    {
+      "ref": "J2",
+      "pad": "24",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "25",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "25"
+    },
+    {
+      "ref": "J2",
+      "pad": "26",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_FRCLK_P"
+    },
+    {
+      "ref": "J2",
+      "pad": "27",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "27"
+    },
+    {
+      "ref": "J2",
+      "pad": "28",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_FRCLK_N"
+    },
+    {
+      "ref": "J2",
+      "pad": "29",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "29"
+    },
+    {
+      "ref": "J2",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3"
+    },
+    {
+      "ref": "J2",
+      "pad": "30",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "31",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "31"
+    },
+    {
+      "ref": "J2",
+      "pad": "32",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "32"
+    },
+    {
+      "ref": "J2",
+      "pad": "33",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "33"
+    },
+    {
+      "ref": "J2",
+      "pad": "34",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "34"
+    },
+    {
+      "ref": "J2",
+      "pad": "35",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "35"
+    },
+    {
+      "ref": "J2",
+      "pad": "36",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "37",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "37"
+    },
+    {
+      "ref": "J2",
+      "pad": "38",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "38"
+    },
+    {
+      "ref": "J2",
+      "pad": "39",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "39"
+    },
+    {
+      "ref": "J2",
+      "pad": "4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "4"
+    },
+    {
+      "ref": "J2",
+      "pad": "40",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "40"
+    },
+    {
+      "ref": "J2",
+      "pad": "41",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "41"
+    },
+    {
+      "ref": "J2",
+      "pad": "42",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "43",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "43"
+    },
+    {
+      "ref": "J2",
+      "pad": "44",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_CLK_P"
+    },
+    {
+      "ref": "J2",
+      "pad": "45",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "45"
+    },
+    {
+      "ref": "J2",
+      "pad": "46",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_CLK_N"
+    },
+    {
+      "ref": "J2",
+      "pad": "47",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "47"
+    },
+    {
+      "ref": "J2",
+      "pad": "48",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "49",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "49"
+    },
+    {
+      "ref": "J2",
+      "pad": "5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5"
+    },
+    {
+      "ref": "J2",
+      "pad": "50",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_TX1_P"
+    },
+    {
+      "ref": "J2",
+      "pad": "51",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "I2C_SDA"
+    },
+    {
+      "ref": "J2",
+      "pad": "52",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_TX1_N"
+    },
+    {
+      "ref": "J2",
+      "pad": "53",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "I2C_SCL"
+    },
+    {
+      "ref": "J2",
+      "pad": "54",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "55",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_RX"
+    },
+    {
+      "ref": "J2",
+      "pad": "56",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_TX0_P"
+    },
+    {
+      "ref": "J2",
+      "pad": "57",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_TX"
+    },
+    {
+      "ref": "J2",
+      "pad": "58",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_TX0_N"
+    },
+    {
+      "ref": "J2",
+      "pad": "59",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "DCA_RST_N"
+    },
+    {
+      "ref": "J2",
+      "pad": "6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "6"
+    },
+    {
+      "ref": "J2",
+      "pad": "60",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_CS_N"
+    },
+    {
+      "ref": "J2",
+      "pad": "8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "8"
+    },
+    {
+      "ref": "J2",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_CLK"
+    },
+    {
+      "ref": "J2",
+      "pad": "MP1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "MP2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "MP3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J2",
+      "pad": "MP4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J3",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "J3",
+      "pad": "10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NRESET"
+    },
+    {
+      "ref": "J3",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "JTAG_TMS"
+    },
+    {
+      "ref": "J3",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J3",
+      "pad": "4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "JTAG_TCK"
+    },
+    {
+      "ref": "J3",
+      "pad": "5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "J3",
+      "pad": "6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP0_TDO"
+    },
+    {
+      "ref": "J3",
+      "pad": "7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "7"
+    },
+    {
+      "ref": "J3",
+      "pad": "8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "JTAG_TDI"
+    },
+    {
+      "ref": "J3",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "L1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B0"
+    },
+    {
+      "ref": "L1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3"
+    },
+    {
+      "ref": "L2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B1"
+    },
+    {
+      "ref": "L2",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2_BUCK"
+    },
+    {
+      "ref": "L3",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B2"
+    },
+    {
+      "ref": "L3",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_BUCK"
+    },
+    {
+      "ref": "L4",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B3"
+    },
+    {
+      "ref": "L4",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8_BUCK"
+    },
+    {
+      "ref": "MH1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "MH2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "MH3",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "MH4",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "Q1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NERROR_OUT"
+    },
+    {
+      "ref": "Q1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "Q1",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "led_k"
+    },
+    {
+      "ref": "R1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_RXD"
+    },
+    {
+      "ref": "R1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_MOSI"
+    },
+    {
+      "ref": "R10",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R10",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_CS_N"
+    },
+    {
+      "ref": "R11",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R11",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D2"
+    },
+    {
+      "ref": "R12",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R12",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D3"
+    },
+    {
+      "ref": "R13",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "pmic-1"
+    },
+    {
+      "ref": "R13",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R14",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "pmic-1"
+    },
+    {
+      "ref": "R14",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP2_PMIC_CLKOUT"
+    },
+    {
+      "ref": "R15",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "R15",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "DAMP_1V8"
+    },
+    {
+      "ref": "R16",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "R16",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "DAMP_1V0_RF1"
+    },
+    {
+      "ref": "R17",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "R17",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "DAMP_1V0_RF2"
+    },
+    {
+      "ref": "R18",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "pmic-1-1"
+    },
+    {
+      "ref": "R18",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R19",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "R19",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "pmic-1-1"
+    },
+    {
+      "ref": "R2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_RXD"
+    },
+    {
+      "ref": "R2",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_RX"
+    },
+    {
+      "ref": "R20",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "R20",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_EN2_GPIO2"
+    },
+    {
+      "ref": "R21",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "R21",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "pmic-2"
+    },
+    {
+      "ref": "R22",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_FB_B2"
+    },
+    {
+      "ref": "R22",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_BUCK"
+    },
+    {
+      "ref": "R23",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_FB_B2"
+    },
+    {
+      "ref": "R23",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "R24",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_EN2_GPIO2"
+    },
+    {
+      "ref": "R24",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIO_LS_ON"
+    },
+    {
+      "ref": "R25",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R25",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_NINT"
+    },
+    {
+      "ref": "R26",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R26",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_PGOOD"
+    },
+    {
+      "ref": "R27",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_PGOOD"
+    },
+    {
+      "ref": "R27",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NRESET"
+    },
+    {
+      "ref": "R28",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R28",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "I2C_SCL"
+    },
+    {
+      "ref": "R29",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R29",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "I2C_SDA"
+    },
+    {
+      "ref": "R3",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "STB"
+    },
+    {
+      "ref": "R3",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R30",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B0"
+    },
+    {
+      "ref": "R30",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "snb0"
+    },
+    {
+      "ref": "R31",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B1"
+    },
+    {
+      "ref": "R31",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "snb1"
+    },
+    {
+      "ref": "R32",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B2"
+    },
+    {
+      "ref": "R32",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "snb2"
+    },
+    {
+      "ref": "R33",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B3"
+    },
+    {
+      "ref": "R33",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "snb3"
+    },
+    {
+      "ref": "R34",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_ILM"
+    },
+    {
+      "ref": "R34",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R35",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_OVLO"
+    },
+    {
+      "ref": "R35",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R36",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIN_5V"
+    },
+    {
+      "ref": "R36",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_OVLO"
+    },
+    {
+      "ref": "R37",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_PGTH"
+    },
+    {
+      "ref": "R37",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R38",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_PG"
+    },
+    {
+      "ref": "R38",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R39",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "R39",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_PG"
+    },
+    {
+      "ref": "R4",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CANH"
+    },
+    {
+      "ref": "R4",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_TERM_MID"
+    },
+    {
+      "ref": "R40",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "R40",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_PGTH"
+    },
+    {
+      "ref": "R41",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_EN_UVLO"
+    },
+    {
+      "ref": "R41",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R42",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIN_5V"
+    },
+    {
+      "ref": "R42",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_EN_UVLO"
+    },
+    {
+      "ref": "R43",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "led_a"
+    },
+    {
+      "ref": "R43",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R44",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R44",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NERROR_IN"
+    },
+    {
+      "ref": "R45",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R45",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NERROR_OUT"
+    },
+    {
+      "ref": "R46",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "R46",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_PA"
+    },
+    {
+      "ref": "R47",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_NINT"
+    },
+    {
+      "ref": "R47",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RADIO_GPIO_2"
+    },
+    {
+      "ref": "R48",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R48",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP0_TDO"
+    },
+    {
+      "ref": "R49",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP1"
+    },
+    {
+      "ref": "R49",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R5",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_TERM_MID"
+    },
+    {
+      "ref": "R5",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CANL"
+    },
+    {
+      "ref": "R50",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP2_PMIC_CLKOUT"
+    },
+    {
+      "ref": "R50",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R51",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R51",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_CS_N"
+    },
+    {
+      "ref": "R52",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SYNC_IN"
+    },
+    {
+      "ref": "R52",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R53",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R53",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_RX"
+    },
+    {
+      "ref": "R54",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3"
+    },
+    {
+      "ref": "R54",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R55",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3"
+    },
+    {
+      "ref": "R55",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIO_LS_ON"
+    },
+    {
+      "ref": "R56",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "R56",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "WARM_RESET"
+    },
+    {
+      "ref": "R57",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_RX"
+    },
+    {
+      "ref": "R57",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_RX_J1"
+    },
+    {
+      "ref": "R58",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_TX"
+    },
+    {
+      "ref": "R58",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_TX_J1"
+    },
+    {
+      "ref": "R6",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_MISO"
+    },
+    {
+      "ref": "R6",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_TXD"
+    },
+    {
+      "ref": "R7",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_TX"
+    },
+    {
+      "ref": "R7",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_TXD"
+    },
+    {
+      "ref": "R8",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "DCA_RST_N"
+    },
+    {
+      "ref": "R8",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NRESET"
+    },
+    {
+      "ref": "R9",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_CLK"
+    },
+    {
+      "ref": "R9",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_CLK_FLASH"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rx1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX1"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rx1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX1"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rx2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX2"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rx2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX2"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rx3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX3"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rx3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX3"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rx4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX4"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rx4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX4"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rxd0",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RXD0"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "rxd0",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RXD0"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "tx1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TX1"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "tx1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TX1"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "tx2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TX2"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "tx2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TX2"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "tx3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TX3"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "tx3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TX3"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "txd4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TXD4"
+    },
+    {
+      "ref": "RFM1",
+      "pad": "txd4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TXD4"
+    },
+    {
+      "ref": "RL1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "RL2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "RT1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RXD0"
+    },
+    {
+      "ref": "RT1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "RT2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TXD4"
+    },
+    {
+      "ref": "RT2",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "R_SH1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_BUCK"
+    },
+    {
+      "ref": "R_SH1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_SH"
+    },
+    {
+      "ref": "TP1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_BUCK"
+    },
+    {
+      "ref": "TP1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_SH"
+    },
+    {
+      "ref": "TP10",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "TP11",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NERROR_OUT"
+    },
+    {
+      "ref": "TP12",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NRESET"
+    },
+    {
+      "ref": "TP13",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_PGOOD"
+    },
+    {
+      "ref": "TP14",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_NINT"
+    },
+    {
+      "ref": "TP15",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP0_TDO"
+    },
+    {
+      "ref": "TP16",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP1"
+    },
+    {
+      "ref": "TP17",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP2_PMIC_CLKOUT"
+    },
+    {
+      "ref": "TP18",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_RX"
+    },
+    {
+      "ref": "TP19",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_TX"
+    },
+    {
+      "ref": "TP2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_PA"
+    },
+    {
+      "ref": "TP20",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "WARM_RESET"
+    },
+    {
+      "ref": "TP3",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "TP4",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "TP5",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "TP6",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "TP7",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_PG"
+    },
+    {
+      "ref": "TP8",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "FRAME_START"
+    },
+    {
+      "ref": "TP9",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "A1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "A10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VOUT_14APLL"
+    },
+    {
+      "ref": "U1",
+      "pad": "A13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "A14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "OSC_CLKOUT"
+    },
+    {
+      "ref": "U1",
+      "pad": "A15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "A2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_PA"
+    },
+    {
+      "ref": "U1",
+      "pad": "A3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "A5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "A7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "A9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "B1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "B10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VBGAP"
+    },
+    {
+      "ref": "U1",
+      "pad": "B11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "U1",
+      "pad": "B12",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "U1",
+      "pad": "B13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VOUT_14SYNTH"
+    },
+    {
+      "ref": "U1",
+      "pad": "B14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "B15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "XTAL_P"
+    },
+    {
+      "ref": "U1",
+      "pad": "B2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_PA"
+    },
+    {
+      "ref": "U1",
+      "pad": "B3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "B4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TX1"
+    },
+    {
+      "ref": "U1",
+      "pad": "B5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "B6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TX2"
+    },
+    {
+      "ref": "U1",
+      "pad": "B7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "B8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_TX3"
+    },
+    {
+      "ref": "U1",
+      "pad": "B9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "C1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "C13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "C13"
+    },
+    {
+      "ref": "U1",
+      "pad": "C14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "C15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "XTAL_N"
+    },
+    {
+      "ref": "U1",
+      "pad": "C2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "U1",
+      "pad": "C3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "C4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "C5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "C6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "C7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "C8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "C9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "D13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_MOSI"
+    },
+    {
+      "ref": "U1",
+      "pad": "D14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "D14"
+    },
+    {
+      "ref": "U1",
+      "pad": "D15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "U1",
+      "pad": "D2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF2"
+    },
+    {
+      "ref": "U1",
+      "pad": "E1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "E10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "E11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "E13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_CLK"
+    },
+    {
+      "ref": "U1",
+      "pad": "E14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_MISO"
+    },
+    {
+      "ref": "U1",
+      "pad": "E15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPIA_CS_N"
+    },
+    {
+      "ref": "U1",
+      "pad": "E2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "E3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "E5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "E6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "E8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "F11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "F13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "I2C_SDA"
+    },
+    {
+      "ref": "U1",
+      "pad": "F14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_RX"
+    },
+    {
+      "ref": "U1",
+      "pad": "F15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "U1",
+      "pad": "F2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX4"
+    },
+    {
+      "ref": "U1",
+      "pad": "F3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "F5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "U1",
+      "pad": "F9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "G1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "G10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "G13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP1"
+    },
+    {
+      "ref": "U1",
+      "pad": "G14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "I2C_SCL"
+    },
+    {
+      "ref": "U1",
+      "pad": "G15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "U1",
+      "pad": "G2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "G3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "G5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "U1",
+      "pad": "G6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "G7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "G8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "H11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "H13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_0"
+    },
+    {
+      "ref": "U1",
+      "pad": "H14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_TX"
+    },
+    {
+      "ref": "U1",
+      "pad": "H15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "U1",
+      "pad": "H2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX3"
+    },
+    {
+      "ref": "U1",
+      "pad": "H3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "H5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "U1",
+      "pad": "H7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "H9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "J1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "J10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "J13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_1"
+    },
+    {
+      "ref": "U1",
+      "pad": "J14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_TX0_P"
+    },
+    {
+      "ref": "U1",
+      "pad": "J15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_TX0_N"
+    },
+    {
+      "ref": "U1",
+      "pad": "J2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "J3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "J5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V0_RF1"
+    },
+    {
+      "ref": "U1",
+      "pad": "J6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "J7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "J8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "K10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "K11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "K13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RADIO_GPIO_2"
+    },
+    {
+      "ref": "U1",
+      "pad": "K14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_TX1_P"
+    },
+    {
+      "ref": "U1",
+      "pad": "K15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_TX1_N"
+    },
+    {
+      "ref": "U1",
+      "pad": "K2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX2"
+    },
+    {
+      "ref": "U1",
+      "pad": "K3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "K5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "U1",
+      "pad": "K7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "K8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "K9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "L1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "L10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "L13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VPP"
+    },
+    {
+      "ref": "U1",
+      "pad": "L14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_CLK_P"
+    },
+    {
+      "ref": "U1",
+      "pad": "L15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_CLK_N"
+    },
+    {
+      "ref": "U1",
+      "pad": "L2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "L3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "L5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "L6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "L8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "M14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_FRCLK_P"
+    },
+    {
+      "ref": "U1",
+      "pad": "M15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "LVDS_FRCLK_N"
+    },
+    {
+      "ref": "U1",
+      "pad": "M2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "RF_RX1"
+    },
+    {
+      "ref": "U1",
+      "pad": "M3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "N1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "N10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "JTAG_TMS"
+    },
+    {
+      "ref": "U1",
+      "pad": "N11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "U1",
+      "pad": "N12",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D1"
+    },
+    {
+      "ref": "U1",
+      "pad": "N13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP0_TDO"
+    },
+    {
+      "ref": "U1",
+      "pad": "N14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "DMM_SYNC"
+    },
+    {
+      "ref": "U1",
+      "pad": "N15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_47"
+    },
+    {
+      "ref": "U1",
+      "pad": "N2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "N3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "N4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_RX"
+    },
+    {
+      "ref": "U1",
+      "pad": "N5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "UART_TX"
+    },
+    {
+      "ref": "U1",
+      "pad": "N6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NERROR_OUT"
+    },
+    {
+      "ref": "U1",
+      "pad": "N7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NERROR_IN"
+    },
+    {
+      "ref": "U1",
+      "pad": "N8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "FRAME_START"
+    },
+    {
+      "ref": "U1",
+      "pad": "N9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "WARM_RESET"
+    },
+    {
+      "ref": "U1",
+      "pad": "P1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPADC1"
+    },
+    {
+      "ref": "U1",
+      "pad": "P10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "JTAG_TCK"
+    },
+    {
+      "ref": "U1",
+      "pad": "P11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_CS_N"
+    },
+    {
+      "ref": "U1",
+      "pad": "P12",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D3"
+    },
+    {
+      "ref": "U1",
+      "pad": "P13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SPI_HOST_INTR"
+    },
+    {
+      "ref": "U1",
+      "pad": "P14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "U1",
+      "pad": "P15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "U1",
+      "pad": "P2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPADC2"
+    },
+    {
+      "ref": "U1",
+      "pad": "P3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPADC3"
+    },
+    {
+      "ref": "U1",
+      "pad": "P4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SYNC_IN"
+    },
+    {
+      "ref": "U1",
+      "pad": "P5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_32"
+    },
+    {
+      "ref": "U1",
+      "pad": "P6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_34"
+    },
+    {
+      "ref": "U1",
+      "pad": "P7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_36"
+    },
+    {
+      "ref": "U1",
+      "pad": "P8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_38"
+    },
+    {
+      "ref": "U1",
+      "pad": "P9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "SOP2_PMIC_CLKOUT"
+    },
+    {
+      "ref": "U1",
+      "pad": "R1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "R10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "U1",
+      "pad": "R11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "JTAG_TDI"
+    },
+    {
+      "ref": "U1",
+      "pad": "R12",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_CLK"
+    },
+    {
+      "ref": "U1",
+      "pad": "R13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D0"
+    },
+    {
+      "ref": "U1",
+      "pad": "R14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D2"
+    },
+    {
+      "ref": "U1",
+      "pad": "R15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U1",
+      "pad": "R2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPADC4"
+    },
+    {
+      "ref": "U1",
+      "pad": "R3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "NRESET"
+    },
+    {
+      "ref": "U1",
+      "pad": "R4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_31"
+    },
+    {
+      "ref": "U1",
+      "pad": "R5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_33"
+    },
+    {
+      "ref": "U1",
+      "pad": "R6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2"
+    },
+    {
+      "ref": "U1",
+      "pad": "R7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_35"
+    },
+    {
+      "ref": "U1",
+      "pad": "R8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GPIO_37"
+    },
+    {
+      "ref": "U1",
+      "pad": "R9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8"
+    },
+    {
+      "ref": "U2",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U2",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U2",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_FB_B2"
+    },
+    {
+      "ref": "U2",
+      "pad": "10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B0"
+    },
+    {
+      "ref": "U2",
+      "pad": "11",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U2",
+      "pad": "12",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B1"
+    },
+    {
+      "ref": "U2",
+      "pad": "13",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "U2",
+      "pad": "14",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V2_BUCK"
+    },
+    {
+      "ref": "U2",
+      "pad": "15",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_EN2_GPIO2"
+    },
+    {
+      "ref": "U2",
+      "pad": "16",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_PGOOD"
+    },
+    {
+      "ref": "U2",
+      "pad": "17",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U2",
+      "pad": "18",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "U2",
+      "pad": "19",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_NINT"
+    },
+    {
+      "ref": "U2",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "pmic-2"
+    },
+    {
+      "ref": "U2",
+      "pad": "20",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_PG"
+    },
+    {
+      "ref": "U2",
+      "pad": "21",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "1V8_BUCK"
+    },
+    {
+      "ref": "U2",
+      "pad": "22",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "U2",
+      "pad": "23",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B3"
+    },
+    {
+      "ref": "U2",
+      "pad": "24",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U2",
+      "pad": "25",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "PMIC_SW_B2"
+    },
+    {
+      "ref": "U2",
+      "pad": "26",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "U2",
+      "pad": "27",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U2",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "pmic-1"
+    },
+    {
+      "ref": "U2",
+      "pad": "4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U2",
+      "pad": "5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "I2C_SCL"
+    },
+    {
+      "ref": "U2",
+      "pad": "6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "I2C_SDA"
+    },
+    {
+      "ref": "U2",
+      "pad": "7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "pmic-1-1"
+    },
+    {
+      "ref": "U2",
+      "pad": "8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3"
+    },
+    {
+      "ref": "U2",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "U3",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U3",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U3",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U3",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U3",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_CS_N"
+    },
+    {
+      "ref": "U3",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D1"
+    },
+    {
+      "ref": "U3",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D2"
+    },
+    {
+      "ref": "U3",
+      "pad": "4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U3",
+      "pad": "5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D0"
+    },
+    {
+      "ref": "U3",
+      "pad": "6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_CLK_FLASH"
+    },
+    {
+      "ref": "U3",
+      "pad": "7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QSPI_D3"
+    },
+    {
+      "ref": "U3",
+      "pad": "8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "U3",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U4",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U4",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U4",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U4",
+      "pad": "",
+      "pinfunction": null,
+      "pintype": null,
+      "net": ""
+    },
+    {
+      "ref": "U4",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_TXD"
+    },
+    {
+      "ref": "U4",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "U4",
+      "pad": "4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CAN_RXD"
+    },
+    {
+      "ref": "U4",
+      "pad": "5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "U4",
+      "pad": "6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CANL"
+    },
+    {
+      "ref": "U4",
+      "pad": "7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CANH"
+    },
+    {
+      "ref": "U4",
+      "pad": "8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "STB"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U4",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U5",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_EN_UVLO"
+    },
+    {
+      "ref": "U5",
+      "pad": "10",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_ITIMER"
+    },
+    {
+      "ref": "U5",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_OVLO"
+    },
+    {
+      "ref": "U5",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_PG"
+    },
+    {
+      "ref": "U5",
+      "pad": "4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_PGTH"
+    },
+    {
+      "ref": "U5",
+      "pad": "5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIN_5V"
+    },
+    {
+      "ref": "U5",
+      "pad": "6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "5V_SYS"
+    },
+    {
+      "ref": "U5",
+      "pad": "7",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_DVDT"
+    },
+    {
+      "ref": "U5",
+      "pad": "8",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U5",
+      "pad": "9",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "EFUSE_ILM"
+    },
+    {
+      "ref": "U6",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3"
+    },
+    {
+      "ref": "U6",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "U6",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "VIO_LS_ON"
+    },
+    {
+      "ref": "U6",
+      "pad": "4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "CT"
+    },
+    {
+      "ref": "U6",
+      "pad": "5",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "QOD"
+    },
+    {
+      "ref": "U6",
+      "pad": "6",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "3V3_RADIO_IO"
+    },
+    {
+      "ref": "Y1",
+      "pad": "1",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "XTAL_P"
+    },
+    {
+      "ref": "Y1",
+      "pad": "2",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    },
+    {
+      "ref": "Y1",
+      "pad": "3",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "XTAL_N"
+    },
+    {
+      "ref": "Y1",
+      "pad": "4",
+      "pinfunction": null,
+      "pintype": null,
+      "net": "GND"
+    }
+  ]
+}

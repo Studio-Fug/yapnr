@@ -1,0 +1,27 @@
+{
+  "name": "pmic.c_snb0",
+  "atoAddress": "pmic.c_snb0",
+  "designator": "C27",
+  "descriptor": "C27 \u2014 pmic.c_snb0",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.c_snb0|parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato::Radar60_C_390p_0402",
+  "footprintUuid": "ef381f07-eefa-466d-9648-746e4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "snb0",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

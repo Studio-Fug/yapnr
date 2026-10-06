@@ -1,0 +1,689 @@
+
+===== page 1 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+1
+ENGINEERING REQUIREMENTS / FEASIBILITY
+Design requirements for a
+commodity phased array radar
+Status: proposal and feasibility assessment, 2026-10-02. Proposed yapnr demonstration; no
+hardware has been built or simulated for this study. All performance requirements are targets.
+Calculations are first-order estimates, and costs are allocations unless a price source is identified.
+Decision: develop a 60 GHz FMCW radar with custom PCB antennas and feed networks, using
+the external-antenna TI IWR6843 as the reference radio. A materials BOM below $100 at 10,000 units
+per year is plausible. The proposed nominal allocation is $70, with a $14 contingency. The credible
+first application is low-speed autonomous ground vehicles and robots at approximately 0.5-20 m. A
+highway perception radar, reliable pedestrian detection in all conditions, and automotive qualification are
+separate projects.
+This document follows yapnr's design-document structure and adds stable requirement IDs and
+verification criteria. The inspected main-branch snapshot is 8dfcf009e808208649387e00d6c3a053d9959ef2.
+No file literally named rules_requirements was present in that snapshot. The RF coupon and FEA design
+documents provide the closest local precedent. [R1-R4]
+1. Goals and scope
+1.1 What the demonstration must prove
+The demonstration shall start with electrical and radiation-pattern requirements, select commodity
+components, synthesize copper RF structures, place and route the complete board, and evaluate the
+resulting coupled design. It shall show the physical manufactured radar and a reproducible comparison
+against a conventional design on the same stackup.
+SYS-01 - Cost boundary. The recurring materials BOM shall be less than $100 USD at a stated
+10,000-unit annual purchase volume, with a design target of $85 or less. It includes the radio, processing,
+memory, clocks, power conversion, interface components, PCB copper antennas, radome, connectors
+and mounting hardware. It excludes assembly, calibration labor, yield loss, certification, development
+equipment, engineering and host vehicle. These exclusions shall be priced separately; an external
+computer needed to perform radar processing must be included in the BOM. Verification: dated supplier
+quotations and an exact-part BOM at gate G5.
+SYS-02 - Commodity construction. Use catalog ICs, ordinary SMT assembly and a commercially
+offered PCB process. No custom silicon, antenna-in-package radio, hand-tuned wire structures, exotic RF
+connector in each shipped unit, or external SDR is allowed in the demonstration BOM. A low-loss RF
+laminate is acceptable commodity hardware. Verification: manufacturing package and supplier process
+review.
+SYS-03 - Application. The initial operational domain is a ground vehicle moving at up to 3 m/s, in a
+controlled test area, with radar targets at 0.5-20 m and radial target speeds up to 4.5 m/s. Initial
+environmental characterization covers dry conditions and 0-50 degrees C ambient. This is an additional
+perception sensor, not an approved sole braking sensor. Verification: a published test-domain declaration
+and recorded test runs.
+SYS-04 - Scope of automation. yapnr shall generate and route every external RF interconnect,
+antenna feed and designated inverse-designed structure. The radio's internal PLL, mixers, LNAs and
+ADCs remain vendor-designed blocks with documented interface models. A successful result
+demonstrates the external signal chain and board design; it does not claim to have synthesized the radio
+silicon. Verification: generated geometry provenance from requirements to final board.
+
+===== page 2 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+2
+SYS-05 - Integration envelope. Target a sensor envelope no larger than 100 x 70 x 25 mm, powered
+from a regulated 5 V input with a 2 A source allowance, and no more than 4 W average consumption in
+the released 20 Hz profile. Output timestamp, mode, range, radial speed, azimuth, SNR/confidence and
+diagnostic status for each detection. Verify measured peak/average power, processing latency and
+junction temperature at the maximum declared ambient. An automotive battery/transient front end is
+outside this initial regulated-input domain and must be costed if added.
+1.2 Non-goals for the first release
+ - Highway-speed autonomous driving, 100-200 m guaranteed detection, or dense 3D imaging.
+ - Automotive qualification or a system functional-safety claim inferred from the IC's qualification.
+ - Simultaneous fine angular resolution, narrow transmit beams and a large field of view from a handful of
+ RF channels.
+- A production-ready design generated solely from nominal FR-4 data.
+ - Replacing measured RF validation with KiCad DRC or replacing DRC with an electromagnetic result.
+
+2. Frequency choice and feasibility
+2.1 Candidate bands
+The physical range resolution is approximately delta_R = c / (2 B), where B is the coherently observed
+bandwidth. The figures below are calculated ideal resolutions, before window broadening, interference
+and calibration error. They are not single-target accuracy guarantees. [R10]
+Candidate
+Representative
+usable bandwidth
+Ideal range
+resolution
+Assessment
+902-928 MHz
+26 MHz theoretical
+full-band span
+5.77 m
+Too coarse for the intended perception demo; large
+aperture
+2.4 GHz
+83.5 MHz US Part 15
+band span
+1.80 m
+Better component access, still poor range separation
+5.725-5.875 GHz
+150 MHz span
+1.00 m
+Excellent intermediate RF-toolkit benchmark; coarse
+radar
+24.0-24.25 GHz
+250 MHz upper
+bound
+0.60 m
+Credible low-cost fallback; allow edge guards
+60 GHz family
+3.2 GHz observed
+sweep proposed
+4.68 cm
+Recommended combination of radar bandwidth and
+compact array
+76-81 GHz
+4 GHz example
+sweep
+3.75 cm
+Strong automotive path, but not an ISM-band answer
+These spans describe engineering comparisons, not blanket permission to emit a particular waveform.
+The 2.4 and 5.8 GHz entries especially require waveform-specific regulatory review.
+Terminology matters. The formal ISM designation near 60 GHz is 61-61.5 GHz, not all of 57-71 GHz.
+The broader US 60 GHz region is available for qualifying unlicensed devices under specific rules.
+Restricting the radar to the 500 MHz ISM slice would give only 30 cm ideal resolution. Here, “60 GHz
+radar” means a design using the applicable unlicensed radar provisions, with the production band initially
+contained in 60-64 GHz. [R8, R9]
+At 915 MHz, half-wavelength spacing is 164 mm. An eight-element linear array has a 1.15 m end-to-end
+phase-center span; roughly a 3.3 m effective aperture is needed for a 5-degree broadside beam under
+
+===== page 3 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+3
+the usual uniform-aperture approximation. At 62 GHz, half-wavelength spacing is 2.42 mm and a
+5-degree aperture is about 49 mm. Inverse design can improve efficiency, matching and packaging, but
+cannot remove this aperture requirement. [R11; calculations]
+2.2 Radio selection
+ARCH-01 - Reference radio. Use an external-antenna IWR6843, with the exact purchasable suffix and
+silicon revision frozen at G1. Its documented capabilities include 60-64 GHz operation, three TX channels,
+four RX channels, 6-bit TX phase control, complex receive conversion and integrated processing. TI's
+published comparison lists approximately $18.963 at 1,000 units; this is a price anchor, not a
+10,000-unit quote. The BOM allocates $22. [R5-R7]
+Use the IWR6843 because it supports an actual transmit phase-steering experiment as well as receive
+beamforming. The lower-cost IWRL6432 is a viable digital/MIMO radar alternative, but its binary TX phase
+control is not a substitute for arbitrary phase steering. The newer IWRL6844 also documents binary
+phase control; more channels alone do not establish equivalent beamforming capability. Do not silently
+substitute either part. [R15, R16]
+24 GHz fallback. Infineon's BGT24LTR11 has accessible analog I/Q outputs, and the manufacturer
+demonstrates software-controlled FMCW. It is attractive for a 1D range demo or a switched-beam
+antenna. A true multibeam system additionally needs RF switching, a beam-forming network, baseband
+conversion and calibration; its one TX and one RX do not create a phased array by themselves. This
+fallback is useful if 60 GHz fabrication/metrology fails the early gates, with the range-separation
+requirement explicitly relaxed to approximately 1 m for a guarded sweep. [R17]
+Sub-GHz conclusion. An SX1262 may supply an experimental CW source, but its normal packet
+receiver does not expose the coherent multi-channel sample stream required here. Its 500 kHz LoRa
+bandwidth corresponds to roughly 300 m ideal radar resolution if used as the observation bandwidth. A
+separate coherent receiver and stepped-frequency processing would be a different radio architecture.
+The revised baseline therefore has no LoRa dependency; telemetry can be added separately if needed.
+[R18; calculation]
+3. Architecture and modes
+3.1 External signal chain
+IWR6843
+PLL / PA / RX / ADC
+ DSP + MCU
+3 phase-controlled TX feeds
+4 calibrated RX feeds
+6 PCB TX patches
+8 PCB RX patches
+Scene / reflection
+Generated copper: launches, matching, corporate dividers, interconnects and radiators. Not to scale.
+Power input -> protection and regulators -> reference clock and IWR6843 -> three phase-controlled TX
+ports -> synthesized launch/matching/feed structures -> three PCB antenna columns -> scene -> four
+PCB receive columns -> four synthesized feeds -> radio LNA/mixer/ADC -> onboard range/Doppler/angle
+processing -> timestamped detections over UART or CAN-FD.
+Each column initially contains two vertically arranged radiating patches fed by a corporate divider. That is
+six TX patches and eight RX patches, with three and four independently controlled phase centers,
+respectively. The optimizer may change the radiator shape while preserving port contracts and the
+declared phase-center geometry. A patch count is not an independent-channel count.
+
+===== page 4 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+4
+ARCH-02 - Two explicit modes. Implement:
+ 1. Perception mode: time-division multiplex the three TX channels, receive all four channels, estimate
+ range and Doppler, compensate target motion between TX slots, then form angle estimates from the
+actual virtual-array geometry.
+2. Phased-transmit demonstration mode: excite all three TX channels coherently, set phase
+ progressions for -30, 0 and +30 degrees, and collect four RX channels. Measure the far-field beam shift
+and show the effect on target illumination. Each beam gets a separate coherent processing interval.
+These modes shall have separate performance reports. They do not simultaneously deliver the same
+MIMO aperture, Doppler resolution and transmit gain. Verification: firmware configuration plus measured
+mode-specific patterns and detections.
+ARCH-03 - Three-TX supply mode. The board shall implement the documented 1 V RF/PA LDO-bypass
+arrangement for three simultaneous TX, including the required PA supply connection, sequencing,
+current capacity and ripple limits. Budget for the documented 2.5 A peak on that rail; average board
+power is a different quantity. Verify the exact revision's data sheet and firmware controls before
+schematic release. Verification: schematic review and rail-current/ripple measurements in the worst
+transmit state. [R6, sections 7.6-7.7 and 8.3.1]
+3.2 Phase-center geometry
+Azimuth phase centers and virtual-position multiplicity
+TX
+RX
+TX + RX
+1
+2
+3
+3
+2
+1
+0d
+1d
+2d
+3d
+4d
+5d
+d = 2.342 mm. Twelve channel pairs occupy six distinct azimuth positions; translations omitted.
+ANT-01 - Steering geometry. Start with azimuth TX positions 0, d, 2d and RX positions 0, d, 2d, 3d,
+where d = c/(2*64 GHz) = 2.342 mm. TX and RX banks may have a common physical translation and
+vertical separation. Their azimuth axes must remain parallel. The spacing is referenced to the highest
+design frequency. Verification: exact exported phase centers and full-wave embedded-element patterns.
+This deliberately favors clean transmit steering. The twelve TX/RX pair measurements have only six
+distinct azimuth sum positions, with multiplicities 1, 2, 3, 3, 2, 1. They are not twelve independent
+uniformly spaced virtual elements. Equalizing the multiplicities affects noise; angle processing shall use
+the actual covariance and measured manifold. The expected resolution is coarse: roughly 18 degrees
+ideal broadside beamwidth for a uniformly weighted six-position equivalent, with a 25-degree
+two-target acceptance target.
+Spacing TX phase centers by 4d would instead produce twelve distinct MIMO positions with the same four
+RX positions. That is a separate layout option. Its sparse transmit array creates grating-lobe problems
+when all TX transmit coherently, so it cannot inherit the baseline's steering claims. The design shall never
+advertise both benefits without demonstrating how it achieves them. [R11; geometry calculation]
+ANT-02 - Radiation targets. Across 60.3-63.8 GHz, require return loss of at least 10 dB per external
+antenna port, nominal per-column realized broadside gain of at least 5 dBi, and useful azimuth coverage
+of at least +/-45 degrees. In phased-transmit mode, main-lobe pointing shall be within 5 degrees of each
+commanded direction after calibration. No unintended lobe within the forward scan sector may exceed
+the selected main lobe. Treat total main-beam efficiency, cross-polarization, sidelobes and scan loss as
+measured outputs, not just antenna matching. Verification: embedded-element simulation and chamber
+patterns with the final radome.
+
+===== page 5 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+5
+ANT-03 - Honest angular output. Report single-target angle accuracy separately from two-target
+resolution. The baseline has no elevation-resolution requirement. Do not generate a convincing-looking
+3D point cloud by interpreting an unmeasured elevation coordinate as data.
+4. Waveform and performance requirements
+4.1 Calculated starting profile
+The following is a mutually consistent starting calculation, not a validated firmware configuration. Chip
+timing, analog-filter settings, quantization, memory layout and legal emissions must be checked at
+G1-G3. [R6, R10]
+Quantity
+Proposed
+value
+Consequence
+Chirp RF start
+60.3 GHz
+Lower edge guard
+Ramp slope
+50 MHz/us
+Range-to-beat-frequency conversion
+RF ramp duration
+70 us
+Ramp ends at 63.8 GHz
+ADC start after ramp start
+6 us
+ADC observes 60.6-63.8 GHz
+ADC capture
+512 complex
+samples at 8
+MS/s
+64 us capture; 3.2 GHz observed bandwidth
+Chirp repetition time
+80 us
+10 us reset/idle allowance
+Perception sequence
+20 cycles of
+TX0, TX1, TX2
+60 chirps; 4.80 ms burst
+Frame period
+50 ms
+20 frames/s; 45.20 ms between bursts
+Per-TX sampling interval
+240 us
+About +/-5.0 m/s unambiguous radial velocity at 62 GHz
+Per-TX coherent observation
+About 4.80 ms
+About 0.50 m/s nominal Doppler bin width
+Beat frequency at 20 m
+6.67 MHz
+Requires a verified complex IF passband beyond this
+frequency
+Raw radar cube
+512 x 60 x 4 x 4
+bytes
+491,520 bytes before scratch/output storage
+delta_R = 4.68 cm is the unwindowed range-bin scale. Windowing broadens peaks, so the acceptance
+requirement is 15 cm separation, not 4.68 cm. If the selected IF mode cannot pass 6.67 MHz with margin,
+reduce slope and recalculate duration, sample rate, samples, velocity ambiguity and duty together.
+Zero-padding does not recover missing bandwidth.
+The raw cube is 480 KiB and is substantial relative to the chip's L3 storage. DSP-01: the firmware shall
+demonstrate a bounded memory plan including range/Doppler transforms, calibration arrays and output
+buffers. Streaming or in-place processing is expected. Meeting the RF arithmetic without fitting the
+processing workload is a failure.
+For the phased-transmit demo, use three blocks of 20 chirps, one block per pointing direction, within the
+same burst budget. Each block lasts 1.60 ms: its nominal velocity-bin width is about 1.51 m/s. This mode
+does not inherit perception mode's velocity-resolution target.
+
+===== page 6 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+6
+4.2 Acceptance targets
+All tests use the released firmware, final antenna/radome and a documented calibration. A “known-RCS
+target” means a characterized reflector with aspect and frequency dependence recorded, not an
+assumed human cross section.
+ID
+Requirement
+Verification
+RAD-0
+1
+Detect a 1 square meter reference target from
+1-20 m at boresight
+At least 90% frame detection over 200 frames per
+test point; 95% confidence interval reported
+RAD-0
+2
+Detect a 0.1 square meter reference target from
+1-10 m
+Same criterion; pedestrian tests reported separately
+RAD-0
+3
+Establish usable operation down to 0.5 m
+Leakage/clipping and near-range filter test; publish
+any blind interval
+RAD-0
+4
+Range error at most 10 cm for an isolated target at
+1-20 m
+95th-percentile absolute error, calibrated ground
+truth
+RAD-0
+5
+Separate equal-strength targets 15 cm apart in
+range
+At 5-10 m, matched angle/Doppler, two peaks with at
+least 3 dB valley; at least 90% of frames
+RAD-0
+6
+Perception-mode velocity error at most 0.25 m/s;
+two-target velocity separation target 1.0 m/s
+Controlled moving target; report window broadening
+and ambiguity limits
+RAD-0
+7
+Angle error at most 3 degrees for an isolated
+target within +/-30 degrees
+Post-processing SNR at least 15 dB; 95th-percentile
+absolute error
+RAD-0
+8
+Resolve two equal-strength targets 25 degrees
+apart around boresight
+Same range/Doppler; report the two-peak criterion
+and success rate
+RAD-0
+9
+At least 20 perception frames/s and at most 100
+ms output latency
+End-to-end timestamps, including processing and
+transport
+RAD-1
+0
+Fewer than one false confirmed track/minute in a
+specified empty scene
+At least 30 min per scene; detector threshold and
+track policy frozen beforehand
+RAD-01 and RAD-02 are boresight targets; a range-versus-angle map shall characterize scan
+degradation. Targets are not guaranteed throughout the full field of view. Separate trials shall cover
+walls, ground clutter, vehicles, foliage, pedestrians, wet radome and other radars. Passing the
+reference-target tests does not establish an all-weather vehicle-perception claim.
+4.3 First-order sensitivity check
+Use the monostatic approximation:
+Pr = EIRP * Gr * lambda^2 * sigma / ((4*pi)^3 * R^4 * L).
+For an illustrative conservative indoor profile, assume 12 dBm EIRP, 5 dBi realized gain at one RX port, 62
+GHz, a 1 square meter target at 20 m, and 3 dB additional two-way environmental/radome loss. The
+received power is approximately -117.3 dBm per receiver. Feed loss is already included in realized
+gain and is not subtracted a second time.
+With an assumed 12 dB receiver noise figure and Hann-window equivalent noise bandwidth 1.5/64 us =
+23.44 kHz, thermal noise per range bin is approximately -118.3 dBm. Ideal coherent accumulation of 20
+chirps adds 13.0 dB, and combining four RX channels adds up to 6.0 dB. After a further assumed 3 dB
+processing/window allowance, the illustrative result is 17.0 dB SNR. This deliberately credits only one
+TX's coherent sequence; extra duplicate MIMO measurements are not counted as free aperture gain.
+
+===== page 7 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+7
+At 10 m, a 0.1 square meter target gives approximately 19.0 dB under the same assumptions. Halving
+range adds about 12 dB; reducing RCS by ten times costs 10 dB. These estimates support a prototype,
+not a detection guarantee. Leakage phase noise, interference, clutter, scan loss, nonideal coherent
+integration and target fluctuations can dominate. Gate G3 replaces the assumed loss and noise terms
+with measurements.
+5. RF copper and fabrication requirements
+RF-01 - Stackup as a contract. Freeze a supplier-specific stackup, RF laminate, thickness distribution,
+copper finish/roughness, etch tolerance, mask openings and via geometry. Start with a thin low-loss RF
+layer over a solid reference plane and ordinary lower layers for power/digital routing. Short-path
+characterized FR-4 is a cost-down experiment, not an interchangeable substitute. TI's RF layout guide
+provides a manufacturing reference; exact dimensions must come from this design's stackup. [R12]
+RF-02 - Copper components. Synthesize at least two meaningful classes: the antenna radiator/column
+and a distributed feed component such as a two-way divider plus matching transition. Their emitted
+copper shall be the copper fabricated. Optimizing a picture, then manually redrawing it, is insufficient.
+Each structure shall carry ports, reference planes, frequency masks, a fabrication envelope and
+versioned S-parameters.
+RF-03 - Feed budgets. From radio package launch to the declared antenna-feed plane, target no more
+than 1.5 dB total dissipative/mismatch loss per path, at least 10 dB return loss, and no more than 0.75 dB
+amplitude imbalance between equivalent paths. Target no more than 5 degrees residual channel phase
+error after calibration. A two-way divider's ideal -3.01 dB split is not dissipative loss; report excess loss
+separately. Verify across band, process corners and temperature samples.
+RF-04 - Phase and delay. Specify electrical phase and group delay at common de-embedded reference
+planes, not only equal physical trace lengths. At 62 GHz and illustrative effective permittivity 2.8, the
+guided wavelength is about 2.89 mm; a 5-degree phase error corresponds to only 40 micrometers of
+electrical path mismatch. Include bends, launches, vias, coupling and dielectric variation.
+Frequency-dependent calibration cannot repair lost signal power.
+RF-05 - Microstrip and stripline. Prefer microstrip or grounded coplanar waveguide for short
+millimeter-wave feeds. If stripline is used, include both transitions and its ground structure in the
+full-wave model. Add a same-stackup stripline transition coupon as an optional toolkit benchmark; the
+radar shall not acquire a long lossy buried feed just to exhibit every primitive.
+RF-06 - Manufacturability. Minimum width, gap, island size, via spacing and mask registration shall
+come from a quoted process. Use eroded, nominal and dilated geometries and sampled material/process
+variations during optimization. Do not retain sub-resolution features because a solver mesh happened to
+permit them. Initial acceptance requires a manufacturable design that meets hard masks in declared
+bounded corners; no fabricated statistical yield percentage shall be inferred from synthetic corners alone.
+RF-07 - Coupling and leakage. Solve the antenna banks, feed region and representative nearby
+board/radome structures together. Include embedded-element patterns, active input match, port
+coupling and polarization. Require at least 10 dB input headroom below the applicable
+compression/blocker limits and at least 6 dB ADC headroom in the declared nearest-target/leakage test.
+Require no more than 3 dB measured desensitization from self-leakage at the acceptance ranges. Select
+antenna separation/shielding from that budget; an arbitrary isolation figure alone is not a radar
+validation.
+RF-08 - Measurement access. Provide removable panel coupons and calibrated millimeter-wave probe
+or waveguide-fixture access to feed structures. A 6 GHz hobby VNA and SMA coupon cannot validate a 60
+GHz product. Require a booked measurement path covering the product band before G2. Bench
+equipment is development cost and shall not be hidden in the $100 claim.
+
+===== page 8 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+8
+6. yapnr workflow and acceptance contracts
+6.1 Repository state and required extensions
+At the inspected snapshot, coupon tooling exists on main, and its documentation explicitly says the
+boards have not been ordered or measured. Its supplied predictions cover 0.1-18 GHz, with stated
+specifications over 1-12 GHz. Those fits cannot be extrapolated into a validated 60 GHz material model.
+[R2]
+Draft PR #30 reports that a divider passes its three-grid checks; antenna synthesis, a Wilkinson-type
+combiner and other cases remain unresolved. Issue #32 proposes catalog-part/distributed-element
+co-simulation and iteration with PnR. These are foundations, not evidence of an already qualified
+end-to-end millimeter-wave flow. [R3, R4]
+PNR-01 - Declared RF objects. The proposed interface shall represent a copper RF component as
+geometry plus ports, reference planes, ground/keepout ownership, an orientation-dependent radiation
+model where relevant, fabrication limits and validation artifacts. These are proposed contracts; this
+document does not invent an existing yapnr API.
+PNR-02 - Hierarchy. Preserve each TX/RX phase-center lattice as a constrained group. Place the radio,
+supplies, memory and interfaces with their own electrical/thermal contracts. Route RF connections using
+qualified line and transition families. Preserve ground returns and antenna clearances through fill, repair
+and final export.
+PNR-03 - Coupled iteration. Evaluate compact network models during search; re-extract the changed
+RF region after placement/routing; run full-wave sign-off on the final exported copper. Coupled adjacent
+blocks require a joint model; blindly cascading independent two-ports misses coupling. Changes to
+stackup, ground fill, radome or nearby metal invalidate affected caches.
+PNR-04 - Optimization priorities. Reject DRC, connection, fabrication, RF-mask, power and regulatory
+violations first. Among feasible candidates, minimize recurring cost, RF excess loss and area, then
+runtime. Selection is mechanical and seed-controlled, following the repository's Monte
+Carlo/successive-halving policy. An agent shall not hand-select a visually attractive board or manually
+route a failing design to claim automatic success. [R1]
+PNR-05 - Evidence levels. Label outputs as analytical estimate, solver prediction, synthetic recovery,
+measured coupon or measured system. Require mesh refinement, passivity/energy checks, calibrated
+material loss and an independent solver or measured comparison. A radiated-fraction objective alone
+cannot establish antenna gain: loss and radiation must be distinguished. Report dispersion,
+finite-conductivity and roughness limitations of the solver at 60 GHz.
+PNR-06 - Reproducibility. Hash the requirements, parts/models, stackup posterior, solver version,
+seed, geometry and firmware. Every solver worker has a timeout and resource budget. New engine
+behavior remains behind a default-off flag until its declared A/B result passes. Native KiCad DRC must
+report zero unconnected items and zero unwaived violations; RF acceptance remains an additional check.
+[R1]
+6.2 End-to-end sequence
+ 1. Freeze the operational domain, jurisdiction, part revision and RF ports.
+ 2. Build the conventional reference and measurement fixtures; characterize same-process coupons.
+ 3. Fit material/process parameters with uncertainty over the actual product band.
+ 4. Optimize single radiator, two-way feed and launch primitives against robust masks.
+ 5. Assemble TX/RX arrays and calculate their coupled embedded patterns.
+ 6. Place and route the complete board; re-extract changed structures and iterate.
+ 7. Sign off the exported board, radome, power, memory and waveform constraints together.
+
+===== page 9 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+9
+8. Build a small lot, calibrate, measure and compare against the reference with frozen analysis.
+ DEMO-01 - Fair comparison. Manufacture conventional and optimized variants with the same radio,
+stackup, outline constraint, firmware and measurement setup. Compare return loss, total efficiency, feed
+loss, pointing, angular response, detection probability, power, BOM and optimizer runtime. The optimized
+design passes if it meets the same hard requirements and demonstrates at least one preregistered gain,
+such as 20% smaller feed area or 0.5 dB less excess loss, without degrading the other hard limits. Both
+thresholds are proposed targets, not predicted wins.
+DEMO-02 - Complete deliverables. Release the requirements, part-selection record, schematic/netlist,
+generated copper, native board, DRC, fabrication files, costing, model provenance, calibration data,
+firmware and raw test data. Include a live range-angle view and a measured beam-steering plot. The
+demonstration must show a real target, not only simulated S-parameters.
+7. Spectrum and operating profiles
+REG-01 - Initial US profile. Design for 47 CFR 15.255(c)(2)(iii)(A): its radar provisions specify a 14 dBm
+peak EIRP ceiling and at least 25.5 ms of qualifying transmitter off-time in every contiguous 33 ms
+interval; qualifying continuous off intervals are at least 2 ms. The outdoor fixed/qualifying vehicular
+alternative in (B) allows 20 dBm with a different off-time constraint. The baseline targets 12 dBm peak
+EIRP for margin. A higher-power outdoor profile is optional and needs its own verification. [R8]
+The proposed 4.80 ms burst every 50 ms leaves at least 28.20 ms outside the burst in any 33 ms
+window. At most one burst can intersect such a window. Even if a window boundary leaves a silent
+fragment shorter than 2 ms and that fragment is excluded, more than 26.20 ms remains, exceeding the
+25.5 ms requirement. This conservative calculation treats the entire burst as transmitting and does not
+credit short inter-chirp gaps. Firmware shall enforce this envelope, including startup, calibration and
+diagnostic emissions; measured timelines and the certification test method must confirm it at G1.
+REG-02 - Full-array EIRP. Verify the worst pointing direction, frequency, process and radome condition
+for every phase code. Three coherent equal TX ports can add 20 log10(3) = 9.54 dB relative to one port
+at the same per-port power and element pattern. The power setting must back off accordingly.
+Beamforming improves spatial selectivity; it is not permission to exceed the radiated limit. Factory
+calibrations and startup states must obey the same envelope.
+REG-03 - Product boundary. Review emissions, exposure, certification, installation conditions and the
+rule's restriction on external phase-locking inputs before hardware release. The baseline is one radio IC
+with an internal reference and an integral array; it shall not expose an external synchronization input
+intended to aggregate independently certified transmitters. Qualification of this architecture is a G1
+regulatory deliverable. [R8, R13]
+REG-04 - Regional variants. Do not assume US settings are legal in Europe, Japan or elsewhere. Each
+release shall name the country, applicable standard/rule version, waveform, power and installation
+category. The 24 GHz fallback requires its own regional review. The high-power 61-61.5 GHz option
+trades away bandwidth and is not the default design.
+8. Cost model
+8.1 Recurring materials allocation
+The following is a planning budget for the complete sensor, not a supplier-quoted BOM. PCB, radome and
+assembly figures are especially sensitive to process and volume. No volume discount below the cited
+radio price is needed to make the nominal arithmetic work.
+
+===== page 10 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+10
+Item
+Quantity or boundary
+Nominal
+USD
+Planning range
+USD
+IWR6843 external-antenna
+radio/processor
+1; price anchor about $18.96/1ku
+22
+19-28
+Power conversion and filtering
+All rails, 1 V bypass capability, inductors
+8
+6-12
+Flash, 40 MHz reference, reset
+One set
+3
+2-5
+External passives and RF
+support
+Decoupling, bias, damping; copper counted
+below
+4
+3-6
+PCB including RF laminate and
+antennas
+One controlled-process board
+16
+10-25
+Interface and input protection
+UART/CAN-FD, ESD, input protection
+5
+3-7
+Connectors and mounting
+hardware
+Shipped product hardware
+4
+2-6
+Radome and enclosure
+Commodity molded material
+6
+4-10
+Thermal/spreader/shield
+allowance
+As required by measured design
+2
+1-4
+Materials subtotal
+70
+50-103
+Design contingency
+20% of nominal, not another physical part
+14
+Budget including
+contingency
+84
+The high end exceeds $100: the constraint is plausible, not closed. A $25 RF PCB and $28 radio consume
+most of the margin. COST-01: if the quoted materials total is $85 or more, review cost-down options
+before full-array fabrication. If the final qualified materials BOM is $100 or more, the original demo
+requirement fails.
+At nominal materials cost, illustrative assembly $6, calibration/test $5 and packout $3 give $84 before
+yield. At 95% yield, a simplified fully-at-risk model gives $84/0.95 = $88.42 per good unit. These are
+process allowances, not quotations; test fixture amortization, freight, tariffs and warranty remain outside
+that estimate. Never present the $84 materials-with-contingency figure as a fully quoted shipped cost.
+8.2 Development resources
+Required resources include an RF PCB engineer, radar firmware/DSP work, yapnr solver/PnR work, 60-64
+GHz network and antenna measurements, a motion/reflector test setup and at least two PCB iterations.
+Low unit cost does not imply low development cost. Shared or rented millimeter-wave facilities are a
+credible route, but access and pricing are unresolved.
+A planning sequence is 2-3 weeks for architecture/profile proof, 3-6 weeks for coupons and supplier
+characterization, 4-8 weeks for primitives/array/PnR closure, and 4-8 weeks for two hardware iterations
+and system validation, with overlap. 12-24 weeks is a planning envelope for an experienced team
+with lab access, not a commitment; immature solver work or fabrication lead times can extend it.
+
+===== page 11 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+11
+9. Verification gates and stop conditions
+G0 - Requirements and radio access. Freeze the domain, reference part, source availability and exact
+pricing basis. Verify firmware can acquire the required complex data and control TX phase. Stop if the
+chosen part does not expose the required mode or the project can only access a closed antenna module.
+G1 - Waveform and implementation proof. Demonstrate chirp/IF feasibility, memory fit, processing
+time, three-TX supply behavior, regulatory profile and complete RF-active timeline on a reference
+platform. Use the 20-cycle profile and verify the complete rolling-window off-time accounting. Stop if the
+system needs an unbudgeted external processor or cannot meet its legal power/timing envelope.
+G2 - Material and primitive proof. Measure same-process lines, launches, a divider and a radiator
+over the operating band. Require model-to-measurement agreement within 0.5 dB magnitude and 5
+degrees transmission phase for the specified feed structures after de-embedding, with resonance centers
+within 1%. If not, update the model or process before optimizing the complete radar. Access to
+appropriate metrology is a prerequisite.
+G3 - Array and receiver proof. Validate coupled antenna patterns, calibrated steering, leakage
+headroom, IF response and the reference-target link budget. Run the perception and phased-transmit
+modes independently. Recalculate range claims from measured sensitivity and legal EIRP. Stop if the
+accepted geometry cannot support the promised angular performance.
+G4 - Automatic layout proof. Generate and route complete reference/optimized boards using frozen
+contracts and mechanical selection. Require native DRC plus final-copper RF sign-off. Compare runs
+across a fixed seed set and fixed compute budgets; report failures as well as the winning candidate. No
+hand-edited copper rescue qualifies.
+G5 - Built-system and cost proof. Characterize at least ten units across two fabrication lots, including
+conventional controls. Run RAD-01 through RAD-10, pattern tests and environmental characterization.
+Publish unit/lot variation; ten units do not prove mass-production yield. Close supplier quotes and report
+materials, assembly, calibration and development costs separately.
+G6 - Demonstration release. Show requirements -> optimization -> full-board PnR -> predicted fields
+-> fabricated radar -> calibrated target measurements. Freeze source/configuration hashes and make
+datasets reproducible. A full vehicle qualification program begins only after this gate; it is not an implied
+deliverable of the demo.
+10. Feasibility assessment
+Hardware cost: plausible, medium-to-high confidence at concept level. A roughly $19 catalog
+radar IC makes a sub-$100 sensor credible without custom silicon. The uncertain cost drivers are RF PCB
+yield, packaging and calibration, rather than the transceiver alone.
+Useful short-range radar: feasible in principle, medium confidence for these exact targets.
+Available bandwidth and coherent reception support the proposed range/Doppler performance.
+Link-budget estimates have enough margin for controlled reference targets, but measured leakage and
+clutter decide useful performance. Human RCS varies strongly and is not guaranteed by the reflector
+result.
+Phased transmit steering: feasible but modest. Three close-spaced TX phase centers can visibly
+steer a broad beam. They do not produce a pencil beam. The baseline intentionally accepts coarse
+angular separation; larger arrays or more channels would need another geometry and cost study.
+End-to-end inverse design and automatic PnR: the largest project risk. The inspected
+implementation is still developing the required primitives, and current coupons are below the proposed
+band. At 60 GHz, etch, roughness, ground transitions, material dispersion and coupled radiation are
+first-order effects. Meeting this document requires new validation work, not simply retuning a 5.8 GHz
+example.
+
+===== page 12 =====
+YAPNR  /  60 GHz phased array radar  /  Proposal 2026-10-02
+12
+Autonomous-vehicle suitability: credible for a constrained robotics demonstration; unproven
+for road deployment. Long range, fine angle resolution, interference resilience, adverse weather,
+safety diagnostics and qualification are not established by a cheap BOM or a good laboratory plot.
+Recommended next commitment: fund G0-G2 before the full radar. In parallel with the 60 GHz
+system definition, retain the repository's existing 5.8 GHz work as a faster way to stabilize
+inverse-designed feeds, co-simulation and PnR integration. Proceed to the complete 60 GHz board only
+after measured primitive closure and an RF fabrication quote within budget.
+11. Sources and provenance
+Manufacturer and regulatory pages were reviewed on 2026-10-02. Prices are indicative public figures and may change.
+Equations, architecture choices, targets, allocations and timing examples in this document are the author's engineering
+analysis; they are not vendor performance promises. No full-wave solve or physical measurement was performed for this
+assessment.
+- R1. yapnr agent and engineering rules at the inspected commit.
+- R2. RF coupon design and coupon user guide. Establish current frequency coverage and unmeasured status.
+- R3. RF inverse-design draft PR 30 and issue 29. Live work status inspected separately from main.
+- R4. RF topology toolkit issue 32 and FEA design.
+- R5. TI IWR6843 product documentation.
+- R6. IWR6843 and IWR6443 data sheet Rev F. RF mode, supply, memory and timing constraints.
+- R7. TI IWR6843 and IWR6843AOP comparison and 1ku pricing. Published price anchor; exact variant quote remains
+open.
+- R8. 47 CFR 15.255. US unlicensed 60 GHz radar provisions, current text displayed through 2026-09-30.
+- R9. ITU spectrum-management training on ISM allocations. Includes 24-24.25 and 61-61.5 GHz allocations; national
+device rules remain separate.
+- R10. TI Programming Chirp Parameters in Radar Devices. Range, velocity and sampling relationships.
+- R11. Analog Devices phased-array characteristics and grating lobes and beam squint.
+- R12. TI RF PCB Design Manufacturing and Validation Guide.
+- R13. TI Radar Device Regulatory Compliance Overview Rev D. Secondary engineering guidance; the governing rule
+controls.
+- R14. 47 CFR 15.249 and 47 CFR 15.247. Alternative-band regulatory context.
+- R15. TI IWRL6432 data sheet and comparison pricing.
+- R16. TI IWRL6844. Newer alternative; binary phase-control distinction.
+- R17. Infineon Distance2GoL application note AN615. Evidence of a commodity 24 GHz analog-I/Q FMCW path.
+- R18. Semtech SX1262 documentation and manufacturer SX126x driver interface. Packet-radio and bandwidth context.

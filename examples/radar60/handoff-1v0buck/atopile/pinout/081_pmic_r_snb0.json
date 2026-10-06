@@ -1,0 +1,27 @@
+{
+  "name": "pmic.r_snb0",
+  "atoAddress": "pmic.r_snb0",
+  "designator": "R30",
+  "descriptor": "R30 \u2014 pmic.r_snb0",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_snb0|parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato::Radar60_R_3R9_0402",
+  "footprintUuid": "2a6c139d-c38a-413f-b10e-72f54642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "PMIC_SW_B0",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "snb0",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

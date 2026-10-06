@@ -1,0 +1,27 @@
+{
+  "name": "pmic.r_clkin_sync",
+  "atoAddress": "pmic.r_clkin_sync",
+  "designator": "R14",
+  "descriptor": "R14 \u2014 pmic.r_clkin_sync",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_clkin_sync|parts/Radar60_R_0_0402_DNP/Radar60_R_0_0402_DNP.ato::Radar60_R_0_0402_DNP",
+  "footprintUuid": "515de1d6-c425-473a-9e47-3e694642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "pmic-1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "SOP2_PMIC_CLKOUT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    }
+  ],
+  "warnings": ["1 unconnected lead(s)"]
+}

@@ -1,0 +1,128 @@
+{
+  "Problem": {
+    "Type": "Driven",
+    "Verbose": 2,
+    "Output": "postpro-sweep"
+  },
+  "Model": {
+    "Mesh": "postpro-amr/mesh.meshgz",
+    "L0": 0.001,
+    "Refinement": {}
+  },
+  "Domains": {
+    "Materials": [
+      {
+        "Attributes": [1],
+        "Permeability": 1.0,
+        "Permittivity": 1.0,
+        "LossTan": 0.0
+      },
+      {
+        "Attributes": [2],
+        "Permeability": 1.0,
+        "Permittivity": 3.56,
+        "LossTan": 0.0037
+      }
+    ]
+  },
+  "Boundaries": {
+    "PEC": {
+      "Attributes": [10, 16]
+    },
+    "Absorbing": {
+      "Attributes": [11, 12, 13, 14, 15],
+      "Order": 1
+    },
+    "Conductivity": [
+      {
+        "Attributes": [7],
+        "Conductivity": 17778549.18970829,
+        "Thickness": 0.035,
+        "External": false
+      },
+      {
+        "Attributes": [8],
+        "Conductivity": 17778549.18970829,
+        "Thickness": 0.035,
+        "External": false
+      },
+      {
+        "Attributes": [9],
+        "Conductivity": 17778549.18970829,
+        "Thickness": 0.035,
+        "External": false
+      }
+    ],
+    "WavePort": [
+      {
+        "Index": 1,
+        "Attributes": [3],
+        "Mode": 1,
+        "Offset": 0.802738,
+        "Excitation": 1,
+        "VoltagePath": [
+          [4.397262, 2.6, 0.1016],
+          [4.397262, 2.6, 0.0]
+        ]
+      },
+      {
+        "Index": 2,
+        "Attributes": [4],
+        "Mode": 1,
+        "Offset": 0.792341,
+        "Excitation": 0,
+        "VoltagePath": [
+          [8.0, 7.277741, 0.1016],
+          [8.0, 7.277741, 0.0]
+        ]
+      },
+      {
+        "Index": 3,
+        "Attributes": [5],
+        "Mode": 1,
+        "Offset": 0.802738,
+        "Excitation": 0,
+        "VoltagePath": [
+          [4.397262, 1.3, 0.1016],
+          [4.397262, 1.3, 0.0]
+        ]
+      },
+      {
+        "Index": 4,
+        "Attributes": [6],
+        "Mode": 1,
+        "Offset": 0.792341,
+        "Excitation": 0,
+        "VoltagePath": [
+          [10.342, 7.277741, 0.1016],
+          [10.342, 7.277741, 0.0]
+        ]
+      }
+    ],
+    "WavePortPEC": {
+      "Attributes": [12, 13]
+    }
+  },
+  "Solver": {
+    "Order": 2,
+    "Device": "CPU",
+    "Driven": {
+      "Samples": [
+        {
+          "Type": "Linear",
+          "MinFreq": 54.0,
+          "MaxFreq": 70.0,
+          "FreqStep": 0.025,
+          "SaveStep": 0
+        }
+      ],
+      "AdaptiveTol": 0.0001
+    },
+    "Linear": {
+      "Type": "Default",
+      "KSPType": "GMRES",
+      "Tol": 1e-6,
+      "MaxIts": 400
+    }
+  }
+}

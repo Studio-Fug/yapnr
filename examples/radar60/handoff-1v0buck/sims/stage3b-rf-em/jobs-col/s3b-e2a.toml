@@ -1,0 +1,49 @@
+# s3b-e2: C1 round-the-best (w35 x t_y) at 20 um, centre column only, exact end criteria;
+# plus the D14 ground-via fence re-run (port case, TX1/RX4, 20 um) against the no-fence baseline.
+name = "s3b-e2a"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 7200
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "cell-c1b-0-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1b-0.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-c1b-1.json,models/cell-c1b-2.json,models/cell-c1b-3.json,models/cell-c1b-4.json,models/cell-c1b-5.json,models/cell-c1b-6.json,models/cell-c1b-7.json,models/cell-c1b-8.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-c1b-1-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1b-1.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-c1b-0.json,models/cell-c1b-2.json,models/cell-c1b-3.json,models/cell-c1b-4.json,models/cell-c1b-5.json,models/cell-c1b-6.json,models/cell-c1b-7.json,models/cell-c1b-8.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-c1b-2-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1b-2.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-c1b-0.json,models/cell-c1b-1.json,models/cell-c1b-3.json,models/cell-c1b-4.json,models/cell-c1b-5.json,models/cell-c1b-6.json,models/cell-c1b-7.json,models/cell-c1b-8.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-c1b-3-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1b-3.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-c1b-0.json,models/cell-c1b-1.json,models/cell-c1b-2.json,models/cell-c1b-4.json,models/cell-c1b-5.json,models/cell-c1b-6.json,models/cell-c1b-7.json,models/cell-c1b-8.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-c1b-4-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1b-4.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-c1b-0.json,models/cell-c1b-1.json,models/cell-c1b-2.json,models/cell-c1b-3.json,models/cell-c1b-5.json,models/cell-c1b-6.json,models/cell-c1b-7.json,models/cell-c1b-8.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-c1b-5-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-c1b-5.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-c1b-0.json,models/cell-c1b-1.json,models/cell-c1b-2.json,models/cell-c1b-3.json,models/cell-c1b-4.json,models/cell-c1b-6.json,models/cell-c1b-7.json,models/cell-c1b-8.json", "--fspan", "54", "70"]

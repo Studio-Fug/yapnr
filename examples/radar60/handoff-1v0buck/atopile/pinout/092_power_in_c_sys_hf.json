@@ -1,0 +1,27 @@
+{
+  "name": "power_in.c_sys_hf",
+  "atoAddress": "power_in.c_sys_hf",
+  "designator": "C37",
+  "descriptor": "C37 \u2014 power_in.c_sys_hf",
+  "typeName": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_sys_hf|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+  "footprintUuid": "a1556b6d-916d-4c77-860d-56f64642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "5V_SYS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,53 @@
+# stage 3b EM bank and ground (s3b-bank-c); written by em/bank/make_jobs.py
+name = "s3b-bank-c"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4d"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 11700
+
+[inputs]
+w = "<notes>/radar60/stage3b-rf/em/bank/code/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/bank/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "bank-C-eTX1"
+script = "w/openems/ant_sim.py"
+args = ["models/bank-C.json", "--out", "{out}", "--excite", "TX1.Pg", "--threads", "{threads}", "--max-steps", "400000", "--probe-bond", "--mesh-ref", "models/bank-A.json,models/bank-B.json", "--dump-bond", "--dump-bond-f", "62.05"]
+
+[[jobs]]
+id = "bank-C-eTX2"
+script = "w/openems/ant_sim.py"
+args = ["models/bank-C.json", "--out", "{out}", "--excite", "TX2.Pg", "--threads", "{threads}", "--max-steps", "400000", "--probe-bond", "--mesh-ref", "models/bank-A.json,models/bank-B.json"]
+
+[[jobs]]
+id = "bank-C-eTX3"
+script = "w/openems/ant_sim.py"
+args = ["models/bank-C.json", "--out", "{out}", "--excite", "TX3.Pg", "--threads", "{threads}", "--max-steps", "400000", "--probe-bond", "--mesh-ref", "models/bank-A.json,models/bank-B.json"]
+
+[[jobs]]
+id = "bank-C-eRX1"
+script = "w/openems/ant_sim.py"
+args = ["models/bank-C.json", "--out", "{out}", "--excite", "RX1.Pg", "--threads", "{threads}", "--max-steps", "400000", "--probe-bond", "--mesh-ref", "models/bank-A.json,models/bank-B.json"]
+
+[[jobs]]
+id = "bank-C-eRX2"
+script = "w/openems/ant_sim.py"
+args = ["models/bank-C.json", "--out", "{out}", "--excite", "RX2.Pg", "--threads", "{threads}", "--max-steps", "400000", "--probe-bond", "--mesh-ref", "models/bank-A.json,models/bank-B.json"]
+
+[[jobs]]
+id = "bank-C-eRX3"
+script = "w/openems/ant_sim.py"
+args = ["models/bank-C.json", "--out", "{out}", "--excite", "RX3.Pg", "--threads", "{threads}", "--max-steps", "400000", "--probe-bond", "--mesh-ref", "models/bank-A.json,models/bank-B.json"]
+
+[[jobs]]
+id = "bank-C-eRX4"
+script = "w/openems/ant_sim.py"
+args = ["models/bank-C.json", "--out", "{out}", "--excite", "RX4.Pg", "--threads", "{threads}", "--max-steps", "400000", "--probe-bond", "--mesh-ref", "models/bank-A.json,models/bank-B.json", "--dump-bond", "--dump-bond-f", "62.05"]

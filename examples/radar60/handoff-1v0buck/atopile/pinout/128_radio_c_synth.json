@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_synth",
+  "atoAddress": "radio.c_synth",
+  "designator": "C62",
+  "descriptor": "C62 \u2014 radio.c_synth",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_synth|parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato::Radar60_C_1u_0402",
+  "footprintUuid": "164a89da-d521-4999-ab70-82c04642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "VOUT_14SYNTH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

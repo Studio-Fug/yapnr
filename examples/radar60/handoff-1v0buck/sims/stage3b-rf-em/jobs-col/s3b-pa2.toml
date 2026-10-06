@@ -1,0 +1,53 @@
+# E2-PA: TX1 corner, feed vs no feed on one mesh template, 20/15 um
+name = "s3b-pa2"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 1800
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "pa-pa0-tx1-short-u20"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa0-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "short", "--threads", "{threads}", "--res", "0.0125", "--mesh-ref", "models/pa-pa-tx1.json"]
+
+[[jobs]]
+id = "pa-pa-tx1-short-u20"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "short", "--threads", "{threads}", "--res", "0.0125", "--mesh-ref", "models/pa-pa0-tx1.json"]
+
+[[jobs]]
+id = "pa-pa-tx1-port-u20"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "port", "--threads", "{threads}", "--res", "0.0125", "--mesh-ref", "models/pa-pa0-tx1.json"]
+
+[[jobs]]
+id = "pa-pa-tx1-open-u20"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "open", "--threads", "{threads}", "--res", "0.0125", "--mesh-ref", "models/pa-pa0-tx1.json"]
+
+[[jobs]]
+id = "pa-pa0-tx1-short-u15"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa0-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "short", "--threads", "{threads}", "--res", "0.009375", "--mesh-ref", "models/pa-pa-tx1.json"]
+
+[[jobs]]
+id = "pa-pa-tx1-short-u15"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "short", "--threads", "{threads}", "--res", "0.009375", "--mesh-ref", "models/pa-pa0-tx1.json"]
+
+[[jobs]]
+id = "pa-pa-tx1-port-u15"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "port", "--threads", "{threads}", "--res", "0.009375", "--mesh-ref", "models/pa-pa0-tx1.json"]

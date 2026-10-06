@@ -257,10 +257,10 @@ module Radar60:
     # QSPI at 80 MHz: 22 Ohm series at the clock source, 25 mm maximum, GND reference (proposed fields).
     # @pnr-si {"name":"qspi","profile":"qspi_80mhz","driver":"radio.u1:R12","series":"flash.r_clk","receiver":"flash.u3:6","return":"flash.u3:4","members":["radio.u1:P11","radio.u1:R13","radio.u1:N12","radio.u1:R14","radio.u1:P12"],"max_length_mm":25}
     # LVDS to J2: 100 Ohm differential, 0.1 mm intra-pair skew (diff_pair rule), outer layer next to J2 (R9).
-    # @pnr-pair {"name":"lvds_tx0","terminal_chain":[{"p":"radio.u1:J14","n":"radio.u1:J15"},{"p":"debug.j2:56","n":"debug.j2:58"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
-    # @pnr-pair {"name":"lvds_tx1","terminal_chain":[{"p":"radio.u1:K14","n":"radio.u1:K15"},{"p":"debug.j2:50","n":"debug.j2:52"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
-    # @pnr-pair {"name":"lvds_clk","terminal_chain":[{"p":"radio.u1:L14","n":"radio.u1:L15"},{"p":"debug.j2:44","n":"debug.j2:46"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
-    # @pnr-pair {"name":"lvds_frclk","terminal_chain":[{"p":"radio.u1:M14","n":"radio.u1:M15"},{"p":"debug.j2:26","n":"debug.j2:28"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
+    # @pnr-pair {"name":"lvds_tx0","terminal_chain":[{"p":"radio.u1:J14","n":"radio.u1:J15"},{"p":"debug.j2:56","n":"debug.j2:58"}],"max_uncoupled_mm":3.0,"reference_layer":"In1.Cu"}
+    # @pnr-pair {"name":"lvds_tx1","terminal_chain":[{"p":"radio.u1:K14","n":"radio.u1:K15"},{"p":"debug.j2:50","n":"debug.j2:52"}],"max_uncoupled_mm":3.0,"reference_layer":"In1.Cu"}
+    # @pnr-pair {"name":"lvds_clk","terminal_chain":[{"p":"radio.u1:L14","n":"radio.u1:L15"},{"p":"debug.j2:44","n":"debug.j2:46"}],"max_uncoupled_mm":3.0,"reference_layer":"In1.Cu"}
+    # @pnr-pair {"name":"lvds_frclk","terminal_chain":[{"p":"radio.u1:M14","n":"radio.u1:M15"},{"p":"debug.j2:26","n":"debug.j2:28"}],"max_uncoupled_mm":3.0,"reference_layer":"In1.Cu"}
     # @pnr-si {"name":"lvds","profile":"lvds_600mbps","pairs":["lvds_tx0","lvds_tx1","lvds_clk","lvds_frclk"],"group_skew_mm":2.0}
     # Noise (N-0003 forms, proposed): 4 MHz bucks; the 40 MHz crystal. Spread spectrum is off by the
     # OTP default (EN_SPREAD_SPEC = 0, SNVSAW2B Table 49) until firmware sets it, so the source is

@@ -1,0 +1,5 @@
+A = rev-a.netlist.json  B = routed-s1.netlist.json
+pads: A=642 B=649 only-A=1 only-B=8
+  pads only in A: RFM1.gnd
+  pads only in B: RFM1.rxd0 RFM1.txd4 RL1.1 RL2.1 RT1.1 RT1.2 RT2.1 RT2.2
+nets in A: 158  identical: 158  renamed: 0  differing: 0

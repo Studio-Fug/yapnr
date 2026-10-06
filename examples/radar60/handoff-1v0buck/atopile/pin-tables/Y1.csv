@@ -1,0 +1,5 @@
+symbolic lead,pad/ball,net (atopile pinout),net (atopile board),net (routed s0),net (routed s1),net (routed s2),net (routed s3)
+X1,1,XTAL_P,XTAL_P,XTAL_P,XTAL_P,XTAL_P,XTAL_P
+GND,2,GND,GND,GND,GND,GND,GND
+X2,3,XTAL_N,XTAL_N,XTAL_N,XTAL_N,XTAL_N,XTAL_N
+2,4,GND,GND,GND,GND,GND,GND

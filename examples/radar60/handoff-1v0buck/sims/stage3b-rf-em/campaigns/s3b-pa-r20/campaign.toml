@@ -1,0 +1,21 @@
+# Written by tools/exp/openems_plan.py; plan it with `yapnr exp plan`.
+schema = "yapnr-campaign-v1"
+kind = "mc-eval"
+name = "s3b-pa-r20"
+source = "none"  # the models and scripts come as inputs of the stage plan
+image = "us-west4-docker.pkg.dev/yapnr-experiments/images/openems:0.37.0-rc3-x86-64-v4@sha256:d468ed9a6b31469504a4046e214b7b098d16f9cee77a55813b6f0d949735deb0"
+visibility = "public"
+determinism = "seeded"
+
+# The openEMS image is not a yapnr image: its interpreter, no KiCad launcher.
+[runtime]
+entrypoint = ""
+python = "/opt/openEMS/venv/bin/python"
+
+[config]
+stage_plan = "stage.jsonl"
+
+[placement]
+families = ["c4"]
+packing = "vcpu"
+vm_vcpus = 8

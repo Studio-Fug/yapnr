@@ -1,0 +1,27 @@
+{
+  "name": "power_in.c_in_hf",
+  "atoAddress": "power_in.c_in_hf",
+  "designator": "C34",
+  "descriptor": "C34 \u2014 power_in.c_in_hf",
+  "typeName": "radar60.ato::Radar60.power_in|power_in.ato::PowerIn.c_in_hf|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+  "footprintUuid": "8b24e626-5e18-4261-98ff-cde34642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "VIN_5V",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

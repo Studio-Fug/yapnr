@@ -1,0 +1,42 @@
+{
+  "mesh": {
+    "nx": 229,
+    "ny": 229,
+    "nz": 20
+  },
+  "cells": 1048820,
+  "res_um": 20.0,
+  "steps_max": 207702,
+  "probes": [
+    {
+      "name": "v_core_0",
+      "at": [-10.314, 16.307],
+      "pair": "core"
+    },
+    {
+      "name": "v_bond_0",
+      "at": [-10.314, 16.307],
+      "pair": "bond"
+    },
+    {
+      "name": "v_core_1",
+      "at": [-9.314, 16.307],
+      "pair": "core"
+    },
+    {
+      "name": "v_bond_1",
+      "at": [-9.314, 16.307],
+      "pair": "bond"
+    },
+    {
+      "name": "v_core_2",
+      "at": [-10.314, 17.307],
+      "pair": "core"
+    },
+    {
+      "name": "v_bond_2",
+      "at": [-10.314, 17.307],
+      "pair": "bond"
+    }
+  ]
+}

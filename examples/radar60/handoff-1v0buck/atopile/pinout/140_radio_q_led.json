@@ -1,0 +1,35 @@
+{
+  "name": "radio.q_led",
+  "atoAddress": "radio.q_led",
+  "designator": "Q1",
+  "descriptor": "Q1 \u2014 radio.q_led",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.q_led|parts/Radar60_2N7002/Radar60_2N7002.ato::Radar60_2N7002",
+  "footprintUuid": "2092fcee-12db-42f5-bb30-f0fa4642524b",
+  "leads": [
+    {
+      "leadDesignator": "G",
+      "padNumbers": ["1"],
+      "netName": "NERROR_OUT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "S",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "D",
+      "padNumbers": ["3"],
+      "netName": "led_k",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

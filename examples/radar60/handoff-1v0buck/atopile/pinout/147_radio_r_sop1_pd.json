@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_sop1_pd",
+  "atoAddress": "radio.r_sop1_pd",
+  "designator": "R49",
+  "descriptor": "R49 \u2014 radio.r_sop1_pd",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sop1_pd|parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato::Radar60_R_10k_0402",
+  "footprintUuid": "75add65a-ec15-47ab-aa99-6ce04642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "SOP1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,76 @@
+{
+  "Problem": {
+    "Type": "BoundaryMode",
+    "Verbose": 2,
+    "Output": "postpro-mode-62GHz-p3"
+  },
+  "Model": {
+    "Mesh": "mesh.msh",
+    "L0": 0.001,
+    "Refinement": {
+      "MaxIts": 0
+    }
+  },
+  "Domains": {
+    "Materials": [
+      {
+        "Attributes": [1],
+        "Permeability": 1.0,
+        "Permittivity": 1.0,
+        "LossTan": 0.0
+      },
+      {
+        "Attributes": [2],
+        "Permeability": 1.0,
+        "Permittivity": 3.56,
+        "LossTan": 0.0037
+      }
+    ]
+  },
+  "Boundaries": {
+    "PEC": {
+      "Attributes": [7, 8, 9, 13]
+    },
+    "Impedance": [
+      {
+        "Attributes": [5],
+        "Rs": 0.23466998735427474,
+        "Ls": 6.024014271410548e-13
+      },
+      {
+        "Attributes": [6],
+        "Rs": 0.23466998735427474,
+        "Ls": 6.024014271410548e-13
+      }
+    ],
+    "Absorbing": {
+      "Attributes": [10, 11, 12],
+      "Order": 1
+    },
+    "Postprocessing": {
+      "Impedance": [
+        {
+          "Index": 1,
+          "VoltagePath": [
+            [0.0, 0.0, 0.1016],
+            [0.0, 0.0, 0.0]
+          ],
+          "NSamples": 200
+        }
+      ]
+    }
+  },
+  "Solver": {
+    "Order": 3,
+    "Device": "CPU",
+    "BoundaryMode": {
+      "Freq": 62.0,
+      "N": 1,
+      "Save": 1,
+      "Attributes": [3]
+    },
+    "Linear": {
+      "Tol": 1e-9
+    }
+  }
+}

@@ -1,0 +1,1299 @@
+{
+  "name": "radio.u1",
+  "atoAddress": "radio.u1",
+  "designator": "U1",
+  "descriptor": "U1 \u2014 radio.u1",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.u1|parts/Radar60_IWR6843AQGABLR/Radar60_IWR6843AQGABLR.ato::Radar60_IWR6843AQGABLR",
+  "footprintUuid": "5d8620c6-bd4b-470c-b1dc-68e14642524b",
+  "leads": [
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["A1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VOUT_14APLL",
+      "padNumbers": ["A10"],
+      "netName": "VOUT_14APLL",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["A13"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "OSC_CLKOUT",
+      "padNumbers": ["A14"],
+      "netName": "OSC_CLKOUT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["A15"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "B2",
+      "padNumbers": ["A2"],
+      "netName": "1V0_PA",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["A3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["A5"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["A7"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["A9"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["B1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VBGAP",
+      "padNumbers": ["B10"],
+      "netName": "VBGAP",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "K5",
+      "padNumbers": ["B11"],
+      "netName": "1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "K5",
+      "padNumbers": ["B12"],
+      "netName": "1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VOUT_14SYNTH",
+      "padNumbers": ["B13"],
+      "netName": "VOUT_14SYNTH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["B14"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "CLKP",
+      "padNumbers": ["B15"],
+      "netName": "XTAL_P",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "A2",
+      "padNumbers": ["B2"],
+      "netName": "1V0_PA",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["B3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "TX1",
+      "padNumbers": ["B4"],
+      "netName": "RF_TX1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["B5"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "TX2",
+      "padNumbers": ["B6"],
+      "netName": "RF_TX2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["B7"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "TX3",
+      "padNumbers": ["B8"],
+      "netName": "RF_TX3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["B9"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["C1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GPADC5",
+      "padNumbers": ["C13"],
+      "netName": "C13",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["C14"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "CLKM",
+      "padNumbers": ["C15"],
+      "netName": "XTAL_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "D2",
+      "padNumbers": ["C2"],
+      "netName": "1V0_RF2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["C3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["C4"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["C5"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["C6"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["C7"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["C8"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["C9"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SPIA_MOSI",
+      "padNumbers": ["D13"],
+      "netName": "SPIA_MOSI",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "GPADC6",
+      "padNumbers": ["D14"],
+      "netName": "D14",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "K5",
+      "padNumbers": ["D15"],
+      "netName": "1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "C2",
+      "padNumbers": ["D2"],
+      "netName": "1V0_RF2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["E1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["E10"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["E11"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SPIA_CLK",
+      "padNumbers": ["E13"],
+      "netName": "SPIA_CLK",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "SPIA_MISO",
+      "padNumbers": ["E14"],
+      "netName": "SPIA_MISO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "SPIA_CS_N",
+      "padNumbers": ["E15"],
+      "netName": "SPIA_CS_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["E2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["E3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["E5"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["E6"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["E8"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["F11"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SPIB_MOSI",
+      "padNumbers": ["F13"],
+      "netName": "I2C_SDA",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "SPIB_CLK",
+      "padNumbers": ["F14"],
+      "netName": "CAN_RX",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "VIOIN",
+      "padNumbers": ["F15"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "RX4",
+      "padNumbers": ["F2"],
+      "netName": "RF_RX4",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["F3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "K5",
+      "padNumbers": ["F5"],
+      "netName": "1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["F9"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "H7",
+      "padNumbers": ["G1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["G10"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SYNC_OUT",
+      "padNumbers": ["G13"],
+      "netName": "SOP1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "SPIB_MISO",
+      "padNumbers": ["G14"],
+      "netName": "I2C_SCL",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P14",
+      "padNumbers": ["G15"],
+      "netName": "1V2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["G2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["G3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "J5",
+      "padNumbers": ["G5"],
+      "netName": "1V0_RF1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["G6"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["G7"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["G8"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["H11"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GPIO_0",
+      "padNumbers": ["H13"],
+      "netName": "GPIO_0",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "SPIB_CS_N",
+      "padNumbers": ["H14"],
+      "netName": "CAN_TX",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P14",
+      "padNumbers": ["H15"],
+      "netName": "1V2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "RX3",
+      "padNumbers": ["H2"],
+      "netName": "RF_RX3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["H3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "J5",
+      "padNumbers": ["H5"],
+      "netName": "1V0_RF1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["H7"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["H9"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["J1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["J10"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GPIO_1",
+      "padNumbers": ["J13"],
+      "netName": "GPIO_1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "LVDS_TXP_0",
+      "padNumbers": ["J14"],
+      "netName": "LVDS_TX0_P",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "LVDS_TXM_0",
+      "padNumbers": ["J15"],
+      "netName": "LVDS_TX0_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["J2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["J3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VIN_13RF1",
+      "padNumbers": ["J5"],
+      "netName": "1V0_RF1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["J6"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["J7"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["J8"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["K10"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["K11"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GPIO_2",
+      "padNumbers": ["K13"],
+      "netName": "RADIO_GPIO_2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "LVDS_TXP_1",
+      "padNumbers": ["K14"],
+      "netName": "LVDS_TX1_P",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "LVDS_TXM_1",
+      "padNumbers": ["K15"],
+      "netName": "LVDS_TX1_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "RX2",
+      "padNumbers": ["K2"],
+      "netName": "RF_RX2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["K3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "R9",
+      "padNumbers": ["K5"],
+      "netName": "1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["K7"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["K8"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["K9"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["L1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["L10"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VPP",
+      "padNumbers": ["L13"],
+      "netName": "VPP",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "LVDS_CLKP",
+      "padNumbers": ["L14"],
+      "netName": "LVDS_CLK_P",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "LVDS_CLKM",
+      "padNumbers": ["L15"],
+      "netName": "LVDS_CLK_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["L2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["L3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["L5"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["L6"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["L8"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "LVDS_FRCLKP",
+      "padNumbers": ["M14"],
+      "netName": "LVDS_FRCLK_P",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "LVDS_FRCLKM",
+      "padNumbers": ["M15"],
+      "netName": "LVDS_FRCLK_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "RX1",
+      "padNumbers": ["M2"],
+      "netName": "RF_RX1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["M3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["N1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "TMS",
+      "padNumbers": ["N10"],
+      "netName": "JTAG_TMS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P14",
+      "padNumbers": ["N11"],
+      "netName": "1V2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "QSPI_1",
+      "padNumbers": ["N12"],
+      "netName": "QSPI_D1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "TDO",
+      "padNumbers": ["N13"],
+      "netName": "SOP0_TDO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "DMM_SYNC",
+      "padNumbers": ["N14"],
+      "netName": "DMM_SYNC",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "GPIO_47",
+      "padNumbers": ["N15"],
+      "netName": "GPIO_47",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["N2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["N3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "RS232_RX",
+      "padNumbers": ["N4"],
+      "netName": "UART_RX",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "RS232_TX",
+      "padNumbers": ["N5"],
+      "netName": "UART_TX",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "NERROR_OUT",
+      "padNumbers": ["N6"],
+      "netName": "NERROR_OUT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "NERROR_IN",
+      "padNumbers": ["N7"],
+      "netName": "NERROR_IN",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "MCU_CLKOUT",
+      "padNumbers": ["N8"],
+      "netName": "FRAME_START",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "WARM_RESET",
+      "padNumbers": ["N9"],
+      "netName": "WARM_RESET",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GPADC1",
+      "padNumbers": ["P1"],
+      "netName": "GPADC1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "TCK",
+      "padNumbers": ["P10"],
+      "netName": "JTAG_TCK",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "QSPI_CS_N",
+      "padNumbers": ["P11"],
+      "netName": "QSPI_CS_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "QSPI_3",
+      "padNumbers": ["P12"],
+      "netName": "QSPI_D3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "SPI_HOST_INTR",
+      "padNumbers": ["P13"],
+      "netName": "SPI_HOST_INTR",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "N11",
+      "padNumbers": ["P14"],
+      "netName": "1V2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P14",
+      "padNumbers": ["P15"],
+      "netName": "1V2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GPADC2",
+      "padNumbers": ["P2"],
+      "netName": "GPADC2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "GPADC3",
+      "padNumbers": ["P3"],
+      "netName": "GPADC3",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "SYNC_IN",
+      "padNumbers": ["P4"],
+      "netName": "SYNC_IN",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GPIO_32",
+      "padNumbers": ["P5"],
+      "netName": "GPIO_32",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "GPIO_34",
+      "padNumbers": ["P6"],
+      "netName": "GPIO_34",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "GPIO_36",
+      "padNumbers": ["P7"],
+      "netName": "GPIO_36",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "GPIO_38",
+      "padNumbers": ["P8"],
+      "netName": "GPIO_38",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "PMIC_CLKOUT",
+      "padNumbers": ["P9"],
+      "netName": "SOP2_PMIC_CLKOUT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["R1"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "VIOIN",
+      "padNumbers": ["R10"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "TDI",
+      "padNumbers": ["R11"],
+      "netName": "JTAG_TDI",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "QSPI_CLK",
+      "padNumbers": ["R12"],
+      "netName": "QSPI_CLK",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "QSPI_0",
+      "padNumbers": ["R13"],
+      "netName": "QSPI_D0",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "QSPI_2",
+      "padNumbers": ["R14"],
+      "netName": "QSPI_D2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "G1",
+      "padNumbers": ["R15"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GPADC4",
+      "padNumbers": ["R2"],
+      "netName": "GPADC4",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "NRESET",
+      "padNumbers": ["R3"],
+      "netName": "NRESET",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "GPIO_31",
+      "padNumbers": ["R4"],
+      "netName": "GPIO_31",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "GPIO_33",
+      "padNumbers": ["R5"],
+      "netName": "GPIO_33",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P14",
+      "padNumbers": ["R6"],
+      "netName": "1V2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GPIO_35",
+      "padNumbers": ["R7"],
+      "netName": "GPIO_35",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "GPIO_37",
+      "padNumbers": ["R8"],
+      "netName": "GPIO_37",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "K5",
+      "padNumbers": ["R9"],
+      "netName": "1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": ["55 unconnected lead(s)"]
+}

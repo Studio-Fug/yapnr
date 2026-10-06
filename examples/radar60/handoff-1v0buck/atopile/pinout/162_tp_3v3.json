@@ -1,0 +1,19 @@
+{
+  "name": "tp_3v3",
+  "atoAddress": "tp_3v3",
+  "designator": "TP5",
+  "descriptor": "TP5 \u2014 tp_3v3",
+  "typeName": "radar60.ato::Radar60.tp_3v3|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "2c560613-165b-4de9-9254-1cfb4642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

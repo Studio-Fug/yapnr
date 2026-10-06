@@ -1,0 +1,44 @@
+{
+  "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+  "attempt": "s1r0",
+  "command": [
+    "w/openems/pa_sim.py",
+    "models/pa-pa0-tx1.json",
+    "--out",
+    "{out}",
+    "--excite",
+    "TX1.Pb",
+    "--pa",
+    "short",
+    "--threads",
+    "{threads}",
+    "--res",
+    "0.0125"
+  ],
+  "cpu": {
+    "avx512f": true,
+    "count": 8,
+    "model": "x86_64"
+  },
+  "engines": ["compressed SSE + multi-threading"],
+  "exit": 0,
+  "id": "pa-pa0-tx1-short",
+  "max_rss_mb": 219.7,
+  "ok": true,
+  "openems_options": {
+    "exact_endcriteria": true
+  },
+  "openems_runs": [
+    {
+      "cells": 933240.0,
+      "iterations": 14835,
+      "mcells_per_s": 213.26,
+      "seconds": 64.92
+    }
+  ],
+  "schema": "yapnr-openems-job-v1",
+  "sys_s": 34.747,
+  "threads": 8,
+  "user_s": 317.818,
+  "wall_s": 68.437
+}

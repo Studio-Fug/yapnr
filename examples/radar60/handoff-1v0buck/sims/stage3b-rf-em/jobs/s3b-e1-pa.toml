@@ -1,0 +1,67 @@
+# stage 3b E1 (s3b-e1-pa): written by openems/stage3b_em.py jobs; estimates [D] from the
+# rf-uniform references scaled by cells and smallest cell: 0.82 VM-h, about $0.06 expected (boot and preemption extra)
+name = "s3b-e1-pa"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 14400
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "pa-pa0-tx1-short"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa0-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "short", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 4 min on c4
+
+[[jobs]]
+id = "pa-pa-tx1-short"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "short", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 5 min on c4
+
+[[jobs]]
+id = "pa-pa-tx1-open"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "open", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 5 min on c4
+
+[[jobs]]
+id = "pa-pa-tx1-port"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-tx1.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "port", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 5 min on c4
+
+[[jobs]]
+id = "pa-pa0-rx4-short"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa0-rx4.json", "--out", "{out}", "--excite", "RX4.Pb", "--pa", "short", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 7 min on c4
+
+[[jobs]]
+id = "pa-pa-rx4-short"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-rx4.json", "--out", "{out}", "--excite", "RX4.Pb", "--pa", "short", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 8 min on c4
+
+[[jobs]]
+id = "pa-pa-rx4-open"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-rx4.json", "--out", "{out}", "--excite", "RX4.Pb", "--pa", "open", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 8 min on c4
+
+[[jobs]]
+id = "pa-pa-rx4-port"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-rx4.json", "--out", "{out}", "--excite", "RX4.Pb", "--pa", "port", "--threads", "{threads}", "--res", "0.0125"]
+# estimate 8 min on c4

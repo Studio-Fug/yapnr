@@ -1,0 +1,19 @@
+{
+  "name": "tp_nerror",
+  "atoAddress": "tp_nerror",
+  "designator": "TP11",
+  "descriptor": "TP11 \u2014 tp_nerror",
+  "typeName": "radar60.ato::Radar60.tp_nerror|parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato::Radar60_TestPad_D1",
+  "footprintUuid": "87583129-1295-422c-9b17-e0c24642524b",
+  "leads": [
+    {
+      "leadDesignator": "TP",
+      "padNumbers": ["1"],
+      "netName": "NERROR_OUT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

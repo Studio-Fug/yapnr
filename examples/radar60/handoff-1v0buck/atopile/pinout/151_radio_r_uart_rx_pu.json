@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_uart_rx_pu",
+  "atoAddress": "radio.r_uart_rx_pu",
+  "designator": "R53",
+  "descriptor": "R53 \u2014 radio.r_uart_rx_pu",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_uart_rx_pu|parts/Radar60_R_100k_0402/Radar60_R_100k_0402.ato::Radar60_R_100k_0402",
+  "footprintUuid": "19b36592-5373-4a4e-9f25-d7fc4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "UART_RX",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

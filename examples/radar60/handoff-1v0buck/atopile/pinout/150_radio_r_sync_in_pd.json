@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_sync_in_pd",
+  "atoAddress": "radio.r_sync_in_pd",
+  "designator": "R52",
+  "descriptor": "R52 \u2014 radio.r_sync_in_pd",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_sync_in_pd|parts/Radar60_R_100k_0402/Radar60_R_100k_0402.ato::Radar60_R_100k_0402",
+  "footprintUuid": "71bba156-2a7b-4f85-9d0f-3c0e4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "SYNC_IN",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

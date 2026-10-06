@@ -1,0 +1,27 @@
+{
+  "name": "radio.d_led",
+  "atoAddress": "radio.d_led",
+  "designator": "D4",
+  "descriptor": "D4 \u2014 radio.d_led",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.d_led|parts/Radar60_LED_Green_0603/Radar60_LED_Green_0603.ato::Radar60_LED_Green_0603",
+  "footprintUuid": "89e87626-1826-443e-baf1-7b254642524b",
+  "leads": [
+    {
+      "leadDesignator": "K",
+      "padNumbers": ["1"],
+      "netName": "led_k",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "A",
+      "padNumbers": ["2"],
+      "netName": "led_a",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

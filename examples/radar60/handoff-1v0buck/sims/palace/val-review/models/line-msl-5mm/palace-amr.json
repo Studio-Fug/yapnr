@@ -1,0 +1,98 @@
+{
+  "Problem": {
+    "Type": "Driven",
+    "Verbose": 2,
+    "Output": "postpro-amr"
+  },
+  "Model": {
+    "Mesh": "mesh.msh",
+    "L0": 0.001,
+    "Refinement": {
+      "Tol": 0.01,
+      "MaxIts": 3,
+      "UpdateFraction": 0.7,
+      "Nonconformal": true,
+      "SaveAdaptMesh": true,
+      "SaveAdaptIterations": true,
+      "MaxSize": 1200000
+    }
+  },
+  "Domains": {
+    "Materials": [
+      {
+        "Attributes": [1],
+        "Permeability": 1.0,
+        "Permittivity": 1.0,
+        "LossTan": 0.0
+      },
+      {
+        "Attributes": [2],
+        "Permeability": 1.0,
+        "Permittivity": 3.56,
+        "LossTan": 0.0037
+      }
+    ]
+  },
+  "Boundaries": {
+    "PEC": {
+      "Attributes": [11]
+    },
+    "Absorbing": {
+      "Attributes": [6, 7, 8, 9, 10],
+      "Order": 1
+    },
+    "Impedance": [
+      {
+        "Attributes": [5],
+        "Rs": 0.11733499367713739,
+        "Ls": 3.0120071357052744e-13
+      }
+    ],
+    "WavePort": [
+      {
+        "Index": 1,
+        "Attributes": [3],
+        "Mode": 1,
+        "Offset": 0.5,
+        "Excitation": 1,
+        "VoltagePath": [
+          [0.0, 0.0, 0.1016],
+          [0.0, 0.0, 0.0]
+        ]
+      },
+      {
+        "Index": 2,
+        "Attributes": [4],
+        "Mode": 1,
+        "Offset": 0.5,
+        "Excitation": 0,
+        "VoltagePath": [
+          [6.0, 0.0, 0.1016],
+          [6.0, 0.0, 0.0]
+        ]
+      }
+    ],
+    "WavePortPEC": {
+      "Attributes": [6, 7]
+    }
+  },
+  "Solver": {
+    "Order": 2,
+    "Device": "CPU",
+    "Driven": {
+      "Samples": [
+        {
+          "Type": "Point",
+          "Freq": [62.0],
+          "SaveStep": 0
+        }
+      ]
+    },
+    "Linear": {
+      "Type": "Default",
+      "KSPType": "GMRES",
+      "Tol": 1e-6,
+      "MaxIts": 400
+    }
+  }
+}

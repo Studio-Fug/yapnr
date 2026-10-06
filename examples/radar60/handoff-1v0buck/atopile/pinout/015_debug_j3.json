@@ -1,0 +1,91 @@
+{
+  "name": "debug.j3",
+  "atoAddress": "debug.j3",
+  "designator": "J3",
+  "descriptor": "J3 \u2014 debug.j3",
+  "typeName": "radar60.ato::Radar60.debug|debug.ato::Debug.j3|parts/Radar60_ARM10_1p27_DNP/Radar60_ARM10_1p27_DNP.ato::Radar60_ARM10_1p27_DNP",
+  "footprintUuid": "fcf51719-3e2e-4475-8c2f-7a374642524b",
+  "leads": [
+    {
+      "leadDesignator": "P1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P10",
+      "padNumbers": ["10"],
+      "netName": "NRESET",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P2",
+      "padNumbers": ["2"],
+      "netName": "JTAG_TMS",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P9",
+      "padNumbers": ["3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P4",
+      "padNumbers": ["4"],
+      "netName": "JTAG_TCK",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P9",
+      "padNumbers": ["5"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P6",
+      "padNumbers": ["6"],
+      "netName": "SOP0_TDO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P7",
+      "padNumbers": ["7"],
+      "netName": "7",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P8",
+      "padNumbers": ["8"],
+      "netName": "JTAG_TDI",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "P9",
+      "padNumbers": ["9"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": ["6 unconnected lead(s)"]
+}

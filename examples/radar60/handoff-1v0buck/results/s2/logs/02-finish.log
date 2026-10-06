@@ -1,0 +1,129 @@
++ /usr/bin/python3 -m pnr.writeback /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/source.kicad_pcb /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/mc/cand/p000/placed.json --out /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/placed.kicad_pcb --rules /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/inputs/rules.json
++ /usr/bin/python3 /tmp/yapnr-work/yapnr-task-cd_cb3ce/src/examples/radar60/board/kicad_ops.py finish /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/placed.kicad_pcb /tmp/yapnr-work/yapnr-task-cd_cb3ce/src/examples/radar60/board/radar60.kicad_pcb /tmp/yapnr-work/yapnr-task-cd_cb3ce/src/examples/radar60/rf/generated/rfm1-n/rfm1-n.kicad_pcb /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/board/radar60-reva.kicad_pcb /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/finish.json PWR_STAGE,EFUSE_STAGE
++ /usr/bin/python3 -m pnr.library_table --from-board /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/board/radar60-reva.kicad_pcb --libs-dir /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/libs --out /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/board/fp-lib-table
++ /usr/bin/python3 /tmp/yapnr-work/yapnr-task-cd_cb3ce/src/examples/radar60/board/kicad_ops.py poses /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/board/radar60-reva.kicad_pcb /tmp/yapnr-work/yapnr-task-cd_cb3ce/work/final-poses.json
+{
+ "parts": 187,
+ "bottom_side": [
+  "C38",
+  "C52",
+  "C53",
+  "C54",
+  "C57",
+  "C58",
+  "C59",
+  "C60",
+  "C61",
+  "C63",
+  "C64"
+ ],
+ "winner": "p000",
+ "starts": 8,
+ "legal": 2,
+ "audit_pass_candidates": 2,
+ "audit_failures": [],
+ "regions_ok": true,
+ "groups_ok": false,
+ "pending_block_spread_mm": {},
+ "pin_distance_failures": [],
+ "protection_at_j1": {
+  "VIN_5V": {
+   "nearest": "D3",
+   "nearest_mm": 9.89,
+   "esd": "D3",
+   "esd_mm": 9.89,
+   "ic": "U5",
+   "ic_mm": 13.33
+  },
+  "CANH": {
+   "nearest": "D1",
+   "nearest_mm": 3.66,
+   "esd": "D1",
+   "esd_mm": 3.66,
+   "ic": "U4",
+   "ic_mm": 9.29
+  },
+  "CANL": {
+   "nearest": "D1",
+   "nearest_mm": 4.1,
+   "esd": "D1",
+   "esd_mm": 4.1,
+   "ic": "U4",
+   "ic_mm": 9.47
+  },
+  "UART_TX_J1": {
+   "nearest": "D2",
+   "nearest_mm": 4.12,
+   "esd": "D2",
+   "esd_mm": 4.12
+  },
+  "UART_RX_J1": {
+   "nearest": "D2",
+   "nearest_mm": 4.16,
+   "esd": "D2",
+   "esd_mm": 4.16
+  }
+ },
+ "rf_ball_vs_macro_worst_um": 0.0,
+ "r1_macro_digest_v2_equal": false,
+ "macro_loads": [
+  "RT1",
+  "RT2"
+ ],
+ "rf_audit": {
+  "A1_entry_and_band": true,
+  "A2_congruence": false,
+  "A3_unstitched_gnd": false,
+  "A4_fence_continuity": true,
+  "A5_identity": true,
+  "A6_vias_at_smd_lands": true
+ },
+ "rf_audit_ok": false,
+ "exit_bands_clear": true,
+ "exit_bands": 4,
+ "bottom_sites_ok": true,
+ "bottom_sites": {
+  "C38": "C38",
+  "C57": "C57",
+  "C61": "C61",
+  "C63": "C63",
+  "C64": "C64"
+ },
+ "fanout_plan": {
+  "signals": 40,
+  "signals_escaped": 37,
+  "drops": 92,
+  "drops_placed": 84,
+  "kinds": {
+   "dogbone": 18,
+   "drop": 84,
+   "failed": 11,
+   "skipped": 29,
+   "surface": 19
+  },
+  "failed": {
+   "A3": "no legal path or via site (static obstacles)",
+   "A5": "no legal path or via site (static obstacles)",
+   "A7": "no legal path or via site (static obstacles)",
+   "E13": "lost its resources to higher-priority pads",
+   "G1": "no legal path or via site (static obstacles)",
+   "J1": "no legal path or via site (static obstacles)",
+   "L1": "no legal path or via site (static obstacles)",
+   "N11": "lost its resources to higher-priority pads",
+   "P14": "no legal path or via site (static obstacles)",
+   "P4": "lost its resources to higher-priority pads",
+   "P9": "lost its resources to higher-priority pads"
+  }
+ },
+ "macro_variant": "n",
+ "macro_status": "placeholder: geometry for integration only; the column's match is not converged and sits high (rf-uniform: RL-10 64.35-66 GHz at 15 um against 60.3-63.8); stage 3b's C1 retune, the D15 pour and S1/S2 choice, the L2-L3 cavity option and the PA-feed EM come before it is frozen",
+ "drc_violations": 113,
+ "drc_by_type": {
+  "isolated_copper": 105,
+  "via_dangling": 6,
+  "copper_edge_clearance": 2
+ },
+ "drc_placement_types": {},
+ "unconnected_items": 400,
+ "board_sha256": "1bd82932772bb304ea2041d617e5f65b46ae3dc05f5561c6902320952fd5f118"
+}

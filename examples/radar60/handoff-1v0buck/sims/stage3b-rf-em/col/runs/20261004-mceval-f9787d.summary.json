@@ -1,0 +1,58 @@
+{
+  "campaign": "20261004-mceval-f9787d",
+  "missing": ["cell-c1a-07-r20", "cell-c1a-09-r20", "cell-c1w-030-r20", "cell-c1a-10-r20-nz8"],
+  "models": {
+    "cell-c1a-10-r20": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 916.0,
+      "mcells_per_s": [215.9],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 4596.854
+    },
+    "cell-c1a-11-r20": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 916.3,
+      "mcells_per_s": [237.15],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 4177.85
+    },
+    "cell-c1a-13-r20": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 925.0,
+      "mcells_per_s": [194.91],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 5626.111
+    },
+    "cell-c1w-042-r20": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 916.2,
+      "mcells_per_s": [194.61],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 5087.685
+    }
+  }
+}

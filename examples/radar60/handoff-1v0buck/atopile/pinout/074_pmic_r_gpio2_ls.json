@@ -1,0 +1,27 @@
+{
+  "name": "pmic.r_gpio2_ls",
+  "atoAddress": "pmic.r_gpio2_ls",
+  "designator": "R24",
+  "descriptor": "R24 \u2014 pmic.r_gpio2_ls",
+  "typeName": "radar60.ato::Radar60.pmic|pmic_lp87524j.ato::Pmic.r_gpio2_ls|parts/Radar60_R_0_0402_DNP/Radar60_R_0_0402_DNP.ato::Radar60_R_0_0402_DNP",
+  "footprintUuid": "fa66740f-8633-4812-9096-33d54642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "PMIC_EN2_GPIO2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "VIO_LS_ON",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    }
+  ],
+  "warnings": ["1 unconnected lead(s)"]
+}

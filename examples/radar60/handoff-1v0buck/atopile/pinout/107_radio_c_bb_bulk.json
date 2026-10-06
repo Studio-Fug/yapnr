@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_bb_bulk",
+  "atoAddress": "radio.c_bb_bulk",
+  "designator": "C41",
+  "descriptor": "C41 \u2014 radio.c_bb_bulk",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_bb_bulk|parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato::Radar60_C_10u_0603",
+  "footprintUuid": "6e2e1467-adb5-46e6-b249-dc1c4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V8",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

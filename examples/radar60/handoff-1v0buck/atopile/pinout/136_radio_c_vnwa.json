@@ -1,0 +1,27 @@
+{
+  "name": "radio.c_vnwa",
+  "atoAddress": "radio.c_vnwa",
+  "designator": "C70",
+  "descriptor": "C70 \u2014 radio.c_vnwa",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.c_vnwa|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+  "footprintUuid": "a8da025e-af86-4527-a0f9-9cf74642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "1V2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

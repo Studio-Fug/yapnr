@@ -1,0 +1,29 @@
+{
+  "orig": {
+    "by_type": {
+      "copper_edge_clearance": 2,
+      "diff_pair_uncoupled_length_too_long": 1,
+      "isolated_copper": 2,
+      "lib_footprint_issues": 185,
+      "skew_out_of_range": 1,
+      "via_dangling": 8
+    },
+    "violations": 199,
+    "unconnected": 162,
+    "footprint_issues": 0
+  },
+  "stripped": {
+    "by_type": {
+      "copper_edge_clearance": 2,
+      "diff_pair_uncoupled_length_too_long": 1,
+      "isolated_copper": 2,
+      "lib_footprint_issues": 185,
+      "skew_out_of_range": 1,
+      "via_dangling": 8
+    },
+    "violations": 199,
+    "unconnected": 162,
+    "footprint_issues": 0
+  },
+  "equivalent": true
+}

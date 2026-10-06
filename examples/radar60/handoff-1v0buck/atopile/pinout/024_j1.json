@@ -1,0 +1,83 @@
+{
+  "name": "j1",
+  "atoAddress": "j1",
+  "designator": "J1",
+  "descriptor": "J1 \u2014 j1",
+  "typeName": "radar60.ato::Radar60.j1|parts/Radar60_JST_SM08B_GHS_TB/Radar60_JST_SM08B_GHS_TB.ato::Radar60_JST_SM08B_GHS_TB",
+  "footprintUuid": "a5047dd3-d301-49fd-a96b-92d84642524b",
+  "leads": [
+    {
+      "leadDesignator": "P1",
+      "padNumbers": ["1"],
+      "netName": "VIN_5V",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P1",
+      "padNumbers": ["2"],
+      "netName": "VIN_5V",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P3",
+      "padNumbers": ["3"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "3",
+      "padNumbers": ["4"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P5",
+      "padNumbers": ["5"],
+      "netName": "CANH",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P6",
+      "padNumbers": ["6"],
+      "netName": "CANL",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P7",
+      "padNumbers": ["7"],
+      "netName": "UART_TX_J1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "P8",
+      "padNumbers": ["8"],
+      "netName": "UART_RX_J1",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "3",
+      "padNumbers": ["MP"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

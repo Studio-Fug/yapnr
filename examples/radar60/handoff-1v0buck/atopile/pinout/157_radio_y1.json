@@ -1,0 +1,43 @@
+{
+  "name": "radio.y1",
+  "atoAddress": "radio.y1",
+  "designator": "Y1",
+  "descriptor": "Y1 \u2014 radio.y1",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.y1|parts/Radar60_CX3225SA40000D0PTWCC/Radar60_CX3225SA40000D0PTWCC.ato::Radar60_CX3225SA40000D0PTWCC",
+  "footprintUuid": "301e8515-e763-47b9-8b60-dae74642524b",
+  "leads": [
+    {
+      "leadDesignator": "X1",
+      "padNumbers": ["1"],
+      "netName": "XTAL_P",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "GND",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "X2",
+      "padNumbers": ["3"],
+      "netName": "XTAL_N",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "2",
+      "padNumbers": ["4"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

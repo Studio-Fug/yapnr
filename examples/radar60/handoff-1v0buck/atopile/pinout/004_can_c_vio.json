@@ -1,0 +1,27 @@
+{
+  "name": "can.c_vio",
+  "atoAddress": "can.c_vio",
+  "designator": "C4",
+  "descriptor": "C4 \u2014 can.c_vio",
+  "typeName": "radar60.ato::Radar60.can|can_fd.ato::CanFd.c_vio|parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato::Radar60_C_100n_0402",
+  "footprintUuid": "d43b7b93-8cee-4071-93ba-504a4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "3V3_RADIO_IO",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "GND",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": []
+}

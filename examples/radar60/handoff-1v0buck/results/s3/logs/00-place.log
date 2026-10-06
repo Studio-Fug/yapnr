@@ -1,0 +1,2 @@
++ /opt/venv/bin/python /tmp/yapnr-work/yapnr-task-4672z4zx/src/examples/radar60/board/halving_seeded.py --out /tmp/yapnr-work/yapnr-task-4672z4zx/work/mc --inputs /tmp/yapnr-work/yapnr-task-4672z4zx/work/inputs --constraints /tmp/yapnr-work/yapnr-task-4672z4zx/work/constraints-place.yaml --repo /tmp/yapnr-work/yapnr-task-4672z4zx/src --seed 3 --n0 8 --procs 2 --iters 600 --stop-after place --library /tmp/yapnr-work/yapnr-task-4672z4zx/work/power-blocks-library.json
+placement search: 236 s

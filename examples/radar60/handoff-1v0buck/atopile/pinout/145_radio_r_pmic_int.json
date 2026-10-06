@@ -1,0 +1,27 @@
+{
+  "name": "radio.r_pmic_int",
+  "atoAddress": "radio.r_pmic_int",
+  "designator": "R47",
+  "descriptor": "R47 \u2014 radio.r_pmic_int",
+  "typeName": "radar60.ato::Radar60.radio|radio_iwr6843.ato::Radio.r_pmic_int|parts/Radar60_R_0_0402/Radar60_R_0_0402.ato::Radar60_R_0_0402",
+  "footprintUuid": "cf114994-2b61-4109-99b9-c76d4642524b",
+  "leads": [
+    {
+      "leadDesignator": "p1",
+      "padNumbers": ["1"],
+      "netName": "PMIC_NINT",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": false
+    },
+    {
+      "leadDesignator": "p2",
+      "padNumbers": ["2"],
+      "netName": "RADIO_GPIO_2",
+      "signalType": "signal",
+      "interfaces": [],
+      "isConnected": true
+    }
+  ],
+  "warnings": ["1 unconnected lead(s)"]
+}

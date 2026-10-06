@@ -1,0 +1,70 @@
+(footprint "R_0201_0603Metric_LOAD"
+	(version 20260206)
+	(generator "pcbnew")
+	(generator_version "10.0")
+	(locked yes)
+	(layer "F.Cu")
+	(property "Reference" "RT1"
+		(at 0.9 0 0)
+		(layer "F.Fab")
+		(uuid "230288d3-19b4-47c2-b062-00e0b10f7285")
+		(effects
+			(font
+				(size 0.4 0.4)
+				(thickness 0.06)
+			)
+		)
+	)
+	(property "Value" "50R 0201 thin film"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "baa85160-4c01-4868-a4b3-2e76bec0bbb6")
+		(effects
+			(font
+				(size 0.4 0.4)
+				(thickness 0.06)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "80a76477-c7c1-4ed8-a1b6-a5e2237716e4")
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Description" "termination of dummy column RXD0"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "f5ad51b8-593c-429f-b2f7-8d8a0e7fe22e")
+		(effects
+			(font
+				(size 0.4 0.4)
+				(thickness 0.06)
+			)
+		)
+	)
+	(attr smd)
+	(duplicate_pad_numbers_are_jumpers no)
+	(pad "1" smd roundrect
+		(at 0 -0.32 90)
+		(size 0.46 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(roundrect_rratio 0.25)
+		(uuid "4c4ec10d-6608-58b4-b4b3-1fc88e691db4")
+	)
+	(pad "2" smd roundrect
+		(at 0 0.32 90)
+		(size 0.46 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(roundrect_rratio 0.25)
+		(uuid "b34997f0-2c05-5a7f-bd77-69dc36bee649")
+	)
+	(embedded_fonts no)
+)

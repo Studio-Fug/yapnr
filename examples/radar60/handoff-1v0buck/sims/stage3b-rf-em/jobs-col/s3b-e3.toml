@@ -1,0 +1,61 @@
+# s3b-e3 (freeze macro v2, track rf): K1 (solid L2) C1 retune at L 1.00/1.015/1.03, K0 at the
+# same L for a fair comparison, and the D14 ground-via fence re-run on the generator's own
+# as-built 4-via row geometry (dummies="outer", pa_fence=True defaults, port case, TX1/RX4).
+# 20 um mesh, centre column only, exact end criteria, one shared mesh template per model group.
+name = "s3b-e3"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4"]
+openems_options = ["exact-endcriteria"]
+memory_gb = 8
+disk_gb = 16
+max_wall_s = 7200
+
+[inputs]
+w = "${REPO}/examples/radar60/rf"
+models = "<notes>/radar60/stage3b-rf/em/models"
+
+[env]
+RFMACRO_ROOT = "w"
+
+[[jobs]]
+id = "cell-k1l-100-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-k1l-100.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-k1l-1015.json,models/cell-k1l-103.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-k1l-1015-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-k1l-1015.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-k1l-100.json,models/cell-k1l-103.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-k1l-103-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-k1l-103.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-k1l-100.json,models/cell-k1l-1015.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-k0l-100-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-k0l-100.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-k0l-1015.json,models/cell-k0l-103.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-k0l-1015-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-k0l-1015.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-k0l-100.json,models/cell-k0l-103.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "cell-k0l-103-r20"
+script = "w/openems/ant_sim.py"
+args = ["models/cell-k0l-103.json", "--out", "{out}", "--excite", "T1.Pg", "--threads", "{threads}", "--res", "0.0125", "--max-steps", "400000", "--mesh-ref", "models/cell-k0l-100.json,models/cell-k0l-1015.json", "--fspan", "54", "70"]
+
+[[jobs]]
+id = "pa-pa-tx1-fence4-port-u20"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-tx1-fence4.json", "--out", "{out}", "--excite", "TX1.Pb", "--pa", "port", "--threads", "{threads}", "--res", "0.0125", "--mesh-ref", "models/pa-pa-tx1.json"]
+
+[[jobs]]
+id = "pa-pa-rx4-fence4-port-u20"
+script = "w/openems/pa_sim.py"
+args = ["models/pa-pa-rx4-fence4.json", "--out", "{out}", "--excite", "RX4.Pb", "--pa", "port", "--threads", "{threads}", "--res", "0.0125", "--mesh-ref", "models/pa-pa-rx4.json"]

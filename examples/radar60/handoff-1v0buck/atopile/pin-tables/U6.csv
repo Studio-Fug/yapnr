@@ -1,0 +1,7 @@
+symbolic lead,pad/ball,net (atopile pinout),net (atopile board),net (routed s0),net (routed s1),net (routed s2),net (routed s3)
+VIN,1,3V3,3V3,3V3,3V3,3V3,3V3
+GND,2,GND,GND,GND,GND,GND,GND
+ON,3,VIO_LS_ON,VIO_LS_ON,VIO_LS_ON,VIO_LS_ON,VIO_LS_ON,VIO_LS_ON
+CT,4,CT,CT,CT,CT,CT,CT
+QOD,5,QOD,QOD,QOD,QOD,QOD,QOD
+VOUT,6,3V3_RADIO_IO,3V3_RADIO_IO,3V3_RADIO_IO,3V3_RADIO_IO,3V3_RADIO_IO,3V3_RADIO_IO

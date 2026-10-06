@@ -594,9 +594,13 @@ function schPcbOverlay(){
 function schPcbLabel(text,col,y){ctx.font='bold 12px system-ui';let w=ctx.measureText(text).width;ctx.fillStyle='rgba(12,20,24,.85)';ctx.fillRect(8,y-15,w+14,21);ctx.fillStyle=col;ctx.fillText(text,15,y)}
 
 // ------------------------------------------------------------------ render hook
+// schPcbOverlay (net/focus highlight+dimming) and the note badges are overlay hooks (see app.js),
+// pushed once below, so they stay live during a gesture's fastFrame() instead of only reappearing
+// once the gesture settles and a full render() fires.
+overlayHooks.push(()=>{schPcbOverlay();window.YapnrNotes?.drawBadges?.(ctx,screen,geo(),laneId)});
 const renderBeforeSchematic=render;
 render=function(){
- renderBeforeSchematic();schPcbOverlay();window.YapnrNotes?.drawBadges?.(ctx,screen,geo(),laneId);
+ renderBeforeSchematic();
  if(sch.urlLane&&display()?.lanes?.[sch.urlLane]){let id=sch.urlLane;sch.urlLane=null;if(laneId!==id){select(id);return}}
  if(sch.urlRef&&geo()){let r=sch.urlRef;sch.urlRef=null;jumpToComponent(r)}
  if(sch.mode!=='pcb'){

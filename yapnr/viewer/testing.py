@@ -166,6 +166,124 @@ def argv_value(argv: Sequence[str], flag: str) -> str:
     return argv[list(argv).index(flag) + 1]
 
 
+# ---------------------------------------------------------------------- synthetic dense geometry
+# tests/e2e/viewer's rendering-performance tests need a board with thousands of vias (ground
+# stitching, the reported-laggy case) but no real board or KiCad export: this hand-builds viewer
+# geometry (the same shape yapnr/viewer/server.py's from_graph()/extract() produce: width, height,
+# parts, tracks, vias, zones) directly, with vias and tracks on a regular, fully predictable grid so
+# a test can compute exactly where a given via/track/pad is without re-deriving it from the output.
+
+
+def synthetic_via_board(n_vias: int = 3000, width: float = 120.0, height: float = 90.0) -> dict:
+    """Deterministic geometry: a regular grid of ``n_vias`` ground-stitching-style vias (net
+    mostly GND, a few other nets sprinkled in), one track per adjacent pair in each row (a
+    comparable count to the vias, as on a real stitched board), a GND zone covering the board, and
+    a handful of two-pad parts off to one side (unrelated to the via grid, for pad/component hit
+    tests). ``via_at()`` below locates a specific grid element.
+    """
+    import math
+
+    cols = max(2, math.ceil(math.sqrt(n_vias * width / height)))
+    rows = max(2, math.ceil(n_vias / cols))
+    dx, dy = (width - 4) / (cols - 1), (height - 4) / (rows - 1)
+    vias = []
+    for j in range(rows):
+        for i in range(cols):
+            if len(vias) >= n_vias:
+                break
+            net = "GND" if (i + j) % 5 else f"SIG{(i + j) % 7}"
+            vias.append(
+                {"net": net, "xy": [round(2 + i * dx, 4), round(2 + j * dy, 4)], "diameter": 0.4}
+            )
+    tracks = []
+    for j in range(rows):
+        for i in range(cols - 1):
+            a, b = j * cols + i, j * cols + i + 1
+            if b >= len(vias):
+                continue
+            tracks.append([vias[a]["net"], "F.Cu", vias[a]["xy"], vias[b]["xy"], 0.15])
+    parts = []
+    for n in range(8):
+        x, y = width - 14 + (n % 4) * 3, 4 + (n // 4) * 3
+        parts.append(
+            dict(
+                ref=f"C{n + 1}",
+                xy=[x, y],
+                pads=[
+                    dict(
+                        number="1",
+                        net="3V3",
+                        xy=[x - 0.5, y],
+                        size=[0.6, 0.6],
+                        angle=0,
+                        shape="rect",
+                        layers=["F.Cu"],
+                    ),
+                    dict(
+                        number="2",
+                        net="GND",
+                        xy=[x + 0.5, y],
+                        size=[0.6, 0.6],
+                        angle=0,
+                        shape="rect",
+                        layers=["F.Cu"],
+                    ),
+                ],
+            )
+        )
+    zone = dict(
+        layer="F.Cu",
+        net="GND",
+        paths=[[[1.0, 1.0], [width - 1.0, 1.0], [width - 1.0, height - 1.0], [1.0, height - 1.0]]],
+    )
+    return dict(
+        frame="mm-y-up",
+        width=width,
+        height=height,
+        parts=parts,
+        tracks=tracks,
+        vias=vias,
+        zones=[zone],
+        cols=cols,
+        rows=rows,
+    )
+
+
+def via_at(geo: dict, i: int, j: int) -> dict:
+    return geo["vias"][j * geo["cols"] + i]
+
+
+def seed_board_event(root: os.PathLike, geo: dict, candidate: str = "mc0") -> str:
+    """Write ``geo`` straight into <root>/geometry/<sha>.json and drop one event referencing it
+    (kind ``signal_start``, matching a real one's shape) into <root>/events/ -- the running
+    viewer's ingest loop picks it up exactly as it would a real extracted board, because the
+    geometry file already exists under its sha256 (server.py's geometry() skips extraction
+    whenever the cache file is already there). Returns the sha256. ``geo`` is trimmed of the
+    ``cols``/``rows`` bookkeeping fields synthetic_via_board() adds before writing.
+    """
+    root = Path(root)
+    body = {k: v for k, v in geo.items() if k not in ("cols", "rows")}
+    payload = json.dumps(body).encode()
+    sha = hashlib.sha256(payload).hexdigest()
+    (root / "geometry").mkdir(parents=True, exist_ok=True)
+    (root / "geometry" / f"{sha}.json").write_bytes(payload)
+    (root / "events").mkdir(parents=True, exist_ok=True)
+    eid = f"{time.time_ns()}-seed"
+    event = {
+        "schema": "pnr-live-event-v1",
+        "id": eid,
+        "time": time.time(),
+        "kind": "signal_start",
+        "candidate": candidate,
+        "iteration": None,
+        "data": {"phase": "signals"},
+        "board": "synthetic.kicad_pcb",
+        "board_sha256": sha,
+    }
+    (root / "events" / f"{eid}.json").write_text(json.dumps(event))
+    return sha
+
+
 # ---------------------------------------------------------------------- headless Chrome / CDP
 # A minimal, stdlib-only Chrome DevTools Protocol client: tests/e2e/viewer drives a real headless
 # Chrome (touch emulation, Input.dispatchTouchEvent, screenshots) and there is no CDP/WebSocket

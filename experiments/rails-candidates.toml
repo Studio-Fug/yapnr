@@ -13,7 +13,11 @@ case = ["11-ufbga201-fanout-6L-SGSGPS-rails"]
 seed = [0, 1, 2, 3]
 
 [config]
+hard = true
 timeout = 600
+initial_pool = true
+initial_starts = 8
+initial_finalists = 3
 
 [resources]
 cpus = 1

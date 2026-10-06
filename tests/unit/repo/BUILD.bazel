@@ -5,6 +5,13 @@ load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 # See tools/repo_root.py.
 yapnr_py_tests(
     data = ["//:MODULE.bazel"],
+    overrides = {
+        # Scans the whole working tree; has hit the default "small" test's 60s timeout as a
+        # flake under CI's shared/contended runners several times (ladder-v2 review, #61/#62/#70),
+        # passing locally and on re-run every time (9-10s typical). Give it headroom instead of
+        # relying on a re-run.
+        "test_privacy_scan": {"timeout": "moderate"},
+    },
     tags = [
         "external",
         "no-remote",

@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from yapnr.viewer.notes import mcp as notes_mcp
+from yapnr.viewer.notes.store import SCHEMA as NOTES_SCHEMA
 from yapnr.viewer.notes.store import NotesStore
 from yapnr.viewer.testing import fixture_copy, start_viewer, stop, write_fake
 
@@ -113,7 +114,7 @@ class ServerIngestionTest(unittest.TestCase):
                 self.assertEqual(
                     (status["available"], status["web"], status["notes"]), (False, False, True)
                 )
-                self.assertEqual(request("/api/notes"), dict(rev=0, notes=[]))
+                self.assertEqual(request("/api/notes"), dict(rev=0, schema=NOTES_SCHEMA, notes=[]))
                 made = json.load(
                     urlopen(
                         Request(
@@ -412,7 +413,7 @@ class SourceAgentHttpTest(unittest.TestCase):
 
                 st = call("/api/agent/status")[2]
                 self.assertEqual((st["available"], st["web"], st["notes"]), (True, True, True))
-                self.assertEqual(call("/api/notes")[2], dict(rev=0, notes=[]))
+                self.assertEqual(call("/api/notes")[2], dict(rev=0, schema=NOTES_SCHEMA, notes=[]))
                 self.assertEqual(call("/api/notes?since=0")[2], dict(rev=0, unchanged=True))
                 # writes: allowlisted Origin required (a missing one too), Host guard, user actor
                 # only

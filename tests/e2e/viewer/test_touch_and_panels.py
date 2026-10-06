@@ -47,6 +47,16 @@ def _save_shot(page: CDP, name: str):
     (Path(SCREEN_DIR) / f"{name}.png").write_bytes(base64.b64decode(data))
 
 
+def _alpha(css_color: str) -> float:
+    """The alpha channel of a computed `rgb(...)`/`rgba(...)` colour, as 0..1. A colour with no
+    alpha component (`rgb(r, g, b)`, the computed form for a fully opaque fill) is 1.0. Used to
+    check a drawer/scrim is actually opaque rather than merely not the literal string
+    "transparent" -- a translucent fill would pass that naive check while still being hard to
+    read against whatever is underneath."""
+    parts = css_color.strip().removeprefix("rgba(").removeprefix("rgb(").rstrip(")").split(",")
+    return float(parts[3]) if len(parts) > 3 else 1.0
+
+
 @unittest.skipUnless(chrome_binary() is not None, "no Chrome/Chromium found (see chrome_binary())")
 class TouchAndPanelsTest(unittest.TestCase):
     def setUp(self):
@@ -101,6 +111,11 @@ class TouchAndPanelsTest(unittest.TestCase):
 
     def touch(self, points, kind):
         self.page.call("Input.dispatchTouchEvent", {"type": kind, "touchPoints": points})
+
+    def _panel_bg(self, element_id):
+        return self.page.eval(
+            f"getComputedStyle(document.getElementById('{element_id}')).backgroundColor"
+        )
 
     def pinch(self, cx, cy, d_from, d_to, steps=8, axis="x"):
         """Two fingers straddling (cx, cy) along `axis`, distance d_from -> d_to."""
@@ -214,6 +229,27 @@ class TouchAndPanelsTest(unittest.TestCase):
             "245px",
         )
 
+        # a panel can collapse to a 34px rail instead of closing outright (mirrors the Inspect
+        # dock's own collapse), keeping its close/expand affordance reachable
+        self.page.eval("YapnrPanels.setLanesRail(true);1")
+        self.assertEqual(
+            self.page.eval(
+                "getComputedStyle(document.documentElement).getPropertyValue('--lanes-w')"
+            ),
+            "34px",
+        )
+        self.assertTrue(
+            self.page.eval("document.getElementById('lanes-panel').classList.contains('sp-rail')")
+        )
+        self.assertTrue(self.page.eval("YapnrPanels.lanesOpen()"))  # rail is not closed
+        self.page.eval("YapnrPanels.setLanesRail(false);1")
+        self.assertEqual(
+            self.page.eval(
+                "getComputedStyle(document.documentElement).getPropertyValue('--lanes-w')"
+            ),
+            "245px",
+        )
+
         # close via the real toolbar button (not just the JS API), reopen via the same button
         br = self.rect("#panel-bar button")
         self.page.call(
@@ -246,7 +282,6 @@ class TouchAndPanelsTest(unittest.TestCase):
         self.assertTrue(
             self.page.eval("document.getElementById('lanes-panel').hasAttribute('inert')")
         )
-        _save_shot(self.page, "desktop-panels-closed")
 
         self.page.eval("YapnrPanels.setExplore(false);1")
         self.assertEqual(
@@ -255,12 +290,16 @@ class TouchAndPanelsTest(unittest.TestCase):
             ),
             "0px",
         )
-        # with every side panel closed the board fills the remaining grid column
+        self.page.eval("window.YapnrDock.close();1")  # the fourth, pre-existing dock column too
+        self.assertFalse(self.page.eval("YapnrDock.isOpen()"))
+        # with every side panel (lanes, exploration, dock) closed the board gets effectively the
+        # whole window (the dock keeps its own pre-existing 34px collapsed rail on a wide screen)
         self.assertFalse(
             self.page.eval(
                 "document.documentElement.scrollWidth>document.documentElement.clientWidth"
             )
         )
+        _save_shot(self.page, "desktop-panels-closed")  # every panel closed, board maximized
 
         # persists across a reload
         self.goto("/", width=1600, height=900)
@@ -312,7 +351,138 @@ class TouchAndPanelsTest(unittest.TestCase):
             self.page.eval("getComputedStyle(document.getElementById('lanes-panel')).position"),
             "fixed",
         )
+        # the drawer paints a solid background -- it must never let the board/toolbar underneath
+        # show through (the transparent-drawer bug). Checked by alpha channel, not just against
+        # the literal strings "transparent"/rgba(0,0,0,0): a translucent fill (e.g. 50% alpha)
+        # would pass a naive string check while still being hard to read against the board.
+        self.assertGreaterEqual(_alpha(self._panel_bg("lanes-panel")), 0.99)
+        # the exploration drawer is the other one the owner reported as transparent -- same check.
+        # Checked and closed again right away: with lanes docked left and exploration docked right
+        # each at min(320px,88vw), the two together can cover the full 412px phone width, which
+        # would leave no sliver of scrim to click in the check below.
+        self.page.eval("YapnrPanels.setExplore(true);1")
+        self.assertGreaterEqual(_alpha(self._panel_bg("explore-panel")), 0.99)
+        self.page.eval("YapnrPanels.setExplore(false);1")
+        # a scrim sits behind the open drawer, dimming the board and giving a tap-outside target;
+        # it must itself be visible (not accidentally transparent) while a drawer is open
+        self.assertFalse(self.page.eval("document.getElementById('sp-scrim').hidden"))
+        self.assertGreater(
+            _alpha(
+                self.page.eval(
+                    "getComputedStyle(document.getElementById('sp-scrim')).backgroundColor"
+                )
+            ),
+            0.0,
+        )
+        # tapping the scrim (not the drawer itself, which is docked left and narrower than the
+        # viewport) closes it
+        scrim_rect = self.rect("#sp-scrim")
+        tap_x, tap_y = scrim_rect["x"] + scrim_rect["width"] - 5, scrim_rect["y"] + 5
+        self.page.call(
+            "Input.dispatchMouseEvent",
+            {"type": "mousePressed", "x": tap_x, "y": tap_y, "button": "left", "clickCount": 1},
+        )
+        self.page.call(
+            "Input.dispatchMouseEvent",
+            {"type": "mouseReleased", "x": tap_x, "y": tap_y, "button": "left", "clickCount": 1},
+        )
+        wait_for(lambda: (self.page.eval("YapnrPanels.lanesOpen()") is False) or None, 3)
+        self.assertTrue(self.page.eval("document.getElementById('sp-scrim').hidden"))
+        # reopen lanes (closed by the scrim tap above) for the focus/Esc checks below
+        self.page.eval("YapnrPanels.setLanes(true);1")
+        # opening the drawer from the toolbar moves focus into it
+        wait_for(
+            lambda: (
+                self.page.eval(
+                    "document.getElementById('lanes-panel').contains(document.activeElement)"
+                )
+            )
+            or None,
+            3,
+        )
+        # Esc closes it even though focus never left the drawer's own close button
+        self.page.call(
+            "Input.dispatchKeyEvent",
+            {"type": "keyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27},
+        )
+        wait_for(lambda: (self.page.eval("YapnrPanels.lanesOpen()") is False) or None, 3)
         _save_shot(self.page, "phone-panel-open")
+
+    def test_phone_drawer_escape_closes_without_focus_inside(self):
+        self.goto(width=412, height=915, mobile=True)
+        self.page.eval("YapnrPanels.setExplore(true);1")
+        self.assertTrue(self.page.eval("YapnrPanels.exploreOpen()"))
+        # move focus somewhere else entirely (the brand heading has none normally; give it one)
+        self.page.eval(
+            "document.getElementById('brand').tabIndex=-1;document.getElementById('brand').focus();1"
+        )
+        self.page.call(
+            "Input.dispatchKeyEvent",
+            {"type": "keyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27},
+        )
+        wait_for(lambda: (self.page.eval("YapnrPanels.exploreOpen()") is False) or None, 3)
+
+    def test_panel_side_can_dock_left_or_right(self):
+        self.goto(width=412, height=915, mobile=True)
+        self.assertEqual(self.page.eval("YapnrPanels.exploreSide()"), "right")
+        self.page.eval("YapnrPanels.setExplore(true);1")
+        r = self.rect("#explore-panel")
+        self.assertGreater(r["left"], 50)  # docked at the right edge
+        self.page.eval("YapnrPanels.setExploreSide('left');1")
+        # the drawer's slide is a transitioned transform (style.css); give it a moment to settle
+        # before measuring, rather than reading the rect mid-transition
+        wait_for(lambda: (self.rect("#explore-panel")["left"] < 10) or None, 3)
+        r = self.rect("#explore-panel")
+        self.assertLess(r["left"], 10)  # now docked at the left edge instead
+        self.page.eval("YapnrPanels.setExploreSide('right');1")  # restore the default
+
+    def test_laptop_width_keeps_lanes_and_exploration_as_columns(self):
+        # a laptop (not a phone) should not lose its columns to the overlay-drawer behaviour
+        self.goto(width=1280, height=800)
+        self.assertTrue(self.page.eval("YapnrPanels.lanesOpen()"))
+        self.assertTrue(self.page.eval("YapnrPanels.exploreOpen()"))
+        self.assertEqual(
+            self.page.eval("getComputedStyle(document.getElementById('lanes-panel')).position"),
+            "relative",
+        )
+        self.assertGreaterEqual(
+            self.page.eval(
+                "getComputedStyle(document.querySelector('main')).gridTemplateColumns.split(' ').length"
+            ),
+            3,
+        )
+
+    def test_narrow_header_and_toolbar_controls_stay_reachable(self):
+        # at phone width the header-right chips and the board toolbar's buttons must not be
+        # clipped out of reach by the page's own overflow:hidden -- they get their own
+        # (non-page) horizontal scroll instead
+        self.goto(width=412, height=915, mobile=True)
+        self.page.eval(
+            "document.getElementById('health').textContent="
+            "'\\u25cf LOCAL LIVE \\u00b7 123456 events (a long status string)';1"
+        )
+        self.page.eval("document.querySelector('.header-right').scrollLeft=99999;1")
+        about = self.rect("#about")
+        self.assertLessEqual(about["right"], self.page.eval("window.innerWidth") + 1)
+        self.page.eval("document.querySelector('.workspace>.toolbar').scrollLeft=99999;1")
+        fit = self.rect("#fit")
+        self.assertLessEqual(fit["right"], self.page.eval("window.innerWidth") + 1)
+        self.assertGreaterEqual(fit["left"], 0)
+        # none of this adds up to page-level horizontal scroll
+        self.assertLessEqual(
+            self.page.eval("document.documentElement.scrollWidth"),
+            self.page.eval("window.innerWidth"),
+        )
+
+    def test_ios_gesture_events_are_prevented(self):
+        # Safari's non-standard gesture* events (pinch zoom of the whole page) must be
+        # suppressed as a backstop alongside touch-action:none
+        self.goto(width=412, height=915, mobile=True)
+        prevented = self.page.eval(
+            "(()=>{let e=new Event('gesturestart',{cancelable:true});"
+            "document.dispatchEvent(e);return e.defaultPrevented})()"
+        )
+        self.assertTrue(prevented)
 
     def test_no_horizontal_scroll_at_360(self):
         self.goto(width=360, height=740, mobile=True)
@@ -399,6 +569,42 @@ class TouchAndPanelsTest(unittest.TestCase):
             )
             self.assertIn("N-0001", ids)
             self.assertNotIn("N-0002", ids)  # unscoped: never drawn on any board
+
+    def test_note_created_through_the_editor_stays_on_its_own_lane(self):
+        # the other scoping tests create notes directly through the API with provenance.lane
+        # already set; this one drives the real editor UI (window.YapnrNotes.newNote + the Save
+        # button, exactly what a click on "+ note" does) while "viewing" lane A (app.js's laneId,
+        # which is all the editor ever reads -- YapnrView.lane() returns it verbatim), then
+        # switches to lane B the same way a lane click does (select() starts by reassigning
+        # laneId) and checks the note never shows there.
+        self.goto(width=1200, height=800)
+        self.page.eval(
+            "laneId='laneA';window.YapnrNotes.newNote("
+            "{title:'via the editor',targets:[{kind:'component',ref:'C9'}]});1"
+        )
+        # Note: checked by count, not by querySelector's own truthiness -- Runtime.evaluate's
+        # returnByValue serializes a DOM Element as `{}` (CDP can't structured-clone a node),
+        # which is falsy in Python, so `page.eval(...) and True` would never see the element.
+        wait_for(
+            lambda: (self.page.eval("document.querySelectorAll('.nt-save').length") > 0) or None, 3
+        )
+        self.page.eval("document.querySelector('.nt-save').click();1")
+        wait_for(lambda: (self.page.eval("window.YapnrNotes.list().length") >= 1) or None, 5)
+        note = json.loads(self.page.eval("JSON.stringify(window.YapnrNotes.list()[0])"))
+        self.assertEqual(note["scope"], {"kind": "lane", "lane": "laneA"})
+
+        ids_a = json.loads(
+            self.page.eval("JSON.stringify(window.YapnrNotes.badgesFor('laneA').flatMap(b=>b.ids))")
+        )
+        self.assertIn(note["id"], ids_a)
+
+        # switch lanes the same way a click on a lane button does (select(id) starts with
+        # laneId=id): the note made while viewing A must not follow onto B
+        self.page.eval("laneId='laneB';1")
+        ids_b = json.loads(
+            self.page.eval("JSON.stringify(window.YapnrNotes.badgesFor('laneB').flatMap(b=>b.ids))")
+        )
+        self.assertNotIn(note["id"], ids_b)
 
 
 if __name__ == "__main__":

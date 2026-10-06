@@ -18,3 +18,10 @@ class DoubleTap{
   let now=Date.now(),last=this.last;this.last={t:now,x:up[0],y:up[1]};
   return !!(last&&now-last.t<this.gapMs&&Math.hypot(up[0]-last.x,up[1]-last.y)<this.posTol)}}
 window.touchMid=touchMid;window.touchDist=touchDist;window.DoubleTap=DoubleTap;
+// Safari (iOS) fires its own non-standard gesturestart/change/end for a two-finger pinch in
+// addition to Pointer/Touch events, and uses it to zoom the whole page regardless of
+// touch-action. touch-action:none on the drawing surfaces already stops this on iOS 13+, but
+// the gesture events still reach the page on older/odd WebKit builds, so suppress them too --
+// cheap insurance, never the primary mechanism (pinch math above still drives the real zoom).
+for(const ev of ['gesturestart','gesturechange','gestureend'])
+ document.addEventListener(ev,e=>e.preventDefault());

@@ -336,7 +336,9 @@ class StoreTest(Base):
 
     def test_since_payload_relevant_find(self):
         s = self.store()
-        self.assertEqual(json.loads(s.payload(None)), dict(rev=0, notes=[]))
+        self.assertEqual(
+            json.loads(s.payload(None)), dict(rev=0, schema=notes_store.SCHEMA, notes=[])
+        )
         a = s.create(dict(title="C17 ESR", targets=[dict(kind="component", ref="C17")]), AGENT)
         s.create(
             dict(title="rail", body="LED supply ripple", targets=[dict(kind="net", name="p5v-hv")]),

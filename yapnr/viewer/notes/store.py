@@ -822,7 +822,11 @@ class NotesStore:
                     self.rev,
                     json.dumps(self.all(), ensure_ascii=False, separators=(",", ":")).encode(),
                 )
-            head = dict(rev=self.rev, **({"skipped": len(self.skipped)} if self.skipped else {}))
+            head = dict(
+                rev=self.rev,
+                schema=SCHEMA,
+                **({"skipped": len(self.skipped)} if self.skipped else {}),
+            )
             if type(since) is int and 0 <= since < self.rev:
                 head.update(
                     changed=sorted(

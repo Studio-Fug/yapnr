@@ -1379,6 +1379,48 @@ mm), whose column above the SOIC is full: no push within reach clears it, so it 
 free slot (10.1 mm, a quarter turn). All 13 cases pass in every arm. The third row opens each
 cluster’s channels by the largest fraction the reach allows: it moves 2.4 times as many parts,
 mostly legal ones, for no routing gain on these cases, so channels are all or nothing.</p>
+<p><strong>A/B</strong> (GCP <code class="docutils literal notranslate"><span class="pre">c4d</span></code> us-west4 for both arms, the runner’s ladder-v2 defaults, <code class="docutils literal notranslate"><span class="pre">--legalize-keep</span></code>
+against <code class="docutils literal notranslate"><span class="pre">--no-legalize-keep</span></code>; ladder, showcases and all 33 hard rungs, seeds 0 and 1; campaigns
+<code class="docutils literal notranslate"><span class="pre">20261006-ladder-091262</span></code> and, after the fixes below, <code class="docutils literal notranslate"><span class="pre">20261006-ladder-8a0b4d</span></code>):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Arm</p></th>
+<th class="head"><p>Pass</p></th>
+<th class="head text-right"><p>Parts moved by legalization</p></th>
+<th class="head text-right"><p>Copper (both pass)</p></th>
+<th class="head text-right"><p>Vias (both pass)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>KEEP on</p></td>
+<td><p>88/90</p></td>
+<td class="text-right"><p>148 of 1496 (285 mm)</p></td>
+<td class="text-right"><p>33455 mm</p></td>
+<td class="text-right"><p>3828</p></td>
+</tr>
+<tr class="row-odd"><td><p>KEEP off</p></td>
+<td><p>90/90</p></td>
+<td class="text-right"><p>1361 of 1496 (4677 mm)</p></td>
+<td class="text-right"><p>31131 mm</p></td>
+<td class="text-right"><p>3772</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The first run found three cells that failed only with KEEP on. Seeds 2 to 7 of those rungs
+decided which were real. <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-pairs</span></code> (5 of 8 seeds against 7 of 8): the
+initial pool took the finalist with the fewest vias although its LVDS pair had fallen back to
+two legs, which KiCad’s gap rule fails; the pool now ranks a pair left as legs with the length
+budgets, before the vias, and the rung passes 8 of 8 in both arms. <code class="docutils literal notranslate"><span class="pre">-rails</span></code> fails 3 of 8 seeds
+in both arms (different seeds): no change. <code class="docutils literal notranslate"><span class="pre">11-buck-vqfnhr-4L-SGPS-pour</span></code> stays at 5 of 8 against
+7 of 8: global placement leaves the feedback resistor on the far side of the 2 x 2 mm regulator
+from its pin, KEEP keeps it there, the feedback net crosses under the part and the ground pin
+next to it loses its pad entry (<code class="docutils literal notranslate"><span class="pre">unqualified_pad_entry</span></code>); the wirelength packer moves the
+resistor beside the pin. Moving such wrong-side parts back is open (a rescue tried here moved
+them but the board then failed on a router short). Copper is 7.5 % longer with KEEP on (13 to
+18 % on the ladder, showcases and <code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code> variants, 6 % on the MCU lane, none on the BGA
+rungs): the wirelength packer improves every legal pose, KEEP keeps them.</p>
 </section>
 </section>
 </section>

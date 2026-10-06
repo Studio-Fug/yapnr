@@ -747,3 +747,26 @@ mm), whose column above the SOIC is full: no push within reach clears it, so it 
 free slot (10.1 mm, a quarter turn). All 13 cases pass in every arm. The third row opens each
 cluster's channels by the largest fraction the reach allows: it moves 2.4 times as many parts,
 mostly legal ones, for no routing gain on these cases, so channels are all or nothing.
+
+**A/B** (GCP `c4d` us-west4 for both arms, the runner's ladder-v2 defaults, `--legalize-keep`
+against `--no-legalize-keep`; ladder, showcases and all 33 hard rungs, seeds 0 and 1; campaigns
+`20261006-ladder-091262` and, after the fixes below, `20261006-ladder-8a0b4d`):
+
+| Arm      | Pass  | Parts moved by legalization | Copper (both pass) | Vias (both pass) |
+| -------- | ----- | --------------------------: | -----------------: | ---------------: |
+| KEEP on  | 88/90 |        148 of 1496 (285 mm) |           33455 mm |             3828 |
+| KEEP off | 90/90 |      1361 of 1496 (4677 mm) |           31131 mm |             3772 |
+
+The first run found three cells that failed only with KEEP on. Seeds 2 to 7 of those rungs
+decided which were real. `11-ufbga201-fanout-6L-SGSGPS-pairs` (5 of 8 seeds against 7 of 8): the
+initial pool took the finalist with the fewest vias although its LVDS pair had fallen back to
+two legs, which KiCad's gap rule fails; the pool now ranks a pair left as legs with the length
+budgets, before the vias, and the rung passes 8 of 8 in both arms. `-rails` fails 3 of 8 seeds
+in both arms (different seeds): no change. `11-buck-vqfnhr-4L-SGPS-pour` stays at 5 of 8 against
+7 of 8: global placement leaves the feedback resistor on the far side of the 2 x 2 mm regulator
+from its pin, KEEP keeps it there, the feedback net crosses under the part and the ground pin
+next to it loses its pad entry (`unqualified_pad_entry`); the wirelength packer moves the
+resistor beside the pin. Moving such wrong-side parts back is open (a rescue tried here moved
+them but the board then failed on a router short). Copper is 7.5 % longer with KEEP on (13 to
+18 % on the ladder, showcases and `07-chaser-20` variants, 6 % on the MCU lane, none on the BGA
+rungs): the wirelength packer improves every legal pose, KEEP keeps them.

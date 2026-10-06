@@ -1,0 +1,9 @@
+{
+  "schema": "yapnr-rf-forward/1",
+  "spec": "line-osh-m-w0p70-l30-m-eq-em528",
+  "spec_sha256": "7b6dca186f67ffe80401c38c1661462f2ee6b0123bc5c257b6d00ebfec3f2405",
+  "copper_mm": [[0.0, 30.0, -0.35, 0.35]],
+  "pixels": 8400,
+  "what": "straight 0.7 mm line, 30 mm, loss line",
+  "substrate": "M-eq-em528"
+}

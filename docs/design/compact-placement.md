@@ -553,8 +553,23 @@ compact cannot place the header: the run stopped there, before the fallback kept
 round (fixed since).
 
 The plane variants fall back on most seeds (their compact rounds leave a net unrouted); the
-two-layer variants keep their compact layout on most. The final validation (the lane, the ladder,
-the showcases and the nightly hard rungs, seeds 0 and 1, compact on and off, and off against
-`main`) is in the PR.
+two-layer variants keep their compact layout on most.
+
+**Validation** (`c5c1f5c` against `main` `586857d`, GCP C4D x86-64, seeds 0 and 1; the lane with
+its options, the ladder and showcases with the pool 8/3, the 15 nightly hard rungs as the nightly
+lane runs them):
+
+| Cells                      | compact | off   | `RELAX` rounds | Placed bbox, compact vs off | Copper        | Vias      |
+| -------------------------- | ------- | ----- | -------------- | --------------------------- | ------------- | --------- |
+| 8 ladder cases (16)        | 16/16   | 16/16 | 0              | 6427 to 3795 mm² (-41 %)    | 2317 → 1633   | 134 → 128 |
+| 4 showcases (8)            | 8/8     | 8/8   | 0              | 6641 to 3899 mm² (-41 %)    | 2460 → 1660   | 148 → 132 |
+| 15 nightly hard rungs (30) | 30/30   | 30/30 | 0              | 26629 to 16935 mm² (-36 %)  | 8514 → 5787   | 821 → 775 |
+| `09-mcu-usb-31` lane (18)  | 18/18   | 16/18 | 7              | 22412 to 19833 mm² (-12 %)  | 12012 → 10244 | 983 → 964 |
+
+The bbox, copper (mm) and vias are summed over the cells that place in both arms (the lane
+without `-header`, which off cannot place). Off on the branch is byte-identical to `main` on 70
+of 72 cells (`placed.json`, `routes.json`, the routed board modulo UUIDs); the other two are
+`-header`, which neither places (the same pool exhaustion). Compact costs 2 to 18 % more CPU
+(the lane's fallback rounds).
 
 **Power-first placement** (`PNR_POWER_FIRST=1`) no longer refuses compact (section 2).

@@ -441,19 +441,22 @@ on the Mac wants about 16,000 s, above <code class="docutils literal notranslate
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">fetch</span> <span class="pre">PLAN</span> <span class="pre">[--full]</span> <span class="pre">[--into</span> <span class="pre">DIR]</span> <span class="pre">[--from</span> <span class="pre">DIR]</span></code></p></td>
 <td><p>no (egress is billed)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">cancel</span> <span class="pre">PLAN</span> <span class="pre">[--submission</span> <span class="pre">N]</span> <span class="pre">[--dry-run]</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">live</span> <span class="pre">PLAN</span> <span class="pre">[--out</span> <span class="pre">DIR]</span> <span class="pre">[--interval</span> <span class="pre">S]</span> <span class="pre">[--once]</span></code></p></td>
+<td><p>no (polls the store)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">cancel</span> <span class="pre">PLAN</span> <span class="pre">[--submission</span> <span class="pre">N]</span> <span class="pre">[--dry-run]</span></code></p></td>
 <td><p>yes</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">doctor</span> <span class="pre">--backend</span> <span class="pre">B</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">doctor</span> <span class="pre">--backend</span> <span class="pre">B</span></code></p></td>
 <td><p>no</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">prices</span> <span class="pre">[--refresh]</span> <span class="pre">[--family</span> <span class="pre">F]</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">prices</span> <span class="pre">[--refresh]</span> <span class="pre">[--family</span> <span class="pre">F]</span></code></p></td>
 <td><p>no (Billing Catalog read)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">unfreeze</span> <span class="pre">--backend</span> <span class="pre">gcp-batch</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">unfreeze</span> <span class="pre">--backend</span> <span class="pre">gcp-batch</span></code></p></td>
 <td><p>yes (deletes the freeze marker)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">calibration</span> <span class="pre">ingest</span> <span class="pre">--reference</span> <span class="pre">DIR</span> <span class="pre">--cloud</span> <span class="pre">DIR...</span> <span class="pre">--out</span> <span class="pre">FILE</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">calibration</span> <span class="pre">ingest</span> <span class="pre">--reference</span> <span class="pre">DIR</span> <span class="pre">--cloud</span> <span class="pre">DIR...</span> <span class="pre">--out</span> <span class="pre">FILE</span></code></p></td>
 <td><p>no</p></td>
 </tr>
 </tbody>
@@ -462,6 +465,40 @@ on the Mac wants about 16,000 s, above <code class="docutils literal notranslate
 <p><code class="docutils literal notranslate"><span class="pre">PLAN</span></code> is the plan directory <code class="docutils literal notranslate"><span class="pre">plan</span></code> printed, or the campaign id. <code class="docutils literal notranslate"><span class="pre">submit</span> <span class="pre">--dry-run</span></code> on <code class="docutils literal notranslate"><span class="pre">gcp-batch</span></code>
 prints every <code class="docutils literal notranslate"><span class="pre">gcloud</span></code> call it would make (all with <code class="docutils literal notranslate"><span class="pre">--impersonate-service-account=yapnr-submit&#64;...</span></code>)
 without making any.</p>
+</section>
+<section id="live-viewer-mirror">
+<h2>Live viewer mirror<a class="headerlink" href="#live-viewer-mirror" title="Link to this heading">¶</a></h2>
+<p>The <a class="reference internal" href="viewer.html"><span class="std std-doc">live viewer</span></a> reads a local directory a running experiment writes telemetry into
+(<code class="docutils literal notranslate"><span class="pre">PNR_LIVE_DIR</span></code>); a campaign’s tasks run elsewhere, so <code class="docutils literal notranslate"><span class="pre">[live]</span></code> in the campaign file has every
+task upload its telemetry to the runs store, and <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">live</span></code> mirrors it back to a local
+directory the viewer reads unchanged. Off by default (no <code class="docutils literal notranslate"><span class="pre">[live]</span></code> section): a task’s behaviour
+and outputs are then byte-identical to a campaign without this feature.</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[live]</span>
+<span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">interval_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">45</span><span class="w">     </span><span class="c1"># at least 10; how often a task uploads (and once more at the end)</span>
+<span class="n">mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;full&quot;</span><span class="w">       </span><span class="c1"># &quot;thin&quot; drops the per-net maze events; keeps checkpoints, round summaries,</span>
+<span class="w">                     </span><span class="c1"># placement costs</span>
+</pre></div>
+</div>
+<p>With <code class="docutils literal notranslate"><span class="pre">[live]</span></code> on, every task sets <code class="docutils literal notranslate"><span class="pre">PNR_LIVE_DIR</span></code> to a scratch directory and <code class="docutils literal notranslate"><span class="pre">PNR_LIVE_CANDIDATE</span></code>
+to its own task id, so the engine’s telemetry writer (<code class="docutils literal notranslate"><span class="pre">pnr.live</span></code>, unaware of any of this) runs as
+it would locally; the wrapper’s <code class="docutils literal notranslate"><span class="pre">LiveUploader</span></code> packs the new events (and the boards they
+reference) written since the last upload into a <code class="docutils literal notranslate"><span class="pre">tar.gz</span></code> at
+<code class="docutils literal notranslate"><span class="pre">campaigns/&lt;cid&gt;/live/&lt;task</span> <span class="pre">key&gt;/&lt;attempt&gt;/&lt;seq&gt;.tar.gz</span></code> in the runs store, every <code class="docutils literal notranslate"><span class="pre">interval_s</span></code> and
+once more when the task ends. Bundles are namespaced by attempt, so a preempted or retried task’s
+lane keeps going (its next attempt’s bundles continue the sequence a fresh attempt’s events need,
+without colliding with the seq numbers an earlier attempt already sent).</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>exp<span class="w"> </span>live<span class="w"> </span>&lt;plan&gt;<span class="w">                           </span><span class="c1"># polls forever; Ctrl-C to stop</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>live<span class="w"> </span>&lt;plan&gt;<span class="w"> </span>--out<span class="w"> </span>runs/live<span class="w"> </span>--once<span class="w">     </span><span class="c1"># one poll, for scripting</span>
+</pre></div>
+</div>
+<p>mirrors every new bundle of the campaign into one shared live directory’s <code class="docutils literal notranslate"><span class="pre">events/</span></code> and <code class="docutils literal notranslate"><span class="pre">boards/</span></code>
+(idempotent: an event or board already on disk is left alone, and boards are content-addressed so
+the same board from two tasks never collides), printing the <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span> <span class="pre">--</span> <span class="pre">--root</span></code>
+command to run. Because every task’s events carry its own <code class="docutils literal notranslate"><span class="pre">candidate</span></code> (its task id), the viewer’s
+existing lane grouping gives each task its own lane with no further bookkeeping; progress is
+saved after every bundle, so an interrupted mirror resumes where it left off. Only the store is
+read; nothing is written back to the campaign.</p>
 </section>
 <section id="google-cloud-bootstrap">
 <h2>Google Cloud bootstrap<a class="headerlink" href="#google-cloud-bootstrap" title="Link to this heading">¶</a></h2>
@@ -1077,7 +1114,10 @@ starts again: keep Spot models to an hour or two.</p>
 planning; golden Batch JSON validated against the vendored
 <a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/third_party/googleapis">Batch v1 discovery document</a>;
 the exact <code class="docutils literal notranslate"><span class="pre">gcloud</span></code> calls of a dry-run submit; golden <code class="docutils literal notranslate"><span class="pre">sbatch</span></code> scripts with <code class="docutils literal notranslate"><span class="pre">bash</span> <span class="pre">-n</span></code> and
-shellcheck; fetch and ladder assembly; prices and calibration; the budget guard), and the manual
+shellcheck; fetch and ladder assembly; prices and calibration; the budget guard; the live-viewer
+mirror’s packing, unpacking, path rewriting and idempotence, and an end-to-end run of the local
+backend with <code class="docutils literal notranslate"><span class="pre">[live]</span></code> on whose mirrored events validate against <code class="docutils literal notranslate"><span class="pre">pnr-live-event-v1</span></code> and are read
+back into a lane by the viewer itself), and the manual
 <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//infra/gcp:tofu_check</span></code> (see <a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp">infra/gcp</a>).
 The test process cannot reach a cloud: real <code class="docutils literal notranslate"><span class="pre">gcloud</span></code> calls are disabled while
 <code class="docutils literal notranslate"><span class="pre">YAPNR_EXP_NO_CLOUD</span></code> is set.</p>
@@ -1193,6 +1233,7 @@ cancel and <code class="docutils literal notranslate"><span class="pre">submit</
 <li><a class="reference internal" href="#quick-start-the-local-backend">Quick start: the local backend</a></li>
 <li><a class="reference internal" href="#campaigns-plans-and-tasks">Campaigns, plans and tasks</a></li>
 <li><a class="reference internal" href="#commands">Commands</a></li>
+<li><a class="reference internal" href="#live-viewer-mirror">Live viewer mirror</a></li>
 <li><a class="reference internal" href="#google-cloud-bootstrap">Google Cloud bootstrap</a><ul>
 <li><a class="reference internal" href="#images">1. Images</a></li>
 <li><a class="reference internal" href="#project-and-billing-owner-account">2. Project and billing (owner account)</a></li>

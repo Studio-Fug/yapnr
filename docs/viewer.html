@@ -310,6 +310,10 @@ control requests, pins, annotation drafts and snapshots).</p>
 bazel<span class="w"> </span>run<span class="w"> </span>//:viewer<span class="w"> </span>--<span class="w"> </span>--config<span class="w"> </span>viewer.toml<span class="w"> </span>--port<span class="w"> </span><span class="m">8795</span>
 </pre></div>
 </div>
+<p>For a campaign running on <code class="docutils literal notranslate"><span class="pre">gcp-batch</span></code> or <code class="docutils literal notranslate"><span class="pre">slurm</span></code> (<a class="reference internal" href="cloud-experiments.html"><span class="std std-doc">cloud-experiments.md</span></a>),
+there is no local directory to point at until <code class="docutils literal notranslate"><span class="pre">[live]</span></code> is on in the campaign file and
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">live</span> <span class="pre">&lt;plan&gt;</span></code> mirrors the tasks’ telemetry back from the runs store; point <code class="docutils literal notranslate"><span class="pre">--root</span></code> at
+its <code class="docutils literal notranslate"><span class="pre">--out</span></code> directory instead (the “Live viewer mirror” section has the details).</p>
 <p>Relative paths are relative to the directory <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span></code> was started from. The server listens on
 <code class="docutils literal notranslate"><span class="pre">127.0.0.1</span></code> only, unless you add listeners (see <a class="reference internal" href="#network-access">Network access</a>).</p>
 <p>From a plain checkout, build the static files once and run the package with Python 3.11 or

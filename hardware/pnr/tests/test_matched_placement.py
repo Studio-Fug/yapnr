@@ -136,6 +136,95 @@ class RefineTest(unittest.TestCase):
         # Only small parts move: the fixed connector and IC stay, rotations stay.
         self.assertEqual([c.rot for c in out.components], [c.rot for c in g.components])
 
+    def test_a_part_may_turn_to_face_its_legs(self):
+        # PNR_COMPACT PAIRS (turns=True): J north, U south, R1 and R2 side by side and boxed
+        # in by keep-outs; R1 faces the wrong way (its AP pad south, its BP pad north), so
+        # each pair's legs differ by a resistor's length. Moving cannot fix it, a half turn
+        # can; without ``turns`` no part turns.
+        from pnr.place.geometry import Rect
+
+        def part(ref, pos, pads, size, rot=0.0):
+            return Component(ref, "t", pos, rot, "top", size, size, pads=pads)
+
+        g = BoardGraph(
+            "boxed",
+            [
+                part(
+                    "J",
+                    (20.0, 18.0),
+                    [Pad("P", "AP", (-0.5, -1), (0.6, 0.6)), Pad("N", "AN", (0.5, -1), (0.6, 0.6))],
+                    (4, 2),
+                ),
+                part(
+                    "U",
+                    (20.0, 2.0),
+                    [Pad("P", "BP", (-0.5, 1), (0.6, 0.6)), Pad("N", "BN", (0.5, 1), (0.6, 0.6))],
+                    (4, 2),
+                ),
+                part(
+                    "R1",
+                    (19.0, 10.0),
+                    [Pad("1", "AP", (-0.5, 0), (0.5, 0.5)), Pad("2", "BP", (0.5, 0), (0.5, 0.5))],
+                    (2, 1.2),
+                    90.0,
+                ),
+                part(
+                    "R2",
+                    (21.0, 10.0),
+                    [Pad("1", "AN", (-0.5, 0), (0.5, 0.5)), Pad("2", "BN", (0.5, 0), (0.5, 0.5))],
+                    (2, 1.2),
+                    270.0,
+                ),
+            ],
+            [
+                Net("AP", 1, [("J", "P"), ("R1", "1")]),
+                Net("AN", 2, [("J", "N"), ("R2", "1")]),
+                Net("BP", 3, [("R1", "2"), ("U", "P")]),
+                Net("BN", 4, [("R2", "2"), ("U", "N")]),
+            ],
+            BoardOutline(W, H),
+        )
+        cc = compile_constraints(
+            {
+                "board": {"outline": {"w": W, "h": H}},
+                "fixed": {
+                    "J": {"at": [20.0, 18.0], "rot": 0, "side": "top"},
+                    "U": {"at": [20.0, 2.0], "rot": 0, "side": "top"},
+                },
+                "diff_pair": [
+                    {"name": "a", "p": "AP", "n": "AN", "skew_mm": 1.0},
+                    {"name": "b", "p": "BP", "n": "BN", "skew_mm": 1.0},
+                ],
+            },
+            g.refs,
+        )
+        sets = matched_sets(cc, g)
+        self.assertEqual([round(m, 6) for m in mismatch(g, sets)], [1.0, 1.0])
+        x0, x1, y0, y1 = 18.0, 22.0, 8.75, 11.25  # the free box around the two parts
+        keep = [
+            Rect(x0 / 2, H / 2, x0, H),
+            Rect((x1 + W) / 2, H / 2, W - x1, H),
+            Rect(20.0, y0 / 2, 4.0, y0),
+            Rect(20.0, (y1 + H) / 2, 4.0, H - y1),
+        ]
+        kw = dict(fixed=resolve_fixed_poses(g, cc), keepouts=keep, grid_mm=0.25, clearance=0.1)
+        plain = refine_matched(g, cc, W, H, **kw)
+        self.assertEqual([c.rot for c in plain.components], [c.rot for c in g.components])
+        self.assertTrue(all(m > 0.5 for m in mismatch(plain, sets)))
+        turned = refine_matched(g, cc, W, H, turns=True, **kw)
+        self.assertEqual(turned.component("R1").rot, 270.0)
+        self.assertEqual(turned.component("R2").rot, 270.0)
+        self.assertTrue(all(m < 0.25 for m in mismatch(turned, sets)), mismatch(turned, sets))
+        self.assertFalse(any(hard_violations(turned, cc, clearance=0.0).values()))
+        # a hard rotation holds a part
+        cc.constraints.append(
+            type(cc.constraints[0])(
+                "orientation", cc.constraints[0].enforcement, ("R1",), {"rot": 90}
+            )
+        )
+        held = refine_matched(g, cc, W, H, turns=True, **kw)
+        self.assertEqual(held.component("R1").rot, 90.0)
+
     def test_nothing_to_do(self):
         g = series_board(r1=(10.0, 13.0), r2=(30.0, 7.0))
         cc = constraints(g, pairs=False)

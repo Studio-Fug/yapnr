@@ -405,6 +405,8 @@ def place(
             outline=_legal_outline(constraints),
             pad_edge=pad_edge,
             **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
+            # PNR_COMPACT PAIRS: a matched part may also turn (pnr.place.matched).
+            **(dict(turns=True) if orient and compact.enabled("PAIRS") else {}),
         )
     reorienting = legalize_flags.legalize_reorient()
     if reorienting and orient:

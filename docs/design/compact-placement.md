@@ -1,7 +1,8 @@
 # Design: compact placement (`PNR_COMPACT`) and shrink-to-fit (`PNR_SHRINK`)
 
 Status: implemented on branch `claude/compact`, off by default; section 11 (legalizer spacing
-and turns) on branch `claude/legalize`, off by default. Code: `hardware/pnr/pnr/compact_flags.py`
+and turns) on branch `claude/legalize`, off by default; section 12 (the `09-mcu-usb-31` lane:
+`PAIRS`, `RELAX`, power-first placement, the router key) on branch `claude/lv2-compact`. Code: `hardware/pnr/pnr/compact_flags.py`
 (the switches, stdlib only) and `hardware/pnr/pnr/place/compact.py` (metrics, cluster box,
 legalizer settings, shrink search); the call sites guard on the switches. Tests:
 `hardware/pnr/tests/test_compact.py`.
@@ -24,9 +25,12 @@ placement exposed:
 
 ## 1. Switches
 
-- `PNR_COMPACT=1` turns on `GP`, `RANK`, `LEGALIZE`, `COURTYARD` and `DROPS`, and the three
-  legalizer parts of section 11 (`WIRE`, `TURN`, `SATELLITES`); `PNR_COMPACT_<PART>=0` drops one
-  part (ablations).
+- `PNR_COMPACT=1` turns on `GP`, `RANK`, `LEGALIZE`, `COURTYARD` and `DROPS`, the three
+  legalizer parts of section 11 (`WIRE`, `TURN`, `SATELLITES`) and the two parts of section 12
+  (`PAIRS`, `RELAX`); `PNR_COMPACT_<PART>=0` drops one part (ablations).
+- The router key (`pnr.feedback.signals.current_key`) carries a `compact` field, a digest of the
+  active parts, `PNR_SHRINK` and the legalizer switches' effective values (section 12), so
+  evaluations and block libraries of two placement configurations never mix.
 - `run.py`'s `--compact-off` choices and the `ladder-cell` kind's `compact_off` list the same
   parts as `pnr/compact_flags.py` (tests keep them equal).
 - `PNR_SHRINK=1` is separate and never on by default: it changes the board outline.
@@ -222,7 +226,8 @@ the shrunk edge, through pad cells the router's edge inset leaves open.
 The full tables are in the workflow's A/B notes; the ladder documentation
 ([compact placement](../regression-ladder.md#compact-placement-opt-in)) summarises them.
 
-Still open: the 0.01 mm courtyard gap (no DRC finding in any arm).
+Still open: the 0.01 mm courtyard gap (no DRC finding in any arm). The manual `09-mcu-usb-31`
+lane is resolved in section 12.
 
 ## 11. Spacing and turns at legalization (`PNR_GP_POLISH`, `PNR_LEGALIZE_HPWL`, ...)
 
@@ -480,3 +485,76 @@ it stays opt-in.
   wirelength (a mean move of 4.15 mm on the core), which a better global placement would leave
   less to do. The polish (A) brought the two closer by lengthening global placement's
   wirelength (+16 %) and is not adopted.
+
+## 12. The `09-mcu-usb-31` lane: `PAIRS` and `RELAX` (2026-10-06)
+
+Ladder v2 makes compact placement the default, which needs the manual `09-mcu-usb-31` lane (the
+seven layout and constraint variants, `-header` and `-mc`) to pass with it wherever it passes
+without. At `origin/main` (`82ec1a5`, GCP C4D x86-64, the lane's options: pool 8/1, 2 rounds,
+packed maze; seeds 0 and 1) it passed 16 of 16 off and 11 of 16 compact (`-header` 0 of 2 off, 1
+of 2 compact).
+
+**Root cause.** All five failing cells (and every failure on seeds 2 and 3) are one of two kinds:
+
+- **A pair out of skew** (`length_unmatched`, 1.5 to 12.6 mm). In every one, one leg of a USB pair
+  carries a via pair and a detour that its partner does not: the two series resistors sit
+  staggered, stacked across the legs or on either side of the connector, so one leg crosses the
+  other or squeezes past a resistor through the bottom layer (a via pair alone is 2 x 1.51 mm on
+  the 1.6 mm board). Without compact the same crossings happen, and the length tuner meanders the
+  short leg back into the 1 mm budget (16 to 20 mm of meanders on some cells); with the courtyards
+  packed at 0.01 mm there is no free cell beside the short leg for a bump, so the tuner adds
+  nothing and the set is reverted. The place-route loop then stops anyway: it counted only
+  unrouted nets, so a round with an unmatched pair was "converged".
+- **A net unrouted** on the plane variants (`4L-SGPS`, `4L-SSGS`, `6L-SGSGPS`): every ground and
+  supply pad drops a via to its plane, and the packed layout leaves the signal escapes no room.
+
+**`PAIRS`.** The matched-length pass after legalization (`pnr.place.matched.refine_matched`) may
+also turn a part on a pair or length group, or a line group's rigid macro (the `-rel` variant's
+authored `usb-series` line), a quarter turn, so that the pads its legs leave from face where the
+legs go. It never turns a part a hard rotation holds, nor without `orient`.
+
+**`RELAX`: compact as far as the board routes.** In the place-route loop
+(`pnr.route.feedback`) a round that leaves a signal net unrouted, or a declared pair or group
+outside its budget, is not converged. Every later round runs with compact placement switched off
+(`pnr.compact_flags.relaxed`, read by every part's call site) at the board's own spread, and the
+first of them takes the initial pool again at the run's seed: it is the first round of the run
+without compact, byte for byte (checked on `09-mcu-usb-31-rel` seed 0: `placed.json` and
+`routes.json` identical). So a board that routes without compact in one round routes with it in
+two, and keeps the compact layout wherever that routes. A board that does not place without
+compact (the pin-1-origin header's envelope) keeps its best compact round
+(`termination: relaxed_placement_failed`). `pnr-report.json` records the switch (`relaxed`:
+the round, the spread, why).
+
+**Rejected on the way** (A/B on GCP, the 8 rungs with the lane's options, seeds 0 to 3):
+
+- the two series resistors placed as a rigid mirrored twin (an engine line group): 15 of 32
+  against 21 of 32 without it, since a twin of 0805s puts its legs 2 mm apart and a twin turned
+  across the legs mismatches them by that pitch;
+- the declared pairs routed coupled (`board.route_pairs: coupled`): the staggered resistors give
+  the coupled solver no channel (`no_coupled_channel`), both pairs fall back to legs;
+- the short leg routed again, longer, through a waypoint or a via hop where meanders find no
+  room: unit-tested, but on the lane's boards no such route cleared the other nets, so it never
+  fired and was removed.
+
+**Measured** (GCP C4D, x86-64; the 8 rungs of the lane run with the initial pool, seeds 0 to 3,
+32 cells; `-mc` passes in every arm):
+
+| Arm                                                     | Pass  | Rounds run without compact |
+| ------------------------------------------------------- | ----- | -------------------------- |
+| off (`main`)                                            | 26/32 | -                          |
+| compact (`main`)                                        | 21/32 | -                          |
+| compact, `RELAX` placing at the board's spread, no pool | 28/32 | 17                         |
+| compact, `RELAX` (pool again), `PAIRS` off              | 31/32 | 16                         |
+| compact, `RELAX` and `PAIRS`                            | 32/32 | 14                         |
+
+Off fails `-header` on every seed (its envelope cannot be placed) and `-abs`, `-sidelock` on seed 3
+(pairs out of skew). The one failure with `PAIRS` off is `-header` seed 0, whose round without
+compact cannot place the header: the run stopped there, before the fallback kept its compact
+round (fixed since).
+
+The plane variants fall back on most seeds (their compact rounds leave a net unrouted); the
+two-layer variants keep their compact layout on most. The final validation (the lane, the ladder,
+the showcases and the nightly hard rungs, seeds 0 and 1, compact on and off, and off against
+`main`) is in the PR.
+
+**Power-first placement** (`PNR_POWER_FIRST=1`) no longer refuses compact (section 2).

@@ -93,6 +93,8 @@ class FlagsTest(unittest.TestCase):
                     WIRE=True,
                     TURN=True,
                     SATELLITES=True,
+                    PAIRS=True,
+                    RELAX=True,
                     SHRINK=True,
                 ),
             )
@@ -578,6 +580,121 @@ class ShrinkTest(unittest.TestCase):
         with flags(PNR_SHRINK="1"), mock.patch.object(feedback, "_place_route_loop", loop):
             _, report = feedback.route_and_place(g, cc2)
         self.assertEqual(report.shrink["skipped"], "keep-outs")
+
+
+class RelaxTest(unittest.TestCase):
+    """RELAX: compact as far as the board routes (pnr.route.feedback, pnr.compact_flags)."""
+
+    def test_relaxed_switches_compact_off(self):
+        from pnr import compact_flags, legalize_flags
+
+        with flags(**ON):
+            with compact_flags.relaxed():
+                self.assertFalse(compact_flags.enabled())
+                self.assertFalse(any(compact_flags.enabled(p) for p in PARTS))
+                self.assertEqual(legalize_flags.active(), {})  # WIRE, TURN, SATELLITES too
+            self.assertTrue(compact_flags.enabled("GP"))
+
+    def loop(self, outcomes, env, use_pool=False, pool_fails_off=False):
+        """Run the place-route loop with a fake placer and router: round r routes with
+        ``outcomes[r]`` = (unrouted nets, length statuses). Returns (report, the
+        (spread, GP enabled, LEGALIZE enabled) each placement saw)."""
+        from types import SimpleNamespace
+
+        from pnr import compact_flags
+        from pnr.constraints import compile_constraints
+        from pnr.place.placer import PlacementReport
+        from pnr.route import feedback
+        from pnr.route.detail import router
+
+        g = board([part("A", (2.0, 2.0), pos=(3.0, 3.0))], 20.0, 10.0)
+        cc = compile_constraints({"board": {"outline": {"w": 20, "h": 10}}}, g.refs)
+        seen, rounds = [], iter(outcomes)
+
+        def place(graph, constraints, **kwargs):
+            seen.append((kwargs["spread"], compact_flags.enabled(), kwargs.get("seed")))
+            return BoardGraph.from_json(graph.to_json()), PlacementReport(20.0, 10.0, 0.0, 0.0)
+
+        def route_board(placed, constraints, rules, **kwargs):
+            unrouted, statuses = next(rounds)
+            nets = {n: SimpleNamespace(remaining_connections=1) for n in unrouted}
+            return SimpleNamespace(
+                result=SimpleNamespace(unrouted=list(unrouted), nets=nets),
+                deferred_nets=set(),
+                tracks=[],
+                vias=[],
+                pressure_events=[],
+                length_report=[dict(name="p", status=x) for x in statuses] or None,
+            )
+
+        def pool(graph, constraints, rules, **kwargs):
+            seen.append(("pool", kwargs["spread"], compact_flags.enabled(), kwargs["seed"]))
+            if pool_fails_off and not compact_flags.enabled():
+                from pnr.place.legalize import LegalizationError
+
+                raise LegalizationError(
+                    "Initial placement pool exhausted without a legal candidate"
+                )
+            placed = BoardGraph.from_json(graph.to_json())
+            report = dict(candidates=[dict(id="start-00", seed=kwargs["seed"])])
+            report["selected"] = "start-00"
+            return (
+                placed,
+                PlacementReport(20.0, 10.0, 0.0, 0.0),
+                route_board(None, None, None),
+                report,
+            )
+
+        from pnr.place import initial_pool
+
+        with flags(**env), mock.patch.object(feedback, "place", place), mock.patch.object(
+            router, "route_board", route_board
+        ), mock.patch.object(initial_pool, "select_initial_placement", pool):
+            _, report = feedback.route_and_place(
+                g,
+                cc,
+                seed=3,
+                max_rounds=len(outcomes),
+                spread=1.3,
+                detail_rules={"fab": {}},
+                initial_pool=use_pool,
+            )
+        return report, seen
+
+    def test_a_round_that_does_not_route_relaxes_the_next(self):
+        # unmatched pair in round 1: not converged under RELAX, round 2 placed relaxed
+        report, seen = self.loop([([], ["length_unmatched"]), ([], ["tuned"])], ON)
+        self.assertTrue(report.converged)
+        self.assertEqual(report.best_round, 2)
+        self.assertEqual(seen, [(1.0, True, 3), (1.3, False, 4)])
+        self.assertEqual(report.relaxed["from_round"], 2)
+        self.assertEqual(report.relaxed["unmatched"], 1)
+        # an unrouted net too
+        report, seen = self.loop([(["N1"], []), ([], [])], ON)
+        self.assertEqual((report.best_round, seen[1]), (2, (1.3, False, 4)))
+        # with the initial pool: the first relaxed round takes it again at the run's seed
+        # and spread, as the run without compact does (compact switched off), then rounds
+        # go on without it
+        report, seen = self.loop(
+            [([], ["length_unmatched"]), (["N1"], []), ([], [])], ON, use_pool=True
+        )
+        self.assertEqual(seen, [("pool", 1.0, True, 3), ("pool", 1.3, False, 3), (1.3, False, 5)])
+        self.assertEqual((report.best_round, report.relaxed["initial_pool"]), (3, True))
+        # a board that does not place without compact (a pin-1-origin header's envelope)
+        # keeps its best compact round
+        report, seen = self.loop(
+            [([], ["length_unmatched"]), ([], [])], ON, use_pool=True, pool_fails_off=True
+        )
+        self.assertEqual((report.best_round, report.converged), (1, False))
+        self.assertEqual(report.termination, "relaxed_placement_failed")
+        self.assertIn("initial_pool_error", report.relaxed)
+        # a round that routes is kept, nothing relaxed
+        report, seen = self.loop([([], ["ok"])], ON)
+        self.assertEqual((report.converged, report.relaxed, len(seen)), (True, None, 1))
+        # without the part (or compact) an unmatched pair converges as before
+        for env in (dict(ON, PNR_COMPACT_RELAX="0"), {}):
+            report, seen = self.loop([([], ["length_unmatched"])], env)
+            self.assertEqual((report.converged, report.relaxed), (True, None))
 
 
 class RunnerTest(unittest.TestCase):

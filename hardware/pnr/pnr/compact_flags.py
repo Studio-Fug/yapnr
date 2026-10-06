@@ -30,7 +30,20 @@ same question as the placer without importing torch or numpy.
     (``PNR_LEGALIZE_REORIENT=wire``);
 ``SATELLITES``
     a line group carries each member's satellite, such as an LED's series resistor, flush
-    beside it (``PNR_LINE_SATELLITES``).
+    beside it (``PNR_LINE_SATELLITES``);
+``PAIRS``
+    the matched-length pass after legalization (:func:`pnr.place.matched.refine_matched`)
+    may also turn a part on a differential pair or length group, or a line group's rigid
+    macro, a quarter turn, so the pads its legs leave from face where the legs go: a
+    pair's series resistors stacked across the legs give one leg a resistor's pitch more,
+    which packed parts leave the length tuner no room to make up;
+``RELAX``
+    compact as far as the board routes: in the place-route loop
+    (:func:`pnr.route.feedback.route_and_place`) a round that leaves a signal net
+    unrouted, or a declared pair or group outside its budget, is not converged, and every
+    later round runs with compact placement switched off (:func:`relaxed`): the first of
+    them is the run without compact (the same initial pool at the same seed and spread),
+    so a board that routes without compact in one round routes with it in two.
 
 An explicit ``PNR_LEGALIZE_HPWL``, ``PNR_LEGALIZE_REORIENT`` or ``PNR_LINE_SATELLITES``
 (``0`` included) wins over its part. ``PNR_COMPACT_<PART>=0`` drops one part (an ablation). ``PNR_SHRINK=1`` (the flat
@@ -40,22 +53,49 @@ caller takes its unchanged path and writes no new JSON keys.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
 
-PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
+PARTS = (
+    "GP",
+    "RANK",
+    "LEGALIZE",
+    "COURTYARD",
+    "DROPS",
+    "WIRE",
+    "TURN",
+    "SATELLITES",
+    "PAIRS",
+    "RELAX",
+)
+_relaxed = False  # relaxed(): compact placement switched off for a RELAX round
 
 
 def enabled(part=None) -> bool:
     """True with ``PNR_COMPACT=1`` (and, for ``part``, unless ``PNR_COMPACT_<PART>=0``)."""
-    if os.environ.get("PNR_COMPACT") != "1":
+    if os.environ.get("PNR_COMPACT") != "1" or _relaxed:
         return False
     if part is None:
         return True
     if part not in PARTS:
         raise ValueError("unknown PNR_COMPACT part %r" % (part,))
     return os.environ.get("PNR_COMPACT_" + part, "1") != "0"
+
+
+@contextlib.contextmanager
+def relaxed():
+    """Within the block :func:`enabled` says False for compact placement and every part
+    (the ``RELAX`` rounds of the place-route loop: a compact round did not route, so the
+    next ones run as without compact). :func:`settings` (the router key) is read outside."""
+    global _relaxed
+    before = _relaxed
+    _relaxed = True
+    try:
+        yield
+    finally:
+        _relaxed = before
 
 
 def shrink_enabled() -> bool:

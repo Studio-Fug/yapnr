@@ -333,9 +333,12 @@ every completion key and the vias, and the plane drops of a `plane_layer` net wi
 stack planned before routing, and the legalizer parts of the design's section 11: the
 wirelength term with the turn chosen with the slot, in-place turns, and line satellites.
 `--compact-off PART` drops one part (`GP`, `RANK`, `LEGALIZE`, `COURTYARD`, `DROPS`, `WIRE`,
-`TURN`, `SATELLITES`) for an ablation. `--shrink` (`PNR_SHRINK=1`) also searches a smaller outline inside
-the design's and writes the board at the smallest that routes; hard rungs are exempt. Both are
-recorded in `provenance.json` (`pnr_environment`).
+`TURN`, `SATELLITES`, `PAIRS`, `RELAX`) for an ablation. `PAIRS` lets the matched-length pass turn
+a pair's series parts to face their legs; `RELAX` runs every round after one that does not route
+(a net open or a pair out of skew) without compact, the first of them as the run without compact
+does ([design, section 12](design/compact-placement.md)). `--shrink` (`PNR_SHRINK=1`) also
+searches a smaller outline inside the design's and writes the board at the smallest that routes;
+hard rungs are exempt. Both are recorded in `provenance.json` (`pnr_environment`).
 
 The legalizer and global-placement switches of the [design's section 11](design/compact-placement.md)
 are runner options too, off by default and usable with or without `--compact`: `--gp-polish`,

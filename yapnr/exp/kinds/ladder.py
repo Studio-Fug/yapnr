@@ -71,6 +71,7 @@ OPTIONS = {
     "legalize_reorient_wire": bool,
     "legalize_channel_clearance_fab": bool,
     "line_satellites": bool,
+    "channel_layers": bool,
     "power_first": bool,
     "route_pairs_diff_pairs": bool,
 }
@@ -92,6 +93,7 @@ FLAGS = {
     "pool_source_clamp": "--pool-source-clamp",
     "legalize_reorient": "--legalize-reorient",
     "line_satellites": "--line-satellites",
+    "channel_layers": "--channel-layers",
     # ladder-v2 ab-pairs-pool A/B.
     "power_first": "--power-first",
     "route_pairs_diff_pairs": "--route-pairs-diff-pairs",

@@ -303,11 +303,13 @@ def legalize_environment(
     reorient=None,
     channel_clearance=None,
     line_satellites=False,
+    channel_layers=False,
 ):
     """The PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP / PNR_LEGALIZE_HPWL /
-    PNR_LEGALIZE_REORIENT / PNR_LEGALIZE_CHANNEL_CLEARANCE / PNR_LINE_SATELLITES variables of
-    ``--gp-polish``, ``--gp-channels``, ``--pool-source-clamp``, ``--legalize-hpwl``,
-    ``--legalize-reorient``, ``--legalize-channel-clearance`` and ``--line-satellites``
+    PNR_LEGALIZE_REORIENT / PNR_LEGALIZE_CHANNEL_CLEARANCE / PNR_LINE_SATELLITES /
+    PNR_CHANNEL_LAYERS variables of ``--gp-polish``, ``--gp-channels``, ``--pool-source-clamp``,
+    ``--legalize-hpwl``, ``--legalize-reorient``, ``--legalize-channel-clearance``,
+    ``--line-satellites`` and ``--channel-layers``
     (``pnr.legalize_flags``; set after the ambient PNR_* variables are stripped, so provenance
     records them); empty when none is given. ``reorient`` is ``"1"`` (guarded), ``"wire"`` or
     None; ``channel_clearance`` is ``"fab"`` or None."""
@@ -333,6 +335,8 @@ def legalize_environment(
         env["PNR_LEGALIZE_CHANNEL_CLEARANCE"] = channel_clearance
     if line_satellites:
         env["PNR_LINE_SATELLITES"] = "1"
+    if channel_layers:
+        env["PNR_CHANNEL_LAYERS"] = "1"
     return env
 
 
@@ -863,6 +867,14 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--channel-layers",
+        action="store_true",
+        help=(
+            "PNR_CHANNEL_LAYERS=1: the routing-channel model (global placement, the legalizer "
+            "and its push) credits the board's other signal layers"
+        ),
+    )
+    ap.add_argument(
         "--shrink",
         action="store_true",
         help=(
@@ -1017,6 +1029,7 @@ def main():
                 args.legalize_reorient,
                 args.legalize_channel_clearance,
                 args.line_satellites,
+                args.channel_layers,
             )
         )
     except ValueError as error:

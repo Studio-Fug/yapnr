@@ -380,8 +380,15 @@ def _place_route_rounds(
         from pathlib import Path
 
         from pnr.place.legalize import LegalizationError
+        from pnr.stage_timing import stage
 
         started = time.monotonic()
+        from pnr.live import emit as _emit_stage
+
+        # One round's placement/legalize search (initial pool or placement attempts, through the
+        # legalizer); closed just below, right before source_round_start -- the routing portion
+        # of this same round is its own "route" stage further down. No-op without PNR_LIVE_DIR.
+        _emit_stage("stage_start", data=dict(stage="global-placement", label="source-round-place"))
         requested_inflation = dict(inflation)
         last_error = LegalizationError("global search exhausted") if local_only else None
         local_move = None
@@ -546,6 +553,14 @@ def _place_route_rounds(
         from pnr.live import emit
 
         emit(
+            "stage_end",
+            data=dict(
+                stage="global-placement",
+                label="source-round-place",
+                seconds=time.monotonic() - started,
+            ),
+        )
+        emit(
             "source_round_start",
             layout=__import__("json").loads(placed.to_json()),
             data=dict(
@@ -566,7 +581,9 @@ def _place_route_rounds(
 
             # The selected initial finalist already used this exact routing
             # budget; retain its result instead of giving the winner a second run.
-            with _trace.scope("route", "route", reused=initial_route is not None):
+            with _trace.scope("route", "route", reused=initial_route is not None), stage(
+                "route", source_round=r + 1
+            ):
                 broute = (
                     initial_route
                     if initial_route is not None

@@ -2646,10 +2646,19 @@ py_test(
 
 py_test(
     name = "stage_timing_test",
-    size = "small",
+    size = "medium",  # RouteFeedbackStageEventsTests runs the placement loop (route_feedback_test)
     srcs = ["tests/test_stage_timing.py"],
+    data = glob(["testdata/splanc_dev/*"]),
+    imports = ["."],
+    legacy_create_init = False,
     main = "tests/test_stage_timing.py",
-    deps = [":pnr"],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
 )
 
 py_test(

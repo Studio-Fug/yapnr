@@ -35,8 +35,11 @@ function prepareCostRaster(){let f=displayCostField();if(!f)return;let term=$('c
  for(let i=0;i<values.length;i++){let t=Math.max(0,Math.min(1,(values[i]-low)/(high-low||1))),j=4*((f.ny-1-Math.floor(i/f.nx))*f.nx+i%f.nx);if(f.legal[i]){pixels.data[j]=Math.round(60+190*t);pixels.data[j+1]=Math.round(205-145*t);pixels.data[j+2]=90;pixels.data[j+3]=125;}else{pixels.data[j]=110;pixels.data[j+1]=120;pixels.data[j+2]=130;pixels.data[j+3]=((i%f.nx+Math.floor(i/f.nx))%2)?32:65;}}
  c.putImageData(pixels,0,0);$('cost-legend').textContent=(f.fixed?(f.mobility?.row_trial?'Row pose held for this global start; other starts sample other edges. ':'Source-locked: no legal movement. '):`Green ${costFormat(low)} → red ${costFormat(high)}. `)+(f.recorded?'Grey = not an evaluated legal center. '+f.pitch_mm+' mm pixels show minimum evaluated cost; '+f.candidate_count+' exact candidates. '+costReport.field_scope:'Grey = placement-infeasible. '+f.pitch_mm+' mm grid; Δ relative to current board.');}
 function drawCostField(){if(!$('cost-field-on').checked||!costReport||costIdentity()!==costKey)return;prepareCostRaster();let f=displayCostField();if(!f||!costFieldCanvas)return;let left=f.origin[0]-f.pitch_mm/2,bottom=f.origin[1]-f.pitch_mm/2,top=bottom+f.ny*f.pitch_mm;ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(costFieldCanvas,...screen([left,top]),f.nx*f.pitch_mm*view.scale,f.ny*f.pitch_mm*view.scale);ctx.restore();circle(f.current_position,4,'#ffffff');}
-// Wrap render once: no cost math or network waits in the drawing hot path.
-const renderBeforeCost=render;render=function(){renderBeforeCost();syncCost();drawCostField();};
+// Wrap render once for the cost lookup (no network waits in the drawing hot path); the cost field
+// itself is an overlay hook (see app.js) so it stays live during a gesture's fastFrame(), not just
+// after a full render().
+const renderBeforeCost=render;render=function(){renderBeforeCost();syncCost();};
+overlayHooks.push(drawCostField);
 $('cost-field-rotation').onchange=()=>{sparseField=null;costFieldStamp=null;render()};
 $('cost-field-on').onchange=render;$('cost-field-term').onchange=()=>{sparseField=null;costFieldStamp=null;render()};
 $('cost-download').onclick=()=>{if(!costReport)return;let url=URL.createObjectURL(new Blob([JSON.stringify(costReport,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=costReport.component.ref+'-'+costReport.board_sha256.slice(0,10)+'-placement-cost.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};

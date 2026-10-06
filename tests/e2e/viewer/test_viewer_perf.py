@@ -205,6 +205,37 @@ class ViewerPerfCorrectnessTest(unittest.TestCase):
             frac = result["diff"] / result["total"]
             self.assertLess(frac, 0.005, f"scale={scale}: {result}")
 
+    # ------------------------------------------------------------------ overlay hooks stay live
+    def test_fast_path_keeps_net_highlight_live(self):
+        # Regression guard: schPcbOverlay() (schematic.js) draws the net/focus highlight+dimming
+        # as an app.js overlay hook (see renderOverlay()'s overlayHooks loop) specifically so it
+        # survives a gesture's fastFrame(), not just a full render(). This failed before that fix:
+        # fastFrame() only redrew app.js's own renderOverlay() content, so a highlight (and the
+        # note badges, cost field) vanished on every pan/pinch/zoom frame and only reappeared once
+        # the gesture settled and a full render() fired ~150ms later.
+        self.set_view(20)
+        v = via_at(self.geo, 1, 0)  # (i+j)%5 == 1 -> "GND" (see synthetic_via_board())
+        self.assertEqual(v["net"], "GND")
+        self.page.eval("window.YapnrView.highlight({nets:['GND']},{frame:false});true")
+
+        def px():
+            return json.loads(
+                self.page.eval(
+                    f"(()=>{{let [sx,sy]=screen([{v['xy'][0]},{v['xy'][1]}]);"
+                    "let d=ctx.getImageData(Math.round(sx),Math.round(sy),1,1).data;"
+                    "return JSON.stringify([d[0],d[1],d[2]]);})()"
+                )
+            )
+
+        full = px()  # full render(): highlight pink, per schPcbOverlay/drawViewHl via HL color
+        self.assertGreater(full[0], 200, f"expected highlight pink, got {full}")  # '#ff7ad9'-ish
+        # Pan a touch -- a real gesture frame, not a settled one -- and check the same spot again.
+        self.page.eval("view={...view,x:view.x+3,y:view.y+2};fastFrame();true")
+        mid_gesture = px()
+        self.assertGreater(
+            mid_gesture[0], 200, f"highlight disappeared during a gesture frame: {mid_gesture}"
+        )
+
     def test_fast_path_does_not_redraw_vias_per_frame(self):
         # A regression guard for the actual perf win, not just pixel fidelity: a full render()
         # never eagerly rebuilds the cache (it only marks it stale -- most render() calls, e.g.

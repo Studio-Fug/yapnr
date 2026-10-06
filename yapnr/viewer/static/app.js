@@ -7,6 +7,12 @@ let state=null,pinned=null,pinId=null,laneId=null,phase='live',phaseGeo=null,ann
 // repainting thousands of vias/tracks every pointermove; gestureCacheDirty marks it stale (set by
 // every full render()) so it is rebuilt lazily, once, at the start of the next gesture.
 let settleTimer=null,gestureCache=null,gestureCacheDirty=true;
+// Overlay hooks: other scripts (cost-inspector.js, schematic.js, notes.js via schematic.js) draw
+// dynamic, selection-dependent extras (net/focus highlight+dimming, note badges, the cost field)
+// by pushing a no-arg function here instead of wrapping render(). renderOverlay() -- called by
+// *both* a full render() and every gesture fastFrame() -- runs them last, so they stay live during
+// a pan/pinch/zoom instead of only reappearing once the gesture settles and a full render() fires.
+let overlayHooks=[];
 const colors={'F.Cu':'#e89a73','In1.Cu':'#aa9de9','In2.Cu':'#dfbd62','B.Cu':'#6eb6e5'},layers=new Set(Object.keys(colors));
 for(const [l,col] of Object.entries(colors)){let lab=document.createElement('label'),inp=document.createElement('input');inp.type='checkbox';inp.checked=true;inp.onchange=()=>{inp.checked?layers.add(l):layers.delete(l);render()};lab.append(inp,document.createTextNode(l));lab.style.color=col;$('layers').append(lab)}
 const display=()=>pinned||state, lane=()=>display()?.lanes[laneId], geo=()=>phase==='live'?lane()?.geometry:phaseGeo;
@@ -48,7 +54,11 @@ function gridFor(g){
   let [cx0,cy0]=cellOf(x0,y0),[cx1,cy1]=cellOf(x1,y1);
   for(let cx=cx0;cx<=cx1;cx++)for(let cy=cy0;cy<=cy1;cy++)add(trackCells,k(cx,cy),i);
  });
- idx={cell,cellOf,key:k,viaCells,trackCells};geomGrids.set(g,idx);return idx;
+ // Widest track's half-width: culling/hit-testing pad by a whole grid cell so nothing just outside
+ // the padded rect is missed by the bbox-stamped cells, but a track can be wider than a cell (cells
+ // can be as small as 0.5mm) so its edge can stick out past that cell-only pad; add the half-width too.
+ let maxHalfW=0;for(let t of g.tracks||[])if(t[4]/2>maxHalfW)maxHalfW=t[4]/2;
+ idx={cell,cellOf,key:k,viaCells,trackCells,maxHalfW};geomGrids.set(g,idx);return idx;
 }
 function cellsInRect(idx,x0,y0,x1,y1){
  let [cx0,cy0]=idx.cellOf(x0,y0),[cx1,cy1]=idx.cellOf(x1,y1),out=[];
@@ -89,7 +99,7 @@ function paintBoard(c,v,w,h,g,dpr){
  for(let z of g.zones||[]){if(!layers.has(z.layer))continue;c.fillStyle=colors[z.layer]+'25';c.beginPath();for(let path of z.paths){path.forEach((p,i)=>i?c.lineTo(...scr(p)):c.moveTo(...scr(p)));c.closePath()}c.fill('evenodd')}
  // Viewport (world/board mm) rect, padded by one grid cell so nothing just outside pops in late.
  let idx=gridFor(g),corners=[[0,0],[w,0],[0,h],[w,h]].map(p=>[(p[0]-v.x)/v.scale,(v.y-p[1])/v.scale]);
- let xs=corners.map(p=>p[0]),ys=corners.map(p=>p[1]),pad=idx.cell;
+ let xs=corners.map(p=>p[0]),ys=corners.map(p=>p[1]),pad=idx.cell+idx.maxHalfW;
  let vx0=Math.min(...xs)-pad,vx1=Math.max(...xs)+pad,vy0=Math.min(...ys)-pad,vy1=Math.max(...ys)+pad;
  // When the viewport already covers the whole board (fit-to-screen, or just zoomed out past it)
  // there is nothing to cull: walking every grid cell to rebuild the same "everything" candidate
@@ -128,6 +138,7 @@ function renderOverlay(g){
  let selected=(g.parts||[]).find(p=>p.ref===selectedPartRef),box=selected&&componentBounds(selected);if(box){let a=screen([box[0]-.6,box[3]+.6]),b=screen([box[2]+.6,box[1]-.6]);ctx.strokeStyle='#79ffe0';ctx.lineWidth=2;ctx.setLineDash([6,3]);ctx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);ctx.setLineDash([]);ctx.fillStyle='#79ffe0';ctx.font='bold 13px system-ui';ctx.fillText(selected.ref,a[0],a[1]-7);}
  drawViewHl(g);if(drag?.region){let a=screen(drag.world),b=drag.last;ctx.fillStyle='#ffb3471a';ctx.strokeStyle='#ffb347';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);ctx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);ctx.setLineDash([]);ctx.fillStyle='#ffb347';ctx.font='11px system-ui';ctx.fillText('Ask about region',Math.min(a[0],b[0]),Math.min(a[1],b[1])-5)}
  let rects=annotations.filter(r=>r.lane===laneId&&r.phase===phase);if(drag?.draw)rects=[...rects,{bounds:[...drag.world,...point(drag.last[0],drag.last[1])],text:'New annotation'}];for(let r of rects){let a=screen(r.bounds.slice(0,2)),b=screen(r.bounds.slice(2));ctx.fillStyle='#ffe38b17';ctx.strokeStyle='#ffe38b';ctx.lineWidth=2;ctx.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);ctx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);ctx.fillStyle='#ffe38b';ctx.fillText(r.text.slice(0,45),Math.min(a[0],b[0]),Math.min(a[1],b[1])-5)}
+ for(let h of overlayHooks)h(g);
 }
 function render(){
  if(settleTimer!==null){clearTimeout(settleTimer);settleTimer=null}
@@ -148,6 +159,10 @@ function render(){
 // full quality and refreshes the cache for the next one (buildGestureCache runs lazily, once, the
 // first time it is needed rather than on every full render -- most render() calls are not followed
 // by a gesture, e.g. the live poll or a lane switch, and would otherwise pay for a cache nobody uses).
+// iOS Safari refuses a canvas backing store over ~16.7M px, and even well under that an uncapped
+// hi-dpr desktop cache (e.g. 2560x1440 @ dpr2 with margin was ~26.6M px) is needless resident
+// memory for a cache that is thrown away ~150ms after a gesture settles anyway.
+const CACHE_PIXEL_CAP=16e6;
 function buildGestureCache(g){
  let w=canvas.clientWidth,h=canvas.clientHeight,dpr=window.devicePixelRatio||1;
  if(w<10||h<10){gestureCache=null;return}
@@ -155,15 +170,29 @@ function buildGestureCache(g){
  // physical pixels for the CSS size we then draw it back at (cssW,cssH below) -- otherwise
  // drawImage has to resample by a sub-pixel amount even when blitting back unchanged (k=1), which
  // showed up as a faint, otherwise pointless blur/edge-shift versus a full render() of the same view.
- let marginGuess=Math.min(320,Math.max(w,h)*.3);
- let pw=Math.round((w+2*marginGuess)*dpr),ph=Math.round((h+2*marginGuess)*dpr);
- let cssW=pw/dpr,cssH=ph/dpr,marginX=(cssW-w)/2,marginY=(cssH-h)/2;
+ let marginGuess=Math.min(320,Math.max(w,h)*.3),cacheDpr=dpr;
+ const area=(m,d)=>Math.round((w+2*m)*d)*Math.round((h+2*m)*d);
+ if(area(marginGuess,cacheDpr)>CACHE_PIXEL_CAP){
+  marginGuess=0; // shrink the margin first -- costs a rebuild on a bigger pan/zoom, not sharpness
+  if(area(0,cacheDpr)>CACHE_PIXEL_CAP)
+   // Margin alone cannot get under the cap (the viewport itself, at this dpr, is too big): fall
+   // back to a lower-resolution cache. It is blitted back scaled during the gesture (a touch
+   // blurrier than a full render(), same as any mid-gesture frame already is) and a full render()
+   // still restores exact sharpness ~150ms after the gesture settles.
+   cacheDpr=Math.max(1,Math.sqrt(CACHE_PIXEL_CAP/(w*h)));
+ }
+ let pw=Math.round((w+2*marginGuess)*cacheDpr),ph=Math.round((h+2*marginGuess)*cacheDpr);
+ let cssW=pw/cacheDpr,cssH=ph/cacheDpr,marginX=(cssW-w)/2,marginY=(cssH-h)/2;
  let off=gestureCache?.canvas||document.createElement('canvas');
  if(off.width!==pw||off.height!==ph){off.width=pw;off.height=ph}
  let octx=off.getContext('2d'),shifted={scale:view.scale,x:view.x+marginX,y:view.y+marginY};
- paintBoard(octx,shifted,cssW,cssH,g,dpr);
+ paintBoard(octx,shifted,cssW,cssH,g,cacheDpr);
  gestureCache={canvas:off,scale0:view.scale,x0:view.x,y0:view.y,marginX,marginY,cssW,cssH};
 }
+// Release the cache's backing store when the tab is hidden (a backgrounded tab on a phone is
+// exactly where a capped-but-still-multi-megabyte canvas is most likely to be the thing the OS
+// decides to reclaim memory from); the next gesture after returning just rebuilds it.
+document.addEventListener('visibilitychange',()=>{if(document.hidden){gestureCache=null;gestureCacheDirty=true}});
 function scheduleSettle(){if(settleTimer!==null)clearTimeout(settleTimer);settleTimer=setTimeout(()=>{settleTimer=null;render()},150)}
 function fastFrame(){
  let g=geo();if(!g){render();return}
@@ -312,7 +341,7 @@ function boardHit(q){let g=geo();if(!g)return null;let tol=2/view.scale,vis=p=>p
  // Grid-accelerated: same exact math as a linear scan over every track/via, over only the
  // handful near q -- padded by a whole cell plus tol so nothing a full scan would have found is
  // ever missed (a track's bbox is stamped into every cell it touches; see gridFor()).
- let idx=gridFor(g),padq=idx.cell+tol,cand=gridCandidates(idx,q[0]-padq,q[1]-padq,q[0]+padq,q[1]+padq);
+ let idx=gridFor(g),padq=idx.cell+idx.maxHalfW+tol,cand=gridCandidates(idx,q[0]-padq,q[1]-padq,q[0]+padq,q[1]+padq);
  // Sorted back to original array order so "first match wins" (two tracks/vias both covering q,
  // e.g. a crossing) picks the exact same one a full linear scan would have.
  for(let i of [...cand.tracks].sort((a,b)=>a-b)){let t=g.tracks[i];if(!t[0]||!layers.has(t[1]))continue;let a=t[2],b=t[3],dx=b[0]-a[0],dy=b[1]-a[1],f=Math.max(0,Math.min(1,((q[0]-a[0])*dx+(q[1]-a[1])*dy)/(dx*dx+dy*dy||1)));if(Math.hypot(q[0]-a[0]-f*dx,q[1]-a[1]-f*dy)<tol+t[4]/2)return {kind:'track',net:t[0],obj:t}}
@@ -354,7 +383,14 @@ function padShape(p,color){ctx.fillStyle=color;if(p.polys?.length){ctx.beginPath
 function drawViewHl(g){let H=viewHl;if(!H||!g)return;
  ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='rgba(9,15,19,.55)';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();
  if(H.region){let a=screen([H.region[0],H.region[3]]),b=screen([H.region[2],H.region[1]]);ctx.fillStyle='#ffb34712';ctx.strokeStyle='#ffb347';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);ctx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);ctx.setLineDash([])}
- if(H.nets.size){for(let t of g.tracks||[])if(H.nets.has(t[0])&&layers.has(t[1]))line(t[2],t[3],HL,Math.max(1.5,t[4]*view.scale),[],true);for(let v of g.vias||[])if(H.nets.has(v.net))circle(v.xy,Math.max(2.5,v.diameter*view.scale/2),HL)}
+ // A GND-style net highlight can cover thousands of vias/tracks; cull to the viewport via the same
+ // grid paintBoard uses instead of a full linear scan every frame (this used to bring the old
+ // per-via drawing cost right back during a gesture, even with fastFrame's raster cache).
+ if(H.nets.size){let idx=gridFor(g),w=canvas.clientWidth,h=canvas.clientHeight,corners=[[0,0],[w,0],[0,h],[w,h]].map(p=>point(...p)),xs=corners.map(p=>p[0]),ys=corners.map(p=>p[1]),pad=idx.cell+idx.maxHalfW;
+  let vx0=Math.min(...xs)-pad,vx1=Math.max(...xs)+pad,vy0=Math.min(...ys)-pad,vy1=Math.max(...ys)+pad;
+  let cand=(vx0<=0&&vy0<=0&&vx1>=g.width&&vy1>=g.height)?{vias:g.vias.map((_,i)=>i),tracks:g.tracks.map((_,i)=>i)}:gridCandidates(idx,vx0,vy0,vx1,vy1);
+  for(let i of cand.tracks){let t=g.tracks[i];if(H.nets.has(t[0])&&layers.has(t[1]))line(t[2],t[3],HL,Math.max(1.5,t[4]*view.scale),[],true)}
+  for(let i of cand.vias){let v=g.vias[i];if(H.nets.has(v.net))circle(v.xy,Math.max(2.5,v.diameter*view.scale/2),HL)}}
  for(let part of g.parts||[]){let mine=H.refs.has(part.ref);
   for(let p of part.pads||[]){if(!p.layers.some(l=>layers.has(l)))continue;let on=H.pads.has(part.ref+'.'+p.number);if(on||(p.net&&H.nets.has(p.net)))padShape(p,HL);else if(mine)padShape(p,'#f1e4ec');
    if(on){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(...screen(p.xy),Math.max(7,Math.max(...p.size)*view.scale*.75),0,7);ctx.stroke()}}

@@ -1058,6 +1058,16 @@ Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`,
   CI traced runs take the same options so their trace hashes stay comparable. The renderer
   (version 3) plays the gloss stage's saved board as a before/after: the copper the stage
   replaced in red, its new copper in green, marked by geometry, not by track rows.
+- **Legalization keeps what global placement got right** (2026-10-05, the owner's report on the
+  hierarchical demo animation and the request for a severity-aware legalizer; the ladder v2 plan's
+  one-default-configuration rule). `PNR_LEGALIZE_KEEP` is on by default, with or without compact
+  placement, and `PNR_LEGALIZE_KEEP=0` restores the plain packer for A/B runs: a part or block legal
+  at its global pose keeps it and its turn, a slight overlap (or a missing routing channel) is
+  resolved by an order-preserving push of the parts around it, and only a mostly occluded part,
+  or one the push cannot fit, is relocated by the packer's cost. `TURN` turns only the parts the
+  legalizer moved. Every legalization records its motion (moved parts, displacement, topology
+  kept) in the reports, the trace and the animation's end card. Measurements:
+  [compact placement, section 13](design/compact-placement.md).
 
 Compact placement before ladder v2 makes it the default (2026-10-06,
 [design, section 12](design/compact-placement.md)):

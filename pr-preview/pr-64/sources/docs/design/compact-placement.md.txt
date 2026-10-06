@@ -742,11 +742,13 @@ hierarchical cases, 1448 part placements; `r6-fix` notes):
 
 Block level: `hier-twin-bank-32` 106 parts moved and 220 mm before, 58 and 103 mm after (40
 relocated before, 2 after); `10-quad-bank-56` 82 and 202 mm before, 50 and 73 mm after (34 and
-2). The two parts still moved far are one D4 in `hier-twin-bank-32` `start-14` (13.25 x 19.75
-mm), whose column above the SOIC is full: no push within reach clears it, so it takes the nearest
-free slot (10.1 mm, a quarter turn). All 13 cases pass in every arm. The third row opens each
-cluster's channels by the largest fraction the reach allows: it moves 2.4 times as many parts,
-mostly legal ones, for no routing gain on these cases, so channels are all or nothing.
+2). The two parts still moved far are the same D4 in the `start-14` block trial of
+`hier-twin-bank-32` and of `10-quad-bank-56` (13.25 x 19.75 mm, a mild part, 22 % occluded),
+whose column above the SOIC is full: no push within reach clears it, so it takes the nearest free
+slot (10.1 mm, a quarter turn). Neither trial is the chosen block. All 13 cases pass in every
+arm. The third row opens each cluster's channels by the largest fraction the reach allows: it
+moves 2.4 times as many parts, mostly legal ones, for no routing gain on these cases, so channels
+are all or nothing.
 
 **A/B** (GCP `c4d` us-west4 for both arms, the runner's ladder-v2 defaults, `--legalize-keep`
 against `--no-legalize-keep`; ladder, showcases and all 33 hard rungs, seeds 0 and 1; campaigns

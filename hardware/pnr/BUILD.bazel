@@ -28,6 +28,17 @@ py_test(
     deps = [":pnr", ":pnr_place"],
 )
 
+py_test(
+    name = "channel_audit_test",
+    size = "small",
+    srcs = [
+        "regression/channel_audit.py",
+        "tests/test_channel_audit.py",
+    ],
+    main = "tests/test_channel_audit.py",
+    deps = [":pnr", ":pnr_place"],
+)
+
 # The stdlib-only pnr sources the pcbnew steps (ingest, writeback) run under
 # @kicad_python — staged as plain files on PYTHONPATH, NOT the torch py_library
 # (KiCad's python has no torch and doesn't need it). See //hardware/pnr:pnr.bzl.

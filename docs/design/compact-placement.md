@@ -268,6 +268,7 @@ Seven switches, each off by default and usable with or without `PNR_COMPACT`
 | `PNR_LEGALIZE_REORIENT=1`            | C2   | After legalization, greedy in-place turns that shorten a part's wirelength, stay legal and do not raise its channel shortage; `=wire` drops the channel guard.                                                        |
 | `PNR_LEGALIZE_CHANNEL_CLEARANCE=fab` | D    | The legalizer's channel model spaces unclassed nets at the fab clearance (the router's) instead of the board's `default_clearance_mm`.                                                                                |
 | `PNR_LINE_SATELLITES=1`              | E    | A line group carries each member's satellite (a free two-pad part on a two-pin net to one member pad) flush beside the member, in line with it.                                                                       |
+| `PNR_CHANNEL_LAYERS=1`               | 13   | The channel model (global placement, the legalizer and its push alike) credits the board's other signal layers: a net that can drop off the surface asks its share of the channel (section 13).                       |
 
 `run.py` takes `--gp-polish`, `--gp-channels L`, `--pool-source-clamp`, `--legalize-hpwl W`,
 `--legalize-reorient [wire]`, `--legalize-channel-clearance fab` and `--line-satellites` (after
@@ -573,3 +574,66 @@ of 72 cells (`placed.json`, `routes.json`, the routed board modulo UUIDs); the o
 (the lane's fallback rounds).
 
 **Power-first placement** (`PNR_POWER_FIRST=1`) no longer refuses compact (section 2).
+
+## 13. Layer-aware channel model (`PNR_CHANNEL_LAYERS`, 2026-10-06)
+
+The routing-channel model (`pnr.place.channels.ChannelModel`) prices the gap between two facing
+pad rows as if every externally connected net on both rows ran along it on the surface. Global
+placement (the compact `GP` inflation floor), the legalizer's slot cost and the
+`PNR_LEGALIZE_KEEP` push all read it, so an overestimate spreads parts that the router never
+needed apart, or makes the push give up on channels it cannot open.
+
+**Measurement** (`regression/channel_audit.py`, `pnr.place.channel_audit`). For each channel the
+model prices on a routed board, the audit takes the busiest cut across the gap and counts the
+surface tracks that run along the channel there (tracks crossing straight from row to row do not
+count) and the vias in it, priced the way the model prices its own demand. Each predicted net is
+classed as _surface_ (it ran along the channel), _dropped_ (a via within 1 mm of its pad) or
+_elsewhere_. On the 88 passing cells of the default configuration (ladder, showcases and the 33
+hard rungs, seeds 0 and 1), in the channels the model calls short:
+
+| Copper layers | Short channels | Width used / predicted | Predicted nets on surface / dropped / elsewhere |
+| ------------- | -------------: | ---------------------: | ----------------------------------------------- |
+| 2             |            752 |                   36 % | 23 / 32 / 45 %                                  |
+| 4             |            208 |                   38 % | 13 / 54 / 33 %                                  |
+| 6             |             87 |                   45 % | 13 / 56 / 31 %                                  |
+| 8             |             22 |                   35 % | 11 / 57 / 31 %                                  |
+
+The model is about 2.5 times too conservative at every layer count. Two things account for it:
+nets leave by another face (a two-pad part's pad lies on three faces of its part), and nets
+drop to another layer next to their pad. Dropping grows from a third of the nets on two layers
+to over half on four or more.
+
+**Model.** With `PNR_CHANNEL_LAYERS=1` the model credits the board's other signal layers (copper
+layers less plane layers, `channels.signal_layers`). A net with a drop site off the channel asks
+only its surface share, one over the signal-layer count. A drop site is a through-hole pad, a pad
+that holds a via in pad under the fab's in-pad class, or a pad that also lies on another face of
+its part, whose via can go out that way. A mid-row net may also drop at that share, but then the
+channel pays one shared via row (the via diameter and a clearance). The demand is the cheaper of
+the two options, never more than the surface-only one. It is unchanged on a single signal layer
+and for plane nets. A block's port nets (`block_ports`) keep the surface price, because they must
+reach the block edge where the parent board routes them. Without this rule both seeds of
+`hier-twin-bank-32` lost `CLOCK` at the top level. The change lives in the model itself, so
+global placement, the legalizer and its push price every channel the same way. Repriced on the
+same boards, the short channels fall to 258 / 111 / 49 / 11, and the router still used about half
+of the new predicted width there.
+
+**A/B** (GCP C4D, `claude/lv2-defaults` plus this change, every ladder-v2 default on, the same
+90 cells per arm; hierarchical cells from the rerun with the block-port rule, seeds 0 to 5):
+
+| Arm | Pass  | Copper (86 both-pass cells) | Vias | `channel_short` parts | Legalization motion, cells with the same pool start (47) |
+| --- | ----- | --------------------------- | ---- | --------------------- | -------------------------------------------------------- |
+| on  | 89/90 | 31826 mm (-1.8 %)           | 3696 | 582                   | 56 parts moved, 141 mm, 22 relocated                     |
+| off | 88/90 | 32405 mm                    | 3740 | 1033                  | 71 parts moved, 157 mm, 21 relocated                     |
+
+Both arms fail `11-buck-vqfnhr-4L-SGPS-pour` seed 0 (the open issue in section 11). Off also
+fails `11-ufbga201-...-rails` seed 1. `10-quad-bank-56` loses `CLOCK` on seeds 2 and 3 in both
+arms (a top-level knit issue, independent of the switch). Copper by family: 07 variants -3.9 %,
+MCU lane -1.2 %, BGA -0.1 %, showcases -3.0 %, power -20 %, ladder +3.0 %. The two BGA cells with
+large relocations in the on arm picked the initial pool's source start, whose global placement
+stacks the decoupling capacitors (severe, relocated 74 mm). The off arm picked another start, so
+the full-table motion total (976 against 285 mm) compares different starts. On cells where both
+arms chose the same start, on moves less.
+
+The switch stays off by default here. Turning it on with the other ladder-v2 defaults changes the
+flag-off identity goldens (`compact_test`) and the shortage-driven fixtures (`elastic_test`,
+`region_align_test`), which then need regenerating.

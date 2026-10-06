@@ -10,6 +10,21 @@ is credited: reaching those layers still needs an escape and a legal via.
 This ignores existing tracks and via obstacles, and does not prove routability.
 It deliberately exposes fixed/fixed shortages rather than hiding them in a
 placement score. A detailed router must validate any resulting placement.
+
+Layer-aware demand (``PNR_CHANNEL_LAYERS=1``, :func:`pnr.legalize_flags.channel_layers`).
+Routed boards use far less of a channel than the surface-only estimate asks
+(``regression/channel_audit.py``): most of a face's nets leave by another face or
+drop to another layer next to their pad. With the flag the model credits the
+board's other signal layers (copper layers less plane layers): a net with a drop
+site off this channel (a through-hole pad, a pad that holds a via in pad under the
+fab's in-pad class, or a pad that also lies on another face of its part, whose via
+can go out that way) asks only its surface share, one over the signal-layer count;
+a block's port nets (``block_ports``) keep the surface price, since they must
+reach the block edge where the parent board routes them;
+any other net may also drop at that share, but then the channel pays one via row
+(the via diameter and a clearance) for all of them. The demand is the cheaper of the
+two, never more than the surface-only one, and unchanged on a single signal layer.
+Plane nets keep their via corridor either way.
 """
 
 from __future__ import annotations
@@ -21,10 +36,44 @@ import numpy as np
 from .geometry import occupied_sides, pad_rects
 
 
+class _Face(dict):
+    """One face's ``{net: [intervals]}``; ``free`` holds its nets with a drop site off
+    this face's channels (layer-aware demand only)."""
+
+    def __init__(self):
+        super().__init__()
+        self.free = set()
+
+
+def signal_layers(rules) -> int:
+    """Copper layers that carry tracks: the stackup's copper (``rules['layers']``
+    without one) less the plane layers (the stackup's ``planes`` and every class's
+    ``plane_layer``); at least 1."""
+    stack = rules.get("stackup") or {}
+    copper = [layer for layer in stack.get("layers", []) if layer.get("kind") == "copper"]
+    count = len(copper) or int(rules.get("layers") or 2)
+    planes = set(stack.get("planes") or [])
+    planes |= {c["plane_layer"] for c in rules.get("net_classes", []) if c.get("plane_layer")}
+    return max(count - len(planes), 1)
+
+
 class ChannelModel:
-    def __init__(self, graph, rules, clearance=None):
+    def __init__(self, graph, rules, clearance=None, layers=None):
         """``clearance`` (mm): the clearance of a net without a class (None: the board's
-        ``default_clearance_mm``; ``PNR_LEGALIZE_CHANNEL_CLEARANCE=fab`` passes the fab's)."""
+        ``default_clearance_mm``; ``PNR_LEGALIZE_CHANNEL_CLEARANCE=fab`` passes the fab's).
+        ``layers``: credit the other signal layers (layer-aware demand); None reads
+        ``PNR_CHANNEL_LAYERS``."""
+        if layers is None:
+            from pnr import legalize_flags
+
+            layers = legalize_flags.channel_layers()
+        # The surface share of a net that can drop to another signal layer (1: none).
+        self.share = 1.0 / signal_layers(rules) if layers else 1.0
+        self.in_pad = None
+        if self.share < 1:
+            from pnr.fab_profile import in_pad_policy
+
+            self.in_pad = in_pad_policy(rules.get("fab"))
         fab = rules.get("fab", {})
         self.width = float(fab.get("track_width_mm", 0.2))
         self.clearance = (
@@ -50,6 +99,8 @@ class ChannelModel:
                     bool(policy["plane"]),
                 )
         self.pairs = rules.get("diff_pairs", [])
+        # A block's nets that leave it (pnr.hier.blocks): no layer credit.
+        self.ports = set(rules.get("block_ports") or [])
         self.refs = {n.name: {ref for ref, _ in n.pins} for n in graph.nets}
         self.geometry = {}
 
@@ -70,8 +121,8 @@ class ChannelModel:
             # direction relative to the footprint origin (a row on +X is east,
             # even if there are no pads at all on the west edge).
             hx, hy = max(abs(left), abs(right)), max(abs(bottom), abs(top))
-            faces = [{} for _ in range(4)]  # west, east, south, north
-            for _, net, r in pads:
+            faces = [_Face() for _ in range(4)]  # west, east, south, north
+            for pad, (_, net, r) in zip(comp.pads, pads):
                 if not net or not (self.refs.get(net, set()) - {comp.ref}):
                     continue
                 distances = (
@@ -84,20 +135,37 @@ class ChannelModel:
                 # don't misclassify them as perimeter signals.
                 if min(distances) > 0.25:
                     continue
-                for face, distance in enumerate(distances):
-                    if distance <= min(distances) + 1e-7:
-                        interval = (
-                            (r.bottom - y, r.top - y) if face < 2 else (r.left - x, r.right - x)
-                        )
-                        faces[face].setdefault(net, []).append(interval)
+                on = [
+                    f for f, distance in enumerate(distances) if distance <= min(distances) + 1e-7
+                ]
+                for face in on:
+                    interval = (r.bottom - y, r.top - y) if face < 2 else (r.left - x, r.right - x)
+                    faces[face].setdefault(net, []).append(interval)
+                if self.share < 1 and (len(on) > 1 or self._drops_in_place(pad)):
+                    for face in on:
+                        faces[face].free.add(net)
             result = (left, right, bottom, top, faces)
         self.geometry[key] = result
         return result
 
-    def demand(self, nets):
-        return float(self.active_demand({n: True for n in nets}))
+    def _drops_in_place(self, pad) -> bool:
+        """The pad reaches the other layers without a via beside it: a plated hole,
+        or a via in pad under the fab's in-pad class."""
+        if pad.through_hole:
+            return True
+        if self.in_pad is None:
+            return False
+        from pnr.fab_profile import in_pad_fit
 
-    def active_demand(self, active):
+        return in_pad_fit(self.in_pad, pad.size, corner=pad.land_corner)
+
+    def demand(self, nets):
+        """The channel ``nets`` ask (mm); a face of :meth:`shape` carries its drop sites."""
+        return float(self.active_demand({n: True for n in nets}, getattr(nets, "free", ())))
+
+    def active_demand(self, active, free=()):
+        """``active``: {net: present (bool or array)}; ``free``: the nets with a drop
+        site off this channel (layer-aware demand only)."""
         remaining = dict(active)
         bundles = []
         plane_clearances = []
@@ -119,6 +187,7 @@ class ChannelModel:
                         np.where(both, 2 * width + gap, np.where(either, width, 0)),
                         clearance,
                         either,
+                        self._drop(pair["p"], free) and self._drop(pair["n"], free),
                     )
                 )
         for net, present in remaining.items():
@@ -126,22 +195,62 @@ class ChannelModel:
             if plane:
                 plane_clearances.append(np.where(present, clearance, 0))
             else:
-                bundles.append((np.where(present, width, 0), clearance, present))
+                bundles.append(
+                    (np.where(present, width, 0), clearance, present, self._drop(net, free))
+                )
         # Conservative bundle spacing. Distinct ground pads share the plane,
         # but at least one via corridor is still needed on this surface.
         track_space = 0.0
         if bundles:
             clearance = 0.0
-            for _, c, present in bundles:
+            for _, c, present, _ in bundles:
                 clearance = np.maximum(clearance, np.where(present, c, 0))
-            track_space = (
-                sum(w for w, _, _ in bundles)
-                + (sum(np.asarray(p, dtype=int) for _, _, p in bundles) + 1) * clearance
-            )
+            widths = sum(w for w, _, _, _ in bundles)
+            count = sum(np.asarray(p, dtype=int) for _, _, p, _ in bundles)
+            track_space = widths + (count + 1) * clearance
+            if self.share < 1:
+                track_space = self._layered(bundles, widths, count, clearance, track_space)
         via_space = 0.0
         for clearance in plane_clearances:
             via_space = np.maximum(via_space, np.where(clearance > 0, self.via + 2 * clearance, 0))
         return np.maximum(track_space, via_space)
+
+    def _drop(self, net, free):
+        """How ``net`` may leave the surface: True (a drop site off the channel),
+        False (a via in the channel) or None (a block port: it escapes to the block
+        edge on the surface, where the parent routes it)."""
+        if net in self.ports:
+            return None
+        return net in free
+
+    def _layered(self, bundles, widths, count, clearance, surface):
+        """Layer-aware track space: the cheaper of (a) the nets with a drop site off
+        the channel at their surface share, the rest on the surface, and (b) every
+        net but the block ports at its share plus one via row for the drops that
+        need a via in the channel; never more than ``surface`` (every net on the
+        surface)."""
+        drop = 1.0 - self.share
+
+        def total(kinds):
+            return (
+                sum(w for w, _, _, f in bundles if f in kinds),
+                sum(np.asarray(p, dtype=int) for _, _, p, f in bundles if f in kinds),
+            )
+
+        free_w, free_n = total((True,))
+        own = widths - drop * free_w + (count - drop * free_n + 1) * clearance
+        row = False
+        for _, _, present, f in bundles:
+            if f is False:
+                row = np.logical_or(row, present)
+        port_w, port_n = total((None,))
+        shared = (
+            widths
+            - drop * (widths - port_w)
+            + (count - drop * (count - port_n) + 1) * clearance
+            + np.where(row, self.via + clearance, 0)
+        )
+        return np.minimum(surface, np.minimum(own, shared))
 
     def interactions(self, comp, other, xs=None, ys=None):
         """Yield direction, gap, overlap, demand, nets; supports numpy centres."""
@@ -193,7 +302,11 @@ class ChannelModel:
                 # by both rows that also reaches a third component still needs
                 # one escape corridor; XOR would erase that demand entirely.
                 nets[net] = np.logical_or(p, q)
-            yield label, gap, overlap, self.active_demand(nets), nets
+            free = ()
+            if self.share < 1:
+                rows = (a[4][face], b[4][opposite])
+                free = {n for n in nets if all(n in r.free for r in rows if n in r)}
+            yield label, gap, overlap, self.active_demand(nets, free), nets
 
     def penalty(self, comp, others, xs, ys):
         score = np.zeros(np.broadcast_shapes(np.shape(xs), np.shape(ys)))
@@ -221,7 +334,7 @@ class ChannelModel:
                     )
         channels.sort(key=lambda item: -item["shortage_mm"])
         return dict(
-            model="surface-pad-escape-v1",
+            model="surface-pad-escape-v1" if self.share >= 1 else "layered-pad-escape-v1",
             limitation="Estimate only; excludes existing tracks, obstacles and detailed fanout.",
             shortage_score=sum(c["shortage_mm"] ** 2 for c in channels),
             channels=channels,

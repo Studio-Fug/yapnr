@@ -482,6 +482,22 @@ ATMEGA32U4 = {
 
 MCU_SIZE = (46, 34)  # the smallest outline where every probe seed legalized (40x30: none)
 MCU_IO = ["VCC", "3V3", "GND", "SCL", "SDA", "TXD", "RXD", "A0"]
+# R1 and R2 (pad 1 the connector-side leg, pad 2 the MCU-side leg): their pads stay
+# parallel across both legs, whatever holds them side by side (check_pair_bridge).
+# max_pitch_mm also catches a placement that is merely parallel, not side by side
+# (owner review 2026-10-06): a generous bound above mcu_relative's hand-picked
+# 2.5 mm line_group pitch, wide of any pitch the inference itself would choose,
+# but well under "opposite ends of a 46x34 mm board".
+MCU_PAIR_BRIDGE_CHECK = dict(
+    id="pair-bridge-r1-r2",
+    kind="pair_bridge",
+    refs=["R1", "R2"],
+    near_pad="1",
+    far_pad="2",
+    tol_mm=0.05,
+    max_pitch_mm=6.0,
+    engine="line_group",
+)
 
 
 def mcu_parts():
@@ -572,10 +588,19 @@ def mcu_usb():
         dict(name="usb_mcu", p="D_P", n="D_N", width_mm=0.25, gap_mm=0.2, skew_mm=1.0),
     ]
     spec["supply"] = dict(voltage_v=5, max_current_a=0.5)
+    # R1 and R2 are the two pairs' shared series resistors (pad 1 on the connector
+    # leg, pad 2 on the MCU leg): neither is tied to the MCU or fixed, so
+    # pnr.constraints.infer_series_line_groups holds them side by side (the owner's
+    # -rails review, 2026-10-05: a line constraint "would produce more human-like
+    # corridor routing" than leaving them wherever placement's general objective
+    # drops them). MCU_PAIR_BRIDGE_CHECK verifies that geometrically, independent of
+    # the inference: whichever constraint (or hand-authored one, as -rel's) ends up
+    # holding them, their pads stay parallel across both legs.
+    spec["checks"] = base_checks(spec) + [MCU_PAIR_BRIDGE_CHECK]
     return hard(
         spec,
         "mcu-usb-31",
-        ["dense-mixed", "tqfp44", "usb-diff-pair", "crystal", "regulator"],
+        ["dense-mixed", "tqfp44", "usb-diff-pair", "crystal", "regulator", "usb-series-line"],
         "nightly",
         45,
     )
@@ -712,7 +737,7 @@ def mcu_absolute(spec):
     # Pin rows along their edge: the connector's pads run along x at rot 0, so rot 90
     # turns them along the east edge with the side-entry mouth facing out; the buttons'
     # pads run along x (designs.PAD_AXIS).
-    return absolute(
+    spec = absolute(
         spec,
         holes=MCU_HOLES,
         edges={"J2": "east", "SW1": "south", "SW2": "south"},
@@ -725,10 +750,14 @@ def mcu_absolute(spec):
             "keep-out on the north edge, the regulator in the south-west quarter."
         ),
     )
+    # absolute() rebuilds checks from base_checks(): restore the family's pair_bridge
+    # check (R1/R2 are not among this variant's own absolute constraints).
+    spec["checks"].append(MCU_PAIR_BRIDGE_CHECK)
+    return spec
 
 
 def mcu_relative(spec):
-    return relative(
+    spec = relative(
         spec,
         lines=[
             ("status-leds", ["D1", "D2", "D3", "D4"], 3.0, "Status LEDs in one ordered row"),
@@ -745,14 +774,21 @@ def mcu_relative(spec):
             "within 12 mm of the MCU, the two buttons aligned."
         ),
     )
+    # relative() already holds R1/R2 in its own explicit "usb-series" line_group
+    # (at a hand-picked 2.5 mm pitch, demonstrating the authored line_group API);
+    # the pair_bridge check still verifies that placement geometrically.
+    spec["checks"].append(MCU_PAIR_BRIDGE_CHECK)
+    return spec
 
 
 def mcu_sidelock(spec):
-    return sidelock(
+    spec = sidelock(
         spec,
         ["C2", "C3", "C4", "C5", "C6", "C7"],
         "The MCU's decoupling, UCAP and AREF capacitors are locked to the bottom side.",
     )
+    spec["checks"].append(MCU_PAIR_BRIDGE_CHECK)
+    return spec
 
 
 def mcu_header(spec):

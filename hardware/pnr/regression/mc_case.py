@@ -29,7 +29,7 @@ from pathlib import Path
 
 import yaml
 
-from pnr.constraints import compile_constraints, compile_routing_rules
+from pnr.constraints import compile_constraints, compile_routing_rules, infer_series_line_groups
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
 from pnr.length_model import attach_board
@@ -51,8 +51,11 @@ spec = json.loads((root / "design.json").read_text())
 mc = spec["mc"]
 graph = BoardGraph.from_json((root / "source-graph.json").read_text())
 # The rung's side policy (``sides: double``) as the engine's ``board.sides``, for this
-# driver and for halving's workers (constraints.yaml), as route_case.py maps it.
-doc = with_policy(spec["constraints"], spec.get("sides"))
+# driver and for halving's workers (constraints.yaml), as route_case.py maps it. A
+# declared diff_pair's two series parts, held side by side where the design leaves
+# them otherwise unconstrained (pnr.constraints), the same way before every one of
+# halving's own workers legalizes and scores a candidate against this same file.
+doc = infer_series_line_groups(with_policy(spec["constraints"], spec.get("sides")), graph)
 constraints = compile_constraints(doc, graph.refs)
 rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
 # ladder-v2 A/B (ab-pairs-pool): as route_case.py.

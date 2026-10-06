@@ -31,6 +31,7 @@ CHECK_KINDS = {
     "region",
     "proximity",
     "line",
+    "pair_bridge",
     "align",
     "plane",
     "microvia_span",

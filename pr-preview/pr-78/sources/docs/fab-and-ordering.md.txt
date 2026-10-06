@@ -66,6 +66,7 @@ for the board's copper layer count, and at JLCPCB `jlc-pofv` when a via sits on 
 | `jlc-4l`       | active | JLCPCB 4 layers, tented vias, no via in pad   | `jlc04161h-7628`     | `jlc04161h-2116`, `-3313`, `-1080`                                 |
 | `jlc-pofv`     | active | JLCPCB 4 layers, epoxy filled and capped vias | `jlc04161h-7628`     | as `jlc-4l`                                                        |
 | `jlc-6l`       | draft  | JLCPCB 6 layers                               | `jlc06161h-3313`     | `jlc06161h-2116c`, `jlc06161h-7628`                                |
+| `jlc-6l-hdi`   | draft  | JLCPCB 6 layers, fine-pitch limits, filled    | `jlc06161h-3313`     | as `jlc-6l`                                                        |
 | `pcbway-std`   | draft  | PCBWay standard 4 layers                      | `pcbway-4l-7628`     |                                                                    |
 | `pcbway-hf-2l` | draft  | PCBWay Rogers 2 layers (RO4003C, RO4350B)     | none: choose one     | `pcbway-ro4003c-0.813`, `-0.508`, `-1.524`, `pcbway-ro4350b-0.508` |
 

@@ -29,14 +29,37 @@ class FloorTest(unittest.TestCase):
         self.assertEqual([c["width_mm"] for c in out["net_classes"]], [1.5, 0.127, None])
         self.assertEqual(out["diff_pairs"][0]["width_mm"], 0.127)
         self.assertEqual(out["diff_pairs"][0]["gap_mm"], 0.15)  # the gap is the design's
+        notes = out["fab_adaptations"]
         self.assertEqual(
-            out["fab_adaptations"],
+            notes[:2],
             [
                 "fab.track_width_mm 0.1 -> 0.127 mm (fab min_track_width)",
                 "net_class fine width 0.1 -> 0.127 mm (fab min_track_width)",
-                "diff_pair usb width 0.1 -> 0.127 mm (fab min_track_width)",
             ],
         )
+        # The diff pair's note also carries its impedance shift (a quantified
+        # warning, not only the mm values -- an owner review on 2026-10-06).
+        self.assertTrue(notes[2].startswith("diff_pair usb width 0.1 -> 0.127 mm"))
+        self.assertIn("Z0", notes[2])
+        self.assertIn("ohm", notes[2])
+
+    def test_a_diff_pairs_raise_also_warns_of_its_impedance_shift(self):
+        rules = copy.deepcopy(RULES)
+        out = fp.apply_rules(rules, "jlc-pofv")
+        z0_old, z0_new = fp._diff_pair_impedance_shift(out, out["diff_pairs"][0], 0.1, 0.127)
+        self.assertGreater(z0_old, z0_new)  # a wider trace is lower impedance
+        self.assertIn("%.1f -> %.1f ohm" % (z0_old, z0_new), out["fab_adaptations"][2])
+
+    def test_every_raise_also_warns_on_stderr(self):
+        import contextlib
+        import io
+
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            fp.apply_rules(copy.deepcopy(RULES), "jlc-pofv")
+        err = buf.getvalue()
+        self.assertEqual(err.count("pnr.fab_profile: warning:"), 3)
+        self.assertIn("Z0", err)
 
     def test_a_design_the_fab_makes_keeps_its_bytes(self):
         rules = copy.deepcopy(RULES)

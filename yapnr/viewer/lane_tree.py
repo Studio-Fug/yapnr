@@ -61,7 +61,11 @@ STATES = ("running", "stalled", "failed", "rejected", "queued", "finished", "don
 # means it never ran at all. Only a lane in one of these states is eligible for the
 # children-derivation rule below; a lane whose own terminal event already carries a verdict
 # (done/failed/rejected) is never overridden by it.
-_NO_TERMINAL_EVENT_STATES = frozenset({"running", "stalled", "queued", "finished"})
+# "running" is deliberately not in the set: a lane with recent activity of its own is still
+# working (a ladder case keeps routing after its initial-start candidates end), so deriving
+# "done" from its children there would announce a verdict before the case has one. It only
+# becomes eligible once it has gone idle (``stalled``) or the run is known over (``finished``).
+_NO_TERMINAL_EVENT_STATES = frozenset({"stalled", "queued", "finished"})
 
 # Lower number wins when picking a group's `best_leaf` (the "select this group, show one board"
 # representative): prefer whatever is still actively happening (running, then stalled) over a
@@ -188,13 +192,20 @@ def _annotate(node: dict, lanes: dict) -> None:
         children_all_ended = child_counts["total"] > 0 and not (
             child_counts["running"] or child_counts["stalled"] or child_counts["queued"]
         )
-        if state in _NO_TERMINAL_EVENT_STATES and children_all_ended:
+        derived = False
+        if state == "stalled" and child_counts["running"]:
+            # Idle itself, but a candidate underneath it is still actively reporting: the case is
+            # waiting on its own children, not stuck -- the subtree is not stalled.
+            state, derived = "running", True
+        elif state in _NO_TERMINAL_EVENT_STATES and children_all_ended:
+            derived = True
             if child_counts["failed"]:
                 state, fraction = "failed", 1.0
             elif child_counts["done"] == child_counts["total"]:
                 state, fraction = "done", 1.0
             else:
                 state, fraction = "finished", 1.0
+        if derived:
             # Correct this lane's own row too (see the module docstring's "one exception"): a
             # person looking at the Experiments drawer must see the same verdict the tree's
             # aggregate counts below are about to reflect, not whatever progress.classify made of

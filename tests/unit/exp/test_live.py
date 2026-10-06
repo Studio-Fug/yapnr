@@ -498,6 +498,28 @@ class SynthesizeTaskEventsTest(unittest.TestCase):
         self.assertTrue(events[0]["synthetic"])
         self.assertEqual(livemod.event_errors(events[0]), [])  # a real schema-valid event
 
+    def test_a_retried_task_uses_the_attempt_its_done_marker_names(self):
+        # Attempt s1r0 was preempted (record written, no _DONE); the retry s1r1 finished. The
+        # synthetic event must carry the retry's verdict/record, not the preempted attempt's.
+        self.write_tasks_jsonl(["ladder/case-a/s0", "ladder/case-b/s0"])
+        preempted = self.prefix / "tasks" / livemod.task_key("ladder/case-a/s0") / "s1r0"
+        preempted.mkdir(parents=True)
+        (preempted / "record.json").write_text(json.dumps(dict(exit_code=137, wall_s=999.0)))
+        self.write_done("ladder/case-a/s0", attempt="s1r1", verdict="fail", record_extra={})
+        # case-b: preempted only, its retry has not finished -- no event, campaign not finished.
+        other = self.prefix / "tasks" / livemod.task_key("ladder/case-b/s0") / "s1r0"
+        other.mkdir(parents=True)
+        (other / "record.json").write_text(json.dumps(dict(exit_code=137)))
+        dest = self.tmp / "mirror"
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertEqual(found, {"tasks": 1, "synthetic_events": 1, "finished": False})
+        (event,) = [json.loads(p.read_text()) for p in (dest / "events").glob("*.json")]
+        self.assertEqual(event["data"]["attempt"], "s1r1")
+        self.assertEqual(event["data"]["verdict"], "fail")
+        self.assertEqual(event["data"]["exit_code"], 0)
+        self.assertEqual(event["data"]["wall_s"], 12.5)
+        self.assertFalse((dest / livemod.FINISHED_MARKER).exists())
+
     def test_is_idempotent_and_resumable(self):
         self.write_tasks_jsonl(["ladder/case-a/s0"])
         self.write_done("ladder/case-a/s0")

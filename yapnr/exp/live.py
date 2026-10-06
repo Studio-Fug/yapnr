@@ -253,10 +253,11 @@ def synthesize_task_events(runs: Store, cid: str, dest: Path) -> Dict[str, Any]:
     lane's outcome existed at all. One synthetic event per task with a ``_DONE`` marker is written
     into ``dest/events`` (named deterministically from the task id, so a repeat call never
     duplicates one -- idempotent and safe to call every poll), with ``kind`` ``SYNTHETIC_KIND``,
-    ``data.verdict``/``data.synthetic`` plus whatever :func:`_record_extra` found. Once every task
-    ``task_ids`` names has one, :data:`FINISHED_MARKER` is written into ``dest`` as well, which is
-    how :mod:`yapnr.viewer.server` tells an otherwise-idle lane with no terminal event of its own
-    (and no children to derive one from) "finished" instead of "stalled" forever.
+    ``data.verdict``/``data.attempt`` plus whatever :func:`_record_extra` found, and a top-level
+    ``synthetic: true``. Once every task ``task_ids`` names has one, :data:`FINISHED_MARKER` is
+    written into ``dest`` as well, which is how :mod:`yapnr.viewer.server` tells an otherwise-idle
+    lane with no terminal event of its own (and no children to derive one from) "finished"
+    instead of "stalled" forever.
 
     Resumable the same way :func:`mirror_once` is: nothing here depends on having run before, a
     task whose marker has not landed yet is simply picked up on the next call, and an interrupted

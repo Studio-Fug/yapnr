@@ -309,7 +309,14 @@ def load_footprint(ld, p) -> str:
         f'"{_u("ldval", ld.ref)}") (effects (font (size 0.4 0.4) (thickness 0.06))))\n'
         f'\t\t(property "Description" "termination of dummy column {ld.name}" (at 0 0) (layer "F.Fab") '
         f'(hide yes) (uuid "{_u("lddsc", ld.ref)}") (effects (font (size 0.4 0.4) (thickness 0.06))))\n'
-        f"\t\t(attr smd{dnp})\n" + "\n".join(pads) + "\n\t)"
+        f"\t\t(attr smd{dnp})\n" + "\n".join(pads) + "\n"
+        # KiCad stock R_0201_0603Metric model: its pads sit on the x-axis (terminals at the
+        # ends), but this footprint's two pads are each rotated 90 degrees (above, "(at 0 {dy}
+        # 90)": the whole 2-pad load turned so its run-in axis is the net direction), so the
+        # model is turned to match with the same 90 degree rotate.
+        '\t\t(model "${KICAD10_3DMODEL_DIR}/Resistor_SMD.3dshapes/R_0201_0603Metric.step"\n'
+        "\t\t\t(offset (xyz 0 0 0))\n\t\t\t(scale (xyz 1 1 1))\n\t\t\t(rotate (xyz 0 0 90))\n\t\t)"
+        "\n\t)"
     )
 
 

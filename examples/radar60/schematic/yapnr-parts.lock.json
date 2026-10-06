@@ -102,7 +102,7 @@
       "name": "Radar60_Fiducial_1mm"
     },
     {
-      "id": "7505ac22e3d0ea029b7fce73f6075cff12dca5ddf09dead034d9c2d9c07beb83",
+      "id": "8e75a6187368e98e89a581f3cfc2b128ff14ce0954a0ee33e613fd446e00694b",
       "lcsc": "C2866258",
       "name": "Radar60_IWR6843AQGABLR"
     },
@@ -121,7 +121,7 @@
       "name": "Radar60_LED_Green_0603"
     },
     {
-      "id": "873f324054028dbc39ca3750339ea0d936cf333f3bed47e9d424584e676d4e7a",
+      "id": "8a97de870a63592f5f89c710f2ffa6f2df18ce96f93cec78a6ba6fcb58b46866",
       "lcsc": "C701982",
       "name": "Radar60_LP87524JRNFRQ1"
     },
@@ -136,7 +136,7 @@
       "name": "Radar60_L_0u47_MCKK2012"
     },
     {
-      "id": "b4ec3ee8ef4b7b4a45f6136774583a15805506e15787c1a16450738acbf67d07",
+      "id": "13175520e300ecad0b817944b4f49b4b139a7913de0a71b8da3e3e10f54412c0",
       "lcsc": "C2908148",
       "name": "Radar60_MX25V1635FZNQ"
     },
@@ -145,12 +145,12 @@
       "name": "Radar60_MountingHole_M2p5"
     },
     {
-      "id": "f67739897dd0818f1249fa0e353957d266f4f2ebceb6a91a7a2afeef9807017d",
+      "id": "1c948e9dcc5d65394dc9028f433689b3aad3e41388c5a67230e842dbb3aedb5e",
       "lcsc": "C2843756",
       "name": "Radar60_QTH_030_01_L_D_A"
     },
     {
-      "id": "60bae0931bf7ae6da58678d676f846e5850ea836bc6bb582b186684cf6b39e5f",
+      "id": "a4a37cf94e6a6e8b2617844f6149202db98ebcfcf3f8956963758fad45cb7890",
       "name": "Radar60_QTH_030_01_L_D_A_DNP"
     },
     {
@@ -200,7 +200,7 @@
       "name": "Radar60_R_1k_0402"
     },
     {
-      "id": "f949f22fc0ed336a19e58ce0792a4a67e6e97586f3df40c639ca2ed08cf536fc",
+      "id": "03f0e89593d4e91ec40dfe0b338dce85efd8f4ebe07cdf9784f58a07fd241207",
       "lcsc": "C4231187",
       "name": "Radar60_R_1m_0612"
     },
@@ -215,7 +215,7 @@
       "name": "Radar60_R_24k_0402"
     },
     {
-      "id": "d0bec99c2efa94dc71eadc2ef7d821685201fd3ecd20439e4df78d6cfea0ef7d",
+      "id": "419c0d57c46d9823a2ecce38dbafe0759524f2aceb7824b4675baa5438d2cb23",
       "lcsc": "C3917256",
       "name": "Radar60_R_2m_0612"
     },
@@ -244,7 +244,7 @@
       "name": "Radar60_SMF5V0A"
     },
     {
-      "id": "7c5a2d24e0aa0017735706e492181cfe9165b84a8f93415e5488b493e81ccb34",
+      "id": "6717065f985ed97d1a5c27faf932a50321237257873aab781b69eb57ed0031c9",
       "lcsc": "C3234119",
       "name": "Radar60_TCAN1044AVDRBRQ1"
     },
@@ -258,7 +258,7 @@
       "name": "Radar60_TPS22917DBVR_DNP"
     },
     {
-      "id": "5eae9ea013dad5c454f03a0a78b351fba969b0019a2a3253344b458b2da3d440",
+      "id": "4c0256ab9a97660ce900f70e8a878d9c0ee6e445c0de0c94a65bf65d47c62519",
       "lcsc": "C3662807",
       "name": "Radar60_TPS259474ARPWR"
     },

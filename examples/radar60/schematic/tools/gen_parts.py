@@ -889,6 +889,40 @@ def stock_dir(explicit: Optional[str]) -> Path:
     raise SystemExit("no KiCad stock footprints: set YAPNR_KICAD_FOOTPRINTS or pass --footprints")
 
 
+# KiCad 10's stock library ships a (model ...) path for these two that 404s: the .kicad_mod
+# names a .step file its own 3dmodels directory does not have (checked on the local headless
+# KiCad 10.0.6; both parts render as a plain box until this is fixed). Rewritten here, not by
+# hand-editing a board, to the closest .step the library does have.
+STOCK_MODEL_FIXUPS = {
+    # MX25V1635FZNQ (U3): WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4mm.step is missing; the only other
+    # EP3.4x4mm-ish 6x5mm/1.27mm WSON-8 model in the library is EP3.4x4.3mm (0.3 mm longer pad
+    # than Macronix's drawing 6110-3401 rev. 8 EP, comment at gen_parts.py Radar60_MX25V1635FZNQ).
+    "Package_SON:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4mm": (
+        "Package_SON.3dshapes/WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4.3mm.step"
+    ),
+    # TCAN1044AVDRBRQ1 (U4): Texas_DRB0008A.step is missing; its land pattern (TI SLLSFJ3D Table
+    # 5-1: 0.65 mm pitch, EP land 1.5x1.75 mm) is closest to the P0.65mm DFN-8-1EP_3x3mm model
+    # whose EP width matches (1.5 mm); the only other P0.65mm option is 0.15 mm wider (1.55 mm)
+    # and 0.65 mm taller EP, further off. (Exact EP from TI's own drawing not independently
+    # re-verified this pass -- this session's web-search budget was spent; flag for review.)
+    "Package_DFN_QFN:Texas_DRB0008A": (
+        "Package_DFN_QFN.3dshapes/DFN-8-1EP_3x3mm_P0.65mm_EP1.5x2.25mm.step"
+    ),
+}
+
+
+def _fix_model_ref(text: str, ref: str) -> str:
+    fix = STOCK_MODEL_FIXUPS.get(ref)
+    if not fix:
+        return text
+    return re.sub(
+        r'(\(model ")\$\{KICAD\d+_3DMODEL_DIR\}/[^"]*(")',
+        r"\1${KICAD10_3DMODEL_DIR}/" + fix + r"\2",
+        text,
+        count=1,
+    )
+
+
 def stock_footprint(lib_dir: Path, ref: str, dnp: bool, board_only: bool) -> Tuple[str, str]:
     lib, name = ref.split(":", 1)
     text = (lib_dir / f"{lib}.pretty" / f"{name}.kicad_mod").read_text(encoding="utf-8")
@@ -896,6 +930,7 @@ def stock_footprint(lib_dir: Path, ref: str, dnp: bool, board_only: bool) -> Tup
     # atopile 0.15.8 reads the KiCad 9 format: drop KiCad 10-only tokens it does not know
     text = re.sub(r'\n\t\(generator_version "[^"]*"\)', "", text)
     text = re.sub(r"\n\t\(embedded_fonts no\)", "", text)
+    text = _fix_model_ref(text, ref)
     text = _attrs(text, dnp, board_only)
     text = _silk_circles_to_rects(text)
     return name, text

@@ -16,6 +16,20 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 Rect = Tuple[float, float, float, float]  # x0, y0, x1, y1
 FORMAT_VERSION = "20241229"  # KiCad 9 board/footprint format, which atopile 0.15.8 writes
 
+# The models3d directory, as a KiCad path variable (same convention as KiCad's own
+# KICAD10_3DMODEL_DIR, and as this project's YAPNR_KICAD_FOOTPRINTS env var, gen_parts.py
+# stock_dir()): export RADAR60_3D=.../examples/radar60/models3d before running kicad-cli or
+# pcbnew (KiCad resolves "${VAR}" in a (model ...) path against the OS environment when it is
+# not a project text variable), or pass kicad-cli's -D RADAR60_3D=... / --define-var. A plain
+# env var, not a project-relative "${KIPRJMOD}/..." text variable: the boards these footprints
+# end up on are copied through out-of-tree work directories (examples/radar60/board/integrate.py)
+# at depths "${KIPRJMOD}" cannot predict. See ../../models3d/README.md.
+MODELS_VAR = "RADAR60_3D"
+
+
+def _model_ref(filename: str) -> str:
+    return f"${{{MODELS_VAR}}}/{filename}"
+
 
 def _n(v: float) -> str:
     s = f"{v:.4f}".rstrip("0").rstrip(".")
@@ -33,6 +47,21 @@ class Footprint:
         self.attr = attr
         self.props: List[Tuple[str, str]] = []
         self.items: List[str] = []
+        self.model_node: Optional[str] = None
+
+    def model(
+        self,
+        path: str,
+        offset: Tuple[float, float, float] = (0, 0, 0),
+        scale: Tuple[float, float, float] = (1, 1, 1),
+        rotate: Tuple[float, float, float] = (0, 0, 0),
+    ) -> None:
+        """Attach a 3D model (one per footprint; KiCad ignores a second ``(model ...)``)."""
+        self.model_node = (
+            f'\t(model "{path}"\n\t\t(offset\n\t\t\t(xyz {_n(offset[0])} {_n(offset[1])} {_n(offset[2])})\n'
+            f"\t\t)\n\t\t(scale\n\t\t\t(xyz {_n(scale[0])} {_n(scale[1])} {_n(scale[2])})\n\t\t)\n"
+            f"\t\t(rotate\n\t\t\t(xyz {_n(rotate[0])} {_n(rotate[1])} {_n(rotate[2])})\n\t\t)\n\t)"
+        )
 
     def prop(self, key: str, value: str) -> None:
         self.props.append((key, value))
@@ -131,6 +160,8 @@ class Footprint:
             )
         out.append(f"\t(attr {self.attr})")
         out.extend(self.items)
+        if self.model_node:
+            out.append(self.model_node)
         out.append(")")
         return "\n".join(out) + "\n"
 
@@ -218,6 +249,10 @@ def abl0161b(balls: Dict[str, str]) -> Footprint:
     # package edge; with the nominal 1.0 mm the B-row caps' pads cannot come within 3.5 mm of
     # their balls (radar60 review 2026-10-03).
     _courtyard(fp, (-half - 0.5, -half - 0.5, half + 0.5, half + 0.5))
+    # Parametric CadQuery model (../../models3d/gen_models3d.py:abl0161b_model), built from this
+    # same function's ball map: real 161-ball BGA, chamfered pin-1 corner, TI's 1.17 mm max
+    # height. Approximate (no TI CAD data); see ../../models3d/README.md.
+    fp.model(_model_ref("ti_abl0161b_fcbga161.step"))
     return fp
 
 
@@ -313,6 +348,10 @@ def rnf0026c() -> Footprint:
     # silk: two short ticks per side outside the lands plus the pin-1 mark
     _silk_corners(fp, 2.3, 2.55, 0.3)
     _courtyard(fp, (-2.75, -2.95, 2.75, 2.95))
+    # Parametric CadQuery model (../../models3d/gen_models3d.py:rnf0026c_model): a lead at every
+    # pad of this same function, 0.80 mm max body (TI SNVSAW2B drawing 4223207/B). Approximate
+    # (no TI CAD data); see ../../models3d/README.md.
+    fp.model(_model_ref("ti_rnf0026c_vqfnhr26.step"))
     return fp
 
 
@@ -352,6 +391,10 @@ def rpw0010a() -> Footprint:
     _fab_body(fp, 1.0, 1.0, 0.3)
     _silk_corners(fp, 1.3, 1.3, 0.2)
     _courtyard(fp, (-1.5, -1.5, 1.5, 1.5))
+    # Parametric CadQuery model (../../models3d/gen_models3d.py:rpw0010a_model): a lead at every
+    # pad of this same function, 0.80 mm max body (TI SLVSFC9C drawing 4225183/A). Approximate
+    # (no TI CAD data); see ../../models3d/README.md.
+    fp.model(_model_ref("ti_rpw0010a_vqfnhr10.step"))
     return fp
 
 
@@ -425,6 +468,11 @@ def qth030_01_a() -> Footprint:
     fp.line((-7.25 - 0.4, y1), (-7.25 + 0.15, y1), "F.SilkS", 0.12)
     land_y = QTH_ROW_Y + h / 2
     _courtyard(fp, (-bw - 0.25, -land_y - 0.25, bw + 0.25, land_y + 0.25))
+    # Parametric CadQuery model (../../models3d/gen_models3d.py:qth030_01_a_model): an
+    # approximate housing the footprint's own envelope, one contact-strip box per land row (not
+    # 60 separate springs) and the two alignment-pin bosses. No Samtec CAD data; see
+    # ../../models3d/README.md.
+    fp.model(_model_ref("samtec_qth030_01_l_d_a.step"))
     return fp
 
 
@@ -457,6 +505,12 @@ def wfcp0612() -> Footprint:
     for sy in (-1, 1):
         fp.line((-0.18, sy * (c / 2 + 0.2)), (0.18, sy * (c / 2 + 0.2)), "F.SilkS", 0.12)
     _courtyard(fp, (-x - b / 2 - 0.25, -c / 2 - 0.25, x + b / 2 + 0.25, c / 2 + 0.25))
+    # No Vishay WFCP CAD data: KiCad's stock Resistor_SMD.3dshapes/R_0612_1632Metric.step has the
+    # same 1.6x3.2 mm body and the same two-pad-on-the-long-sides layout as this footprint (its
+    # 1x3.4 mm pads bracket our 1.30x3.80 mm lands); Resistor_SMD.3dshapes/
+    # R_Shunt_Vishay_WSKW0612.step was considered and rejected, it is a different, 4-pad Kelvin
+    # part with no geometric match here.
+    fp.model("${KICAD10_3DMODEL_DIR}/Resistor_SMD.3dshapes/R_0612_1632Metric.step")
     return fp
 
 

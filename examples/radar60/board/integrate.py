@@ -118,6 +118,10 @@ def _env(engine, extra=None):
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join([str(Path(engine) / "hardware/pnr"), str(engine)])
     env["PNR_FAB_PROFILE"] = PROFILE
+    # the models3d/gen_models3d.py STEP models (schematic/tools/footprints.py, RADAR60_3D): a
+    # plain env var, not a KiCad project text variable, because WORK (and this board's eventual
+    # copies) aren't at a fixed depth under the source tree -- see footprints.py:MODELS_VAR.
+    env.setdefault("RADAR60_3D", str(HERE.parent / "models3d"))
     for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
         env.setdefault(k, "1")
     env.update(extra or {})

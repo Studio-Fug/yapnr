@@ -1,0 +1,25 @@
+# The rails rung (11-ufbga201-fanout-6L-SGSGPS-rails) under the new plane-vs-trace
+# candidate decision (pnr.plane_partition._rail_decision): VDD and VDDA stay on the
+# supply plane, VBAT is traced. Four seeds, one task per cell
+# (hardware/pnr/regression/README.md).
+schema = "yapnr-campaign-v1"
+kind = "ladder-cell"
+name = "rails-candidates"
+source = "HEAD"
+image = "edge"
+
+[matrix]
+case = ["11-ufbga201-fanout-6L-SGSGPS-rails"]
+seed = [0, 1, 2, 3]
+
+[config]
+hard = true
+timeout = 600
+initial_pool = true
+initial_starts = 8
+initial_finalists = 3
+
+[resources]
+cpus = 1
+memory_gb = 3
+max_wall_s = 1800

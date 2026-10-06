@@ -170,7 +170,25 @@ class HardRungContract(unittest.TestCase):
                     for p in spec["constraints"].get("plane_partition") or []
                     if not p.get("region")
                 ]
-                shared = sum(len(p["nets"]) - 1 for p in parts)
+                # A candidate the rung traces instead of planing (pnr.plane_partition's
+                # own rule, e.g. the rails rung's VBAT) keeps its net_class plain: no
+                # plane_layer, so it adds no class here, unlike a candidate that keeps
+                # the plane.
+                shared = sum(
+                    max(
+                        sum(
+                            1
+                            for n in p["nets"]
+                            if any(
+                                n in c.get("nets", []) and c.get("plane_layer") == p["layer"]
+                                for c in classes.values()
+                            )
+                        )
+                        - 1,
+                        0,
+                    )
+                    for p in parts
+                )
                 self.assertEqual(len(planes), len(first) + shared)
                 self.assertEqual(
                     sum(c["kind"] == "plane" for c in spec["checks"]),
@@ -492,13 +510,22 @@ class HardRungContract(unittest.TestCase):
         rules = compile_routing_rules(c, sorted(nets))
         (part,) = rules["plane_partition"]
         self.assertEqual(part["nets"], ["VDD", "VDDA", "VBAT"])
-        self.assertEqual(part["fill"], "GND")
+        # No fill: a dedicated ground plane already exists elsewhere in this stack
+        # (owner review 2026-10-05), so the layer's leftover is not repeated GND.
+        self.assertIsNone(part["fill"])
         self.assertTrue(part["protect_fanouts"])
         self.assertEqual([e["net"] for e in rules["ir_drop"]], ["VDD", "VDDA", "VBAT"])
         balls = [e for e in rules["ir_drop"] if e["net"] == "VDDA"][0]["sinks"]
         self.assertEqual(sorted(balls), ["U1:P1", "U1:R1"])
         classes = [x for x in rules["net_classes"] if x.get("plane_layer") == part["layer"]]
-        self.assertEqual(sorted(n for x in classes for n in x["nets"]), ["VBAT", "VDD", "VDDA"])
+        # VBAT keeps no plane_layer class (it is traced, not planed): only VDD and
+        # VDDA own a class naming this layer.
+        self.assertEqual(sorted(n for x in classes for n in x["nets"]), ["VDD", "VDDA"])
+        # The candidates' plane-or-trace decision (pnr.plane_partition) is checked
+        # by the rail_zones check: the engine's own rule, not a hardcoded fill,
+        # keeps VBAT (0.001 A off a single BGA ball) off the plane.
+        (rail_check,) = [c for c in rails["checks"] if c["kind"] == "rail_zones"]
+        self.assertEqual(rail_check["trace_nets"], ["VBAT"])
 
     def test_buck_pour_rung(self):
         from pnr.constraints import compile_constraints, compile_routing_rules

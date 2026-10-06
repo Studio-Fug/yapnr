@@ -604,7 +604,9 @@ def _drop_span(vm, stack):
     return drop_span
 
 
-def tie_plane_layers(grid, graph, stack, plan, result, plane_access, via_keepout, net_halo, rule):
+def tie_plane_layers(
+    grid, graph, stack, plan, result, plane_access, via_keepout, net_halo, rule, traced=frozenset()
+):
     """Tie the plane layers of a net with several (two ground planes), whose blind
     or micro drops reach only the plane nearest each pad (pnr.via_policy).
 
@@ -639,7 +641,11 @@ def tie_plane_layers(grid, graph, stack, plan, result, plane_access, via_keepout
     names = vm.model.layers
     last = len(names) - 1
     dedicated = list(stack.dedicated)
-    plane_nets = set(stack.plane_nets)
+    # ``traced``: plane_partition candidates the engine itself routes as ordinary
+    # signal nets (pnr.plane_partition.decide_rails) -- no dedicated-plane drop
+    # exists for them, so they keep none of this function's reference-plane
+    # bookkeeping either.
+    plane_nets = set(stack.plane_nets) - traced
     multi = {net: stack.net_planes(net) for net in sorted(plane_nets)}
     multi = {net: planes for net, planes in multi.items() if len(planes) > 1}
     limit = float((rule or {}).get("max_mm") or 0.0)
@@ -979,6 +985,23 @@ def route_board(
 
     width, height = outline_size(graph, constraints)
     layers, planes, stack = layer_plan(graph, rules)
+    # A plane_partition candidate the engine itself decides to trace (current,
+    # budget, terminal count: pnr.plane_partition._rail_decision) is carried into
+    # the routing rules here, not left a dead plane drop: net_class.plane_layer
+    # alone used to decide every net in ``planes`` below, unaware of this per-rail
+    # decision (an owner review on 2026-10-06 found the mismatch -- a traced
+    # candidate kept out of signal_nets and out of every plane's drop planning,
+    # with nowhere left to route it). trace_decisions is the one, early source of
+    # truth; for_route reuses it rather than recomputing from a fuller terminal
+    # count that could, in principle, disagree.
+    trace_decisions: dict = {}
+    traced_nets: Set[str] = set()
+    if rules and rules.get("plane_partition"):
+        from pnr.plane_partition import decide_rails
+
+        trace_decisions = decide_rails(rules, graph, fixed_copper)
+        traced_nets = {n for n, (d, _r) in trace_decisions.items() if d == "trace"}
+        planes = planes - traced_nets
     grid = RouteGrid.from_graph(
         graph,
         width,
@@ -1103,7 +1126,11 @@ def route_board(
 
         for comp in graph.components:
             for pad in comp.pads:
-                if pad.net in stack.plane_nets and not pad.through_hole:
+                if (
+                    pad.net in stack.plane_nets
+                    and pad.net not in traced_nets
+                    and not pad.through_hole
+                ):
                     w = terminal_required_width(
                         comp.ref, pad.name, pad.net, rules or {}, neck=False
                     )
@@ -1170,7 +1197,15 @@ def route_board(
         from pnr.plane_partition import for_route
 
         partitions = for_route(
-            grid, graph, rules, stack, width, height, fixed_copper=fixed_copper, fanouts=fanouts
+            grid,
+            graph,
+            rules,
+            stack,
+            width,
+            height,
+            fixed_copper=fixed_copper,
+            fanouts=fanouts,
+            decisions=trace_decisions,
         )
         done = {p.layer for p in partitions}
         regions = [r for r in regions if r.layer not in done]
@@ -1479,6 +1514,7 @@ def route_board(
             via_keepout,
             net_halo,
             vm.model.policy.get("return_tie"),
+            traced=traced_nets,
         )
         plan.diagnostics.update(report)
 

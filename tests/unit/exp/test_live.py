@@ -447,5 +447,112 @@ class GcsBinaryBundleTest(unittest.TestCase):
         self.assertEqual(livemod.event_errors(events[0]), [])
 
 
+class SynthesizeTaskEventsTest(unittest.TestCase):
+    """yapnr.exp.live.synthesize_task_events: a synthetic terminal event per _DONE-marked task
+    lane, and the campaign-finished marker once every task named by tasks.jsonl has one -- how a
+    finished campaign's ladder "case" lanes (no terminal event of their own, before
+    hardware/pnr/regression/run.py's fix) stop reading "stalled" forever once it is over."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.store_root = self.tmp / "store"
+        self.store = LocalStore(self.store_root)
+        self.cid = "20261006-ladder-abc123"
+        self.prefix = self.store_root / "campaigns" / self.cid
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def write_tasks_jsonl(self, task_ids):
+        self.prefix.mkdir(parents=True, exist_ok=True)
+        (self.prefix / "tasks.jsonl").write_text(
+            "".join(json.dumps({"id": tid}) + "\n" for tid in task_ids)
+        )
+
+    def write_done(self, task_id, attempt="s1r0", verdict="pass", record_extra=None):
+        key = livemod.task_key(task_id)
+        task_dir = self.prefix / "tasks" / key
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "_DONE").write_text(
+            json.dumps({"task": task_id, "attempt": attempt, "verdict": verdict}) + "\n"
+        )
+        if record_extra is not None:
+            record_dir = task_dir / attempt
+            record_dir.mkdir(parents=True, exist_ok=True)
+            record = dict(exit_code=0, wall_s=12.5, timed_out=False)
+            record.update(record_extra)
+            (record_dir / "record.json").write_text(json.dumps(record))
+
+    def test_writes_one_synthetic_event_per_done_task(self):
+        self.write_tasks_jsonl(["ladder/case-a/s0", "ladder/case-b/s0"])
+        self.write_done("ladder/case-a/s0", verdict="pass")
+        dest = self.tmp / "mirror"
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertEqual(found, {"tasks": 1, "synthetic_events": 1, "finished": False})
+        events = [json.loads(p.read_text()) for p in (dest / "events").glob("*.json")]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["candidate"], "ladder/case-a/s0")
+        self.assertEqual(events[0]["kind"], livemod.SYNTHETIC_KIND)
+        self.assertEqual(events[0]["data"]["verdict"], "pass")
+        self.assertTrue(events[0]["synthetic"])
+        self.assertEqual(livemod.event_errors(events[0]), [])  # a real schema-valid event
+
+    def test_is_idempotent_and_resumable(self):
+        self.write_tasks_jsonl(["ladder/case-a/s0"])
+        self.write_done("ladder/case-a/s0")
+        dest = self.tmp / "mirror"
+        first = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertEqual(first["synthetic_events"], 1)
+        second = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertEqual(second["synthetic_events"], 0)  # already on disk, not re-added
+        self.assertEqual(len(list((dest / "events").glob("*.json"))), 1)
+
+    def test_finished_marker_appears_only_once_every_task_is_done(self):
+        self.write_tasks_jsonl(["ladder/case-a/s0", "ladder/case-b/s0"])
+        self.write_done("ladder/case-a/s0")
+        dest = self.tmp / "mirror"
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertFalse(found["finished"])
+        self.assertFalse((dest / livemod.FINISHED_MARKER).exists())
+        self.write_done("ladder/case-b/s0", verdict="fail")
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertTrue(found["finished"])
+        marker = json.loads((dest / livemod.FINISHED_MARKER).read_text())
+        self.assertEqual(marker["campaign"], self.cid)
+        self.assertEqual(marker["tasks"], 2)
+
+    def test_no_tasks_jsonl_yet_is_never_finished(self):
+        # A mirror polling before the campaign's own plan has uploaded: _DONE markers alone
+        # (there are none yet either) must never look "finished".
+        dest = self.tmp / "mirror"
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertEqual(found, {"tasks": 0, "synthetic_events": 0, "finished": False})
+
+    def test_record_json_extras_are_folded_in_best_effort(self):
+        self.write_tasks_jsonl(["t/a"])
+        self.write_done("t/a", attempt="s1r0", record_extra={"exit_code": 1, "wall_s": 42.0})
+        dest = self.tmp / "mirror"
+        livemod.synthesize_task_events(self.store, self.cid, dest)
+        event = json.loads(next((dest / "events").glob("*.json")).read_text())
+        self.assertEqual(event["data"]["exit_code"], 1)
+        self.assertEqual(event["data"]["wall_s"], 42.0)
+
+    def test_missing_record_json_is_silently_ignored(self):
+        self.write_tasks_jsonl(["t/a"])
+        self.write_done("t/a")  # no record.json written at all
+        dest = self.tmp / "mirror"
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertEqual(found["synthetic_events"], 1)  # the marker alone is already enough
+
+    def test_mirror_calls_synthesize_and_reports_it(self):
+        self.write_tasks_jsonl(["t/a"])
+        self.write_done("t/a")
+        dest = self.tmp / "mirror"
+        report = livemod.mirror(self.store, self.cid, dest, once=True, sleep=lambda s: None)
+        self.assertEqual(report["synthetic_events"], 1)
+        self.assertTrue(report["finished"])
+
+
 if __name__ == "__main__":
     unittest.main()

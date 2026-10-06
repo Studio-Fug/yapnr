@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -26,6 +27,7 @@ from run import (
     gloss_gate,
     gloss_stage,
     gloss_summary,
+    live_emit,
     measure_summary,
     new_result,
     parser,
@@ -910,6 +912,50 @@ class SuiteEnvScrubbing(unittest.TestCase):
         env = scrubbed_suite_env({"PATH": "/usr/bin", "PNR_SHRINK": "1"}, PNR_LOCAL_PRESSURE="1")
         self.assertNotIn("PNR_SHRINK", env)
         self.assertEqual(env["PNR_LOCAL_PRESSURE"], "1")
+
+
+class CaseLaneLiveEmit(unittest.TestCase):
+    """run.py's own terminal event for a case/seed lane (hardware/pnr/pnr/live.py's ``emit``,
+    reused directly rather than reimplemented): a no-op with PNR_LIVE_DIR unset -- the common,
+    non-live run, so this must never change run.py's own results -- and, with it set, a real
+    event under the task's own PNR_LIVE_CANDIDATE (yapnr.exp.task's task id for a live campaign,
+    e.g. a ladder "case" lane: docs/viewer.md "Finished without a final event")."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.env = unittest.mock.patch.dict(os.environ, {}, clear=False)
+        self.env.start()
+        for var in ("PNR_LIVE_DIR", "PNR_LIVE_CANDIDATE", "PNR_LIVE_ITERATION"):
+            os.environ.pop(var, None)
+
+    def tearDown(self):
+        self.env.stop()
+        self._tmp.cleanup()
+
+    def test_is_a_no_op_with_live_off(self):
+        live_emit("case_complete", data=dict(passed=True))
+        self.assertEqual(list(self.tmp.iterdir()), [])  # nothing written anywhere
+
+    def test_writes_a_real_event_under_the_tasks_own_candidate_id(self):
+        os.environ["PNR_LIVE_DIR"] = str(self.tmp)
+        os.environ["PNR_LIVE_CANDIDATE"] = "ladder/09-mcu-usb/s0"
+        live_emit("case_complete", data=dict(passed=True, opens=0, violations=0, case="09-mcu-usb"))
+        files = list((self.tmp / "events").glob("*.json"))
+        self.assertEqual(len(files), 1)
+        event = json.loads(files[0].read_text())
+        self.assertEqual(event["kind"], "case_complete")
+        self.assertEqual(event["candidate"], "ladder/09-mcu-usb/s0")
+        self.assertEqual(event["data"]["passed"], True)
+
+    def test_a_failed_case_emits_case_failed(self):
+        os.environ["PNR_LIVE_DIR"] = str(self.tmp)
+        os.environ["PNR_LIVE_CANDIDATE"] = "ladder/09-mcu-usb/s0"
+        live_emit("case_failed", data=dict(passed=False, reasons=["designed_open"]))
+        files = list((self.tmp / "events").glob("*.json"))
+        event = json.loads(files[0].read_text())
+        self.assertEqual(event["kind"], "case_failed")
+        self.assertEqual(event["data"]["reasons"], ["designed_open"])
 
 
 if __name__ == "__main__":

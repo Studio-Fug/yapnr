@@ -27,6 +27,15 @@ from hard_rungs import dru_text, hard_rungs
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
+
+# ``pnr.live`` (hardware/pnr/pnr/live.py) is telemetry only: ``emit`` is a no-op whenever
+# PNR_LIVE_DIR is unset, so importing it unconditionally here costs nothing for the common,
+# non-live run and changes no byte of run.py's own results. HERE.parent is hardware/pnr, which
+# holds the `pnr` package this script otherwise never needs on sys.path (it imports `designs`/
+# `hard_rungs` from its own directory instead).
+sys.path.insert(0, str(HERE.parent))
+from pnr.live import emit as live_emit  # noqa: E402
+
 KI = "/Applications/KiCad/KiCad.app/Contents"
 
 
@@ -1302,6 +1311,33 @@ def main():
                 )
             result["elapsed_seconds"] = time.monotonic() - t
             result["cpu_seconds"] = round(sum((result.get("cpu_stages") or {}).values()), 3)
+            # The case/seed lane's own terminal event (docs/viewer.md "Finished without a final
+            # event"): candidates run under this case (hardware/pnr/pnr/place/initial_pool.py and
+            # friends) already emit their own candidate_complete/candidate_failed, but nothing
+            # emitted one for the case lane itself -- a live/mirrored campaign's parent lanes had
+            # no terminal event at all, only whatever mid-run telemetry (source_round_start,
+            # worker_config_applied) happened to land last, which read "stalled" forever once the
+            # campaign actually finished. PNR_LIVE_CANDIDATE here is this task's own id (ladder/
+            # <case>/sN, set by yapnr.exp.task for a live campaign; "controller" for a bare local
+            # run), never a candidate's -- run.py never overrides it the way the pool code does
+            # for its own nested candidates, and always restores it afterward.
+            # violations is a total count here (yapnr.viewer.progress reads it the same way a
+            # route_result/phase_complete frame's "violations" is: a number, not result.json's
+            # own by-DRC-type breakdown dict) rather than result["violations"] verbatim.
+            violation_total = sum((result.get("violations") or {}).values())
+            live_emit(
+                "case_complete" if result["passed"] else "case_failed",
+                data=dict(
+                    passed=result["passed"],
+                    reasons=result.get("reasons") or [],
+                    opens=result.get("opens"),
+                    violations=violation_total,
+                    elapsed_seconds=result["elapsed_seconds"],
+                    case=spec["name"],
+                    seed=seed,
+                    error=result.get("error"),
+                ),
+            )
             (root / "result.json").write_text(json.dumps(result, indent=2))
             results.append(result)
             (out / "summary.json").write_text(

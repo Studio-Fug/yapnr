@@ -62,13 +62,17 @@ class RealShapeTest(unittest.TestCase):
     def test_a_group_that_is_also_a_lane_counts_itself_once(self):
         # s0 is itself a lane (source_round_start) AND the parent of two candidate lanes: it must
         # show up in its own subtree's counts exactly once, not be silently dropped either way.
+        # Its own last event is never anything yapnr.viewer.progress treats as terminal, but both
+        # its candidate children have (one done, one failed): the children-derivation rule folds
+        # s0's own contribution in as "failed" too (a verdict says so) rather than "running"
+        # forever -- see test_case_lane_with_no_terminal_event_derives_from_its_children below.
         s0 = self.tree["children"]["ladder"]["children"]["keep-on"]["children"][
             "09-mcu-usb-31-6L-SGSGPS"
         ]["children"]["s0"]
         self.assertEqual(s0["counts"]["total"], 3)  # itself + its 2 candidate children
         self.assertEqual(s0["counts"]["done"], 1)
-        self.assertEqual(s0["counts"]["failed"], 1)
-        self.assertEqual(s0["counts"]["running"], 1)  # the source_round_start lane itself
+        self.assertEqual(s0["counts"]["failed"], 2)  # the candidate, plus s0 itself (derived)
+        self.assertEqual(s0["counts"]["running"], 0)
 
     def test_root_counts_every_non_audit_lane_exactly_once(self):
         self.assertEqual(self.tree["counts"]["total"], len(self.lanes) - 1)  # minus the audit lane
@@ -79,14 +83,32 @@ class RealShapeTest(unittest.TestCase):
         ]
         self.assertEqual(case["order"], ["s0", "s1"])
 
-    def test_best_leaf_prefers_running_over_failed_over_queued_over_done(self):
-        # s0 itself is a still-running source_round_start lane with a done and a failed child
-        # underneath it; s1 has only a queued child. A single failed leaf must not steal the
-        # selection away from the subtree that is still actively running.
+    def test_best_leaf_prefers_failed_subtree_over_a_merely_queued_one(self):
+        # s0's own source_round_start lane derives to "failed" (both its candidates have ended,
+        # one of them failed -- see test_a_group_that_is_also_a_lane_counts_itself_once); s1 has
+        # only a queued child. The failed subtree still outranks the merely-queued one.
         case = self.tree["children"]["ladder"]["children"]["keep-on"]["children"][
             "09-mcu-usb-31-6L-SGSGPS"
         ]
-        self.assertEqual(case["best_leaf"], "ladder/keep-on/09-mcu-usb-31-6L-SGSGPS/s0")
+        self.assertEqual(
+            case["best_leaf"], "ladder/keep-on/09-mcu-usb-31-6L-SGSGPS/s0/initial-start-01"
+        )
+
+    def test_best_leaf_still_prefers_a_genuinely_running_child_over_a_derived_failure(self):
+        # Unlike the fixture above, s0 here has a candidate still actually running: its children
+        # have not all ended, so no derivation kicks in and s0's own "running" state (whatever
+        # its last raw event was) stands -- and still outranks s1's derived failure.
+        lanes = {
+            "g/s0": lane("g/s0", status=None, kind="source_round_start"),
+            "g/s0/initial-start-00": lane("g/s0/initial-start-00", **RUNNING),
+            "g/s1": lane("g/s1", status=None, kind="source_round_start"),
+            "g/s1/initial-start-00": lane("g/s1/initial-start-00", **FAILED),
+        }
+        tree = build_tree(lanes)
+        g = tree["children"]["g"]
+        self.assertEqual(g["children"]["s0"]["counts"]["running"], 2)  # itself + its candidate
+        self.assertEqual(g["children"]["s1"]["counts"]["failed"], 2)  # derived + its candidate
+        self.assertEqual(g["best_leaf"], "g/s0/initial-start-00")  # s0's subtree is still active
 
     def test_best_leaf_prefers_failed_over_queued_when_nothing_is_running(self):
         lanes = {
@@ -103,7 +125,7 @@ class OddShapeTest(unittest.TestCase):
         self.assertEqual(tree["children"], {})
         self.assertEqual(
             tree["counts"],
-            dict(queued=0, running=0, stalled=0, rejected=0, done=0, failed=0, total=0),
+            dict(queued=0, running=0, stalled=0, rejected=0, finished=0, done=0, failed=0, total=0),
         )
         self.assertEqual(tree["fraction"], 0.0)
         self.assertIsNone(tree["best_leaf"])
@@ -182,6 +204,77 @@ class OddShapeTest(unittest.TestCase):
         }
         tree = build_tree(lanes)
         self.assertAlmostEqual(tree["children"]["g"]["fraction"], 0.5)
+
+
+class NoTerminalEventDerivationTest(unittest.TestCase):
+    """The ladder runner's real pre-fix shape (a case/seed lane whose last event is never
+    terminal, docs/viewer.md "Finished without a final event"): once every candidate underneath
+    it has ended, its own state is derived from theirs rather than read verbatim off its last raw
+    event. See the RealShapeTest cases above for the mixed done/failed shape in context."""
+
+    def test_all_children_done_derives_done(self):
+        lanes = {
+            "s0": lane("s0", status=None, kind="worker_config_applied"),
+            "s0/initial-start-00": lane("s0/initial-start-00", **DONE),
+            "s0/initial-start-01": lane("s0/initial-start-01", **DONE),
+        }
+        tree = build_tree(lanes)
+        s0 = tree["children"]["s0"]
+        self.assertEqual(
+            s0["counts"],
+            dict(done=3, failed=0, running=0, stalled=0, rejected=0, queued=0, finished=0, total=3),
+        )
+        self.assertEqual(s0["fraction"], 1.0)
+
+    def test_a_queued_and_done_mix_with_no_failure_derives_finished_not_done(self):
+        # Neither "every candidate succeeded" nor "something failed" -- the fallback bucket.
+        lanes = {
+            "s0": lane("s0", status=None, kind="worker_config_applied"),
+            "s0/initial-start-00": lane("s0/initial-start-00", **DONE),
+            "s0/initial-start-01": lane(
+                "s0/initial-start-01", status="rejected", kind="iteration_complete", phase="result"
+            ),
+        }
+        tree = build_tree(lanes)
+        s0 = tree["children"]["s0"]
+        self.assertEqual(s0["counts"]["finished"], 1)  # s0 itself, derived
+        self.assertEqual(s0["counts"]["done"], 1)
+        self.assertEqual(s0["counts"]["rejected"], 1)
+
+    def test_a_still_queued_child_blocks_derivation_entirely(self):
+        # Not every candidate has ended yet: s0 keeps reading whatever its own last raw event
+        # says (here, nothing classifiable yet -- "running" at fraction 0) rather than guessing.
+        lanes = {
+            "s0": lane("s0", status=None, kind="worker_config_applied"),
+            "s0/initial-start-00": lane("s0/initial-start-00", **DONE),
+            "s0/initial-start-01": lane("s0/initial-start-01", **QUEUED),
+        }
+        tree = build_tree(lanes)
+        s0 = tree["children"]["s0"]
+        self.assertEqual(s0["counts"]["running"], 1)  # s0 itself, undecided
+        self.assertEqual(s0["counts"]["done"], 1)
+        self.assertEqual(s0["counts"]["queued"], 1)
+
+    def test_a_lanes_own_terminal_event_is_never_overridden_by_its_children(self):
+        # If the lane itself already has a real verdict (e.g. the new case_complete/case_failed
+        # hardware/pnr/regression/run.py emits), the children-derivation rule must not touch it
+        # even if, hypothetically, a child disagreed -- an explicit terminal event always wins.
+        lanes = {
+            "s0": lane("s0", **DONE),
+            "s0/initial-start-00": lane("s0/initial-start-00", **FAILED),
+        }
+        tree = build_tree(lanes)
+        s0 = tree["children"]["s0"]
+        self.assertEqual(s0["counts"]["done"], 1)  # s0 itself, untouched
+        self.assertEqual(s0["counts"]["failed"], 1)  # its child, also untouched
+
+    def test_a_leaf_with_no_children_is_never_derived(self):
+        # No children at all: the "all children ended" check must not vacuously succeed.
+        lanes = {"controller": lane("controller", status=None, kind="worker_config_applied")}
+        tree = build_tree(lanes)
+        node = tree["children"]["controller"]
+        self.assertEqual(node["counts"]["running"], 1)
+        self.assertEqual(node["counts"]["done"], 0)
 
 
 if __name__ == "__main__":

@@ -144,6 +144,51 @@ def regions_from_rows(rows) -> list:
     ]
 
 
+@dataclass
+class PlaneFrame:
+    """One snapshot for :mod:`pnr.animate.plane_partition` (see :class:`PlaneTrace`):
+    ``label`` is a copy of a rail-ownership grid at this point (-1 unclaimed, k the index
+    into :attr:`PlaneTrace.nets`), or None where the stage has none yet (``raster``).
+    ``extra`` carries stage-specific data a renderer may draw (``necks``: the per-terminal
+    widest-path rows of :func:`_width_check`, one list per net)."""
+
+    stage: str
+    caption: str
+    label: Optional[np.ndarray] = None
+    extra: dict = field(default_factory=dict)
+
+
+@dataclass
+class PlaneTrace:
+    """Optional, observational record of :func:`_partition`'s stages, for
+    :mod:`pnr.animate.plane_partition` (see ``docs/plane-partition.md``). Stages, in
+    emission order: ``raster`` (once), ``terminals`` (once), ``trunk`` and ``widen`` (once per
+    rail, in the order they are connected), ``grow`` (a few snapshots plus the final one),
+    ``carve``, ``polygons``, ``necks`` (once each).
+
+    Off by default: every call site below passes ``trace=None`` unless a caller opts in, and
+    every hook here only **copies** an array the algorithm already holds (nothing here feeds
+    back into a decision), so the partition's result never depends on whether a trace is
+    collected -- ``tests/test_plane_partition_trace.py`` checks a traced and an untraced run
+    are byte-identical. numpy only; no file I/O (a renderer reads the object directly)."""
+
+    nets: List[str]
+    h_mm: float = 0.1
+    free: Optional[np.ndarray] = None  # set once by raster(): the paintable cells
+    blocked: Optional[np.ndarray] = None  # set once by raster(): foreign copper, inside free's box
+    frames: List[PlaneFrame] = field(default_factory=list)
+
+    def raster(self, free: np.ndarray, blocked: np.ndarray, caption: str) -> None:
+        self.free = free.copy()
+        self.blocked = blocked.copy()
+        self.add("raster", None, caption)
+
+    def add(self, stage: str, label: Optional[np.ndarray], caption: str, **extra) -> None:
+        self.frames.append(
+            PlaneFrame(stage, caption, None if label is None else label.copy(), extra)
+        )
+
+
 # --------------------------------------------------------------- raster tools
 
 
@@ -461,12 +506,16 @@ def partition(
     corridor_mm: float = 0.0,
     corridor_keep_mm: float = 0.0,
     bodies: Sequence[list] = (),
+    trace: Optional["PlaneTrace"] = None,
 ) -> Partition:
     """Partition ``entry["layer"]`` (see the module doc). ``terminals``: net ->
     :class:`Terminal` list (in the nets' order of ``entry["nets"]``); ``blocked``:
     foreign copper discs ``(centre, radius incl. clearance)``; ``blocked_polygons``:
     ``(rings, allowed nets)`` keepouts barring pours on the layer; ``fill_min_mm``:
-    the zones' minimum width (a tree passes only where a zone that wide fills)."""
+    the zones' minimum width (a tree passes only where a zone that wide fills); ``trace``:
+    an optional :class:`PlaneTrace` to record the stages into (off by default; a traced call
+    is never served from, or added to, the inputs cache -- it costs an extra recompute, never
+    a different result, see :class:`PlaneTrace`)."""
     payload = dict(
         entry=entry,
         width=width,
@@ -489,7 +538,7 @@ def partition(
         payload["corridor"] = [corridor_mm, corridor_keep_mm]
         payload["bodies"] = [list(map(list, r)) for r in bodies]
     key = _digest(payload)
-    if key in _CACHE:
+    if trace is None and key in _CACHE:
         return _CACHE[key]
     result = _partition(
         entry,
@@ -510,11 +559,13 @@ def partition(
         corridor_mm,
         corridor_keep_mm,
         bodies,
+        trace,
     )
     result.report["inputs_sha256"] = key
-    if len(_CACHE) > 8:
-        _CACHE.clear()
-    _CACHE[key] = result
+    if trace is None:
+        if len(_CACHE) > 8:
+            _CACHE.clear()
+        _CACHE[key] = result
     return result
 
 
@@ -537,6 +588,7 @@ def _partition(
     corridor_mm=0.0,
     corridor_keep_mm=0.0,
     bodies=(),
+    trace=None,
 ):
     from pnr.electrical import current_width
     from pnr.ir_drop import barrel_ohm, resistivity
@@ -569,6 +621,20 @@ def _partition(
     if entry.get("region"):
         # An outer-layer pour inside a region (a power stage's lands): only there.
         free &= g.polygon([entry["region"]])
+    if trace is not None:
+        trace.h_mm = h
+        # Display only: every net's keepout union (hard is only the disc-shaped blocks --
+        # mounting holes, foreign vias -- per_net_block also holds the polygon keepouts,
+        # which are per net in the algorithm but shown here as one combined "blocked").
+        shown_blocked = hard.copy()
+        for mask in per_net_block.values():
+            shown_blocked |= mask
+        trace.raster(
+            free,
+            shown_blocked,
+            "The layer rasterized: free copper inside the outline, less the edge clearance "
+            "and other nets' blocked copper",
+        )
     # 2. Terminals: via lands and whole pad lands (exact, pre-claimed), pad reach discs.
     label = np.full((g.ny, g.nx), -1, dtype=np.int64)  # claimed copper per rail
     cells_of = {}
@@ -583,6 +649,18 @@ def _partition(
             cells_of[n].append(disc)
     for k, n in enumerate(nets):
         label[via_land[n] & (label < 0)] = k
+    if trace is not None:
+        # Display only: every terminal disc (via lands and pad reach discs), not fed back.
+        term_label = label.copy()
+        for k, n in enumerate(nets):
+            for disc in cells_of[n]:
+                term_label[disc & (term_label < 0)] = k
+        trace.add(
+            "terminals",
+            term_label,
+            "Each rail's terminals: via lands (exact) and pad reach discs (where an "
+            "unplaced drop will land)",
+        )
     # 3. Order: current, terminal count, name (or as listed).
     if entry.get("order", "current") == "current":
         order = sorted(
@@ -644,6 +722,10 @@ def _partition(
         attempt = _connect(ctx, label, variant)
         if sum(map(len, attempt[2].values())) < sum(map(len, best[2].values())):
             best, best_order = attempt, variant
+    if trace is not None:
+        # A trace-only replay of the winning order (the search above tried others too, which
+        # would make confusing frames); its result is discarded, ``best`` is kept below.
+        _connect(ctx, label, best_order, trace=trace)
     label, spines, unreached, lengths, reached_of = best
     report["orders_tried"] = len(tried)
     report["connect_order"] = [nets[k] for k in best_order]
@@ -672,6 +754,10 @@ def _partition(
             protect = dilate(protect, gap_cells - 1e-9) if protect.any() else protect
             room = free & ~per_net_block[n] & ~near & ~protect
             label[dilate(spine, w / h / 2) & room & (label < 0)] = k
+        if trace is not None:
+            trace.add(
+                "widen", label, "Rail %s: widened to %.2f mm for its current and IR budget" % (n, w)
+            )
         missing = unreached[n]
         report["nets"][n] = dict(
             current_a=currents.get(n) or 0.0,
@@ -706,7 +792,7 @@ def _partition(
         free = free & ~lanes
         if walled:
             report["walled_in"] = walled
-    grown = _grow(label, free, per_net_block, nets, order)
+    grown = _grow(label, free, per_net_block, nets, order, trace=trace)
     # A grown cell keeps gap + h (centre to centre) from another rail's claimed copper
     # and gap / 2 + h from another rail's grown copper (which carves the other half).
     carves = []
@@ -720,9 +806,12 @@ def _partition(
         carves.append(mine & (claimed != k) & near)
     for carve in carves:
         grown[carve] = -1
+    if trace is not None:
+        trace.add("carve", grown, "Carving back the grown copper to keep the split gap")
     # 6. Polygons, connectivity and the narrowest width along each trunk.
     regions = []
     shapes = []
+    neck_rows = []
     occupied = grown >= 0
     for k, n in enumerate(nets):
         mine = grown == k
@@ -760,6 +849,8 @@ def _partition(
         narrowest = [row["width_mm"] for row in ways if row["width_mm"] is not None]
         if narrowest:
             info["way_min_mm"] = min(narrowest)
+        if trace is not None:
+            neck_rows += [dict(row, net=n) for row in ways]
         # One raster cell of tolerance (a strip of 2m cells reads (2m - 1) h wide).
         necked = [
             row
@@ -804,6 +895,18 @@ def _partition(
             holes = [lp for lp in loops if _area(lp) < 0]
             for lp in outer:
                 shapes.append((abs(_area(lp)), n, lp, holes if len(outer) == 1 else []))
+    if trace is not None:
+        trace.add(
+            "polygons",
+            grown,
+            "One connected piece per rail (holes kept for free copper or another rail)",
+        )
+        trace.add(
+            "necks",
+            grown,
+            "Widest path from each terminal to its rail's root: the narrowest copper on it",
+            ways=neck_rows,
+        )
     if occupied.any():
         report["gap_min_mm"] = _gap_min(grown, len(nets), h)
     shapes.sort(key=lambda s: (-s[0], s[1]))
@@ -835,10 +938,12 @@ def _partition(
     return Partition(layer, regions, report, cores, entry.get("connect"))
 
 
-def _connect(ctx, label0, order):
+def _connect(ctx, label0, order, trace=None):
     """Phase 1: every rail's Steiner tree, claimed at its minimum width (see
     :func:`_partition`). Returns (labels, spines, unreached terminals, tree lengths in
-    cells, reached counts)."""
+    cells, reached counts). ``trace``: recorded with one ``trunk`` frame per rail, in
+    ``order`` (see :class:`PlaneTrace`); pass it only on the call whose result is kept (a
+    caller exploring alternate orders should not trace the exploratory attempts)."""
     g = ctx["g"]
     nets = ctx["nets"]
     gap_cells = ctx["gap_cells"]
@@ -867,6 +972,12 @@ def _connect(ctx, label0, order):
                 for t in range(len(ctx["terminals"][n]))
                 if t not in set(reached)
             ]
+            if trace is not None:
+                trace.add(
+                    "trunk",
+                    label,
+                    "Rail %s: each terminal claims its own land (poured as pieces)" % n,
+                )
             continue
         # The pad discs of rails still to come keep their landing ground (with the
         # gap): a trunk may cross one on its centre line, never widen there.
@@ -947,6 +1058,13 @@ def _connect(ctx, label0, order):
         unreached[n] = [
             ctx["terminals"][n][t] for t in range(len(ctx["terminals"][n])) if t not in set(reached)
         ]
+        if trace is not None:
+            trace.add(
+                "trunk",
+                label,
+                "Rail %s: minimum-width (%.2f mm) Steiner tree to its terminals"
+                % (n, ctx["min_w"]),
+            )
     return label, spines, unreached, lengths, reached_of
 
 
@@ -1185,9 +1303,10 @@ def _root(net, terms, flat_terms, sources):
     return min(usable, key=lambda k: (math.dist(terms[k].at, (cx, cy)), terms[k].name))
 
 
-def _grow(label, free, per_net_block, nets, order):
+def _grow(label, free, per_net_block, nets, order, trace=None):
     """Breadth-first competition of the claimed territories into the free cells
-    (4-neighbour, rails in ``order`` within a ring)."""
+    (4-neighbour, rails in ``order`` within a ring). ``trace``: a handful of snapshots as the
+    competition proceeds, plus the final state (see :class:`PlaneTrace`)."""
     ny, nx = label.shape
     out = label.copy()
     flat = out.ravel()
@@ -1196,6 +1315,10 @@ def _grow(label, free, per_net_block, nets, order):
     for k in order:
         for c in np.flatnonzero(flat == k).tolist():
             q.append(c)
+    SNAPSHOTS = 6
+    assigned = int((flat >= 0).sum())
+    to_grow = max(1, int(free.sum()) - assigned)
+    next_mark = assigned + max(1, to_grow // SNAPSHOTS) if trace is not None else None
     while q:
         c = q.popleft()
         k = flat[c]
@@ -1209,6 +1332,13 @@ def _grow(label, free, per_net_block, nets, order):
             if good and flat[nb] < 0 and ok[k][nb]:
                 flat[nb] = k
                 q.append(nb)
+                if trace is not None:
+                    assigned += 1
+                    if assigned >= next_mark:
+                        trace.add("grow", out, "Competitive growth into the free area")
+                        next_mark += max(1, to_grow // SNAPSHOTS)
+    if trace is not None:
+        trace.add("grow", out, "Competitive growth into the free area (done)")
     return out
 
 

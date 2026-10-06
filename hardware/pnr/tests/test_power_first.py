@@ -468,10 +468,14 @@ class Placement(unittest.TestCase):
 
     def test_retry_when_a_hot_loop_grows(self):
         # J1 barely moves when legalization opens one hot loop (the trunks dominate
-        # it), so the per-loop ratio alone must trigger the runner-up retry.
+        # it), so the per-loop ratio alone must trigger the runner-up retry. The retry
+        # ratio is raised past the J1 growth the platform's float order gives (1.26x on
+        # linux-arm64), so only the loop ratio can trigger it.
         import pnr.place.power_first as pf
 
-        with mock.patch.object(pf, "loop_ratio", side_effect=[2.0, 1.0]):
+        with mock.patch.object(pf, "loop_ratio", side_effect=[20.0, 1.0]), mock.patch.object(
+            pf, "RETRY_RATIO", 10.0
+        ):
             (placed, report), _ = self.place("pd", True, iters=60)
         info = placed.power_first
         self.assertTrue(info["retried"])

@@ -72,6 +72,57 @@ behind it and closes it on a tap outside. Every toggle is a real `<button>`
 (keyboard-activatable, `aria-pressed` reflects state), and the page keeps no horizontal scroll down
 to 360px wide.
 
+## Rendering and performance
+
+The board canvas (`static/app.js`) used to redraw everything, every frame, in immediate mode: each
+via was two `beginPath`/`arc`/`fill` calls with a `fillStyle` change, forced to at least a 2px
+radius even when zoomed out past legibility, and both drawing and hover/click hit-testing scanned
+every via and track on the board linearly. On a real board with thousands of ground-stitching
+vias (the reported case) this made panning, pinching and zooming visibly laggy. Four changes fix
+it, in order of how much they matter:
+
+1. **A spatial grid** (`gridFor()`, one per geometry object, built lazily and cached by object
+   identity — nothing invalidates it by hand, a new geometry is simply a new object): uniform cells
+   in board mm, sized so each holds a handful of vias and tracks. `paintBoard()` and `boardHit()`
+   both use it — drawing culls to the cells the current viewport actually overlaps; hit-testing
+   checks only the cells near the query point. Both return exactly what a full linear scan would
+   have (same candidates, same priority order), just over far fewer items; this is the one checked
+   directly, not just measured, in `tests/e2e/viewer/test_viewer_perf.py`.
+2. **Via batching**: the via rings and holes in the culled, visible set are drawn as one `Path2D`
+   fill each (board-space coordinates, one `setTransform` per tier) instead of two `arc`/`fill`
+   calls and a `fillStyle` change per via. Tracks are culled by the same grid but still drawn one
+   at a time, since their stroke width and colour both vary per track (a diff view, a draft net) —
+   batching those would need bucketing by width too, judged not worth the added complexity once
+   culling and the via work below met the target.
+3. **Via level of detail**, by true on-screen diameter (`diameter * view.scale`, no artificial
+   minimum): ≥1.5px draws the normal ring and hole; 0.5–1.5px draws a plain dot at its true size
+   (a ring is not legible at that size anyway); below 0.5px, too small to resolve individually, one
+   representative dot stands in for every via in that grid cell — a cheap stand-in for a
+   pre-rendered texture tile that reuses the grid already built for culling. Hit-testing always
+   uses a via's true diameter regardless of which tier drew it, so a via that is just a cell fleck
+   on screen is exactly as clickable as it always was.
+4. **A gesture raster cache**: while a pan, pinch, wheel-zoom or rectangle drag is live, the board
+   canvas just blits an offscreen raster of the last full render (built once, at the view the
+   gesture started from, lazily — only the first fast frame of a gesture pays for it, not every
+   plain `render()`, e.g. the 1.2s live poll) with a scale+translate transform; the dynamic overlay
+   (selection, routing target, highlights, drag/annotation rectangles, cost dots) is still drawn
+   live on top every frame. A plain `render()` ~150ms after the gesture goes idle (or immediately
+   on release) restores full quality and marks the cache stale for next time. The cache is built at
+   a margin around the viewport (snapped so its backing store is an exact pixel multiple — no
+   sub-pixel resampling blur when nothing has actually moved yet) so a modest gesture never shows a
+   visible seam; a very large single pan can outrun the margin until the gesture settles.
+
+A fifth option, instanced WebGL vias, was in the original plan but turned out unnecessary: items
+1–4 alone already meet the <16ms p95 target during gestures at 1x CPU throttling (see the
+before/after table in the PR). Pads and other tracks were left without additional level-of-detail
+tiers for the same reason — their counts were never the bottleneck.
+
+Tests: `tests/e2e/viewer/test_viewer_perf.py` (manual, like its siblings — a real headless Chrome
+against a real viewer server and a synthetic dense board; skips without Chrome) checks that
+`boardHit()` matches a verbatim copy of the pre-grid linear scan at many points and across a dense
+sweep at a zoomed-out LoD tier, that the gesture fast path reproduces a full render pixel-for-pixel
+at each via LoD tier, and that panning does not rebuild the cache mid-gesture.
+
 ## The live directory
 
 | Path                             | Written by     | What                                                  |

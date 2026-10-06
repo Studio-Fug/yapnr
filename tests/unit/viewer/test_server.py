@@ -414,7 +414,9 @@ class SourceAgentHttpTest(unittest.TestCase):
                 st = call("/api/agent/status")[2]
                 self.assertEqual((st["available"], st["web"], st["notes"]), (True, True, True))
                 self.assertEqual(call("/api/notes")[2], dict(rev=0, schema=NOTES_SCHEMA, notes=[]))
-                self.assertEqual(call("/api/notes?since=0")[2], dict(rev=0, unchanged=True))
+                self.assertEqual(
+                    call("/api/notes?since=0")[2], dict(rev=0, schema=NOTES_SCHEMA, unchanged=True)
+                )
                 # writes: allowlisted Origin required (a missing one too), Host guard, user actor
                 # only
                 user = dict(

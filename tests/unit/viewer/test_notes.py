@@ -346,8 +346,10 @@ class StoreTest(Base):
         )
         c = s.create(dict(title="lane note", kind="question"), AGENT, provenance=dict(lane="nb6/x"))
         r = s.rev
-        self.assertEqual(json.loads(s.payload(r)), dict(rev=r, unchanged=True))
-        self.assertLess(len(s.payload(r)), 40)
+        self.assertEqual(
+            json.loads(s.payload(r)), dict(rev=r, schema=notes_store.SCHEMA, unchanged=True)
+        )
+        self.assertLess(len(s.payload(r)), 60)
         s.delete(c["id"], USER)
         s.comment(a["id"], "x", USER)
         d = json.loads(s.payload(r))

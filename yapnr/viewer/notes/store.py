@@ -814,8 +814,11 @@ class NotesStore:
         with self.tlock:
             self.refresh()
             if since == self.rev:
+                # schema is on this branch too (not just the full-payload one below): a client
+                # polling with `since` already at the current rev -- the common case once it has
+                # caught up -- otherwise never learns which notes schema it is talking to.
                 return json.dumps(
-                    dict(rev=self.rev, unchanged=True), separators=(",", ":")
+                    dict(rev=self.rev, schema=SCHEMA, unchanged=True), separators=(",", ":")
                 ).encode()
             if self._payload is None or self._payload[0] != self.rev:
                 self._payload = (

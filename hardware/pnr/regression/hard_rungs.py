@@ -1846,7 +1846,11 @@ def ufbga_rails(spec):
     checks = [c for c in spec["checks"] if not (c["kind"] == "plane" and c["net"] == "VCC")]
     for c in checks:
         if c["id"] == "fanout-plane-vias":
+            # Every candidate's plane vias, less a rail the route traced (its vias are
+            # then routing vias, judged as any signal's: the checker reads the routed
+            # rules' traced_rails).
             c["nets"] = ["GND"] + rails
+            c["allocated"] = True
     for net in rails:
         sink = {"U1": sorted(balls[net])}
         entry = dict(

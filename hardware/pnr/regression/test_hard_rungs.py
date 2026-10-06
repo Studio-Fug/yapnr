@@ -549,6 +549,9 @@ class HardRungContract(unittest.TestCase):
         (rail_check,) = [c for c in rails["checks"] if c["kind"] == "rail_zones"]
         self.assertTrue(rail_check["candidates"])
         self.assertNotIn("trace_nets", rail_check)
+        (vias,) = [c for c in rails["checks"] if c["id"] == "fanout-plane-vias"]
+        self.assertEqual(vias["nets"], ["GND", "VDD", "VDDA", "VBAT"])
+        self.assertTrue(vias["allocated"])
         (quality,) = [c for c in rails["checks"] if c["kind"] == "plane_quality"]
         self.assertEqual(quality["layer"], part["layer"])
         self.assertEqual(quality["candidates"], ["VDD", "VDDA", "VBAT"])

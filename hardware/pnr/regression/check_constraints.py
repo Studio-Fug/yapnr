@@ -499,12 +499,23 @@ def _ref_pads(b, ref):
     return out
 
 
+def traced_rails(b):
+    """The plane_partition candidates the route traced (pnr.rail_alloc): the routed
+    rules beside the board (``rules.json``, rewritten after routing) name them."""
+    path = Path(b.path).with_name("rules.json")
+    if not path.is_file():
+        return set()
+    return set(json.loads(path.read_text()).get("traced_rails") or ())
+
+
 def check_via_class(b, c):
     """Every via of ``nets`` inside ``ref``'s courtyard is ``diameter_mm``/``drill_mm``
     and, with ``site: interstitial``, sits at the centre of a cell of the part's ball
-    lattice (pitch per axis from its pads, in the footprint's own frame)."""
+    lattice (pitch per axis from its pads, in the footprint's own frame). With
+    ``allocated``, a candidate rail the route traced (:func:`traced_rails`) is an
+    ordinary signal there, its vias routing vias, and leaves ``nets``."""
     x0, y0, x1, y1 = b.courtyard(c["ref"])
-    nets = set(c["nets"])
+    nets = set(c["nets"]) - (traced_rails(b) if c.get("allocated") else set())
     fp = b.fps[c["ref"]]
     # The ball lattice in the footprint's own frame: pitch per axis, origin at a ball.
     local = [(mm(p.GetFPRelativePosition().x), mm(p.GetFPRelativePosition().y)) for p in fp.Pads()]
@@ -546,7 +557,12 @@ def check_via_class(b, c):
     return (
         count > 0 and not wrong and not off_site,
         dict(vias=count, wrong_size=wrong[:10], off_site=off_site[:10]),
-        dict(diameter_mm=c["diameter_mm"], drill_mm=c["drill_mm"], site=c.get("site")),
+        dict(
+            diameter_mm=c["diameter_mm"],
+            drill_mm=c["drill_mm"],
+            site=c.get("site"),
+            nets=sorted(nets),
+        ),
     )
 
 
@@ -750,7 +766,7 @@ def plane_layer_geometry(b, c):
         if v.GetClass() not in ("PCB_VIA", "VIA") or not v.IsOnLayer(lid):
             continue
         p = v.GetPosition()
-        terms.setdefault(v.GetNetname(), []).append((mm(p.x), mm(p.y), mm(v.GetWidth()) / 2))
+        terms.setdefault(v.GetNetname(), []).append((mm(p.x), mm(p.y), mm(v.GetWidth(lid)) / 2))
     for fp in board.GetFootprints():
         for pad in fp.Pads():
             if not pad.GetNetname() or not pad.IsOnLayer(lid):

@@ -41,6 +41,11 @@ jobs file).
     id = "cand-rank0"
     placement = "reva/candidates/rank0/placement.json"   # relative to the jobs file
 
+    [live]                                  # optional: the live viewer mirror (yapnr.exp.spec
+    enabled = true                          # live_errors), copied into campaign.toml verbatim
+    interval_s = 45
+    mode = "thin"
+
 Every seed task runs ``pre_steps(if any) + [["place"] + place_args, ["select"] + select_args,
 ["finish"]] + post_steps``; every candidate task runs ``pre_steps + [["finish", "--placement",
 "candidate.json"]] + post_steps`` (the candidate file is bundled as its own input). Each line's
@@ -106,7 +111,10 @@ TOP_KEYS = {
     "defaults",
     "seeds",
     "candidates",
+    "live",
 }
+LIVE_KEYS = {"enabled", "interval_s", "mode"}
+LIVE_MODES = {"thin", "full"}
 DEFAULT_KEYS = {
     "work_dir",
     "seed_from",
@@ -199,6 +207,20 @@ def check_jobs(doc: Mapping[str, Any]) -> List[str]:
     for i, entry in enumerate(candidates):
         if isinstance(entry, dict) and not isinstance(entry.get("placement"), str):
             errors.append("candidates[%d]: placement names a placement.json file" % i)
+    if "live" in doc:
+        live = doc["live"]
+        if not isinstance(live, dict):
+            errors.append("live is a table {enabled, interval_s, mode}")
+        else:
+            errors += ["live: unknown key %r" % k for k in sorted(set(live) - LIVE_KEYS)]
+            if "enabled" in live and not isinstance(live["enabled"], bool):
+                errors.append("live.enabled is a boolean")
+            if "interval_s" in live:
+                v = live["interval_s"]
+                if isinstance(v, bool) or not isinstance(v, int) or v < 10:
+                    errors.append("live.interval_s is a whole number of seconds, at least 10")
+            if "mode" in live and live["mode"] not in LIVE_MODES:
+                errors.append("live.mode must be one of %s" % ", ".join(sorted(LIVE_MODES)))
     return errors
 
 
@@ -296,6 +318,15 @@ def campaign_toml(doc: Mapping[str, Any]) -> str:
         "[config]",
         'stage_plan = "stage.jsonl"',
     ]
+    live = doc.get("live")
+    if live:
+        lines += ["", "[live]"]
+        if "enabled" in live:
+            lines.append("enabled = %s" % json.dumps(live["enabled"]))
+        if "interval_s" in live:
+            lines.append("interval_s = %d" % live["interval_s"])
+        if "mode" in live:
+            lines.append("mode = %s" % json.dumps(live["mode"]))
     return "\n".join(lines) + "\n"
 
 

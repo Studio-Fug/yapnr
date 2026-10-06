@@ -1,0 +1,57 @@
+# radar60 Rev A: stage 3c consolidation smoke campaign (2026-10-05) -- 4 seeds + the best
+# existing placement re-run, to show the CONSOLIDATED flow (power-stage fixed blocks + macro
+# v2) runs end to end on GCP after claude/radar60-3d. Not a search: see explore_jobs.toml for
+# the real (12-seed) exploration wave, which this file otherwise matches field for field.
+# Seeds failing at legalization is an expected outcome here (the legalizer fix is a separate
+# track, stage3c/plan.md); what this proves is that fixblocks + the v2 macro + --library reach
+# every step without crashing.
+#
+#   python3 tools/exp/pnr_explore_plan.py examples/radar60/board/explore_jobs_smoke3d.toml \
+#       --repo . --out <dir>
+#   yapnr exp plan <dir>/campaign.toml --backend gcp-batch
+#
+schema = "yapnr-pnr-explore-v1"
+name = "radar60-smoke3d"
+driver = "examples/radar60/board/integrate.py"
+paths = ["hardware", "yapnr", "examples/radar60", "tools/exp"]
+image = "edge"
+
+[live]
+enabled = true
+interval_s = 45
+mode = "thin"
+
+[defaults]
+cpus = 2
+memory_gb = 4
+disk_gb = 8
+max_wall_s = 1800
+work_dir = "work"
+seed_from = "reva/prepared"
+common_args = ["--work", "{work}", "--out", "{work}/board", "--engine", "{cwd}/src", "--python", "${PYTHON}", "--library", "{work}/power-blocks-library.json"]
+post_steps = [["block"], ["route"], ["check"]]
+collect = ["work/route/candidate.kicad_pcb", "work/board/measure.json", "work/route-diag.json"]
+embed = [["measure", "work/board/measure.json"], ["route_diag", "work/route-diag.json"]]
+
+[[seeds]]
+id = "s0"
+place_args = ["--seed", "0", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s1"
+place_args = ["--seed", "1", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s2"
+place_args = ["--seed", "2", "--n0", "8", "--procs", "2"]
+
+[[seeds]]
+id = "s3"
+place_args = ["--seed", "3", "--n0", "8", "--procs", "2"]
+
+[[candidates]]
+# radar60-3c's own real result (stage3b-rf/freeze.md, arm A), re-run against the consolidated
+# inputs (v2 macro, power-stage blocks fixed first): predates both, so a failure here is a real
+# finding (old part positions colliding with the new fixed sites or RF region), not noise.
+id = "cand-arm-a"
+placement = "reva/placement.json"

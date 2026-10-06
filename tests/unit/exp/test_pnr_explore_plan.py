@@ -47,6 +47,11 @@ driver = "board/driver.py"
 paths = ["board"]
 image = "edge"
 
+[live]
+enabled = true
+interval_s = 45
+mode = "thin"
+
 [defaults]
 cpus = 1
 memory_gb = 2
@@ -119,6 +124,19 @@ class CheckJobsTest(unittest.TestCase):
         }
         errors = pnr_explore_plan.check_jobs(doc)
         self.assertTrue(any("repeated" in e for e in errors))
+
+    def test_rejects_a_bad_live_table(self):
+        doc = {
+            "schema": "yapnr-pnr-explore-v1",
+            "name": "x",
+            "driver": "d.py",
+            "paths": ["a"],
+            "seeds": [{"id": "s0"}],
+            "live": {"enabled": True, "interval_s": 1, "mode": "chunky"},
+        }
+        errors = pnr_explore_plan.check_jobs(doc)
+        self.assertTrue(any("interval_s" in e for e in errors))
+        self.assertTrue(any("mode" in e for e in errors))
 
 
 class GenerateTest(unittest.TestCase):
@@ -211,6 +229,7 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(spec.campaign_errors(campaign), [])
         self.assertEqual(campaign["kind"], "mc-eval")
         self.assertEqual(campaign["source"], "none")
+        self.assertEqual(campaign["live"], {"enabled": True, "interval_s": 45, "mode": "thin"})
         kind = kinds.get("mc-eval")
         self.assertEqual(kind.check(campaign), [])
         ctx = kinds.Context(

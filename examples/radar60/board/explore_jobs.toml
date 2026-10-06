@@ -1,11 +1,31 @@
 # radar60 Rev A: N placement starts explored on GCP as one yapnr exp campaign
 # (tools/exp/pnr_explore_plan.py, docs/cloud-experiments.md "Any command as a task").
 #
-# `source` (needs the atopile build, which a Batch VM cannot fetch) and `prepare` are run once,
-# locally, into `seed_from` below; every task resumes from that snapshot with its own seed, so
-# only `place`/`select`/`finish`/`route`/`check` run in the cloud. No power-stage library here
-# (`fixblocks`/`block` steps), matching radar60-3c's Wave 1-3 flow (stage3c/iterate.md); a wave
-# that needs the U2/U5 fixed blocks lists them under `pre_steps`/`post_steps` with `--library`.
+# `source`, `fixblocks` (the power-stage library's two blocks posed and fixed in situ) and
+# `prepare` are run once, locally, into `seed_from` below, in that order -- `prepare`'s
+# fanout/hold_out must see the fixed blocks' copper, so it cannot run before `fixblocks`
+# (integrate.py's module docstring). Every task resumes from that snapshot with its own seed,
+# so only `place`/`select`/`finish`/`block`/`route`/`check` run in the cloud. `--library`
+# (power_block.py merge's library.json, copied into the snapshot so `{work}/...` finds it) is
+# shared by every step through `common_args`: `place` places the two blocks as rigid macros and
+# expands them, `block` (a post_step, after `finish`) draws the chosen layouts' routed copper
+# and outer pours into the finished board as fixed groups before `route`/`check` run.
+# (Stage 3c consolidation, 2026-10-05: `radar60-3c-power`'s blocks merged onto this flow; the
+# pre-power-block wave this comment used to describe is `stage3c/iterate.md`'s Wave 1-3.)
+#
+#   python3 examples/radar60/board/integrate.py source --work reva/prepared --out /tmp/out \
+#       --ato-board <rev-a.kicad_pcb> --engine $PWD --python <numeric-python>
+#   python3 examples/radar60/board/power_block.py synth --work reva/prepared \
+#       --out /tmp/pwr-pmic --engine $PWD --block-anchor pmic --python <numeric-python>
+#   python3 examples/radar60/board/power_block.py synth --work reva/prepared \
+#       --out /tmp/pwr-efuse --engine $PWD --block-anchor efuse --python <numeric-python>
+#   python3 examples/radar60/board/power_block.py merge \
+#       --libs /tmp/pwr-pmic/library.json /tmp/pwr-efuse/library.json \
+#       --out reva/prepared/power-blocks-library.json --engine $PWD
+#   python3 examples/radar60/board/integrate.py fixblocks --work reva/prepared --out /tmp/out \
+#       --library reva/prepared/power-blocks-library.json --engine $PWD --python <numeric-python>
+#   python3 examples/radar60/board/integrate.py prepare --work reva/prepared --out /tmp/out \
+#       --engine $PWD --python <numeric-python>
 #
 #   python3 tools/exp/pnr_explore_plan.py examples/radar60/board/explore_jobs.toml \
 #       --repo . --out <dir>
@@ -17,15 +37,25 @@ driver = "examples/radar60/board/integrate.py"
 paths = ["hardware", "yapnr", "examples/radar60", "tools/exp"]
 image = "edge"
 
+# Owner directive (2026-10-05): every GCP campaign submitted from here on runs with the live
+# viewer mirror on, so the owner can watch (yapnr PR #60, yapnr.exp.live). `mode = "thin"` drops
+# the per-net maze events (just placement/route milestones); `live-watch.sh` mirrors and serves
+# the viewer locally once the plan is submitted.
+[live]
+enabled = true
+interval_s = 45
+mode = "thin"
+
 [defaults]
 cpus = 2
 memory_gb = 4
 disk_gb = 8
 max_wall_s = 1800
 work_dir = "work"
-# A local `source` + `prepare` pass (see the module docstring above); not committed -- run it
-# once per inputs change and point this at the result (examples/radar60/board/reva/prepared by
-# convention, matching integrate.py's own --out default).
+# A local `source` + `fixblocks` + `prepare` pass (see the module docstring above), with
+# power-blocks-library.json copied in beside it; not committed -- run it once per inputs change
+# and point this at the result (examples/radar60/board/reva/prepared by convention, matching
+# integrate.py's own --out default).
 seed_from = "reva/prepared"
 # integrate.py runs each step with its subprocess cwd pinned to --engine, so --work/--out/
 # --engine must all be absolute (tools/exp/pnr_explore_job.py's docstring, "found the hard
@@ -33,8 +63,11 @@ seed_from = "reva/prepared"
 # cwd and silently fails to import yapnr.fab.capability, among others). {work}/{cwd} are
 # pnr_explore_job.py's own substitutions. The driver's --out (where the placed/routed board
 # goes) is nested under --work so "work/..." below still finds it from this process's own cwd.
-common_args = ["--work", "{work}", "--out", "{work}/board", "--engine", "{cwd}/src", "--python", "${PYTHON}"]
-post_steps = [["route"], ["check"]]
+# --library: power_block.py merge's library.json, carried in `seed_from` beside source.kicad_pcb
+# (harmless on steps that ignore it; fixblocks already consumed it locally, --library here is
+# for `place` and `block`).
+common_args = ["--work", "{work}", "--out", "{work}/board", "--engine", "{cwd}/src", "--python", "${PYTHON}", "--library", "{work}/power-blocks-library.json"]
+post_steps = [["block"], ["route"], ["check"]]
 collect = ["work/route/candidate.kicad_pcb", "work/board/measure.json", "work/route-diag.json"]
 embed = [["measure", "work/board/measure.json"], ["route_diag", "work/route-diag.json"]]
 
@@ -95,6 +128,9 @@ place_args = ["--seed", "11", "--n0", "8", "--procs", "2"]
 [[candidates]]
 # radar60-3c's own real result (stage3b-rf/freeze.md, arm A): a route+check run that reaches
 # every post_step, as a comparison point against the four (currently all-fail-to-legalize)
-# seeds above -- the committed winner of an earlier, larger (n0=24) placement search.
+# seeds above -- the committed winner of an earlier, larger (n0=24) placement search. Predates
+# the power-stage blocks and the v2 macro (stage 3c consolidation, 2026-10-05): its part
+# positions may now collide with the fixed blocks' sites or the moved RF region, so a failure
+# here is a real audit/DRC finding, not a repeat of the seeds' expected outcome class.
 id = "cand-arm-a"
 placement = "reva/placement.json"

@@ -406,6 +406,83 @@ class LegalizerTest(unittest.TestCase):
                 self.assertAlmostEqual(((c.pos[1] + sy) / (g / 2)) % 1.0, 0.0, places=6)
 
 
+class GPChannelInflationTest(unittest.TestCase):
+    """``GP`` reserves (part of) the escape-channel room the legalizer's push
+    otherwise opens afterwards (block-level motion fix, docs/design/compact-placement.md
+    section 12): :func:`pnr.place.compact.channel_margin` /
+    :func:`pnr.place.compact.gp_channel_inflation`, and that ``placer.place`` actually
+    feeds the result into global placement's ``inflation`` floor."""
+
+    def _channel_board(self):
+        from pnr.graph import Net
+
+        # BUSY: 7 externally-connected signal pads on its east edge, so every face
+        # needs an escape channel for several nets at once. QUIET's two pads are on
+        # nets that reach nothing else, so it needs no channel room. SINK is just the
+        # far end of BUSY's nets.
+        busy = part(
+            "BUSY",
+            (2.0, 2.0),
+            pos=(5.0, 5.0),
+            pads=[Pad(str(i), "net%d" % i, (1.0, -0.6 + 0.2 * i), (0.3, 0.15)) for i in range(7)],
+        )
+        sink = part(
+            "SINK",
+            (1.0, 1.0),
+            pos=(15.0, 5.0),
+            pads=[Pad(str(i), "net%d" % i, (0.0, 0.0), (0.3, 0.3)) for i in range(7)],
+        )
+        quiet = part("QUIET", pos=(5.0, 2.0))
+        nets = [Net("net%d" % i, i, [("BUSY", str(i)), ("SINK", str(i))]) for i in range(7)]
+        return board([busy, sink, quiet], nets=nets)
+
+    def test_channel_margin_only_for_externally_connected_faces(self):
+        from pnr.place import compact
+        from pnr.place.channels import ChannelModel
+
+        g = self._channel_board()
+        channels = ChannelModel(g, {})
+        busy, sink, quiet = (g.component(r) for r in ("BUSY", "SINK", "QUIET"))
+        self.assertGreater(compact.channel_margin(busy, channels), 0.0)
+        self.assertEqual(compact.channel_margin(quiet, channels), 0.0)
+
+    def test_gp_channel_inflation_floors_the_busy_part_only(self):
+        from pnr.place import compact
+        from pnr.place.channels import ChannelModel
+
+        g = self._channel_board()
+        channels = ChannelModel(g, {})
+        infl = compact.gp_channel_inflation(g, channels)
+        self.assertIn("BUSY", infl)
+        self.assertGreater(infl["BUSY"], 1.0)
+        self.assertLessEqual(infl["BUSY"], compact.GP_CHANNEL_INFLATION_CAP)
+        self.assertNotIn("QUIET", infl)
+
+    def test_placer_feeds_gp_channel_inflation_into_global_place(self):
+        """``place()`` actually computes and passes a non-trivial ``inflation`` floor
+        to ``global_place`` under ``PNR_COMPACT`` GP; with GP off, it does not."""
+        from pnr.place import placer
+
+        g = self._channel_board()
+        cc = compiled(20.0, 10.0)
+        seen = {}
+        real = placer.global_place
+
+        def spy(*args, **kwargs):
+            seen["inflation"] = dict(kwargs.get("inflation") or {})
+            return real(*args, iters=5, **{k: v for k, v in kwargs.items() if k != "iters"})
+
+        with flags(**ON), mock.patch.object(placer, "global_place", side_effect=spy):
+            placer.place(g, cc, iters=5)
+        self.assertIn("BUSY", seen["inflation"])
+        self.assertGreater(seen["inflation"]["BUSY"], 1.0)
+
+        seen.clear()
+        with flags(), mock.patch.object(placer, "global_place", side_effect=spy):
+            placer.place(g, cc, iters=5)
+        self.assertEqual(seen["inflation"], {})
+
+
 class RankTest(unittest.TestCase):
     def test_route_rank_never_trades_completion(self):
         from pnr.place.initial_pool import route_rank

@@ -650,3 +650,48 @@ ran on `c4` (another region's Spot quota), the branch's on `c4d`; the extra seed
 `c4d`. A first version without the channels in the push moved fewer parts still (the core flat
 cases 0 to 43 %) but passed only 40 of 50 compact cells against 44 (the MCU lane 8 of 18), so the
 channels stay.
+
+### F. Block-level motion: reserving channel room in GP, not only in the push
+
+The above still left the block level moving almost as much as before the push's channel term
+(`10-quad-bank-56` block: 70 % of parts, 16.3 mm; `hier-twin-bank-32` block: 65 %, 16.3 mm — both
+close to, not below, `main`'s non-compact 65–67 % / 15.0 mm). Mechanically this is because `GP`'s
+density term (`w_spread * overlap`, §4) only ever reserves each part's own courtyard at the global
+spread floor; it has no notion of the escape-channel room classified nets will need between facing
+pads, so the legalizer's push still has to open that room itself, at legalization time, moving
+parts that were already legal by the courtyard-only measure.
+
+**Fix** (`pnr.place.compact.channel_margin`, `gp_channel_inflation`; `GP` only, additive): before
+`global_place` runs, a `pnr.place.channels.ChannelModel` is built on the incoming (pre-placement)
+graph — a rough proxy, since `GP` may still turn a part, but good enough for a density floor. For
+each part, `channel_margin` takes the largest single-face demand (mm) its own externally-connected
+pads ask for (half of it: the facing neighbour owes the other half), and `gp_channel_inflation`
+turns that into a multiplier on the part's own smaller courtyard half-extent, capped at 1.3 (the
+legalizer's own spread cap). The result merges (`max`) into the existing `inflation` floor
+`global_place` already took from the place-route loop's congestion feedback (§6) — the same
+mechanism, a different reason to ask for room, so GP's density term now reserves (part of) the
+channel room up front instead of leaving it entirely to the legalizer's push.
+
+**Measured** (Mac, seed 0, `--compact`, `pnr.place.motion`, `legalize-motion/table-final.md`):
+
+| Stage                     | `main` (no compact) | §12 push alone |       + this fix |
+| ------------------------- | ------------------: | -------------: | ---------------: |
+| `10-quad-bank-56` block   | 65 % moved, 15.0 mm |  70 %, 16.3 mm | **14 %, 3.2 mm** |
+| `10-quad-bank-56` top     |       33 %, 30.0 mm |   17 %, 7.7 mm |  **0 %, 0.3 mm** |
+| `hier-twin-bank-32` block |       67 %, 14.9 mm |  65 %, 16.3 mm | **18 %, 3.4 mm** |
+| `hier-twin-bank-32` top   |       19 %, 13.0 mm |   19 %, 1.2 mm |  **0 %, 0.2 mm** |
+
+Block-level motion now sits well below the non-compact baseline instead of at parity with it, and
+top-level motion is essentially zero. The same improvement holds across every ladder and showcase
+case (01–08, the edge-io pair, the line chaser): every one moves less, and by a wider margin, than
+`main` without compact (`legalize-motion/gp3-on.out`, `summary-main-off-main-on-v2-on-gp3-on.json`).
+All 13 cases still pass. The trade-off is a smaller compaction win on 11 of the 13 — copper is
+still below `main`'s non-compact figure by 2–27 % on 11 cases (06–08, the line chaser, both edge-io
+cases, both hierarchical cases), but 2 trivial cases (01, 02: two and three parts) end up a few mm
+_longer_ than uncompacted, since reserving channel room up front leaves GP less free to shrink an
+already-tiny board. Frame strips: `legalize-motion/strips/after-gp-*.png`.
+
+Not done: the early `ChannelModel` ignores the rotation `GP` may still pick (the final legalizer's
+own channel push, §12, still uses the correct post-placement one); `_place_line_groups` and
+power-first staged placement do not call this path (compact does not support power-first, and no
+rung currently needs the channel-aware GP floor inside a line group).

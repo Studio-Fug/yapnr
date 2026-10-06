@@ -297,6 +297,26 @@ def place(
         pad_edge=pad_edge,
         margins=tight.margins if tight else None,
     )
+    # PNR_COMPACT GP: reserve (part of) the escape-channel room the legalizer's
+    # push otherwise opens afterwards, so block-level legalization moves little
+    # too (pnr.place.compact.gp_channel_inflation) — a rough, pre-placement
+    # estimate from the incoming rotations, combined with the route-feedback
+    # ``inflation`` floor (independent spreading reasons, so take the larger).
+    gp_inflation = inflation
+    if compact.enabled("GP"):
+        from pnr.constraints import compile_routing_rules as _compile_routing_rules
+
+        from .channels import ChannelModel as _EarlyChannelModel
+
+        early_rules = channel_rules or _compile_routing_rules(
+            constraints, [n.name for n in graph.nets]
+        )
+        early_channels = _EarlyChannelModel(graph, early_rules, **_channel_kwargs(early_rules))
+        chan_inflation = compact.gp_channel_inflation(graph, early_channels)
+        if chan_inflation:
+            gp_inflation = dict(inflation or {})
+            for ref, infl in chan_inflation.items():
+                gp_inflation[ref] = max(infl, gp_inflation.get(ref, 1.0))
     placement = global_place(
         graph,
         constraints,
@@ -305,7 +325,7 @@ def place(
         seed=seed,
         iters=iters,
         orient=orient,
-        inflation=inflation,
+        inflation=gp_inflation,
         spread=spread,
         initial_positions=initial_positions,
         initial_rotations=initial_rotations,

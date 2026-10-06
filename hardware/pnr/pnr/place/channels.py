@@ -19,6 +19,8 @@ board's other signal layers (copper layers less plane layers): a net with a drop
 site off this channel (a through-hole pad, a pad that holds a via in pad under the
 fab's in-pad class, or a pad that also lies on another face of its part, whose via
 can go out that way) asks only its surface share, one over the signal-layer count;
+a block's port nets (``block_ports``) keep the surface price, since they must
+reach the block edge where the parent board routes them;
 any other net may also drop at that share, but then the channel pays one via row
 (the via diameter and a clearance) for all of them. The demand is the cheaper of the
 two, never more than the surface-only one, and unchanged on a single signal layer.
@@ -97,6 +99,8 @@ class ChannelModel:
                     bool(policy["plane"]),
                 )
         self.pairs = rules.get("diff_pairs", [])
+        # A block's nets that leave it (pnr.hier.blocks): no layer credit.
+        self.ports = set(rules.get("block_ports") or [])
         self.refs = {n.name: {ref for ref, _ in n.pins} for n in graph.nets}
         self.geometry = {}
 
@@ -183,7 +187,7 @@ class ChannelModel:
                         np.where(both, 2 * width + gap, np.where(either, width, 0)),
                         clearance,
                         either,
-                        pair["p"] in free and pair["n"] in free,
+                        self._drop(pair["p"], free) and self._drop(pair["n"], free),
                     )
                 )
         for net, present in remaining.items():
@@ -191,7 +195,9 @@ class ChannelModel:
             if plane:
                 plane_clearances.append(np.where(present, clearance, 0))
             else:
-                bundles.append((np.where(present, width, 0), clearance, present, net in free))
+                bundles.append(
+                    (np.where(present, width, 0), clearance, present, self._drop(net, free))
+                )
         # Conservative bundle spacing. Distinct ground pads share the plane,
         # but at least one via corridor is still needed on this surface.
         track_space = 0.0
@@ -209,22 +215,39 @@ class ChannelModel:
             via_space = np.maximum(via_space, np.where(clearance > 0, self.via + 2 * clearance, 0))
         return np.maximum(track_space, via_space)
 
+    def _drop(self, net, free):
+        """How ``net`` may leave the surface: True (a drop site off the channel),
+        False (a via in the channel) or None (a block port: it escapes to the block
+        edge on the surface, where the parent routes it)."""
+        if net in self.ports:
+            return None
+        return net in free
+
     def _layered(self, bundles, widths, count, clearance, surface):
         """Layer-aware track space: the cheaper of (a) the nets with a drop site off
         the channel at their surface share, the rest on the surface, and (b) every
-        net at its share plus one via row for the drops that need a via in the
-        channel; never more than ``surface`` (every net on the surface)."""
+        net but the block ports at its share plus one via row for the drops that
+        need a via in the channel; never more than ``surface`` (every net on the
+        surface)."""
         drop = 1.0 - self.share
-        free_w = sum(w for w, _, _, f in bundles if f)
-        free_n = sum(np.asarray(p, dtype=int) for _, _, p, f in bundles if f)
+
+        def total(kinds):
+            return (
+                sum(w for w, _, _, f in bundles if f in kinds),
+                sum(np.asarray(p, dtype=int) for _, _, p, f in bundles if f in kinds),
+            )
+
+        free_w, free_n = total((True,))
         own = widths - drop * free_w + (count - drop * free_n + 1) * clearance
         row = False
         for _, _, present, f in bundles:
-            if not f:
+            if f is False:
                 row = np.logical_or(row, present)
+        port_w, port_n = total((None,))
         shared = (
-            self.share * widths
-            + (self.share * count + 1) * clearance
+            widths
+            - drop * (widths - port_w)
+            + (count - drop * (count - port_n) + 1) * clearance
             + np.where(row, self.via + clearance, 0)
         )
         return np.minimum(surface, np.minimum(own, shared))

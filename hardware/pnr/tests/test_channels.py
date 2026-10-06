@@ -242,6 +242,15 @@ class LayeredChannelTests(unittest.TestCase):
         rules = dict(TWO_LAYERS, fab={"via_classes": {"in_pad": in_pad}})
         self.assertAlmostEqual(self.east(graph, rules), 0.4 + 3 * 0.15)
 
+    def test_block_ports_keep_the_surface_price(self):
+        # A block's nets that leave it must reach the block edge on the surface.
+        graph = example()
+        rules = dict(TWO_LAYERS, block_ports=["n0", "n1", "n2", "n3"])
+        self.assertAlmostEqual(self.east(graph, rules), 1.55)
+        rules = dict(TWO_LAYERS, block_ports=["n0"])
+        # n3 (corner) at half a track, n0 (port) and n1, n2 (mid-row) full.
+        self.assertAlmostEqual(self.east(graph, rules), 0.7 + (3.5 + 1) * 0.15)
+
     def test_more_signal_layers_ask_less_and_planes_are_unchanged(self):
         stack = {
             "layers": [{"name": "L%d" % i, "kind": "copper"} for i in range(6)],

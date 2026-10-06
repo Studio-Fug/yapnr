@@ -57,13 +57,14 @@ circle within `terminal_reach_mm` where its drop will land.
 ### 3. A minimum-width tree per rail
 
 Rails are taken in order -- by peak current, then terminal count, then name, unless the
-section lists an explicit order (here every rail but `1V0_BUCK` has no declared current, so the
-order falls back to terminal count and name; the engine also tries the order that starts with
-whichever rail is left with an unreached terminal, and keeps the attempt that leaves fewest
+section lists an explicit order (here no rail declares a current, so the order falls back to
+terminal count and name; the engine also tries the order that starts with whichever
+rail is left with an unreached terminal, and keeps the attempt that leaves fewest
 unreached). Each rail gets a **Steiner tree with the shortest-path heuristic**: Dijkstra grows
 the tree from its current cells to the nearest remaining terminal, on a cost grid where a cell
-costs more the narrower than `min_width_mm` the trunk would be there (from a distance
-transform) and inside another rail's terminal discs. `min_width_mm` is a hard limit outside the
+costs more the narrower than the rail's wanted width (`min_width_mm`, or its IPC-2221 width
+where that is larger) the trunk would be there (from a distance transform), and inside another
+rail's pad discs. `min_width_mm` is a hard limit outside the
 rail's own terminals: the tree passes only where a zone that wide still fits, keeping
 `split_gap_mm` of copper from every other rail and leaving the next rails' terminal discs free
 to land on. A terminal the hard width cannot reach is joined instead where a zone of the
@@ -75,14 +76,14 @@ board's minimum fab width still fills, and reported **necked**; one no path reac
 ### 4. Widen each trunk
 
 Each trunk then widens, the higher-current rail first, to the largest of `min_width_mm`, the
-IPC-2221 internal width for its current (at the layer's copper weight) and `R_sq · L /
-R_share` for its IR-drop budget (`L` the root's path to its farthest terminal, `R_share` the
-budget less two via barrels, at least a quarter of it; capped at 10 mm) -- wherever no other
-rail's copper or pad disc already is. In this example `1V0_BUCK` has no declared current but
-does have a 0.5 mOhm budget (`ir_drop:` section) over a 4.09 mm tree: that alone drives its
-width to the 10 mm cap, by far the widest rail here even though its _reported_ current is
-zero -- the IR-budget term does not need a current figure to size a trunk, only the budget and
-the tree's own length.
+IPC-2221 internal width for its current (at the layer's copper weight) and `R_sq · L / R_share`
+for its IR-drop budget (`L` the root's path to its farthest terminal, `R_share` the budget less
+two via barrels, at least a quarter of it; capped at 10 mm) -- wherever no other rail's copper
+or pad disc already is. In this example `1V0_BUCK` has no declared current but does have a 0.5
+mOhm budget (`ir_drop:` section) over a 4.09 mm root-to-farthest-terminal path: that alone asks
+for 16.4 mm and is held to the 10 mm cap, by far the widest rail here even though its
+_reported_ current is zero -- the IR-budget term does not need a current figure to size a
+trunk, only the budget and the tree's own path length.
 
 ![1V0_BUCK widened to the 10 mm cap for its IR budget; the switch nodes stay minimal][widen]
 
@@ -114,13 +115,16 @@ dropped (a rail poured as `pieces` keeps every piece that holds a terminal inste
 
 ![Each rail reduced to one connected piece, holes kept for free copper or another rail][polygons]
 
-Finally, a **widest-path (bottleneck) search** runs from the tree's root through the rail's
-own drawn copper to every terminal: the largest, over every path the copper allows, of the
-narrowest copper along that path. A terminal whose best path narrows under `min_width_mm` is
-**necked**; under the rail's IPC-2221 width it sets `ipc_neck`. None of the seven rails neck in this
-example (every `way_min_mm` clears both floors) -- the small circles in the still below are
-drawn at every terminal's neck point regardless, where the narrowest copper on its best path
-actually is, which for most of them is simply somewhere along an already-comfortable trunk.
+Finally, a **widest-path (bottleneck) search** runs from the tree's root through the rail's own
+drawn copper to every terminal: the largest, over every path the copper allows, of the
+narrowest copper along that path. A terminal whose best path narrows under `min_width_mm` (less
+one raster cell of tolerance: a strip of 2m cells reads (2m - 1) h wide) is **necked**; under
+the rail's IPC-2221 width it sets `ipc_neck`. None of the seven rails neck in this example
+(three switch nodes bottom out at 0.23 mm, inside that one-cell tolerance of the 0.25 mm
+minimum; no rail declares a current, so there is no IPC floor) -- the small circles in the
+still below are drawn at every terminal's neck point regardless, where the narrowest copper on
+its best path actually is, which for most of them is simply somewhere
+along an already-comfortable trunk.
 
 ![The finished pour, each terminal's widest-path neck point marked][necks]
 
@@ -253,7 +257,8 @@ The reviewed sources, as cited above and in the review itself:
    Math. Japonica 24:573-577, 1980.
 10. R. Adams, L. Bischof, "Seeded region growing," IEEE TPAMI 16(6), 1994.
     <https://doi.org/10.1109/34.295913>.
-11. M. Pollack, "The Maximum Capacity Through a Network," Operations Research 8(5):733-736, 1960. <https://doi.org/10.1287/opre.8.5.733>.
+11. M. Pollack, "The Maximum Capacity Through a Network," Operations Research 8(5):733-736, 1960.
+    <https://doi.org/10.1287/opre.8.5.733>.
 12. IPC-2221 curve-fit constants (k = 0.024 internal; b = 0.44; c = 0.725), as published by
     Advanced Circuits' trace-width calculator citing IPC-2221 (formerly IPC-D-275); the
     standard itself was not consulted, and IPC-2152 supersedes it for current capacity.

@@ -484,6 +484,10 @@ MCU_SIZE = (46, 34)  # the smallest outline where every probe seed legalized (40
 MCU_IO = ["VCC", "3V3", "GND", "SCL", "SDA", "TXD", "RXD", "A0"]
 # R1 and R2 (pad 1 the connector-side leg, pad 2 the MCU-side leg): their pads stay
 # parallel across both legs, whatever holds them side by side (check_pair_bridge).
+# max_pitch_mm also catches a placement that is merely parallel, not side by side
+# (owner review 2026-10-06): a generous bound above mcu_relative's hand-picked
+# 2.5 mm line_group pitch, wide of any pitch the inference itself would choose,
+# but well under "opposite ends of a 46x34 mm board".
 MCU_PAIR_BRIDGE_CHECK = dict(
     id="pair-bridge-r1-r2",
     kind="pair_bridge",
@@ -491,6 +495,7 @@ MCU_PAIR_BRIDGE_CHECK = dict(
     near_pad="1",
     far_pad="2",
     tol_mm=0.05,
+    max_pitch_mm=6.0,
     engine="line_group",
 )
 

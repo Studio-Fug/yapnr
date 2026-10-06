@@ -16,7 +16,8 @@ on F.Cu is on neither side).
 Check kinds: ``inside_board``, ``side``, ``fixed``, ``edge``, ``orientation``,
 ``keepout``, ``region``, ``proximity``, ``line``, ``pair_bridge`` (a diff pair's two
 series parts, such as a USB board's resistors, stay geometrically coupled across
-them), ``align``, ``plane``, ``microvia_span``, ``copper_digest``, ``no_copper``,
+them and, with ``max_pitch_mm``, side by side), ``align``, ``plane``,
+``microvia_span``, ``copper_digest``, ``no_copper``,
 and for area-array parts
 ``via_class`` (the size and site of a part's plane vias), ``escape`` (each listed ball's
 copper reaches a via or leaves the courtyard) and ``pad_distance`` (parts' pads near their
@@ -250,24 +251,37 @@ def check_pair_bridge(b, c):
     board, so a constant-width corridor could run straight through both -- the
     geometric precondition for ANY router to keep the pair's copper coupled across
     them, measured here from pad positions alone, not from how a particular tool
-    routed it."""
+    routed it. Parallel legs alone do not make the pair *adjacent* (two parts the
+    same distance apart anywhere on the board pass just as well); ``max_pitch_mm``,
+    where given, also bounds the near-pad-to-near-pad distance, the "side by side"
+    half of the owner's review (2026-10-06) that parallelism alone does not catch."""
     ref_a, ref_z = c["refs"]
     near = (b.pad_pos(ref_a, c["near_pad"]), b.pad_pos(ref_z, c["near_pad"]))
     far = (b.pad_pos(ref_a, c["far_pad"]), b.pad_pos(ref_z, c["far_pad"]))
     near_vec = (near[1][0] - near[0][0], near[1][1] - near[0][1])
     far_vec = (far[1][0] - far[0][0], far[1][1] - far[0][1])
     err = math.dist(near_vec, far_vec)
+    pitch = math.dist(*near)
     same_side = b.side(ref_a) == b.side(ref_z)
-    ok = err <= c.get("tol_mm", 0.05) + 1e-6 and same_side
+    max_pitch = c.get("max_pitch_mm")
+    ok = (
+        err <= c.get("tol_mm", 0.05) + 1e-6
+        and same_side
+        and (max_pitch is None or pitch <= max_pitch + 1e-6)
+    )
+    limit = dict(tol_mm=c.get("tol_mm", 0.05))
+    if max_pitch is not None:
+        limit["max_pitch_mm"] = max_pitch
     return (
         ok,
         dict(
             near_vec_mm=[round(v, 4) for v in near_vec],
             far_vec_mm=[round(v, 4) for v in far_vec],
             mismatch_mm=round(err, 4),
+            pitch_mm=round(pitch, 4),
             same_side=same_side,
         ),
-        dict(tol_mm=c.get("tol_mm", 0.05)),
+        limit,
     )
 
 

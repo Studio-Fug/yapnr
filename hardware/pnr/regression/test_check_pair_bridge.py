@@ -77,6 +77,52 @@ class PairBridgeCheck(unittest.TestCase):
         ok, _measured, _expected = self.check(r2_offset=(0.02, 2.5), r2_rot=0.0)
         self.assertTrue(ok)
 
+    def test_without_max_pitch_a_distant_but_parallel_pair_still_passes(self):
+        # Parallel, matching legs are not by themselves "side by side": without
+        # max_pitch_mm, a pair translated far apart (but still a pure translation)
+        # is not caught -- the gap an owner review (2026-10-06) found.
+        ok, measured, _expected = self.check(r2_offset=(0.0, 15.0), r2_rot=0.0)
+        self.assertTrue(ok)
+        self.assertEqual(measured["mismatch_mm"], 0.0)
+        self.assertEqual(measured["pitch_mm"], 15.0)
+
+    def test_max_pitch_mm_catches_the_same_distant_pair(self):
+        spec = dict(
+            id="pair-bridge",
+            kind="pair_bridge",
+            refs=["R1", "R2"],
+            near_pad="1",
+            far_pad="2",
+            max_pitch_mm=6.0,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            from check_constraints import Board, check_pair_bridge
+
+            path = Path(tmp) / "b.kicad_pcb"
+            bridge_board(path, r2_offset=(0.0, 15.0), r2_rot=0.0)
+            ok, measured, expected = check_pair_bridge(Board(path), spec)
+        self.assertFalse(ok)
+        self.assertEqual(measured["pitch_mm"], 15.0)
+        self.assertEqual(expected["max_pitch_mm"], 6.0)
+
+    def test_max_pitch_mm_still_passes_a_pair_within_it(self):
+        spec = dict(
+            id="pair-bridge",
+            kind="pair_bridge",
+            refs=["R1", "R2"],
+            near_pad="1",
+            far_pad="2",
+            max_pitch_mm=6.0,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            from check_constraints import Board, check_pair_bridge
+
+            path = Path(tmp) / "b.kicad_pcb"
+            bridge_board(path, r2_offset=(0.0, 2.5), r2_rot=0.0)
+            ok, measured, _expected = check_pair_bridge(Board(path), spec)
+        self.assertTrue(ok)
+        self.assertEqual(measured["pitch_mm"], 2.5)
+
 
 if __name__ == "__main__":
     unittest.main()

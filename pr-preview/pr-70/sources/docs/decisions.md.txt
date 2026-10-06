@@ -1063,14 +1063,16 @@ Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`,
   one-default-configuration rule). `PNR_LEGALIZE_KEEP` is on by default, with or without compact
   placement, and `PNR_LEGALIZE_KEEP=0` restores the plain packer for A/B runs: a part or block legal
   at its global pose keeps it and its turn, a slight overlap (or a missing routing channel) is
-  resolved by an order-preserving push of the parts around it, and a mostly occluded part, or one
-  the push cannot fit, is relocated by the packer's cost. The push has a bounded reach (1.5 mm);
-  a part can also be relocated when its own overlap was slight but resolving it would need a push
-  past that reach (through a crowded neighbour, say), so "relocated" tracks what the push could
-  fit within its reach, not how badly the part first overlapped. `TURN` turns only the parts the
+  resolved by an order-preserving push of the parts around it (the overlap first, routing
+  channels only where they fit), a part the push cannot clear or whose slot is taken takes the
+  nearest free slot around its pose (2026-10-06, the owner's R6 report), and only a mostly
+  occluded part is relocated by the packer's cost. The push has a bounded reach (1.5 mm); a part
+  whose own overlap was slight but whose clearing would need a push past that reach (through a
+  crowded neighbour, say) is one of the nudged ones, so the motion record names each relocated
+  part's reason (severe, push infeasible, slot taken). `TURN` turns only the parts the
   legalizer moved. Every legalization records its motion (moved parts, displacement, topology
   kept) in the reports, the trace and the animation's end card. Measurements:
-  [compact placement, section 12](design/compact-placement.md).
+  [compact placement, section 13](design/compact-placement.md).
 
 Compact placement before ladder v2 makes it the default (2026-10-06,
 [design, section 12](design/compact-placement.md)):

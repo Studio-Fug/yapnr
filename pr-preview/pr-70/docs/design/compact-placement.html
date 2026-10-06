@@ -1199,19 +1199,29 @@ constraint graphs from the global poses (an overlapping pair separates along its
 penetration, a side-by-side pair keeps its order), solved as the weighted least-squares
 projection of the global centres (Dykstra, per axis), with the outline, fixed parts and the
 parts the push may not move (regions, aligns, edge bands, hard discs, hull macros) as bounds.
-A pair’s distance includes the escape channel the packer’s channel model asks between facing
-pad rows (the channel is part of the clearance), and a part short of one is pushed like a mild
-overlap. A cluster whose push goes beyond a part’s reach (1.5 mm or half its smaller side) gives
-up its most occluded part to relocation and is pushed again.</p></li>
+The physical overlap is cleared first: a cluster whose push goes beyond a part’s reach (1.5 mm
+or half its smaller side) gives up its most occluded mild part (<code class="docutils literal notranslate"><span class="pre">push_infeasible</span></code>) and is pushed
+again. Then the escape channel the packer’s channel model asks between facing pad rows is a soft
+goal: the cluster is pushed again with each pair’s distance including its channel, and that
+push is kept when it fits within every part’s reach; otherwise the overlap-only push stands. A
+channel never makes the push give up a part; a cluster with no overlap but a part short of a
+channel is pushed only when the whole channel fits.</p></li>
 <li><p><em>Anchors.</em> Held parts (hard groups, aligns, regions, edge bands, hard discs) are placed first as
 before; then every part that is not severe takes the free slot nearest its (pushed) pose within
-1.5 grid cells, at its global turn, without the channel or wirelength terms. Only a part whose
-slot is taken, and the severe ones, go through the packer’s full search (its cost, <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> and
-turns). <code class="docutils literal notranslate"><span class="pre">TURN</span></code> turns only the parts the legalizer moved. If the result leaves a part without a
-slot, the board is legalized again with the plain packer (<code class="docutils literal notranslate"><span class="pre">keep_fallback</span></code>).</p></li>
+1.5 grid cells, at its global turn, without the channel or wirelength terms. A part whose slot
+is taken (<code class="docutils literal notranslate"><span class="pre">slot_taken</span></code>) or that the push gave up (<code class="docutils literal notranslate"><span class="pre">push_infeasible</span></code>) then takes the nearest free
+slot in rings expanding from its global pose (radius 3, 6, 12, … grid cells; its global turn
+first at each ring, then its other turns), never the full search; a held part whose slot is
+taken keeps the packer’s own search, which carries its constraint’s costs (an exact align
+needs them). Only the severe parts go through the packer’s full search (its cost, <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> and
+turns). <code class="docutils literal notranslate"><span class="pre">TURN</span></code> turns only the parts the
+legalizer moved. If the result leaves a part without a slot, the board is legalized again with
+the plain packer (<code class="docutils literal notranslate"><span class="pre">keep_fallback</span></code>).</p></li>
 <li><p><em>Metric.</em> Every legalization records its motion: parts moved (beyond 0.4 mm or turned),
 displacement sum and maximum, turns, topology kept (the fraction of pairwise left/right and
-above/below relations of the global poses that the legal poses keep) and the triage counts. It
+above/below relations of the global poses that the legal poses keep), the triage counts and,
+per part that left its pose, the reason (<code class="docutils literal notranslate"><span class="pre">relocations</span></code>; <code class="docutils literal notranslate"><span class="pre">relocated_severe</span></code>,
+<code class="docutils literal notranslate"><span class="pre">relocated_push_infeasible</span></code>, <code class="docutils literal notranslate"><span class="pre">relocated_slot_taken</span></code>, <code class="docutils literal notranslate"><span class="pre">nudged</span></code>, <code class="docutils literal notranslate"><span class="pre">channel_unopened</span></code>). It
 is in the placement report, <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code> (<code class="docutils literal notranslate"><span class="pre">legal_motion</span></code>; <code class="docutils literal notranslate"><span class="pre">block</span></code> and <code class="docutils literal notranslate"><span class="pre">top</span></code> for the
 hierarchical driver), <code class="docutils literal notranslate"><span class="pre">ladder-results.json</span></code>, the trace’s <code class="docutils literal notranslate"><span class="pre">legal</span></code> events and the animation’s end
 card (“legalization moved …”).</p></li>
@@ -1303,6 +1313,76 @@ own channel push, §13, still uses the correct post-placement one); <code class=
 power-first staged placement do not call this path (compact does not support power-first, and no
 rung currently needs the channel-aware GP floor inside a line group).</p>
 </section>
+<section id="g-a-slight-overlap-is-nudged-never-re-placed-2026-10-06">
+<h3>G. A slight overlap is nudged, never re-placed (2026-10-06)<a class="headerlink" href="#g-a-slight-overlap-is-nudged-never-re-placed-2026-10-06" title="Link to this heading">¶</a></h3>
+<blockquote>
+<div><p>Owner report (2026-10-05): “In the block step, the global placement puts R6 overlapping with
+D4, and instead of nudging R6 a bit to the right, it re-places it north of the SOIC.” And: “if
+it’s only a very small overlap that caused the placement to be illegal, then it would be much
+smarter to push all of the other parts around it outwards to make room slightly rather than
+completely replacing it.”</p>
+</div></blockquote>
+<p><strong>Cause</strong> (<code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> seed 0, block <code class="docutils literal notranslate"><span class="pre">top.bank_a</span></code> trial <code class="docutils literal notranslate"><span class="pre">start-13</span></code>, 19.75 x 13.25 mm,
+reproduced from the legalizer’s input alone: <code class="docutils literal notranslate"><span class="pre">hardware/pnr/testdata/legalize_keep</span></code>). Four parts
+overlap slightly (R6 over D4 among them), none severe, and all 12 are short of an escape channel.
+The push asked for the overlap and the full channels at once; with every part channel-short that
+exceeded the 1.5 mm cascade bound, so the cluster gave up its most occluded part (R6), the push
+failed again and the cluster was left as it was (pushed 0). R6, its slot taken by D4, went to
+the packer’s full search with <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> and landed 10.7 mm away, north of the SOIC, with a quarter
+turn; R7 also left its slot with a half turn.</p>
+<p><strong>Fix</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.keep.resolve</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.place.legalize</span></code>): the courtyard overlap is cleared first
+and the channels are a soft goal (kept only where they fit; never a reason to give a part up); a
+part the push cannot clear (<code class="docutils literal notranslate"><span class="pre">push_infeasible</span></code>) or whose slot is taken (<code class="docutils literal notranslate"><span class="pre">slot_taken</span></code>) takes the
+nearest free slot in rings around its global pose, its global turn first, never the full search;
+only severe parts are relocated wholesale. The motion record names each relocated part’s reason.
+On <code class="docutils literal notranslate"><span class="pre">start-13</span></code> R6 now stays put (under 0.4 mm, same turn): D4 moves 0.47 mm, nothing else moves
+more than a snap, and nothing is relocated (was: max 10.7 mm, 2 relocated).</p>
+<p><strong>Measured</strong> (Mac, seed 0, <code class="docutils literal notranslate"><span class="pre">--compact</span></code>, every <code class="docutils literal notranslate"><span class="pre">legalize()</span></code> call; ladder, showcases and both
+hierarchical cases, 1448 part placements; <code class="docutils literal notranslate"><span class="pre">r6-fix</span></code> notes):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Legalizer</p></th>
+<th class="head text-right"><p>Parts moved</p></th>
+<th class="head text-right"><p>Sum (mm)</p></th>
+<th class="head text-right"><p>Max (mm)</p></th>
+<th class="head"><p>Relocated (severe / push / slot)</p></th>
+<th class="head text-right"><p>Moved &gt; 3 mm</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>before (<code class="docutils literal notranslate"><span class="pre">7ab6fbd5</span></code>)</p></td>
+<td class="text-right"><p>218</p></td>
+<td class="text-right"><p>463.1</p></td>
+<td class="text-right"><p>14.1</p></td>
+<td><p>86 (by the full search)</p></td>
+<td class="text-right"><p>24</p></td>
+</tr>
+<tr class="row-odd"><td><p>this fix</p></td>
+<td class="text-right"><p>132</p></td>
+<td class="text-right"><p>216.5</p></td>
+<td class="text-right"><p>10.1</p></td>
+<td><p>4 (0 / 4 / 0)</p></td>
+<td class="text-right"><p>2</p></td>
+</tr>
+<tr class="row-even"><td><p>channels opened as far as reach</p></td>
+<td class="text-right"><p>518</p></td>
+<td class="text-right"><p>580.0</p></td>
+<td class="text-right"><p>8.5</p></td>
+<td><p>4 (0 / 4 / 0)</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Block level: <code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> 106 parts moved and 220 mm before, 58 and 103 mm after (40
+relocated before, 2 after); <code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> 82 and 202 mm before, 50 and 73 mm after (34 and
+2). The two parts still moved far are one D4 in <code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> <code class="docutils literal notranslate"><span class="pre">start-14</span></code> (13.25 x 19.75
+mm), whose column above the SOIC is full: no push within reach clears it, so it takes the nearest
+free slot (10.1 mm, a quarter turn). All 13 cases pass in every arm. The third row opens each
+cluster’s channels by the largest fraction the reach allows: it moves 2.4 times as many parts,
+mostly legal ones, for no routing gain on these cases, so channels are all or nothing.</p>
+</section>
 </section>
 </section>
 
@@ -1387,6 +1467,7 @@ rung currently needs the channel-aware GP floor inside a line group).</p>
 <li><a class="reference internal" href="#the-09-mcu-usb-31-lane-pairs-and-relax-2026-10-06">12. The <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane: <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> and <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> (2026-10-06)</a></li>
 <li><a class="reference internal" href="#displacement-minimizing-legalization-pnr-legalize-keep-on-by-default">13. Displacement-minimizing legalization (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>, on by default)</a><ul>
 <li><a class="reference internal" href="#f-block-level-motion-reserving-channel-room-in-gp-not-only-in-the-push">F. Block-level motion: reserving channel room in GP, not only in the push</a></li>
+<li><a class="reference internal" href="#g-a-slight-overlap-is-nudged-never-re-placed-2026-10-06">G. A slight overlap is nudged, never re-placed (2026-10-06)</a></li>
 </ul>
 </li>
 </ul>

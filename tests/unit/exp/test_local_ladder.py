@@ -20,6 +20,7 @@ from pathlib import Path
 
 from tools.ci import ladder_summary
 from yapnr.exp import config, fetch
+from yapnr.exp import live as livemod
 from yapnr.exp import plan as planning
 from yapnr.exp import testing
 from yapnr.exp.backends import local
@@ -42,6 +43,8 @@ cpus = 1
 memory_gb = 3
 max_wall_s = 900
 """
+
+LIVE_CAMPAIGN = CAMPAIGN + '\n[live]\nenabled = true\ninterval_s = 10\nmode = "full"\n'
 
 
 @unittest.skipUnless(
@@ -71,6 +74,34 @@ class LocalLadderTest(unittest.TestCase):
             provenance = json.loads((run / "provenance.json").read_text())
             self.assertEqual(provenance["engine_revision"], plan.meta["source"]["commit"])
             self.assertEqual(provenance["shards"][0]["verdict"], "pass")
+
+    def test_one_cell_with_live_on_emits_and_mirrors_real_bundles(self):
+        """The real `run.py` ladder cell, through the real `yapnr exp` wrapper, with [live]
+        on: this is what the review's finding 1 broke (run.py stripped PNR_LIVE_DIR and
+        PNR_LIVE_CANDIDATE before the engine ever saw them, so a ladder campaign emitted no
+        live events and `yapnr exp live` mirrored zero bundles even though tasks passed)."""
+        repo = Path(os.environ["YAPNR_EXP_LADDER_REPO"])
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            cfg = config.load()
+            cfg.local.store = str(tmp / "store")
+            cfg.local.workers = 1
+            campaign = testing.write_campaign(tmp / "ladder-live.toml", LIVE_CAMPAIGN)
+            plan = planning.make_plan(campaign, "local", cfg, repo=repo, offline=True)
+            self.assertEqual(plan.meta["live"]["enabled"], True)
+            backend = local.Local()
+            backend.wait = True
+            done = backend.submit(plan, cfg, say=lambda s: None)
+            self.assertEqual(done[0].record["job"]["exit"], 0)
+            runs = backend.stores(plan, cfg).runs
+            bundles = livemod.list_bundles(runs, plan.id)
+            self.assertGreaterEqual(len(bundles), 1, "no live bundles: see review finding 1")
+            dest = tmp / "mirror"
+            found = livemod.mirror_once(runs, plan.id, dest, livemod.LiveState())
+            self.assertGreaterEqual(found["events"], 1)
+            events = [json.loads(p.read_text()) for p in (dest / "events").glob("*.json")]
+            for event in events:
+                self.assertEqual(livemod.event_errors(event), [])  # pnr-live-event-v1
 
 
 if __name__ == "__main__":

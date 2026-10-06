@@ -521,6 +521,16 @@ def make_plan(
         )
         caps = {"refusals": check.refusals, "confirm": check.confirm, "limit_usd": check.limit_usd}
 
+    live_raw = campaign.get("live")
+    live_cfg = (
+        {
+            "enabled": bool(live_raw.get("enabled", False)),
+            "interval_s": int(live_raw.get("interval_s", 45)),
+            "mode": live_raw.get("mode", "full"),
+        }
+        if live_raw is not None
+        else None
+    )
     wrapper = WRAPPER.read_bytes()
     task_lines = [spec.canonical_json(t).decode() for t in tasks]
     # Private campaigns: the opaque task ids and what they stand for stay in the local plan.
@@ -543,6 +553,7 @@ def make_plan(
             "repository": pinned.name if pinned else None,
             **({"runtime": dict(campaign["runtime"])} if "runtime" in campaign else {}),
         },
+        **({"live": live_cfg} if live_cfg is not None else {}),
         "bundles": sorted({i["bundle"] for t in tasks for i in t["inputs"]}),
         "task_count": len(tasks),
         "task_hashes": {t["id"]: spec.spec_hash(t) for t in tasks},

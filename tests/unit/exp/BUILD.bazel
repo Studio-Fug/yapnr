@@ -22,6 +22,14 @@ yapnr_py_tests(
         },
         # Runs wrapper processes, including a preemption and a retry.
         "test_wrapper": {"timeout": "moderate"},
+        # Runs a real wrapper process and a real viewer server process.
+        "test_live_e2e": {
+            "timeout": "moderate",
+            "deps": [
+                "//yapnr/viewer",
+                "//yapnr/viewer:testing",
+            ],
+        },
     },
     deps = [
         "//tools/ci:ci_lib",

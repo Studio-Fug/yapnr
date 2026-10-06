@@ -246,6 +246,28 @@ FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/cap
 COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
 
 
+# Ambient PNR_* switches an operator happens to have set must not silently change the suite's
+# configuration; PNR_LIVE_* is the one exception, since it is telemetry only (hardware/pnr/pnr/
+# live.py: no routing/placement decision reads it) and letting it through is what lets a task run
+# under `yapnr exp` with [live] on actually emit live-viewer events.
+LIVE_ENV_PREFIX = "PNR_LIVE_"
+AMBIENT_ENV_KEEP = ("PNR_LOCAL_PRESSURE", "PNR_JOINT_ACCESS")
+
+
+def scrubbed_suite_env(base_env, **overrides):
+    """``base_env`` plus ``overrides``, with ambient ``PNR_*`` switches stripped except
+    ``AMBIENT_ENV_KEEP`` and anything under ``LIVE_ENV_PREFIX``."""
+    env = dict(base_env, **overrides)
+    for key in list(env):
+        if (
+            key.startswith("PNR_")
+            and key not in AMBIENT_ENV_KEEP
+            and not key.startswith(LIVE_ENV_PREFIX)
+        ):
+            del env[key]
+    return env
+
+
 def compact_environment(compact, compact_off=(), shrink=False):
     """The PNR_COMPACT / PNR_SHRINK variables of ``--compact``, ``--compact-off`` and
     ``--shrink`` (set after the ambient PNR_* variables are stripped, so provenance
@@ -903,15 +925,11 @@ def main():
     except ValueError as error:
         raise SystemExit(str(error))
     # The frozen root carries yapnr.fab.capability and its profile data (fab_data_inputs).
-    env = dict(
+    env = scrubbed_suite_env(
         os.environ,
         PYTHONPATH=os.pathsep.join([str(freeze / "hardware/pnr"), str(freeze)]),
         PNR_LOCAL_PRESSURE="1",
     )
-    # Ambient experiment switches must not silently change the suite configuration.
-    for key in list(env):
-        if key.startswith("PNR_") and key not in ("PNR_LOCAL_PRESSURE", "PNR_JOINT_ACCESS"):
-            del env[key]
     if args.packed_maze and args.reference_maze:
         raise SystemExit("--packed-maze and --reference-maze are exclusive")
     if args.packed_maze:

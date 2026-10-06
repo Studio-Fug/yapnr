@@ -93,6 +93,29 @@ class TaskSpecTest(unittest.TestCase):
         self.assertEqual(image.runtime({}), (image.YAPNR_PYTHON, image.YAPNR_ENTRYPOINT))
         self.assertEqual(image.runtime({"runtime": ok}), (ok["python"], None))
 
+    def test_live_is_checked(self):
+        base = {"schema": spec.CAMPAIGN_SCHEMA, "kind": "ladder-cell"}
+        self.assertEqual(spec.campaign_errors(base), [])  # [live] is optional; off by default
+        self.assertEqual(
+            spec.campaign_errors(dict(base, live={"enabled": True, "mode": "thin"})), []
+        )
+        errors = spec.campaign_errors(
+            dict(base, live={"enabled": "yes", "interval_s": 5, "mode": "quick", "x": 1})
+        )
+        self.assertEqual(
+            sorted(errors),
+            [
+                "live.enabled is a boolean",
+                "live.interval_s is a whole number of seconds, at least 10",
+                "live.mode must be one of thin, full",
+                "unknown live key 'x'",
+            ],
+        )
+        self.assertEqual(
+            spec.campaign_errors(dict(base, live="x")),
+            ["live is a table {enabled, interval_s, mode}"],
+        )
+
     def test_placement_keys_are_checked_not_ignored(self):
         def errors(**placement):
             return spec.campaign_errors(

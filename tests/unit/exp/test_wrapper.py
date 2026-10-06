@@ -312,6 +312,7 @@ class RunCommandTest(unittest.TestCase):
             work = Path(tmp)
             task = testing.python_task("t/x", "pass")
             checkpoints = wrapper.Checkpoints(task, work, work / "ckpt")
+            live = wrapper.LiveUploader(None, work, work / "live")
             stop = wrapper.Stop()
             start = time.monotonic()
             code, timed_out, stopped, _ = wrapper.run_command(
@@ -322,6 +323,7 @@ class RunCommandTest(unittest.TestCase):
                 0,
                 stop,
                 checkpoints,
+                live,
                 work / "logs",
                 False,
             )

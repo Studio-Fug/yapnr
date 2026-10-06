@@ -19,6 +19,11 @@ bazel run //:viewer -- --root runs/example/live            # http://127.0.0.1:87
 bazel run //:viewer -- --config viewer.toml --port 8795
 ```
 
+For a campaign running on `gcp-batch` or `slurm` ([cloud-experiments.md](cloud-experiments.md)),
+there is no local directory to point at until `[live]` is on in the campaign file and
+`yapnr exp live <plan>` mirrors the tasks' telemetry back from the runs store; point `--root` at
+its `--out` directory instead (the "Live viewer mirror" section has the details).
+
 Relative paths are relative to the directory `bazel run` was started from. The server listens on
 `127.0.0.1` only, unless you add listeners (see [Network access](#network-access)).
 

@@ -5,6 +5,7 @@
     yapnr exp status PLAN [--json]
     yapnr exp logs PLAN [TASK] [--limit N]
     yapnr exp fetch PLAN [--full] [--into DIR] [--from DIR] [--allow-mixed]
+    yapnr exp live PLAN [--out DIR] [--interval S] [--once]
     yapnr exp cancel PLAN [--submission N] [--dry-run]
     yapnr exp doctor --backend B [--image-digest D]
     yapnr exp prices [--refresh] [--rerank] [--family F ...]
@@ -296,6 +297,30 @@ def _cmd_fetch(args) -> int:
     return 0
 
 
+def _cmd_live(args) -> int:
+    from yapnr.exp import backends
+    from yapnr.exp import live as livemod
+
+    cfg = _config(args)
+    plan = _find_plan(args.plan, cfg)
+    backend = backends.get(plan.backend)
+    runs = backend.stores(plan, cfg, _cloud(cfg, plan)).runs
+    out = (
+        Path(args.out).expanduser()
+        if args.out
+        else cfg.local.store_path(plan.private) / "live" / plan.id
+    )
+    interval = args.interval or (plan.meta.get("live") or {}).get("interval_s") or 20
+    print("mirroring %s -> %s" % (plan.id, out))
+    report = livemod.mirror(runs, plan.id, out, interval_s=interval, once=args.once, say=print)
+    print(
+        "polled %d time(s): %d bundle(s), %d event(s), %d board(s)"
+        % (report["polls"], report["bundles"], report["events"], report["boards"])
+    )
+    print("viewer    bazel run //:viewer -- --root %s" % out)
+    return 0
+
+
 def _cmd_cancel(args) -> int:
     from yapnr.exp import backends
     from yapnr.exp.backends.base import local_records
@@ -529,6 +554,17 @@ def register(commands: argparse._SubParsersAction) -> None:
     p.add_argument("--from", dest="source", help="a local copy of the store (Slurm sites)")
     p.add_argument("--allow-mixed", action="store_true", help="assemble mixed platforms")
     p.set_defaults(func=_run(_cmd_fetch))
+
+    p = sub.add_parser(
+        "live", help="mirror a running campaign's live-viewer bundles into a local live directory"
+    )
+    p.add_argument("plan", help=PLAN_HELP)
+    p.add_argument("--out", help="the local live directory (default: <store>/live/<campaign id>)")
+    p.add_argument(
+        "--interval", type=float, help="seconds between polls (default: [live].interval_s or 20)"
+    )
+    p.add_argument("--once", action="store_true", help="poll once and exit, instead of looping")
+    p.set_defaults(func=_run(_cmd_live))
 
     p = sub.add_parser("cancel", help="cancel the campaign's jobs")
     p.add_argument("plan", help=PLAN_HELP)

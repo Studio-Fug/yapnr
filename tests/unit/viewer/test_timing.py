@@ -152,6 +152,36 @@ class ObservedStageEventTests(unittest.TestCase):
         self.assertTrue(lane["running"])
         self.assertEqual(result["running_count"], 1)
 
+    def test_a_closed_stage_alone_does_not_mark_a_lane_finished(self):
+        # A plain ladder-cell campaign (pnr.route.feedback) has no engine-level "this lane is
+        # done" event yet -- only per-stage boundaries. A stage_end closing its own stage must
+        # not be read as the whole lane finishing (it is very much still running after routing:
+        # DRC, judge, artifacts).
+        self._seed("ladder/c/s0", [("global-placement", 0.7), ("route", 0.1)])
+        # _seed() always appends a candidate_complete; drop it to model today's real ladder-cell
+        # shape (no terminal event at all).
+        complete = sorted(self.events_dir.glob("*.json"))[-1]
+        complete.unlink()
+        result = timing.aggregate(Path(self.tmp))
+        lane = next(x for x in result["timeline"] if x["candidate"] == "ladder/c/s0")
+        self.assertTrue(lane["running"])
+
+    def test_a_closed_run_task_timing_span_does_mark_a_lane_finished(self):
+        self._write_task_timing("ladder/d/s0", "run", seconds=42.0)
+        result = timing.aggregate(Path(self.tmp))
+        lane = next(x for x in result["timeline"] if x["candidate"] == "ladder/d/s0")
+        self.assertFalse(lane["running"])
+
+    def _write_task_timing(self, candidate, stage, seconds):
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=3000.0,
+            kind="task_timing",
+            candidate=candidate,
+            data=dict(stage=stage, seconds=seconds),
+        )
+
     def test_slowest_lanes_sorted_descending(self):
         self._seed("ladder/a/s0", [("route", 1.0)])
         self._seed("ladder/a/s1", [("route", 9.0)])

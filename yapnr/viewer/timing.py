@@ -265,8 +265,16 @@ def aggregate(root: Path, scope: str = "") -> dict:
             any_observed = True
         elif spans:
             any_estimated = True
-        terminal_kinds = {"candidate_complete", "stage_end", "task_timing"}
-        running = not any(e["kind"] in terminal_kinds for e in lane_events)
+        # A bare stage_end only closes one stage, not the lane: a plain ladder-cell campaign has
+        # no engine-level completion event at all yet (unlike full_iteration's candidate_complete;
+        # a ladder runner terminal event is tracked separately), so the only other real signal is
+        # a GCP task's own "run" span closing (yapnr.exp.timing only ever reports that span once
+        # it is actually closed -- the task is done, succeeded or failed).
+        running = not any(
+            e["kind"] == "candidate_complete"
+            or (e["kind"] == "task_timing" and e.get("data", {}).get("stage") == "run")
+            for e in lane_events
+        )
         start = lane_events[0]["time"]
         end = lane_events[-1]["time"]
         for span in spans:

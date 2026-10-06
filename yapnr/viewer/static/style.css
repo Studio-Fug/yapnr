@@ -88,4 +88,4 @@ details label{display:flex;align-items:center;justify-content:space-between;gap:
 .tr-bar{flex:none;width:44px;height:6px;border-radius:3px;background:#23343c;overflow:hidden}
 .tr-bar-fill{height:100%;border-radius:3px;transition:width .2s ease}
 .tr-status{margin-left:21px;font-size:10px;color:#94aab5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:480px){.tr-bar{width:30px}.tr-count{display:none}}
+@media(max-width:480px){.tr-bar{width:30px}.tr-count{font-size:8px;max-width:34px;overflow:hidden;text-overflow:ellipsis}}

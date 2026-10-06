@@ -82,10 +82,7 @@ FLAGS = {
     "showcases": "--showcases",
     # The hard rungs (hardware/pnr/regression/hard_rungs.py) become selectable cases.
     "hard": "--hard",
-    # PNR_COMPACT / PNR_SHRINK (docs/design/compact-placement.md) and PNR_GLOSS.
-    "compact": "--compact",
     "shrink": "--shrink",
-    "gloss": "--gloss",
     "gloss_measure": "--gloss-measure",
     # The legalizer and global-placement switches (hardware/pnr/pnr/legalize_flags.py).
     "gp_polish": "--gp-polish",
@@ -94,6 +91,13 @@ FLAGS = {
     "line_satellites": "--line-satellites",
     # ladder-v2 ab-pairs-pool A/B.
     "power_first": "--power-first",
+}
+# Ladder v2 (docs/decisions.md): these default on in the runner itself, so omitting the key
+# takes run.py's own default (on); a campaign must set the key to ``false`` explicitly to get
+# the old/off behaviour, which this emits as the runner's --no-<flag>.
+DEFAULT_ON_FLAGS = {
+    "compact": "--compact",
+    "gloss": "--gloss",
     "route_pairs_diff_pairs": "--route-pairs-diff-pairs",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
@@ -130,20 +134,33 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
         str(options.get("rounds", 4)),
         "--timeout",
         str(options.get("timeout", 600)),
-        "--fab-profile",
-        options.get("fab_profile", "legacy"),
     ]
+    # Omit --fab-profile entirely unless the campaign names one, so the runner's own default
+    # (jlc-pofv, ladder-v2) is the single source of truth instead of a second copy here.
+    if options.get("fab_profile") is not None:
+        args += ["--fab-profile", options["fab_profile"]]
     for key, flag in FLAGS.items():
         if options.get(key):
             args.append(flag)
-    if options.get("initial_pool"):
-        args += [
-            "--initial-pool",
-            "--initial-starts",
-            str(options.get("initial_starts", 8)),
-            "--initial-finalists",
-            str(options.get("initial_finalists", 3)),
-        ]
+    for key, flag in DEFAULT_ON_FLAGS.items():
+        value = options.get(key)
+        if value is False:
+            args.append(flag.replace("--", "--no-", 1))
+        elif value:
+            args.append(flag)
+    if options.get("initial_pool") is False:
+        args.append("--no-initial-pool")
+    else:
+        if (
+            options.get("initial_pool")
+            or options.get("initial_starts") is not None
+            or (options.get("initial_finalists") is not None)
+        ):
+            args.append("--initial-pool")
+        if options.get("initial_starts") is not None:
+            args += ["--initial-starts", str(options["initial_starts"])]
+        if options.get("initial_finalists") is not None:
+            args += ["--initial-finalists", str(options["initial_finalists"])]
     if options.get("detail_pitch_mm") is not None:
         args += ["--detail-pitch-mm", str(options["detail_pitch_mm"])]
     if options.get("trace_placement_every") is not None:

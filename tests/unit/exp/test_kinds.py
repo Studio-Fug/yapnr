@@ -259,6 +259,51 @@ class LadderOptionsTest(unittest.TestCase):
         self.assertTrue(any("compact_off names" in e for e in errors), errors)
         self.assertTrue(any("compact_off needs compact" in e for e in errors), errors)
 
+    def test_default_on_flags_need_an_explicit_off_to_turn_them_off(self):
+        """compact/gloss/route_pairs_diff_pairs/initial_pool default on in the runner itself
+        (ladder-v2): a campaign that omits the key gets no flag at all (the runner's own
+        default decides), and only an explicit ``false`` emits the runner's --no-<flag> so an
+        A/B config can still turn one off."""
+        from yapnr.exp.kinds import ladder
+
+        omitted = ladder.runner_arguments({})
+        for flag in (
+            "--compact",
+            "--no-compact",
+            "--gloss",
+            "--no-gloss",
+            "--initial-pool",
+            "--no-initial-pool",
+            "--route-pairs-diff-pairs",
+            "--no-route-pairs-diff-pairs",
+            "--fab-profile",
+        ):
+            self.assertNotIn(flag, omitted)
+
+        off = ladder.runner_arguments(
+            dict(compact=False, gloss=False, initial_pool=False, route_pairs_diff_pairs=False)
+        )
+        self.assertIn("--no-compact", off)
+        self.assertIn("--no-gloss", off)
+        self.assertIn("--no-initial-pool", off)
+        self.assertIn("--no-route-pairs-diff-pairs", off)
+        for flag in ("--compact", "--gloss", "--initial-pool", "--route-pairs-diff-pairs"):
+            self.assertNotIn(flag, off)
+
+        on = ladder.runner_arguments(
+            dict(compact=True, gloss=True, initial_pool=True, route_pairs_diff_pairs=True)
+        )
+        for flag in ("--compact", "--gloss", "--initial-pool", "--route-pairs-diff-pairs"):
+            self.assertIn(flag, on)
+
+        self.assertIn("--fab-profile", ladder.runner_arguments(dict(fab_profile="legacy")))
+        self.assertEqual(
+            ladder.runner_arguments(dict(fab_profile="legacy"))[
+                ladder.runner_arguments(dict(fab_profile="legacy")).index("--fab-profile") + 1
+            ],
+            "legacy",
+        )
+
     def test_legalizer_switches_reach_the_runner(self):
         from yapnr.exp.kinds import ladder
 

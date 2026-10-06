@@ -361,7 +361,9 @@ def source_inputs(repo):
 # The vendor profiles of yapnr/fab/data (oshpark-2l, oshpark-4l, jlc-4l, ...) route and judge a
 # case under that vendor's rules (docs/fab-and-ordering.md).
 FAB_PROFILES = ("legacy", "jlc-pofv")
-DEFAULT_FAB_PROFILE = "legacy"
+# Ladder v2 default (docs/decisions.md): the engine's own fab-capability profile, not
+# the fixtures' legacy block; pass --fab-profile legacy to get the old runner default.
+DEFAULT_FAB_PROFILE = "jlc-pofv"
 
 
 def fab_profiles(repo=REPO):
@@ -732,8 +734,12 @@ def parser():
     )
     ap.add_argument(
         "--initial-pool",
-        action="store_true",
-        help="Compare a bounded set of legal global placements before round one",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Compare a bounded set of legal global placements before round one (default: on, "
+            "ladder-v2; --no-initial-pool restores the single-start runner path for A/Bs)"
+        ),
     )
     ap.add_argument("--initial-starts", type=int, default=8)
     ap.add_argument("--initial-finalists", type=int, default=3)
@@ -770,11 +776,12 @@ def parser():
     )
     ap.add_argument(
         "--gloss",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
-            "Run the opt-in PNR_GLOSS pass (dekink, pull-tight, corridor packing; 07g semantics) "
-            "after refill, before the audit; a cold-DRC gate restores the pre-gloss board if "
-            "opens or findings rise"
+            "Run the PNR_GLOSS pass (dekink, pull-tight, corridor packing; 07g semantics) after "
+            "refill, before the audit; a cold-DRC gate restores the pre-gloss board if opens or "
+            "findings rise (default: on, ladder-v2; --no-gloss restores the plain runner path)"
         ),
     )
     ap.add_argument(
@@ -794,10 +801,13 @@ def parser():
     )
     ap.add_argument(
         "--compact",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
-            "PNR_COMPACT=1: compact placement (spread 1.0, clustered starts, the courtyard gap "
-            "and copper margins in the legalizer, offset courtyards, a compactness tie-break)"
+            "PNR_COMPACT=1 (default, ladder-v2): compact placement (spread 1.0, clustered "
+            "starts, the courtyard gap and copper margins in the legalizer, offset courtyards, "
+            "a compactness tie-break, WIRE/TURN/SATELLITES/PAIRS/RELAX); --no-compact restores "
+            "the plain (pre-ladder-v2) runner path for A/B comparisons"
         ),
     )
     ap.add_argument(
@@ -877,10 +887,12 @@ def parser():
     )
     ap.add_argument(
         "--route-pairs-diff-pairs",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
-            "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS=1: route_pairs: coupled for any design that "
-            "declares a diff_pair, without editing the case (ladder-v2 ab-pairs-pool A/B)"
+            "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS=1 (default, ladder-v2): route_pairs: coupled "
+            "for any design that declares a diff_pair, without editing the case; "
+            "--no-route-pairs-diff-pairs restores the case's own declared route_pairs"
         ),
     )
     ap.add_argument(

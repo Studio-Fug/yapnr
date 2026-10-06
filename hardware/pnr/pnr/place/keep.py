@@ -27,10 +27,13 @@ push, the outline).
    alone (slots side by side): when that fails, the cluster's most occluded mild part is given up
    (``push_infeasible``) and the rest spread again. Then, where the legalizer's routing-channel
    model asks for an escape channel between two facing pad rows, the channel is a *soft* goal:
-   the pair's distance grows by the largest share of the channel (:data:`SHARE_STEPS` bisection
-   steps between none and all of it) that the push still meets within every part's reach. A
-   channel never makes the push give up, and a part short of one at its GP pose is pushed like a
-   mild overlap.
+   the cluster is pushed again with each pair's distance grown by its channel, and that push is
+   kept when it meets every constraint within every part's reach; otherwise the overlap-only push
+   stands. A channel never makes the push give up a part, and a cluster with no overlap but a
+   part short of a channel at its GP pose is pushed only when the whole channel fits. (Opening a
+   fraction of the channels instead, the largest the reach allows, moved 2.4 times as many parts
+   on the ladder, showcases and both hierarchical cases at seed 0, mostly legal ones, for no
+   routing gain: r6-fix notes, 2026-10-06.)
 
 The legalizer then takes, for every part that is not severe, the slot nearest its (spread) pose
 within a grid snap at its GP turn; a part that cannot have it (its slot is taken:
@@ -56,8 +59,6 @@ TOL = 1e-6
 # The least cascade bound (mm), and the share of a slot's smaller side that bounds it otherwise.
 REACH_MM = 1.5
 REACH_SHARE = 0.5
-# Bisection steps of :func:`resolve` on the share of the routing channels a push opens.
-SHARE_STEPS = 5
 # The nearest-first search of a part that keeps no slot at its pose: rings of radius
 # ``snap * RING_GROWTH ** k`` around its GP pose (pnr.place.legalize).
 RING_GROWTH = 2.0
@@ -151,9 +152,9 @@ def reach(box: Box) -> float:
     return max(REACH_MM, REACH_SHARE * min(box.w, box.h))
 
 
-def _axis_pairs(slots, obstacles, need=None, share=1.0):
+def _axis_pairs(slots, obstacles, need=None):
     """Initial constraints: ``{(i, j): (axis, first, need)}`` over slot indices (obstacles
-    indexed after the slots), ``first`` the index in front on ``axis`` (``need``, ``share``: see
+    indexed after the slots), ``first`` the index in front on ``axis`` (``need``: see
     :func:`spread`)."""
     boxes = list(slots) + list(obstacles)
     n = len(slots)
@@ -174,23 +175,22 @@ def _axis_pairs(slots, obstacles, need=None, share=1.0):
                 axis = 1  # one above the other: keep the order
             else:
                 continue
-            out[(i, j)] = (axis,) + _order(a, b, i, j, axis, need, share)
+            out[(i, j)] = (axis,) + _order(a, b, i, j, axis, need)
     return out
 
 
-def _order(a, b, i, j, axis, need=None, share=1.0):
+def _order(a, b, i, j, axis, need=None):
     """``(first, need)``: which of ``a`` (index i) and ``b`` (j) is in front on ``axis`` at the
     GP poses (a tie: the lower index) and the centre distance the pair needs there: their slots
-    side by side, or more where ``need(front, back, axis)`` (refs) asks more (a routing channel),
-    by ``share`` (0 to 1) of the difference."""
+    side by side, or more where ``need(front, back, axis)`` (refs) asks more (a routing channel)."""
     ca, cb = (a.x, b.x) if axis == 0 else (a.y, b.y)
     gap = (a.w + b.w) / 2.0 if axis == 0 else (a.h + b.h) / 2.0
     first = i if ca <= cb else j
     if need is not None and a.ref is not None and b.ref is not None:
         front, back = (a, b) if first == i else (b, a)
         extra = need(front.ref, back.ref, axis)
-        if extra is not None and float(extra) > gap:
-            gap += share * (float(extra) - gap)
+        if extra is not None:
+            gap = max(gap, float(extra))
     return first, gap
 
 
@@ -229,20 +229,19 @@ def _solve_axis(targets, weights, lo, hi, cons, sweeps=SWEEPS, tol=TOL):
 
 
 def spread(
-    slots: Sequence[Box], obstacles: Sequence[Box], rounds: int = ROUNDS, need=None, share=1.0
+    slots: Sequence[Box], obstacles: Sequence[Box], rounds: int = ROUNDS, need=None
 ) -> Tuple[Dict[str, Tuple[float, float]], List[str]]:
     """``({ref: (x, y)} new centres, [refs pushed past their reach or left in conflict])`` for
     the movable ``slots`` among the fixed ``obstacles`` (the module docstring). ``need(front, back,
     axis)`` (refs; None: none) is a larger centre distance a pair needs along ``axis``, such as
-    the routing channel between their facing pad rows; the pair asks ``share`` (0 to 1) of the
-    extra distance. An empty failure
+    the routing channel between their facing pad rows. An empty failure
     list means every slot is clear of every other slot and obstacle on a shared plane, inside its
     bounds and within its reach."""
     n = len(slots)
     if n == 0:
         return {}, []
     boxes = list(slots) + list(obstacles)
-    pairs = _axis_pairs(slots, obstacles, need, share)
+    pairs = _axis_pairs(slots, obstacles, need)
     xs = [s.x for s in slots]
     ys = [s.y for s in slots]
     failed: List[str] = []
@@ -288,7 +287,7 @@ def spread(
                 gx = abs(ga.x - gb.x) - (ga.w + gb.w) / 2.0
                 gy = abs(ga.y - gb.y) - (ga.h + gb.h) / 2.0
                 axis = 0 if gx >= gy else 1
-                pairs[(i, j)] = (axis,) + _order(ga, gb, i, j, axis, need, share)
+                pairs[(i, j)] = (axis,) + _order(ga, gb, i, j, axis, need)
                 added = True
         if not added:
             failed = [] if ok_all else [s.ref for s in slots]
@@ -339,17 +338,17 @@ def resolve(
     occlusion: Optional[Dict[str, float]] = None,
     need=None,
     short=(),
-    shares: Optional[Dict[str, float]] = None,
+    opened: Optional[Dict[str, bool]] = None,
 ) -> Tuple[Dict[str, Tuple[float, float]], List[str]]:
     """Spread ``slots`` (none severe) cluster by cluster (:func:`clusters`), the physical overlap
     first: while a cluster's push fails, its most occluded mild part (``occlusion``; ties: the
     smaller, then the later reference) joins the returned list of parts the push gave up and the
     cluster is spread again without it. ``need`` (see :func:`spread`) then widens the pairs'
-    distances by their routing channels, as large a share of them (all, or the largest of
-    :data:`SHARE_STEPS` bisection steps) as the push still meets: a channel is a soft goal and
-    never gives a part up. A cluster with no overlap is left as it is unless it holds a part of
-    ``short`` (refs short of a channel at their GP poses). Returns ``({ref: (x, y)}, [refs the
-    push gave up])``; ``shares`` (a dict, when given) receives each spread part's channel share."""
+    distances by their routing channels, a push kept only when it meets them all: a channel is a
+    soft goal and never gives a part up. A cluster with no overlap is left as it is unless it
+    holds a part of ``short`` (refs short of a channel at their GP poses) and its channels fit.
+    Returns ``({ref: (x, y)}, [refs the push gave up])``; ``opened`` (a dict, when given)
+    receives, for each part of a spread cluster, whether its channels were opened."""
     occlusion = dict(occlusion or occlusions(slots, obstacles, width, height))
     drop: List[str] = []
     out: Dict[str, Tuple[float, float]] = {}
@@ -373,23 +372,13 @@ def resolve(
                 occlusion = dict(occlusion)
                 occlusion.update(occlusions(live, obstacles, width, height))
                 continue
-            share = 0.0
+            channels = False
             if need is not None:
                 got, bad = spread(live, obstacles, need=need)
                 if not bad:
-                    centres, share = got, 1.0
-                else:
-                    lo, hi = 0.0, 1.0
-                    for _ in range(SHARE_STEPS):
-                        mid = (lo + hi) / 2.0
-                        got, bad = spread(live, obstacles, need=need, share=mid)
-                        if bad:
-                            hi = mid
-                        else:
-                            centres, lo = got, mid
-                    share = lo
+                    centres, channels = got, True
             out.update(centres)
-            if shares is not None:
-                shares.update({s.ref: share for s in live})
+            if opened is not None:
+                opened.update({s.ref: channels for s in live})
             break
     return out, drop

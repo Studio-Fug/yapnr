@@ -618,9 +618,10 @@ snap offset beyond half a grid cell.
   The physical overlap is cleared first: a cluster whose push goes beyond a part's reach (1.5 mm
   or half its smaller side) gives up its most occluded mild part (`push_infeasible`) and is pushed
   again. Then the escape channel the packer's channel model asks between facing pad rows is a soft
-  goal: each pair's distance grows by the largest share of its channel (all of it, or five
-  bisection steps between none and all) that the push still meets within every part's reach. A
-  channel never makes the push give up a part; a part short of one is pushed like a mild overlap.
+  goal: the cluster is pushed again with each pair's distance including its channel, and that
+  push is kept when it fits within every part's reach; otherwise the overlap-only push stands. A
+  channel never makes the push give up a part; a cluster with no overlap but a part short of a
+  channel is pushed only when the whole channel fits.
 - _Anchors._ Held parts (hard groups, aligns, regions, edge bands, hard discs) are placed first as
   before; then every part that is not severe takes the free slot nearest its (pushed) pose within
   1.5 grid cells, at its global turn, without the channel or wirelength terms. A part whose slot
@@ -634,7 +635,7 @@ snap offset beyond half a grid cell.
   displacement sum and maximum, turns, topology kept (the fraction of pairwise left/right and
   above/below relations of the global poses that the legal poses keep), the triage counts and,
   per part that left its pose, the reason (`relocations`; `relocated_severe`,
-  `relocated_push_infeasible`, `relocated_slot_taken`, `nudged`, `channel_partial`). It
+  `relocated_push_infeasible`, `relocated_slot_taken`, `nudged`, `channel_unopened`). It
   is in the placement report, `pnr-report.json` (`legal_motion`; `block` and `top` for the
   hierarchical driver), `ladder-results.json`, the trace's `legal` events and the animation's end
   card ("legalization moved ...").
@@ -684,7 +685,7 @@ channel room up front instead of leaving it entirely to the legalizer's push.
 
 **Measured** (Mac, seed 0, `--compact`, `pnr.place.motion`, `legalize-motion/table-final.md`):
 
-| Stage                     | `main` (no compact) | §12 push alone |       + this fix |
+| Stage                     | `main` (no compact) | §13 push alone |       + this fix |
 | ------------------------- | ------------------: | -------------: | ---------------: |
 | `10-quad-bank-56` block   | 65 % moved, 15.0 mm |  70 %, 16.3 mm | **14 %, 3.2 mm** |
 | `10-quad-bank-56` top     |       33 %, 30.0 mm |   17 %, 7.7 mm |  **0 %, 0.3 mm** |
@@ -702,6 +703,48 @@ _longer_ than uncompacted, since reserving channel room up front leaves GP less 
 already-tiny board. Frame strips: `legalize-motion/strips/after-gp-*.png`.
 
 Not done: the early `ChannelModel` ignores the rotation `GP` may still pick (the final legalizer's
-own channel push, §12, still uses the correct post-placement one); `_place_line_groups` and
+own channel push, §13, still uses the correct post-placement one); `_place_line_groups` and
 power-first staged placement do not call this path (compact does not support power-first, and no
 rung currently needs the channel-aware GP floor inside a line group).
+
+### G. A slight overlap is nudged, never re-placed (2026-10-06)
+
+> Owner report (2026-10-05): "In the block step, the global placement puts R6 overlapping with
+> D4, and instead of nudging R6 a bit to the right, it re-places it north of the SOIC." And: "if
+> it's only a very small overlap that caused the placement to be illegal, then it would be much
+> smarter to push all of the other parts around it outwards to make room slightly rather than
+> completely replacing it."
+
+**Cause** (`hier-twin-bank-32` seed 0, block `top.bank_a` trial `start-13`, 19.75 x 13.25 mm,
+reproduced from the legalizer's input alone: `hardware/pnr/testdata/legalize_keep`). Four parts
+overlap slightly (R6 over D4 among them), none severe, and all 12 are short of an escape channel.
+The push asked for the overlap and the full channels at once; with every part channel-short that
+exceeded the 1.5 mm cascade bound, so the cluster gave up its most occluded part (R6), the push
+failed again and the cluster was left as it was (pushed 0). R6, its slot taken by D4, went to
+the packer's full search with `WIRE` and landed 10.7 mm away, north of the SOIC, with a quarter
+turn; R7 also left its slot with a half turn.
+
+**Fix** (`pnr.place.keep.resolve`, `pnr.place.legalize`): the courtyard overlap is cleared first
+and the channels are a soft goal (kept only where they fit; never a reason to give a part up); a
+part the push cannot clear (`push_infeasible`) or whose slot is taken (`slot_taken`) takes the
+nearest free slot in rings around its global pose, its global turn first, never the full search;
+only severe parts are relocated wholesale. The motion record names each relocated part's reason.
+On `start-13` R6 now stays put (under 0.4 mm, same turn): D4 moves 0.47 mm, nothing else moves
+more than a snap, and nothing is relocated (was: max 10.7 mm, 2 relocated).
+
+**Measured** (Mac, seed 0, `--compact`, every `legalize()` call; ladder, showcases and both
+hierarchical cases, 1448 part placements; `r6-fix` notes):
+
+| Legalizer                       | Parts moved | Sum (mm) | Max (mm) | Relocated (severe / push / slot) | Moved > 3 mm |
+| ------------------------------- | ----------: | -------: | -------: | -------------------------------- | -----------: |
+| before (`7ab6fbd5`)             |         218 |    463.1 |     14.1 | 86 (by the full search)          |           24 |
+| this fix                        |         132 |    216.5 |     10.1 | 4 (0 / 4 / 0)                    |            2 |
+| channels opened as far as reach |         518 |    580.0 |      8.5 | 4 (0 / 4 / 0)                    |            0 |
+
+Block level: `hier-twin-bank-32` 106 parts moved and 220 mm before, 58 and 103 mm after (40
+relocated before, 2 after); `10-quad-bank-56` 82 and 202 mm before, 50 and 73 mm after (34 and
+2). The two parts still moved far are one D4 in `hier-twin-bank-32` `start-14` (13.25 x 19.75
+mm), whose column above the SOIC is full: no push within reach clears it, so it takes the nearest
+free slot (10.1 mm, a quarter turn). All 13 cases pass in every arm. The third row opens each
+cluster's channels by the largest fraction the reach allows: it moves 2.4 times as many parts,
+mostly legal ones, for no routing gain on these cases, so channels are all or nothing.

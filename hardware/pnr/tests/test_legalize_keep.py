@@ -351,19 +351,19 @@ class SpreadTest(unittest.TestCase):
         self.assertEqual(bad, [])
         self.assertAlmostEqual(centres["B"][0] - centres["A"][0], 5.0, places=3)
         self.assertGreaterEqual(centres["C"][0] - centres["B"][0], 4.0 - 1e-4)
-        shares = {}
-        moved, drop = keepmod.resolve(slots, [], 30, 20, need=need, short={"A"}, shares=shares)
+        opened = {}
+        moved, drop = keepmod.resolve(slots, [], 30, 20, need=need, short={"A"}, opened=opened)
         self.assertEqual(drop, [])
         self.assertAlmostEqual(moved["B"][0] - moved["A"][0], 5.0, places=3)
-        self.assertEqual(set(shares.values()), {1.0})
+        self.assertEqual(set(opened.values()), {True})
         # Without a short part or an overlap the cluster is left as it is.
         still, _ = keepmod.resolve(slots, [], 30, 20, need=need)
         self.assertEqual(still["B"], (9.0, 5.0))
 
     def test_a_channel_is_a_soft_goal_that_never_gives_a_part_up(self):
         # A overlaps B by 0.5 mm between two walls with 1.5 mm to spare: the overlap is cleared,
-        # but the 4 mm channel A-B asks cannot open within the walls, so the push opens what it
-        # can and gives up no part.
+        # but the 4 mm channel A-B asks cannot open within the walls, so the overlap-only push
+        # stands and no part is given up.
         walls = [
             keepmod.Box(None, 1.0, 10.0, 2.0, 20.0, ("top",)),
             keepmod.Box(None, 12.5, 10.0, 2.0, 20.0, ("top",)),
@@ -375,14 +375,15 @@ class SpreadTest(unittest.TestCase):
 
         _, bad = keepmod.spread(slots, walls, need=need)
         self.assertNotEqual(bad, [])  # the whole channel is out of reach
-        shares = {}
-        moved, drop = keepmod.resolve(slots, walls, 30, 20, need=need, shares=shares)
+        opened = {}
+        moved, drop = keepmod.resolve(slots, walls, 30, 20, need=need, opened=opened)
         self.assertEqual(drop, [])
-        gap = moved["B"][0] - moved["A"][0]
-        self.assertGreaterEqual(gap, 4.0 - 1e-4)  # the overlap is cleared
-        self.assertLess(gap, 8.0)
-        self.assertGreater(min(shares.values()), 0.0)
-        self.assertLess(max(shares.values()), 1.0)
+        self.assertAlmostEqual(moved["B"][0] - moved["A"][0], 4.0, places=3)  # overlap cleared
+        self.assertEqual(set(opened.values()), {False})
+        # Without the overlap (B just clear of A) and A short of the channel, nothing moves.
+        clear = [self.box("A", 4.5, 10.0), self.box("B", 8.6, 10.0)]
+        still, drop = keepmod.resolve(clear, walls, 30, 20, need=need, short={"A"})
+        self.assertEqual((still["A"], still["B"], drop), ((4.5, 10.0), (8.6, 10.0), []))
 
     def test_an_obstacle_does_not_move_and_a_bound_holds(self):
         wall = keepmod.Box(None, 1.0, 5.0, 2.0, 10.0, ("top",))

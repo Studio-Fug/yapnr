@@ -163,7 +163,7 @@ TRIAGE = (
     "relocated",
     "anchored",
     "channel_short",
-    "channel_partial",
+    "channel_unopened",
     "nudged",
     "relocated_severe",
     "relocated_push_infeasible",

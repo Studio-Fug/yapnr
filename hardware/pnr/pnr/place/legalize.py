@@ -626,7 +626,7 @@ def _keep_plan(
     pair's distance in a push by the escape channel it asks (:func:`_channel_need`; the
     ``fixed_parts`` count as neighbours), and a part short of one at its pose (``channel_short``)
     is pushed like a mild overlap. The physical overlap is cleared first; the channels are a soft
-    goal the push opens as far as every part's reach allows (:func:`pnr.place.keep.resolve`)."""
+    goal the push opens when they fit within every part's reach (:func:`pnr.place.keep.resolve`)."""
     from .keep import PUSH_REASON, SEVERE_REASON, Box, resolve, triage
 
     slots, shifts, rigid = [], {}, []
@@ -665,7 +665,7 @@ def _keep_plan(
             for c in movable
             if c.ref not in severe_set and is_short(c, [o for o in live if o is not c])
         }
-    shares = {}
+    opened = {}
     centres, dropped = resolve(
         push,
         list(obstacles) + held,
@@ -674,7 +674,7 @@ def _keep_plan(
         occlusion,
         need=need,
         short=short,
-        shares=shares,
+        opened=opened,
     )
     by_ref = {c.ref: c for c in movable}
     pushed = 0
@@ -690,8 +690,8 @@ def _keep_plan(
     clean = sum(1 for s in slots if occlusion.get(s.ref, 0.0) <= 0.0)
     counts = dict(
         channel_short=len(short),
-        # Parts of a spread cluster whose channels the push opened in part only (a soft goal).
-        channel_partial=sum(1 for v in shares.values() if v < 1.0),
+        # Parts of a spread cluster whose channels did not fit the push (a soft goal).
+        channel_unopened=sum(1 for v in opened.values() if not v),
         clean=clean,
         mild=len(slots) - clean - len(severe),
         severe=len(severe),

@@ -338,10 +338,12 @@ class RunnerContract(unittest.TestCase):
         lines = out.stdout.splitlines()
         self.assertTrue(all(re.match(r"^[^=\s]+==\S+$", line) for line in lines), lines[:3])
 
-    def test_the_ladder_is_judged_under_the_fixtures_own_rules_by_default(self):
-        self.assertEqual(parser().parse_args(["--out", "x"]).fab_profile, "legacy")
+    def test_the_ladder_is_judged_under_the_engines_profile_by_default(self):
+        # ladder-v2 (docs/decisions.md): the runner's own default is the engine's fab-capability
+        # profile, not the fixtures' legacy block; --fab-profile legacy restores the old default.
+        self.assertEqual(parser().parse_args(["--out", "x"]).fab_profile, "jlc-pofv")
         self.assertEqual(
-            parser().parse_args(["--out", "x", "--fab-profile", "jlc-pofv"]).fab_profile, "jlc-pofv"
+            parser().parse_args(["--out", "x", "--fab-profile", "legacy"]).fab_profile, "legacy"
         )
         with self.assertRaises(SystemExit):
             parser().parse_args(["--out", "x", "--fab-profile", "other"])
@@ -412,8 +414,9 @@ class NativeTraceContract(unittest.TestCase):
             dense_run = json.loads((Path(tmp) / "dense" / "trace" / "run.json").read_text())
             self.assertEqual(dense_run["config"]["trace_placement_every"], 5)
             run = json.loads((root / "trace" / "run.json").read_text())
+            # ladder-v2: --initial-pool is on by default (docs/decisions.md).
             self.assertEqual(
-                (run["subject"]["case"], run["config"]["initial_pool"]), (spec["name"], False)
+                (run["subject"]["case"], run["config"]["initial_pool"]), (spec["name"], True)
             )
             self.assertNotIn("trace_placement_every", run["config"])  # recorded only when set
             recorder = trace.Recorder(root / "trace")
@@ -548,10 +551,13 @@ GLOSS_BOARD = (
 
 
 class GlossStageContract(unittest.TestCase):
-    """run.py --gloss (PNR_GLOSS, opt-in): one gated stage after refill, stubbed here."""
+    """run.py --gloss (PNR_GLOSS): one gated stage after refill, stubbed here. On by default
+    since ladder-v2 (docs/decisions.md); --no-gloss restores the plain runner path."""
 
-    def test_options_are_opt_in(self):
+    def test_on_by_default_no_gloss_turns_it_off(self):
         args = parser().parse_args(["--out", "x"])
+        self.assertEqual((args.gloss, args.gloss_flag, args.gloss_measure), (True, [], False))
+        args = parser().parse_args(["--out", "x", "--no-gloss"])
         self.assertEqual((args.gloss, args.gloss_flag, args.gloss_measure), (False, [], False))
         args = parser().parse_args(
             ["--out", "x", "--gloss", "--gloss-flag", "PNR_GLOSS_STEPS=dekink", "--gloss-measure"]

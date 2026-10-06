@@ -1,0 +1,40 @@
+{
+  "1V0_BUCK": {
+    "budget_mohm": 0.5,
+    "current_a": 2.5,
+    "density": {
+      "F.Cu": {
+        "a_per_mm": 1.098298,
+        "at": [5.25, 10.45],
+        "ipc_a_per_mm": 2.351753,
+        "kind": "plane",
+        "neck": false
+      }
+    },
+    "edges": 6764,
+    "h_mm": 0.1,
+    "hard": false,
+    "heatmaps": ["${HANDOFF}/power-lib/blocks/34c7ed35931c/route/ir/ir-1V0_BUCK-F_Cu.png"],
+    "iterations": 357,
+    "loss_w": 0.00242214,
+    "nodes": 3470,
+    "opens": [],
+    "plating_mm": 0.02,
+    "r_eff_mohm": 0.387542,
+    "residual": 9.742726930815302e-11,
+    "resistivity_ohm_mm": 1.990384e-5,
+    "sinks": [
+      {
+        "drop_mv": 0.968856,
+        "share": 1.0,
+        "sink": "R_SH1.1"
+      }
+    ],
+    "sources": ["L3.2"],
+    "split": "equal",
+    "status": "pass",
+    "temperature_c": 60.0,
+    "warnings": [],
+    "worst_drop_mv": 0.968856
+  }
+}

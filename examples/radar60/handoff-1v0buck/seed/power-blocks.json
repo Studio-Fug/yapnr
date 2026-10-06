@@ -1,0 +1,122 @@
+{
+  "fixed": {
+    "@pmic.u2": {
+      "at": [52.0, 12.5],
+      "rot": 270.0,
+      "side": "top"
+    },
+    "@power_in.efuse": {
+      "at": [13.55, 4.65],
+      "rot": 270.0,
+      "side": "top"
+    }
+  },
+  "fixed_block": [
+    {
+      "name": "pwr_stage",
+      "group": "PWR_STAGE",
+      "anchor": "@pmic.u2",
+      "solid_layers": ["F.Cu"],
+      "sha256": "a6b1556fc88471c217ca6f47fd689ec8187f2f96a9beda993d265e6334c06462"
+    },
+    {
+      "name": "efuse_stage",
+      "group": "EFUSE_STAGE",
+      "anchor": "@power_in.efuse",
+      "solid_layers": ["F.Cu"],
+      "sha256": "6b8f3bae11111e9d6031b9a9ce931c0bb0832cd79c55d8c580ca105ac8c5a00f"
+    }
+  ],
+  "hold": [
+    "C14",
+    "C15",
+    "C16",
+    "C17",
+    "C27",
+    "C28",
+    "C29",
+    "C30",
+    "C31",
+    "L1",
+    "L2",
+    "L3",
+    "L4",
+    "R30",
+    "R31",
+    "R32",
+    "R33",
+    "R_SH1",
+    "TP1",
+    "C33",
+    "C34",
+    "C36",
+    "C37",
+    "D3"
+  ],
+  "sites": {
+    "U2": [40.0, 6.75, 58.0, 21.7],
+    "U5": [6.8, 0.4, 22.5, 6.95]
+  },
+  "blocks": [
+    {
+      "block": "group:pmic.u2",
+      "layout": "34c7ed35931c",
+      "board": "${HANDOFF}/power-lib/blocks/34c7ed35931c",
+      "assembled": {
+        "blocks": [
+          {
+            "block": "${HANDOFF}/power-lib/blocks/34c7ed35931c/block.kicad_pcb",
+            "footprints": 20,
+            "items": 140,
+            "rigid_error_nm": 0,
+            "zones": 26
+          }
+        ],
+        "group": "PWR_STAGE",
+        "anchor": "U2",
+        "refs": [
+          "C14",
+          "C15",
+          "C16",
+          "C17",
+          "C27",
+          "C28",
+          "C29",
+          "C30",
+          "C31",
+          "L1",
+          "L2",
+          "L3",
+          "L4",
+          "R30",
+          "R31",
+          "R32",
+          "R33",
+          "R_SH1",
+          "TP1"
+        ],
+        "sha256": "a6b1556fc88471c217ca6f47fd689ec8187f2f96a9beda993d265e6334c06462"
+      }
+    },
+    {
+      "block": "group:power_in.efuse",
+      "layout": "de5bfabb679f",
+      "board": "${HANDOFF}/power-lib/blocks/de5bfabb679f",
+      "assembled": {
+        "blocks": [
+          {
+            "block": "${HANDOFF}/power-lib/blocks/de5bfabb679f/block.kicad_pcb",
+            "footprints": 6,
+            "items": 17,
+            "rigid_error_nm": 0,
+            "zones": 4
+          }
+        ],
+        "group": "EFUSE_STAGE",
+        "anchor": "U5",
+        "refs": ["C33", "C34", "C36", "C37", "D3"],
+        "sha256": "6b8f3bae11111e9d6031b9a9ce931c0bb0832cd79c55d8c580ca105ac8c5a00f"
+      }
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-10-05T17:16:59",
+  "ignored_checks": [
+    {
+      "description": "Footprint has no courtyard defined",
+      "key": "missing_courtyard"
+    },
+    {
+      "description": "Track endpoint not centered on via",
+      "key": "track_not_centered_on_via"
+    },
+    {
+      "description": "Tuning profile track geometries",
+      "key": "tuning_profile_track_geometries"
+    },
+    {
+      "description": "Footprint doesn't match symbol's footprint filters",
+      "key": "footprint_filters_mismatch"
+    },
+    {
+      "description": "Footprint component type doesn't match footprint pads",
+      "key": "footprint_type_mismatch"
+    }
+  ],
+  "included_severities": ["error", "warning"],
+  "kicad_version": "10.0.6",
+  "schematic_parity": [],
+  "source": "candidate.kicad_pcb",
+  "unconnected_items": [
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 103",
+          "pos": {
+            "x": 35.85,
+            "y": 33.0
+          },
+          "uuid": "2739bf7c-5b4a-4f21-9ea0-fc594a70c682"
+        },
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 101",
+          "pos": {
+            "x": 30.7,
+            "y": 33.7
+          },
+          "uuid": "4de8b349-e239-49ba-afc8-67367957be1c"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 8 [GND] of U5 on F.Cu",
+          "pos": {
+            "x": 36.825,
+            "y": 33.5
+          },
+          "uuid": "b8f1e1ee-f177-4bc2-af1c-6879885ec9a4"
+        },
+        {
+          "description": "Via [GND] on F.Cu - B.Cu",
+          "pos": {
+            "x": 34.625,
+            "y": 34.525
+          },
+          "uuid": "ee65c006-1219-43f5-ae74-18bb0919a820"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    }
+  ],
+  "violations": [
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_22u_0805'",
+      "items": [
+        {
+          "description": "Footprint C36",
+          "pos": {
+            "x": 41.175,
+            "y": 32.725
+          },
+          "uuid": "5f9d91c0-3872-4815-893f-72a74642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_SMF5V0A'",
+      "items": [
+        {
+          "description": "Footprint D3",
+          "pos": {
+            "x": 42.425,
+            "y": 35.225
+          },
+          "uuid": "64b86ef2-3763-4934-9125-1a564642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_100n_0402'",
+      "items": [
+        {
+          "description": "Footprint C34",
+          "pos": {
+            "x": 40.425,
+            "y": 30.975
+          },
+          "uuid": "bee84d0e-8598-4939-aff0-bbc54642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_10u_0805'",
+      "items": [
+        {
+          "description": "Footprint C33",
+          "pos": {
+            "x": 32.925,
+            "y": 35.725
+          },
+          "uuid": "d75ec948-595b-4208-9426-42524642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_TPS259474ARPWR'",
+      "items": [
+        {
+          "description": "Footprint U5",
+          "pos": {
+            "x": 37.05,
+            "y": 32.6
+          },
+          "uuid": "dc2978c1-bd7a-44ba-b364-7eea4642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_100n_0402'",
+      "items": [
+        {
+          "description": "Footprint C37",
+          "pos": {
+            "x": 34.175,
+            "y": 33.475
+          },
+          "uuid": "f25e8643-a1f3-4150-8378-27414642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    }
+  ]
+}

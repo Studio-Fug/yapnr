@@ -1,0 +1,735 @@
+{
+  "data": {
+    "measure": {
+      "diff_pairs": {
+        "CLK": {
+          "connected": {
+            "LVDS_CLK_N": false,
+            "LVDS_CLK_P": false
+          },
+          "layers": {
+            "LVDS_CLK_N": [],
+            "LVDS_CLK_P": []
+          },
+          "legs_connected": 0,
+          "n": 0.0,
+          "p": 0.0,
+          "p_connected": false,
+          "skew_mm": 0.0,
+          "vias": {
+            "LVDS_CLK_N": 0,
+            "LVDS_CLK_P": 0
+          }
+        },
+        "FRCLK": {
+          "connected": {
+            "LVDS_FRCLK_N": false,
+            "LVDS_FRCLK_P": false
+          },
+          "layers": {
+            "LVDS_FRCLK_N": [],
+            "LVDS_FRCLK_P": []
+          },
+          "legs_connected": 0,
+          "n": 0.0,
+          "p": 0.0,
+          "p_connected": false,
+          "skew_mm": 0.0,
+          "vias": {
+            "LVDS_FRCLK_N": 0,
+            "LVDS_FRCLK_P": 0
+          }
+        },
+        "TX0": {
+          "connected": {
+            "LVDS_TX0_N": false,
+            "LVDS_TX0_P": false
+          },
+          "layers": {
+            "LVDS_TX0_N": [],
+            "LVDS_TX0_P": []
+          },
+          "legs_connected": 0,
+          "n": 0.0,
+          "p": 0.0,
+          "p_connected": false,
+          "skew_mm": 0.0,
+          "vias": {
+            "LVDS_TX0_N": 0,
+            "LVDS_TX0_P": 0
+          }
+        },
+        "TX1": {
+          "connected": {
+            "LVDS_TX1_N": false,
+            "LVDS_TX1_P": false
+          },
+          "layers": {
+            "LVDS_TX1_N": [],
+            "LVDS_TX1_P": []
+          },
+          "legs_connected": 0,
+          "n": 0.0,
+          "p": 0.0,
+          "p_connected": false,
+          "skew_mm": 0.0,
+          "vias": {
+            "LVDS_TX1_N": 0,
+            "LVDS_TX1_P": 0
+          }
+        }
+      },
+      "diff_pairs_connected_legs": 0,
+      "diff_pairs_group_skew_mm": null,
+      "diff_pairs_total_legs": 8,
+      "drc_by_type": {
+        "isolated_copper": 2,
+        "length_out_of_range": 1,
+        "shorting_items": 1,
+        "via_dangling": 10
+      },
+      "drc_ignored_by_default": {
+        "footprint_type_mismatch": 1,
+        "missing_courtyard": 3,
+        "track_not_centered_on_via": 6
+      },
+      "ir": {
+        "1V0_BUCK": {
+          "budget_mohm": 0.5,
+          "current_a": 2.5,
+          "loss_w": 0.002395,
+          "opens": [],
+          "r_eff_mohm": 0.3832,
+          "status": "pass",
+          "worst_drop_mv": 0.958
+        },
+        "1V0_RF1": {
+          "budget_mohm": 4.0,
+          "current_a": 2.5,
+          "loss_w": 0.0,
+          "opens": ["U1.G5", "U1.H5", "U1.J5"],
+          "r_eff_mohm": null,
+          "status": "open",
+          "worst_drop_mv": null
+        },
+        "1V0_RF2": {
+          "budget_mohm": 4.0,
+          "current_a": 2.5,
+          "loss_w": 0.009429375,
+          "opens": ["U1.C2", "U1.D2"],
+          "r_eff_mohm": null,
+          "status": "open",
+          "worst_drop_mv": null
+        },
+        "1V0_SH": {
+          "budget_mohm": 0.5,
+          "current_a": 2.5,
+          "loss_w": 0.0,
+          "opens": ["FB3.1", "FB4.1", "FB5.1"],
+          "r_eff_mohm": null,
+          "status": "open",
+          "worst_drop_mv": null
+        },
+        "1V2": {
+          "budget_mohm": 12.0,
+          "current_a": 1.0,
+          "loss_w": 0.0,
+          "opens": ["U1.G15", "U1.H15", "U1.N11", "U1.P14", "U1.P15", "U1.R6"],
+          "r_eff_mohm": null,
+          "status": "open",
+          "worst_drop_mv": null
+        },
+        "1V8": {
+          "budget_mohm": 21.0,
+          "current_a": 0.85,
+          "loss_w": 0.000256017,
+          "opens": ["U1.B11", "U1.B12", "U1.D15", "U1.F5", "U1.K5"],
+          "r_eff_mohm": null,
+          "status": "open",
+          "worst_drop_mv": null
+        },
+        "3V3": {
+          "budget_mohm": 165.0,
+          "current_a": 0.2,
+          "loss_w": 0.0,
+          "opens": ["U6.1", "R55.1", "R54.1", "U2.8"],
+          "r_eff_mohm": null,
+          "status": "open",
+          "worst_drop_mv": null
+        },
+        "3V3_RADIO_IO": {
+          "budget_mohm": 165.0,
+          "current_a": 0.2,
+          "loss_w": 0.003321405,
+          "opens": [],
+          "r_eff_mohm": 113.274715,
+          "status": "pass",
+          "worst_drop_mv": 22.654943
+        },
+        "5V_SYS": {
+          "budget_mohm": 33.0,
+          "current_a": 1.5,
+          "loss_w": 0.0,
+          "opens": [
+            "U4.3",
+            "TP6.1",
+            "R40.1",
+            "R20.1",
+            "R39.1",
+            "R21.1",
+            "R19.1",
+            "U2.9",
+            "U2.13",
+            "U2.18",
+            "U2.22",
+            "U2.26"
+          ],
+          "r_eff_mohm": null,
+          "status": "open",
+          "worst_drop_mv": null
+        }
+      },
+      "nets": {
+        "QSPI_CLK": {
+          "connected": true,
+          "layers": ["F.Cu"],
+          "length_mm": 5.217,
+          "vias": 0
+        },
+        "QSPI_CLK_FLASH": {
+          "connected": true,
+          "layers": ["B.Cu", "F.Cu"],
+          "length_mm": 6.137,
+          "vias": 2
+        },
+        "QSPI_CS_N": {
+          "connected": false,
+          "layers": ["F.Cu", "In2.Cu"],
+          "length_mm": 13.474,
+          "vias": 2
+        },
+        "QSPI_D0": {
+          "connected": true,
+          "layers": ["B.Cu", "F.Cu"],
+          "length_mm": 9.427,
+          "vias": 2
+        },
+        "QSPI_D1": {
+          "connected": true,
+          "layers": ["F.Cu", "In2.Cu"],
+          "length_mm": 24.868,
+          "vias": 2
+        },
+        "QSPI_D2": {
+          "connected": false,
+          "layers": ["F.Cu"],
+          "length_mm": 9.01,
+          "vias": 0
+        },
+        "QSPI_D3": {
+          "connected": false,
+          "layers": ["F.Cu"],
+          "length_mm": 3.662,
+          "vias": 0
+        }
+      },
+      "nets_connected": 4,
+      "nets_total": 7,
+      "qspi_max_length_mm": 24.868,
+      "r1_macro": {
+        "board_sha256": "15dbe8694fba2cff258c66c832eb5d2209576e68d434e80b46fe34d09692cc46",
+        "counts": {
+          "copper": 1508,
+          "load_pads": 4,
+          "mask_polygons": 11
+        },
+        "equal": true,
+        "want": "15dbe8694fba2cff258c66c832eb5d2209576e68d434e80b46fe34d09692cc46"
+      },
+      "r4_foreign_copper": {
+        "items": [],
+        "zone_fill_mm2": {}
+      },
+      "rf_audit_routed": {
+        "A1_entry_and_band": {
+          "foreign_vias_in_band": [],
+          "lines": {
+            "RX1": {
+              "contacts": 1,
+              "ok": true,
+              "span_mm": [0.6]
+            },
+            "RX2": {
+              "contacts": 1,
+              "ok": true,
+              "span_mm": [0.6]
+            },
+            "RX3": {
+              "contacts": 1,
+              "ok": true,
+              "span_mm": [0.6]
+            },
+            "RX4": {
+              "contacts": 1,
+              "ok": true,
+              "span_mm": [0.6]
+            },
+            "RXD0": {
+              "contacts": 1,
+              "ok": true,
+              "span_mm": [0.6]
+            },
+            "TX1": {
+              "contacts": 1,
+              "ok": true,
+              "span_mm": [0.6]
+            },
+            "TX2": {
+              "contacts": 1,
+              "ok": true,
+              "span_mm": [0.6]
+            },
+            "TX3": {
+              "contacts": 1,
+              "ok": true,
+              "span_mm": [0.6]
+            },
+            "TXD4": {
+              "contacts": 1,
+              "ok": true,
+              "span_mm": [0.6]
+            }
+          },
+          "ok": true
+        },
+        "A2_congruence": {
+          "columns": {
+            "RX1": {
+              "F.Cu GND xor_mm2": 0.0004,
+              "F.Cu copper xor_mm2": 0.0,
+              "In1.Cu GND xor_mm2": 0.0,
+              "In2.Cu GND xor_mm2": 0.0,
+              "declared_difference_mm2": {
+                "F.Cu GND": 0.5316,
+                "F.Cu copper": 0.9216,
+                "In1.Cu GND": 0.0,
+                "In2.Cu GND": 0.0
+              },
+              "open_end": true,
+              "via_mismatch": 0
+            },
+            "RX3": {
+              "F.Cu GND xor_mm2": 0.0001,
+              "F.Cu copper xor_mm2": 0.0,
+              "In1.Cu GND xor_mm2": 0.0,
+              "In2.Cu GND xor_mm2": 0.0,
+              "open_end": false,
+              "via_mismatch": 0
+            },
+            "RX4": {
+              "F.Cu GND xor_mm2": 10.9147,
+              "F.Cu copper xor_mm2": 5.2057,
+              "In1.Cu GND xor_mm2": 5.32,
+              "In2.Cu GND xor_mm2": 0.0,
+              "open_end": false,
+              "via_mismatch": 52
+            },
+            "TX1": {
+              "F.Cu GND xor_mm2": 10.9147,
+              "F.Cu copper xor_mm2": 5.2057,
+              "In1.Cu GND xor_mm2": 5.32,
+              "In2.Cu GND xor_mm2": 0.0,
+              "open_end": false,
+              "via_mismatch": 55
+            },
+            "TX2": {
+              "F.Cu GND xor_mm2": 0.0,
+              "F.Cu copper xor_mm2": 0.0,
+              "In1.Cu GND xor_mm2": 0.0,
+              "In2.Cu GND xor_mm2": 0.0,
+              "open_end": false,
+              "via_mismatch": 0
+            },
+            "TX3": {
+              "F.Cu GND xor_mm2": 0.0004,
+              "F.Cu copper xor_mm2": 0.0,
+              "In1.Cu GND xor_mm2": 0.0,
+              "In2.Cu GND xor_mm2": 0.0,
+              "declared_difference_mm2": {
+                "F.Cu GND": 0.5316,
+                "F.Cu copper": 0.9216,
+                "In1.Cu GND": 0.0,
+                "In2.Cu GND": 0.0
+              },
+              "open_end": true,
+              "via_mismatch": 0
+            }
+          },
+          "ok": false,
+          "reference": "RX2"
+        },
+        "A3_unstitched_gnd": {
+          "gnd_area_mm2": 404.87,
+          "ok": false,
+          "unreached": [
+            {
+              "area_mm2": 0.0051,
+              "at": [4.057, 5.249],
+              "bbox": [4.023, 5.204, 4.083, 5.314],
+              "long_mm": 0.12
+            },
+            {
+              "area_mm2": 0.0034,
+              "at": [4.036, 5.812],
+              "bbox": [4.003, 5.774, 4.053, 5.874],
+              "long_mm": 0.11
+            },
+            {
+              "area_mm2": 0.0037,
+              "at": [4.063, 6.138],
+              "bbox": [4.033, 6.084, 4.103, 6.174],
+              "long_mm": 0.1
+            },
+            {
+              "area_mm2": 0.0038,
+              "at": [4.036, 5.597],
+              "bbox": [4.003, 5.534, 4.063, 5.644],
+              "long_mm": 0.12
+            }
+          ]
+        },
+        "A4_fence_continuity": {
+          "limit_mm": 0.5,
+          "ok": true,
+          "rows": {
+            "RX1.L": {
+              "max_spacing_mm": 0.497,
+              "openings": 0,
+              "over": 0
+            },
+            "RX1.R": {
+              "max_spacing_mm": 0.464,
+              "openings": 0,
+              "over": 0
+            },
+            "RX2.L": {
+              "max_spacing_mm": 0.48,
+              "openings": 0,
+              "over": 0
+            },
+            "RX2.R": {
+              "max_spacing_mm": 0.493,
+              "openings": 0,
+              "over": 0
+            },
+            "RX3.L": {
+              "max_spacing_mm": 0.493,
+              "openings": 0,
+              "over": 0
+            },
+            "RX3.R": {
+              "max_spacing_mm": 0.498,
+              "openings": 0,
+              "over": 0
+            },
+            "RX4.L": {
+              "max_spacing_mm": 0.498,
+              "openings": 0,
+              "over": 0
+            },
+            "RX4.R": {
+              "max_spacing_mm": 0.5,
+              "openings": 0,
+              "over": 0
+            },
+            "TX1.L": {
+              "max_spacing_mm": 0.495,
+              "openings": 0,
+              "over": 0
+            },
+            "TX1.R": {
+              "max_spacing_mm": 0.472,
+              "openings": 0,
+              "over": 0
+            },
+            "TX2.L": {
+              "max_spacing_mm": 0.498,
+              "openings": 0,
+              "over": 0
+            },
+            "TX2.R": {
+              "max_spacing_mm": 0.481,
+              "openings": 0,
+              "over": 0
+            },
+            "TX3.L": {
+              "max_spacing_mm": 0.499,
+              "openings": 0,
+              "over": 0
+            },
+            "TX3.R": {
+              "max_spacing_mm": 0.46,
+              "openings": 0,
+              "over": 0
+            }
+          }
+        },
+        "A5_identity": {
+          "geometry_sha256_matches": true,
+          "loads_bad": [],
+          "loads_found": 2,
+          "macro_vias_missing": 0,
+          "ok": true
+        },
+        "A6_vias_at_smd_lands": {
+          "clear_mm": 0.1,
+          "lands": 407,
+          "ok": true,
+          "vias_at_lands": []
+        },
+        "board": "candidate.kicad_pcb",
+        "ok": false
+      },
+      "unconnected": 152
+    },
+    "route_diag": {
+      "failure_sites": {
+        "1V0_PA": [
+          [29.9, 31.9],
+          [30.39, 33.45],
+          [30.39, 33.95],
+          [30.55, 31.9],
+          [30.625, 31.105],
+          [30.89, 33.45],
+          [30.89, 33.95],
+          [33.635, 21.875],
+          [34.05, 20.95],
+          [34.825, 20.625],
+          [36.125, 25.65],
+          [51.5, 28.25]
+        ],
+        "1V0_RF1": [
+          [4.4, 33.125],
+          [12.85, 25.875],
+          [13.375, 29.425],
+          [26.0, 30.6],
+          [26.65, 30.6],
+          [26.7388, 29.95]
+        ],
+        "1V0_RF2": [
+          [20.15, 30.45],
+          [28.105, 32.375],
+          [28.15, 30.65],
+          [28.35, 30.15],
+          [28.6, 31.9],
+          [29.05, 31.05],
+          [29.25, 31.9],
+          [34.125, 22.675],
+          [35.25, 25.5625],
+          [40.625, 22.365],
+          [42.425, 23.375],
+          [58.875, 9.15]
+        ],
+        "1V0_SH": [
+          [19.0, 28.9375],
+          [20.75, 20.3125],
+          [35.25, 23.4375],
+          [47.075, 19.075],
+          [48.825, 18.325]
+        ],
+        "1V2": [[22.75, 26.05]],
+        "1V2_BUCK": [[50.125, 10.625]],
+        "1V8": [
+          [17.45, 31.25],
+          [24.15, 16.625],
+          [24.7, 30.6],
+          [25.35, 30.0388],
+          [25.855, 18.875],
+          [27.3, 30.6],
+          [28.6, 22.8],
+          [30.55, 26.05],
+          [32.645, 25.875],
+          [49.125, 27.575],
+          [51.125, 24.15]
+        ],
+        "3V3": [[50.125, 14.375]],
+        "5V_SYS": [
+          [2.635, 7.375],
+          [13.55, 4.4],
+          [34.605, 19.375],
+          [36.645, 18.625],
+          [37.275, 14.2],
+          [49.25, 33.5],
+          [50.46, 11.5],
+          [50.46, 13.5],
+          [52.25, 10.6],
+          [53.54, 11.5],
+          [53.54, 13.5],
+          [55.635, 23.625],
+          [56.115, 22.375]
+        ],
+        "CAN_RX": [[27.375, 24.125]],
+        "EFUSE_DVDT": [[12.875, 3.875]],
+        "EFUSE_EN_UVLO": [[14.375, 5.625]],
+        "EFUSE_ILM": [[13.875, 3.875]],
+        "EFUSE_ITIMER": [[14.375, 3.875]],
+        "EFUSE_OVLO": [[13.875, 5.625]],
+        "EFUSE_PG": [
+          [13.375, 5.625],
+          [53.375, 10.625]
+        ],
+        "GND": [
+          [3.3549999999999995, 17.8],
+          [4.625, 17.8],
+          [11.575, 37.625],
+          [13.325000000000001, 3.7500000000000004],
+          [17.25, 8.414],
+          [18.75, 8.414],
+          [20.25, 8.414],
+          [22.6, 16.625],
+          [28.125, 5.095000000000001],
+          [29.375, 5.095000000000001],
+          [33.605, 24.625],
+          [33.605, 25.875],
+          [49.125, 25.675],
+          [49.125, 31.325],
+          [49.325, 23.625],
+          [50.46, 12.5],
+          [51.125, 22.6],
+          [51.75, 10.6],
+          [52.0, 12.5],
+          [52.25, 14.4],
+          [52.875, 25.4],
+          [53.54, 12.5]
+        ],
+        "I2C_SCL": [[51.875, 14.375]],
+        "I2C_SDA": [[51.375, 14.375]],
+        "LVDS_TX1_N": [[25.875, 8.375]],
+        "LVDS_TX1_P": [[25.375, 8.375]],
+        "PMIC_EN2_GPIO2": [[50.875, 10.625]],
+        "PMIC_FB_B2": [[53.875, 14.375]],
+        "PMIC_PGOOD": [[51.375, 10.625]],
+        "PMIC_SW_B2": [[53.625, 13.125]],
+        "SOP2_PMIC_CLKOUT": [[22.1, 27.35]],
+        "SPIA_CS_N": [[56.875, 23.625]],
+        "SYNC_IN": [[22.1, 30.6]],
+        "VIN_5V": [[13.625, 4.875]],
+        "pmic-1": [[52.875, 14.375]],
+        "pmic-1-1": [[50.875, 14.375]],
+        "pmic-2": [[53.375, 14.375]]
+      },
+      "partial_open": {
+        "1V0_RF2": {
+          "U1.C2": "conflicts with another part's pad on the board",
+          "U1.D2": "conflicts with another part's pad on the board"
+        },
+        "1V2": {
+          "U1.N11": "plan: lost its resources to higher-priority pads"
+        },
+        "SOP2_PMIC_CLKOUT": {
+          "U1.P9": "plan: lost its resources to higher-priority pads"
+        },
+        "SYNC_IN": {
+          "U1.P4": "plan: lost its resources to higher-priority pads"
+        }
+      },
+      "unrouted": [
+        "1V0_PA",
+        "1V0_RF1",
+        "1V0_RF2",
+        "1V0_SH",
+        "1V2_BUCK",
+        "1V8",
+        "3V3",
+        "3V3_RADIO_IO",
+        "5V_SYS",
+        "CANL",
+        "CAN_RX",
+        "DAMP_1V8",
+        "EFUSE_DVDT",
+        "EFUSE_EN_UVLO",
+        "EFUSE_ILM",
+        "EFUSE_ITIMER",
+        "EFUSE_OVLO",
+        "EFUSE_PG",
+        "GND",
+        "I2C_SCL",
+        "I2C_SDA",
+        "LVDS_CLK_N",
+        "LVDS_CLK_P",
+        "LVDS_FRCLK_N",
+        "LVDS_FRCLK_P",
+        "LVDS_TX0_N",
+        "LVDS_TX0_P",
+        "LVDS_TX1_N",
+        "LVDS_TX1_P",
+        "NRESET",
+        "PMIC_EN2_GPIO2",
+        "PMIC_FB_B2",
+        "PMIC_NINT",
+        "PMIC_PGOOD",
+        "PMIC_SW_B2",
+        "QSPI_CS_N",
+        "QSPI_D2",
+        "QSPI_D3",
+        "RADIO_GPIO_2",
+        "SPIA_CLK",
+        "SPIA_CS_N",
+        "SPIA_MISO",
+        "SPIA_MOSI",
+        "SPI_HOST_INTR",
+        "STB",
+        "SYNC_IN",
+        "UART_RX",
+        "UART_TX",
+        "VIN_5V",
+        "XTAL_N",
+        "XTAL_P",
+        "pmic-1",
+        "pmic-1-1",
+        "pmic-2"
+      ]
+    }
+  },
+  "driver": "src/examples/radar60/board/integrate.py",
+  "files": ["candidate.kicad_pcb", "measure.json", "route-diag.json"],
+  "ok": true,
+  "steps": [
+    {
+      "args": ["--seed", "0", "--n0", "8", "--procs", "2"],
+      "log": "00-place.log",
+      "returncode": 0,
+      "seconds": 222.05,
+      "step": "place"
+    },
+    {
+      "args": ["--top-n", "1"],
+      "log": "01-select.log",
+      "returncode": 0,
+      "seconds": 0.096,
+      "step": "select"
+    },
+    {
+      "args": [],
+      "log": "02-finish.log",
+      "returncode": 0,
+      "seconds": 34.191,
+      "step": "finish"
+    },
+    {
+      "args": [],
+      "log": "03-route.log",
+      "returncode": 0,
+      "seconds": 739.18,
+      "step": "route"
+    },
+    {
+      "args": [],
+      "log": "04-check.log",
+      "returncode": 0,
+      "seconds": 62.161,
+      "step": "check"
+    }
+  ],
+  "wall_s": 1057.677
+}

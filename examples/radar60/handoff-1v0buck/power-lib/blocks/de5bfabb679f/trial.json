@@ -1,0 +1,21 @@
+{
+  "width": 15.7,
+  "height": 6.55,
+  "utilisation": 0.4558,
+  "aspect": 2.3969,
+  "seed": 14,
+  "area": 102.835,
+  "legal": true,
+  "status": "legal",
+  "layout": {
+    "power_in.c_sys_bulk": [10.875, 4.125, 0.0, "top"],
+    "power_in.tvs": [12.125, 1.625, 0.0, "top"],
+    "power_in.c_in_hf": [10.125, 5.875, 0.0, "top"],
+    "power_in.c_in_bulk": [2.625, 1.125, 180.0, "top"],
+    "@": [6.75, 4.25, 270.0, "top"],
+    "power_in.c_sys_hf": [3.875, 3.375, 270.0, "top"]
+  },
+  "port_debt_mm": 40.29,
+  "seconds": 0.56,
+  "id": "de5bfabb679f"
+}

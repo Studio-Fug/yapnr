@@ -1,0 +1,279 @@
+schema: v0
+board:
+  outline:
+    w: 18.6
+    h: 15.549999999999999
+  layers: 6
+  default_clearance_mm: 0.2
+  references_on_fab: true
+  plane_fallback_drops: false
+  class_clearance: maze
+  dru_routing: true
+  edge: exact
+  route_pairs: coupled
+fab:
+  track_width_mm: 0.15
+fixed: {}
+orientation: {}
+side: {}
+group:
+  - members:
+      - '@pmic.l_b*'
+    anchor: '@pmic.u2'
+    radius_mm: 8.5
+    hard: true
+  - members:
+      - '@pmic.c_in[[]*'
+    anchor: '@pmic.u2'
+    radius_mm: 5
+    hard: true
+  - members:
+      - '@pmic.r_snb0'
+    anchor: '@pmic.l_b0'
+    radius_mm: 3.5
+    hard: true
+    anchor_pad: '1'
+  - members:
+      - '@pmic.r_snb1'
+    anchor: '@pmic.l_b1'
+    radius_mm: 3.5
+    hard: true
+    anchor_pad: '1'
+  - members:
+      - '@pmic.r_snb2'
+    anchor: '@pmic.l_b2'
+    radius_mm: 3.5
+    hard: true
+    anchor_pad: '1'
+  - members:
+      - '@pmic.r_snb3'
+    anchor: '@pmic.l_b3'
+    radius_mm: 3.5
+    hard: true
+    anchor_pad: '1'
+  - members:
+      - '@pmic.c_snb0'
+    anchor: '@pmic.r_snb0'
+    radius_mm: 2.5
+    hard: true
+  - members:
+      - '@pmic.c_snb1'
+    anchor: '@pmic.r_snb1'
+    radius_mm: 2.5
+    hard: true
+  - members:
+      - '@pmic.c_snb2'
+    anchor: '@pmic.r_snb2'
+    radius_mm: 2.5
+    hard: true
+  - members:
+      - '@pmic.c_snb3'
+    anchor: '@pmic.r_snb3'
+    radius_mm: 2.5
+    hard: true
+  - members:
+      - '@pmic.c_vana'
+    anchor: '@pmic.u2'
+    radius_mm: 5
+    hard: true
+  - members:
+      - '@pmic.r_sh'
+    anchor: '@pmic.l_b2'
+    radius_mm: 4
+    hard: true
+    anchor_pad: '2'
+  - members:
+      - '@pmic.tp_isns'
+    anchor: '@pmic.r_sh'
+    radius_mm: 4
+    hard: true
+net_class:
+  RF:
+    nets:
+      - RF_RX*
+      - RF_TX*
+  XTAL:
+    nets:
+      - XTAL_*
+    clearance_mm: 0.15
+  QSPI:
+    nets:
+      - QSPI_*
+  PWR:
+    nets:
+      - 1V0_*
+      - 1V2*
+      - 1V8*
+      - 3V3*
+      - 5V_SYS
+      - VIN_5V
+    width_mm: 0.25
+    clearance_mm: 0.15
+  SW:
+    nets:
+      - PMIC_SW_B*
+    width_mm: 0.6
+    clearance_mm: 0.2
+  GND:
+    nets:
+      - GND
+    plane_layer: In1.Cu
+  ANALOG:
+    nets:
+      - VOUT_14*
+      - VBGAP
+      - EFUSE_EN_UVLO
+      - EFUSE_OVLO
+      - EFUSE_PGTH
+      - EFUSE_ILM
+      - EFUSE_ITIMER
+      - EFUSE_DVDT
+      - VIO_LS_ON
+      - DAMP_*
+      - PMIC_FB_B2
+  LVDS:
+    nets:
+      - LVDS_TX0_P
+      - LVDS_TX0_N
+      - LVDS_TX1_P
+      - LVDS_TX1_N
+      - LVDS_CLK_P
+      - LVDS_CLK_N
+      - LVDS_FRCLK_P
+      - LVDS_FRCLK_N
+    width_mm: 0.17
+    clearance_mm: 0.1
+  rail_1v0_rf1:
+    nets:
+      - 1V0_RF1
+    plane_layer: In3.Cu
+  rail_1v0_rf2:
+    nets:
+      - 1V0_RF2
+    plane_layer: In3.Cu
+  rail_1v0_pa:
+    nets:
+      - 1V0_PA
+    plane_layer: In3.Cu
+  rail_1v2:
+    nets:
+      - 1V2
+    plane_layer: In3.Cu
+  rail_1v8:
+    nets:
+      - 1V8
+    plane_layer: In3.Cu
+  rail_5v_sys:
+    nets:
+      - 5V_SYS
+    plane_layer: In3.Cu
+  rail_1v0_sh:
+    nets:
+      - 1V0_SH
+    plane_layer: In3.Cu
+ir_drop:
+  - net: 1V0_BUCK
+    sources:
+      '@pmic.l_b2':
+        - '2'
+    sinks:
+      '@pmic.r_sh':
+        - '1'
+    current_a: 2.5
+    budget_mohm: 0.5
+    temperature_c: 60
+    two_point: false
+pour:
+  - layer: B.Cu
+    net: GND
+    connect: solid
+region:
+  - name: pmic_block
+    hard: true
+    reason: PMIC block, power-first
+    refs:
+      - '@pmic.u2'
+      - '@pmic.l_*'
+      - '@pmic.c_in*'
+      - '@pmic.c_vana'
+      - '@pmic.r_snb*'
+      - '@pmic.c_snb*'
+      - '@pmic.r_sh'
+      - '@pmic.tp_isns'
+      - '@pmic.r_s*'
+    rect:
+      - 0.0
+      - 0.0
+      - 18.3
+      - 15.55
+  - name: pmic_switching
+    hard: true
+    reason: switch nodes >= 8 mm from Y1 and >= 5 mm from RF
+    refs:
+      - '@pmic.u2'
+      - '@pmic.l_b*'
+    rect:
+      - 1.3
+      - 0.0
+      - 18.3
+      - 15.25
+  - name: r4_digital
+    hard: true
+    reason: 'R4: no digital copper within 5 mm of the RF region (derived by integrate.py)'
+    refs:
+      - '@pmic.c_snb0'
+      - '@pmic.c_snb1'
+      - '@pmic.c_snb2'
+      - '@pmic.c_snb3'
+      - '@pmic.l_b0'
+      - '@pmic.l_b1'
+      - '@pmic.l_b2'
+      - '@pmic.l_b3'
+      - '@pmic.r_snb0'
+      - '@pmic.r_snb1'
+      - '@pmic.r_snb2'
+      - '@pmic.r_snb3'
+      - '@pmic.u2'
+    areas:
+      - rect:
+          - 0.0
+          - 0.0
+          - 16.769
+          - 15.25
+      - rect:
+          - 16.769
+          - 0.0
+          - 18.6
+          - 15.55
+plane_partition:
+  - layer: F.Cu
+    nets:
+      - 5V_SYS
+      - PMIC_SW_B0
+      - PMIC_SW_B1
+      - PMIC_SW_B2
+      - PMIC_SW_B3
+      - 1V0_BUCK
+      - GND
+    terminals: pad
+    connect: solid
+    stitch_vias: 4
+    split_gap_mm: 0.2
+    min_width_mm: 0.25
+    h_mm: 0.05
+    pieces:
+      - GND
+      - 5V_SYS
+    region:
+      refs:
+        - '@pmic.c_in[[]0]'
+        - '@pmic.c_in[[]1]'
+        - '@pmic.c_in[[]2]'
+        - '@pmic.c_in[[]3]'
+        - '@pmic.l_b0'
+        - '@pmic.l_b1'
+        - '@pmic.l_b2'
+        - '@pmic.l_b3'
+        - '@pmic.r_sh'
+        - '@pmic.u2'
+      margin_mm: 0.5

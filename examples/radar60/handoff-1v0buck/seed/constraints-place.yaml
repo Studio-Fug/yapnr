@@ -1,0 +1,1697 @@
+# constraints.yaml without the proposed rf_macro section, plus the R4 region, the fanout
+# exit bands and the bottom-site edits (integrate.py prepare; generated)
+schema: v0
+board:
+  outline:
+    w: 60
+    h: 47.4
+  layers: 6
+  default_clearance_mm: 0.2
+  references_on_fab: true
+  plane_fallback_drops: false
+  class_clearance: maze
+  dru_routing: true
+  edge: exact
+  route_pairs: coupled
+fab:
+  track_width_mm: 0.15
+fixed:
+  '@radio.u1':
+    at:
+      - 26
+      - 28
+    rot: 270
+    side: top
+  '@j1':
+    edge: south
+    align: center
+    rot: 0
+    side: top
+  '@mech.mh[[]0]':
+    at:
+      - 3.5
+      - 3.5
+    rot: 0
+    side: top
+  '@mech.mh[[]1]':
+    at:
+      - 56.5
+      - 3.5
+    rot: 0
+    side: top
+  '@mech.mh[[]2]':
+    at:
+      - 3.5
+      - 43.9
+    rot: 0
+    side: top
+  '@mech.mh[[]3]':
+    at:
+      - 56.5
+      - 43.9
+    rot: 0
+    side: top
+  RL1:
+    at:
+      - 3.5
+      - 27
+    rot: 0
+    side: top
+  RL2:
+    at:
+      - 56.5
+      - 27
+    rot: 0
+    side: top
+  '@pmic.u2':
+    at:
+      - 52.0
+      - 12.5
+    rot: 270.0
+    side: top
+  '@power_in.efuse':
+    at:
+      - 13.55
+      - 4.65
+    rot: 270.0
+    side: top
+orientation:
+  '@radio.c_synth': 0
+  '@radio.c_xp': 0
+  '@radio.c_xm': 270
+  '@radio.c_pa': 270
+  '@radio.c_rf2': 180
+  '@flash.r_clk': 180
+keepout:
+  - name: rf_region_1
+    polygon:
+      - - 12.599
+        - 33.75
+      - - 29.563
+        - 33.75
+      - - 29.563
+        - 47.4
+      - - 12.599
+        - 47.4
+  - name: rf_region_2
+    polygon:
+      - - 12.599
+        - 33.2
+      - - 20.25
+        - 33.2
+      - - 20.25
+        - 33.75
+      - - 12.599
+        - 33.75
+  - name: rf_region_3
+    polygon:
+      - - 29.563
+        - 35
+      - - 31.25
+        - 35
+      - - 31.25
+        - 47.4
+      - - 29.563
+        - 47.4
+  - name: rf_region_4
+    polygon:
+      - - 31.25
+        - 33.75
+      - - 47.972
+        - 33.75
+      - - 47.972
+        - 47.4
+      - - 31.25
+        - 47.4
+  - name: rf_region_5
+    polygon:
+      - - 31.75
+        - 26.7
+      - - 47.972
+        - 26.7
+      - - 47.972
+        - 33.75
+      - - 31.75
+        - 33.75
+  - name: u2_site_0
+    polygon:
+      - - 40.0
+        - 6.75
+      - - 48.18
+        - 6.75
+      - - 48.18
+        - 21.7
+      - - 40.0
+        - 21.7
+  - name: u2_site_1
+    polygon:
+      - - 55.82
+        - 6.75
+      - - 58.0
+        - 6.75
+      - - 58.0
+        - 21.7
+      - - 55.82
+        - 21.7
+  - name: u2_site_2
+    polygon:
+      - - 48.18
+        - 6.75
+      - - 55.82
+        - 6.75
+      - - 55.82
+        - 8.93
+      - - 48.18
+        - 8.93
+  - name: u2_site_3
+    polygon:
+      - - 48.18
+        - 16.07
+      - - 55.82
+        - 16.07
+      - - 55.82
+        - 21.7
+      - - 48.18
+        - 21.7
+  - name: u5_site_0
+    polygon:
+      - - 6.8
+        - 0.4
+      - - 10.98
+        - 0.4
+      - - 10.98
+        - 6.95
+      - - 6.8
+        - 6.95
+  - name: u5_site_1
+    polygon:
+      - - 16.12
+        - 0.4
+      - - 22.5
+        - 0.4
+      - - 22.5
+        - 6.95
+      - - 16.12
+        - 6.95
+  - name: u5_site_2
+    polygon:
+      - - 10.98
+        - 0.4
+      - - 16.12
+        - 0.4
+      - - 16.12
+        - 2.08
+      - - 10.98
+        - 2.08
+  - name: exit_south_1
+    polygon:
+      - - 22.5
+        - 19.75
+      - - 26.25
+        - 19.75
+      - - 26.25
+        - 22.25
+      - - 22.5
+        - 22.25
+  - name: exit_south_2
+    polygon:
+      - - 27.7
+        - 19.75
+      - - 28.2
+        - 19.75
+      - - 28.2
+        - 22.25
+      - - 27.7
+        - 22.25
+  - name: exit_west_1
+    polygon:
+      - - 17.75
+        - 23.85
+      - - 20.25
+        - 23.85
+      - - 20.25
+        - 26.625
+      - - 17.75
+        - 26.625
+  - name: exit_west_2
+    polygon:
+      - - 17.75
+        - 27.425
+      - - 20.25
+        - 27.425
+      - - 20.25
+        - 27.925
+      - - 17.75
+        - 27.925
+copper_keepout:
+  - name: rf_region_1
+    rect:
+      - 12.599
+      - 33.2
+      - 29.563
+      - 47.4
+    layers:
+      - F.Cu
+      - In1.Cu
+      - In2.Cu
+    exempt_groups:
+      - RFM1_MACRO
+  - name: rf_region_2
+    rect:
+      - 29.563
+      - 35
+      - 31.25
+      - 47.4
+    layers:
+      - F.Cu
+      - In1.Cu
+      - In2.Cu
+    exempt_groups:
+      - RFM1_MACRO
+  - name: rf_region_3
+    rect:
+      - 31.25
+      - 26.7
+      - 47.972
+      - 47.4
+    layers:
+      - F.Cu
+      - In1.Cu
+      - In2.Cu
+    exempt_groups:
+      - RFM1_MACRO
+  - name: rf_region_4
+    rect:
+      - 31.2
+      - 26.7
+      - 31.25
+      - 33.2
+    layers:
+      - F.Cu
+      - In1.Cu
+      - In2.Cu
+    exempt_groups:
+      - RFM1_MACRO
+  - name: rf_guard_1
+    rect:
+      - 7.599
+      - 28.2
+      - 12.599
+      - 47.4
+    layers:
+      - F.Cu
+      - In1.Cu
+      - In2.Cu
+    items:
+      - tracks
+      - vias
+    allow_classes:
+      - RF
+      - PWR
+      - GND
+      - ANALOG
+  - name: rf_guard_2
+    rect:
+      - 12.599
+      - 28.2
+      - 20.8
+      - 33.2
+    layers:
+      - F.Cu
+      - In1.Cu
+      - In2.Cu
+    items:
+      - tracks
+      - vias
+    allow_classes:
+      - RF
+      - PWR
+      - GND
+      - ANALOG
+  - name: rf_guard_3
+    rect:
+      - 31.2
+      - 21.7
+      - 52.972
+      - 26.7
+    layers:
+      - F.Cu
+      - In1.Cu
+      - In2.Cu
+    items:
+      - tracks
+      - vias
+    allow_classes:
+      - RF
+      - PWR
+      - GND
+      - ANALOG
+  - name: rf_guard_4
+    rect:
+      - 47.972
+      - 26.7
+      - 52.972
+      - 47.4
+    layers:
+      - F.Cu
+      - In1.Cu
+      - In2.Cu
+    items:
+      - tracks
+      - vias
+    allow_classes:
+      - RF
+      - PWR
+      - GND
+      - ANALOG
+  - name: mh1
+    polygon:
+      - - 6.75
+        - 3.8201
+      - - 6.6251
+        - 4.448
+      - - 6.3801
+        - 5.0395
+      - - 6.0244
+        - 5.5718
+      - - 5.5718
+        - 6.0244
+      - - 5.0395
+        - 6.3801
+      - - 4.448
+        - 6.6251
+      - - 3.8201
+        - 6.75
+      - - 3.1799
+        - 6.75
+      - - 2.552
+        - 6.6251
+      - - 1.9605
+        - 6.3801
+      - - 1.4282
+        - 6.0244
+      - - 0.9756
+        - 5.5718
+      - - 0.6199
+        - 5.0395
+      - - 0.3749
+        - 4.448
+      - - 0.25
+        - 3.8201
+      - - 0.25
+        - 3.1799
+      - - 0.3749
+        - 2.552
+      - - 0.6199
+        - 1.9605
+      - - 0.9756
+        - 1.4282
+      - - 1.4282
+        - 0.9756
+      - - 1.9605
+        - 0.6199
+      - - 2.552
+        - 0.3749
+      - - 3.1799
+        - 0.25
+      - - 3.8201
+        - 0.25
+      - - 4.448
+        - 0.3749
+      - - 5.0395
+        - 0.6199
+      - - 5.5718
+        - 0.9756
+      - - 6.0244
+        - 1.4282
+      - - 6.3801
+        - 1.9605
+      - - 6.6251
+        - 2.552
+      - - 6.75
+        - 3.1799
+    items:
+      - tracks
+      - vias
+  - name: mh2
+    polygon:
+      - - 59.75
+        - 3.8201
+      - - 59.6251
+        - 4.448
+      - - 59.3801
+        - 5.0395
+      - - 59.0244
+        - 5.5718
+      - - 58.5718
+        - 6.0244
+      - - 58.0395
+        - 6.3801
+      - - 57.448
+        - 6.6251
+      - - 56.8201
+        - 6.75
+      - - 56.1799
+        - 6.75
+      - - 55.552
+        - 6.6251
+      - - 54.9605
+        - 6.3801
+      - - 54.4282
+        - 6.0244
+      - - 53.9756
+        - 5.5718
+      - - 53.6199
+        - 5.0395
+      - - 53.3749
+        - 4.448
+      - - 53.25
+        - 3.8201
+      - - 53.25
+        - 3.1799
+      - - 53.3749
+        - 2.552
+      - - 53.6199
+        - 1.9605
+      - - 53.9756
+        - 1.4282
+      - - 54.4282
+        - 0.9756
+      - - 54.9605
+        - 0.6199
+      - - 55.552
+        - 0.3749
+      - - 56.1799
+        - 0.25
+      - - 56.8201
+        - 0.25
+      - - 57.448
+        - 0.3749
+      - - 58.0395
+        - 0.6199
+      - - 58.5718
+        - 0.9756
+      - - 59.0244
+        - 1.4282
+      - - 59.3801
+        - 1.9605
+      - - 59.6251
+        - 2.552
+      - - 59.75
+        - 3.1799
+    items:
+      - tracks
+      - vias
+  - name: mh3
+    polygon:
+      - - 6.75
+        - 44.2201
+      - - 6.6251
+        - 44.848
+      - - 6.3801
+        - 45.4395
+      - - 6.0244
+        - 45.9718
+      - - 5.5718
+        - 46.4244
+      - - 5.0395
+        - 46.7801
+      - - 4.448
+        - 47.0251
+      - - 3.8201
+        - 47.15
+      - - 3.1799
+        - 47.15
+      - - 2.552
+        - 47.0251
+      - - 1.9605
+        - 46.7801
+      - - 1.4282
+        - 46.4244
+      - - 0.9756
+        - 45.9718
+      - - 0.6199
+        - 45.4395
+      - - 0.3749
+        - 44.848
+      - - 0.25
+        - 44.2201
+      - - 0.25
+        - 43.5799
+      - - 0.3749
+        - 42.952
+      - - 0.6199
+        - 42.3605
+      - - 0.9756
+        - 41.8282
+      - - 1.4282
+        - 41.3756
+      - - 1.9605
+        - 41.0199
+      - - 2.552
+        - 40.7749
+      - - 3.1799
+        - 40.65
+      - - 3.8201
+        - 40.65
+      - - 4.448
+        - 40.7749
+      - - 5.0395
+        - 41.0199
+      - - 5.5718
+        - 41.3756
+      - - 6.0244
+        - 41.8282
+      - - 6.3801
+        - 42.3605
+      - - 6.6251
+        - 42.952
+      - - 6.75
+        - 43.5799
+    items:
+      - tracks
+      - vias
+  - name: mh4
+    polygon:
+      - - 59.75
+        - 44.2201
+      - - 59.6251
+        - 44.848
+      - - 59.3801
+        - 45.4395
+      - - 59.0244
+        - 45.9718
+      - - 58.5718
+        - 46.4244
+      - - 58.0395
+        - 46.7801
+      - - 57.448
+        - 47.0251
+      - - 56.8201
+        - 47.15
+      - - 56.1799
+        - 47.15
+      - - 55.552
+        - 47.0251
+      - - 54.9605
+        - 46.7801
+      - - 54.4282
+        - 46.4244
+      - - 53.9756
+        - 45.9718
+      - - 53.6199
+        - 45.4395
+      - - 53.3749
+        - 44.848
+      - - 53.25
+        - 44.2201
+      - - 53.25
+        - 43.5799
+      - - 53.3749
+        - 42.952
+      - - 53.6199
+        - 42.3605
+      - - 53.9756
+        - 41.8282
+      - - 54.4282
+        - 41.3756
+      - - 54.9605
+        - 41.0199
+      - - 55.552
+        - 40.7749
+      - - 56.1799
+        - 40.65
+      - - 56.8201
+        - 40.65
+      - - 57.448
+        - 40.7749
+      - - 58.0395
+        - 41.0199
+      - - 58.5718
+        - 41.3756
+      - - 59.0244
+        - 41.8282
+      - - 59.3801
+        - 42.3605
+      - - 59.6251
+        - 42.952
+      - - 59.75
+        - 43.5799
+    items:
+      - tracks
+      - vias
+  - name: radome_land1
+    polygon:
+      - - 6
+        - 27.2462
+      - - 5.9039
+        - 27.7292
+      - - 5.7155
+        - 28.1842
+      - - 5.4419
+        - 28.5937
+      - - 5.0937
+        - 28.9419
+      - - 4.6842
+        - 29.2155
+      - - 4.2292
+        - 29.4039
+      - - 3.7462
+        - 29.5
+      - - 3.2538
+        - 29.5
+      - - 2.7708
+        - 29.4039
+      - - 2.3158
+        - 29.2155
+      - - 1.9063
+        - 28.9419
+      - - 1.5581
+        - 28.5937
+      - - 1.2845
+        - 28.1842
+      - - 1.0961
+        - 27.7292
+      - - 1
+        - 27.2462
+      - - 1
+        - 26.7538
+      - - 1.0961
+        - 26.2708
+      - - 1.2845
+        - 25.8158
+      - - 1.5581
+        - 25.4063
+      - - 1.9063
+        - 25.0581
+      - - 2.3158
+        - 24.7845
+      - - 2.7708
+        - 24.5961
+      - - 3.2538
+        - 24.5
+      - - 3.7462
+        - 24.5
+      - - 4.2292
+        - 24.5961
+      - - 4.6842
+        - 24.7845
+      - - 5.0937
+        - 25.0581
+      - - 5.4419
+        - 25.4063
+      - - 5.7155
+        - 25.8158
+      - - 5.9039
+        - 26.2708
+      - - 6
+        - 26.7538
+    items:
+      - tracks
+      - vias
+  - name: radome_land2
+    polygon:
+      - - 59
+        - 27.2462
+      - - 58.9039
+        - 27.7292
+      - - 58.7155
+        - 28.1842
+      - - 58.4419
+        - 28.5937
+      - - 58.0937
+        - 28.9419
+      - - 57.6842
+        - 29.2155
+      - - 57.2292
+        - 29.4039
+      - - 56.7462
+        - 29.5
+      - - 56.2538
+        - 29.5
+      - - 55.7708
+        - 29.4039
+      - - 55.3158
+        - 29.2155
+      - - 54.9063
+        - 28.9419
+      - - 54.5581
+        - 28.5937
+      - - 54.2845
+        - 28.1842
+      - - 54.0961
+        - 27.7292
+      - - 54
+        - 27.2462
+      - - 54
+        - 26.7538
+      - - 54.0961
+        - 26.2708
+      - - 54.2845
+        - 25.8158
+      - - 54.5581
+        - 25.4063
+      - - 54.9063
+        - 25.0581
+      - - 55.3158
+        - 24.7845
+      - - 55.7708
+        - 24.5961
+      - - 56.2538
+        - 24.5
+      - - 56.7462
+        - 24.5
+      - - 57.2292
+        - 24.5961
+      - - 57.6842
+        - 24.7845
+      - - 58.0937
+        - 25.0581
+      - - 58.4419
+        - 25.4063
+      - - 58.7155
+        - 25.8158
+      - - 58.9039
+        - 26.2708
+      - - 59
+        - 26.7538
+    items:
+      - tracks
+      - vias
+  - name: flash_ep_vias
+    ref: '@flash.u3'
+    rect_mm:
+      - -1.7
+      - -2
+      - 1.7
+      - 2
+    layers:
+      - F.Cu
+    items:
+      - vias
+  - name: flash_ep_tracks
+    ref: '@flash.u3'
+    rect_mm:
+      - -1.7
+      - -2
+      - 1.7
+      - 2
+    layers:
+      - F.Cu
+    items:
+      - tracks
+    allow_classes:
+      - GND
+  - name: y1_digital
+    rect:
+      - 28.9
+      - 15.45
+      - 32.9
+      - 20
+    layers:
+      - In2.Cu
+      - B.Cu
+    items:
+      - tracks
+      - vias
+    allow_classes:
+      - GND
+      - XTAL
+fixed_block:
+  - name: rfm1
+    group: RFM1_MACRO
+    anchor: '@radio.u1'
+    solid_layers:
+      - In2.Cu
+  - name: pwr_stage
+    group: PWR_STAGE
+    anchor: '@pmic.u2'
+    solid_layers:
+      - F.Cu
+    sha256: a6b1556fc88471c217ca6f47fd689ec8187f2f96a9beda993d265e6334c06462
+  - name: efuse_stage
+    group: EFUSE_STAGE
+    anchor: '@power_in.efuse'
+    solid_layers:
+      - F.Cu
+    sha256: 6b8f3bae11111e9d6031b9a9ce931c0bb0832cd79c55d8c580ca105ac8c5a00f
+fanout:
+  - name: u1
+    ref: '@radio.u1'
+    skip_pads:
+      - B4
+      - B6
+      - B8
+      - F2
+      - H2
+      - K2
+      - M2
+      - A2
+      - B2
+    via_classes:
+      ground:
+        diameter_mm: 0.35
+        drill_mm: 0.15
+        nets:
+          - GND
+        sites:
+          - interstitial
+          - outside
+      xtal:
+        diameter_mm: 0.4
+        drill_mm: 0.2
+        nets:
+          - XTAL_*
+        layers:
+          - F.Cu
+      lvds:
+        diameter_mm: 0.4
+        drill_mm: 0.2
+        nets:
+          - LVDS_*
+        sites:
+          - vacant
+          - outside
+        layers:
+          - F.Cu
+      supply:
+        diameter_mm: 0.4
+        drill_mm: 0.2
+        nets:
+          - 1V0_PA
+          - 1V0_RF1
+          - 1V0_RF2
+          - 1V2
+          - 1V8
+          - 3V3_RADIO_IO
+          - VBGAP
+          - VOUT_14APLL
+          - VOUT_14SYNTH
+        sites:
+          - vacant
+          - outside
+      default:
+        diameter_mm: 0.4
+        drill_mm: 0.2
+        sites:
+          - vacant
+          - outside
+    surface_rings: 2
+    forbidden_exits:
+      - north
+      - east
+    neck_mm: 0.1
+    neck_classes:
+      - LVDS
+    drop_nets:
+      - 1V0_PA
+      - 1V2
+      - 1V8
+      - 3V3_RADIO_IO
+      - VBGAP
+      - VOUT_14APLL
+      - VOUT_14SYNTH
+    lock: true
+    partial:
+      bridge: true
+    bottom_sites:
+      parts:
+        - '@radio.c_vbgap'
+        - '@radio.c_apll'
+        - '@radio.c_synth'
+        - '@radio.c_rf1'
+        - '@radio.c_sram'
+        - '@radio.c_vco'
+      max_stub_mm: 1
+      zone: shadow
+      rotations:
+        - 0
+        - 90
+legalize:
+  outline: exact
+  order: scarcity
+  lookahead: regions
+region:
+  - name: lvds_header
+    refs:
+      - '@debug.j2'
+    rect:
+      - 8
+      - 6.95
+      - 34
+      - 15.7
+    hard: true
+    reason: J2 above J1, below the flash and Y1
+  - name: jtag
+    refs:
+      - '@debug.j3'
+    rect:
+      - 0.5
+      - 8
+      - 8.4
+      - 24.3
+    hard: true
+    reason: J3 at the west edge
+  - name: pmic_block
+    refs:
+      - '@pmic.u2'
+      - '@pmic.c_out*'
+      - '@pmic.r_fb2*'
+      - '@pmic.r_clkin*'
+      - '@pmic.r_en*'
+      - '@pmic.r_gpio2_ls'
+      - '@pmic.r_s*'
+      - '@pmic.r_nint*'
+      - '@pmic.r_pgood*'
+      - '@pmic.r_rst'
+      - '@pmic.c_rst'
+    rect:
+      - 38
+      - 2
+      - 58
+      - 26.65
+    hard: true
+    reason: PMIC block, power-first
+  - name: flash_block
+    refs:
+      - '@flash.u3'
+    rect:
+      - 8.3
+      - 15.75
+      - 19.3
+      - 24.6
+    hard: true
+    reason: QSPI within about 10 mm
+  - name: efuse_block
+    refs:
+      - '@power_in.efuse'
+    rect:
+      - 6.8
+      - 0.4
+      - 22.5
+      - 7.25
+    hard: true
+    reason: eFuse next to J1 pins 1-2
+  - name: can_block
+    refs:
+      - '@can.u4'
+    rect:
+      - 31.6
+      - 6.65
+      - 38
+      - 16
+    hard: true
+    reason: CAN after its ESD, near J1
+  - name: pmic_switching
+    refs:
+      - '@pmic.u2'
+    rect:
+      - 41
+      - 2
+      - 58
+      - 21.7
+    hard: true
+    reason: switch nodes >= 8 mm from Y1 and >= 5 mm from RF
+  - name: crystal
+    refs:
+      - '@radio.y1'
+    rect:
+      - 28.4
+      - 15.75
+      - 33
+      - 19.7
+    hard: true
+    reason: Y1 below its load caps, east of the exit bands
+  - name: radio_synth
+    refs:
+      - '@radio.c_synth'
+    rect:
+      - 32.1
+      - 22.8
+      - 34.15
+      - 23.95
+    hard: true
+    reason: VOUT_14SYNTH cap at B13
+  - name: xtal_cap_p
+    refs:
+      - '@radio.c_xp'
+    rect:
+      - 29.5
+      - 20.3
+      - 31.7
+      - 21.7
+    hard: true
+    reason: CLKP load cap below B15
+  - name: xtal_cap_n
+    refs:
+      - '@radio.c_xm'
+    rect:
+      - 28.2
+      - 19.9
+      - 29.6
+      - 22.05
+    hard: true
+    reason: CLKM load cap below C15
+  - name: pa_cap
+    refs:
+      - '@radio.c_pa'
+    rect:
+      - 30.05
+      - 29.4
+      - 31.2
+      - 31.85
+    hard: true
+    reason: VOUT_PA 220 nF at A2/B2
+  - name: rf2_cap
+    refs:
+      - '@radio.c_rf2'
+    rect:
+      - 26.1
+      - 31.85
+      - 28.6
+      - 33.2
+    hard: true
+    reason: VIN_13RF2 220 nF at C2/D2
+  - name: pa_bulk
+    refs:
+      - '@radio.c_pa_10u'
+      - '@radio.c_pa_22u'
+      - '@radio.c_rf2_10u'
+      - '@radio.c_rf2_22u'
+    rect:
+      - 31.4
+      - 19.5
+      - 37.5
+      - 26.6
+    hard: true
+    reason: VOUT_PA and VIN_13RF2 bulk, bottom side east of the package
+  - name: radio_west
+    refs:
+      - '@radio.c_bb[[]*'
+    rect:
+      - 15
+      - 26
+      - 19.55
+      - 33
+    hard: true
+    reason: VIN_13RF1 and VIN_18BB caps west of G5-J5 / F5, K5
+  - name: qspi_series
+    refs:
+      - '@flash.r_clk'
+    rect:
+      - 15.4
+      - 24.8
+      - 17.55
+      - 25.95
+    hard: true
+    reason: QSPI_CLK 22 ohm west of the R12 exit bands
+  - name: connector_esd
+    refs:
+      - '@uart.esd'
+      - '@can.esd'
+    rect:
+      - 31.6
+      - 6.65
+      - 38.5
+      - 11
+    hard: true
+    reason: CAN and UART ESD next to J1 pins 5-8, before the transceiver
+  - name: efuse_ic
+    refs:
+      - '@power_in.efuse'
+    rect:
+      - 6.8
+      - 0.4
+      - 15.8
+      - 7.25
+    hard: true
+    reason: eFuse IC west of its own TVS (see connector_tvs above)
+  - name: r4_digital
+    refs:
+      - '@can.c_term'
+      - '@can.esd'
+      - '@can.r_rx_d13'
+      - '@can.r_rx_f14'
+      - '@can.r_stb'
+      - '@can.r_term_h'
+      - '@can.r_term_l'
+      - '@can.r_tx_e14'
+      - '@can.r_tx_h14'
+      - '@can.u4'
+      - '@debug.j2'
+      - '@debug.j3'
+      - '@debug.r_dca_rst'
+      - '@flash.r_clk'
+      - '@flash.r_cs_pu'
+      - '@flash.r_d2_pu'
+      - '@flash.r_d3_pu'
+      - '@flash.u3'
+      - '@pmic.c_rst'
+      - '@pmic.r_clkin_gnd'
+      - '@pmic.r_clkin_sync'
+      - '@pmic.r_en1_pd'
+      - '@pmic.r_en1_pu'
+      - '@pmic.r_en2_pu'
+      - '@pmic.r_en3_pu'
+      - '@pmic.r_gpio2_ls'
+      - '@pmic.r_nint_pu'
+      - '@pmic.r_pgood_pu'
+      - '@pmic.r_rst'
+      - '@pmic.r_scl_pu'
+      - '@pmic.r_sda_pu'
+      - '@power_in.r_pg_div'
+      - '@power_in.r_pg_pu'
+      - '@radio.c_xm'
+      - '@radio.c_xp'
+      - '@radio.d_led'
+      - '@radio.q_led'
+      - '@radio.r_led'
+      - '@radio.r_nerr_in_pu'
+      - '@radio.r_nerr_out_pu'
+      - '@radio.r_pmic_int'
+      - '@radio.r_sop0_pu'
+      - '@radio.r_sop1_pd'
+      - '@radio.r_sop2_pd'
+      - '@radio.r_spia_cs_pu'
+      - '@radio.r_sync_in_pd'
+      - '@radio.r_uart_rx_pu'
+      - '@radio.r_warm_pu'
+      - '@radio.y1'
+      - '@tp_efuse_pg'
+      - '@tp_frame'
+      - '@tp_nerror'
+      - '@tp_nreset'
+      - '@tp_pgood'
+      - '@tp_pmic_nint'
+      - '@tp_sop0'
+      - '@tp_sop1'
+      - '@tp_sop2'
+      - '@tp_uart_rx'
+      - '@tp_uart_tx'
+      - '@tp_warm_reset'
+      - '@uart.esd'
+      - '@uart.r_rx'
+      - '@uart.r_tx'
+    areas:
+      - rect:
+          - 0.0
+          - 0.0
+          - 7.599
+          - 47.4
+      - rect:
+          - 7.599
+          - 0.0
+          - 20.8
+          - 28.2
+      - rect:
+          - 20.8
+          - 0.0
+          - 31.2
+          - 33.2
+      - rect:
+          - 31.2
+          - 0.0
+          - 52.972
+          - 21.7
+      - rect:
+          - 52.972
+          - 0.0
+          - 60.0
+          - 47.4
+    hard: true
+    reason: 'R4: no digital copper within 5 mm of the RF region (derived by integrate.py)'
+side:
+  bottom:
+    - '@radio.c_pa'
+    - '@radio.c_rf2'
+    - '@radio.c_pa_10u'
+    - '@radio.c_pa_22u'
+    - '@radio.c_rf2_10u'
+    - '@radio.c_rf2_22u'
+group:
+  - members:
+      - '@radio.c_apll'
+      - '@radio.c_bb[[]*'
+      - '@radio.c_clk'
+      - '@radio.c_diff'
+      - '@radio.c_dig[[]*'
+      - '@radio.c_dig_2u2'
+      - '@radio.c_dig_10n'
+      - '@radio.c_io18'
+      - '@radio.c_rf1'
+      - '@radio.c_sram'
+      - '@radio.c_synth'
+      - '@radio.c_vbgap'
+      - '@radio.c_vco'
+      - '@radio.c_vio[[]*'
+      - '@radio.c_vio_2u2'
+      - '@radio.c_vnwa'
+      - '@radio.c_pa'
+      - '@radio.c_rf2'
+    anchor: '@radio.u1'
+    radius_mm: 11
+    hard: true
+  - members:
+      - '@radio.c_*_10u'
+      - '@radio.c_*_22u'
+      - '@radio.c_*_bulk'
+    anchor: '@radio.u1'
+    radius_mm: 14
+    hard: true
+  - members:
+      - '@radio.y1'
+    anchor: '@radio.u1'
+    radius_mm: 12.5
+    hard: true
+  - members:
+      - '@pmic.fb_rf1'
+    anchor: '@radio.u1'
+    radius_mm: 12
+    hard: true
+    anchor_pad: H5
+  - members:
+      - '@pmic.fb_rf2_a'
+      - '@pmic.fb_rf2_b'
+    anchor: '@radio.u1'
+    radius_mm: 10
+    hard: true
+    anchor_pad: D2
+  - members:
+      - '@pmic.r_damp_rf1'
+    anchor: '@pmic.fb_rf1'
+    radius_mm: 3
+    hard: true
+    anchor_pad: '2'
+  - members:
+      - '@pmic.r_damp_rf2'
+    anchor: '@pmic.fb_rf2_a'
+    radius_mm: 3
+    hard: true
+    anchor_pad: '2'
+  - members:
+      - '@pmic.r_damp_1v8'
+    anchor: '@pmic.fb_1v8'
+    radius_mm: 3
+    hard: true
+    anchor_pad: '2'
+  - members:
+      - '@pmic.c_damp_rf1'
+    anchor: '@pmic.r_damp_rf1'
+    radius_mm: 2
+    hard: true
+    anchor_pad: '2'
+  - members:
+      - '@pmic.c_damp_rf2'
+    anchor: '@pmic.r_damp_rf2'
+    radius_mm: 2
+    hard: true
+    anchor_pad: '2'
+  - members:
+      - '@pmic.c_damp_1v8'
+    anchor: '@pmic.r_damp_1v8'
+    radius_mm: 2
+    hard: true
+    anchor_pad: '2'
+  - members:
+      - '@power_in.r_*'
+      - '@power_in.c_itimer'
+      - '@power_in.c_dvdt'
+    anchor: '@power_in.efuse'
+    radius_mm: 8
+    hard: false
+  - members:
+      - '@can.c_*'
+      - '@can.r_*'
+    anchor: '@can.u4'
+    radius_mm: 7.5
+    hard: true
+  - members:
+      - '@flash.c_*'
+      - '@flash.r_cs_pu'
+      - '@flash.r_d2_pu'
+      - '@flash.r_d3_pu'
+    anchor: '@flash.u3'
+    radius_mm: 5.5
+    hard: true
+  - members:
+      - '@flash.r_clk'
+    anchor: '@radio.u1'
+    radius_mm: 11
+    hard: true
+  - members:
+      - '@radio.c_xp'
+      - '@radio.c_xm'
+    anchor: '@radio.u1'
+    radius_mm: 9.5
+    hard: true
+  - members:
+      - '@uart.esd'
+      - '@can.esd'
+    anchor: '@j1'
+    radius_mm: 12
+    hard: true
+  - members:
+      - '@radio.r_pa'
+    anchor: '@radio.u1'
+    radius_mm: 11
+    hard: true
+    anchor_pad: D2
+net_class:
+  RF:
+    nets:
+      - RF_RX*
+      - RF_TX*
+  XTAL:
+    nets:
+      - XTAL_*
+    clearance_mm: 0.15
+  QSPI:
+    nets:
+      - QSPI_*
+  PWR:
+    nets:
+      - 1V0_*
+      - 1V2*
+      - 1V8*
+      - 3V3*
+      - 5V_SYS
+      - VIN_5V
+    width_mm: 0.25
+    clearance_mm: 0.15
+  SW:
+    nets:
+      - PMIC_SW_B*
+    width_mm: 0.6
+    clearance_mm: 0.2
+  GND:
+    nets:
+      - GND
+    plane_layer: In1.Cu
+  ANALOG:
+    nets:
+      - VOUT_14*
+      - VBGAP
+      - EFUSE_EN_UVLO
+      - EFUSE_OVLO
+      - EFUSE_PGTH
+      - EFUSE_ILM
+      - EFUSE_ITIMER
+      - EFUSE_DVDT
+      - VIO_LS_ON
+      - DAMP_*
+      - PMIC_FB_B2
+  LVDS:
+    nets:
+      - LVDS_TX0_P
+      - LVDS_TX0_N
+      - LVDS_TX1_P
+      - LVDS_TX1_N
+      - LVDS_CLK_P
+      - LVDS_CLK_N
+      - LVDS_FRCLK_P
+      - LVDS_FRCLK_N
+    width_mm: 0.17
+    clearance_mm: 0.1
+  rail_1v0_rf1:
+    nets:
+      - 1V0_RF1
+    plane_layer: In3.Cu
+  rail_1v0_rf2:
+    nets:
+      - 1V0_RF2
+    plane_layer: In3.Cu
+  rail_1v0_pa:
+    nets:
+      - 1V0_PA
+    plane_layer: In3.Cu
+  rail_1v2:
+    nets:
+      - 1V2
+    plane_layer: In3.Cu
+  rail_1v8:
+    nets:
+      - 1V8
+    plane_layer: In3.Cu
+  rail_5v_sys:
+    nets:
+      - 5V_SYS
+    plane_layer: In3.Cu
+  rail_1v0_sh:
+    nets:
+      - 1V0_SH
+    plane_layer: In3.Cu
+diff_pair:
+  - name: lvds_tx0
+    p: LVDS_TX0_P
+    n: LVDS_TX0_N
+    width_mm: 0.17
+    gap_mm: 0.18
+    skew_mm: 0.1
+    layers:
+      - F.Cu
+    max_uncoupled_mm: 3
+  - name: lvds_tx1
+    p: LVDS_TX1_P
+    n: LVDS_TX1_N
+    width_mm: 0.17
+    gap_mm: 0.18
+    skew_mm: 0.1
+    layers:
+      - F.Cu
+    max_uncoupled_mm: 3
+  - name: lvds_clk
+    p: LVDS_CLK_P
+    n: LVDS_CLK_N
+    width_mm: 0.17
+    gap_mm: 0.18
+    skew_mm: 0.1
+    layers:
+      - F.Cu
+    max_uncoupled_mm: 3
+  - name: lvds_frclk
+    p: LVDS_FRCLK_P
+    n: LVDS_FRCLK_N
+    width_mm: 0.17
+    gap_mm: 0.18
+    skew_mm: 0.1
+    layers:
+      - F.Cu
+    max_uncoupled_mm: 3
+length_match:
+  - name: lvds
+    nets:
+      - LVDS_TX0_P
+      - LVDS_TX0_N
+      - LVDS_TX1_P
+      - LVDS_TX1_N
+      - LVDS_CLK_P
+      - LVDS_CLK_N
+      - LVDS_FRCLK_P
+      - LVDS_FRCLK_N
+    tolerance_mm: 2
+ir_drop:
+  - net: 1V0_RF1
+    sources:
+      '@pmic.fb_rf1':
+        - '2'
+    sinks:
+      '@radio.u1':
+        - G5
+        - H5
+        - J5
+    current_a: 2.5
+    budget_mohm: 4
+    temperature_c: 60
+    two_point: false
+  - net: 1V0_RF2
+    sources:
+      '@pmic.fb_rf2_a':
+        - '2'
+      '@pmic.fb_rf2_b':
+        - '2'
+    sinks:
+      '@radio.u1':
+        - C2
+        - D2
+      '@radio.r_pa':
+        - '1'
+    current_a: 2.5
+    budget_mohm: 4
+    temperature_c: 60
+    two_point: false
+  - net: 1V2
+    sources:
+      '@pmic.fb_1v2':
+        - '2'
+    sinks:
+      '@radio.u1':
+        - G15
+        - H15
+        - N11
+        - P14
+        - P15
+        - R6
+    current_a: 1
+    budget_mohm: 12
+    temperature_c: 60
+    two_point: false
+  - net: 1V8
+    sources:
+      '@pmic.fb_1v8':
+        - '2'
+    sinks:
+      '@radio.u1':
+        - B11
+        - B12
+        - D15
+        - F5
+        - K5
+        - R9
+    current_a: 0.85
+    budget_mohm: 21
+    temperature_c: 60
+    two_point: false
+  - net: 3V3_RADIO_IO
+    sources:
+      '@radio.u6':
+        - '6'
+    sinks:
+      '@radio.u1':
+        - F15
+        - R10
+    current_a: 0.2
+    budget_mohm: 165
+    temperature_c: 60
+    two_point: false
+  - net: 3V3
+    sources:
+      L1:
+        - '2'
+    current_a: 0.2
+    budget_mohm: 165
+    temperature_c: 60
+    two_point: false
+  - net: 5V_SYS
+    sources:
+      '@power_in.efuse':
+        - '6'
+    current_a: 1.5
+    budget_mohm: 33
+    temperature_c: 60
+    two_point: false
+  - net: 1V0_BUCK
+    sources:
+      L3:
+        - '2'
+    sinks:
+      R_SH1:
+        - '1'
+    current_a: 2.5
+    budget_mohm: 0.5
+    temperature_c: 60
+    two_point: false
+  - net: 1V0_SH
+    sources:
+      R_SH1:
+        - '2'
+    sinks:
+      '@pmic.fb_rf1':
+        - '1'
+      '@pmic.fb_rf2_a':
+        - '1'
+      '@pmic.fb_rf2_b':
+        - '1'
+    current_a: 2.5
+    budget_mohm: 0.5
+    temperature_c: 60
+    two_point: false
+pour:
+  - layer: B.Cu
+    net: GND
+    connect: solid
+plane_partition:
+  - layer: In3.Cu
+    nets:
+      - 1V0_RF1
+      - 1V0_RF2
+      - 1V0_PA
+      - 1V2
+      - 1V8
+      - 5V_SYS
+      - 1V0_SH
+    order: listed
+    fixed_lands: true
+    fill: GND
+    split_gap_mm: 0.3
+    min_width_mm: 1
+    currents:
+      1V0_RF1: 2.5
+      1V0_RF2: 2.5
+      1V2: 1
+      1V8: 0.85
+      5V_SYS: 1.5
+      1V0_SH: 2.5
+    budgets_mohm:
+      1V0_RF1: 4
+      1V0_RF2: 4
+      1V2: 12
+      1V8: 21
+      5V_SYS: 33
+    sources:
+      1V0_RF1:
+        '@pmic.fb_rf1': '2'
+      1V0_RF2:
+        '@pmic.fb_rf2_a': '2'
+      1V0_PA:
+        '@radio.r_pa': '2'
+      1V2:
+        '@pmic.fb_1v2': '2'
+      1V8:
+        '@pmic.fb_1v8': '2'
+      5V_SYS:
+        '@power_in.efuse': '6'
+      1V0_SH:
+        R_SH1: '2'
+  - layer: F.Cu
+    nets:
+      - GND
+    region:
+      refs:
+        - '@flash.u3'
+    terminals: pad
+    connect: solid
+noise_keepout:
+  - name: sw_to_crystal
+    nets:
+      - PMIC_SW_B*
+    from: '@radio.y1'
+    min_distance_mm: 8
+  - name: sw_to_rf
+    nets:
+      - PMIC_SW_B*
+    from_region: rf_macro
+    min_distance_mm: 5
+  - name: digital_to_rf
+    layers:
+      - F.Cu
+      - In1.Cu
+      - In2.Cu
+    from_region: rf_macro
+    min_distance_mm: 5
+    except_classes:
+      - RF
+      - PWR
+      - GND
+      - ANALOG
+height_limit:
+  rule: radome_visibility
+  angle_deg: 30
+  from_copper:
+    - - 17.599
+      - 37.928
+      - 28.417
+      - 42.048
+    - - 34.496
+      - 36.25
+      - 42.972
+      - 40.37

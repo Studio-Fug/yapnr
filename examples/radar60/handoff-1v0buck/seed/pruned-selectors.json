@@ -1,0 +1,22 @@
+[
+  "@pmic.c_in*",
+  "@pmic.c_in[[]*",
+  "@pmic.c_snb*",
+  "@pmic.c_vana",
+  "@pmic.l_*",
+  "@pmic.l_b*",
+  "@pmic.l_b0",
+  "@pmic.l_b1",
+  "@pmic.l_b2",
+  "@pmic.l_b3",
+  "@pmic.r_sh",
+  "@pmic.r_snb*",
+  "@pmic.r_snb0",
+  "@pmic.r_snb1",
+  "@pmic.r_snb2",
+  "@pmic.r_snb3",
+  "@pmic.tp_isns",
+  "@power_in.c_in_*",
+  "@power_in.c_sys_*",
+  "@power_in.tvs"
+]

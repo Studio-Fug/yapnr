@@ -1,0 +1,271 @@
+{
+  "class_clearance": "maze",
+  "copper_keepouts": [],
+  "default_clearance_mm": 0.2,
+  "diff_pairs": [],
+  "dru_routing": true,
+  "edge": "exact",
+  "fab": {
+    "clearance_mm": 0.1,
+    "component_pth_min_drill_mm": 0.3,
+    "edge_clearance_mm": 0.3,
+    "hole_clearance_mm": 0.1524,
+    "hole_to_edge_mm": 0.5,
+    "hole_to_hole_mm": 0.28,
+    "min_npth_drill_mm": 0.5,
+    "min_through_drill_mm": 0.15,
+    "min_track_width_mm": 0.1,
+    "min_via_diameter_mm": 0.31,
+    "npth_hole_clearance_mm": 0.2,
+    "pth_hole_clearance_mm": 0.2,
+    "pth_hole_to_hole_mm": 0.41,
+    "smd_pad_clearance_mm": 0.1,
+    "track_width_mm": 0.15,
+    "via_annular_mm": 0.0762,
+    "via_classes": {
+      "bga_gnd": {
+        "diameter_mm": 0.35,
+        "drill_mm": 0.15
+      },
+      "default": {
+        "diameter_mm": 0.4,
+        "drill_mm": 0.2
+      },
+      "escape": {
+        "diameter_mm": 0.4,
+        "drill_mm": 0.2
+      },
+      "fence": {
+        "diameter_mm": 0.32,
+        "drill_mm": 0.15
+      },
+      "power": {
+        "diameter_mm": 0.55,
+        "drill_mm": 0.3
+      }
+    },
+    "via_diameter_mm": 0.4,
+    "via_drill_mm": 0.2,
+    "via_to_smd_pad_mm": 0.1
+  },
+  "fab_profile": "pcbway-adv-6l-rf",
+  "ir_drop": [
+    {
+      "budget_mohm": 0.5,
+      "current_a": 2.5,
+      "h_mm": 0.1,
+      "hard": false,
+      "net": "1V0_BUCK",
+      "sinks": ["R_SH1:1"],
+      "sources": ["L3:2"],
+      "split": "equal",
+      "temperature_c": 60.0,
+      "two_point": false
+    }
+  ],
+  "layers": 6,
+  "length_match": [],
+  "mounting_holes": [],
+  "net_classes": [
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "RF",
+      "nets": [],
+      "plane_layer": null,
+      "width_mm": null
+    },
+    {
+      "clearance_mm": 0.15,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "XTAL",
+      "nets": [],
+      "plane_layer": null,
+      "width_mm": null
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "QSPI",
+      "nets": [],
+      "plane_layer": null,
+      "width_mm": null
+    },
+    {
+      "clearance_mm": 0.15,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "PWR",
+      "nets": ["1V0_BUCK", "1V0_SH", "1V2_BUCK", "1V8_BUCK", "3V3", "5V_SYS"],
+      "plane_layer": null,
+      "width_mm": 0.25
+    },
+    {
+      "clearance_mm": 0.2,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "SW",
+      "nets": ["PMIC_SW_B2", "PMIC_SW_B0", "PMIC_SW_B3", "PMIC_SW_B1"],
+      "plane_layer": null,
+      "width_mm": 0.6
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "GND",
+      "nets": ["GND"],
+      "plane_layer": "In1.Cu",
+      "width_mm": null
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "ANALOG",
+      "nets": ["PMIC_FB_B2"],
+      "plane_layer": null,
+      "width_mm": null
+    },
+    {
+      "clearance_mm": 0.1,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "LVDS",
+      "nets": [],
+      "plane_layer": null,
+      "width_mm": 0.17
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "rail_1v0_rf1",
+      "nets": [],
+      "plane_layer": "In3.Cu",
+      "width_mm": null
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "rail_1v0_rf2",
+      "nets": [],
+      "plane_layer": "In3.Cu",
+      "width_mm": null
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "rail_1v0_pa",
+      "nets": [],
+      "plane_layer": "In3.Cu",
+      "width_mm": null
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "rail_1v2",
+      "nets": [],
+      "plane_layer": "In3.Cu",
+      "width_mm": null
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "rail_1v8",
+      "nets": [],
+      "plane_layer": "In3.Cu",
+      "width_mm": null
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "rail_5v_sys",
+      "nets": ["5V_SYS"],
+      "plane_layer": "In3.Cu",
+      "width_mm": null
+    },
+    {
+      "clearance_mm": null,
+      "copper_oz": 1.0,
+      "current_a": null,
+      "delta_t_c": 10.0,
+      "external": true,
+      "name": "rail_1v0_sh",
+      "nets": ["1V0_SH"],
+      "plane_layer": "In3.Cu",
+      "width_mm": null
+    }
+  ],
+  "plane_fallback_drops": false,
+  "plane_partition": [
+    {
+      "budgets_mohm": {},
+      "connect": "solid",
+      "core_no_vias": true,
+      "currents": {},
+      "fill": null,
+      "h_mm": 0.05,
+      "layer": "F.Cu",
+      "min_width_mm": 0.25,
+      "nets": ["5V_SYS", "PMIC_SW_B0", "PMIC_SW_B1", "PMIC_SW_B2", "PMIC_SW_B3", "1V0_BUCK", "GND"],
+      "order": "current",
+      "pieces": ["GND", "5V_SYS"],
+      "region": {
+        "margin_mm": 0.5,
+        "refs": ["C14", "C15", "C16", "C17", "L1", "L2", "L3", "L4", "R_SH1", "U2"]
+      },
+      "sources": {},
+      "split_gap_mm": 0.2,
+      "stitch_vias": 4,
+      "terminal_reach_mm": 0.8,
+      "terminals": "pad"
+    }
+  ],
+  "pours": [
+    {
+      "connect": "solid",
+      "layer": "B.Cu",
+      "net": "GND",
+      "stitch": true
+    }
+  ],
+  "references_on_fab": true,
+  "route_pairs": "coupled"
+}

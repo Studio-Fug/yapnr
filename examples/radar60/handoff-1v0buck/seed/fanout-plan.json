@@ -1,0 +1,269 @@
+{
+  "inputs_sha256": "01c8c7e3a6ce138d5d27a20b18c9b86aecc4d045faec2e06c1456823fec50d38",
+  "diagnostics": {
+    "signals": 40,
+    "signals_escaped": 37,
+    "drops": 92,
+    "drops_placed": 84,
+    "kinds": {
+      "dogbone": 18,
+      "drop": 84,
+      "failed": 11,
+      "skipped": 29,
+      "surface": 19
+    },
+    "failed": {
+      "A3": "no legal path or via site (static obstacles)",
+      "A5": "no legal path or via site (static obstacles)",
+      "A7": "no legal path or via site (static obstacles)",
+      "E13": "lost its resources to higher-priority pads",
+      "G1": "no legal path or via site (static obstacles)",
+      "J1": "no legal path or via site (static obstacles)",
+      "L1": "no legal path or via site (static obstacles)",
+      "N11": "lost its resources to higher-priority pads",
+      "P14": "no legal path or via site (static obstacles)",
+      "P4": "lost its resources to higher-priority pads",
+      "P9": "lost its resources to higher-priority pads"
+    }
+  },
+  "exit_strips": [
+    {
+      "ball": "B15",
+      "net": "XTAL_P",
+      "edge": "south",
+      "exit": [29.9, 22.15],
+      "rect": [29.65, 19.75, 30.15, 22.25]
+    },
+    {
+      "ball": "C15",
+      "net": "XTAL_N",
+      "edge": "south",
+      "exit": [29.25, 22.15],
+      "rect": [29.0, 19.75, 29.5, 22.25]
+    },
+    {
+      "ball": "E15",
+      "net": "SPIA_CS_N",
+      "edge": "south",
+      "exit": [27.95, 22.15],
+      "rect": [27.7, 19.75, 28.2, 22.25]
+    },
+    {
+      "ball": "J14",
+      "net": "LVDS_TX0_P",
+      "edge": "south",
+      "exit": [25.675, 22.15],
+      "rect": [25.425, 19.75, 25.925, 22.25]
+    },
+    {
+      "ball": "J15",
+      "net": "LVDS_TX0_N",
+      "edge": "south",
+      "exit": [26.0, 22.15],
+      "rect": [25.75, 19.75, 26.25, 22.25]
+    },
+    {
+      "ball": "K14",
+      "net": "LVDS_TX1_P",
+      "edge": "south",
+      "exit": [24.7, 22.15],
+      "rect": [24.45, 19.75, 24.95, 22.25]
+    },
+    {
+      "ball": "K15",
+      "net": "LVDS_TX1_N",
+      "edge": "south",
+      "exit": [25.35, 22.15],
+      "rect": [25.1, 19.75, 25.6, 22.25]
+    },
+    {
+      "ball": "L14",
+      "net": "LVDS_CLK_P",
+      "edge": "south",
+      "exit": [23.725, 22.15],
+      "rect": [23.475, 19.75, 23.975, 22.25]
+    },
+    {
+      "ball": "L15",
+      "net": "LVDS_CLK_N",
+      "edge": "south",
+      "exit": [24.375, 22.15],
+      "rect": [24.125, 19.75, 24.625, 22.25]
+    },
+    {
+      "ball": "M14",
+      "net": "LVDS_FRCLK_P",
+      "edge": "south",
+      "exit": [22.75, 22.15],
+      "rect": [22.5, 19.75, 23.0, 22.25]
+    },
+    {
+      "ball": "M15",
+      "net": "LVDS_FRCLK_N",
+      "edge": "south",
+      "exit": [23.4, 22.15],
+      "rect": [23.15, 19.75, 23.65, 22.25]
+    },
+    {
+      "ball": "P11",
+      "net": "QSPI_CS_N",
+      "edge": "west",
+      "exit": [20.15, 26.05],
+      "rect": [17.75, 25.8, 20.25, 26.3]
+    },
+    {
+      "ball": "P12",
+      "net": "QSPI_D3",
+      "edge": "west",
+      "exit": [20.15, 25.075],
+      "rect": [17.75, 24.825, 20.25, 25.325]
+    },
+    {
+      "ball": "P13",
+      "net": "SPI_HOST_INTR",
+      "edge": "west",
+      "exit": [20.15, 24.425],
+      "rect": [17.75, 24.175, 20.25, 24.675]
+    },
+    {
+      "ball": "R11",
+      "net": "JTAG_TDI",
+      "edge": "west",
+      "exit": [20.15, 26.375],
+      "rect": [17.75, 26.125, 20.25, 26.625]
+    },
+    {
+      "ball": "R12",
+      "net": "QSPI_CLK",
+      "edge": "west",
+      "exit": [20.15, 25.4],
+      "rect": [17.75, 25.15, 20.25, 25.65]
+    },
+    {
+      "ball": "R13",
+      "net": "QSPI_D0",
+      "edge": "west",
+      "exit": [20.15, 24.75],
+      "rect": [17.75, 24.5, 20.25, 25.0]
+    },
+    {
+      "ball": "R14",
+      "net": "QSPI_D2",
+      "edge": "west",
+      "exit": [20.15, 24.1],
+      "rect": [17.75, 23.85, 20.25, 24.35]
+    },
+    {
+      "ball": "R3",
+      "net": "NRESET",
+      "edge": "west",
+      "exit": [20.15, 27.675],
+      "rect": [17.75, 27.425, 20.25, 27.925]
+    }
+  ],
+  "own_path_strips": [
+    {
+      "ball": "B15",
+      "net": "XTAL_P",
+      "edge": "south",
+      "exit": [29.9, 22.15],
+      "rect": [29.65, 19.75, 30.15, 22.25],
+      "slots": ["xtal_cap_p"]
+    },
+    {
+      "ball": "C15",
+      "net": "XTAL_N",
+      "edge": "south",
+      "exit": [29.25, 22.15],
+      "rect": [29.0, 19.75, 29.5, 22.25],
+      "slots": ["xtal_cap_n"]
+    }
+  ],
+  "bands": [
+    {
+      "name": "exit_south_1",
+      "edge": "south",
+      "balls": ["J14", "J15", "K14", "K15", "L14", "L15", "M14", "M15"],
+      "rect": [22.5, 19.75, 26.25, 22.25]
+    },
+    {
+      "name": "exit_south_2",
+      "edge": "south",
+      "balls": ["E15"],
+      "rect": [27.7, 19.75, 28.2, 22.25]
+    },
+    {
+      "name": "exit_west_1",
+      "edge": "west",
+      "balls": ["P11", "P12", "P13", "R11", "R12", "R13", "R14"],
+      "rect": [17.75, 23.85, 20.25, 26.625]
+    },
+    {
+      "name": "exit_west_2",
+      "edge": "west",
+      "balls": ["R3"],
+      "rect": [17.75, 27.425, 20.25, 27.925]
+    }
+  ],
+  "slot_errors": [],
+  "bottom_sites": {
+    "C38": {
+      "at": [30.3062, 28.0813],
+      "rot": 90.0,
+      "side": "bottom",
+      "stubs": {
+        "1": 0.9653,
+        "2": 0.2544
+      },
+      "address": "radio.c_apll"
+    },
+    "C57": {
+      "at": [27.2188, 29.95],
+      "rot": 0.0,
+      "side": "bottom",
+      "stubs": {
+        "1": 0.14,
+        "2": 0.148
+      },
+      "address": "radio.c_rf1"
+    },
+    "C61": {
+      "at": [22.6687, 29.7875],
+      "rot": 0.0,
+      "side": "bottom",
+      "stubs": {
+        "1": 0.9087,
+        "2": 0.1213
+      },
+      "address": "radio.c_sram"
+    },
+    "C63": {
+      "at": [28.925, 27.7562],
+      "rot": 90.0,
+      "side": "bottom",
+      "stubs": {
+        "1": 0.7573,
+        "2": 0.165
+      },
+      "address": "radio.c_vbgap"
+    },
+    "C64": {
+      "at": [25.35, 30.5188],
+      "rot": 90.0,
+      "side": "bottom",
+      "stubs": {
+        "1": 0.2986,
+        "2": 0.148
+      },
+      "address": "radio.c_vco"
+    }
+  },
+  "bottom_unplaced": {
+    "C62": "no pose clears the fanout with every pad within 1.00 mm of its via"
+  },
+  "site_parts_removed_from": {
+    "region": ["radio_apll:@radio.c_apll", "radio_vbgap:@radio.c_vbgap", "radio_west:@radio.c_rf1"],
+    "orientation": ["@radio.c_apll", "@radio.c_vbgap"],
+    "side": []
+  }
+}

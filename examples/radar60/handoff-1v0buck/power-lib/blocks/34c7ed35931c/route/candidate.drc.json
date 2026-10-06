@@ -1,0 +1,726 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-10-05T08:54:45",
+  "ignored_checks": [
+    {
+      "description": "Footprint has no courtyard defined",
+      "key": "missing_courtyard"
+    },
+    {
+      "description": "Track endpoint not centered on via",
+      "key": "track_not_centered_on_via"
+    },
+    {
+      "description": "Tuning profile track geometries",
+      "key": "tuning_profile_track_geometries"
+    },
+    {
+      "description": "Footprint doesn't match symbol's footprint filters",
+      "key": "footprint_filters_mismatch"
+    },
+    {
+      "description": "Footprint component type doesn't match footprint pads",
+      "key": "footprint_type_mismatch"
+    }
+  ],
+  "included_severities": ["error", "warning"],
+  "kicad_version": "10.0.6",
+  "schematic_parity": [],
+  "source": "candidate.kicad_pcb",
+  "unconnected_items": [
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 112",
+          "pos": {
+            "x": 36.3,
+            "y": 42.1
+          },
+          "uuid": "a331a6a1-2442-4e63-9631-fe08009ef672"
+        },
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 123",
+          "pos": {
+            "x": 39.6,
+            "y": 44.65
+          },
+          "uuid": "082a6fa0-be52-4f07-a3b5-56813f81bc9c"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 118",
+          "pos": {
+            "x": 39.8,
+            "y": 40.55
+          },
+          "uuid": "3fca2d2d-842f-4853-a266-fb735a87fa86"
+        },
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 109",
+          "pos": {
+            "x": 36.5,
+            "y": 39.05
+          },
+          "uuid": "bcc605f8-045a-4b97-b8a1-4ebb7323ee25"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 116",
+          "pos": {
+            "x": 42.35,
+            "y": 41.55
+          },
+          "uuid": "03685462-2936-43cd-a7ad-f8ef6ab33ae8"
+        },
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 118",
+          "pos": {
+            "x": 39.8,
+            "y": 40.55
+          },
+          "uuid": "3fca2d2d-842f-4853-a266-fb735a87fa86"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 116",
+          "pos": {
+            "x": 42.35,
+            "y": 41.55
+          },
+          "uuid": "03685462-2936-43cd-a7ad-f8ef6ab33ae8"
+        },
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 116",
+          "pos": {
+            "x": 42.35,
+            "y": 41.55
+          },
+          "uuid": "03685462-2936-43cd-a7ad-f8ef6ab33ae8"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 117",
+          "pos": {
+            "x": 42.85,
+            "y": 38.7
+          },
+          "uuid": "532ddff1-d0fe-490f-ae62-e829ce88439d"
+        },
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 116",
+          "pos": {
+            "x": 42.35,
+            "y": 41.55
+          },
+          "uuid": "03685462-2936-43cd-a7ad-f8ef6ab33ae8"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane 5V_SYS In3.Cu' [5V_SYS] on In3.Cu, priority 0",
+          "pos": {
+            "x": 30.0,
+            "y": 45.55
+          },
+          "uuid": "00c8a093-c0e0-4eee-87a4-f286571ea657"
+        },
+        {
+          "description": "Zone 'plane 5V_SYS F.Cu' [5V_SYS] on F.Cu, priority 108",
+          "pos": {
+            "x": 46.05,
+            "y": 39.0
+          },
+          "uuid": "59baea5f-f3ac-441c-8d79-f043578ed688"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C29 on F.Cu",
+          "pos": {
+            "x": 30.925,
+            "y": 35.895
+          },
+          "uuid": "665c1186-5484-4bba-8e59-fbfb8be5db9e"
+        },
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 110",
+          "pos": {
+            "x": 36.15,
+            "y": 37.1
+          },
+          "uuid": "9383b613-e79a-4ff1-8305-1de4db1a4296"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 122",
+          "pos": {
+            "x": 39.6,
+            "y": 43.65
+          },
+          "uuid": "9ced0f09-a00c-463b-be7e-7bfb15d6e92b"
+        },
+        {
+          "description": "Zone 'pour GND B.Cu' [GND] on B.Cu, priority 0",
+          "pos": {
+            "x": 30.0,
+            "y": 30.0
+          },
+          "uuid": "3b8530d1-1e2a-4b23-bf8c-24527b13589f"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 121",
+          "pos": {
+            "x": 40.85,
+            "y": 44.65
+          },
+          "uuid": "e573ae13-b65b-4f6d-8377-e1a107a8352e"
+        },
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 122",
+          "pos": {
+            "x": 39.6,
+            "y": 43.65
+          },
+          "uuid": "9ced0f09-a00c-463b-be7e-7bfb15d6e92b"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 115",
+          "pos": {
+            "x": 41.95,
+            "y": 40.6
+          },
+          "uuid": "bf7a1406-3c92-4fda-9154-09e814c0e056"
+        },
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 119",
+          "pos": {
+            "x": 39.7,
+            "y": 39.6
+          },
+          "uuid": "7aadd1dc-2767-4616-81df-50deabcabf40"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 125",
+          "pos": {
+            "x": 41.9,
+            "y": 41.7
+          },
+          "uuid": "de4ed8af-b33f-4752-b22e-ba87be0128e5"
+        },
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 115",
+          "pos": {
+            "x": 41.95,
+            "y": 40.6
+          },
+          "uuid": "bf7a1406-3c92-4fda-9154-09e814c0e056"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 115",
+          "pos": {
+            "x": 41.95,
+            "y": 40.6
+          },
+          "uuid": "bf7a1406-3c92-4fda-9154-09e814c0e056"
+        },
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 124",
+          "pos": {
+            "x": 42.2,
+            "y": 38.25
+          },
+          "uuid": "43a54f20-c71e-4b43-87c5-5eb3170edd04"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 115",
+          "pos": {
+            "x": 41.95,
+            "y": 40.6
+          },
+          "uuid": "bf7a1406-3c92-4fda-9154-09e814c0e056"
+        },
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 120",
+          "pos": {
+            "x": 42.8,
+            "y": 39.7
+          },
+          "uuid": "062750a0-6cf5-4cfb-b632-6f9a4b7fb144"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Zone 'plane GND F.Cu' [GND] on F.Cu, priority 120",
+          "pos": {
+            "x": 42.8,
+            "y": 39.7
+          },
+          "uuid": "062750a0-6cf5-4cfb-b632-6f9a4b7fb144"
+        },
+        {
+          "description": "Zone 'pour GND B.Cu' [GND] on B.Cu, priority 0",
+          "pos": {
+            "x": 30.0,
+            "y": 30.0
+          },
+          "uuid": "3b8530d1-1e2a-4b23-bf8c-24527b13589f"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [3V3] of L1 on F.Cu",
+          "pos": {
+            "x": 38.3625,
+            "y": 44.25
+          },
+          "uuid": "d3f9bf0e-38ba-4797-9e1d-398ceb2202e7"
+        },
+        {
+          "description": "Pad 8 [3V3] of U2 on F.Cu",
+          "pos": {
+            "x": 40.475,
+            "y": 37.6875
+          },
+          "uuid": "6c911d85-d95c-4042-a9b5-8161115c930a"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [snb0] of C27 on F.Cu",
+          "pos": {
+            "x": 33.695,
+            "y": 43.875
+          },
+          "uuid": "ce4425f6-0720-4f21-ba8d-e92b9ff68837"
+        },
+        {
+          "description": "Pad 2 [snb0] of R30 on F.Cu",
+          "pos": {
+            "x": 35.935,
+            "y": 42.625
+          },
+          "uuid": "dd2a2c27-fd7d-4b7f-9c4b-34947fd1c1f4"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [snb1] of C28 on F.Cu",
+          "pos": {
+            "x": 41.175,
+            "y": 43.395
+          },
+          "uuid": "e25aff64-9dc3-4b98-b859-79781f10990b"
+        },
+        {
+          "description": "Pad 2 [snb1] of R31 on F.Cu",
+          "pos": {
+            "x": 42.675,
+            "y": 43.365
+          },
+          "uuid": "a4654ea3-fb36-4fe4-ae79-3cdff3c9f74f"
+        }
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    }
+  ],
+  "violations": [
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_10u_0805'",
+      "items": [
+        {
+          "description": "Footprint C14",
+          "pos": {
+            "x": 46.925,
+            "y": 41.375
+          },
+          "uuid": "082de096-f82e-4ee6-b53c-64b64642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_L_0u47_IHLP1616BZ'",
+      "items": [
+        {
+          "description": "Footprint L3",
+          "pos": {
+            "x": 34.05,
+            "y": 38.5
+          },
+          "uuid": "191df218-03f4-44a8-8f21-1c774642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_L_0u47_MCKK2012'",
+      "items": [
+        {
+          "description": "Footprint L1",
+          "pos": {
+            "x": 37.3,
+            "y": 44.25
+          },
+          "uuid": "1b726aaa-5a2a-4a20-914d-dce44642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_R_3R9_0402'",
+      "items": [
+        {
+          "description": "Footprint R30",
+          "pos": {
+            "x": 35.425,
+            "y": 42.625
+          },
+          "uuid": "2a6c139d-c38a-413f-b10e-72f54642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_KelvinSense_2Pad'",
+      "items": [
+        {
+          "description": "Footprint TP1",
+          "pos": {
+            "x": 38.925,
+            "y": 34.375
+          },
+          "uuid": "453e338f-f787-44c9-971f-6c5d4642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_R_3R9_0402'",
+      "items": [
+        {
+          "description": "Footprint R33",
+          "pos": {
+            "x": 47.675,
+            "y": 34.375
+          },
+          "uuid": "4bcc1256-3e21-47c3-995d-22154642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_390p_0402'",
+      "items": [
+        {
+          "description": "Footprint C30",
+          "pos": {
+            "x": 47.675,
+            "y": 31.875
+          },
+          "uuid": "69fa2530-ffc7-4948-bb0e-12f64642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_10u_0805'",
+      "items": [
+        {
+          "description": "Footprint C17",
+          "pos": {
+            "x": 37.675,
+            "y": 37.625
+          },
+          "uuid": "6b404895-79cc-4612-9eac-e9884642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_390p_0402'",
+      "items": [
+        {
+          "description": "Footprint C29",
+          "pos": {
+            "x": 30.925,
+            "y": 36.375
+          },
+          "uuid": "6fb29de6-7f6c-4bf6-be16-07d14642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_10u_0805'",
+      "items": [
+        {
+          "description": "Footprint C16",
+          "pos": {
+            "x": 46.925,
+            "y": 37.625
+          },
+          "uuid": "7401ce2b-bd8a-458b-acef-90974642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_L_0u47_MCKK2012'",
+      "items": [
+        {
+          "description": "Footprint L2",
+          "pos": {
+            "x": 45.3,
+            "y": 44.25
+          },
+          "uuid": "819c8cd1-8825-4ba6-b235-ea744642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_100n_0402'",
+      "items": [
+        {
+          "description": "Footprint C31",
+          "pos": {
+            "x": 39.925,
+            "y": 43.875
+          },
+          "uuid": "b3d6b450-d873-4818-a7af-df1f4642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_390p_0402'",
+      "items": [
+        {
+          "description": "Footprint C28",
+          "pos": {
+            "x": 41.175,
+            "y": 43.875
+          },
+          "uuid": "bc549884-2bf5-41e6-8c91-97134642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_L_0u47_IHLP1616BZ'",
+      "items": [
+        {
+          "description": "Footprint L4",
+          "pos": {
+            "x": 43.55,
+            "y": 33.0
+          },
+          "uuid": "bca9865a-42f0-482e-a123-ba464642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_R_3R9_0402'",
+      "items": [
+        {
+          "description": "Footprint R32",
+          "pos": {
+            "x": 30.925,
+            "y": 38.875
+          },
+          "uuid": "bfd94feb-eb58-4888-a06f-cd014642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_R_3R9_0402'",
+      "items": [
+        {
+          "description": "Footprint R31",
+          "pos": {
+            "x": 42.675,
+            "y": 43.875
+          },
+          "uuid": "c93e8d49-a4bd-4a96-803d-ddc34642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_R_2m_0612'",
+      "items": [
+        {
+          "description": "Footprint R_SH1",
+          "pos": {
+            "x": 35.3,
+            "y": 32.875
+          },
+          "uuid": "d6befee7-dea3-4295-bd7d-2e464642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_10u_0805'",
+      "items": [
+        {
+          "description": "Footprint C15",
+          "pos": {
+            "x": 37.675,
+            "y": 41.375
+          },
+          "uuid": "defadbab-2d0c-4f3b-ab56-02dc4642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_C_390p_0402'",
+      "items": [
+        {
+          "description": "Footprint C27",
+          "pos": {
+            "x": 34.175,
+            "y": 43.875
+          },
+          "uuid": "ef381f07-eefa-466d-9648-746e4642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'Radar60_LP87524JRNFRQ1'",
+      "items": [
+        {
+          "description": "Footprint U2",
+          "pos": {
+            "x": 42.3,
+            "y": 39.5
+          },
+          "uuid": "f98a1b2d-f448-4cbb-a02f-569a4642524b"
+        }
+      ],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    }
+  ]
+}

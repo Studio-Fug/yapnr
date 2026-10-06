@@ -1,0 +1,454 @@
+{
+  "components": [
+    {
+      "address": "power_in.c_sys_bulk",
+      "bbox": [3.45, 2.01],
+      "courtyard": [3.49, 2.05],
+      "footprint": "Radar60_C_22u_0805:C_0805_2012Metric",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.25,
+          "name": "1",
+          "net": "5V_SYS",
+          "offset": [-0.95, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [1.0, 1.45],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.25,
+          "name": "2",
+          "net": "GND",
+          "offset": [0.95, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [1.0, 1.45],
+          "through_hole": false
+        }
+      ],
+      "pos": [11.175, 4.425],
+      "ref": "C36",
+      "rot": 0.0,
+      "side": "top",
+      "smd_body": true
+    },
+    {
+      "address": "power_in.tvs",
+      "bbox": [4.84, 2.35],
+      "body": [-2.42, -1.195, 2.395, 1.195],
+      "courtyard": [4.84, 2.39],
+      "footprint": "Radar60_SMF5V0A:D_SMF",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.25,
+          "name": "1",
+          "net": "VIN_5V",
+          "offset": [-1.45, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [1.3, 1.4],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.25,
+          "name": "2",
+          "net": "GND",
+          "offset": [1.45, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [1.3, 1.4],
+          "through_hole": false
+        }
+      ],
+      "pos": [12.425, 1.925],
+      "ref": "D3",
+      "rot": 0.0,
+      "side": "top",
+      "smd_body": true
+    },
+    {
+      "address": "power_in.c_in_hf",
+      "bbox": [1.87, 0.97],
+      "courtyard": [1.91, 1.01],
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.14,
+          "name": "1",
+          "net": "VIN_5V",
+          "offset": [-0.48, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.56, 0.62],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.14,
+          "name": "2",
+          "net": "GND",
+          "offset": [0.48, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.56, 0.62],
+          "through_hole": false
+        }
+      ],
+      "pos": [10.425, 6.175],
+      "ref": "C34",
+      "rot": 0.0,
+      "side": "top",
+      "smd_body": true
+    },
+    {
+      "address": "power_in.c_in_bulk",
+      "bbox": [3.45, 2.01],
+      "courtyard": [3.49, 2.05],
+      "footprint": "Radar60_C_10u_0805:C_0805_2012Metric",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.25,
+          "name": "1",
+          "net": "VIN_5V",
+          "offset": [-0.95, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [1.0, 1.45],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.25,
+          "name": "2",
+          "net": "GND",
+          "offset": [0.95, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [1.0, 1.45],
+          "through_hole": false
+        }
+      ],
+      "pos": [2.925, 1.425],
+      "ref": "C33",
+      "rot": 180.0,
+      "side": "top",
+      "smd_body": true
+    },
+    {
+      "address": "power_in.efuse",
+      "bbox": [4.14, 4.14],
+      "body": [-2.07, -1.545, 1.545, 2.07],
+      "courtyard": [4.14, 4.14],
+      "footprint": "Radar60_TPS259474ARPWR:TI_RPW0010A_VQFN-HR-10_2x2mm_P0.45mm",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "1",
+          "net": "EFUSE_EN_UVLO",
+          "offset": [-0.9, 0.7],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.6000000000000001, 1.0],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.0375,
+          "name": "2",
+          "net": "EFUSE_OVLO",
+          "offset": [-0.9, 0.225],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.6000000000000001, 0.25000000000000017],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.0375,
+          "name": "3",
+          "net": "EFUSE_PG",
+          "offset": [-0.9, -0.225],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.6000000000000001, 0.25000000000000017],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "4",
+          "net": "EFUSE_PGTH",
+          "offset": [-0.9, -0.7],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.6000000000000001, 1.0],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.045,
+          "name": "5",
+          "net": "VIN_5V",
+          "offset": [-0.25, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.3000000000000006, 2.4],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.045,
+          "name": "6",
+          "net": "5V_SYS",
+          "offset": [0.25, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.3000000000000006, 2.4],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "7",
+          "net": "EFUSE_DVDT",
+          "offset": [0.9, -0.7],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.6000000000000001, 1.0],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.0375,
+          "name": "8",
+          "net": "GND",
+          "offset": [0.9, -0.225],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.6000000000000001, 0.25000000000000017],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.0375,
+          "name": "9",
+          "net": "EFUSE_ILM",
+          "offset": [0.9, 0.225],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.6000000000000001, 0.25000000000000017],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "10",
+          "net": "EFUSE_ITIMER",
+          "offset": [0.9, 0.7],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.6000000000000001, 1.0],
+          "through_hole": false
+        }
+      ],
+      "pos": [7.05, 4.55],
+      "ref": "U5",
+      "rot": -90.0,
+      "side": "top",
+      "smd_body": true
+    },
+    {
+      "address": "power_in.c_sys_hf",
+      "bbox": [1.87, 0.97],
+      "courtyard": [1.91, 1.01],
+      "footprint": "Radar60_C_100n_0402:C_0402_1005Metric",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.14,
+          "name": "1",
+          "net": "5V_SYS",
+          "offset": [-0.48, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.5600000000000002, 0.6200000000000001],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": 0.14,
+          "name": "2",
+          "net": "GND",
+          "offset": [0.48, -0.0],
+          "plated": false,
+          "plated_land_radius": 0.0,
+          "size": [0.5600000000000002, 0.6200000000000001],
+          "through_hole": false
+        }
+      ],
+      "pos": [4.175, 3.675],
+      "ref": "C37",
+      "rot": -90.0,
+      "side": "top",
+      "smd_body": true
+    }
+  ],
+  "name": "board",
+  "nets": [
+    {
+      "code": 1,
+      "name": "5V_SYS",
+      "pins": [
+        ["C36", "1"],
+        ["U5", "6"],
+        ["C37", "1"]
+      ]
+    },
+    {
+      "code": 2,
+      "name": "GND",
+      "pins": [
+        ["C36", "2"],
+        ["D3", "2"],
+        ["C34", "2"],
+        ["C33", "2"],
+        ["U5", "8"],
+        ["C37", "2"]
+      ]
+    },
+    {
+      "code": 3,
+      "name": "VIN_5V",
+      "pins": [
+        ["D3", "1"],
+        ["C34", "1"],
+        ["C33", "1"],
+        ["U5", "5"]
+      ]
+    },
+    {
+      "code": 4,
+      "name": "EFUSE_EN_UVLO",
+      "pins": [["U5", "1"]]
+    },
+    {
+      "code": 5,
+      "name": "EFUSE_OVLO",
+      "pins": [["U5", "2"]]
+    },
+    {
+      "code": 6,
+      "name": "EFUSE_PG",
+      "pins": [["U5", "3"]]
+    },
+    {
+      "code": 7,
+      "name": "EFUSE_PGTH",
+      "pins": [["U5", "4"]]
+    },
+    {
+      "code": 8,
+      "name": "EFUSE_DVDT",
+      "pins": [["U5", "7"]]
+    },
+    {
+      "code": 9,
+      "name": "EFUSE_ILM",
+      "pins": [["U5", "9"]]
+    },
+    {
+      "code": 10,
+      "name": "EFUSE_ITIMER",
+      "pins": [["U5", "10"]]
+    }
+  ],
+  "outline": {
+    "height": 7.15,
+    "polygon": [
+      [0.0, 0.0],
+      [16.3, 0.0],
+      [16.3, 7.15],
+      [0.0, 7.15]
+    ],
+    "width": 16.3
+  },
+  "schema": "v0",
+  "stack": {
+    "layers": [
+      {
+        "copper_mm": 0.035,
+        "name": "F.Cu",
+        "type": "signal",
+        "zones": []
+      },
+      {
+        "copper_mm": 0.0175,
+        "name": "In1.Cu",
+        "type": "power",
+        "zone_shapes": [
+          {
+            "net": "GND",
+            "outline": [
+              [0.0, 0.0],
+              [16.3, 0.0],
+              [16.3, 7.15],
+              [0.0, 7.15]
+            ],
+            "priority": 0
+          }
+        ],
+        "zones": ["GND"]
+      },
+      {
+        "copper_mm": 0.0175,
+        "name": "In2.Cu",
+        "type": "signal",
+        "zones": []
+      },
+      {
+        "copper_mm": 0.035,
+        "name": "In3.Cu",
+        "type": "power",
+        "zone_shapes": [
+          {
+            "net": "5V_SYS",
+            "outline": [
+              [0.0, 0.0],
+              [16.3, 0.0],
+              [16.3, 7.15],
+              [0.0, 7.15]
+            ],
+            "priority": 0
+          }
+        ],
+        "zones": ["5V_SYS"]
+      },
+      {
+        "copper_mm": 0.0175,
+        "name": "In4.Cu",
+        "type": "power",
+        "zones": []
+      },
+      {
+        "copper_mm": 0.035,
+        "name": "B.Cu",
+        "type": "signal",
+        "zones": []
+      }
+    ]
+  }
+}

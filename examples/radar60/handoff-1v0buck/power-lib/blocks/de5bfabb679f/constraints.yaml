@@ -1,0 +1,193 @@
+schema: v0
+board:
+  outline:
+    w: 16.3
+    h: 7.1499999999999995
+  layers: 6
+  default_clearance_mm: 0.2
+  references_on_fab: true
+  plane_fallback_drops: false
+  class_clearance: maze
+  dru_routing: true
+  edge: exact
+  route_pairs: coupled
+fab:
+  track_width_mm: 0.15
+fixed: {}
+orientation: {}
+side: {}
+group:
+  - members:
+      - '@power_in.c_in_*'
+      - '@power_in.c_sys_*'
+    anchor: '@power_in.efuse'
+    radius_mm: 10
+    hard: true
+  - members:
+      - '@power_in.tvs'
+    anchor: '@power_in.efuse'
+    radius_mm: 6
+    hard: true
+net_class:
+  RF:
+    nets:
+      - RF_RX*
+      - RF_TX*
+  XTAL:
+    nets:
+      - XTAL_*
+    clearance_mm: 0.15
+  QSPI:
+    nets:
+      - QSPI_*
+  PWR:
+    nets:
+      - 1V0_*
+      - 1V2*
+      - 1V8*
+      - 3V3*
+      - 5V_SYS
+      - VIN_5V
+    width_mm: 0.25
+    clearance_mm: 0.15
+  SW:
+    nets:
+      - PMIC_SW_B*
+    width_mm: 0.6
+    clearance_mm: 0.2
+  GND:
+    nets:
+      - GND
+    plane_layer: In1.Cu
+  ANALOG:
+    nets:
+      - VOUT_14*
+      - VBGAP
+      - EFUSE_EN_UVLO
+      - EFUSE_OVLO
+      - EFUSE_PGTH
+      - EFUSE_ILM
+      - EFUSE_ITIMER
+      - EFUSE_DVDT
+      - VIO_LS_ON
+      - DAMP_*
+      - PMIC_FB_B2
+  LVDS:
+    nets:
+      - LVDS_TX0_P
+      - LVDS_TX0_N
+      - LVDS_TX1_P
+      - LVDS_TX1_N
+      - LVDS_CLK_P
+      - LVDS_CLK_N
+      - LVDS_FRCLK_P
+      - LVDS_FRCLK_N
+    width_mm: 0.17
+    clearance_mm: 0.1
+  rail_1v0_rf1:
+    nets:
+      - 1V0_RF1
+    plane_layer: In3.Cu
+  rail_1v0_rf2:
+    nets:
+      - 1V0_RF2
+    plane_layer: In3.Cu
+  rail_1v0_pa:
+    nets:
+      - 1V0_PA
+    plane_layer: In3.Cu
+  rail_1v2:
+    nets:
+      - 1V2
+    plane_layer: In3.Cu
+  rail_1v8:
+    nets:
+      - 1V8
+    plane_layer: In3.Cu
+  rail_5v_sys:
+    nets:
+      - 5V_SYS
+    plane_layer: In3.Cu
+  rail_1v0_sh:
+    nets:
+      - 1V0_SH
+    plane_layer: In3.Cu
+pour:
+  - layer: B.Cu
+    net: GND
+    connect: solid
+region:
+  - name: efuse_block
+    hard: true
+    reason: eFuse next to J1 pins 1-2
+    refs:
+      - '@power_in.efuse'
+    rect:
+      - 0.3
+      - 0.3
+      - 16.0
+      - 7.15
+  - name: connector_tvs
+    hard: true
+    reason: '5 V TVS east of the eFuse IC, nearer J1 pins 1-2 than U5 (audit: protection
+      before the IC)'
+    refs:
+      - '@power_in.tvs'
+    rect:
+      - 9.8
+      - 0.3
+      - 16.0
+      - 7.15
+  - name: efuse_ic
+    hard: true
+    reason: eFuse IC west of its own TVS (see connector_tvs above)
+    refs:
+      - '@power_in.efuse'
+    rect:
+      - 0.3
+      - 0.3
+      - 9.3
+      - 7.15
+  - name: r4_digital
+    hard: true
+    reason: 'R4: no digital copper within 5 mm of the RF region (derived by integrate.py)'
+    refs:
+      - '@power_in.efuse'
+    areas:
+      - rect:
+          - 0.0
+          - 0.0
+          - 1.099
+          - 7.15
+      - rect:
+          - 1.099
+          - 0.0
+          - 14.3
+          - 7.15
+      - rect:
+          - 14.3
+          - 0.0
+          - 16.3
+          - 7.15
+plane_partition:
+  - layer: F.Cu
+    nets:
+      - VIN_5V
+      - 5V_SYS
+    terminals: pad
+    connect: solid
+    stitch_vias: 2
+    split_gap_mm: 0.2
+    min_width_mm: 0.25
+    h_mm: 0.05
+    pieces:
+      - 5V_SYS
+    region:
+      refs:
+        - '@power_in.c_in_bulk'
+        - '@power_in.c_in_hf'
+        - '@power_in.c_sys_bulk'
+        - '@power_in.c_sys_hf'
+        - '@power_in.efuse'
+        - '@power_in.tvs'
+      margin_mm: 0.5

@@ -1,0 +1,223 @@
+{
+  "components": 160,
+  "nets": 154,
+  "held_out": [
+    "C14",
+    "C15",
+    "C16",
+    "C17",
+    "C27",
+    "C28",
+    "C29",
+    "C30",
+    "C31",
+    "C33",
+    "C34",
+    "C36",
+    "C37",
+    "D3",
+    "L1",
+    "L2",
+    "L3",
+    "L4",
+    "R30",
+    "R31",
+    "R32",
+    "R33",
+    "RFM1",
+    "RT1",
+    "RT2",
+    "R_SH1",
+    "TP1"
+  ],
+  "fixed_blocks": [
+    {
+      "name": "rfm1",
+      "group": "RFM1_MACRO",
+      "anchor": "U1",
+      "sha256": "309afe7c5ab899e185e31104b9d37343f10c62347b4b945c02c1c558ea79f0a7",
+      "refs": ["RFM1", "RT1", "RT2"]
+    },
+    {
+      "name": "pwr_stage",
+      "group": "PWR_STAGE",
+      "anchor": "U2",
+      "sha256": "a6b1556fc88471c217ca6f47fd689ec8187f2f96a9beda993d265e6334c06462",
+      "refs": [
+        "C14",
+        "C15",
+        "C16",
+        "C17",
+        "C27",
+        "C28",
+        "C29",
+        "C30",
+        "C31",
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "R30",
+        "R31",
+        "R32",
+        "R33",
+        "R_SH1",
+        "TP1"
+      ]
+    },
+    {
+      "name": "efuse_stage",
+      "group": "EFUSE_STAGE",
+      "anchor": "U5",
+      "sha256": "6b8f3bae11111e9d6031b9a9ce931c0bb0832cd79c55d8c580ca105ac8c5a00f",
+      "refs": ["C33", "C34", "C36", "C37", "D3"]
+    }
+  ],
+  "warnings": [
+    "unknown top-level section 'noise_keepout' (ignored)",
+    "unknown top-level section 'height_limit' (ignored)"
+  ],
+  "constraints": ["fixed", "group", "keepout", "orientation", "region", "side"],
+  "decoupling_sets": {
+    "caps": 35,
+    "sets": {
+      "radio_decoupling_hf": 24,
+      "radio_decoupling_bulk": 9,
+      "crystal_caps": 2
+    },
+    "uncovered": [],
+    "in_several": [],
+    "pmic_unassigned": []
+  },
+  "r4_digital_parts": 64,
+  "r4_region_rects": [
+    {
+      "rect": [0.0, 0.0, 7.599, 47.4]
+    },
+    {
+      "rect": [7.599, 0.0, 20.8, 28.2]
+    },
+    {
+      "rect": [20.8, 0.0, 31.2, 33.2]
+    },
+    {
+      "rect": [31.2, 0.0, 52.972, 21.7]
+    },
+    {
+      "rect": [52.972, 0.0, 60.0, 47.4]
+    }
+  ],
+  "fanout": {
+    "diagnostics": {
+      "signals": 40,
+      "signals_escaped": 37,
+      "drops": 92,
+      "drops_placed": 84,
+      "kinds": {
+        "dogbone": 18,
+        "drop": 84,
+        "failed": 11,
+        "skipped": 29,
+        "surface": 19
+      },
+      "failed": {
+        "A3": "no legal path or via site (static obstacles)",
+        "A5": "no legal path or via site (static obstacles)",
+        "A7": "no legal path or via site (static obstacles)",
+        "E13": "lost its resources to higher-priority pads",
+        "G1": "no legal path or via site (static obstacles)",
+        "J1": "no legal path or via site (static obstacles)",
+        "L1": "no legal path or via site (static obstacles)",
+        "N11": "lost its resources to higher-priority pads",
+        "P14": "no legal path or via site (static obstacles)",
+        "P4": "lost its resources to higher-priority pads",
+        "P9": "lost its resources to higher-priority pads"
+      }
+    },
+    "bands": [
+      {
+        "name": "exit_south_1",
+        "edge": "south",
+        "balls": ["J14", "J15", "K14", "K15", "L14", "L15", "M14", "M15"],
+        "rect": [22.5, 19.75, 26.25, 22.25]
+      },
+      {
+        "name": "exit_south_2",
+        "edge": "south",
+        "balls": ["E15"],
+        "rect": [27.7, 19.75, 28.2, 22.25]
+      },
+      {
+        "name": "exit_west_1",
+        "edge": "west",
+        "balls": ["P11", "P12", "P13", "R11", "R12", "R13", "R14"],
+        "rect": [17.75, 23.85, 20.25, 26.625]
+      },
+      {
+        "name": "exit_west_2",
+        "edge": "west",
+        "balls": ["R3"],
+        "rect": [17.75, 27.425, 20.25, 27.925]
+      }
+    ],
+    "bottom_sites": {
+      "C38": {
+        "at": [30.3062, 28.0813],
+        "rot": 90.0,
+        "side": "bottom",
+        "stubs": {
+          "1": 0.9653,
+          "2": 0.2544
+        },
+        "address": "radio.c_apll"
+      },
+      "C57": {
+        "at": [27.2188, 29.95],
+        "rot": 0.0,
+        "side": "bottom",
+        "stubs": {
+          "1": 0.14,
+          "2": 0.148
+        },
+        "address": "radio.c_rf1"
+      },
+      "C61": {
+        "at": [22.6687, 29.7875],
+        "rot": 0.0,
+        "side": "bottom",
+        "stubs": {
+          "1": 0.9087,
+          "2": 0.1213
+        },
+        "address": "radio.c_sram"
+      },
+      "C63": {
+        "at": [28.925, 27.7562],
+        "rot": 90.0,
+        "side": "bottom",
+        "stubs": {
+          "1": 0.7573,
+          "2": 0.165
+        },
+        "address": "radio.c_vbgap"
+      },
+      "C64": {
+        "at": [25.35, 30.5188],
+        "rot": 90.0,
+        "side": "bottom",
+        "stubs": {
+          "1": 0.2986,
+          "2": 0.148
+        },
+        "address": "radio.c_vco"
+      }
+    },
+    "bottom_unplaced": {
+      "C62": "no pose clears the fanout with every pad within 1.00 mm of its via"
+    }
+  },
+  "own_path_strips": [
+    ["B15", "XTAL_P", ["xtal_cap_p"]],
+    ["C15", "XTAL_N", ["xtal_cap_n"]]
+  ]
+}

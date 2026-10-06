@@ -1,0 +1,30 @@
+{
+  "id": "e720478abbd1",
+  "area": 102.835,
+  "width": 15.7,
+  "height": 6.55,
+  "port_debt_mm": 38.67,
+  "apron_mm": 0.3,
+  "unrouted": ["GND"],
+  "unconnected": 4,
+  "violations": 0,
+  "violation_types": [],
+  "ir": {},
+  "ir_fail": 0,
+  "ir_excess": 0,
+  "hot_links": 13,
+  "hot_links_open": 9,
+  "hot_open": [
+    ["GND", ["C33", "2"]],
+    ["GND", ["C34", "2"]],
+    ["5V_SYS", ["C36", "1"]],
+    ["GND", ["C36", "2"]],
+    ["5V_SYS", ["C37", "1"]],
+    ["GND", ["C37", "2"]],
+    ["GND", ["D3", "2"]],
+    ["5V_SYS", ["U5", "6"]],
+    ["GND", ["U5", "8"]]
+  ],
+  "status": "ok",
+  "seconds": 7.1
+}

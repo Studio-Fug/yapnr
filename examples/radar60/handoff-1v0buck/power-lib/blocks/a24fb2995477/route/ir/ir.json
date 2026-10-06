@@ -1,0 +1,49 @@
+{
+  "1V0_BUCK": {
+    "budget_mohm": 0.5,
+    "current_a": 2.5,
+    "density": {
+      "F.Cu": {
+        "a_per_mm": 4.375642,
+        "at": [16.25, 2.25],
+        "ipc_a_per_mm": 2.351753,
+        "kind": "plane",
+        "neck": true
+      }
+    },
+    "edges": 5436,
+    "h_mm": 0.1,
+    "hard": false,
+    "heatmaps": ["${HANDOFF}/power-lib/blocks/a24fb2995477/route/ir/ir-1V0_BUCK-F_Cu.png"],
+    "iterations": 341,
+    "loss_w": 0.012809963,
+    "nodes": 2815,
+    "opens": [],
+    "plating_mm": 0.02,
+    "r_eff_mohm": 2.049594,
+    "residual": 8.145657762316757e-11,
+    "resistivity_ohm_mm": 1.990384e-5,
+    "sinks": [
+      {
+        "drop_mv": 5.123985,
+        "share": 1.0,
+        "sink": "R_SH1.1"
+      }
+    ],
+    "sources": ["L3.2"],
+    "split": "equal",
+    "status": "fail",
+    "temperature_c": 60.0,
+    "warnings": [
+      {
+        "consequence": "above the 2.352 A/mm of an IPC-2221 trace carrying the whole 2.5 A (10 C rise): a local neck",
+        "statement": "F.Cu carries 4.376 A/mm at (16.250, 2.250) (plane)"
+      },
+      {
+        "consequence": "over its budget (0.500 mOhm)",
+        "statement": "the rail's copper resistance is 2.050 mOhm (5.124 mV at 2.5 A)"
+      }
+    ],
+    "worst_drop_mv": 5.123985
+  }
+}

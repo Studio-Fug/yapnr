@@ -1,0 +1,9 @@
+{
+  "seconds": 0.2742962089832872,
+  "unfinished_signal": ["GND"],
+  "deferred": [],
+  "failure_sites": {
+    "GND": [[6.825, 3.65]],
+    "5V_SYS": [[7.075, 4.3]]
+  }
+}

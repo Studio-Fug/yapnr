@@ -86,6 +86,8 @@ REPEATED_PADS = {
     HARD_LIB["usb_micro_b"]: {"SH": 8},
     HARD_LIB["u_fl"]: {"2": 2},
     HARD_LIB["jst_sh_12"]: {"MP": 2},
+    # The microSD socket's shell (soc_rung.py, 12-soc-bga).
+    "Connector_Card:microSD_HC_Hirose_DM3AT-SF-PEJM5": {"SH": 4},
 }
 
 

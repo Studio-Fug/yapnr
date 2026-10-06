@@ -117,5 +117,29 @@ class DrcIgnoredByDefaultTest(unittest.TestCase):
         )
 
 
+class EngineIdTest(unittest.TestCase):
+    """Found running the consolidated explore flow on GCP (2026-10-05): a cloud task's
+    --engine is a git-archive source bundle inside an image that may not carry a `git`
+    binary at all, and `write_placement` (step_select, on a legal candidate) crashed every
+    such task with a plain FileNotFoundError. Provenance, not a step input: must degrade."""
+
+    def test_a_missing_git_binary_does_not_raise(self):
+        import subprocess
+
+        real_run = subprocess.run
+
+        def no_git(cmd, *a, **kw):
+            if cmd and cmd[0] == "git":
+                raise FileNotFoundError(2, "No such file or directory", "git")
+            return real_run(cmd, *a, **kw)
+
+        integrate.subprocess.run = no_git
+        try:
+            got = integrate._engine_id("/nonexistent/not-a-checkout")
+        finally:
+            integrate.subprocess.run = real_run
+        self.assertEqual(got, {"head": "", "merging": None, "uncommitted_files": 0})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -697,7 +697,15 @@ def write_placement(a, work, recs, winner, sel, out_dir=None):
 
 def _engine_id(engine):
     def git(*args):
-        res = subprocess.run(["git", "-C", str(engine), *args], capture_output=True, text=True)
+        # A cloud task's --engine is a git-archive source bundle, not a real checkout, and its
+        # image may not even carry a `git` binary (found running the consolidated explore flow
+        # on GCP, 2026-10-05: the Mac's checkout always has both, so this never fired before).
+        # Either way this is provenance, not a step input: degrade to "" rather than crash a
+        # placement that is otherwise legal and audit-passing.
+        try:
+            res = subprocess.run(["git", "-C", str(engine), *args], capture_output=True, text=True)
+        except OSError:
+            return ""
         return res.stdout.strip()
 
     return {

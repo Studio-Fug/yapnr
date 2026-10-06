@@ -61,9 +61,11 @@ class ViaClearRadiusTest(unittest.TestCase):
     def test_the_hole_clearance_widens_a_thin_ringed_via_only(self):
         from pnr.route.detail.router import via_clear_radius
 
-        # jlc-6l-hdi: 0.45/0.30 via, 0.09 copper and 0.20 hole clearance: the hole
-        # binds (0.15 + 0.20 - 0.09 = 0.26 > 0.225).
-        self.assertAlmostEqual(via_clear_radius(fp.apply_fab(fp.LEGACY_FAB, "jlc-6l-hdi")), 0.26)
+        # jlc-6l-hdi: 0.40/0.20 via, 0.09 copper and 0.20 hole clearance: the hole
+        # binds (0.10 + 0.20 - 0.09 = 0.21 > 0.20).
+        self.assertAlmostEqual(via_clear_radius(fp.apply_fab(fp.LEGACY_FAB, "jlc-6l-hdi")), 0.21)
+        # oshpark-4l: 0.55/0.30 via, 0.127 copper, 0.254 hole: 0.277 > 0.275.
+        self.assertAlmostEqual(via_clear_radius(fp.apply_fab(fp.LEGACY_FAB, "oshpark-4l")), 0.277)
         # legacy and jlc-pofv: the ring covers it, the copper radius as before.
         self.assertEqual(via_clear_radius(fp.apply_fab(fp.LEGACY_FAB, "legacy")), 0.3)
         self.assertEqual(via_clear_radius(fp.apply_fab(fp.LEGACY_FAB, "jlc-pofv")), 0.225)

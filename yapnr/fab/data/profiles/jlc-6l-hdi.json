@@ -23,8 +23,8 @@
       "hole_to_hole_mm": 0.25,
       "pth_hole_to_hole_mm": 0.5,
       "component_pth_min_drill_mm": 0.3,
-      "via_diameter_mm": 0.45,
-      "via_drill_mm": 0.3,
+      "via_diameter_mm": 0.4,
+      "via_drill_mm": 0.2,
       "min_via_diameter_mm": 0.25,
       "min_through_drill_mm": 0.15,
       "via_annular_mm": 0.05,
@@ -32,8 +32,8 @@
       "via_to_smd_pad_mm": 0.127,
       "via_classes": {
         "default": {
-          "diameter_mm": 0.45,
-          "drill_mm": 0.3
+          "diameter_mm": 0.4,
+          "drill_mm": 0.2
         },
         "escape": {
           "diameter_mm": 0.35,
@@ -62,8 +62,8 @@
       "outer_copper_oz": 1.0,
       "inner_copper_oz": 0.4342857142857143,
       "min_via_plating_um": 18,
-      "via_diameter_mm": 0.45,
-      "via_drill_mm": 0.3,
+      "via_diameter_mm": 0.4,
+      "via_drill_mm": 0.2,
       "hole_clearance_mm": 0.2,
       "hole_to_hole_mm": 0.25,
       "pth_hole_to_hole_mm": 0.5,
@@ -87,14 +87,14 @@
         "hole_to_hole_mm": "derived: the jlc-4l value (6-layer rules not transcribed)",
         "pth_hole_to_hole_mm": "derived: the jlc-4l value (6-layer rules not transcribed)",
         "component_pth_min_drill_mm": "derived: the jlc-4l value (6-layer rules not transcribed)",
-        "via_diameter_mm": "derived: the jlc-4l value (6-layer rules not transcribed)",
-        "via_drill_mm": "derived: the jlc-4l value (6-layer rules not transcribed)",
+        "via_diameter_mm": "derived: the fine-pitch default via, a 0.20 mm drill (the jlc-4l escape class's) with a 0.10 mm ring, within the J-cap multilayer minimum 0.15/0.25 mm",
+        "via_drill_mm": "derived: the fine-pitch default via, a 0.20 mm drill (the jlc-4l escape class's) with a 0.10 mm ring, within the J-cap multilayer minimum 0.15/0.25 mm",
         "min_via_diameter_mm": "J-cap (multilayer: minimum via hole size/diameter 0.15/0.25 mm)",
         "min_through_drill_mm": "J-cap (multilayer: minimum via hole size/diameter 0.15/0.25 mm)",
         "via_annular_mm": "derived: the J-cap minimum via (0.25 - 0.15) / 2",
         "min_npth_drill_mm": "derived: the jlc-4l value (6-layer rules not transcribed)",
         "via_to_smd_pad_mm": "derived: the jlc-4l value (6-layer rules not transcribed)",
-        "via_classes": "derived: default and power as jlc-6l; escape a J-cap minimum-drill via (0.15 mm) with a 0.10 mm ring; in_pad the jlc-pofv 5B filled in-pad class (J-cover: resin filling is free on 6-layer and above)"
+        "via_classes": "derived: default the fine-pitch default via (as via_diameter_mm), power as jlc-6l; escape a J-cap minimum-drill via (0.15 mm) with a 0.10 mm ring; in_pad the jlc-pofv 5B filled in-pad class (J-cover: resin filling is free on 6-layer and above)"
       },
       "copper": {
         "outer_copper_um": "derived: the jlc-4l value",
@@ -102,8 +102,8 @@
         "outer_copper_oz": "derived: the jlc-4l value",
         "inner_copper_oz": "derived: the jlc-4l value",
         "min_via_plating_um": "derived: the jlc-4l value",
-        "via_diameter_mm": "derived: the jlc-4l value",
-        "via_drill_mm": "derived: the jlc-4l value",
+        "via_diameter_mm": "as fab.via_diameter_mm",
+        "via_drill_mm": "as fab.via_drill_mm",
         "hole_clearance_mm": "derived: the jlc-4l value",
         "hole_to_hole_mm": "derived: the jlc-4l value",
         "pth_hole_to_hole_mm": "derived: the jlc-4l value",

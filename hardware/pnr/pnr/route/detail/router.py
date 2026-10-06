@@ -937,7 +937,7 @@ def route_board(
     via_radius_mm = fab["via_diameter_mm"] / 2.0
     # The radius a via keeps other copper away by: its copper, or more where the fab's
     # hole clearance (via hole to other copper) binds before the copper clearance does
-    # (a thin ring under a fine clearance: jlc-6l-hdi's 0.45/0.30 via at 0.09 mm).
+    # (a thin ring under a fine clearance: jlc-6l-hdi's 0.40/0.20 via at 0.09 mm).
     via_clear_radius_mm = via_clear_radius(fab)
     # Per-net track width from the net classes (type/amperage), default = fab width.
     net_width = _net_widths(rules, track_width_mm)

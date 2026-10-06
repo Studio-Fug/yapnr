@@ -14,8 +14,10 @@ footprint layer, confirmed by its surface pads (a part marked flipped whose pads
 on F.Cu is on neither side).
 
 Check kinds: ``inside_board``, ``side``, ``fixed``, ``edge``, ``orientation``,
-``keepout``, ``region``, ``proximity``, ``line``, ``align``, ``plane``,
-``microvia_span``, ``copper_digest``, ``no_copper``, and for area-array parts
+``keepout``, ``region``, ``proximity``, ``line``, ``pair_bridge`` (a diff pair's two
+series parts, such as a USB board's resistors, stay geometrically coupled across
+them), ``align``, ``plane``, ``microvia_span``, ``copper_digest``, ``no_copper``,
+and for area-array parts
 ``via_class`` (the size and site of a part's plane vias), ``escape`` (each listed ball's
 copper reaches a via or leaves the courtyard) and ``pad_distance`` (parts' pads near their
 net's pads on an anchor); for supplies ``unconnected`` (exactly the listed pads are cut off
@@ -238,6 +240,34 @@ def check_line(b, c):
             sides=sides,
         ),
         dict(pitch_mm=c["pitch_mm"], rot=c.get("rot", 0), tol_mm=c.get("tol_mm", 0.01)),
+    )
+
+
+def check_pair_bridge(b, c):
+    """Two two-terminal parts in series on a diff pair's legs (a ``line_group``'s
+    series resistors, say) stay geometrically coupled: the vector between their
+    pair-side pads equals the vector between their far-side pads, on one side of the
+    board, so a constant-width corridor could run straight through both -- the
+    geometric precondition for ANY router to keep the pair's copper coupled across
+    them, measured here from pad positions alone, not from how a particular tool
+    routed it."""
+    ref_a, ref_z = c["refs"]
+    near = (b.pad_pos(ref_a, c["near_pad"]), b.pad_pos(ref_z, c["near_pad"]))
+    far = (b.pad_pos(ref_a, c["far_pad"]), b.pad_pos(ref_z, c["far_pad"]))
+    near_vec = (near[1][0] - near[0][0], near[1][1] - near[0][1])
+    far_vec = (far[1][0] - far[0][0], far[1][1] - far[0][1])
+    err = math.dist(near_vec, far_vec)
+    same_side = b.side(ref_a) == b.side(ref_z)
+    ok = err <= c.get("tol_mm", 0.05) + 1e-6 and same_side
+    return (
+        ok,
+        dict(
+            near_vec_mm=[round(v, 4) for v in near_vec],
+            far_vec_mm=[round(v, 4) for v in far_vec],
+            mismatch_mm=round(err, 4),
+            same_side=same_side,
+        ),
+        dict(tol_mm=c.get("tol_mm", 0.05)),
     )
 
 
@@ -703,6 +733,7 @@ KINDS = dict(
     region=check_region,
     proximity=check_proximity,
     line=check_line,
+    pair_bridge=check_pair_bridge,
     align=check_align,
     plane=check_plane,
     microvia_span=check_microvia_span,

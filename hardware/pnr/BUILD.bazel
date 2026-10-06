@@ -1812,6 +1812,25 @@ py_test(
     ],
 )
 
+# The checker's pair_bridge check (a diff pair's two series parts, geometrically
+# coupled across them), KiCad's Python: run it there by hand, python3 -m unittest
+# test_check_pair_bridge in regression/.
+py_test(
+    name = "check_pair_bridge_test",
+    size = "small",
+    srcs = [
+        "regression/check_constraints.py",
+        "regression/test_check_pair_bridge.py",
+    ],
+    imports = ["regression"],
+    main = "regression/test_check_pair_bridge.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+)
+
 py_binary(
     name = "native_regression",
     srcs = [
@@ -2075,6 +2094,18 @@ py_test(
         ":pnr_hier",
         ":pnr_place",
         ":pnr_route",
+    ],
+)
+
+# Implicit line_group for a diff_pair's two series parts (pnr.constraints.infer_series_line_groups).
+py_test(
+    name = "series_line_inference_test",
+    size = "small",
+    srcs = ["tests/test_series_line_inference.py"],
+    imports = ["."],
+    main = "tests/test_series_line_inference.py",
+    deps = [
+        ":pnr",
     ],
 )
 

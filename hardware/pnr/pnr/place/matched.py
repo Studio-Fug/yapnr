@@ -36,6 +36,7 @@ from .geometry import (
     occupied_sides,
     pin_positions,
     placement_rects,
+    resolve_hard_rotations,
 )
 from .legalize import LegalizationError, _mark, _place_part, pad_edge_box
 
@@ -151,10 +152,15 @@ def refine_matched(
     outline: Optional[str] = None,
     pad_edge: Optional[Tuple[float, float]] = None,
     margins: Optional[Dict[str, float]] = None,
+    turns: bool = False,
 ) -> BoardGraph:
     """Move the small parts on matched nets to even each set's estimated lengths
     (module docstring). Returns a new graph; ``graph`` itself when nothing moves.
-    ``margins`` ({ref: mm}, PNR_COMPACT ``LEGALIZE``) grows each part's slot."""
+    ``margins`` ({ref: mm}, PNR_COMPACT ``LEGALIZE``) grows each part's slot.
+    ``turns`` (PNR_COMPACT ``PAIRS``): a part, or a line group's rigid macro, may also
+    take another quarter turn (not one a hard rotation holds), so that the pads its legs
+    leave from face where the legs go: a pair's series resistors stacked across the legs
+    give one leg a resistor's pitch more."""
     sets = matched_sets(constraints, graph)
     if not sets:
         return graph
@@ -162,6 +168,7 @@ def refine_matched(
 
     placed = BoardGraph.from_json(graph.to_json())
     held = _held_refs(constraints) | set(fixed)
+    hard_rots = set(resolve_hard_rotations(constraints)) if turns else set()
     limits = group_limits or {}
     inflation = inflation or {}
     member_of: Dict[str, List[int]] = {}
@@ -213,61 +220,82 @@ def refine_matched(
                             g,
                             Rect(cr.cx, cr.cy, cr.w * infl + grow, cr.h * infl + grow),
                         )
-            cr = courtyard_rect(comp)
-            infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
-            grow = (
-                clearance + 2 * margins[comp.ref] if margins and comp.ref in margins else clearance
-            )
-            bw, bh = (int(math.ceil((size * infl + grow) / g)) for size in (cr.w, cr.h))
-            shift = body_shift(comp)  # PNR_COMPACT offset courtyard (None: centred)
-            x0, y0 = comp.pos
-            nets = sorted({p.net for p in comp.pads if p.net and p.net in pins.nets})
-
-            def cost(xs, ys, comp=comp, touched=touched, nets=nets, pins=pins, x0=x0, y0=y0):
-                dx, dy = xs - x0, ys - y0
-                spread_mm = np.zeros_like(xs)
-                for k in touched:
-                    lengths = np.stack(
-                        np.broadcast_arrays(*[pins.length(n, comp.ref, dx, dy) for n in sets[k]])
-                    )
-                    spread_mm = spread_mm + lengths.max(0) - lengths.min(0)
-                added = np.zeros_like(xs)
-                for net in nets:
-                    if len(pins.nets[net]) >= 2:
-                        added = (
-                            added
-                            + _hpwl(*pins.coords(net, comp.ref, dx, dy))
-                            - _hpwl(*pins.coords(net))
-                        )
-                return W_MISMATCH * spread_mm + W_WIRELENGTH * added
-
-            try:
-                row, col = _place_part(
-                    occ,
-                    g,
-                    bw,
-                    bh,
-                    (x0, y0),
-                    list(limits.get(comp.ref, ())),
-                    candidate_cost=cost,
-                    box=None if pad_edge is None else pad_edge_box(comp, pad_edge, width, height),
-                    **({} if shift is None else dict(shift=shift)),
+            # PNR_COMPACT PAIRS (``turns``): the part may also take another quarter turn.
+            rot0 = comp.rot
+            rots = [rot0]
+            if turns and comp.ref not in hard_rots:
+                rots += [(rot0 + q) % 360 for q in (90.0, 180.0, 270.0)]
+            best_move = None
+            for rot in rots:
+                comp.rot = rot
+                pins = _Pins(placed)
+                cr = courtyard_rect(comp)
+                infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+                grow = (
+                    clearance + 2 * margins[comp.ref]
+                    if margins and comp.ref in margins
+                    else clearance
                 )
-            except LegalizationError:
-                continue
-            candidate = ((col + bw / 2) * g, (row + bh / 2) * g)
-            if shift is not None:
-                candidate = (candidate[0] - shift[0], candidate[1] - shift[1])
-            cx, cy = np.array([candidate[0]]), np.array([candidate[1]])
-            after_cost = float(cost(cx, cy)[0]) + math.dist(candidate, (x0, y0)) ** 2
-            dx, dy = candidate[0] - x0, candidate[1] - y0
-            after = sum(
-                max(float(pins.length(n, comp.ref, dx, dy)) for n in sets[k])
-                - min(float(pins.length(n, comp.ref, dx, dy)) for n in sets[k])
-                for k in touched
-            )
-            if after <= before - MIN_GAIN_MM and after_cost < W_MISMATCH * before - 1e-9:
-                comp.pos = candidate
+                bw, bh = (int(math.ceil((size * infl + grow) / g)) for size in (cr.w, cr.h))
+                shift = body_shift(comp)  # PNR_COMPACT offset courtyard (None: centred)
+                x0, y0 = comp.pos
+                nets = sorted({p.net for p in comp.pads if p.net and p.net in pins.nets})
+
+                def cost(xs, ys, comp=comp, touched=touched, nets=nets, pins=pins, x0=x0, y0=y0):
+                    dx, dy = xs - x0, ys - y0
+                    spread_mm = np.zeros_like(xs)
+                    for k in touched:
+                        lengths = np.stack(
+                            np.broadcast_arrays(
+                                *[pins.length(n, comp.ref, dx, dy) for n in sets[k]]
+                            )
+                        )
+                        spread_mm = spread_mm + lengths.max(0) - lengths.min(0)
+                    added = np.zeros_like(xs)
+                    for net in nets:
+                        if len(pins.nets[net]) >= 2:
+                            added = (
+                                added
+                                + _hpwl(*pins.coords(net, comp.ref, dx, dy))
+                                - _hpwl(*pins.coords(net))
+                            )
+                    return W_MISMATCH * spread_mm + W_WIRELENGTH * added
+
+                try:
+                    row, col = _place_part(
+                        occ,
+                        g,
+                        bw,
+                        bh,
+                        (x0, y0),
+                        list(limits.get(comp.ref, ())),
+                        candidate_cost=cost,
+                        box=(
+                            None
+                            if pad_edge is None
+                            else pad_edge_box(comp, pad_edge, width, height)
+                        ),
+                        **({} if shift is None else dict(shift=shift)),
+                    )
+                except LegalizationError:
+                    continue
+                candidate = ((col + bw / 2) * g, (row + bh / 2) * g)
+                if shift is not None:
+                    candidate = (candidate[0] - shift[0], candidate[1] - shift[1])
+                cx, cy = np.array([candidate[0]]), np.array([candidate[1]])
+                after_cost = float(cost(cx, cy)[0]) + math.dist(candidate, (x0, y0)) ** 2
+                dx, dy = candidate[0] - x0, candidate[1] - y0
+                after = sum(
+                    max(float(pins.length(n, comp.ref, dx, dy)) for n in sets[k])
+                    - min(float(pins.length(n, comp.ref, dx, dy)) for n in sets[k])
+                    for k in touched
+                )
+                if after <= before - MIN_GAIN_MM and after_cost < W_MISMATCH * before - 1e-9:
+                    if best_move is None or after_cost < best_move[0] - 1e-9:
+                        best_move = (after_cost, candidate, rot)
+            comp.rot = rot0
+            if best_move is not None:
+                comp.pos, comp.rot = best_move[1], best_move[2]
                 changed = moved = True
         if not changed:
             break

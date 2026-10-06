@@ -146,7 +146,8 @@ def place(
     PNR_COMPACT=1 (:mod:`pnr.place.compact`): the spread floor is 1.0 and the global
     starts are drawn in a cluster box (``GP``), the legalizer keeps the courtyard gap,
     copper margins and a finer grid (``LEGALIZE``), and offset courtyards hold their body
-    box (``COURTYARD``). Power-first placement does not support it.
+    box (``COURTYARD``). Under power-first placement every part but ``WIRE`` and ``TURN``
+    applies (:func:`pnr.place.power_first.staged_place`).
     """
     spread = compact.spread(spread)  # PNR_COMPACT GP: 1.0 (unchanged otherwise)
     if any(c.kind == "line_group" for c in constraints.constraints):
@@ -232,8 +233,6 @@ def place(
 
     roles = None
     if os.environ.get("PNR_POWER_FIRST") == "1":
-        if compact.enabled():
-            raise ValueError("PNR_COMPACT does not support PNR_POWER_FIRST=1")
         if related:
             raise ValueError("region and align constraints do not support PNR_POWER_FIRST=1")
         # Power-first placement: derive tiers/loops, staged lexicographic global
@@ -262,6 +261,13 @@ def place(
             grid_mm=grid_mm,
             legalize_spread=min(spread, _LEGALIZE_SPREAD_CAP),
             pair_weights=pair_weights,
+            # PNR_COMPACT LEGALIZE margins and GP cluster box (pnr.place.power_first).
+            **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
+            **(
+                dict(start_box=compact.cluster_box(graph, constraints, width, height))
+                if compact.enabled("GP")
+                else {}
+            ),
             mobility={
                 ref: dict(
                     source_fixed=not bool(c.params.get("row_trial")),
@@ -399,6 +405,8 @@ def place(
             outline=_legal_outline(constraints),
             pad_edge=pad_edge,
             **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
+            # PNR_COMPACT PAIRS: a matched part may also turn (pnr.place.matched).
+            **(dict(turns=True) if orient and compact.enabled("PAIRS") else {}),
         )
     reorienting = legalize_flags.legalize_reorient()
     if reorienting and orient:

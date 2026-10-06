@@ -243,7 +243,18 @@ FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/cap
 
 # The parts of PNR_COMPACT (pnr.compact_flags.PARTS; test_compact keeps them equal)
 # --compact-off may drop.
-COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
+COMPACT_PARTS = (
+    "GP",
+    "RANK",
+    "LEGALIZE",
+    "COURTYARD",
+    "DROPS",
+    "WIRE",
+    "TURN",
+    "SATELLITES",
+    "PAIRS",
+    "RELAX",
+)
 
 
 # Ambient PNR_* switches an operator happens to have set must not silently change the suite's

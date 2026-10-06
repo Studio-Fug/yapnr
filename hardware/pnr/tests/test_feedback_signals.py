@@ -136,6 +136,61 @@ class RouterKeyTest(unittest.TestCase):
         )
         self.assertIn("shove|native|900.0|True", signals.key_string(k))
 
+    def test_compact_key_separates_placement_arms(self):
+        # PNR_COMPACT (and each part, and the legalizer switches that are its parts) is in the
+        # router key; with everything off the key and its string are what they were before
+        import os
+        from unittest import mock
+
+        from pnr import compact_flags, legalize_flags
+
+        names = ["PNR_COMPACT", "PNR_SHRINK"] + ["PNR_COMPACT_" + p for p in compact_flags.PARTS]
+        names += list(legalize_flags.FLAGS)
+        clean = {k: v for k, v in os.environ.items() if k not in names}
+
+        def key(**env):
+            with mock.patch.dict(os.environ, dict(clean, **env), clear=True):
+                return signals.current_key("native", 900)
+
+        off = key()
+        self.assertIsNone(off["compact"])
+        self.assertNotIn("compact=", signals.key_string(off))
+        self.assertTrue(signals.key_string(off).endswith("|%s|2" % off["code"]))
+        on = key(PNR_COMPACT="1")
+        self.assertRegex(on["compact"], "^[0-9a-f]{12}$")
+        self.assertIn("|compact=%s|%s|2" % (on["compact"], on["code"]), signals.key_string(on))
+        with mock.patch.dict(os.environ, dict(clean, PNR_COMPACT="1"), clear=True):
+            conf = compact_flags.settings()
+        self.assertEqual(conf["parts"], sorted(compact_flags.PARTS))
+        self.assertEqual(
+            conf["legalize"],
+            dict(LEGALIZE_HPWL=4.0, LEGALIZE_REORIENT="wire", LINE_SATELLITES=True),
+        )
+        variants = [
+            key(PNR_COMPACT="1", PNR_COMPACT_COURTYARD="0"),
+            key(PNR_COMPACT="1", PNR_LEGALIZE_HPWL="2"),
+            key(PNR_COMPACT="1", PNR_SHRINK="1"),
+            key(PNR_LEGALIZE_HPWL="4"),
+        ]
+        keys = [off["compact"], on["compact"]] + [v["compact"] for v in variants]
+        self.assertEqual(len(set(keys)), len(keys))
+        # an evaluation of one arm is never imported into the other
+        base = dict(router="plain", stage="native", budget_seconds=900.0, power_first=False)
+        base["fab_profile"] = off["fab_profile"]
+        for record, current in ((None, on), (on["compact"], off), (variants[0]["compact"], on)):
+            observed = signals.observed_key(
+                dict(base, compact=record), stage="native", power_first=False
+            )
+            errors, _ = signals.check_import(observed, dict(base, compact=current["compact"]))
+            self.assertEqual(len(errors), 1, errors)
+            self.assertTrue(errors[0].startswith("compact "))
+        observed = signals.observed_key(
+            dict(base, compact=on["compact"]), stage="native", power_first=False
+        )
+        self.assertEqual(
+            signals.check_import(observed, dict(base, compact=on["compact"])), ([], [])
+        )
+
 
 MINI_TREE = {
     "pnr/__init__.py": "",

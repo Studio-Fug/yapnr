@@ -59,6 +59,8 @@ class FeedbackReport:
     outline_scale: float = 1.0  # rubber-band factor applied to the target outline
     initial_pool: dict = field(default_factory=dict)
     shrink: Optional[dict] = None  # PNR_SHRINK search record (None without the flag)
+    # PNR_COMPACT RELAX: the rounds run without compact placement (None: none was).
+    relaxed: Optional[dict] = None
 
     @property
     def final_overflow(self) -> float:
@@ -257,9 +259,61 @@ def _place_route_loop(
     detail_iters: int,
     spread: float,
     initial_pool=None,
+    relax_spread: Optional[float] = None,
 ) -> Tuple[BoardGraph, FeedbackReport]:
     """One place↔route loop at the *current* ``constraints`` outline (the inner loop
-    the rubber-band wraps). See :func:`route_and_place`."""
+    the rubber-band wraps). See :func:`route_and_place`.
+
+    ``relax_spread`` (PNR_COMPACT ``RELAX``: the board's own spread; None: off): a round
+    that leaves a signal net unrouted or a declared pair or group outside its budget is
+    not converged, and every later round runs with compact placement switched off
+    (:func:`pnr.compact_flags.relaxed`) at ``relax_spread``; the first of them takes the
+    initial pool again at ``seed``, as the run without compact does in its first round."""
+    import contextlib
+
+    with contextlib.ExitStack() as relax:
+        return _place_route_rounds(
+            graph,
+            constraints,
+            seed=seed,
+            iters=iters,
+            orient=orient,
+            max_rounds=max_rounds,
+            gcell_mm=gcell_mm,
+            track_pitch_mm=track_pitch_mm,
+            route_passes=route_passes,
+            detail_rules=detail_rules,
+            detail_pitch_mm=detail_pitch_mm,
+            detail_iters=detail_iters,
+            spread=spread,
+            initial_pool=initial_pool,
+            relax_spread=relax_spread,
+            relax=relax,
+        )
+
+
+def _place_route_rounds(
+    graph,
+    constraints,
+    *,
+    seed,
+    iters,
+    orient,
+    max_rounds,
+    gcell_mm,
+    track_pitch_mm,
+    route_passes,
+    detail_rules,
+    detail_pitch_mm,
+    detail_iters,
+    spread,
+    initial_pool,
+    relax_spread,
+    relax,
+):
+    """The rounds of :func:`_place_route_loop`; ``relax`` (an ExitStack) holds
+    :func:`pnr.compact_flags.relaxed` from the first RELAX round on."""
+    from pnr import compact_flags
     from pnr.place.initial_pool import InitialPoolConfig, preserve_source_locks
 
     pool_config = (
@@ -313,6 +367,8 @@ def _place_route_loop(
     from pnr import trace as _trace
 
     tracer = _trace.current()  # None unless PNR_TRACE_DIR is set; observational only
+    relaxing = False  # PNR_COMPACT RELAX: a round did not route
+    repool = False  # the first RELAX round takes the initial pool again
 
     for r in range(max_rounds):
         report.rounds = r + 1
@@ -331,24 +387,34 @@ def _place_route_loop(
         local_move = None
         placement_attempt_log = []
         initial_route = None
-        if pool_config is not None and r == 0:
+        if pool_config is not None and (r == 0 or repool):
+            repool = False
             from pnr.place.initial_pool import select_initial_placement
 
             diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
-            with _trace.scope("initial-pool", "pool"):
-                placed, prep, initial_route, pool_report = select_initial_placement(
-                    graph,
-                    constraints,
-                    detail_rules,
-                    config=pool_config,
-                    seed=seed,
-                    iters=iters,
-                    orient=orient,
-                    spread=spread,
-                    pitch=detail_pitch_mm,
-                    route_iters=detail_iters,
-                    output=Path(diagnostic) / "initial-pool" if diagnostic else None,
-                )
+            try:
+                with _trace.scope("initial-pool", "pool"):
+                    placed, prep, initial_route, pool_report = select_initial_placement(
+                        graph,
+                        constraints,
+                        detail_rules,
+                        config=pool_config,
+                        seed=seed,
+                        iters=iters,
+                        orient=orient,
+                        spread=relax_spread if relaxing else spread,
+                        pitch=detail_pitch_mm,
+                        route_iters=detail_iters,
+                        output=Path(diagnostic) / "initial-pool" if diagnostic else None,
+                    )
+            except LegalizationError as error:
+                if not relaxing:
+                    raise
+                # PNR_COMPACT RELAX: the board does not place without compact (a part
+                # whose symmetric envelope does not fit): keep the best compact round.
+                report.relaxed["initial_pool_error"] = str(error)
+                report.termination = "relaxed_placement_failed"
+                break
             report.initial_pool = pool_report
             placement_attempt_log = pool_report["candidates"]
             damping = 1.0
@@ -443,7 +509,7 @@ def _place_route_loop(
                             iters=iters,
                             orient=orient,
                             inflation={k: 1 + (v - 1) * damping for k, v in inflation.items()},
-                            spread=spread,
+                            spread=relax_spread if relaxing else spread,
                             channel_rules=detail_rules,
                         )
                     placement_attempt_log.append(dict(seed=trial_seed, damping=damping, legal=True))
@@ -524,6 +590,15 @@ def _place_route_loop(
                 for n in set(broute.result.unrouted) - broute.deferred_nets
             )
             report.connection_history.append(missing)
+            # PNR_COMPACT RELAX: declared pairs / groups the tuner left outside their
+            # budgets also keep the loop going (0 without the part: unchanged).
+            unmatched = 0
+            if relax_spread is not None:
+                unmatched = sum(
+                    1
+                    for entry in getattr(broute, "length_report", None) or []
+                    if entry.get("status") in ("length_unmatched", "tuning_error")
+                )
             if folder:
                 payload = dict(
                     tracks=broute.tracks,
@@ -580,7 +655,7 @@ def _place_route_loop(
                         ),
                     ),
                 )
-            if n_unrouted <= 0:
+            if n_unrouted <= 0 and not unmatched:
                 report.converged = True
                 report.best_round = r + 1
                 report.termination = "routing_stage_converged"
@@ -588,6 +663,16 @@ def _place_route_loop(
                 best_placed = placed
                 report.detail_result = broute
                 break
+            if relax_spread is not None and not relaxing:
+                relaxing = repool = True
+                relax.enter_context(compact_flags.relaxed())
+                report.relaxed = dict(
+                    from_round=r + 2,
+                    spread=relax_spread,
+                    initial_pool=pool_config is not None,
+                    unrouted=n_unrouted,
+                    unmatched=unmatched,
+                )
             cell = detail_congestion(broute, placed, width, height, gcell_mm)
             overflow = float(missing)
         else:
@@ -660,7 +745,7 @@ def _place_route_loop(
         # Track the BEST placement seen — the inflation feedback can overshoot and
         # oscillate (round N+1 worse than round N), so we must not return the last
         # round blindly; return the fewest estimated missing connections.
-        unfinished = n_unrouted if detail_rules is not None else 0
+        unfinished = n_unrouted + unmatched if detail_rules is not None else 0
         bbox = compact.metrics(placed, width, height)["bbox_mm2"] if ranking else float("inf")
         if (
             overflow < best_overflow - 1e-9
@@ -766,6 +851,8 @@ def route_and_place(
     from pnr import trace as _trace
     from pnr.place import compact
 
+    # PNR_COMPACT RELAX: the board's own spread for the rounds after one that did not route.
+    relax_spread = spread if compact.enabled("RELAX") and compact.enabled("GP") else None
     spread = compact.spread(spread)  # PNR_COMPACT GP: 1.0 (unchanged otherwise)
     tracer = _trace.current()  # None unless PNR_TRACE_DIR is set; observational only
     if tracer is not None:
@@ -783,6 +870,7 @@ def route_and_place(
         detail_iters=detail_iters,
         spread=spread,
         initial_pool=initial_pool,
+        **({} if relax_spread is None else dict(relax_spread=relax_spread)),
     )
     if compact.shrink_enabled():
         skipped = compact.shrink_skip_reason(constraints, auto_outline)
@@ -812,6 +900,7 @@ def route_and_place(
             detail_iters=detail_iters,
             spread=spread,
             initial_pool=initial_pool,
+            **({} if relax_spread is None else dict(relax_spread=relax_spread)),
         )
         report.outline_scale = scale
         if report.converged or not auto_outline or scale >= outline_max_scale - 1e-9:

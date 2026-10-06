@@ -387,7 +387,14 @@ class StagedPlacer:
         starts=STARTS,
         grid_mm=0.0,
         pair_weights=None,
+        clearance=None,
+        start_box=None,
     ):
+        """``clearance`` (mm): the courtyard gap the legalizer keeps (None: the board's
+        ``default_clearance_mm``; PNR_COMPACT ``LEGALIZE`` passes its courtyard gap).
+        ``start_box`` ((x0, y0, w, h), PNR_COMPACT ``GP``): the seeded random starts are
+        mapped into that box (:func:`pnr.place.compact.box_coordinate`, the same draws), as
+        in :func:`pnr.place.model.global_place`; None keeps them on the whole outline."""
         import torch
 
         from pnr.constraints import Enforcement
@@ -475,8 +482,11 @@ class StagedPlacer:
 
         # Same seeded start as model.global_place (start 0), then K-1 extra starts.
         init = torch.rand(n, 2)
-        init[:, 0] = half[:, 0] + init[:, 0] * (width - 2 * half[:, 0])
-        init[:, 1] = half[:, 1] + init[:, 1] * (height - 2 * half[:, 1])
+        if start_box is not None:
+            init = self._boxed(init, half, start_box)
+        else:
+            init[:, 0] = half[:, 0] + init[:, 0] * (width - 2 * half[:, 0])
+            init[:, 1] = half[:, 1] + init[:, 1] * (height - 2 * half[:, 1])
         if initial_positions is not None:
             for ref, xy in initial_positions.items():
                 if ref not in idx or len(xy) != 2:
@@ -489,6 +499,9 @@ class StagedPlacer:
         inits = [init]
         for _ in range(1, max(1, starts)):
             r = torch.rand(n, 2, generator=gen)
+            if start_box is not None:
+                inits.append(self._boxed(r, half, start_box))
+                continue
             inits.append(
                 torch.stack(
                     [
@@ -571,12 +584,30 @@ class StagedPlacer:
         # Courtyards separate by the board clearance plus one legalizer grid cell:
         # the legalizer rounds every block up to whole cells, so a continuous
         # layout packed at exactly the clearance would not fit its grid.
-        self.clearance = float(constraints.board.default_clearance_mm)
+        self.clearance = (
+            float(constraints.board.default_clearance_mm) if clearance is None else float(clearance)
+        )
         self.overlap_clearance = self.clearance + float(grid_mm)
         self.compiled = Compiled(graph, roles)
         self.cost = _TorchCost(self.compiled, gamma)
 
     # ------------------------------------------------------------- helpers
+    def _boxed(self, draws, half, start_box):
+        """PNR_COMPACT ``GP``: unit draws (n, 2) mapped into the cluster box."""
+        from .compact import box_coordinate
+
+        x0, y0, bw, bh = (float(v) for v in start_box)
+        return self.torch.tensor(
+            [
+                [
+                    box_coordinate(u, hx, x0, bw, self.width),
+                    box_coordinate(v, hy, y0, bh, self.height),
+                ]
+                for (u, v), (hx, hy) in zip(draws.tolist(), half.tolist())
+            ],
+            dtype=self.torch.float32,
+        ).reshape(len(half), 2)
+
     def _temps(self, stage, frac, active):
         hi = TEMP_HI[stage - 1]
         t = self.torch.full((self.n,), GHOST_TEMP)
@@ -966,6 +997,8 @@ def staged_place(
     mobility,
     pair_weights=None,
     pad_edge=None,
+    margins=None,
+    start_box=None,
 ):
     """Staged global placement, power-first legalization, one bounded retry.
 
@@ -977,6 +1010,14 @@ def staged_place(
     RETRY_RATIO x its continuous value (:func:`loop_ratio`). The kept result is
     chosen by :func:`better_attempt`: legal, then hot-loop cost
     sum_L w_L Lambda_L at the legal pose (EPS[0] tie band), then J1.
+
+    PNR_COMPACT (:mod:`pnr.place.compact`): ``clearance`` and ``grid_mm`` are the
+    ``LEGALIZE`` courtyard gap and slot grid (the staged placer's overlap term keeps the
+    same gap), ``margins`` its per-part copper margins, ``start_box`` the ``GP`` cluster
+    box of the random starts; ``COURTYARD`` reaches the half sizes and the legalizer
+    through :mod:`pnr.place.geometry`. ``WIRE`` and ``TURN`` give way to the hot-loop
+    objective here: the power-first legalizer and its retry rule judge every slot by the
+    hot loops, so no wirelength-weighted slot or post-legalization turn runs.
     """
     from pnr.constraints import compile_routing_rules
     from pnr.graph import BoardGraph
@@ -1001,6 +1042,8 @@ def staged_place(
         initial_rotations=initial_rotations,
         grid_mm=grid_mm,
         pair_weights=pair_weights,
+        clearance=clearance,
+        start_box=start_box,
     )
     best, runner = sp.stage1()
     compiled = sp.compiled
@@ -1057,6 +1100,7 @@ def staged_place(
                 spread=legalize_spread,
                 roles=roles,
                 **({} if pad_edge is None else dict(pad_edge=pad_edge)),
+                **({} if not margins else dict(margins=margins)),
                 **legal_options.legalize_kwargs(constraints, graph),
             )
         except LegalizationError as exc:

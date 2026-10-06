@@ -92,7 +92,18 @@ FLAGS = {
 WEIGHTS = {"gp_channels": "--gp-channels", "legalize_hpwl": "--legalize-hpwl"}
 # The PNR_COMPACT parts ``compact_off`` may name (run.py --compact-off; equal to
 # hardware/pnr/pnr/compact_flags.py PARTS, which test_kinds checks).
-COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
+COMPACT_PARTS = (
+    "GP",
+    "RANK",
+    "LEGALIZE",
+    "COURTYARD",
+    "DROPS",
+    "WIRE",
+    "TURN",
+    "SATELLITES",
+    "PAIRS",
+    "RELAX",
+)
 
 SUMMARY = [
     "run/summary.json",

@@ -102,6 +102,8 @@ routes.update(
             **({"length_tuning": r.length_report} if r.length_report is not None else {}),
             # PNR_SHRINK only (absent otherwise): the outline search and its choice.
             **({"shrink": report.shrink} if report.shrink is not None else {}),
+            # PNR_COMPACT RELAX only (absent otherwise): the rounds placed relaxed.
+            **({"relaxed": report.relaxed} if getattr(report, "relaxed", None) else {}),
         ),
         indent=2,
     )

@@ -573,6 +573,16 @@ def soc_bga():
         "manual",
         240,
     )
+    # A target for the router (2026-10-06, GCP seeds 0 and 1): about 34 of its 112 nets stay
+    # open, the SDRAM lane is not matched, and tracks cross the microSD and QFN footprints'
+    # own keep-outs (the router does not read footprint rule areas).
+    spec["ci"]["target"] = dict(
+        feature="dense-board routing",
+        reason=(
+            "about 34 of 112 nets left open; the length-matched lane out of skew; footprint "
+            "keep-outs and PTH hole spacing not modelled by the router"
+        ),
+    )
     spec["checks"] = base_checks(spec) + [
         dict(
             id="edge-" + ref, kind="edge", ref=ref, edge=r["edge"], max_mm=1.0, engine="edge_align"

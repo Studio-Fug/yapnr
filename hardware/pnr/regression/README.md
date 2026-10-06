@@ -263,7 +263,11 @@ both routed on signal layers. Six layers (S G S G P S), the BGA rung's fine-pitc
 fanout (interstitial 0.35/0.15 mm plane drops: an HDI-capable profile's drill). The MCU,
 the SDRAM, the USB receptacle, the magnetics header and four holes are fixed; the microSD
 socket, the debug header and the I/O connector are locked to their edges; the rest is
-placed by the engine. Ball functions come from KiCad's `STM32F746IGKx` symbol.
+placed by the engine, with hard proximity groups keeping each part's support parts
+(decoupling, crystals, terminations, regulator capacitors) beside it. Ball functions come
+from KiCad's `STM32F746IGKx` symbol. It is a target (`ci.target`): on 2026-10-06 the router
+left about a third of its nets open, did not match the SDRAM lane, and crossed the keep-outs
+that the microSD and QFN footprints carry (the router does not read footprint rule areas).
 
 ## Push-and-shove rungs
 

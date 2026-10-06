@@ -5,7 +5,10 @@ a connector up to a TLC555 + CD4017B LED chaser on four copper layers. Each case
 circuit alone (a netlist of real KiCad library footprints on an empty outline; only the supply
 connector is fixed), runs the ordinary place-and-route pipeline, and is judged by KiCad's own
 design-rule check (DRC) on the saved board. The fixtures, the runner and the frozen results of the
-engine's last Splanc round live in [`hardware/pnr/regression/`][ladder-readme].
+engine's last Splanc round live in [`hardware/pnr/regression/`][ladder-readme]. Past case 08 the
+ladder continues with [rungs 09 to 12](#rungs-09-to-12): a USB microcontroller board, a
+hierarchical four-bank board, current-sized power copper, a buck stage on hot-rod lands, a 0.65 mm
+BGA escape with split rails and with a coupled pair, and a purpose-built 113-part BGA computer.
 
 Every case below has an animation of its critical path: one straight line from the unplaced board
 to the fully routed board and KiCad's verdict, including the experiments the final board descends
@@ -65,6 +68,100 @@ pad entries, and zero KiCad unconnected items and findings, warnings included. S
 fabrication block, which the runner routes and judges under (`PNR_FAB_PROFILE=legacy` for every
 stage). `--fab-profile jlc-pofv` routes and judges under the engine's default JLCPCB profile
 instead (0.127 mm clearance, 0.45/0.30 mm vias, vias 0.127 mm off SMD pads).
+
+## Rungs 09 to 12
+
+Past the eight small cases the ladder continues with six of the hard rungs
+([`hard_rungs.py`][hard-rungs], CI lane `ladder`): one per family, each judged by the same gate plus
+the rung's own constraint checks (`check_constraints.py` on the saved board) and custom KiCad rules
+(plane layers carry no tracks, via policy, differential-pair skew, length-match groups), and the
+purpose-built top rung. Seeds 0 and 1 with the initial placement pool (8 starts, 3 routed finalists),
+the runner's other defaults (no compact placement or gloss) and the legacy fabrication profile,
+as the nightly CI hard-rung step runs them; engine `1f4c3d8`, GCP C4 (x86-64), KiCad 10.0.6. Values
+are seed 0 / seed 1; the time is the case's wall time (one vCPU per case; two for the top rung).
+
+| Rung                                 | Parts | Nets | Layers | Added difficulty                                                                                           | Seeds 0, 1         |   Opens | Findings |      Vias |     Copper (mm) |    Time (s) |
+| ------------------------------------ | ----: | ---: | -----: | ---------------------------------------------------------------------------------------------------------- | ------------------ | ------: | -------: | --------: | --------------: | ----------: |
+| `09-mcu-usb-31`                      |    31 |   27 |      2 | ATmega32U4 TQFP-44, crystal, USB Micro-B with two differential pairs, LDO, LEDs                            | pass, pass         |   0 / 0 |    0 / 0 |   39 / 49 |   792.9 / 971.5 |   357 / 371 |
+| `10-quad-bank-56`                    |    56 |   50 |      2 | Hierarchy: a clock block and one CD4017B bank template placed and routed four times                        | pass, pass         |   0 / 0 |    0 / 0 |   62 / 62 | 1076.6 / 1076.6 |   102 / 102 |
+| `11-power-switch-31`                 |    31 |   17 |      2 | Four-channel 12 V MOSFET switch: 3 A trunk, 1.5 A outputs, current-sized copper                            | pass, pass         |   0 / 0 |    0 / 0 |   22 / 20 |   748.0 / 726.7 |     69 / 49 |
+| `11-buck-vqfnhr-4L-SGPS-pour`        |    10 |    6 |      4 | Buck stage on VQFN-HR hot-rod lands no track can enter, joined by outer pours                              | pass, pass         |   0 / 0 |    0 / 0 |   17 / 17 |     45.7 / 49.5 |     14 / 16 |
+| `11-ufbga201-fanout-6L-SGSGPS-rails` |    19 |   55 |      6 | 0.65 mm UFBGA-201 escape; three supply rails share one plane, IR drop judged per rail                      | pass, pass         |   0 / 0 |    0 / 0 | 133 / 137 |   791.2 / 827.9 |   102 / 102 |
+| `11-ufbga201-fanout-6L-SGSGPS-pairs` |    18 |   55 |      6 | 0.65 mm UFBGA-201 escape; an LVDS pair coupled on F.Cu from the fanout (skew 0.1 mm)                       | pass, pass         |   0 / 0 |    0 / 0 | 135 / 135 |   815.1 / 884.9 |     94 / 95 |
+| `12-soc-bga-113`                     |   113 |  112 |      6 | STM32F746 UFBGA176+25: SDRAM with a length-matched lane, QSPI, RMII PHY, USB, microSD; four supply domains | **fail**, **fail** | 37 / 40 |  18 / 20 | 355 / 375 | 2522.5 / 2606.9 | 1294 / 1083 |
+
+The top rung, `12-soc-bga-113` ([`soc_rung.py`][soc-rung], manual lane), is a purpose-built
+single-board computer: an STM32F746 in a 0.65 mm UFBGA176+25 with a 16-bit SDRAM whose high data
+byte lane is a length-match group (1.0 mm), a quad-SPI flash, an RMII Ethernet PHY with series and
+MDI terminations, USB full speed, microSD, SWD and I/O connectors, and four supply domains (USB
+5 V, a buck to 3.3 V that owns the supply plane, two LDOs whose analog rails are routed on signal
+layers) on six layers. Its pin map is KiCad's `STM32F746IGKx` symbol; hard proximity groups keep
+each part's support parts beside it; the [ladder README][ladder-readme] describes it. It is the
+ladder's target, not yet a pass (engine `bc82338`, the same configuration): the router leaves 34 of
+its 112 nets open on both seeds, and KiCad's findings name what is still missing besides capacity:
+the SDRAM lane out of skew (9 / 8 `skew_out_of_range`), tracks through the keep-outs the microSD and
+QFN footprints carry (5 / 10 `items_not_allowed`: the router does not read footprint rule areas), a
+via 0.19 mm from the USB receptacle's shell hole (2 / 2 `hole_to_hole`, minimum 0.25 mm) and 2 / 0
+`clearance`. Its proximity, edge and fixed checks pass; the `fanout-escape` check does not (balls
+left unrouted). It carries a `ci.target` (dense-board routing) in the manual lane.
+
+### Push-and-shove rungs
+
+`11-shove-channel-14` and `11-shove-channel-lm-14` ([`shove_rungs.py`][shove-rungs], manual lane)
+are small two-layer boards made for a push-and-shove router: a copper wall with one 4.25 mm channel,
+a 10-net bus through it and four late nets that cross the bus and share the channel. Nine tracks fit
+per layer (eight on a 0.25 mm routing grid) and fourteen nets need the channel; the `-lm` variant
+turns the bus north after the channel and matches it to 0.5 mm, so its meanders need the room the
+late nets cross. They are routable by construction, and the current router (negotiated rip-up and
+reroute) leaves nets open on them: they are marked as targets for the queued push-and-shove router
+(`ci.target`), not gated.
+
+Seeds 0 and 1, the same configuration and engine as the rungs above:
+
+| Rung                     | Parts | Nets | Layers | Seeds 0, 1 | Nets left open (engine) | KiCad opens | KiCad findings                                      |  Time (s) |
+| ------------------------ | ----: | ---: | -----: | ---------- | ----------------------- | ----------: | --------------------------------------------------- | --------: |
+| `11-shove-channel-14`    |     4 |   14 |      2 | fail, fail | B5, X0 / B5, X0         |       2 / 2 | 0 / 0                                               | 148 / 152 |
+| `11-shove-channel-lm-14` |     4 |   14 |      2 | fail, fail | X2, X3 / X2, X3         |       2 / 2 | 9 / 9 (`skew_out_of_range`: the bus is not matched) | 161 / 163 |
+
+### CI test rungs
+
+The other hard rungs vary one dimension of a base (stackup, via policy, sides, placement
+constraints, search, parts) and stay CI test rungs: the `nightly` lane runs every night
+(informational), the `manual` lane on request. The same campaign's results:
+
+| Rung                                   | Lane    | Dimension                                  | Parts |  Cu | Seed 0                     | Seed 1                     |      Vias |  Time (s) |
+| -------------------------------------- | ------- | ------------------------------------------ | ----: | --: | -------------------------- | -------------------------- | --------: | --------: |
+| `09-mcu-usb-31-4L-SGPS`                | manual  | stackup 4L-SGPS                            |    31 |   4 | pass                       | pass                       |   73 / 82 | 110 / 129 |
+| `09-mcu-usb-31-4L-SSGS`                | manual  | stackup 4L-SSGS                            |    31 |   4 | pass                       | pass                       |   69 / 77 | 233 / 182 |
+| `09-mcu-usb-31-6L-SGSGPS`              | manual  | stackup 6L-SGSGPS                          |    31 |   6 | pass                       | pass                       |   76 / 84 | 120 / 162 |
+| `09-mcu-usb-31-abs`                    | manual  | constraints absolute                       |    33 |   2 | pass                       | pass                       |   56 / 53 | 307 / 265 |
+| `09-mcu-usb-31-rel`                    | manual  | constraints relative                       |    31 |   2 | pass                       | pass                       |   50 / 50 | 326 / 341 |
+| `09-mcu-usb-31-sidelock`               | manual  | sides assigned                             |    31 |   2 | pass                       | pass                       |   43 / 51 | 313 / 329 |
+| `09-mcu-usb-31-mc`                     | manual  | search mc                                  |    31 |   2 | pass                       | pass                       |   41 / 40 | 277 / 265 |
+| `09-mcu-usb-31-header`                 | manual  | parts tht-header                           |    31 |   2 | **fail** (`stage_failure`) | **fail** (`stage_failure`) |         - |   25 / 26 |
+| `07-chaser-20-4L-SGPS`                 | nightly | stackup 4L-SGPS                            |    20 |   4 | pass                       | pass                       |   28 / 32 |   27 / 51 |
+| `07-chaser-20-4L-SGGS`                 | nightly | stackup 4L-SGGS                            |    20 |   4 | pass                       | pass                       |   25 / 29 |   31 / 40 |
+| `07-chaser-20-4L-SSGS`                 | nightly | stackup 4L-SSGS                            |    20 |   4 | pass                       | pass                       |   29 / 30 |   32 / 32 |
+| `07-chaser-20-6L-SGSSPS`               | nightly | stackup 6L-SGSSPS                          |    20 |   6 | pass                       | pass                       |   26 / 34 |   32 / 33 |
+| `07-chaser-20-6L-SGSGPS`               | nightly | stackup 6L-SGSGPS                          |    20 |   6 | pass                       | pass                       |   30 / 32 |   30 / 30 |
+| `07-chaser-20-8L-SGSGPSGS`             | nightly | stackup 8L-SGSGPSGS                        |    20 |   8 | pass                       | pass                       |   30 / 30 |   31 / 49 |
+| `07-chaser-20-6L-SGSGPS-BB`            | nightly | stackup 6L-SGSGPS, via policy blind-buried |    20 |   6 | pass                       | pass                       |   31 / 34 |   78 / 91 |
+| `07-chaser-20-6L-SGSGPS-HDI`           | nightly | stackup 6L-SGSGPS, via policy hdi          |    20 |   6 | pass                       | pass                       |   32 / 38 |   96 / 88 |
+| `07-chaser-20-double`                  | nightly | sides double                               |    20 |   2 | pass                       | pass                       |   14 / 15 |   45 / 46 |
+| `07-chaser-20-4L-SGPS-double`          | nightly | stackup 4L-SGPS, sides double              |    20 |   4 | pass                       | pass                       |   24 / 24 |   36 / 36 |
+| `07-chaser-20-abs`                     | nightly | constraints absolute                       |    22 |   2 | pass                       | pass                       |   22 / 22 |   36 / 38 |
+| `07-chaser-20-rel`                     | nightly | constraints relative                       |    20 |   2 | pass                       | pass                       |   21 / 21 |   37 / 31 |
+| `07-chaser-20-sidelock`                | nightly | sides assigned                             |    20 |   2 | pass                       | pass                       |   15 / 18 |   75 / 82 |
+| `07-chaser-20-4L-SGPS-arcblock`        | nightly | stackup 4L-SGPS, parts arcblock            |    22 |   4 | pass                       | pass                       |   38 / 43 |   32 / 30 |
+| `11-ufbga201-fanout-6L-SGSGPS`         | manual  | stackup 6L-SGSGPS                          |    17 |   6 | pass                       | pass                       | 133 / 135 |   89 / 89 |
+| `11-ufbga201-fanout-6L-SGSGPS-block`   | manual  | stackup 6L-SGSGPS, parts block             |    18 |   6 | pass                       | pass                       | 142 / 141 |  103 / 92 |
+| `11-ufbga201-fanout-6L-SGSGPS-classes` | manual  | stackup 6L-SGSGPS, constraints classes     |    18 |   6 | pass                       | pass                       | 133 / 133 |   94 / 96 |
+| `11-ufbga201-fanout-6L-SGSGPS-partial` | manual  | stackup 6L-SGSGPS, constraints partial     |    17 |   6 | pass                       | pass                       | 131 / 133 |   91 / 89 |
+| `11-buck-vqfnhr-4L-SGPS`               | manual  | stackup 4L-SGPS                            |    10 |   4 | pass                       | pass                       |   12 / 12 |   14 / 14 |
+
+`09-mcu-usb-31-header` fails in this configuration because the initial pool cannot place its
+pin-1-origin header; it passes with compact placement (see
+[Compact placement](#compact-placement-opt-in)).
 
 ### Showcases
 
@@ -382,7 +479,12 @@ compared with <a href="animations/manifest.json"><code>animations/manifest.json<
 is a notice); the traced run and the showcases take the animations' options, `--compact --gloss`,
 so their traces compare with the committed ones. The nightly run also takes the opt-in
 [gloss stage](#gloss-opt-in) through `04-inverter-leds-8` and `07-chaser-20` (seed 0): a stage
-error fails the job, and a stage that kept no edit on either case is a warning. The lane is
-informational, not a required check yet; its aggregate check is named `ladder`.
+error fails the job, and a stage that kept no edit on either case is a warning. Nightly it then runs
+the hard rungs of the `ladder` lane ([rungs 09 to 11](#rungs-09-to-12)) and of the `nightly` lane
+(the chaser variants), seed 0, with the initial pool: informational, a hard rung never decides the
+job. The lane is informational, not a required check yet; its aggregate check is named `ladder`.
 
 [ladder-readme]: https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/README.md
+[hard-rungs]: https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/hard_rungs.py
+[soc-rung]: https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/soc_rung.py
+[shove-rungs]: https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/shove_rungs.py

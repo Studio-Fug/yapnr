@@ -1,8 +1,0 @@
-{
- "schema": "yapnr-rf-forward/1",
- "spec": "divider-osh-m-star-fwd",
- "spec_sha256": "6ebc0f7f06cb0ed0a2ade3a83320aeec5a79c13a408e34964cd1a333cf0d2266",
- "from_run": "d1-star",
- "substrate": "as optimized",
- "wide": true
-}

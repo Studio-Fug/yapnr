@@ -680,13 +680,22 @@ def _route_metrics(board):
         out["length_unmatched"] = sum(
             1 for r in report if r.get("status") in ("length_unmatched", "tuning_error")
         )
+    coupled = (getattr(board, "escape_diagnostics", None) or {}).get("coupled_pairs")
+    if coupled:
+        # Declared pairs the coupled router (board.route_pairs: coupled) left as two legs: the
+        # board's gap and uncoupled-length rules will not hold (route_rank).
+        out["pairs_uncoupled"] = sum(
+            1 for row in (coupled.get("pairs") or {}).values() if row.get("status") == "legs"
+        )
     return out
 
 
 def route_rank(metrics) -> tuple:
     """Sort key of routed candidates: missing connections, unresolved nets, then
     declared pairs / groups outside their budgets (``length_unmatched``, only when
-    the design declares any), then vias and copper length (the ``objective``).
+    the design declares any) together with the declared pairs the coupled router left as
+    two legs (``pairs_uncoupled``, only under ``board.route_pairs: coupled``: their gap and
+    uncoupled-length rules fail), then vias and copper length (the ``objective``).
 
     PNR_COMPACT ``RANK``: a record carrying the compactness ``bucket``
     (:func:`pnr.place.compact.rank_bucket`) ranks it after every completion key and the
@@ -694,7 +703,9 @@ def route_rank(metrics) -> tuple:
     but a via is not. Under PNR_SHRINK (the outline follows the bounding box) the
     bucket ranks before the vias. A record without one is keyed as before."""
     objective = list(metrics.get("objective") or [math.inf])
-    head = tuple(objective[:2]) + (metrics.get("length_unmatched", 0),)
+    head = tuple(objective[:2]) + (
+        metrics.get("length_unmatched", 0) + metrics.get("pairs_uncoupled", 0),
+    )
     if "bucket" not in metrics:
         return head + tuple(objective[2:])
     if compact.shrink_enabled():

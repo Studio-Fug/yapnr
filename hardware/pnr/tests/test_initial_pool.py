@@ -13,10 +13,12 @@ from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.place.initial_pool import (
     InitialPoolConfig,
+    _route_metrics,
     diverse_shortlist,
     initial_starts,
     pose_distance,
     preserve_source_locks,
+    route_rank,
     select_initial_placement,
 )
 from pnr.place.model import global_place
@@ -302,6 +304,33 @@ class InitialStartsTest(unittest.TestCase):
         ]:
             with self.assertRaises(ValueError):
                 InitialPoolConfig(**kwargs)
+
+
+class PairCouplingRankTest(unittest.TestCase):
+    def test_a_pair_left_as_legs_ranks_after_a_coupled_one(self):
+        # board.route_pairs: coupled: a finalist whose declared pair fell back to two legs
+        # (KiCad's gap and uncoupled-length rules fail) ranks after one routed coupled, ahead
+        # of the vias and copper (11-ufbga201-fanout-6L-SGSGPS-pairs seed 1 under
+        # PNR_LEGALIZE_KEEP picked the fewer-vias finalist with its LVDS pair as legs).
+        def board(status, vias):
+            return NS(
+                result=RouteResult({}, [], 1),
+                deferred_nets=set(),
+                tracks=[],
+                vias=[None] * vias,
+                escape_diagnostics=dict(
+                    coupled_pairs=dict(pairs=dict(lvds=dict(status=status)), groups=[])
+                ),
+            )
+
+        legs, coupled = _route_metrics(board("legs", 134)), _route_metrics(board("coupled", 139))
+        self.assertEqual((legs["pairs_uncoupled"], coupled["pairs_uncoupled"]), (1, 0))
+        self.assertLess(route_rank(coupled), route_rank(legs))
+        # Without the coupled router's report the key is the previous one.
+        plain = _route_metrics(
+            NS(result=RouteResult({}, [], 1), deferred_nets=set(), tracks=[], vias=[])
+        )
+        self.assertNotIn("pairs_uncoupled", plain)
 
 
 class InitialSelectionTest(unittest.TestCase):

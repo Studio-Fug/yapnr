@@ -1123,6 +1123,28 @@ owner questionnaire answer "Go ahead with ladder v2 as planned"):
   flags, letting the runner's new defaults decide; every ladder, showcase and hard-rung case
   passed.
 
+New blocker found by the phase-1 full regression (2026-10-06, GCP, 90 cells: ladder + showcases
+
+- all 33 hard rungs, seeds 0-1, campaign `20261006-ladder-b0ec34`): with `--fab-profile jlc-pofv`
+  as the default, every rung the nightly CI lane runs still passes (the ladder, the showcases and
+  all 15 nightly-lane hard rungs), but 11 of the 18 manual-lane-only hard rungs now fail where they
+  passed under `--fab-profile legacy` (every other new default unchanged, confirmed on the Mac):
+  the six UFBGA-201 rungs (`pnr.fanout.spec.FanoutError`: their 0.65 mm BGA escape's via spec, 0.150
+  mm drill, is under jlc-pofv's capability data, `min_through_drill` 0.200 mm), three
+  `09-mcu-usb-31` stackup variants (`skew_out_of_range`: jlc-pofv's wider via/pad clearance pushes
+  a USB pair's meander out of budget) and both `11-buck-vqfnhr` rungs (`native_drc_violations`,
+  93-151 `track_width` findings, cause not yet isolated). These are real profile/manufacturability
+  conflicts, not test bugs, and the manual lane is never run in CI (`output/hier/ladder-v2/
+inventory.md` section 1c) -- so this does not block phase 1's own CI or the public ladder/
+  showcase pages, both fully compatible with jlc-pofv. Per "never weaken rungs ... a default flip
+  that makes a rung fail is fixed in the engine, not by relaxing the rung" (`ladder-v2` rules): not
+  fixed here. The fix needs its own investigation (likely different per mechanism: a BGA-capable
+  vendor profile or a fanout fallback for the UFBGA-201 family; whether `--fab-profile` should
+  respect a design's own declared fab block over the runner's; the buck track-width count once its
+  cause is found) and is tracked as a new blocker, the way compact's own MCU-lane blocker was
+  before this phase flipped its default. See `output/hier/ladder-v2/gcp-spend.md` for the full
+  per-rung breakdown.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

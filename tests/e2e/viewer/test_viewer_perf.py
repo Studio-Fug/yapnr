@@ -238,20 +238,16 @@ class ViewerPerfCorrectnessTest(unittest.TestCase):
 
     def test_fast_path_does_not_redraw_vias_per_frame(self):
         # A regression guard for the actual perf win, not just pixel fidelity: a full render()
-        # never eagerly rebuilds the cache (it only marks it stale -- most render() calls, e.g.
-        # the live poll, are never followed by a gesture); the *first* fastFrame() of a gesture
-        # builds it once, and every later frame of that same gesture must reuse it unchanged.
+        # never rebuilds the cache inline (it only marks it stale and schedules a build for idle
+        # time, so the next gesture starts from a ready cache); every frame of a gesture then
+        # reuses it unchanged.
         self.set_view(20)
-        self.assertTrue(self.page.eval("gestureCacheDirty"))
+        wait_for(lambda: self.page.eval("!gestureCacheDirty&&!!gestureCache") or None, 10)
+        built = self.page.eval("gestureCache.x0+':'+gestureCache.scale0")
         self.page.eval("fastFrame();")
-        self.assertFalse(self.page.eval("gestureCacheDirty"))
-        built_canvas_id = self.page.eval("gestureCache.canvas.toString()+':'+gestureCache.scale0")
         self.page.eval("view={...view,x:view.x+5};fastFrame();")
         self.assertFalse(self.page.eval("gestureCacheDirty"))
-        self.assertEqual(
-            self.page.eval("gestureCache.canvas.toString()+':'+gestureCache.scale0"),
-            built_canvas_id,
-        )
+        self.assertEqual(self.page.eval("gestureCache.x0+':'+gestureCache.scale0"), built)
 
 
 if __name__ == "__main__":

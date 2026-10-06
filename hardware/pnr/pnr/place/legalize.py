@@ -1988,8 +1988,8 @@ def legalize(
         anchored = False
         if comp.ref in anchoring:
             # PNR_LEGALIZE_KEEP: the slot at the (pushed) global pose, at the global turn; else
-            # back to the queue, after the anchors (a free part), or now (a held part), for the
-            # nearest-first rings around the pose.
+            # back to the queue, after the anchors, for the nearest-first rings around the pose
+            # (a free part), or the packer's full search now (a held part).
             anchoring.discard(comp.ref)
             outcome = search(only=original_rotation, snap=True)
             if outcome[0] is None:
@@ -2001,13 +2001,15 @@ def legalize(
 
                 comp.rot = original_rotation
                 reasons[comp.ref] = SLOT_REASON
-                nudging.add(comp.ref)
                 if anchor_now:
+                    nudging.add(comp.ref)
                     movable.append(comp)
                     continue
-        if not anchored and comp.ref in nudging:
-            # PNR_LEGALIZE_KEEP: never the full search for a part that is not severe; it only
-            # falls back to it when no ring has a slot at any turn.
+                # A held part (an align, a region, an edge band, a hard group) keeps the
+                # packer's own search, which carries its constraints' costs.
+        if not anchored and comp.ref in nudging and not scarce(comp):
+            # PNR_LEGALIZE_KEEP: never the full search for a free part that is not severe; it
+            # only falls back to it when no ring has a slot at any turn.
             nudging.discard(comp.ref)
             outcome = ring_search()
             if outcome[0] is None:

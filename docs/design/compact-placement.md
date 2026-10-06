@@ -627,8 +627,10 @@ snap offset beyond half a grid cell.
   1.5 grid cells, at its global turn, without the channel or wirelength terms. A part whose slot
   is taken (`slot_taken`) or that the push gave up (`push_infeasible`) then takes the nearest free
   slot in rings expanding from its global pose (radius 3, 6, 12, ... grid cells; its global turn
-  first at each ring, then its other turns), never the full search. Only the severe parts go
-  through the packer's full search (its cost, `WIRE` and turns). `TURN` turns only the parts the
+  first at each ring, then its other turns), never the full search; a held part whose slot is
+  taken keeps the packer's own search, which carries its constraint's costs (an exact align
+  needs them). Only the severe parts go through the packer's full search (its cost, `WIRE` and
+  turns). `TURN` turns only the parts the
   legalizer moved. If the result leaves a part without a slot, the board is legalized again with
   the plain packer (`keep_fallback`).
 - _Metric._ Every legalization records its motion: parts moved (beyond 0.4 mm or turned),

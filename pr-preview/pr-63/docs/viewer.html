@@ -345,10 +345,16 @@ schematic, or 3D view) fills the window. The Inspect/Source/Ask/Notes panel can 
 thin rail or be resized (drag its left edge); it is docked to the right edge (not yet to the left
 or bottom — a follow-up). Layout (open/closed, the dock’s width and last tab) persists per browser
 in <code class="docutils literal notranslate"><span class="pre">localStorage</span></code> (wrapped in <code class="docutils literal notranslate"><span class="pre">try</span></code>/<code class="docutils literal notranslate"><span class="pre">catch</span></code>, so a private window or blocked storage degrades to
-“nothing remembered”, never an error), with a <strong>Reset layout</strong> button next to the toggles. At
-≤1360px width every panel becomes a fixed overlay drawer instead of a grid column, closed by
-default, so a phone or narrow tablet opens straight onto the maximized board; opening one slides it
-in over the board rather than squeezing the layout. Every toggle is a real <code class="docutils literal notranslate"><span class="pre">&lt;button&gt;</span></code>
+“nothing remembered”, never an error), with a <strong>Reset layout</strong> button next to the toggles. The
+Experiment lanes and Exploration panels can each also collapse to a thin rail (mirroring the
+Inspect/Source/Ask/Notes dock) and dock to either the left or right edge, independent of one
+another, on a wide screen. At ≤900px width (phone and small-tablet widths — a laptop keeps both
+columns) every panel becomes a fixed overlay drawer instead of a grid column, closed by default,
+so a phone opens straight onto the maximized board; opening one slides it in over the board rather
+than squeezing the layout. The Inspect/Source/Ask/Notes dock has its own, wider breakpoint
+(≤1360px), since it is a fourth column rather than two of three. A drawer paints a solid, themed
+background — it must never let the board underneath show through — and a scrim dims the board
+behind it and closes it on a tap outside. Every toggle is a real <code class="docutils literal notranslate"><span class="pre">&lt;button&gt;</span></code>
 (keyboard-activatable, <code class="docutils literal notranslate"><span class="pre">aria-pressed</span></code> reflects state), and the page keeps no horizontal scroll down
 to 360px wide.</p>
 </section>

@@ -198,7 +198,7 @@ class LatticeTest(unittest.TestCase):
 class FitTest(unittest.TestCase):
     """The 0.65 mm / 0.32 mm land arithmetic of the design (stage 2 section 5)."""
 
-    def model(self, vacant=()):
+    def model(self, vacant=(), **kw):
         positions = array(5, lambda r, c: (r, c) in vacant)
         lat = infer(lands(positions))
         obs = Obstacles()
@@ -215,7 +215,19 @@ class FitTest(unittest.TestCase):
             hole_to_edge=None,
             via_classes=[dict(GROUND, sites=["interstitial", "vacant"]), DEFAULT],
             widths=[0.1],
+            **kw,
         )
+
+    def test_a_via_hole_keeps_the_fab_hole_clearance_to_other_copper(self):
+        # 0.35/0.15 between 0.32 mm balls: its hole edge is 0.2246 mm from each land.
+        self.assertEqual(self.model(hole_clearance=0.2).via_blockers((3, 3), 0, "X"), frozenset())
+        blocked = self.model(hole_clearance=0.25).via_blockers((3, 3), 0, "X")
+        self.assertEqual(len(blocked), 4)  # the four balls around the site
+        # Two such vias a pitch apart: copper 0.30 mm, hole to copper 0.40 mm apart.
+        other, _same = self.model(hole_clearance=0.38).stencils[(("v", 0, 0), ("v", 0, 0))]
+        self.assertNotIn((2, 0), other)
+        other, _same = self.model(hole_clearance=0.41).stencils[(("v", 0, 0), ("v", 0, 0))]
+        self.assertIn((2, 0), other)
 
     def test_interstitial_fits_035_not_040(self):
         m = self.model()
@@ -744,6 +756,50 @@ class SpecTest(unittest.TestCase):
         self.assertIn("neck_classes: nope is not a net class", warnings[0])
         with self.assertRaisesRegex(FanoutError, "neck_classes needs neck_mm"):
             spec(neck_classes=["gnd"])
+
+    def test_the_fab_profile_adapts_an_unmade_via_class(self):
+        from pnr import fab_profile as fp
+        from pnr.fanout import check
+
+        pofv = dict(rules(), fab=fp.apply_fab(FAB, "jlc-pofv"))
+        # The ground class's 0.35/0.15 drop: jlc-pofv drills 0.20 at least; its filled
+        # in-pad via (0.35/0.20) is no wider, so the class takes it and says so.
+        sp = spec()
+        warnings = check(sp, pofv, ["F.Cu", "In2.Cu", "B.Cu"])
+        ground = next(c for c in sp["via_classes"] if c["name"] == "ground")
+        self.assertEqual((ground["diameter_mm"], ground["drill_mm"]), (0.35, 0.2))
+        self.assertEqual(ground["sites"], ["interstitial"])
+        self.assertTrue(any("ground" in w and "filled in-pad via 0.35/0.2" in w for w in warnings))
+        default = next(c for c in sp["via_classes"] if c["name"] == "default")
+        self.assertEqual((default["diameter_mm"], default["drill_mm"]), (0.4, 0.2))  # made
+        # Nothing to adapt to without filled vias (legacy, the design's own block).
+        with self.assertRaisesRegex(FanoutError, "min_through_drill"):
+            check(spec(), dict(rules(), fab=dict(FAB, min_through_drill_mm=0.2)), ["F.Cu"])
+        # A declared via the fab makes is never touched.
+        sp = spec(via_classes={"default": {"diameter_mm": 0.45, "drill_mm": 0.3}})
+        self.assertEqual(check(sp, pofv, ["F.Cu"]), [])
+        self.assertEqual(sp["via_classes"][0]["drill_mm"], 0.3)
+        # Wider than the declared via: not a fit for its sites, so still an error.
+        sp = spec(via_classes={"default": {"diameter_mm": 0.3, "drill_mm": 0.1}})
+        with self.assertRaisesRegex(FanoutError, "min_through_drill"):
+            check(sp, pofv, ["F.Cu"])
+
+    def test_a_part_without_classes_escapes_by_the_profiles_filled_via(self):
+        from pnr import fab_profile as fp
+        from pnr.fanout import check
+
+        sp = spec(via_classes={})
+        sp["via_classes"] = []
+        check(sp, dict(rules(), fab=fp.apply_fab(FAB, "jlc-pofv")), ["F.Cu"])
+        (c,) = sp["via_classes"]
+        self.assertEqual((c["diameter_mm"], c["drill_mm"]), (0.35, 0.2))
+        self.assertEqual(c["sites"], ["in_pad", "interstitial", "vacant", "outside"])
+        sp = spec(via_classes={})
+        sp["via_classes"] = []
+        check(sp, rules(), ["F.Cu"])  # no filled vias: the fab's default via, outside
+        (c,) = sp["via_classes"]
+        self.assertEqual((c["diameter_mm"], c["drill_mm"]), (0.4, 0.2))
+        self.assertEqual(c["sites"], ["vacant", "outside"])
 
     def test_rules_keep_their_bytes_without_a_fanout(self):
         from pnr.constraints import compile_constraints, compile_routing_rules

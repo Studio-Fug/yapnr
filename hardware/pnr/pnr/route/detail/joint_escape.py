@@ -597,6 +597,12 @@ def enumerate_drops(
                 break
         if len(found) >= 4 * max_options:
             break
+    for c in found:
+        if _grazes_own_lands(grid, net, side, c.segments, rect):
+            # The stub crosses another land of its net without entering it at full
+            # width: that land is touched but not entered (pnr.pad_entry judges it
+            # an unqualified entry). Taken only when no clean site is left.
+            c.cost += GRAZE_COST
     # Directionally diverse: equal-cost sites on one side must not crowd out the
     # only exit on the other side of a dense pad row.
     found.sort(key=lambda c: (c.cost, c.access_key, c.segments))
@@ -614,6 +620,44 @@ def enumerate_drops(
             chosen.append(c)
     options += chosen[: max(0, max_options - len(options))]
     return sorted(options, key=lambda c: (c.cost, c.access_key, c.segments))
+
+
+# The cost (mm, as _make_option prices a via at 3.0) added to a drop whose stub grazes
+# another land of its own net.
+GRAZE_COST = 5.0
+
+
+def _rect_gap(p, r):
+    return math.hypot(
+        max(r.left - p[0], 0.0, p[0] - r.right), max(r.bottom - p[1], 0.0, p[1] - r.top)
+    )
+
+
+def _segment_rect_gap(a, b, r):
+    """The distance between segment ``a``-``b`` and the rectangle ``r`` (0 if they meet)."""
+    if _rect_gap(a, r) == 0.0 or _rect_gap(b, r) == 0.0:
+        return 0.0
+    corners = ((r.left, r.bottom), (r.right, r.bottom), (r.right, r.top), (r.left, r.top))
+    for k in range(4):
+        c, d = corners[k], corners[(k + 1) % 4]
+        if _segment_distance_sq(a, b, c, d) <= 1e-18:
+            return 0.0
+    return min(math.sqrt(_segment_distance_sq(a, b, c, c)) for c in corners)
+
+
+def _grazes_own_lands(grid, net, layer, segments, rect):
+    """A stub of ``segments`` on ``layer`` overlaps a surface land of ``net`` other
+    than its own (``rect``) with its copper."""
+    lands = [r for la, owner, r, _ in grid.smd_pads if owner == net and la == layer and r != rect]
+    if not lands:
+        return False
+    for la, a, b, width in segments:
+        if la != layer:
+            continue
+        for r in lands:
+            if _segment_rect_gap(a, b, r) < width / 2 - 1e-9:
+                return True
+    return False
 
 
 def _drop_site_test(grid, plane_access, net, span, through_test):
@@ -851,15 +895,19 @@ def plan_joint_escapes(
         for k, cs in options.items()
         if cs
     }
-    selection = select_joint(
+    selection, seal_report = _select_unsealed(
+        grid,
         options,
-        lambda a, b: options_conflict(grid, a, b),
+        terminals,
+        drops,
+        bounds,
         max_states=max_states,
         max_cluster_size=max_cluster_size,
-        may_interact=lambda a, b: a in bounds and b in bounds and _overlap(bounds[a], bounds[b]),
     )
     plan = EscapePlan()
     plan.diagnostics = selection.report()
+    if seal_report:
+        plan.diagnostics["sealed_access"] = seal_report
     plan.diagnostics["candidate_counts"] = {k: len(cs) for k, cs in options.items()}
     plan.diagnostics["model"] = "joint-grid-pad-rectangles-v1"
     plan.blocked_nets = {terminals[key][0] for key in selection.unresolved}
@@ -908,3 +956,167 @@ def plan_joint_escapes(
             plan.net_access.setdefault(net, []).append(esc.access)
         plan.escapes.append(esc)
     return plan
+
+
+# A selected exit whose access cell can reach fewer than this many grid cells on its
+# layer, no via site and no other terminal of its net is sealed (see _sealed_access).
+SEAL_REACH_CELLS = 400
+# Re-selections after a sealed exit (each bans the sealing options for that exit).
+SEAL_ROUNDS = 6
+
+
+def _select_unsealed(grid, options, terminals, drops, bounds, *, max_states, max_cluster_size):
+    """:func:`select_joint`, then re-selected while a chosen option walls in another
+    terminal's exit.
+
+    The joint search only knows pairwise geometric conflicts: it can choose a plane
+    drop whose via and halo close the last gap out of a neighbouring signal pad (a
+    connector's ground drop sealing the middle pin of a 0.65 mm row, say), leaving
+    that pad's net open for every router round however the rest is routed. After
+    each selection the exits are checked against the selection's own occupancy
+    (:func:`_sealed_access`); the options that wall a sealed exit in are declared in
+    conflict with that exit's option and the search runs again. A re-selection is
+    kept only if it seals fewer exits and resolves no fewer terminals, so a board
+    whose selection seals nothing is planned exactly as before. Returns the
+    selection and a report of the sealed exits ({} when none was found)."""
+    extra = set()
+    extra_keys = set()
+
+    def conflict(a, b):
+        return (id(a), id(b)) in extra or options_conflict(grid, a, b)
+
+    def may_interact(a, b):
+        if (a, b) in extra_keys:
+            return True
+        return a in bounds and b in bounds and _overlap(bounds[a], bounds[b])
+
+    def run():
+        return select_joint(
+            options,
+            conflict,
+            max_states=max_states,
+            max_cluster_size=max_cluster_size,
+            may_interact=may_interact,
+        )
+
+    best = run()
+    sealed = _sealed_access(grid, options, terminals, drops, best.selected)
+    if not sealed:
+        return best, {}
+    report = {
+        "found": {k: walls for k, (walls, _) in sorted(sealed.items())},
+        "rounds": 0,
+        "left": sorted(sealed),
+    }
+    current, current_sealed = best, sealed
+    for round_ in range(SEAL_ROUNDS):
+        added = False
+        for key, (walls, border) in sorted(current_sealed.items()):
+            a = options[key][current.selected[key]]
+            for other in walls:
+                # Every option of a walling terminal that would stand on this
+                # border, not only the chosen one: the next search moves it off.
+                for b in options[other]:
+                    if b.occupied.isdisjoint(border):
+                        continue
+                    for pair in ((id(a), id(b)), (id(b), id(a))):
+                        if pair not in extra:
+                            extra.add(pair)
+                            added = True
+                extra_keys.update(((key, other), (other, key)))
+        if not added:
+            break
+        current = run()
+        current_sealed = _sealed_access(grid, options, terminals, drops, current.selected)
+        report["rounds"] = round_ + 1
+        report.setdefault("walls", []).append(
+            {k: walls for k, (walls, _) in sorted(current_sealed.items())}
+        )
+        if len(current.unresolved) <= len(best.unresolved) and len(current_sealed) < len(
+            report["left"]
+        ):
+            best = current
+            report["left"] = sorted(current_sealed)
+        if not current_sealed:
+            break
+    return best, report
+
+
+def _sealed_access(grid, options, terminals, drops, selected, reach=SEAL_REACH_CELLS):
+    """{terminal key: ([keys of the selected options walling it in], border cells)}
+    for every selected signal exit that the selection itself seals.
+
+    An exit is sealed when the cells its net's track may use on the access layer,
+    counting the selection's own exits and drops as copper (each with its halo, as
+    :func:`_occupied` reserves them), reach fewer than ``reach`` cells from its
+    access cell and none of them is a via site or another terminal of the net. Exits
+    that already change layer (an option with a via) are not checked. The walling
+    options are the selected options of other terminals that occupy a cell on the
+    sealed region's border; an exit sealed by static copper alone names none."""
+    owner = {}
+    holders = {}
+    access = {}
+    for key, i in selected.items():
+        net = terminals[key][0]
+        option = options[key][i]
+        for cell in option.occupied:
+            held = owner.get(cell)
+            owner[cell] = net if held is None or held == net else "\0conflict"
+            holders.setdefault(cell, []).append(key)
+        if key not in drops:
+            access.setdefault(net, set()).add(option.access_key)
+    out = {}
+    steps = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1))
+    for key in sorted(selected):
+        if key in drops:
+            continue
+        net = terminals[key][0]
+        option = options[key][selected[key]]
+        if option.vias:
+            continue
+        layer, i0, j0 = option.access_key
+        others = access.get(net, set()) - {option.access_key}
+
+        def free(i, j):
+            held = owner.get((layer, i, j))
+            return (held is None or held == net) and grid.passable(layer, i, j, net)
+
+        def via_site(i, j):
+            if not grid.via_passable(layer, i, j, net):
+                return False
+            for la in range(grid.nlayers):
+                held = owner.get((la, i, j))
+                if held is not None and held != net:
+                    return False
+            return True
+
+        seen = {(i0, j0)}
+        todo = [(i0, j0)]
+        border = set()
+        escaped = False
+        while todo and not escaped:
+            i, j = todo.pop()
+            if (layer, i, j) in others or via_site(i, j):
+                escaped = True
+                break
+            for di, dj in steps:
+                n = (i + di, j + dj)
+                if n in seen:
+                    continue
+                if free(*n):
+                    seen.add(n)
+                    todo.append(n)
+                    if len(seen) >= reach:
+                        escaped = True
+                        break
+                elif grid.in_bounds(*n):
+                    border.add(n)
+        if escaped:
+            continue
+        walls = set()
+        for i, j in border:
+            for other in holders.get((layer, i, j), ()):
+                if terminals[other][0] != net:
+                    walls.add(other)
+        out[key] = (sorted(walls), frozenset((layer, i, j) for i, j in border))
+    return out

@@ -19,7 +19,7 @@ from hard_rungs import (
     plane_layers,
     ufbga_base,
 )
-from run import parser
+from run import fab_profiles, parser
 
 CHECK_KINDS = {
     "inside_board",
@@ -55,6 +55,28 @@ class HardRungContract(unittest.TestCase):
     def setUp(self):
         self.rungs = hard_rungs()
         self.by_name = {r["name"]: r for r in self.rungs}
+
+    def test_only_the_bga_rungs_declare_a_fab_profile_and_it_makes_their_vias(self):
+        from pnr import fab_profile as fp
+
+        declared = {r["name"]: r.get("fab_profile") for r in self.rungs if r.get("fab_profile")}
+        self.assertEqual(
+            sorted(declared),
+            sorted(r["name"] for r in self.rungs if r["base"] == "ufbga201-fanout"),
+        )
+        for name, profile in declared.items():
+            self.assertIn(profile, fab_profiles(), name)
+            fab = fp.profile_fab(profile)
+            for check in self.by_name[name]["checks"]:
+                if check["kind"] != "via_class":
+                    continue
+                self.assertGreaterEqual(check["drill_mm"], fab["min_through_drill_mm"], name)
+                self.assertGreaterEqual(check["diameter_mm"], fab["min_via_diameter_mm"], name)
+                ring = (check["diameter_mm"] - check["drill_mm"]) / 2
+                self.assertGreaterEqual(ring + 1e-9, fab["via_annular_mm"], name)
+            # tracks and clearances no finer than the fab makes
+            design = self.by_name[name]["constraints"]["fab"]
+            self.assertGreaterEqual(design["track_width_mm"], fab["min_track_width_mm"], name)
 
     def test_names_are_unique_and_outside_the_gate(self):
         names = [r["name"] for r in self.rungs]

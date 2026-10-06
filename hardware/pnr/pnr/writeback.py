@@ -341,8 +341,36 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
     return len(zones) + reused
 
 
+def _pour_reached(board, pours) -> set:
+    """The uuids of the SMD pads that reach a through contact (a stitch via, say) through
+    the drawn outer ``pours`` (pnr.plane_partition pieces): the board's zones are filled
+    to see it and every zone not filled before is emptied again, so the board leaves as it
+    came but for its refreshed fills. Empty without pours."""
+    import pcbnew
+
+    if not pours:
+        return set()
+    zones = list(board.Zones())
+    empty = [z for z in zones if not z.IsFilled()]
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    board.BuildConnectivity()
+    nets = {z.GetNetCode() for z in pours}
+    reached = {
+        pad.m_Uuid.AsString()
+        for fp in board.GetFootprints()
+        for pad in fp.Pads()
+        if pad.GetNetCode() in nets
+        and pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
+        and _has_through_access(board, pad)
+    }
+    for z in empty:
+        z.UnFill()
+    board.BuildConnectivity()
+    return reached
+
+
 def form_planes(
-    board, stack, rules: dict, width: float, height: float, net_code=None, regions=None
+    board, stack, rules: dict, width: float, height: float, net_code=None, regions=None, pours=None
 ) -> dict:
     """Form every dedicated plane of a declared copper ``stack`` (:mod:`pnr.stack`).
 
@@ -355,8 +383,10 @@ def form_planes(
     its pads' bounding box plus 2 mm for each other net (smaller boxes at higher
     priorities). Without ``regions`` they are computed from the board's pads.
     Zones already on the board, such as those drawn in the source, are kept. The
-    planes stage refills them all. Returns ``{"fallback_vias": n, "zones": [(layer,
-    net), ...]}``.
+    planes stage refills them all. A pad an outer pour of ``pours`` (the drawn
+    pnr.plane_partition pieces) joins to a stitch via is reached already: it takes no
+    fallback via (:func:`_pour_reached`). Returns ``{"fallback_vias": n, "zones":
+    [(layer, net), ...]}``.
     """
     import pcbnew
 
@@ -370,6 +400,7 @@ def form_planes(
     left = []
     # Declared pours (pnr.pour): their net's pads on their layer are the pour's.
     poured = [(e["net"], copper_layer(board, e["layer"])) for e in (rules or {}).get("pours") or []]
+    pour_reached = _pour_reached(board, pours)
     for net in sorted(stack.plane_nets):
         code = codes.get(net)
         if code is None:
@@ -381,6 +412,7 @@ def form_planes(
             if pad.GetNetCode() == code
             and pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
             and not any(n == net and pad.IsOnLayer(lid) for n, lid in poured)
+            and pad.m_Uuid.AsString() not in pour_reached
             and not _has_through_access(board, pad)
         ]
         if unreached and (rules or {}).get("plane_fallback_drops", True) is False:
@@ -390,7 +422,14 @@ def form_planes(
                 for pad in unreached
             )
         elif unreached:
-            added += _dogbone_fanout_net(board, code, rules=rules, skip_connected=True, stack=stack)
+            added += _dogbone_fanout_net(
+                board,
+                code,
+                rules=rules,
+                skip_connected=True,
+                stack=stack,
+                **({"skip": pour_reached} if pour_reached else {}),
+            )
     if regions is None:
         pads: Dict[str, list] = {}
         for fp in board.GetFootprints():
@@ -783,6 +822,7 @@ def _dogbone_fanout_net(
     width_log=None,
     skip_connected: bool = False,
     stack=None,
+    skip=None,
 ) -> int:
     """Add only checked external pad-to-plane escapes; never force via-in-pad.
 
@@ -861,6 +901,8 @@ def _dogbone_fanout_net(
                 continue
             if skip_connected and _has_through_access(board, pad):
                 continue
+            if skip and pad.m_Uuid.AsString() in skip:
+                continue  # reached through a stitched outer pour (form_planes)
             # Plane attachment is still a current-carrying trace. Resolve its
             # required width from the same source policy as ordinary routing;
             # the fabrication minimum is not a per-net width specification.
@@ -926,7 +968,24 @@ def _dogbone_fanout_net(
             placed = False
             # Nearest via distance first (stub length dominates inductance), then the
             # widest allowed stub, then direction. One width: the previous order.
-            for extra, trace_w in [(e, w) for e in (0.0, 0.25, 0.5, 0.9, 1.5) for w in widths]:
+            # Other lands of the net on the pad's layer: a stub that crosses one
+            # touches it without entering it at full width (an unqualified entry,
+            # pnr.pad_entry), so such a site is taken only when no other is legal.
+            lands = [
+                other.GetEffectiveShape(surface)
+                for other in fp.Pads()
+                if other.GetNetCode() == netcode
+                and other.m_Uuid.AsString() != pad.m_Uuid.AsString()
+                and other.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
+                and other.IsOnLayer(surface)
+            ]
+            tries = [
+                (graze, e, w)
+                for graze in ((False, True) if lands else (True,))
+                for e in (0.0, 0.25, 0.5, 0.9, 1.5)
+                for w in widths
+            ]
+            for graze, extra, trace_w in tries:
                 for delta in (0, 45, -45, 90, -90, 135, -135, 180):
                     theta = angle + math.radians(delta)
                     distance = base + _nm(extra)
@@ -938,6 +997,11 @@ def _dogbone_fanout_net(
                     if not (
                         bounds.GetLeft() + edge <= x <= bounds.GetRight() - edge
                         and bounds.GetTop() + edge <= y <= bounds.GetBottom() - edge
+                    ):
+                        continue
+                    if not graze and any(
+                        land.Collide(pcbnew.SEG(pos, pcbnew.VECTOR2I(x, y)), round(trace_w / 2.0))
+                        for land in lands
                     ):
                         continue
                     if barred and any(
@@ -1863,7 +1927,15 @@ def writeback(
             sys.stderr.write("writeback: plane partition zones %d\n" % len(drawn))
             done = {r["layer"] for r in rows}
             regions = [r for r in regions if r.layer not in done]
-        formed = form_planes(board, stack, rules, width, height, net_code or None, regions)
+            outer = {(r["net"], r["layer"]) for r in rows if r.get("pour")}
+            pours = [
+                z for z in drawn if (z.GetNetname(), board.GetLayerName(z.GetLayer())) in outer
+            ]
+        else:
+            pours = []
+        formed = form_planes(
+            board, stack, rules, width, height, net_code or None, regions, pours=pours
+        )
         sys.stderr.write("writeback: stack planes " + str(formed) + "\n")
     elif (routes or {}).get("plane_regions"):
         # Outer pours only (plane_partition with a region), on a board without a

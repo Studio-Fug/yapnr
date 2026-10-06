@@ -72,6 +72,7 @@ class Model:
         in_pad=None,
         net_clearance: Optional[Dict[str, float]] = None,
         clearances: Sequence[float] = (),
+        hole_clearance: Optional[float] = None,
     ):
         self.lat = lattice
         self.layers = list(layers)
@@ -83,6 +84,9 @@ class Model:
         )
         self.via_to_pad = via_to_pad
         self.hole_to_hole = hole_to_hole
+        # A via hole to another net's copper (KiCad's hole_clearance); None: not judged
+        # apart from the copper clearance (the planner passes the fab's).
+        self.hole_clearance = hole_clearance
         self.edge_clearance = edge_clearance
         self.hole_to_edge = hole_to_edge
         self.via_classes = list(via_classes)
@@ -227,8 +231,11 @@ class Model:
                 if not net:
                     return None
                 nets.add(net)
-        for net, c, dia, _drill in self.obs.vias:
-            if segment_segment(a, b, c, c) < half + dia / 2 + max(cl, self.cl(net)) + MARGIN:
+        for net, c, dia, drill in self.obs.vias:
+            gap = segment_segment(a, b, c, c)
+            if gap < half + dia / 2 + max(cl, self.cl(net)) + MARGIN or self._hole_near(
+                gap - half, drill
+            ):
                 if not net:
                     return None
                 nets.add(net)
@@ -284,12 +291,17 @@ class Model:
                 elif dist < r + keep_own + MARGIN:
                     return None
                 continue
-            if dist < r + max(cl, self.cl(land.net), self.via_to_pad or 0.0) + MARGIN:
+            if dist < r + max(cl, self.cl(land.net), self.via_to_pad or 0.0) + MARGIN or (
+                self._hole_near(dist, h)
+            ):
                 if not land.net:
                     return None
                 nets.add(land.net)
         for other, _la, a, b, w in self.obs.tracks:
-            if segment_segment(p, p, a, b) < r + w / 2 + max(cl, self.cl(other)) + MARGIN:
+            gap = segment_segment(p, p, a, b)
+            if gap < r + w / 2 + max(cl, self.cl(other)) + MARGIN or self._hole_near(
+                gap - w / 2, h
+            ):
                 if not other:
                     return None
                 nets.add(other)
@@ -297,7 +309,11 @@ class Model:
             gap = math.dist(p, c)
             if gap < (h + drill) / 2 + self.hole_to_hole + MARGIN and gap > 1e-6:
                 return None  # drills too close, whatever the nets
-            if gap < r + dia / 2 + max(cl, self.cl(other)) + MARGIN:
+            if (
+                gap < r + dia / 2 + max(cl, self.cl(other)) + MARGIN
+                or self._hole_near(gap - dia / 2, h)
+                or self._hole_near(gap - r, drill)
+            ):
                 if not other:
                     return None
                 nets.add(other)
@@ -317,6 +333,13 @@ class Model:
         if not self._outline_clear(p, p, keep):
             return None
         return frozenset(nets)
+
+    def _hole_near(self, gap, drill) -> bool:
+        """A hole of ``drill`` whose centre is ``gap`` from another net's copper edge is
+        closer than the fab's hole clearance."""
+        if self.hole_clearance is None or drill is None:
+            return False
+        return gap < drill / 2 + self.hole_clearance + MARGIN
 
     def _in_pad_fits(self, land, p, d, h) -> bool:
         from pnr.fab_profile import in_pad_fit
@@ -398,7 +421,11 @@ class Model:
                     for db in range(-reach, reach + 1):
                         b0, b1, rb, hb, cb = self._shape(tb, (da, db))
                         gap = segment_segment(a0, a1, b0, b1)
-                        if gap < ra + rb + max(ca, cb) + MARGIN:
+                        if (
+                            gap < ra + rb + max(ca, cb) + MARGIN
+                            or self._hole_near(gap - rb, ha)
+                            or self._hole_near(gap - ra, hb)
+                        ):
                             other.append((da, db))
                         if ha is not None and hb is not None and (da, db) != (0, 0):
                             if gap < (ha + hb) / 2 + self.hole_to_hole + MARGIN:

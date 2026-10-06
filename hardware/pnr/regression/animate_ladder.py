@@ -133,7 +133,8 @@ def gloss_result(result):
 
 def case_result(case, directory, result, config, profile=None):
     """One case of ``ladder-results.json``: the design's size and the gate's result, no paths.
-    ``fab_profile`` is the profile of the saved board's custom rules, else the run's;
+    ``fab_profile`` is the profile of the saved board's custom rules, else the one the
+    case declared (``result.json``, run.py case_fab_profile), else the run's;
     ``compactness`` the placed parts' measure (``result.json``) and ``gloss``
     :func:`gloss_result`."""
     design = json.loads((Path(directory) / "design.json").read_text())
@@ -155,7 +156,7 @@ def case_result(case, directory, result, config, profile=None):
         opens=result.get("opens"),
         violations=result.get("violations"),
         drc_rules=drc_rules(directory),
-        fab_profile=fab_profile(directory) or profile,
+        fab_profile=fab_profile(directory) or result.get("fab_profile") or profile,
         vias=result.get("vias"),
         tracks=result.get("tracks"),
         copper_length_mm=None if copper is None else round(copper, 2),

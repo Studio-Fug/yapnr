@@ -433,6 +433,7 @@ def plan(
         ),
         via_to_pad=g.via_to_smd_pad,
         hole_to_hole=g.hole_to_hole,
+        hole_clearance=g.hole_clearance,
         edge_clearance=g.edge_clearance,
         hole_to_edge=g.hole_to_edge,
         via_classes=spec["via_classes"],

@@ -28,7 +28,14 @@ enforces exactly them. `--fab-profile jlc-pofv` routes and judges under the
 engine's default JLCPCB profile instead (`pnr.fab_profile`: 0.127 mm clearance,
 0.45/0.30 mm vias, vias kept 0.127 mm off SMD pads); `route_case.py` applies the
 profile to the rules the router uses, as `writeback` does to the rules KiCad
-checks.
+checks. Under a profile the engine adapts to it: a track width finer than its
+`min_track_width_mm` (a design default, a class or a pair width) is raised to it
+(`rules.json` `fab_adaptations`), and a fanout via class it cannot drill takes its
+filled in-pad via when that is no wider. A rung that needs a finer fab declares
+it (`fab_profile`): the UFBGA-201 rungs' 0.35/0.15 mm plane drops and 0.10 mm tracks
+run under `jlc-6l-hdi` (JLCPCB's multilayer 0.15/0.25 mm vias, 0.09 mm tracks,
+filled vias) whenever the run selects a profile; `legacy` keeps every fixture's
+own block.
 Each manifest retains explicit intentionally unused pins. Pin mappings and timer
 connections were checked against [TLC555](https://www.ti.com/lit/ds/symlink/tlc555.pdf),
 [CD4017B](https://www.ti.com/lit/ds/symlink/cd4017b.pdf), and the KiCad library

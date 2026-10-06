@@ -45,7 +45,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 ENV = "PNR_FAB_PROFILE"
 DEFAULT = "jlc-pofv"
@@ -283,6 +283,40 @@ def apply_fab(fab: Optional[Dict], name: Optional[str] = None) -> Dict:
     return out
 
 
+def floor_track_widths(rules: Dict, name: Optional[str] = None) -> List[str]:
+    """Raise every track width ``rules`` asks for to the profile's minimum. In place.
+
+    A design's fab block may ask for tracks finer than the selected fab can make
+    (a fine-pitch rung's 0.10 mm default track under a 0.127 mm profile): the
+    default signal track (``fab.track_width_mm``), a net class's ``width_mm`` and a
+    differential pair's ``width_mm`` below the profile's ``min_track_width_mm`` are
+    raised to it, so the engine never draws a track the judge's board setup rejects.
+    Each raise is recorded in ``rules['fab_adaptations']`` (only when there is one,
+    so a design that fits keeps its bytes) and returned. Legacy and profiles without
+    a minimum change nothing.
+    """
+    floor = profile_fab(name).get("min_track_width_mm")
+    notes: List[str] = []
+    if not floor:
+        return notes
+    floor = float(floor)
+
+    def raise_(holder, key, what):
+        value = holder.get(key)
+        if isinstance(value, (int, float)) and value < floor - 1e-9:
+            notes.append("%s %.4g -> %.4g mm (fab min_track_width)" % (what, value, floor))
+            holder[key] = floor
+
+    raise_(rules.setdefault("fab", {}), "track_width_mm", "fab.track_width_mm")
+    for nc in rules.get("net_classes") or ():
+        raise_(nc, "width_mm", "net_class %s width" % nc.get("name"))
+    for dp in rules.get("diff_pairs") or ():
+        raise_(dp, "width_mm", "diff_pair %s width" % dp.get("name"))
+    if notes:
+        rules["fab_adaptations"] = list(rules.get("fab_adaptations") or ()) + notes
+    return notes
+
+
 def apply_fab_model(model: Optional[Dict], name: Optional[str] = None) -> Dict:
     """An electrical / plane-access fab model (JSON dict) under the profile.
 
@@ -320,6 +354,7 @@ def apply_rules(rules: Dict, name: Optional[str] = None) -> Dict:
         return rules
     out = copy.deepcopy(rules)
     out["fab"] = apply_fab(out.get("fab"), name)
+    floor_track_widths(out, name)
     for key in ("electrical_fab", "plane_access_fab"):
         if isinstance(out.get(key), dict):
             out[key] = apply_fab_model(out[key], name)

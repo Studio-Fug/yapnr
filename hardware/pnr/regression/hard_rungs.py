@@ -1234,6 +1234,9 @@ BGA_SIZE = (36, 36)
 # Three east-edge balls left for a small fixed block (an RF launch, say): unconnected
 # here, their surface exits a reserved corridor in U1's frame (x east, y north).
 BGA_RESERVED_BALLS = ["E15", "F15", "G15"]
+# The fab profile the BGA rungs declare (yapnr/fab/data/profiles): 0.15 mm drills and
+# 0.09 mm tracks, filled vias.
+BGA_FAB_PROFILE = "jlc-6l-hdi"
 BGA_RESERVED_RECT = [4.8, 0.3, 6.4, 2.3]
 
 
@@ -1377,6 +1380,10 @@ def ufbga_base():
         )
     ]
     spec["supply"] = dict(voltage_v=3.3, max_current_a=0.1)
+    # The 0.35/0.15 mm plane drops between 0.65 mm balls (and the via_class check that
+    # holds them) need a 0.15 mm drill: a fab that makes it, whatever profile the run
+    # selects (run.py case_fab_profile; legacy keeps this block for the A/B baseline).
+    spec["fab_profile"] = BGA_FAB_PROFILE
     spec = hard(spec, "ufbga201-fanout", ["bga-fanout", "fine-pitch"], "manual", 120)
     signals = sorted(b for balls in sides.values() for b in balls)
     spec["checks"] += [

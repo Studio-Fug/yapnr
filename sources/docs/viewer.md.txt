@@ -72,6 +72,74 @@ behind it and closes it on a tap outside. Every toggle is a real `<button>`
 (keyboard-activatable, `aria-pressed` reflects state), and the page keeps no horizontal scroll down
 to 360px wide.
 
+## Rendering and performance
+
+The board canvas (`static/app.js`) used to redraw everything, every frame, in immediate mode: each
+via was two `beginPath`/`arc`/`fill` calls with a `fillStyle` change, forced to at least a 2px
+radius even when zoomed out past legibility, and both drawing and hover/click hit-testing scanned
+every via and track on the board linearly. On a real board with thousands of ground-stitching
+vias (the reported case) this made panning, pinching and zooming visibly laggy. Four changes fix
+it, in order of how much they matter:
+
+1. **A spatial grid** (`gridFor()`, one per geometry object, built lazily and cached by object
+   identity — nothing invalidates it by hand, a new geometry is simply a new object): uniform cells
+   in board mm, sized so each holds a handful of vias and tracks. `paintBoard()` and `boardHit()`
+   both use it — drawing culls to the cells the current viewport actually overlaps; hit-testing
+   checks only the cells near the query point. Both return exactly what a full linear scan would
+   have (same candidates, same priority order), just over far fewer items; this is the one checked
+   directly, not just measured, in `tests/e2e/viewer/test_viewer_perf.py`.
+2. **Via batching**: the via rings and holes in the culled, visible set are drawn as one `Path2D`
+   fill each (board-space coordinates, one `setTransform` per tier) instead of two `arc`/`fill`
+   calls and a `fillStyle` change per via. Tracks are culled by the same grid but still drawn one
+   at a time, since their stroke width and colour both vary per track (a diff view, a draft net) —
+   batching those would need bucketing by width too, judged not worth the added complexity once
+   culling and the via work below met the target.
+3. **Via level of detail**, by true on-screen diameter (`diameter * view.scale`, no artificial
+   minimum): ≥1.5px draws the normal ring and hole; 0.5–1.5px draws a plain dot at its true size
+   (a ring is not legible at that size anyway); below 0.5px, too small to resolve individually, one
+   representative dot stands in for every via in that grid cell — a cheap stand-in for a
+   pre-rendered texture tile that reuses the grid already built for culling. Hit-testing always
+   uses a via's true diameter regardless of which tier drew it, so a via that is just a cell fleck
+   on screen is exactly as clickable as it always was.
+4. **A gesture raster cache**: while a pan, pinch, wheel-zoom or rectangle drag is live, the board
+   canvas just blits an offscreen raster of the static board layers with a scale+translate
+   transform, at most once per animation frame however many input events arrive; the dynamic
+   overlay (selection, routing target, highlights, drag/annotation rectangles, cost dots, note
+   badges) is still drawn live on top every frame. The cache is built at a margin around the
+   viewport (snapped so its backing store is an exact pixel multiple — no sub-pixel resampling blur
+   when nothing has actually moved yet) and is reused for as long as the board content (its
+   content hash, layers, toggles, diff and draft) and the view stay the same.
+5. **Nothing heavy while a finger is down.** A full `render()` requested mid-gesture (a live poll,
+   a note, a highlight) is deferred to the release, which renders anyway; the live poll does not
+   even advance its revision until the gesture is over. The full-quality redraw after a gesture is
+   the release itself (a pause mid-drag no longer triggers one); only the wheel, which has no
+   release, still settles 150ms after its last step. After every full render whose content or view
+   the cache does not match, the cache is rebuilt — and forced to rasterise, since canvas drawing
+   is otherwise only executed on first use — in idle time, so the next drag starts from a ready
+   cache and its first frame is a blit like any other. The one exception mid-gesture: a finger held
+   still for 0.7s over a region the cache does not cover (a long pan past the margin, or a pinch
+   past 2x) rebuilds the cache at the current view, so the blank edge fills in while the user looks.
+
+   Before this, every full render marked the cache stale and the first gesture frame rebuilt it, so
+   every drag started with a 60–140ms hitch on a phone; worse, the settle render fired whenever a
+   finger paused for 150ms mid-drag (or a frame took that long), which made the next move rebuild
+   the cache again — a loop that turned one slow frame into continuous stutter.
+
+A further option, instanced WebGL vias, was in the original plan but turned out unnecessary: items
+1–4 alone already meet the <16ms p95 target during gestures at 1x CPU throttling (see the
+before/after table in the PR). Pads and other tracks were left without additional level-of-detail
+tiers for the same reason — their counts were never the bottleneck.
+
+Tests: `tests/e2e/viewer/test_viewer_perf.py` (manual, like its siblings — a real headless Chrome
+against a real viewer server and a synthetic dense board; skips without Chrome) checks that
+`boardHit()` matches a verbatim copy of the pre-grid linear scan at many points and across a dense
+sweep at a zoomed-out LoD tier, that the gesture fast path reproduces a full render pixel-for-pixel
+at each via LoD tier, and that panning does not rebuild the cache mid-gesture.
+`tests/e2e/viewer/test_viewer_gesture.py` (same setup, phone profile with touch emulation) drives
+real touch drags with 16ms move steps, mid-drag pauses and a live poll that re-renders mid-drag,
+and checks that no full render and no cache rebuild happen while a finger is down, that the drag
+starts from a cache built in idle time, and frame-time bounds under a modest CPU throttle.
+
 ## The live directory
 
 | Path                             | Written by     | What                                                  |

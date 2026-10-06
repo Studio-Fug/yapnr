@@ -326,6 +326,38 @@ newer, with the engine on the import path:</p>
 <p>Without the assembled dist the viewer serves its bare static files: everything works except the
 schematic layout (elkjs) and the 3D view (three.js), which say so in the page.</p>
 </section>
+<section id="touch-and-panels">
+<h2>Touch and panels<a class="headerlink" href="#touch-and-panels" title="Link to this heading">¶</a></h2>
+<p><strong>Touch</strong> (Android Chrome, iOS Safari, or a trackpad/mouse — behaviour is unchanged for those):
+pinch with two fingers to zoom the board, the schematic and the 3D view, anchored at the pinch
+centre; a two-finger drag pans; double-tap zooms in (and back out, toggling) centred on the tap.
+One-finger drag keeps its existing meaning on each surface: it pans the board or schematic, except
+while the rectangle-annotation or “Ask region” tool is armed, where it draws that rectangle, same
+as with a mouse. The 3D view’s orbit/pan/zoom is three.js <code class="docutils literal notranslate"><span class="pre">OrbitControls</span></code>, wired for touch
+(<code class="docutils literal notranslate"><span class="pre">controls.touches</span></code>) the same way. Every drawing surface sets CSS <code class="docutils literal notranslate"><span class="pre">touch-action:</span> <span class="pre">none</span></code> so the
+browser’s own page-level pinch-zoom and scroll never fight the gesture; <code class="docutils literal notranslate"><span class="pre">static/touch.js</span></code> holds
+the shared pinch/double-tap math, used by <code class="docutils literal notranslate"><span class="pre">static/app.js</span></code> (the board canvas) and
+<code class="docutils literal notranslate"><span class="pre">static/schematic.js</span></code> (the schematic SVG).</p>
+<p><strong>Dockable panels</strong>: the Experiment lanes column, the Exploration column (tree, placement costs,
+events) and the Inspect/Source/Ask/Notes dock can each be closed and reopened from the small
+toolbar in the header (<code class="docutils literal notranslate"><span class="pre">static/panels.js</span></code>, <code class="docutils literal notranslate"><span class="pre">static/dock.css</span></code>); with all three closed the board (or
+schematic, or 3D view) fills the window. The Inspect/Source/Ask/Notes panel can also collapse to a
+thin rail or be resized (drag its left edge); it is docked to the right edge (not yet to the left
+or bottom — a follow-up). Layout (open/closed, the dock’s width and last tab) persists per browser
+in <code class="docutils literal notranslate"><span class="pre">localStorage</span></code> (wrapped in <code class="docutils literal notranslate"><span class="pre">try</span></code>/<code class="docutils literal notranslate"><span class="pre">catch</span></code>, so a private window or blocked storage degrades to
+“nothing remembered”, never an error), with a <strong>Reset layout</strong> button next to the toggles. The
+Experiment lanes and Exploration panels can each also collapse to a thin rail (mirroring the
+Inspect/Source/Ask/Notes dock) and dock to either the left or right edge, independent of one
+another, on a wide screen. At ≤900px width (phone and small-tablet widths — a laptop keeps both
+columns) every panel becomes a fixed overlay drawer instead of a grid column, closed by default,
+so a phone opens straight onto the maximized board; opening one slides it in over the board rather
+than squeezing the layout. The Inspect/Source/Ask/Notes dock has its own, wider breakpoint
+(≤1360px), since it is a fourth column rather than two of three. A drawer paints a solid, themed
+background — it must never let the board underneath show through — and a scrim dims the board
+behind it and closes it on a tap outside. Every toggle is a real <code class="docutils literal notranslate"><span class="pre">&lt;button&gt;</span></code>
+(keyboard-activatable, <code class="docutils literal notranslate"><span class="pre">aria-pressed</span></code> reflects state), and the page keeps no horizontal scroll down
+to 360px wide.</p>
+</section>
 <section id="the-live-directory">
 <h2>The live directory<a class="headerlink" href="#the-live-directory" title="Link to this heading">¶</a></h2>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -534,6 +566,34 @@ People create, edit, accept, reject, apply and delete them in the Notes tab; the
 only add notes, comment and edit its own open notes. <code class="docutils literal notranslate"><span class="pre">design-notes.md</span></code> in the same folder is the
 feed for the next design pass, and <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.viewer.notes.store</span> <span class="pre">report</span> <span class="pre">--dir</span> <span class="pre">&lt;notes&gt;</span></code>
 prints it (<code class="docutils literal notranslate"><span class="pre">--status</span> <span class="pre">accepted</span></code>, <code class="docutils literal notranslate"><span class="pre">--json</span></code>).</p>
+<section id="scope-which-lane-s-a-note-shows-on">
+<h3>Scope: which lane(s) a note shows on<a class="headerlink" href="#scope-which-lane-s-a-note-shows-on" title="Link to this heading">¶</a></h3>
+<p>One experiment (one <code class="docutils literal notranslate"><span class="pre">--root</span></code>) can have many lanes (candidates/trials), each with its own board,
+and the same refdes (<code class="docutils literal notranslate"><span class="pre">C1</span></code>, <code class="docutils literal notranslate"><span class="pre">U5</span></code>, …) names a <em>different</em> instance on each one. A note is therefore
+scoped to the lane it was recorded in, not to the refdes alone: a note about <code class="docutils literal notranslate"><span class="pre">C1</span></code> written while
+looking at lane <code class="docutils literal notranslate"><span class="pre">r05/c02</span></code> is never drawn on, or counted for, lane <code class="docutils literal notranslate"><span class="pre">r05/c07</span></code>’s board, even though
+both boards have their own <code class="docutils literal notranslate"><span class="pre">C1</span></code>.</p>
+<p>Every note carries a computed <code class="docutils literal notranslate"><span class="pre">scope</span></code> (<code class="docutils literal notranslate"><span class="pre">notes/store.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">derive_scope()</span></code>, schema
+<code class="docutils literal notranslate"><span class="pre">yapnr-notes-v2</span></code>), from two inputs already on the note:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">provenance.lane</span></code>, recorded automatically from the lane you were viewing when you created the
+note (via the Inspect panel, a board click, or the Ask agent) — scope <code class="docutils literal notranslate"><span class="pre">{&quot;kind&quot;:&quot;lane&quot;,&quot;lane&quot;:…}</span></code>.</p></li>
+<li><p>an explicit, optional <strong>global</strong> field, off by default, you set yourself (the Notes editor’s
+“Show in every experiment” checkbox; only a user can set it, like status) — scope
+<code class="docutils literal notranslate"><span class="pre">{&quot;kind&quot;:&quot;global&quot;}</span></code>.</p></li>
+<li><p>neither: scope <code class="docutils literal notranslate"><span class="pre">{&quot;kind&quot;:&quot;unscoped&quot;}</span></code> — a note with no recorded lane (written before scoping
+existed, or with the board paused on no particular lane). An unscoped note is never drawn on any
+board; the Notes tab lists it under “Unscoped notes” instead of guessing where it belongs, with
+a button to tag it with the lane you are currently viewing.</p></li>
+</ul>
+<p>Scope is computed fresh every time a note is read, not stored in <code class="docutils literal notranslate"><span class="pre">notes.jsonl</span></code> — so this needed no
+migration: a note from an older viewer that never had a “scope” or “global” field is classified
+the same way new ones are (by its <code class="docutils literal notranslate"><span class="pre">provenance.lane</span></code>, or unscoped), and nothing in the log is
+rewritten or lost. Board badges (<code class="docutils literal notranslate"><span class="pre">note-badges</span></code>), the Inspect panel’s “Notes” section, and the Ask
+agent’s dossier (<code class="docutils literal notranslate"><span class="pre">notes/store.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">relevant()</span></code>) all filter by scope against the lane you are
+currently looking at; the Notes tab’s own search list still shows every note (each with a scope
+label) so you can find and re-tag an unscoped one.</p>
+</section>
 </section>
 <section id="http-interface">
 <h2>HTTP interface<a class="headerlink" href="#http-interface" title="Link to this heading">¶</a></h2>
@@ -652,6 +712,7 @@ Apache-2.0 web-worker shim; both texts are served) and three.js (MIT); see
             <ul>
 <li><a class="reference internal" href="#">The live viewer</a><ul>
 <li><a class="reference internal" href="#running-it">Running it</a></li>
+<li><a class="reference internal" href="#touch-and-panels">Touch and panels</a></li>
 <li><a class="reference internal" href="#the-live-directory">The live directory</a></li>
 <li><a class="reference internal" href="#configuration">Configuration</a></li>
 <li><a class="reference internal" href="#design-inputs-and-optional-services">Design inputs and optional services</a><ul>
@@ -660,7 +721,10 @@ Apache-2.0 web-worker shim; both texts are served) and three.js (MIT); see
 </li>
 <li><a class="reference internal" href="#network-access">Network access</a></li>
 <li><a class="reference internal" href="#the-ask-agent-and-ai-net-labels-off-by-default">The Ask agent and AI net labels (off by default)</a></li>
-<li><a class="reference internal" href="#design-notes">Design notes</a></li>
+<li><a class="reference internal" href="#design-notes">Design notes</a><ul>
+<li><a class="reference internal" href="#scope-which-lane-s-a-note-shows-on">Scope: which lane(s) a note shows on</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#http-interface">HTTP interface</a></li>
 <li><a class="reference internal" href="#source-code-and-license">Source code and license</a></li>
 </ul>

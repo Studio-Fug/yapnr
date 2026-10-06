@@ -986,7 +986,12 @@ py_test(
     imports = ["."],
     legacy_create_init = False,
     main = "tests/test_fab_adapt.py",
-    deps = [":pnr"],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+    ],
 )
 
 # Joint terminal access never walls a selected exit in (a plane drop sealing a connector's

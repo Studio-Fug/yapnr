@@ -57,6 +57,19 @@ class FloorTest(unittest.TestCase):
         self.assertEqual(out["fab"]["track_width_mm"], 0.1)
 
 
+class ViaClearRadiusTest(unittest.TestCase):
+    def test_the_hole_clearance_widens_a_thin_ringed_via_only(self):
+        from pnr.route.detail.router import via_clear_radius
+
+        # jlc-6l-hdi: 0.45/0.30 via, 0.09 copper and 0.20 hole clearance: the hole
+        # binds (0.15 + 0.20 - 0.09 = 0.26 > 0.225).
+        self.assertAlmostEqual(via_clear_radius(fp.apply_fab(fp.LEGACY_FAB, "jlc-6l-hdi")), 0.26)
+        # legacy and jlc-pofv: the ring covers it, the copper radius as before.
+        self.assertEqual(via_clear_radius(fp.apply_fab(fp.LEGACY_FAB, "legacy")), 0.3)
+        self.assertEqual(via_clear_radius(fp.apply_fab(fp.LEGACY_FAB, "jlc-pofv")), 0.225)
+        self.assertEqual(via_clear_radius({"via_diameter_mm": 0.6, "via_drill_mm": 0.3}), 0.3)
+
+
 class HdiProfileTest(unittest.TestCase):
     def test_jlc_6l_hdi_makes_the_bga_rungs_vias_and_tracks(self):
         fab = fp.profile_fab("jlc-6l-hdi")

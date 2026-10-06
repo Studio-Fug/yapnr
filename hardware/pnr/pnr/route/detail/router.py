@@ -861,6 +861,18 @@ def tie_plane_layers(grid, graph, stack, plan, result, plane_access, via_keepout
     return added, report
 
 
+def via_clear_radius(fab) -> float:
+    """The radius (mm) a default via keeps other copper away by: its copper radius, or
+    ``drill / 2 + hole_clearance - clearance`` where the hole clearance binds first
+    (its ring is thinner than ``hole_clearance - clearance``). Equal to the copper
+    radius for every profile whose rings cover it (legacy, jlc-pofv)."""
+    radius = float(fab["via_diameter_mm"]) / 2.0
+    hole = fab.get("hole_clearance_mm")
+    if hole is None:
+        return radius
+    return max(radius, float(fab["via_drill_mm"]) / 2.0 + float(hole) - float(fab["clearance_mm"]))
+
+
 def detail_pitch(explicit, track_width_mm, clearance_mm):
     """Resolve one pitch for source screening and fixed-copper signal handoff.
 
@@ -923,6 +935,10 @@ def route_board(
     track_width_mm = fab["track_width_mm"] if track_width_mm is None else track_width_mm
     clearance_mm = fab["clearance_mm"]
     via_radius_mm = fab["via_diameter_mm"] / 2.0
+    # The radius a via keeps other copper away by: its copper, or more where the fab's
+    # hole clearance (via hole to other copper) binds before the copper clearance does
+    # (a thin ring under a fine clearance: jlc-6l-hdi's 0.45/0.30 via at 0.09 mm).
+    via_clear_radius_mm = via_clear_radius(fab)
     # Per-net track width from the net classes (type/amperage), default = fab width.
     net_width = _net_widths(rules, track_width_mm)
     pitch = detail_pitch(pitch, track_width_mm, clearance_mm)
@@ -969,11 +985,11 @@ def route_board(
     # must clear by ``via_diameter + clearance`` centre-to-centre, so the nearest
     # allowed other-net via sits ⌈(via_d+clr)/pitch⌉ cells away ⇒ keep-out radius one
     # less. (Default 0.45/0.13/0.30 ⇒ 1; a tighter fab needs a wider halo.)
-    via_keepout = max(1, math.ceil((2 * via_radius_mm + clearance_mm) / pitch) - 1)
+    via_keepout = max(1, math.ceil((2 * via_clear_radius_mm + clearance_mm) / pitch) - 1)
     # A net whose class clearance needs more keeps its own (class_clearance: maze).
     via_keepouts = {}
     for n in sorted(class_of):
-        k = max(via_keepout, math.ceil((2 * via_radius_mm + own_clearance(n)) / pitch) - 1)
+        k = max(via_keepout, math.ceil((2 * via_clear_radius_mm + own_clearance(n)) / pitch) - 1)
         if k > via_keepout:
             via_keepouts[n] = k
 
@@ -987,7 +1003,7 @@ def route_board(
         layers=layers,
         clearance=clearance_mm,
         track_width=track_width_mm,
-        via_radius=via_radius_mm,
+        via_radius=via_clear_radius_mm,
     )
     grid.net_widths = net_width
     grid.via_model = vm = _via_model(rules, layers, grid, fab, via_keepout, graph)
@@ -1618,7 +1634,7 @@ def route_board(
                 net_halo=net_halo,
                 via_keepout=via_keepout,
                 access=net_access,
-                via_radius=via_radius_mm,
+                via_radius=via_clear_radius_mm,
                 fixed_copper=_flat(fixed_copper),
             )
     if dru:

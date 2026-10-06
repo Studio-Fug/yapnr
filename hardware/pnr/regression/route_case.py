@@ -29,6 +29,11 @@ g = BoardGraph.from_json((root / "source-graph.json").read_text())
 c = compile_constraints(with_policy(spec["constraints"], spec.get("sides")), g.refs)
 # Route under the fab profile writeback stamps and KiCad judges (PNR_FAB_PROFILE; legacy: unchanged).
 rules = apply_rules(compile_routing_rules(c, [n.name for n in g.nets]))
+# ladder-v2 A/B (ab-pairs-pool): PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS=1 turns on coupled
+# pair routing (board.route_pairs: coupled) for any design that declares a diff_pair,
+# without editing each case; off (default) leaves the case's own declaration alone.
+if os.environ.get("PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS") == "1" and rules.get("diff_pairs"):
+    rules["route_pairs"] = "coupled"
 # The rung's tool-neutral via policy, less what the board's own rules disallow, on
 # its declared stack, with the build (drill pairs) its parts need (pnr.via_policy);
 # none for through vias only, as before.

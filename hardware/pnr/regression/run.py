@@ -871,6 +871,19 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--power-first",
+        action="store_true",
+        help="PNR_POWER_FIRST=1: lexicographic power-first placement (pnr.place.power_first)",
+    )
+    ap.add_argument(
+        "--route-pairs-diff-pairs",
+        action="store_true",
+        help=(
+            "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS=1: route_pairs: coupled for any design that "
+            "declares a diff_pair, without editing the case (ladder-v2 ab-pairs-pool A/B)"
+        ),
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
@@ -981,6 +994,10 @@ def main():
             native = dict(library=Path(library).name, sha256=sha(Path(library)))
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
+    if args.power_first:
+        env["PNR_POWER_FIRST"] = "1"
+    if args.route_pairs_diff_pairs:
+        env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
     if args.detail_pitch_mm is not None:
         import math
 

@@ -1805,7 +1805,17 @@ def legalize(
                             return value + wire_weight * wire
 
                     if snap:
-                        candidate_cost = bound = None
+                        # PNR_LEGALIZE_KEEP anchor: the nearest slot; a cost capture still
+                        # records the candidates' fields (the scores are not used).
+                        bound = None
+                        if capturing:
+
+                            def candidate_cost(xs, ys, _record=candidate_cost):
+                                _record(xs, ys)
+                                return 0.0
+
+                        else:
+                            candidate_cost = None
                     slot_free = hull_free(comp, bw, bh) if is_hull(comp) else None
                     slot_mask = region_mask(comp, bw, bh)
                     r, c = _place_part(

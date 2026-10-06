@@ -1727,9 +1727,19 @@ RAIL_CAPS = {"C1": "VDD", "C2": "VDD", "C3": "VDD", "C4": "VDD", "C5": "VDDA", "
 # VBAT (one ball, 0.001 A) is not given plane access: its ball fans out like an
 # ordinary signal (the "default" via class, a routable layer) rather than toward
 # the supply plane (owner review 2026-10-05, matching pnr.plane_partition's own
-# rule: current_width_floor_A / terminal count would trace it there too). Left in
-# the "planes" via class, its drop lands on the plane layer with no territory to
-# join (the layer is not routable for any other net): dead, unrouted copper.
+# rule: current_width_floor_A / terminal count would trace it there too). This
+# rung still names it here and keeps it off the "planes" via class and
+# net_class.plane_layer explicitly (so VBAT's via is sized for a signal, not a
+# plane drop) rather than leaning on the general fallback alone -- but the
+# general case is covered now: pnr.route.detail.router.route_board itself calls
+# pnr.plane_partition.decide_rails before any routing and drops a candidate it
+# decides to trace from signal_nets/stack.plane_nets/tie_plane_layers, so a rung
+# that left VBAT in one plane_vcc class and one "planes" via class, like every
+# other candidate, would still route it as an ordinary trace rather than leaving
+# it a dead plane drop (owner review 2026-10-06 found the previous gap: the
+# router read only net_class.plane_layer, never this module's own decision).
+# pnr.plane_partition.for_route takes the same decision as a parameter and fails
+# loudly if a fresh recompute (the real terminal count) disagrees with it.
 TRACED_RAILS = {"VBAT"}
 
 

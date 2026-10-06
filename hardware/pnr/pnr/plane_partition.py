@@ -1487,8 +1487,76 @@ def _rail_decision(n_candidates, n_terms, current, budget):
     )
 
 
+def _static_terminal_count(entry, net, graph, fixed_copper=None) -> int:
+    """A lower-bound terminal count for ``net`` on ``entry["layer"]``, from data
+    available before any routing runs: through-hole and surface pads of ``graph``,
+    plus the fixed copper's own vias and (``fixed_lands``) lands on the layer. Omits
+    escape vias (planned later, and only for a net already routed as a signal --
+    never a net this rule would keep a plane) and ``fanouts.skip_pads`` (unknown
+    yet): both omissions can only undercount a trace candidate's reach toward
+    :data:`CANDIDATE_TERMINALS_MIN`, the safe direction (toward keeping the plane,
+    today's behaviour), never make :func:`decide_rails` call "trace" where
+    :func:`for_route`'s own, fuller count would call "plane"."""
+    layer = entry["layer"]
+    count = 0
+    for comp in graph.components:
+        for pad in comp.pads:
+            if pad.net == net:
+                count += 1
+    if fixed_copper:
+        for n, _xy, _d in fixed_vias_on(fixed_copper, layer):
+            if n == net:
+                count += 1
+        if entry.get("fixed_lands"):
+            from pnr.fanout.planner import fixed_items
+
+            _t, _v, polygons = fixed_items(fixed_copper)
+            for n, _t in _fixed_lands(polygons, layer, {net: []}):
+                if n == net:
+                    count += 1
+    return count
+
+
+def decide_rails(rules, graph, fixed_copper=None) -> Dict[str, Tuple[str, str]]:
+    """net -> (decision, reason) (:func:`_rail_decision`) for every candidate of
+    every non-outer ``plane_partition`` entry in ``rules``, from data available
+    before routing (:func:`_static_terminal_count`). The single, early source of
+    truth :func:`for_route` reuses (its ``decisions``) and callers carry into the
+    routing rules before :func:`pnr.route.detail.router.layer_plan` runs, so a
+    candidate decided "trace" is never left a dead plane drop (route/detail/router.py
+    excluding it from signal routing on ``net_class.plane_layer`` alone, unaware of
+    this module's own decision, was the bug an owner review on 2026-10-06 found)."""
+    from pnr.power_spec import rail_current
+
+    out: Dict[str, Tuple[str, str]] = {}
+    for entry in rules.get("plane_partition") or ():
+        if entry.get("region"):
+            continue  # an outer pour: every candidate keeps today's rule
+        nets = list(entry.get("nets") or ())
+        currents = {n: rail_current(rules, n, (entry.get("currents") or {}).get(n)) for n in nets}
+        budgets = dict(entry.get("budgets_mohm") or {})
+        for n in nets:
+            out[n] = _rail_decision(
+                len(nets),
+                _static_terminal_count(entry, n, graph, fixed_copper),
+                currents.get(n),
+                budgets.get(n),
+            )
+    return out
+
+
 def for_route(
-    grid, graph, rules, stack, width, height, *, fixed_copper=None, fanouts=None, outer=False
+    grid,
+    graph,
+    rules,
+    stack,
+    width,
+    height,
+    *,
+    fixed_copper=None,
+    fanouts=None,
+    outer=False,
+    decisions=None,
 ):
     """Every declared partition of ``rules`` on this route: its inputs from the grid
     after the fanouts are planned (their vias are terminals or foreign copper), the
@@ -1496,7 +1564,15 @@ def for_route(
     :class:`Partition` list.
 
     ``outer``: the entries with a ``region`` instead (a pour on a routed layer inside
-    a region, :func:`outer_terminals`); without ``outer`` those are left out."""
+    a region, :func:`outer_terminals`); without ``outer`` those are left out.
+
+    ``decisions``: :func:`decide_rails`'s net -> (decision, reason), computed before
+    routing from the same rules and graph; a net it covers keeps that decision here
+    (the single source of truth a caller also carries into the routing rules), and
+    one it does not (an entry :func:`decide_rails` itself skips, or a fresh
+    ``rules['plane_partition']`` this call sees that a stale ``decisions`` does not)
+    falls back to a fresh :func:`_rail_decision` call, as if ``decisions`` were
+    None."""
     from pnr.fanout.planner import fixed_items
     from pnr.fixed_block import keepout_polygon
     from pnr.place.geometry import pad_rects
@@ -1620,11 +1696,25 @@ def for_route(
         # the entry itself declares (``budgets_mohm``), not one merged in from a
         # plain ``ir_drop`` check: a design verifying every rail's drop is no reason
         # to plane every rail.
-        decisions = {
-            n: _rail_decision(len(nets), len(terms[n]), currents.get(n), explicit_budgets.get(n))
-            for n in nets
-        }
-        traced = [n for n in nets if decisions[n][0] == "trace"]
+        net_decisions = {}
+        for n in nets:
+            fresh = _rail_decision(
+                len(nets), len(terms[n]), currents.get(n), explicit_budgets.get(n)
+            )
+            early = (decisions or {}).get(n)
+            if early is not None and early[0] != fresh[0]:
+                # The caller already acted on ``early`` (excluded or kept the net out of
+                # signal routing, a plane's drop planning) before this partition ran; a
+                # disagreement now would silently repeat the bug an owner review on
+                # 2026-10-06 found (a traced candidate with nowhere left to route), so
+                # this fails loudly instead of picking either decision.
+                raise ValueError(
+                    "plane_partition: %s decided %r before routing (%s) and %r once routed "
+                    "(%d terminal(s)): the two must agree"
+                    % (n, early[0], early[1], fresh[0], len(terms[n]))
+                )
+            net_decisions[n] = early or fresh
+        traced = [n for n in nets if net_decisions[n][0] == "trace"]
         for n in traced:
             for t in terms.pop(n):
                 blocked.append((t.at, t.radius + gap_to(n)))
@@ -1647,7 +1737,7 @@ def for_route(
             fill_min_mm=fill_min,
         )
         part.report["candidates"] = {
-            n: dict(decision=d, reason=r) for n, (d, r) in sorted(decisions.items())
+            n: dict(decision=d, reason=r) for n, (d, r) in sorted(net_decisions.items())
         }
         if traced:
             part.report["traced_nets"] = sorted(traced)

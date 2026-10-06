@@ -102,17 +102,30 @@ it, in order of how much they matter:
    uses a via's true diameter regardless of which tier drew it, so a via that is just a cell fleck
    on screen is exactly as clickable as it always was.
 4. **A gesture raster cache**: while a pan, pinch, wheel-zoom or rectangle drag is live, the board
-   canvas just blits an offscreen raster of the last full render (built once, at the view the
-   gesture started from, lazily — only the first fast frame of a gesture pays for it, not every
-   plain `render()`, e.g. the 1.2s live poll) with a scale+translate transform; the dynamic overlay
-   (selection, routing target, highlights, drag/annotation rectangles, cost dots) is still drawn
-   live on top every frame. A plain `render()` ~150ms after the gesture goes idle (or immediately
-   on release) restores full quality and marks the cache stale for next time. The cache is built at
-   a margin around the viewport (snapped so its backing store is an exact pixel multiple — no
-   sub-pixel resampling blur when nothing has actually moved yet) so a modest gesture never shows a
-   visible seam; a very large single pan can outrun the margin until the gesture settles.
+   canvas just blits an offscreen raster of the static board layers with a scale+translate
+   transform, at most once per animation frame however many input events arrive; the dynamic
+   overlay (selection, routing target, highlights, drag/annotation rectangles, cost dots, note
+   badges) is still drawn live on top every frame. The cache is built at a margin around the
+   viewport (snapped so its backing store is an exact pixel multiple — no sub-pixel resampling blur
+   when nothing has actually moved yet) and is reused for as long as the board content (its
+   content hash, layers, toggles, diff and draft) and the view stay the same.
+5. **Nothing heavy while a finger is down.** A full `render()` requested mid-gesture (a live poll,
+   a note, a highlight) is deferred to the release, which renders anyway; the live poll does not
+   even advance its revision until the gesture is over. The full-quality redraw after a gesture is
+   the release itself (a pause mid-drag no longer triggers one); only the wheel, which has no
+   release, still settles 150ms after its last step. After every full render whose content or view
+   the cache does not match, the cache is rebuilt — and forced to rasterise, since canvas drawing
+   is otherwise only executed on first use — in idle time, so the next drag starts from a ready
+   cache and its first frame is a blit like any other. The one exception mid-gesture: a finger held
+   still for 0.7s over a region the cache does not cover (a long pan past the margin, or a pinch
+   past 2x) rebuilds the cache at the current view, so the blank edge fills in while the user looks.
 
-A fifth option, instanced WebGL vias, was in the original plan but turned out unnecessary: items
+   Before this, every full render marked the cache stale and the first gesture frame rebuilt it, so
+   every drag started with a 60–140ms hitch on a phone; worse, the settle render fired whenever a
+   finger paused for 150ms mid-drag (or a frame took that long), which made the next move rebuild
+   the cache again — a loop that turned one slow frame into continuous stutter.
+
+A further option, instanced WebGL vias, was in the original plan but turned out unnecessary: items
 1–4 alone already meet the <16ms p95 target during gestures at 1x CPU throttling (see the
 before/after table in the PR). Pads and other tracks were left without additional level-of-detail
 tiers for the same reason — their counts were never the bottleneck.
@@ -122,6 +135,10 @@ against a real viewer server and a synthetic dense board; skips without Chrome) 
 `boardHit()` matches a verbatim copy of the pre-grid linear scan at many points and across a dense
 sweep at a zoomed-out LoD tier, that the gesture fast path reproduces a full render pixel-for-pixel
 at each via LoD tier, and that panning does not rebuild the cache mid-gesture.
+`tests/e2e/viewer/test_viewer_gesture.py` (same setup, phone profile with touch emulation) drives
+real touch drags with 16ms move steps, mid-drag pauses and a live poll that re-renders mid-drag,
+and checks that no full render and no cache rebuild happen while a finger is down, that the drag
+starts from a cache built in idle time, and frame-time bounds under a modest CPU throttle.
 
 ## The live directory
 

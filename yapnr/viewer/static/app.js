@@ -1,12 +1,15 @@
 'use strict';
 const $=id=>document.getElementById(id), canvas=$('board'),ctx=canvas.getContext('2d');
 let state=null,pinned=null,pinId=null,laneId=null,phase='live',phaseGeo=null,annotations=[],drawing=false,drag=null,preview=null,view={scale:8,x:40,y:500},fitted=false,revision=-1;
-// Gesture performance (see docs/viewer.md "Rendering and performance"): settleTimer fires a full
-// render() shortly after a pan/pinch/zoom/wheel gesture goes idle; gestureCache is an offscreen
-// raster of the last full render(), blitted with a transform while a gesture is live instead of
-// repainting thousands of vias/tracks every pointermove; gestureCacheDirty marks it stale (set by
-// every full render()) so it is rebuilt lazily, once, at the start of the next gesture.
-let settleTimer=null,gestureCache=null,gestureCacheDirty=true;
+// Gesture performance (see docs/viewer.md "Rendering and performance"): gestureCache is an
+// offscreen raster of the static board layers, blitted with a transform while a gesture is live
+// instead of repainting thousands of vias/tracks every frame; gestureCacheDirty: it does not match
+// the board content or the view a gesture would start from (it is then rebuilt in idle time, see
+// warmGestureCache). While a finger/button is down render() is deferred to the end of the gesture
+// (renderDeferred), since a full repaint plus a cache rebuild mid-drag is exactly the stutter this
+// avoids; settleTimer (a full render() after the last step) only serves the wheel, which has no
+// "pointer up". frameQ: the one queued gesture frame, so several input events per frame paint once.
+let settleTimer=null,gestureCache=null,gestureCacheDirty=true,renderDeferred=false,frameQ=0,warmQ=null,cacheCanvas=null;
 // Overlay hooks: other scripts (cost-inspector.js, schematic.js, notes.js via schematic.js) draw
 // dynamic, selection-dependent extras (net/focus highlight+dimming, note badges, the cost field)
 // by pushing a no-arg function here instead of wrapping render(). renderOverlay() -- called by
@@ -140,29 +143,49 @@ function renderOverlay(g){
  let rects=annotations.filter(r=>r.lane===laneId&&r.phase===phase);if(drag?.draw)rects=[...rects,{bounds:[...drag.world,...point(drag.last[0],drag.last[1])],text:'New annotation'}];for(let r of rects){let a=screen(r.bounds.slice(0,2)),b=screen(r.bounds.slice(2));ctx.fillStyle='#ffe38b17';ctx.strokeStyle='#ffe38b';ctx.lineWidth=2;ctx.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);ctx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);ctx.fillStyle='#ffe38b';ctx.fillText(r.text.slice(0,45),Math.min(a[0],b[0]),Math.min(a[1],b[1])-5)}
  for(let h of overlayHooks)h(g);
 }
-function render(){
+// The full-quality paint. render() (below, and the wrappers other scripts add around it) is what
+// everything calls; while a gesture is active that is deferred to the gesture's end (see the
+// wrapper near window.YapnrView), and fastFrame() falls back to calling paintFull() directly.
+function paintFull(){
  if(settleTimer!==null){clearTimeout(settleTimer);settleTimer=null}
+ if(frameQ){cancelAnimationFrame(frameQ);frameQ=0} // a queued gesture frame would only blit over this full-quality one
+ renderDeferred=false;
  let [c,w,h]=resize(canvas),g=geo();
- if(!g){c.clearRect(0,0,w,h);c.fillStyle='#10191e';c.fillRect(0,0,w,h);c.fillStyle='#8fa7b3';c.fillText('Waiting for native placement…',30,40);gestureCache=null;renderSearch();return}
+ if(!g){c.clearRect(0,0,w,h);c.fillStyle='#10191e';c.fillRect(0,0,w,h);c.fillStyle='#8fa7b3';c.fillText('Waiting for native placement…',30,40);gestureCache=null;gestureCacheDirty=true;renderSearch();return}
  if(pendingComponentRef){let requested=pendingComponentRef;pendingComponentRef=null;jumpToComponent(requested);return;}
  refreshComponentOptions(g);
  paintBoard(c,view,w,h,g,window.devicePixelRatio||1);
  renderOverlay(g);
  renderSearch();
- gestureCacheDirty=true; // next gesture frame rebuilds the raster against this latest content
+ // Only a change of board content (geometry, layers, toggles) or of the view/size makes the raster
+ // stale; a re-render of the same board at the same view (a live poll about another lane, a
+ // highlight, a note) keeps it. A stale one is rebuilt in idle time, not here.
+ gestureCacheDirty=!cacheMatches(g,view);
+ if(gestureCacheDirty)warmGestureCache();
 }
+function render(){paintFull()}
 // ------------------------------------------------------------------ gesture fast path
-// Render the static board layers into an offscreen canvas once, at the view a gesture started
-// from plus a margin (so a modest pan/pinch stays inside it); every frame of that gesture then
-// just blits the cache with a scale+translate (no via/track work at all) and redraws the small,
-// cheap dynamic overlay on top. A plain full render() ~150ms after the last gesture input restores
-// full quality and refreshes the cache for the next one (buildGestureCache runs lazily, once, the
-// first time it is needed rather than on every full render -- most render() calls are not followed
-// by a gesture, e.g. the live poll or a lane switch, and would otherwise pay for a cache nobody uses).
+// Render the static board layers into an offscreen canvas at the current view plus a margin (so a
+// pan/pinch stays inside it); every frame of a gesture then just blits the cache with a
+// scale+translate (no via/track work at all) and redraws the small, cheap dynamic overlay on top.
+// The cache is (re)built in idle time after a full render() whose content or view it does not
+// match (warmGestureCache), so a gesture normally starts from a ready one; fastFrame() only builds
+// it synchronously when a gesture starts before that happened. During a gesture it is never rebuilt
+// for a re-render (those wait for the gesture to end); only when the finger holds still over a
+// region the cache does not cover (refreshWhileHeld) -- otherwise that region stays blank until
+// release. The full render() on release restores full quality.
 // iOS Safari refuses a canvas backing store over ~16.7M px, and even well under that an uncapped
 // hi-dpr desktop cache (e.g. 2560x1440 @ dpr2 with margin was ~26.6M px) is needless resident
-// memory for a cache that is thrown away ~150ms after a gesture settles anyway.
+// memory, so the cache is capped.
 const CACHE_PIXEL_CAP=16e6;
+// Everything paintBoard() reads besides the view and size: the board (by its content hash where
+// there is one, not object identity -- every live poll that reports any new event hands over a
+// fresh geometry object for the same board), the diff/draft overlays, layer and label/changes toggles.
+const objIds=new WeakMap();let objSeq=0;
+const objId=o=>{if(!o||typeof o!=='object')return 0;let i=objIds.get(o);if(!i)objIds.set(o,i=++objSeq);return i};
+function boardKey(g){let l=lane(),live=phase==='live',sha=live?l?.board_sha256:null,prev=live?l?.previous:null;
+ return [laneId,phase,sha||'#'+objId(g),g.width,g.height,(g.vias||[]).length,(g.tracks||[]).length,prev?(sha?'p':'#'+objId(prev))+(prev.tracks||[]).length:'',live?JSON.stringify(l?.draft||{}):'',[...layers].sort().join(','),$('changes').checked,$('labels').checked].join('|')}
+function cacheMatches(g,v){let C=gestureCache;return !!C&&C.scale0===v.scale&&C.x0===v.x&&C.y0===v.y&&C.w===canvas.clientWidth&&C.h===canvas.clientHeight&&C.dpr===(window.devicePixelRatio||1)&&C.key===boardKey(g)}
 function buildGestureCache(g){
  let w=canvas.clientWidth,h=canvas.clientHeight,dpr=window.devicePixelRatio||1;
  if(w<10||h<10){gestureCache=null;return}
@@ -178,31 +201,60 @@ function buildGestureCache(g){
    // Margin alone cannot get under the cap (the viewport itself, at this dpr, is too big): fall
    // back to a lower-resolution cache. It is blitted back scaled during the gesture (a touch
    // blurrier than a full render(), same as any mid-gesture frame already is) and a full render()
-   // still restores exact sharpness ~150ms after the gesture settles.
+   // still restores exact sharpness when the gesture ends.
    cacheDpr=Math.max(1,Math.sqrt(CACHE_PIXEL_CAP/(w*h)));
  }
  let pw=Math.round((w+2*marginGuess)*cacheDpr),ph=Math.round((h+2*marginGuess)*cacheDpr);
  let cssW=pw/cacheDpr,cssH=ph/cacheDpr,marginX=(cssW-w)/2,marginY=(cssH-h)/2;
- let off=gestureCache?.canvas||document.createElement('canvas');
+ let off=cacheCanvas||(cacheCanvas=document.createElement('canvas')); // one offscreen canvas, reused for every build
  if(off.width!==pw||off.height!==ph){off.width=pw;off.height=ph}
  let octx=off.getContext('2d'),shifted={scale:view.scale,x:view.x+marginX,y:view.y+marginY};
  paintBoard(octx,shifted,cssW,cssH,g,cacheDpr);
- gestureCache={canvas:off,scale0:view.scale,x0:view.x,y0:view.y,marginX,marginY,cssW,cssH};
+ gestureCache={canvas:off,scale0:view.scale,x0:view.x,y0:view.y,marginX,marginY,cssW,cssH,w,h,dpr,key:boardKey(g)};
+ gestureCacheDirty=false;
+ // Canvas drawing is recorded and only executed when the result is first used: without this the
+ // first gesture frame's blit, not this build, would pay for rasterising thousands of vias.
+ if(window.createImageBitmap)createImageBitmap(off,0,0,1,1).then(b=>b.close(),()=>{});
+}
+// Build the cache for the view a full render() just showed once the page is idle (a burst of
+// renders builds once; nothing at all if a gesture or a wheel zoom is under way by then).
+function warmGestureCache(){
+ if(warmQ)return;
+ const run=()=>{warmQ=null;if(!gestureCacheDirty||gestureActive()||settleTimer!==null||document.hidden)return;let g=geo();if(g)buildGestureCache(g)};
+ warmQ=window.requestIdleCallback?{idle:requestIdleCallback(run,{timeout:300})}:{t:setTimeout(run,60)};
 }
 // Release the cache's backing store when the tab is hidden (a backgrounded tab on a phone is
 // exactly where a capped-but-still-multi-megabyte canvas is most likely to be the thing the OS
-// decides to reclaim memory from); the next gesture after returning just rebuilds it.
-document.addEventListener('visibilitychange',()=>{if(document.hidden){gestureCache=null;gestureCacheDirty=true}});
-function scheduleSettle(){if(settleTimer!==null)clearTimeout(settleTimer);settleTimer=setTimeout(()=>{settleTimer=null;render()},150)}
+// decides to reclaim memory from); it is rebuilt in idle time on return.
+document.addEventListener('visibilitychange',()=>{if(document.hidden){gestureCache=null;gestureCacheDirty=true;if(cacheCanvas){cacheCanvas.width=0;cacheCanvas.height=0}}else if(geo())warmGestureCache()});
+// A pan/pinch/drag in progress: a finger or mouse button down on the board and a drag or pinch
+// under way. downPointers is kept by capture-phase listeners, ahead of the handlers below, so a
+// release always ends the gesture even if a handler after it throws before clearing drag.
+const downPointers=new Set();
+canvas.addEventListener('pointerdown',e=>downPointers.add(e.pointerId),true);
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(ev,e=>downPointers.delete(e.pointerId),true);
+function gestureActive(){return downPointers.size>0&&(!!drag||bTouch.size>=2)}
+// At most one gesture frame per animation frame, however many input events arrive in it.
+function requestGestureFrame(){if(!frameQ)frameQ=requestAnimationFrame(()=>{frameQ=0;fastFrame()})}
+// The wheel has no "pointer up": a full render() 150ms after the last wheel step restores full quality.
+function scheduleSettle(){if(settleTimer!==null)clearTimeout(settleTimer);settleTimer=setTimeout(()=>{settleTimer=null;if(!gestureActive())render()},150)}
+// While a finger holds still mid-gesture for a while (HOLD_MS: looking, not a brief pause in a
+// drag), rebuild the cache if the view has left it (blank edges after a long pan, or zoomed far
+// enough that the blit is badly blurred) -- never a full render, and never on a short pause.
+const HOLD_MS=700;let heldTimer=null;
+function refreshWhileHeld(){clearTimeout(heldTimer);heldTimer=setTimeout(()=>{heldTimer=null;let C=gestureCache,g=geo();if(!C||!g||!gestureActive())return;
+ let k=view.scale/C.scale0,x0=view.x-(C.x0+C.marginX)*k,y0=view.y-(C.y0+C.marginY)*k,x1=x0+C.cssW*k,y1=y0+C.cssH*k;
+ if(x0<=0&&y0<=0&&x1>=C.w&&y1>=C.h&&k<2)return;buildGestureCache(g);fastFrame()},HOLD_MS)}
 function fastFrame(){
- let g=geo();if(!g){render();return}
- if(gestureCacheDirty||!gestureCache){buildGestureCache(g);gestureCacheDirty=false}
- if(!gestureCache){render();return}
+ if(frameQ){cancelAnimationFrame(frameQ);frameQ=0}
+ let g=geo();if(!g){paintFull();return}
+ if(gestureCacheDirty||!gestureCache)buildGestureCache(g);
+ if(!gestureCache){paintFull();return}
  let [c,w,h]=resize(canvas);c.clearRect(0,0,w,h);c.fillStyle='#10191e';c.fillRect(0,0,w,h);
  let k=view.scale/gestureCache.scale0,dx=view.x-(gestureCache.x0+gestureCache.marginX)*k,dy=view.y-(gestureCache.y0+gestureCache.marginY)*k;
  c.save();c.translate(dx,dy);c.scale(k,k);c.drawImage(gestureCache.canvas,0,0,gestureCache.cssW,gestureCache.cssH);c.restore();
  renderOverlay(g);
- scheduleSettle();
+ if(gestureActive())refreshWhileHeld();else scheduleSettle();
 }
 let treeHits=[],spaceHits=[];
 function renderSearch(){let s=display();if(!s)return;let [c,w,h]=resize($('tree'));c.clearRect(0,0,w,h);treeHits=[];let all=Object.values(s.lanes).filter(l=>!l.id.endsWith('/search')),rounds=[...new Set(all.map(l=>l.iteration))].slice(-6);rounds.forEach((r,ri)=>{let ls=all.filter(l=>l.iteration===r),y=22+ri*25;c.fillStyle='#8da9b6';c.font='10px system-ui';c.fillText('R'+r,4,y+3);ls.forEach((l,i)=>{let x=60+i*49;c.strokeStyle='#405965';c.beginPath();c.moveTo(30,y);c.lineTo(x,y);c.stroke();c.fillStyle=l.status==='accepted'?'#9ee6d1':l.status==='failed'?'#ed6d70':l.status==='complete'?'#719be8':l.status==='queued'?'#53636d':'#f3c875';c.beginPath();c.arc(x,y,l.id===laneId?7:5,0,7);c.fill();treeHits.push({x,y,id:l.id})})});
@@ -239,7 +291,7 @@ $('phase').onchange=async()=>{phase=$('phase').value;phaseGeo=null;if(phase!=='l
 for(let id of ['changes','labels','air','costs'])$(id).onchange=render;
 async function saveSnapshot(){await pin();let body=annotationBody();backupDraft();let r=await api('/api/snapshot',body);if(pinId===body.pin_id&&draftRevision===body.draft_revision){draftSavedRevision=draftRevision;finalizedRevision=draftRevision;if(draftTimer!==null){clearTimeout(draftTimer);draftTimer=null;}try{window.localStorage?.removeItem(draftKey(pinned.run));}catch(e){}}let a=document.createElement('a');a.href=r.url;a.download=r.id+'.json';a.textContent='Download snapshot JSON';$('saved').replaceChildren(a,document.createElement('br'),document.createTextNode(r.path));}
 $('snapshot').onclick=async()=>{try{await saveSnapshot()}catch(e){$('saved').textContent='Snapshot failed: '+e.message}};
-canvas.onwheel=e=>{e.preventDefault();let r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,p=point(x,y),s=Math.max(1,Math.min(250,view.scale*Math.exp(-e.deltaY*.001)));view={scale:s,x:x-p[0]*s,y:y+p[1]*s};fastFrame()};
+canvas.onwheel=e=>{e.preventDefault();let r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,p=point(x,y),s=Math.max(1,Math.min(250,view.scale*Math.exp(-e.deltaY*.001)));view={scale:s,x:x-p[0]*s,y:y+p[1]*s};requestGestureFrame()};
 // Touch: Pointer Events fire once per finger (touch-action:none on #board keeps the page itself
 // from scrolling/zooming), so a second finger landing is a pinch, not a second single-finger drag.
 // bTouch tracks every active touch pointer; bPinchPrev is the previous frame's distance/midpoint
@@ -265,7 +317,7 @@ canvas.onpointerdown=e=>{canvas.setPointerCapture(e.pointerId);let r=canvas.getB
 canvas.onpointermove=e=>{let r=canvas.getBoundingClientRect(),p=[e.clientX-r.left,e.clientY-r.top];
  if(e.pointerType==='touch'&&bTouch.has(e.pointerId)){bTouch.set(e.pointerId,p);
   if(bTouch.size>=2){if(!bPinchQ){bPinchQ=true;bPinchRaf=requestAnimationFrame(bApplyPinch)}return}}
- let q=point(...p);$('coords').textContent=q.map(v=>v.toFixed(2)).join(', ')+' mm';if(drag){drag.last=p;if(!drag.draw&&!drag.region){view.x=drag.view.x+p[0]-drag.start[0];view.y=drag.view.y+p[1]-drag.start[1]}fastFrame();return}if(!geo())return;let nb=window.YapnrNotes?.badgeAt?.(p[0],p[1]);if(nb&&canvas.style.cursor!=='pointer'){canvas.dataset.cur=canvas.style.cursor;canvas.style.cursor='pointer'}else if(!nb&&canvas.style.cursor==='pointer')canvas.style.cursor=canvas.dataset.cur||'';if(nb){$('hover').style.display='block';$('hover').textContent=nb.text;return}let hit=hoverText(boardHit(q));$('hover').style.display=hit?'block':'none';$('hover').textContent=hit||''};
+ let q=point(...p),ct=q.map(v=>v.toFixed(2)).join(', ')+' mm';if($('coords').textContent!==ct)$('coords').textContent=ct;if(drag){drag.last=p;if(!drag.draw&&!drag.region){view.x=drag.view.x+p[0]-drag.start[0];view.y=drag.view.y+p[1]-drag.start[1]}requestGestureFrame();return}if(!geo())return;let nb=window.YapnrNotes?.badgeAt?.(p[0],p[1]);if(nb&&canvas.style.cursor!=='pointer'){canvas.dataset.cur=canvas.style.cursor;canvas.style.cursor='pointer'}else if(!nb&&canvas.style.cursor==='pointer')canvas.style.cursor=canvas.dataset.cur||'';if(nb){$('hover').style.display='block';$('hover').textContent=nb.text;return}let hit=hoverText(boardHit(q));$('hover').style.display=hit?'block':'none';$('hover').textContent=hit||''};
 canvas.addEventListener('pointerleave',()=>{if(!drag)$('hover').style.display='none'});  // the hover box (part, pad or note badge) does not outlive the pointer
 function bTouchEnd(e){if(e.pointerType!=='touch')return false;
  if(bPinchQ){cancelAnimationFrame(bPinchRaf);bApplyPinch()} // flush a still-queued gesture frame before this finger (and its bTouch entry) goes away
@@ -274,13 +326,17 @@ function bTouchEnd(e){if(e.pointerType!=='touch')return false;
  if(was>=2){bPinchPrev=null;drag=null;if(bTouch.size<2)render();return true} // ending a pinch/two-finger gesture: never a click or a draw
  if(was===1&&bTouch.size===0&&down&&bDtap.hit(down,up)){let s=view.scale<40?Math.min(120,view.scale*2.5):8,wp=point(...up);view={scale:s,x:up[0]-wp[0]*s,y:up[1]+wp[1]*s};drag=null;render();return true}
  return false}
-canvas.addEventListener('pointercancel',e=>bTouchEnd(e));
+// A cancelled single-finger/mouse drag ends the gesture like a release would (minus the click):
+// without this, drag would stay set and keep every render() deferred.
+canvas.addEventListener('pointercancel',e=>{if(!bTouchEnd(e)&&drag){drag=null;render()}});
 canvas.onpointerup=e=>{if(bTouchEnd(e))return;if(drag&&!drag.draw&&!drag.region&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3){let nb=window.YapnrNotes?.badgeAt?.(drag.last[0],drag.last[1]);if(nb){if(e.shiftKey)askAdd(nb.item,' (note badge)');else window.YapnrNotes.showFor(nb.item);drag=null;render();return}}if(drag?.region)finishRegion();else if(drag&&!drag.draw&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3)boardClick(point(...drag.last),e.shiftKey);if(drag?.draw){let a=drag.world,b=point(...drag.last);if(Math.hypot(a[0]-b[0],a[1]-b[1])>.05)annotations.push({bounds:[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])],text:$('note').value||`Issue ${annotations.length+1}`,lane:laneId,phase,board_sha256:phase==='live'?lane()?.board_sha256:lane()?.frames[Number(phase)]?.board_sha256,event_id:lane()?.event_id});annotationChanged();}drag=null;render()};
 $('tree').onclick=e=>{let r=$('tree').getBoundingClientRect(),p=treeHits.find(p=>Math.hypot(p.x-e.clientX+r.left,p.y-e.clientY+r.top)<10);if(p)e.shiftKey?askAdd({kind:'lane',lane:p.id},' (Shift+click)'):select(p.id)};
 $('space').onmousemove=e=>{let r=$('space').getBoundingClientRect(),p=spaceHits.find(p=>Math.hypot(p.x-e.clientX+r.left,p.y-e.clientY+r.top)<5);if(p)$('space').title=JSON.stringify(p.p)};
 $('space').onclick=e=>{let r=$('space').getBoundingClientRect(),p=spaceHits.find(p=>Math.hypot(p.x-e.clientX+r.left,p.y-e.clientY+r.top)<5);if(e.shiftKey){if(p)askAdd(probeItem(p.p));return}preview=p?.p.moves?p.p:null;render()};
 window.onresize=render;
-async function poll(){try{let fresh=await api('/api/state?since='+revision+'&run='+encodeURIComponent(state?.run||'')+(laneId?'&lane='+encodeURIComponent(laneId):''));if(!fresh.unchanged)state=fresh;await restoreDraft();showControls();$('health').textContent=state.errors.length?'TELEMETRY ERROR · '+state.errors.at(-1).error:`● LOCAL LIVE · ${state.revision} events`;$('health').style.color=state.errors.length?'#ff9292':'#9ee6d1';if(!pinned&&revision!==state.revision){revision=state.revision;updateControls();render();if(!fitted&&geo())fit()}}catch(e){$('health').textContent='DISCONNECTED · '+e.message}setTimeout(poll,1200)}poll();
+// A poll that lands mid-gesture leaves revision alone (no sidebar rebuild, no render while a finger is
+// down); the next poll, after the release, picks the change up.
+async function poll(){try{let fresh=await api('/api/state?since='+revision+'&run='+encodeURIComponent(state?.run||'')+(laneId?'&lane='+encodeURIComponent(laneId):''));if(!fresh.unchanged)state=fresh;await restoreDraft();showControls();$('health').textContent=state.errors.length?'TELEMETRY ERROR · '+state.errors.at(-1).error:`● LOCAL LIVE · ${state.revision} events`;$('health').style.color=state.errors.length?'#ff9292':'#9ee6d1';if(!pinned&&revision!==state.revision&&!gestureActive()){revision=state.revision;updateControls();render();if(!fitted&&geo())fit()}}catch(e){$('health').textContent='DISCONNECTED · '+e.message}setTimeout(poll,1200)}poll();
 
 const controlKeys=['route_workers','candidate_workers','samples','k','n'];let controlRevision=null,controlMessage=null;
 function showControls(){let requested=state?.controls;if(!requested)return;
@@ -406,7 +462,9 @@ function frameViewHl(){let H=viewHl,g=geo(),w=canvas.clientWidth,h=canvas.client
  let scale=Math.max(1,Math.min(120,(w-80)/Math.max(4,b[2]-b[0]),(h-80)/Math.max(4,b[3]-b[1])));view={scale,x:w/2-(b[0]+b[2])/2*scale,y:h/2+(b[1]+b[3])/2*scale};fitted=true;return true}
 function hlLabel(refs,nets,pads){let all=[...refs,...pads,...[...nets].map(n=>{let t=netTitle(n);return t?t.split(' — ')[0]+' ('+n+')':n})];return all.slice(0,3).join(', ')+(all.length>3?` +${all.length-3}`:'')}
 function updateViewChip(){viewChip.hidden=!viewHl;if(!viewHl)return;let x=document.createElement('button');x.textContent='×';x.title='Clear this highlight';x.onclick=()=>window.YapnrView.clear();let l=document.createElement('span');l.className='chip-l';l.textContent=viewHl.label;viewChip.replaceChildren(l,x);viewChip.title='Highlighted on the board: '+viewHl.label}
-const renderBeforeView=render;render=function(){renderBeforeView();if(viewHl?.pendingFrame&&frameViewHl())renderBeforeView();if(viewHl&&!viewHl.named&&SRC()?.index?.()){viewHl.named=true;if(!viewHl.fixed){viewHl.label=hlLabel(viewHl.refs,viewHl.nets,viewHl.pads);updateViewChip()}}};
+// Mid-gesture, a render() (a live poll, a note, a highlight) only marks itself deferred: the release
+// renders anyway, and the next gesture frame already redraws the live overlay on the cached board.
+const renderBeforeView=render;render=function(){if(gestureActive()){renderDeferred=true;requestGestureFrame();return}renderBeforeView();if(viewHl?.pendingFrame&&frameViewHl())renderBeforeView();if(viewHl&&!viewHl.named&&SRC()?.index?.()){viewHl.named=true;if(!viewHl.fixed){viewHl.label=hlLabel(viewHl.refs,viewHl.nets,viewHl.pads);updateViewChip()}}};
 window.YapnrView={
  highlight(sel={},opt={}){let refs=new Set(sel.refs||[]),nets=new Set(sel.nets||[]),pads=new Set(sel.pads||[]);if(!refs.size&&!nets.size&&!pads.size&&!sel.bbox)return window.YapnrView.clear();
   viewHl={refs,nets,pads,region:sel.bbox||null,label:opt.label||hlLabel(refs,nets,pads),fixed:!!opt.label,named:!!SRC()?.index?.(),pendingFrame:opt.frame!==false};updateViewChip();

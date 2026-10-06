@@ -113,6 +113,9 @@ class Kind:
     short = ""
     # Repository paths the source bundle needs; None: the whole tree; (): no source bundle.
     source_paths: Optional[Tuple[str, ...]] = None
+    # Further paths the bundle carries when the source commit has them (data a checkout may
+    # lack, such as a fixture repository's); never more than these, never a failure without.
+    optional_source_paths: Tuple[str, ...] = ()
     default_resources: Dict[str, Any] = dict(cpus=1, memory_gb=2, disk_gb=4, max_wall_s=3600)
     default_determinism = "seeded"
     config_keys: frozenset = frozenset()

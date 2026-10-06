@@ -55,6 +55,18 @@ def resolve_source(repo: Path, source: str, paths: Optional[Sequence[str]]) -> T
     return commit, dirty
 
 
+def present(repo: Path, commit: str, paths: Sequence[str]) -> List[str]:
+    """The ``paths`` that exist in ``commit`` (a file or a directory), in order."""
+    out = []
+    for path in paths:
+        try:
+            _git(repo, "cat-file", "-e", "%s:%s" % (commit, path))
+        except BundleError:
+            continue
+        out.append(path)
+    return out
+
+
 def _gzip(data: bytes) -> bytes:
     out = io.BytesIO()
     with gzip.GzipFile(filename="", mode="wb", fileobj=out, mtime=0, compresslevel=6) as gz:

@@ -1007,6 +1007,41 @@ py_test(
     ],
 )
 
+# The engine adapts a design to the selected fab profile: track widths under its minimum
+# are raised (rules.json fab_adaptations); the jlc-6l-hdi data profile's limits.
+py_test(
+    name = "fab_adapt_test",
+    size = "small",
+    srcs = ["tests/test_fab_adapt.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_fab_adapt.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
+# Joint terminal access never walls a selected exit in (a plane drop sealing a connector's
+# middle pin) and prices a drop stub across another land of its net as a last resort.
+py_test(
+    name = "escape_seal_test",
+    size = "small",
+    srcs = ["tests/test_escape_seal.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_escape_seal.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
 # The partition drawn by writeback and filled by KiCad, its rails' IR drop, and the
 # checker's supply checks (rail_zones, ir_drop, unconnected). It needs KiCad's Python
 # (pcbnew): run it there by hand.

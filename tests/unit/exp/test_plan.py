@@ -51,6 +51,30 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(len(plan.classes), 1)
         self.assertEqual(plan.meta["image"]["ref"], "ghcr.io/studio-fug/yapnr@" + testing.DIGEST)
 
+    def test_the_ladder_bundle_carries_the_fab_data_a_checkout_has(self):
+        # The fixture checkout has no yapnr/fab: the bundle is the engine paths alone.
+        plan = self.plan(testing.LADDER_CAMPAIGN)
+        self.assertEqual(plan.meta["source"]["paths"], ["hardware/pnr", "hardware/tools"])
+        # With the profile data: those paths too (and nothing else of yapnr/).
+        data = self.repo / "yapnr" / "fab" / "data" / "profiles"
+        data.mkdir(parents=True)
+        (data / "x.json").write_text("{}\n")
+        for name in ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/cli.py"):
+            (self.repo / name).write_text("# fixture\n")
+        testing.git(self.repo, "add", "-A")
+        testing.git(self.repo, "commit", "-q", "-m", "fab data")
+        plan = self.plan(testing.LADDER_CAMPAIGN, name="with-data.toml")
+        self.assertEqual(
+            plan.meta["source"]["paths"],
+            [
+                "hardware/pnr",
+                "hardware/tools",
+                "yapnr/__init__.py",
+                "yapnr/fab/__init__.py",
+                "yapnr/fab/data",
+            ],
+        )
+
     def test_live_absent_is_strictly_byte_identical_and_is_recorded_when_set(self):
         # No [live] section: the key itself is left out of meta, not set to a default-off
         # value, so a campaign.json from before this feature existed stays byte-identical

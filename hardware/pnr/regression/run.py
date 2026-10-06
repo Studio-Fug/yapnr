@@ -368,6 +368,17 @@ FAB_PROFILES = ("legacy", "jlc-pofv")
 DEFAULT_FAB_PROFILE = "legacy"
 
 
+def case_fab_profile(spec, profile):
+    """The fab profile a case is routed and judged under: the run's ``profile``, or the
+    one a design declares it needs (``fab_profile``: a BGA rung's 0.15 mm drills) when
+    the run selects a fab profile at all. Legacy keeps every design's own fab block (the
+    A/B baseline), so a declaration does not apply under it."""
+    declared = spec.get("fab_profile")
+    if declared and profile != "legacy":
+        return declared
+    return profile
+
+
 def fab_profiles(repo=REPO):
     """Every profile ``--fab-profile`` accepts: the built-in ones and the data profiles."""
     data = sorted(p.stem for p in (repo / "yapnr/fab/data/profiles").glob("*.json"))
@@ -1129,7 +1140,13 @@ def main():
 
                 result["cpu_stages"] = {}
 
+                case_profile = case_fab_profile(spec, args.fab_profile)
+                if case_profile != args.fab_profile:
+                    result["fab_profile"] = case_profile
+
                 def run(name, cmd, extra=None):
+                    if case_profile != args.fab_profile:
+                        extra = dict(extra or {}, PNR_FAB_PROFILE=case_profile)
                     result["stages"][name] = stage(root, name, cmd, extra, result["cpu_stages"])
 
                 native = tracing.NativeTrace(root, spec, seed, args, out.name) if tracing else None

@@ -164,6 +164,15 @@ class LadderCell(base.Kind):
     name = "ladder-cell"
     short = "ladder"
     source_paths = ("hardware/pnr", "hardware/tools")
+    # The vendor profile data pnr.fab_profile resolves a data profile from (run.py
+    # FAB_DATA_SOURCES and yapnr/fab/data): a cell under jlc-6l-hdi or oshpark-4l, or a rung
+    # that declares one, uses its own checkout's data, not the image's.
+    optional_source_paths = (
+        "yapnr/__init__.py",
+        "yapnr/fab/__init__.py",
+        "yapnr/fab/capability.py",
+        "yapnr/fab/data",
+    )
     # A cell's work directory holds a few MB (the source bundle and the case's outputs); 2 GB
     # keeps 8 cells per VM within the boot disk's free space (cost.BOOT_DISK_RESERVE_GB).
     default_resources = dict(cpus=1, memory_gb=3, disk_gb=2, max_wall_s=7200)

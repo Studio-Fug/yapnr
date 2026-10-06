@@ -414,6 +414,11 @@ def make_plan(
         paths = list(kind.source_paths) if kind.source_paths else None
         try:
             commit, dirty = bundle.resolve_source(root, source, paths)
+            if paths is not None and kind.optional_source_paths:
+                extra = bundle.present(root, commit, kind.optional_source_paths)
+                if extra:
+                    paths += extra
+                    commit, dirty = bundle.resolve_source(root, source, paths)
         except bundle.BundleError as err:
             raise PlanError(str(err)) from err
         if dirty and not allow_dirty:

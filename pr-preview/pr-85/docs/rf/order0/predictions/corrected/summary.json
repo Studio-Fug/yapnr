@@ -1,0 +1,560 @@
+{
+  "schema": "yapnr-order0-corrected/1",
+  "band_ghz": [4.25, 5.75],
+  "substrates": {
+    "M-eq": {
+      "line": {
+        "family": "M",
+        "ids": ["line-m-w040-l10", "line-m-w040-l30"],
+        "solver_db_per_cm_5ghz": 0.11711,
+        "coupon_db_per_cm_5ghz": 0.13147
+      },
+      "arm": {
+        "family": "M1.4",
+        "ids": ["line-m-w070-l10", "line-m-w070-l30"],
+        "solver_db_per_cm_5ghz": 0.10939,
+        "coupon_db_per_cm_5ghz": 0.13187
+      }
+    },
+    "M-nom": {
+      "line": {
+        "family": "M",
+        "ids": ["line-m-w040-l10-m-nom", "line-m-w040-l30-m-nom"],
+        "solver_db_per_cm_5ghz": 0.12083,
+        "coupon_db_per_cm_5ghz": 0.13147
+      },
+      "arm": {
+        "family": "M1.4",
+        "ids": ["line-m-w070-l10-m-nom", "line-m-w070-l30-m-nom"],
+        "solver_db_per_cm_5ghz": 0.11336,
+        "coupon_db_per_cm_5ghz": 0.13187
+      }
+    },
+    "M-eq-em528": {
+      "line": {
+        "family": "M",
+        "ids": ["line-m-w040-l10-m-eq-em528", "line-m-w040-l30-m-eq-em528"],
+        "solver_db_per_cm_5ghz": 0.09191,
+        "coupon_db_per_cm_5ghz": 0.10941
+      },
+      "arm": {
+        "family": "M1.4",
+        "ids": ["line-m-w070-l10-m-eq-em528", "line-m-w070-l30-m-eq-em528"],
+        "solver_db_per_cm_5ghz": 0.08313,
+        "coupon_db_per_cm_5ghz": 0.10885
+      }
+    },
+    "W-eq": {
+      "line": {
+        "family": "W",
+        "ids": ["line-w-w300-l20", "line-w-w300-l60"],
+        "solver_db_per_cm_5ghz": 0.07544,
+        "coupon_db_per_cm_5ghz": 0.07446
+      }
+    },
+    "W-nom": {
+      "line": {
+        "family": "W",
+        "ids": ["line-w-w300-l20-w-nom", "line-w-w300-l60-w-nom"],
+        "solver_db_per_cm_5ghz": 0.07962,
+        "coupon_db_per_cm_5ghz": 0.07446
+      }
+    },
+    "W-eq-em528": {
+      "line": {
+        "family": "W",
+        "ids": ["line-w-w300-l20-w-eq-em528", "line-w-w300-l60-w-eq-em528"],
+        "solver_db_per_cm_5ghz": 0.04712,
+        "coupon_db_per_cm_5ghz": 0.04847
+      }
+    }
+  },
+  "items": {
+    "d1-m-eq-coarse": {
+      "source": "D1/runs/d1-star/coarse_dense.s3p",
+      "substrate": "M-eq",
+      "method": "ratio (port line)",
+      "file": "d1-m-eq-coarse-loss-corrected.s3p",
+      "correction_db_band": [-0.0527, 0.004],
+      "raw": {
+        "s11_max_db": -20.699,
+        "s21_min_db": -3.2446,
+        "s31_min_db": -3.2446
+      },
+      "corrected": {
+        "s11_max_db": -20.699,
+        "s21_min_db": -3.2974,
+        "s31_min_db": -3.2974
+      },
+      "s11_minima_ghz": [4.9236]
+    },
+    "d1-m-eq-fine": {
+      "source": "D1/runs/d1-star/fine.s3p",
+      "substrate": "M-eq",
+      "method": "ratio (port line)",
+      "file": "d1-m-eq-fine-loss-corrected.s3p",
+      "correction_db_band": [-0.0532, 0.0041],
+      "raw": {
+        "s11_max_db": -20.866,
+        "s21_min_db": -3.2449,
+        "s31_min_db": -3.2449
+      },
+      "corrected": {
+        "s11_max_db": -20.866,
+        "s21_min_db": -3.2981,
+        "s31_min_db": -3.2981
+      },
+      "s11_minima_ghz": [4.9325]
+    },
+    "d1-m-eq-finer": {
+      "source": "D1/runs/d1-star/finer.s3p",
+      "substrate": "M-eq",
+      "method": "ratio (port line)",
+      "file": "d1-m-eq-finer-loss-corrected.s3p",
+      "correction_db_band": [-0.055, 0.0042],
+      "raw": {
+        "s11_max_db": -20.899,
+        "s21_min_db": -3.251,
+        "s31_min_db": -3.251
+      },
+      "corrected": {
+        "s11_max_db": -20.899,
+        "s21_min_db": -3.3059,
+        "s31_min_db": -3.3059
+      },
+      "s11_minima_ghz": [4.9326]
+    },
+    "d1-m-eq-wide-coarse": {
+      "source": "D1/variants/d1-star-m-eq/coarse_dense.s3p",
+      "substrate": "M-eq",
+      "method": "ratio (port line)",
+      "file": "d1-m-eq-wide-coarse-loss-corrected.s3p",
+      "correction_db_band": [-0.0532, 0.0041],
+      "raw": {
+        "s11_max_db": -20.715,
+        "s21_min_db": -3.2464,
+        "s31_min_db": -3.2464
+      },
+      "corrected": {
+        "s11_max_db": -20.715,
+        "s21_min_db": -3.2996,
+        "s31_min_db": -3.2996
+      },
+      "s11_minima_ghz": [4.9248]
+    },
+    "d1-m-eq-wide-fine": {
+      "source": "D1/variants/d1-star-m-eq/fine.s3p",
+      "substrate": "M-eq",
+      "method": "ratio (port line)",
+      "file": "d1-m-eq-wide-fine-loss-corrected.s3p",
+      "correction_db_band": [-0.0538, 0.0042],
+      "raw": {
+        "s11_max_db": -20.892,
+        "s21_min_db": -3.2469,
+        "s31_min_db": -3.2469
+      },
+      "corrected": {
+        "s11_max_db": -20.892,
+        "s21_min_db": -3.3007,
+        "s31_min_db": -3.3007
+      },
+      "s11_minima_ghz": [4.9348]
+    },
+    "d1-m-eq-wide-finer": {
+      "source": "D1/variants/d1-star-m-eq/finer.s3p",
+      "substrate": "M-eq",
+      "method": "ratio (port line)",
+      "file": "d1-m-eq-wide-finer-loss-corrected.s3p",
+      "correction_db_band": [-0.0554, 0.0043],
+      "raw": {
+        "s11_max_db": -20.914,
+        "s21_min_db": -3.2526,
+        "s31_min_db": -3.2526
+      },
+      "corrected": {
+        "s11_max_db": -20.914,
+        "s21_min_db": -3.308,
+        "s31_min_db": -3.308
+      },
+      "s11_minima_ghz": [4.9336]
+    },
+    "d1-m-nom-coarse": {
+      "source": "D1/variants/d1-star-m-nom/coarse_dense.s3p",
+      "substrate": "M-nom",
+      "method": "ratio (port line)",
+      "file": "d1-m-nom-coarse-loss-corrected.s3p",
+      "correction_db_band": [-0.0474, 0.0107],
+      "raw": {
+        "s11_max_db": -20.558,
+        "s21_min_db": -3.2568,
+        "s31_min_db": -3.2568
+      },
+      "corrected": {
+        "s11_max_db": -20.558,
+        "s21_min_db": -3.3042,
+        "s31_min_db": -3.3042
+      },
+      "s11_minima_ghz": [4.8096]
+    },
+    "d1-m-nom-fine": {
+      "source": "D1/variants/d1-star-m-nom/fine.s3p",
+      "substrate": "M-nom",
+      "method": "ratio (port line)",
+      "file": "d1-m-nom-fine-loss-corrected.s3p",
+      "correction_db_band": [-0.0479, 0.0109],
+      "raw": {
+        "s11_max_db": -20.728,
+        "s21_min_db": -3.2573,
+        "s31_min_db": -3.2573
+      },
+      "corrected": {
+        "s11_max_db": -20.728,
+        "s21_min_db": -3.3052,
+        "s31_min_db": -3.3052
+      },
+      "s11_minima_ghz": [4.8202]
+    },
+    "d1-m-nom-finer": {
+      "source": "D1/variants/d1-star-m-nom/finer.s3p",
+      "substrate": "M-nom",
+      "method": "ratio (port line)",
+      "file": "d1-m-nom-finer-loss-corrected.s3p",
+      "correction_db_band": [-0.0493, 0.0111],
+      "raw": {
+        "s11_max_db": -20.751,
+        "s21_min_db": -3.2628,
+        "s31_min_db": -3.2628
+      },
+      "corrected": {
+        "s11_max_db": -20.751,
+        "s21_min_db": -3.312,
+        "s31_min_db": -3.312
+      },
+      "s11_minima_ghz": [4.8207]
+    },
+    "d1-m-eq-em528-coarse": {
+      "source": "D1/variants/d1-star-m-eq-em528/coarse_dense.s3p",
+      "substrate": "M-eq-em528",
+      "method": "ratio (port line)",
+      "file": "d1-m-eq-em528-coarse-loss-corrected.s3p",
+      "correction_db_band": [-0.0514, -0.0071],
+      "raw": {
+        "s11_max_db": -19.67,
+        "s21_min_db": -3.2104,
+        "s31_min_db": -3.2104
+      },
+      "corrected": {
+        "s11_max_db": -19.67,
+        "s21_min_db": -3.2618,
+        "s31_min_db": -3.2618
+      },
+      "s11_minima_ghz": [4.9361]
+    },
+    "d1-m-eq-em528-fine": {
+      "source": "D1/variants/d1-star-m-eq-em528/fine.s3p",
+      "substrate": "M-eq-em528",
+      "method": "ratio (port line)",
+      "file": "d1-m-eq-em528-fine-loss-corrected.s3p",
+      "correction_db_band": [-0.0534, -0.0074],
+      "raw": {
+        "s11_max_db": -19.839,
+        "s21_min_db": -3.2144,
+        "s31_min_db": -3.2144
+      },
+      "corrected": {
+        "s11_max_db": -19.839,
+        "s21_min_db": -3.2677,
+        "s31_min_db": -3.2677
+      },
+      "s11_minima_ghz": [4.9461]
+    },
+    "d1-m-eq-em528-finer": {
+      "source": "D1/variants/d1-star-m-eq-em528/finer.s3p",
+      "substrate": "M-eq-em528",
+      "method": "ratio (port line)",
+      "file": "d1-m-eq-em528-finer-loss-corrected.s3p",
+      "correction_db_band": [-0.0556, -0.0076],
+      "raw": {
+        "s11_max_db": -19.856,
+        "s21_min_db": -3.2206,
+        "s31_min_db": -3.2206
+      },
+      "corrected": {
+        "s11_max_db": -19.856,
+        "s21_min_db": -3.2762,
+        "s31_min_db": -3.2762
+      },
+      "s11_minima_ghz": [4.9441]
+    },
+    "r1-m-eq": {
+      "source": "run0b/r1-m-eq.s3p",
+      "substrate": "M-eq",
+      "method": "path [('arm', 9.2), ('line', 6.0)]",
+      "file": "r1-m-eq-loss-corrected.s3p",
+      "correction_db_band": [-0.0544, -0.0038],
+      "raw": {
+        "s11_max_db": -21.341,
+        "s21_min_db": -3.2391,
+        "s31_min_db": -3.2391
+      },
+      "corrected": {
+        "s11_max_db": -21.341,
+        "s21_min_db": -3.2851,
+        "s31_min_db": -3.2851
+      },
+      "s11_minima_ghz": [5.0445]
+    },
+    "r1-m-nom": {
+      "source": "references/r1-m-nom/coarse_dense.s3p",
+      "substrate": "M-nom",
+      "method": "path [('arm', 9.2), ('line', 6.0)]",
+      "file": "r1-m-nom-loss-corrected.s3p",
+      "correction_db_band": [-0.0485, 0.0021],
+      "raw": {
+        "s11_max_db": -21.64,
+        "s21_min_db": -3.2447,
+        "s31_min_db": -3.2447
+      },
+      "corrected": {
+        "s11_max_db": -21.64,
+        "s21_min_db": -3.2932,
+        "s31_min_db": -3.2932
+      },
+      "s11_minima_ghz": [4.7605]
+    },
+    "r1-m-eq-em528": {
+      "source": "references/r1-m-eq-em528/coarse_dense.s3p",
+      "substrate": "M-eq-em528",
+      "method": "path [('arm', 9.2), ('line', 6.0)]",
+      "file": "r1-m-eq-em528-loss-corrected.s3p",
+      "correction_db_band": [-0.054, -0.0139],
+      "raw": {
+        "s11_max_db": -19.685,
+        "s21_min_db": -3.2092,
+        "s31_min_db": -3.2092
+      },
+      "corrected": {
+        "s11_max_db": -19.685,
+        "s21_min_db": -3.2476,
+        "s31_min_db": -3.2476
+      },
+      "s11_minima_ghz": [5.0926]
+    },
+    "r1t-w-eq": {
+      "source": "references/r1t-w-eq/coarse_dense.s3p",
+      "substrate": "W-eq",
+      "method": "path [('line', 10.75), ('line', 11.0)] (3.0 mm line's Δα)",
+      "file": "r1t-w-eq-loss-corrected.s3p",
+      "correction_db_band": [-0.0173, 0.0225],
+      "raw": {
+        "s11_max_db": -15.234,
+        "s21_min_db": -3.5486,
+        "s31_min_db": -3.5486
+      },
+      "corrected": {
+        "s11_max_db": -15.234,
+        "s21_min_db": -3.5659,
+        "s31_min_db": -3.5659
+      },
+      "s11_minima_ghz": [4.923]
+    },
+    "r1t-w-nom": {
+      "source": "references/r1t-w-nom/coarse_dense.s3p",
+      "substrate": "W-nom",
+      "method": "path [('line', 10.75), ('line', 11.0)] (3.0 mm line's Δα)",
+      "file": "r1t-w-nom-loss-corrected.s3p",
+      "correction_db_band": [-0.008, 0.0312],
+      "raw": {
+        "s11_max_db": -14.848,
+        "s21_min_db": -3.5848,
+        "s31_min_db": -3.5848
+      },
+      "corrected": {
+        "s11_max_db": -14.848,
+        "s21_min_db": -3.5928,
+        "s31_min_db": -3.5928
+      },
+      "s11_minima_ghz": [4.8749]
+    },
+    "r1t-w-eq-em528": {
+      "source": "references/r1t-w-eq-em528/coarse_dense.s3p",
+      "substrate": "W-eq-em528",
+      "method": "path [('line', 10.75), ('line', 11.0)] (3.0 mm line's Δα)",
+      "file": "r1t-w-eq-em528-loss-corrected.s3p",
+      "correction_db_band": [-0.0147, 0.0087],
+      "raw": {
+        "s11_max_db": -14.368,
+        "s21_min_db": -3.4562,
+        "s31_min_db": -3.4562
+      },
+      "corrected": {
+        "s11_max_db": -14.368,
+        "s21_min_db": -3.4709,
+        "s31_min_db": -3.4709
+      },
+      "s11_minima_ghz": [4.8311]
+    },
+    "d2-star-sched-w-eq-coarse": {
+      "source": "D2/runs/d2-star-sched/coarse_dense.s3p",
+      "substrate": "W-eq",
+      "method": "ratio (port line)",
+      "file": "d2-star-sched-w-eq-coarse-loss-corrected.s3p",
+      "correction_db_band": [-0.0409, 0.0493],
+      "raw": {
+        "s11_max_db": -19.343,
+        "s21_min_db": -3.4117,
+        "s31_min_db": -3.4117
+      },
+      "corrected": {
+        "s11_max_db": -19.343,
+        "s21_min_db": -3.4526,
+        "s31_min_db": -3.4526
+      },
+      "s11_minima_ghz": [4.9963]
+    },
+    "d2-star-sched-w-eq-fine": {
+      "source": "D2/runs/d2-star-sched/fine.s3p",
+      "substrate": "W-eq",
+      "method": "ratio (port line)",
+      "file": "d2-star-sched-w-eq-fine-loss-corrected.s3p",
+      "correction_db_band": [-0.0394, 0.0473],
+      "raw": {
+        "s11_max_db": -19.353,
+        "s21_min_db": -3.3974,
+        "s31_min_db": -3.3974
+      },
+      "corrected": {
+        "s11_max_db": -19.353,
+        "s21_min_db": -3.4369,
+        "s31_min_db": -3.4369
+      },
+      "s11_minima_ghz": [5.006]
+    },
+    "d2-star-sched-w-eq-finer": {
+      "source": "D2/runs/d2-star-sched/finer.s3p",
+      "substrate": "W-eq",
+      "method": "ratio (port line)",
+      "file": "d2-star-sched-w-eq-finer-loss-corrected.s3p",
+      "correction_db_band": [-0.0391, 0.0469],
+      "raw": {
+        "s11_max_db": -19.359,
+        "s21_min_db": -3.3942,
+        "s31_min_db": -3.3942
+      },
+      "corrected": {
+        "s11_max_db": -19.359,
+        "s21_min_db": -3.4334,
+        "s31_min_db": -3.4334
+      },
+      "s11_minima_ghz": [5.0104]
+    },
+    "d2-star-sched-w-nom-coarse": {
+      "source": "D2/variants/d2-star-sched-w-nom/coarse_dense.s3p",
+      "substrate": "W-nom",
+      "method": "ratio (port line)",
+      "file": "d2-star-sched-w-nom-coarse-loss-corrected.s3p",
+      "correction_db_band": [-0.0194, 0.0695],
+      "raw": {
+        "s11_max_db": -19.251,
+        "s21_min_db": -3.4334,
+        "s31_min_db": -3.4334
+      },
+      "corrected": {
+        "s11_max_db": -19.251,
+        "s21_min_db": -3.4529,
+        "s31_min_db": -3.4529
+      },
+      "s11_minima_ghz": [5.0766]
+    },
+    "d2-star-sched-w-nom-fine": {
+      "source": "D2/variants/d2-star-sched-w-nom/fine.s3p",
+      "substrate": "W-nom",
+      "method": "ratio (port line)",
+      "file": "d2-star-sched-w-nom-fine-loss-corrected.s3p",
+      "correction_db_band": [-0.0189, 0.0675],
+      "raw": {
+        "s11_max_db": -19.267,
+        "s21_min_db": -3.4219,
+        "s31_min_db": -3.4219
+      },
+      "corrected": {
+        "s11_max_db": -19.267,
+        "s21_min_db": -3.4402,
+        "s31_min_db": -3.4402
+      },
+      "s11_minima_ghz": [5.0893]
+    },
+    "d2-star-sched-w-nom-finer": {
+      "source": "D2/variants/d2-star-sched-w-nom/finer.s3p",
+      "substrate": "W-nom",
+      "method": "ratio (port line)",
+      "file": "d2-star-sched-w-nom-finer-loss-corrected.s3p",
+      "correction_db_band": [-0.0187, 0.0671],
+      "raw": {
+        "s11_max_db": -19.271,
+        "s21_min_db": -3.4196,
+        "s31_min_db": -3.4196
+      },
+      "corrected": {
+        "s11_max_db": -19.271,
+        "s21_min_db": -3.4372,
+        "s31_min_db": -3.4372
+      },
+      "s11_minima_ghz": [5.0958]
+    },
+    "d2-star-sched-w-eq-em528-coarse": {
+      "source": "D2/variants/d2-star-sched-w-eq-em528/coarse_dense.s3p",
+      "substrate": "W-eq-em528",
+      "method": "ratio (port line)",
+      "file": "d2-star-sched-w-eq-em528-coarse-loss-corrected.s3p",
+      "correction_db_band": [-0.0382, 0.0207],
+      "raw": {
+        "s11_max_db": -19.855,
+        "s21_min_db": -3.3235,
+        "s31_min_db": -3.3235
+      },
+      "corrected": {
+        "s11_max_db": -19.855,
+        "s21_min_db": -3.3617,
+        "s31_min_db": -3.3617
+      },
+      "s11_minima_ghz": [4.7722]
+    },
+    "d2-star-sched-w-eq-em528-fine": {
+      "source": "D2/variants/d2-star-sched-w-eq-em528/fine.s3p",
+      "substrate": "W-eq-em528",
+      "method": "ratio (port line)",
+      "file": "d2-star-sched-w-eq-em528-fine-loss-corrected.s3p",
+      "correction_db_band": [-0.0374, 0.0201],
+      "raw": {
+        "s11_max_db": -20.047,
+        "s21_min_db": -3.3154,
+        "s31_min_db": -3.3154
+      },
+      "corrected": {
+        "s11_max_db": -20.047,
+        "s21_min_db": -3.3527,
+        "s31_min_db": -3.3527
+      },
+      "s11_minima_ghz": [4.7781]
+    },
+    "d2-star-sched-w-eq-em528-finer": {
+      "source": "D2/variants/d2-star-sched-w-eq-em528/finer.s3p",
+      "substrate": "W-eq-em528",
+      "method": "ratio (port line)",
+      "file": "d2-star-sched-w-eq-em528-finer-loss-corrected.s3p",
+      "correction_db_band": [-0.0372, 0.0201],
+      "raw": {
+        "s11_max_db": -20.134,
+        "s21_min_db": -3.3137,
+        "s31_min_db": -3.3137
+      },
+      "corrected": {
+        "s11_max_db": -20.134,
+        "s21_min_db": -3.3509,
+        "s31_min_db": -3.3509
+      },
+      "s11_minima_ghz": [4.7809]
+    }
+  }
+}

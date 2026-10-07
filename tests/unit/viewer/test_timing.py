@@ -377,43 +377,66 @@ class MirrorLagTests(unittest.TestCase):
             result = self._aggregate(name)
             events = timing.load_events(root)
             self.assertEqual(result["running_count"], 0)
-            expected = max(e["time"] for e in events) - min(e["time"] for e in events)
+            # The real event range: a mirror-synthesized task_complete is detection time, not
+            # work, and must not stretch the campaign's wall clock (lv2p2-rungs-all read 13520s
+            # for ~15 minutes of real activity before this).
+            real = [e for e in events if e["kind"] not in timing.MIRROR_TERMINAL_KINDS]
+            expected = max(e["time"] for e in real) - min(e["time"] for e in real)
             self.assertAlmostEqual(result["wall_seconds"], expected, places=3)
+            self.assertLess(result["wall_seconds"], 3600.0)
+            for lane in result["timeline"]:
+                self.assertLessEqual(
+                    lane["end"], self._lane_last_real_time(root, lane["candidate"]) + 1e-6
+                )
 
-    def test_mirror_gap_does_not_inflate_unattributed_or_deflate_coverage(self):
+    def _unit_wall(self, root, candidate):
+        # By hand from the raw events: the lane's real window (first event to last non-mirror
+        # event), or the runner's own task wall (task_complete data.wall_s) when that is longer --
+        # never the mirror's detection timestamp.
+        events = [e for e in timing.load_events(root) if e.get("candidate") == candidate]
+        window = self._lane_last_real_time(root, candidate) - min(e["time"] for e in events)
+        walls = [
+            e["data"]["wall_s"]
+            for e in events
+            if e["kind"] in timing.MIRROR_TERMINAL_KINDS and "wall_s" in (e.get("data") or {})
+        ]
+        return max([window] + walls[-1:])
+
+    def test_mirror_gap_never_counts_as_unattributed(self):
         # The gap between the last real marker and the delayed task_complete is a mirror-
-        # detection artifact, not pipeline activity (see MIRROR_TERMINAL_KINDS and this module's
-        # docstring): lacking a task_timing "run" span, `coverage_wall` falls back to the same
-        # mirror-lag-excluding bound a span's own open_bound already uses (`last_real`), not the
-        # raw lane_wall/wall_seconds -- a dangling task_complete must not dilute coverage any more
-        # than it is allowed to inflate a span. These three fixtures' real activity is almost
-        # entirely covered by (estimated) spans once the trailing mirror gap is excluded, so
-        # coverage reads high and unattributed near zero, even though `wall_seconds` (asserted
-        # separately above) still honestly reports the full multi-hour span.
-        for name in ("lv2p2", "dp-ab2", "demo"):
-            result = self._aggregate(name)
-            self.assertIn("unattributed", result)
-            self.assertLess(result["unattributed"]["total"], 1.0)
-            self.assertGreater(result["coverage"], 0.95)
-
-    def test_coverage_is_attributed_over_coverage_wall(self):
+        # detection artifact: unattributed time is bounded by each task's own measured wall
+        # (wall_s, seconds), never by the multi-hour gap to the task_complete timestamp.
         for name in ("lv2p2", "dp-ab2", "demo"):
             root = self.MIRROR_LAG / name
             result = self._aggregate(name)
-            # None of these lanes are running or have a task_timing run span, so each lane's own
-            # coverage_wall is its last *real* (non-mirror) event minus its first.
-            coverage_wall_total = sum(
-                self._lane_last_real_time(root, lane["candidate"]) - lane["start"]
+            bound = sum(self._unit_wall(root, lane["candidate"]) for lane in result["timeline"])
+            self.assertLessEqual(result["unattributed"]["total"], bound + 1e-6)
+            self.assertLess(result["unattributed"]["total"], 120.0)
+
+    def test_coverage_is_attributed_over_the_tasks_real_wall(self):
+        # These slices hold a sliver of each task's events but the runner's full wall_s, so
+        # coverage reads low -- exactly the instrumentation gap the owner's spot check flagged
+        # (observed stages cover only a sliver of a ladder cell's real time).
+        for name in ("lv2p2", "dp-ab2", "demo"):
+            root = self.MIRROR_LAG / name
+            result = self._aggregate(name)
+            # No lane in these slices has a descendant lane or a run span: each is its own unit.
+            walls = {
+                lane["candidate"]: self._unit_wall(root, lane["candidate"])
+                for lane in result["timeline"]
+            }
+            attributed = sum(
+                min(timing._union_seconds(lane["pipeline_spans"]), walls[lane["candidate"]])
                 for lane in result["timeline"]
             )
-            expected = result["total_seconds"] / coverage_wall_total if coverage_wall_total else 1.0
-            self.assertAlmostEqual(result["coverage"], expected, places=6)
-            # And the two rows account for the whole coverage_wall total, by construction.
+            total_wall = sum(walls.values())
+            self.assertAlmostEqual(result["coverage"], attributed / total_wall, places=6)
+            self.assertLessEqual(result["coverage"], 1.0)
             self.assertAlmostEqual(
-                result["total_seconds"] + result["unattributed"]["total"],
-                coverage_wall_total,
-                places=3,
+                attributed + result["unattributed"]["total"], total_wall, places=3
             )
+        # timing-demo2's two cells: ~0.8s of stage spans against 5-6s of runner wall each.
+        self.assertLess(self._aggregate("demo")["coverage"], 0.5)
 
 
 class UnattributedSyntheticTests(unittest.TestCase):
@@ -586,9 +609,10 @@ class UnattributedSyntheticTests(unittest.TestCase):
             data={},
         )
         result = timing.aggregate(Path(self.tmp))
-        # The Gantt/slowest "seconds" figure is untouched by this refinement: first event (1010)
-        # to the raw last event, the lagged task_complete (1080) -- 70s.
-        self.assertAlmostEqual(result["slowest"][0]["seconds"], 70.0, places=3)
+        # The Gantt/slowest "seconds" figure ends at the lane's last real event (1012), never
+        # the lagged task_complete (1080): 2s, not 70s; the campaign wall clock likewise.
+        self.assertAlmostEqual(result["slowest"][0]["seconds"], 2.0, places=3)
+        self.assertAlmostEqual(result["wall_seconds"], 2.0, places=3)
         # But unattributed/coverage are measured against the 12s run span, not the 70s lane wall.
         self.assertAlmostEqual(result["unattributed"]["total"], 10.0, places=3)
         self.assertAlmostEqual(result["coverage"], 2.0 / 12.0, places=6)
@@ -604,3 +628,61 @@ class UnattributedSyntheticTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnionCoverageTests(unittest.TestCase):
+    """Overlapping spans count once toward attributed time, and coverage never exceeds 1."""
+
+    def test_union_seconds_merges_overlaps(self):
+        spans = [
+            dict(start=0.0, end=4.0),
+            dict(start=1.0, end=2.0),
+            dict(start=3.0, end=6.0),
+            dict(start=8.0, end=9.0),
+        ]
+        self.assertAlmostEqual(timing._union_seconds(spans), 7.0)
+        self.assertEqual(timing._union_seconds([]), 0.0)
+
+    def test_nested_observed_spans_do_not_push_coverage_past_one(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        events = tmp / "events"
+        events.mkdir()
+        rows = [
+            (1000.0, "stage_start", dict(stage="route", label="outer")),
+            (1001.0, "stage_start", dict(stage="gloss", label="inner")),
+            (1003.0, "stage_end", dict(stage="gloss", label="inner", seconds=2.0)),
+            (1004.0, "stage_end", dict(stage="route", label="outer", seconds=4.0)),
+            (1004.0, "case_complete", {}),
+        ]
+        for i, (t, kind, data) in enumerate(rows):
+            _write_event(events, i, time=t, kind=kind, candidate="ladder/u/s0", data=data)
+        result = timing.aggregate(tmp)
+        self.assertAlmostEqual(result["coverage"], 1.0, places=6)
+        self.assertAlmostEqual(result["unattributed"]["total"], 0.0, places=6)
+
+    def test_child_lanes_count_toward_their_tasks_wall_once(self):
+        # A task lane with the runner's wall_s absorbs its screening children: their parallel
+        # spans are unioned against the task's 10s wall, and the children's own windows are not
+        # counted again. Union of [0,4] and [2,6] is 6s -> 4s unattributed, coverage 0.6.
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        events = tmp / "events"
+        events.mkdir()
+        task = "ladder/p/s0"
+        rows = [
+            (1000.0, task, "candidate_start", {}),
+            (1000.0, task + "/initial-start-00", "stage_start", dict(stage="route", label="a")),
+            (1004.0, task + "/initial-start-00", "stage_end", dict(stage="route", label="a")),
+            (1002.0, task + "/initial-start-01", "stage_start", dict(stage="route", label="b")),
+            (1006.0, task + "/initial-start-01", "stage_end", dict(stage="route", label="b")),
+            (1006.0, task, "candidate_complete", {}),
+            (9000.0, task, "task_complete", dict(wall_s=10.0)),
+        ]
+        for i, (t, cand, kind, data) in enumerate(rows):
+            _write_event(events, i, time=t, kind=kind, candidate=cand, data=data)
+        result = timing.aggregate(tmp)
+        self.assertEqual(result["unattributed"]["count"], 1)
+        self.assertAlmostEqual(result["unattributed"]["total"], 4.0, places=6)
+        self.assertAlmostEqual(result["coverage"], 0.6, places=6)
+        self.assertAlmostEqual(result["wall_seconds"], 6.0, places=6)

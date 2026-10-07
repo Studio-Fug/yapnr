@@ -78,6 +78,30 @@ class StageTimingTests(unittest.TestCase):
         self.assertEqual(stage_timing.canonical("gloss-metrics"), "gloss-metrics")
         self.assertEqual(stage_timing.canonical("planes"), "plane-partition-pours")
 
+    def test_ladder_cell_stage_names_land_in_the_fixed_vocabulary(self):
+        # regression/run.py's and route_case.py's live_stage() names must all map onto a
+        # canonical viewer stage, never appear as a stray row of their own.
+        for name in (
+            "freeze-source",
+            "maze-kernel-build",
+            "version-check",
+            "generate",
+            "writeback",
+            "planes",
+            "gloss",
+            "gloss-measure",
+            "gloss-drc-before",
+            "gloss-drc-after",
+            "refill",
+            "audit",
+            "drc",
+            "via-scan",
+            "checks",
+            "driver-setup",
+            "artifacts",
+        ):
+            self.assertIn(stage_timing.canonical(name), stage_timing.STAGES, name)
+
 
 class RouteFeedbackStageEventsTests(unittest.TestCase):
     """pnr.route.feedback._place_route_rounds -- the plain ladder-cell driver's real

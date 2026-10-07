@@ -75,34 +75,34 @@ an explicit ``now`` close to them, exactly as ``tests/unit/viewer/test_progress.
 
 ``total_seconds`` sums stage time *across lanes that ran in parallel* -- it is a lane-seconds
 total, not a wall-clock figure. ``wall_seconds`` is the actual wall-clock span of the scope (its
-last event minus its first), extended to ``now`` only while some lane in scope is genuinely
+last real event minus its first: like a span, a finished lane's window ends at its last event
+outside :data:`MIRROR_TERMINAL_KINDS`, and a lane with only mirror events is left out of the
+range), extended to ``now`` only while some lane in scope is genuinely
 ``running`` (a live campaign's span keeps growing as it runs; a finished one's does not, no matter
 when someone happens to load the panel). Concurrency counts only *leaf* lanes (a lane with no
 child lane under it in the same scope) -- counting a parent candidate lane and the child lanes it
 spawned (e.g. ``initial-start-NN`` screening candidates) together overstates how many things were
 really running at once.
 
-**Unattributed time and coverage.** Per lane, a ``coverage_wall`` figure minus the sum of its
-pipeline-span seconds is that lane's ``unattributed`` time: wall-clock the lane genuinely spent
-*doing something real*, with no stage event to say where. ``coverage_wall`` is, in order: the
-task's own ``run`` task_timing span (real Batch RUNNING-state transitions, GCP only) when one
-exists; else ``last_real - start`` (extended to ``now`` while running) -- the exact same
-mirror-lag-excluding bound a span's own ``open_bound`` already uses, above, not the lane's raw
-``lane_wall``/``seconds`` (first-to-last-*recorded*-event). Both exclusions matter for the same
-reason: queue-wait/boot is already its own ``task_overhead`` row, and a trailing
-mirror-synthesized terminal event's detection lag is not pipeline activity at all -- a dangling
-``task_complete`` must not dilute coverage any more than :func:`_estimate_spans` lets it inflate a
-span. The trade-off this accepts: a campaign whose only telemetry is one early marker and then
-genuine hours of silent, real, unobserved work (rather than a mirror catching up late) reads a
-misleadingly high coverage too, since there's nothing left to measure the gap against once the
-trailing mirror event is excluded -- ``wall_seconds`` (never adjusted by any of this) is what
-still shows that discrepancy, by staying far larger than ``total_seconds``. Aggregated in the same
-shape as a stage (:func:`_stat_block`) under the top-level ``unattributed`` key, and ``coverage``
-(also top-level, and in the CLI table) is attributed total over ``coverage_wall`` total across the
-scope -- the fraction of a lane's real
-run time any stage actually accounts for. A campaign relying on marker-estimated spans with a
-sparse marker set reads a low coverage; one instrumented with ``stage_start``/``stage_end``
-through its last real phase reads close to 1.0.
+**Unattributed time and coverage.** Per unit (below), a ``coverage_wall`` figure minus the union of
+its pipeline spans is that unit's ``unattributed`` time: wall-clock the lane genuinely spent *doing
+something real*, with no stage event to say where. ``coverage_wall`` is, in order: the task's own
+``run`` task_timing span (real Batch RUNNING-state transitions, GCP only) when one exists; else,
+for a finished lane, the larger of ``last_real - start`` and the runner's own measured task wall
+(``data.wall_s`` on the mirror's ``task_complete`` -- a measurement, unlike that event's timestamp,
+and it includes the work before the task's first live event); ``now - start`` while running. Never
+the raw first-to-last-*recorded*-event range: queue-wait/boot is already its own ``task_overhead``
+row, and a trailing mirror-synthesized terminal event's detection lag is not pipeline activity at
+all. A lane with a known task wall is a *unit* that absorbs every descendant lane in scope
+(``initial-start-NN`` screening children run inside the same task): their spans count toward its
+attributed time and their windows are not counted again. Attributed time is the *union* of a unit's
+pipeline spans (overlaps counted once), capped at ``coverage_wall``, so coverage never exceeds 1.
+Aggregated in the same shape as a stage (:func:`_stat_block`) under the top-level ``unattributed``
+key, and ``coverage`` (also top-level, and in the CLI table) is attributed total over
+``coverage_wall`` total across the scope -- the fraction of a lane's real run time any stage
+actually accounts for. A campaign relying on marker-estimated spans with a sparse marker set reads
+a low coverage; one instrumented with ``stage_start``/``stage_end`` through its last real phase
+reads close to 1.0.
 
 Caching: one :class:`_RootCache` per live root, keyed off the ``events`` directory's mtime and the
 set of filenames already parsed (the same incremental-scan shape as ``Viewer.ingest`` in
@@ -377,6 +377,22 @@ def _lane_pipeline_spans(
     return sorted(observed + estimated, key=lambda s: s["start"])
 
 
+def _union_seconds(spans: Sequence[dict]) -> float:
+    """Total seconds covered by ``spans`` with overlaps counted once."""
+    total = 0.0
+    cur_start = cur_end = None
+    for span in sorted(spans, key=lambda s: s["start"]):
+        if cur_end is None or span["start"] > cur_end:
+            if cur_end is not None:
+                total += cur_end - cur_start
+            cur_start, cur_end = span["start"], span["end"]
+        else:
+            cur_end = max(cur_end, span["end"])
+    if cur_end is not None:
+        total += cur_end - cur_start
+    return total
+
+
 def _lane_terminal(lane_events: Sequence[dict], task_spans: Sequence[dict]) -> bool:
     if any(e["kind"] in TERMINAL_KINDS for e in lane_events):
         return True
@@ -475,9 +491,6 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
     any_estimated = False
     total_seconds = 0.0
 
-    unattributed_durations: List[float] = []
-    lane_wall_total = 0.0
-
     for candidate, lane_events in sorted(by_lane.items()):
         lane_events.sort(key=lambda e: e.get("time", 0))
         task_spans = _task_spans(lane_events)
@@ -492,6 +505,12 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
         real_events = [e for e in lane_events if e["kind"] not in MIRROR_TERMINAL_KINDS]
         last_real = real_events[-1]["time"] if real_events else end
         open_bound = now if running else last_real
+        # A finished lane's own window ends at its last real event too: the Gantt bar, the
+        # "slowest lanes" seconds, concurrency and the campaign's wall_seconds must not carry the
+        # mirror's detection lag any more than a span may (lv2p2-rungs-all read a 13520s wall for
+        # ~15 minutes of real activity, the rest being the catch-up poller's delay).
+        if not running:
+            end = last_real
         spans = _lane_pipeline_spans(lane_events, open_bound)
         for span in spans:
             any_observed = any_observed or not span["estimated"]
@@ -515,16 +534,24 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
         # uses for spans, not the raw `lane_wall`: a dangling task_complete must not dilute
         # coverage any more than it is allowed to inflate a span.
         run_spans = [s for s in task_spans if s["stage"] == "run"]
+        # The runner's own measured task wall time, carried on the mirror's task_complete
+        # (``data.wall_s``): the task's real run span when Batch status events were not caught.
+        # Unlike the event's timestamp it is not detection lag, and it includes work before the
+        # task's first live event, which is exactly the gap coverage has to show.
+        task_walls = [
+            e["data"]["wall_s"]
+            for e in lane_events
+            if e["kind"] in MIRROR_TERMINAL_KINDS
+            and isinstance((e.get("data") or {}).get("wall_s"), (int, float))
+        ]
         if run_spans:
             coverage_wall = max(
                 0.0, max(s["end"] for s in run_spans) - min(s["start"] for s in run_spans)
             )
+        elif running:
+            coverage_wall = now - start
         else:
-            coverage_wall = (now - start) if running else (last_real - start)
-        attributed = sum(span["seconds"] for span in spans)
-        unattributed = max(0.0, coverage_wall - attributed)
-        unattributed_durations.append(unattributed)
-        lane_wall_total += coverage_wall
+            coverage_wall = max([last_real - start] + [float(w) for w in task_walls[-1:]])
         lanes_out.append(
             dict(
                 candidate=candidate,
@@ -535,9 +562,45 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
                 seconds=lane_wall,
                 spans=sorted(spans + task_spans, key=lambda s: s["start"]),
                 pipeline_spans=spans,
-                unattributed=unattributed,
+                coverage_wall=coverage_wall,
+                task_wall=bool(run_spans or task_walls),
+                mirror_only=not real_events,
             )
         )
+
+    # Unattributed/coverage per *task*: a lane whose own task wall is known (a run span, or the
+    # runner's wall_s) absorbs every descendant lane under it in scope (initial-start-NN
+    # screening children and the like run inside that same task), so their spans count toward
+    # its attributed time and their windows are not counted a second time. A lane with no such
+    # ancestor is its own unit. Attributed time is the *union* of the unit's pipeline spans
+    # (overlapping/nested/parallel spans count once), capped at the unit's wall: coverage is a
+    # fraction of real wall time, never above 1.
+    task_lanes = {lane["candidate"] for lane in lanes_out if lane["task_wall"]}
+    units: Dict[str, List[dict]] = {}
+    for lane in lanes_out:
+        parts = lane["candidate"].split("/")
+        owner = lane["candidate"]
+        for i in range(1, len(parts)):
+            ancestor = "/".join(parts[:i])
+            if ancestor in task_lanes:
+                owner = ancestor
+                break
+        units.setdefault(owner, []).append(lane)
+    by_candidate = {lane["candidate"]: lane for lane in lanes_out}
+    unattributed_durations: List[float] = []
+    lane_wall_total = 0.0
+    attributed_total = 0.0
+    for lane in lanes_out:
+        lane["unattributed"] = 0.0
+    for owner, members in sorted(units.items()):
+        unit_wall = by_candidate[owner]["coverage_wall"]
+        unit_spans = [span for member in members for span in member["pipeline_spans"]]
+        attributed = min(_union_seconds(unit_spans), unit_wall)
+        unattributed = unit_wall - attributed
+        by_candidate[owner]["unattributed"] = unattributed
+        unattributed_durations.append(unattributed)
+        lane_wall_total += unit_wall
+        attributed_total += attributed
 
     stages = {}
     for stage, durations in stage_durations.items():
@@ -573,8 +636,12 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
     concurrency = []
     wall_seconds = 0.0
     if lanes_out:
-        t0 = min(lane["start"] for lane in lanes_out)
-        t1 = max(lane["end"] for lane in lanes_out)
+        # A lane holding nothing but a mirror-synthesized terminal event (a task that never
+        # emitted live events of its own) has no real timestamp at all: it says "done", not when.
+        # It is left out of the campaign's wall-clock range whenever any lane has real events.
+        windowed = [lane for lane in lanes_out if not lane["mirror_only"]] or lanes_out
+        t0 = min(lane["start"] for lane in windowed)
+        t1 = max(lane["end"] for lane in windowed)
         if any(lane["running"] for lane in lanes_out):
             # A still-running scope's wall-clock span keeps growing with the live clock, not just
             # whatever's been seen so far -- a finished scope's never reaches past its last event.
@@ -605,7 +672,7 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
         if unattributed_durations
         else {}
     )
-    coverage = (total_seconds / lane_wall_total) if lane_wall_total else 1.0
+    coverage = (attributed_total / lane_wall_total) if lane_wall_total else 1.0
 
     return dict(
         schema="pnr-timing-v1",
@@ -614,7 +681,7 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
         lane_count=len(lanes_out),
         running_count=sum(1 for lane in lanes_out if lane["running"]),
         total_seconds=total_seconds,  # summed across lanes that ran in parallel, NOT wall-clock
-        wall_seconds=wall_seconds,  # the scope's actual wall-clock span (last event - first)
+        wall_seconds=wall_seconds,  # the scope's real wall-clock span (last real event - first)
         stage_order=stage_order(list(stages)),
         stages=stages,
         unattributed=unattributed_stats,

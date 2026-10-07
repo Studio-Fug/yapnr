@@ -76,6 +76,9 @@ _ALIAS = {
     "via-scan": "drc-judge",
     "checks": "drc-judge",
     "gloss-measure": "gloss",
+    # gloss_stage()'s cold kicad-cli DRC before and after the gloss pass (its keep/restore gate).
+    "gloss-drc-before": "drc-judge",
+    "gloss-drc-after": "drc-judge",
     # Once-per-task bootstrap before the per-case loop even starts (main(), ahead of its own
     # `run()` closure): hashing and freezing every source file, the optional native maze-kernel
     # compile, and the python/kicad version probes. The live timing-bounds check measured this as
@@ -84,6 +87,10 @@ _ALIAS = {
     "freeze-source": "setup",
     "maze-kernel-build": "setup",
     "version-check": "setup",
+    # regression/route_case.py (the flat ladder driver, inside run.py's unwrapped "place-route"
+    # subprocess): its imports and rule compilation before route_and_place. Its writes after
+    # route_and_place go under "artifacts" directly.
+    "driver-setup": "setup",
 }
 
 

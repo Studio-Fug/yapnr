@@ -1076,6 +1076,29 @@ Compact placement before ladder v2 makes it the default (2026-10-06,
   switches; absent with everything off, so earlier keys are unchanged), and power-first
   placement runs with compact instead of refusing it.
 
+Ladder fab-profile default (2026-10-06, `claude/defaults-rails-fab`, campaign
+`20261007-ladder-7fe33f`, [regression-ladder.md](regression-ladder.md)):
+
+- **Gate: flip `--fab-profile` default to `jlc-pofv` only if all 21 of `20261006-ladder-b0ec34`'s
+  jlc-pofv failures pass on this commit, and no rung is worse than `legacy`**
+  (`experiments/defaults-rails-fab.toml`: the full ladder + showcases + 33 hard rungs, both fab
+  profiles, seeds 0 and 1, rail allocation search as the default in both arms, PR #81).
+- **Outcome: stays `legacy`.** 20 of the 21 now pass; `11-ufbga201-fanout-6L-SGSGPS-rails` seed 0
+  still fails a `rails-In4` plane-partition check under `jlc-pofv`. That cell is rail-allocation
+  territory, not fab-profile (`legacy` fails it on both seeds, so `jlc-pofv` is not a regression
+  there), but the gate as stated is 21 of 21, not 20. Otherwise `jlc-pofv` is no worse than
+  `legacy` anywhere: 89 of 90 seed runs pass vs 86 (`legacy` also fails `09-mcu-usb-31-header` s0
+  and `-mc` s1 on skew), opens and DRC findings are the same or fewer, and it uses fewer vias
+  (3627 vs 3894) and less copper (29.5 m vs 31.9 m; less on 30 of 45 cases, more on 14). The
+  `-rails` cell is the only thing holding the flip.
+- **Rail allocation on `-rails`:** with search the default (both arms), `-rails` passes 1 of 4
+  cells here (`jlc-pofv` s1 only; `rails-In4` on the rest), in this campaign's configuration
+  (compact, gloss, initial pool), against #81's 4 of 4 for search in its own A/B. Search is still
+  not worse than static (0 of 4 in #81), but the rung is not settled.
+- **Revisit when** the `-rails` cell passes under `jlc-pofv` on both seeds (rail allocation or
+  the plane-partition checker), or the owner decides the one rail-allocation-territory cell is
+  out of scope for this gate.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

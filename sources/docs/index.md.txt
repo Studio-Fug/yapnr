@@ -108,6 +108,7 @@ design/cloud-experiments
 design/fab-and-ordering
 design/gloss
 design/compact-placement
+design/route-compact
 history/import-manifest
 about-the-name
 references

@@ -48,9 +48,13 @@ EXTRACT_SCRIPT = PACKAGE / "kicad_scripts" / "extract.py"
 EXTRACT_TIMEOUT = 40
 LICENSE = "AGPL-3.0-or-later"
 # Written by ``yapnr exp live`` (yapnr.exp.live.FINISHED_MARKER) directly under the live root
-# once every task in the mirrored campaign has a ``_DONE`` marker; see Viewer._run_finished. Kept
-# as a matching literal in both files rather than a cross-package import -- yapnr.viewer and
-# yapnr.exp are independent Bazel targets.
+# once every task the mirrored campaign actually submitted has a ``_DONE`` marker (not
+# necessarily every task its plan names: a campaign that only submitted part of its plan is
+# "finished" once that part is done -- yapnr.exp.live.required_task_ids); see
+# Viewer._run_finished. Withdrawn by the same mirror if a later submission turns up more,
+# unfinished work, so its mere existence is always safe to trust. Kept as a matching literal in
+# both files rather than a cross-package import -- yapnr.viewer and yapnr.exp are independent
+# Bazel targets.
 MIRROR_FINISHED_MARKER = "campaign-finished.json"
 # Third-party files served unmodified from the assembled dist; the browser may cache them.
 PINNED_PREFIXES = ("elk.bundled.js", "vendor/", "third_party/")
@@ -891,11 +895,13 @@ class Viewer:
         "stalled" forever -- a mirrored campaign that is simply done looks identical to a dead
         worker otherwise. Two sources, cheap enough to re-check every poll:
 
-        - :data:`MIRROR_FINISHED_MARKER` directly under ``self.root``, written once by
-          ``yapnr exp live`` (:mod:`yapnr.exp.live`'s own ``FINISHED_MARKER``, same name -- kept
-          as a plain string in both rather than a cross-package import so the viewer and the exp
-          CLI stay independently buildable) when every task in the campaign's ``tasks.jsonl`` has
-          a ``_DONE`` marker.
+        - :data:`MIRROR_FINISHED_MARKER` directly under ``self.root``, written by ``yapnr exp
+          live`` (:mod:`yapnr.exp.live`'s own ``FINISHED_MARKER``, same name -- kept as a plain
+          string in both rather than a cross-package import so the viewer and the exp CLI stay
+          independently buildable) once every task the campaign actually *submitted* has a
+          ``_DONE`` marker (its ``tasks.jsonl`` plan only when nothing was submitted yet), and
+          withdrawn by the same mirror the moment that stops being true, so its presence alone is
+          enough -- this method never has to reason about partial submissions itself.
         - for a local (non-mirrored) run, a ``summary.json`` with ``"complete": true`` in ``root``
           or one of its first few parents -- ``hardware/pnr/regression/run.py --out`` always
           writes one there when it exits, campaign machinery or not (``PNR_LIVE_DIR`` is commonly

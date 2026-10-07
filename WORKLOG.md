@@ -305,13 +305,12 @@ board edges, the hierarchical ladder driver and their animations on
 14. Owner, fab and ordering (design §12): decisions D1 to D5. For the first OSH Park order, route
     the board under an OSH Park profile, run `yapnr order stage BOARD --vendor oshpark`, drop the
     zip on oshpark.com, check the preview and pay there; RF boards also pin `--stackup` (D4).
-15. Owner: decide whether the ladder should default to `--fab-profile jlc-pofv` (the engine's
-    default JLCPCB profile) instead of `legacy` (the fixtures' own rules; `docs/decisions.md`).
-    With `route_case.py` applying the profile, `jlc-pofv` passes every case too (2026-09-30:
-    pool seed 0, 8 of 8; baseline seeds 0 and 1, 16 of 16; other boards than legacy's, e.g. case
-    07 with 17 vias instead of 19). Flipping it changes the rules the ladder README states and
-    needs a refresh of `docs/animations/`. The first `ladder.yaml` run (the pull request of
-    `claude/ladder-animations`) is the first run of its container path.
+15. Owner decision (2026-10-06, `docs/decisions.md`): not yet. The gate was "flip to
+    `--fab-profile jlc-pofv` only when all 21 of `20261006-ladder-b0ec34`'s jlc-pofv failures
+    pass on `claude/defaults-rails-fab`"; campaign `20261007-ladder-7fe33f` got 20 of 21 (the
+    remaining one, `11-ufbga201-fanout-6L-SGSGPS-rails` seed 0, is rail-allocation territory,
+    not fab-profile, and `legacy` fails it on both seeds). Stays `legacy` default until that
+    cell passes or the gate is revisited; see `docs/regression-ladder.md`.
 16. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
 17. Showcases (`claude/animations-groups-hier`): the first nightly showcase step on the arm64

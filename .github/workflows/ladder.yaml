@@ -380,8 +380,9 @@ jobs:
 
       # Informational: the hard rungs of the CI lanes given (hardware/pnr/regression/hard_rungs.py),
       # seed 0, with the initial pool. A failure or a timeout is a notice, never the job.
-      # --rail-alloc search opts in to the plane-allocation search (pnr.rail_alloc; default
-      # off, AGENTS.md) explicitly, since the -rails rung's plane_quality check needs it.
+      # --rail-alloc search is the engine's default now (pnr.rail_alloc, #81's A/B); passed
+      # explicitly here so the -rails rung's plane_quality check keeps exercising it even if
+      # a future run.py invocation elsewhere passes --rail-alloc static.
       - name: Run the hard rungs (informational)
         if: always() && needs.plan.outputs.hard_lane != 'none'
         env:

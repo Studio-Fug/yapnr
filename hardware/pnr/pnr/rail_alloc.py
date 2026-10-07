@@ -44,13 +44,22 @@ The decision is made on the first route of a board in a process (the initial poo
 first finalist, or the first P/R round) and held for its later routes of the *same*
 placement and fanout (other P/R rounds of the same design), so the placement search
 compares like with like and pays for the comparison once; a different placement or
-fanout assignment is decided afresh. Default off (AGENTS.md): the static rule of
-thumb (:func:`pnr.plane_partition._rail_decision`) decides unless
-``PNR_RAIL_ALLOC=search`` opts in (``run.py --rail-alloc search``), which every A/B
-campaign and the hard-rung CI lane that exercises this rung pass explicitly.
-``PNR_RAIL_ALLOC=static`` is still accepted, to force the A/B arm when the default
-ever changes. The report (``escape_diagnostics.rail_allocation``) names the chosen
-allocation and, per rail, the numbers that decided it.
+fanout assignment is decided afresh. **Default on** (the A/B below): search decides
+unless ``PNR_RAIL_ALLOC=static`` opts out (``run.py --rail-alloc static``) back to
+the old rule of thumb (:func:`pnr.plane_partition._rail_decision`).
+``PNR_RAIL_ALLOC=search`` is still accepted, to force search explicitly. The report
+(``escape_diagnostics.rail_allocation``) names the chosen allocation and, per rail,
+the numbers that decided it.
+
+A/B (#81, GCP c4d spot us-west4, PR #81's commit): ``-rails`` search 4/4 seeds 0-3
+vs static 0/4 (VDDA competes with VDD for the plane and fails the quality judge
+every seed); ``-pour`` identical both arms (no candidates, 4/4 both); the other 31
+hard rungs' 62 cells identical both arms (59/62, the 3 failures pre-existing and
+reproduced on main). Of the 21 cells 20261006-ladder-b0ec34 found failing under
+``--fab-profile jlc-pofv`` (campaign on an older commit, before #76 and #81),
+``-rails`` is the only one this flag can change the result of; the other 20 are
+MCU-stackup and BGA-fanout cases #76's fab-profile adaptation fixes, independent of
+rail allocation.
 """
 
 from __future__ import annotations
@@ -97,10 +106,9 @@ class Choice:
 
 
 def mode() -> str:
-    # Default off (AGENTS.md): the static rule of thumb, unless PNR_RAIL_ALLOC=search
-    # opts in (run.py --rail-alloc search; every A/B campaign and the hard-rung CI lane
-    # that exercises this rung pass it explicitly).
-    value = os.environ.get("PNR_RAIL_ALLOC", "static")
+    # Default on (#81's A/B): search decides, unless PNR_RAIL_ALLOC=static opts out
+    # (run.py --rail-alloc static) back to the rule of thumb.
+    value = os.environ.get("PNR_RAIL_ALLOC", "search")
     if value not in ("search", "static"):
         raise ValueError("PNR_RAIL_ALLOC is search or static, not %r" % value)
     return value

@@ -238,6 +238,57 @@ class HullTest(unittest.TestCase):
         self.assertEqual(len(rects), 2)
 
 
+class DovetailTermTest(unittest.TestCase):
+    """PNR_HULL_DOVETAIL: the smooth packing term of global placement over hull bodies."""
+
+    def bodies(self):
+        import torch
+
+        return dict(
+            owner=torch.tensor([0, 1]),
+            off4=torch.zeros(2, 4, 2),
+            half4=torch.ones(2, 4, 2),
+            pair=torch.triu(torch.ones(2, 2), diagonal=1),
+        )
+
+    def test_pack_pulls_bodies_together(self):
+        import torch
+
+        from pnr.place.hull import gp_pack
+
+        pos = torch.tensor([[0.0, 0.0], [10.0, 0.0]], requires_grad=True)
+        p = torch.zeros(2, 4)
+        p[:, 0] = 1.0
+        value = gp_pack(self.bodies(), pos, p, 0.05)
+        # Half-perimeter of the box around both 2 x 2 bodies: 12 + 2.
+        self.assertAlmostEqual(float(value), 14.0, delta=0.1)  # smooth max: + gamma ln 2
+        value.backward()
+        self.assertLess(float(pos.grad[0, 0]), 0.0)  # left body: moving right shrinks it
+        self.assertGreater(float(pos.grad[1, 0]), 0.0)  # right body: moving left does
+
+    def test_weight_flag(self):
+        from pnr.place.hull import dovetail_weight
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(dovetail_weight(), 0.0)
+        with mock.patch.dict(os.environ, {"PNR_HULL_DOVETAIL": "1.5"}, clear=True):
+            self.assertEqual(dovetail_weight(), 1.5)
+        with mock.patch.dict(os.environ, {"PNR_HULL_DOVETAIL": "-1"}, clear=True):
+            with self.assertRaises(ValueError):
+                dovetail_weight()
+
+    def test_parts_match_the_runner(self):
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "regression"))
+        try:
+            import run
+        except ImportError:  # the runner needs its own imports; the kinds check covers it
+            self.skipTest("run.py not importable here")
+        self.assertEqual(tuple(run.ROUTE_COMPACT_PARTS), rc.PARTS)
+
+
 class LoopTest(unittest.TestCase):
     def setUp(self):
         self.g = board([part("R1", 10, 20), part("R2", 40, 20)])

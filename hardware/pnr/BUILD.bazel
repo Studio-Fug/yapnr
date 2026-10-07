@@ -2136,6 +2136,46 @@ py_test(
     ],
 )
 
+# Route-then-compact (PNR_ROUTE_COMPACT=1, pnr.place.route_compact): the order-preserving 1D
+# compaction by routed copper, its back-off, the hull shapes it slides by and the
+# PNR_HULL_DOVETAIL packing term of global placement.
+py_test(
+    name = "route_compact_test",
+    size = "small",
+    srcs = ["tests/test_route_compact.py"],
+    # The runner's --route-compact parts (regression/run.py) must equal the engine's.
+    data = glob(["regression/*.py"]),
+    main = "tests/test_route_compact.py",
+    deps = [
+        ":pnr",
+        ":pnr_hier",
+        ":pnr_place",
+        requirement("numpy"),
+        requirement("torch"),
+    ],
+)
+
+# Block macro hulls (PNR_MACRO_HULL=1, pnr.place.hull / pnr.hier.extent), shrink and the
+# used-area library ranking (N-0001). The real-board cases skip without their fixtures.
+py_test(
+    name = "macro_hull_test",
+    size = "medium",
+    srcs = ["tests/test_macro_hull.py"],
+    # pnr.mc is not in :pnr yet (PR3b).
+    data = glob(["pnr/**/*.py"]),
+    imports = ["."],
+    main = "tests/test_macro_hull.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
 # Power-first placement (PNR_POWER_FIRST=1): derivation, staged objective, legalizer,
 # ranking, routed metrics; and the compact parts under it.
 py_test(

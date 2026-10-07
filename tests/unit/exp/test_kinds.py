@@ -322,6 +322,46 @@ class LadderOptionsTest(unittest.TestCase):
         ]
         self.assertEqual(ladder.COMPACT_PARTS, parts)
 
+    def test_route_compact_options(self):
+        """route_compact (true or a list of parts), macro_hull and hull_dovetail become the
+        runner's --route-compact, --macro-hull and --hull-dovetail; the parts are the
+        engine's (hardware/pnr/pnr/place/route_compact.py PARTS, read without importing)."""
+        import ast
+
+        from yapnr.exp.kinds import ladder
+
+        self.assertEqual(
+            ladder.runner_arguments(dict(route_compact=True))[-2:], ["--route-compact", "1"]
+        )
+        self.assertEqual(
+            ladder.runner_arguments(dict(route_compact="TOP,BLOCK"))[-2:],
+            ["--route-compact", "TOP,BLOCK"],
+        )
+        args = ladder.runner_arguments(dict(macro_hull=True, hull_dovetail=1.5))
+        self.assertIn("--macro-hull", args)
+        self.assertEqual(args[args.index("--hull-dovetail") + 1], "1.5")
+        self.assertNotIn("--route-compact", ladder.runner_arguments({}))
+        kind = kinds.get("ladder-cell")
+        campaign = {
+            "schema": spec.CAMPAIGN_SCHEMA,
+            "kind": "ladder-cell",
+            "matrix": {"case": ["01-connector-led-2"], "seed": [0], "config": ["on", "bad"]},
+            "configs": {"on": {"route_compact": True}, "bad": {"route_compact": "TOP,EDGE"}},
+        }
+        self.assertEqual(
+            kind.check(campaign),
+            ["configs.bad.route_compact is true or a comma list of TOP, BLOCK, FLAT"],
+        )
+        source = Path(__file__).resolve().parents[3] / "hardware/pnr/pnr/place/route_compact.py"
+        tree = ast.parse(source.read_text())
+        (parts,) = [
+            ast.literal_eval(node.value)
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "PARTS" for t in node.targets)
+        ]
+        self.assertEqual(ladder.ROUTE_COMPACT_PARTS, parts)
+
     def test_case_names_allow_the_hard_rungs_stackup_suffix(self):
         """matrix.case accepts hard_rungs.py's with_stackup names (e.g. "...-6L-SGSGPS"), whose
         layer codes are upper case; CASE_RE used to accept lower case only, so no stackup

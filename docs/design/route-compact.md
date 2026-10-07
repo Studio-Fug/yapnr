@@ -82,14 +82,16 @@ bounding box of the placed bodies and of the routed board's copper and vias; KiC
 judges every board. The full tables are in the pull request and in
 [the ladder's page](../regression-ladder.md#route-then-compact-opt-in).
 
-| Rungs                                                | Arm                                              | Pass  | Bounding box | Copper  | Vias |
-| ---------------------------------------------------- | ------------------------------------------------ | ----- | ------------ | ------- | ---- |
-| hier-twin-bank, 10-quad-bank, 13-dovetail (12 cells) | off                                              | 12/12 | 5336 mm²     | 2181 mm | 144  |
-|                                                      | `--route-compact`                                | 12/12 | -6.7 %       | -4.4 %  | +4 % |
-|                                                      | `--macro-hull`                                   | 12/12 | -6.2 %       | -0.8 %  | +3 % |
-|                                                      | `--route-compact --macro-hull --hull-dovetail 1` | 12/12 | -19.2 %      | -5.3 %  | +4 % |
-| ladder 01-08 (16 cells)                              | off                                              | 16/16 | 3151 mm²     | 1136 mm | 70   |
-|                                                      | `--route-compact`                                | 16/16 | -21.5 %      | -11.3 % | -3 % |
+| Rungs                                                | Arm                                              | Pass  | Bounding box | Copper   | Vias   |
+| ---------------------------------------------------- | ------------------------------------------------ | ----- | ------------ | -------- | ------ |
+| hier-twin-bank, 10-quad-bank, 13-dovetail (12 cells) | off                                              | 12/12 | 5336 mm²     | 2181 mm  | 144    |
+|                                                      | `--route-compact`                                | 12/12 | -6.7 %       | -4.4 %   | +4 %   |
+|                                                      | `--macro-hull`                                   | 12/12 | -6.2 %       | -0.8 %   | +3 %   |
+|                                                      | `--route-compact --macro-hull --hull-dovetail 1` | 12/12 | -19.2 %      | -5.3 %   | +4 %   |
+| ladder 01-08 (16 cells)                              | off                                              | 16/16 | 3151 mm²     | 1136 mm  | 70     |
+|                                                      | `--route-compact`                                | 16/16 | -21.5 %      | -11.3 %  | -3 %   |
+| 35 other hard rungs (70 cells)                       | off                                              | 60/70 | 39029 mm²    | 19266 mm | 2225   |
+|                                                      | `--route-compact`                                | 61/70 | -6.8 %       | -3.3 %   | -0.4 % |
 
 Three guards came out of the first runs: a legacy plane pad left without writeback's
 dog-bone room (`08-chaser-20-plane`), a coupled pair whose copper the reroute moved

@@ -15,6 +15,7 @@ from pnr.length_model import attach_board
 from pnr.place.sides import plan as side_plan
 from pnr.place.sides import report as sides_report
 from pnr.place.sides import with_policy
+from pnr.profile import run as profiled
 from pnr.route.detail.exact_route import exact_mode
 from pnr.route.detail.native_maze import status as maze_status
 from pnr.route.feedback import route_and_place
@@ -66,16 +67,21 @@ attach_dru(rules, dru_path.read_text() if dru_path.exists() else None, [n.name f
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 os.environ["PNR_ROUND_DIAGNOSTICS"] = str(root / "rounds")
 t = time.monotonic()
-g, report = route_and_place(
-    g,
-    c,
-    seed=seed,
-    iters=350,
-    max_rounds=rounds,
-    detail_rules=rules,
-    detail_pitch_mm=0.25,
-    detail_iters=8,
-    spread=1.3,
+# PNR_PROFILE_DIR (yapnr exp [profile]): the place-route loop under pnr.profile, the ladder's
+# largest stage; without it this is a plain call.
+g, report = profiled(
+    "route-case",
+    lambda: route_and_place(
+        g,
+        c,
+        seed=seed,
+        iters=350,
+        max_rounds=rounds,
+        detail_rules=rules,
+        detail_pitch_mm=0.25,
+        detail_iters=8,
+        spread=1.3,
+    ),
 )
 (root / "placed.json").write_text(g.to_json())
 plan = side_plan(BoardGraph.from_json((root / "source-graph.json").read_text()), c, rules)

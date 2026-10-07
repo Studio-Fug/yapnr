@@ -92,10 +92,16 @@ function summaryTable(){
    h('td',{},(s.share*100).toFixed(0)+'%'),
    h('td',{},histogramSvg(stage,s,d.stage_order)));
  });
+ let u=d.unattributed;
+ let unatRow=u&&u.count?h('tr',{class:'tm-unattributed'},
+  h('td',{class:'tm-stage'},h('i',{style:'--c:#555'}),'unattributed'),
+  h('td',{},u.count),h('td',{},fmt(u.total)),h('td',{},fmt(u.mean)),h('td',{},fmt(u.median)),
+  h('td',{},fmt(u.p90)),h('td',{},fmt(u.max)),h('td',{},((u.share||0)*100).toFixed(0)+'%'),
+  h('td',{class:'tm-empty'},'no stage event says where')):null;
  return h('div',{class:'tm-table-wrap'},h('table',{class:'tm-table'},
   h('thead',{},h('tr',{},h('th',{},'stage'),h('th',{},'n'),h('th',{},'total'),h('th',{},'mean'),
    h('th',{},'median'),h('th',{},'p90'),h('th',{},'max'),h('th',{},'share'),h('th',{},'distribution'))),
-  h('tbody',{},...rows)));
+  h('tbody',{},...rows,unatRow)));
 }
 
 function taskOverheadTable(){
@@ -176,7 +182,8 @@ function renderAll(){
  // campaign's wall-clock span, which wall_seconds (last event - first, across lanes in scope)
  // gives directly; showing both side by side is the point (a campaign with wide concurrency has
  // total_seconds >> wall_seconds, and that gap *is* the parallelism story).
- let totalsNote='lane-seconds total '+fmt(d.total_seconds)+' · wall-clock '+fmt(d.wall_seconds);
+ let totalsNote='lane-seconds total '+fmt(d.total_seconds)+' · wall-clock '+fmt(d.wall_seconds)
+  +' · coverage '+((d.coverage??1)*100).toFixed(0)+'% (unattributed '+fmt(d.unattributed?.total)+')';
  panel.append(
   h('div',{class:'tm-head'},
    h('span',{class:'tm-status'},state.loading?'Loading…':''),

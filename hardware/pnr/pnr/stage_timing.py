@@ -65,6 +65,35 @@ _ALIAS = {
     "pad-entry": "fanout-escape",
     "audit": "drc-judge",
     "feedback": "artifacts",
+    # hardware/pnr/regression/run.py's own per-case stage names (the ladder-cell path: no
+    # native-loop, no KiCad-subprocess full_iteration.py -- see its `run()` closure). "place-route"
+    # itself is deliberately never wrapped there: it shells out to route_case.py/hier_case.py/
+    # mc_case.py, which call pnr.route.feedback.route_and_place *in that subprocess*, already
+    # emitting its own "source-round-place"/"route" spans; an outer span here would overlap them
+    # and double count. "generate"/"writeback" build the initial board (board-gen/placement's
+    # ladder-path equivalent); "drc"/"via-scan"/"checks" are the cold kicad-cli judge, same bucket
+    # as "audit"; "gloss-measure" is the optional --gloss-measure A/B run, same bucket as "gloss".
+    "generate": "setup",
+    "writeback": "setup",
+    "drc": "drc-judge",
+    "via-scan": "drc-judge",
+    "checks": "drc-judge",
+    "gloss-measure": "gloss",
+    # gloss_stage()'s cold kicad-cli DRC before and after the gloss pass (its keep/restore gate).
+    "gloss-drc-before": "drc-judge",
+    "gloss-drc-after": "drc-judge",
+    # Once-per-task bootstrap before the per-case loop even starts (main(), ahead of its own
+    # `run()` closure): hashing and freezing every source file, the optional native maze-kernel
+    # compile, and the python/kicad version probes. The live timing-bounds check measured this as
+    # the dominant share of a cold GCP task's otherwise-unattributed time (~16s of a ~26s task,
+    # almost all of it "freeze-source") -- real setup work, same bucket as "generate"/"placement".
+    "freeze-source": "setup",
+    "maze-kernel-build": "setup",
+    "version-check": "setup",
+    # regression/route_case.py (the flat ladder driver, inside run.py's unwrapped "place-route"
+    # subprocess): its imports and rule compilation before route_and_place. Its writes after
+    # route_and_place go under "artifacts" directly.
+    "driver-setup": "setup",
 }
 
 

@@ -1,0 +1,16 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "synthetic-ladder~02-resistor-led-3~s0",
+  "time": 1791342468.38394,
+  "kind": "task_complete",
+  "candidate": "ladder/02-resistor-led-3/s0",
+  "iteration": null,
+  "data": {
+    "verdict": "pass",
+    "attempt": "s1r0",
+    "exit_code": 0,
+    "wall_s": 5.004,
+    "timed_out": false
+  },
+  "synthetic": true
+}

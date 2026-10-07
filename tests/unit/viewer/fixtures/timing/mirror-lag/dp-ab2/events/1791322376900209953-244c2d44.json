@@ -1,0 +1,14 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791322376900209953-244c2d44",
+  "time": 1791322376.900222,
+  "kind": "phase_start",
+  "candidate": "ladder/01-connector-led-2/s1",
+  "iteration": null,
+  "data": {
+    "phase": "gloss",
+    "label": "07g-gloss",
+    "budget_seconds": 240.0,
+    "steps": ["normalize", "dekink", "gloss", "corridor"]
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791329510965650657-ece165a6",
+  "time": 1791329510.9656565,
+  "kind": "source_round_start",
+  "candidate": "ladder/01-connector-led-2/s0",
+  "iteration": null,
+  "data": {
+    "phase": "source P/R round 1",
+    "provisional": true,
+    "source_round": 1,
+    "cached_initial_finalist": false
+  },
+  "layout": {
+    "components": [
+      {
+        "address": "",
+        "bbox": [3.49, 2.04],
+        "body": [-1.745, -1.02, 1.725, 1.02],
+        "courtyard": [3.49, 2.04],
+        "footprint": "LED_SMD:LED_0805_2012Metric",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.24375,
+            "name": "1",
+            "net": "GND",
+            "offset": [-0.9375, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.975, 1.4],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.24375,
+            "name": "2",
+            "net": "LED_A",
+            "offset": [0.9375, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.975, 1.4],
+            "through_hole": false
+          }
+        ],
+        "pos": [8.125, 5.75],
+        "ref": "D1",
+        "rot": 90.0,
+        "side": "top",
+        "smd_body": true
+      },
+      {
+        "address": "",
+        "bbox": [3.59, 8.69],
+        "body": [-1.815, -4.365, 1.815, 1.815],
+        "courtyard": [3.63, 8.73],
+        "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [1.0, 1.0],
+            "land_corner": null,
+            "name": "1",
+            "net": "LED_A",
+            "offset": [0.0, -0.0],
+            "plated": true,
+            "plated_land_radius": 0.85,
+            "size": [1.7, 1.7],
+            "through_hole": true
+          },
+          {
+            "drill_size": [1.0, 1.0],
+            "land_corner": null,
+            "name": "2",
+            "net": "GND",
+            "offset": [0.0, -2.54],
+            "plated": true,
+            "plated_land_radius": 0.85,
+            "size": [1.7, 1.7],
+            "through_hole": true
+          }
+        ],
+        "pos": [4.0, 7.0],
+        "ref": "J1",
+        "rot": 0.0,
+        "side": "top",
+        "smd_body": false
+      }
+    ],
+    "name": "source",
+    "nets": [
+      {
+        "code": 1,
+        "name": "GND",
+        "pins": [
+          ["D1", "1"],
+          ["J1", "2"]
+        ]
+      },
+      {
+        "code": 2,
+        "name": "LED_A",
+        "pins": [
+          ["D1", "2"],
+          ["J1", "1"]
+        ]
+      }
+    ],
+    "outline": {
+      "height": 14.0,
+      "polygon": [],
+      "width": 18.0
+    },
+    "schema": "v0"
+  }
+}

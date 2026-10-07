@@ -36,6 +36,16 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent))
 from pnr.live import emit as live_emit  # noqa: E402
 
+# Same no-op-without-PNR_LIVE_DIR reasoning as live_emit above: `stage()` emits a
+# stage_start/stage_end pair around the wrapped block and otherwise costs nothing. Used by the
+# `run()` closure below (main()) to give the ladder-cell path's own stages -- generate,
+# writeback, planes, gloss, refill, audit, drc, via-scan, checks -- real observed spans in the
+# live Timing panel, which before this only ever saw the "source_round_start"/"phase_start"
+# markers pnr.route.feedback and pnr.gloss emit internally, covering a sliver of a case's real
+# wall time (see yapnr.viewer.timing's docstring on MIRROR_TERMINAL_KINDS, and this file's own
+# PNR_LIVE_CANDIDATE comment at the case_complete/case_failed emit site below).
+from pnr.stage_timing import stage as live_stage  # noqa: E402
+
 KI = "/Applications/KiCad/KiCad.app/Contents"
 
 
@@ -1048,13 +1058,19 @@ def main():
         cases = [c for c in allcases if not args.case or c["name"] in args.case]
     if not cases or (set(args.case) - {c["name"] for c in cases}):
         raise SystemExit("Unknown/empty case selection")
-    source_files = source_inputs(REPO)
-    manifest = {str(p.relative_to(REPO)): sha(p) for p in source_files}
-    freeze = out / "source-freeze"
-    for source_path in source_files:
-        target = freeze / source_path.relative_to(REPO)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, target)
+    # Hashing and copying every frozen source file (hundreds, on a cold container with no page
+    # cache for the mounted tree) measured as the dominant share of a ladder cell's otherwise
+    # "unattributed" time on a fresh GCP task (the live timing-bounds check that found this: ~16s
+    # of a ~26s task, before "generate" -- this file's own `run()` closure's live_stage() wraps --
+    # ever got a chance to start). Once per task regardless of how many cases/seeds it runs.
+    with live_stage("freeze-source"):
+        source_files = source_inputs(REPO)
+        manifest = {str(p.relative_to(REPO)): sha(p) for p in source_files}
+        freeze = out / "source-freeze"
+        for source_path in source_files:
+            target = freeze / source_path.relative_to(REPO)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, target)
     frozen_here = freeze / "hardware/pnr/regression"
     try:
         glossing, gloss_groups = freeze_gloss_groups(glossing, freeze)
@@ -1081,29 +1097,30 @@ def main():
         # The frozen C source, compiled once for the run (pnr.route.detail.native_maze).
         # Without a working compiler the run keeps the packed kernel (identical routes)
         # and says so here and in provenance.
-        try:
-            library = subprocess.run(
-                [
-                    args.python,
-                    "-c",
-                    "import sys; from pnr.route.detail.native_maze import build_library; "
-                    "print(build_library(sys.argv[1]))",
-                    str(out / "native"),
-                ],
-                env=dict(env, PYTHONPATH=str(freeze / "hardware/pnr")),
-                capture_output=True,
-                text=True,
-                timeout=600,
-                check=True,
-            ).stdout.strip()
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
-            detail = (getattr(error, "stderr", None) or str(error)).strip().splitlines()
-            reason = detail[-1] if detail else type(error).__name__
-            print("native maze kernel not built (%s); the packed kernel routes" % reason)
-            native = dict(library=None, error=reason)
-        else:
-            env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
-            native = dict(library=Path(library).name, sha256=sha(Path(library)))
+        with live_stage("maze-kernel-build"):
+            try:
+                library = subprocess.run(
+                    [
+                        args.python,
+                        "-c",
+                        "import sys; from pnr.route.detail.native_maze import build_library; "
+                        "print(build_library(sys.argv[1]))",
+                        str(out / "native"),
+                    ],
+                    env=dict(env, PYTHONPATH=str(freeze / "hardware/pnr")),
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                    check=True,
+                ).stdout.strip()
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
+                detail = (getattr(error, "stderr", None) or str(error)).strip().splitlines()
+                reason = detail[-1] if detail else type(error).__name__
+                print("native maze kernel not built (%s); the packed kernel routes" % reason)
+                native = dict(library=None, error=reason)
+            else:
+                env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
+                native = dict(library=Path(library).name, sha256=sha(Path(library)))
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.power_first:
@@ -1197,13 +1214,14 @@ def main():
         native_maze=native,
     )
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2))
-    for key, cmd in [
-        ("python", [args.python, "-c", LISTING]),
-        ("kicad", [args.kicad_cli, "version"]),
-    ]:
-        (out / (key + "-version.txt")).write_text(
-            subprocess.check_output(cmd, text=True, timeout=300)
-        )  # a version query
+    with live_stage("version-check"):
+        for key, cmd in [
+            ("python", [args.python, "-c", LISTING]),
+            ("kicad", [args.kicad_cli, "version"]),
+        ]:
+            (out / (key + "-version.txt")).write_text(
+                subprocess.check_output(cmd, text=True, timeout=300)
+            )  # a version query
     tracing = None
     if args.trace:
         sys.path[:0] = [
@@ -1256,7 +1274,20 @@ def main():
                 def run(name, cmd, extra=None):
                     if case_profile != args.fab_profile:
                         extra = dict(extra or {}, PNR_FAB_PROFILE=case_profile)
-                    result["stages"][name] = stage(root, name, cmd, extra, result["cpu_stages"])
+                    # "place-route" is the one stage never wrapped in a live span here: that
+                    # subprocess calls pnr.route.feedback.route_and_place directly, which already
+                    # emits its own "source-round-place"/"route" stage_start/stage_end pairs under
+                    # this same candidate -- an outer span here would overlap them and double
+                    # count the live Timing panel's stage totals (see the _ALIAS comment in
+                    # pnr/stage_timing.py). Every other named stage below emits nothing live on
+                    # its own, so wrapping it here is purely additive coverage.
+                    if name == "place-route":
+                        result["stages"][name] = stage(root, name, cmd, extra, result["cpu_stages"])
+                    else:
+                        with live_stage(name):
+                            result["stages"][name] = stage(
+                                root, name, cmd, extra, result["cpu_stages"]
+                            )
 
                 native = tracing.NativeTrace(root, spec, seed, args, out.name) if tracing else None
                 run(

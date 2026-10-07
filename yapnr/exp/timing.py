@@ -255,8 +255,14 @@ def resolve_live_dir(target: str, cfg=None) -> Path:
 
 def format_table(result: Dict[str, Any]) -> str:
     lines = [
-        "mode: %s  (%d lane(s), %d still running)"
-        % (result["mode"], result["lane_count"], result["running_count"]),
+        "mode: %s  (%d lane(s), %d still running)  wall: %.1fs  coverage: %.1f%%"
+        % (
+            result["mode"],
+            result["lane_count"],
+            result["running_count"],
+            result.get("wall_seconds", 0.0),
+            result.get("coverage", 1.0) * 100,
+        ),
         "",
         "%-26s %6s %10s %9s %9s %9s %7s"
         % ("stage", "n", "total_s", "mean_s", "median_s", "p90_s", "share"),
@@ -266,6 +272,24 @@ def format_table(result: Dict[str, Any]) -> str:
         lines.append(
             "%-26s %6d %10.1f %9.2f %9.2f %9.2f %6.1f%%"
             % (stage, s["count"], s["total"], s["mean"], s["median"], s["p90"], s["share"] * 100)
+        )
+    unattributed = result.get("unattributed")
+    if unattributed:
+        # Real lane wall-clock time no stage span claims (instrumentation gaps, or a mirror's
+        # detection lag past the lane's own last real event) -- see yapnr.viewer.timing's
+        # docstring. Shown like a stage row, but its "share" is of lane-wall, not total_seconds
+        # (it is not part of total_seconds at all).
+        lines.append(
+            "%-26s %6d %10.1f %9.2f %9.2f %9.2f %6.1f%%"
+            % (
+                "unattributed",
+                unattributed["count"],
+                unattributed["total"],
+                unattributed["mean"],
+                unattributed["median"],
+                unattributed["p90"],
+                unattributed.get("share", 0.0) * 100,
+            )
         )
     lines.append("")
     lines.append("slowest lanes:")

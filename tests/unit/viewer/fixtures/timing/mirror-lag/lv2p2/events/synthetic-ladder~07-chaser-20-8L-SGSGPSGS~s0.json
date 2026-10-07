@@ -1,0 +1,16 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "synthetic-ladder~07-chaser-20-8L-SGSGPSGS~s0",
+  "time": 1791326263.972367,
+  "kind": "task_complete",
+  "candidate": "ladder/07-chaser-20-8L-SGSGPSGS/s0",
+  "iteration": null,
+  "data": {
+    "verdict": "pass",
+    "attempt": "s1r0",
+    "exit_code": 0,
+    "wall_s": 31.523,
+    "timed_out": false
+  },
+  "synthetic": true
+}

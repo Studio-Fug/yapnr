@@ -302,7 +302,10 @@ a connector up to a TLC555 + CD4017B LED chaser on four copper layers. Each case
 circuit alone (a netlist of real KiCad library footprints on an empty outline; only the supply
 connector is fixed), runs the ordinary place-and-route pipeline, and is judged by KiCad’s own
 design-rule check (DRC) on the saved board. The fixtures, the runner and the frozen results of the
-engine’s last Splanc round live in <a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/README.md"><code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression/</span></code></a>.</p>
+engine’s last Splanc round live in <a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/README.md"><code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression/</span></code></a>. Past case 08 the
+ladder continues with <a class="reference internal" href="#rungs-09-to-12">rungs 09 to 12</a>: a USB microcontroller board, a
+hierarchical four-bank board, current-sized power copper, a buck stage on hot-rod lands, a 0.65 mm
+BGA escape with split rails and with a coupled pair, and a purpose-built 113-part BGA computer.</p>
 <p>Every case below has an animation of its critical path: one straight line from the unplaced board
 to the fully routed board and KiCad’s verdict, including the experiments the final board descends
 from and, at each selection, the candidates it was chosen from. The animations are recorded with
@@ -481,6 +484,482 @@ pad entries, and zero KiCad unconnected items and findings, warnings included. S
 fabrication block, which the runner routes and judges under (<code class="docutils literal notranslate"><span class="pre">PNR_FAB_PROFILE=legacy</span></code> for every
 stage). <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> routes and judges under the engine’s default JLCPCB profile
 instead (0.127 mm clearance, 0.45/0.30 mm vias, vias 0.127 mm off SMD pads).</p>
+</section>
+<section id="rungs-09-to-12">
+<h2>Rungs 09 to 12<a class="headerlink" href="#rungs-09-to-12" title="Link to this heading">¶</a></h2>
+<p>Past the eight small cases the ladder continues with six of the hard rungs
+(<a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/hard_rungs.py"><code class="docutils literal notranslate"><span class="pre">hard_rungs.py</span></code></a>, CI lane <code class="docutils literal notranslate"><span class="pre">ladder</span></code>): one per family, each judged by the same gate plus
+the rung’s own constraint checks (<code class="docutils literal notranslate"><span class="pre">check_constraints.py</span></code> on the saved board) and custom KiCad rules
+(plane layers carry no tracks, via policy, differential-pair skew, length-match groups), and the
+purpose-built top rung. Seeds 0 and 1 with the initial placement pool (8 starts, 3 routed finalists),
+the runner’s other defaults (no compact placement or gloss) and the legacy fabrication profile,
+as the nightly CI hard-rung step runs them; engine <code class="docutils literal notranslate"><span class="pre">1f4c3d8</span></code>, GCP C4 (x86-64), KiCad 10.0.6. Values
+are seed 0 / seed 1; the time is the case’s wall time (one vCPU per case; two for the top rung).</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rung</p></th>
+<th class="head text-right"><p>Parts</p></th>
+<th class="head text-right"><p>Nets</p></th>
+<th class="head text-right"><p>Layers</p></th>
+<th class="head"><p>Added difficulty</p></th>
+<th class="head"><p>Seeds 0, 1</p></th>
+<th class="head text-right"><p>Opens</p></th>
+<th class="head text-right"><p>Findings</p></th>
+<th class="head text-right"><p>Vias</p></th>
+<th class="head text-right"><p>Copper (mm)</p></th>
+<th class="head text-right"><p>Time (s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code></p></td>
+<td class="text-right"><p>31</p></td>
+<td class="text-right"><p>27</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>ATmega32U4 TQFP-44, crystal, USB Micro-B with two differential pairs, LDO, LEDs</p></td>
+<td><p>pass, pass</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>39 / 49</p></td>
+<td class="text-right"><p>792.9 / 971.5</p></td>
+<td class="text-right"><p>357 / 371</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code></p></td>
+<td class="text-right"><p>56</p></td>
+<td class="text-right"><p>50</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>Hierarchy: a clock block and one CD4017B bank template placed and routed four times</p></td>
+<td><p>pass, pass</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>62 / 62</p></td>
+<td class="text-right"><p>1076.6 / 1076.6</p></td>
+<td class="text-right"><p>102 / 102</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">11-power-switch-31</span></code></p></td>
+<td class="text-right"><p>31</p></td>
+<td class="text-right"><p>17</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>Four-channel 12 V MOSFET switch: 3 A trunk, 1.5 A outputs, current-sized copper</p></td>
+<td><p>pass, pass</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>22 / 20</p></td>
+<td class="text-right"><p>748.0 / 726.7</p></td>
+<td class="text-right"><p>69 / 49</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">11-buck-vqfnhr-4L-SGPS-pour</span></code></p></td>
+<td class="text-right"><p>10</p></td>
+<td class="text-right"><p>6</p></td>
+<td class="text-right"><p>4</p></td>
+<td><p>Buck stage on VQFN-HR hot-rod lands no track can enter, joined by outer pours</p></td>
+<td><p>pass, pass</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>17 / 17</p></td>
+<td class="text-right"><p>45.7 / 49.5</p></td>
+<td class="text-right"><p>14 / 16</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code></p></td>
+<td class="text-right"><p>19</p></td>
+<td class="text-right"><p>55</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>0.65 mm UFBGA-201 escape; two of three supply rails share one plane (the trickle rail traced on a signal layer), IR drop judged per rail</p></td>
+<td><p>pass, pass</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>133 / 137</p></td>
+<td class="text-right"><p>791.2 / 827.9</p></td>
+<td class="text-right"><p>102 / 102</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-pairs</span></code></p></td>
+<td class="text-right"><p>18</p></td>
+<td class="text-right"><p>55</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>0.65 mm UFBGA-201 escape; an LVDS pair coupled on F.Cu from the fanout (skew 0.1 mm)</p></td>
+<td><p>pass, pass</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>0 / 0</p></td>
+<td class="text-right"><p>135 / 135</p></td>
+<td class="text-right"><p>815.1 / 884.9</p></td>
+<td class="text-right"><p>94 / 95</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">12-soc-bga-113</span></code></p></td>
+<td class="text-right"><p>113</p></td>
+<td class="text-right"><p>112</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>STM32F746 UFBGA176+25: SDRAM with a length-matched lane, QSPI, RMII PHY, USB, microSD; four supply domains</p></td>
+<td><p><strong>fail</strong>, <strong>fail</strong></p></td>
+<td class="text-right"><p>37 / 40</p></td>
+<td class="text-right"><p>18 / 20</p></td>
+<td class="text-right"><p>355 / 375</p></td>
+<td class="text-right"><p>2522.5 / 2606.9</p></td>
+<td class="text-right"><p>1294 / 1083</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The top rung, <code class="docutils literal notranslate"><span class="pre">12-soc-bga-113</span></code> (<a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/soc_rung.py"><code class="docutils literal notranslate"><span class="pre">soc_rung.py</span></code></a>, manual lane), is a purpose-built
+single-board computer: an STM32F746 in a 0.65 mm UFBGA176+25 with a 16-bit SDRAM whose high data
+byte lane is a length-match group (1.0 mm), a quad-SPI flash, an RMII Ethernet PHY with series and
+MDI terminations, USB full speed, microSD, SWD and I/O connectors, and four supply domains (USB
+5 V, a buck to 3.3 V that owns the supply plane, two LDOs whose analog rails are routed on signal
+layers) on six layers. Its pin map is KiCad’s <code class="docutils literal notranslate"><span class="pre">STM32F746IGKx</span></code> symbol; hard proximity groups keep
+each part’s support parts beside it; the <a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/README.md">ladder README</a> describes it. It is the
+ladder’s target, not yet a pass (engine <code class="docutils literal notranslate"><span class="pre">bc82338</span></code>, the same configuration): the router leaves 34 of
+its 112 nets open on both seeds, and KiCad’s findings name what is still missing besides capacity:
+the SDRAM lane out of skew (9 / 8 <code class="docutils literal notranslate"><span class="pre">skew_out_of_range</span></code>), tracks through the keep-outs the microSD and
+QFN footprints carry (5 / 10 <code class="docutils literal notranslate"><span class="pre">items_not_allowed</span></code>: the router does not read footprint rule areas), a
+via 0.19 mm from the USB receptacle’s shell hole (2 / 2 <code class="docutils literal notranslate"><span class="pre">hole_to_hole</span></code>, minimum 0.25 mm) and 2 / 0
+<code class="docutils literal notranslate"><span class="pre">clearance</span></code>. Its proximity, edge and fixed checks pass; the <code class="docutils literal notranslate"><span class="pre">fanout-escape</span></code> check does not (balls
+left unrouted). It carries a <code class="docutils literal notranslate"><span class="pre">ci.target</span></code> (dense-board routing) in the manual lane.</p>
+<section id="push-and-shove-rungs">
+<h3>Push-and-shove rungs<a class="headerlink" href="#push-and-shove-rungs" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">11-shove-channel-14</span></code> and <code class="docutils literal notranslate"><span class="pre">11-shove-channel-lm-14</span></code> (<a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/shove_rungs.py"><code class="docutils literal notranslate"><span class="pre">shove_rungs.py</span></code></a>, manual lane)
+are small two-layer boards made for a push-and-shove router: a copper wall with one 4.25 mm channel,
+a 10-net bus through it and four late nets that cross the bus and share the channel. Nine tracks fit
+per layer (eight on a 0.25 mm routing grid) and fourteen nets need the channel; the <code class="docutils literal notranslate"><span class="pre">-lm</span></code> variant
+turns the bus north after the channel and matches it to 0.5 mm, so its meanders need the room the
+late nets cross. They are routable by construction, and the current router (negotiated rip-up and
+reroute) leaves nets open on them: they are marked as targets for the queued push-and-shove router
+(<code class="docutils literal notranslate"><span class="pre">ci.target</span></code>), not gated.</p>
+<p>Seeds 0 and 1, the same configuration and engine as the rungs above:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rung</p></th>
+<th class="head text-right"><p>Parts</p></th>
+<th class="head text-right"><p>Nets</p></th>
+<th class="head text-right"><p>Layers</p></th>
+<th class="head"><p>Seeds 0, 1</p></th>
+<th class="head"><p>Nets left open (engine)</p></th>
+<th class="head text-right"><p>KiCad opens</p></th>
+<th class="head"><p>KiCad findings</p></th>
+<th class="head text-right"><p>Time (s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">11-shove-channel-14</span></code></p></td>
+<td class="text-right"><p>4</p></td>
+<td class="text-right"><p>14</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>fail, fail</p></td>
+<td><p>B5, X0 / B5, X0</p></td>
+<td class="text-right"><p>2 / 2</p></td>
+<td><p>0 / 0</p></td>
+<td class="text-right"><p>148 / 152</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">11-shove-channel-lm-14</span></code></p></td>
+<td class="text-right"><p>4</p></td>
+<td class="text-right"><p>14</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>fail, fail</p></td>
+<td><p>X2, X3 / X2, X3</p></td>
+<td class="text-right"><p>2 / 2</p></td>
+<td><p>9 / 9 (<code class="docutils literal notranslate"><span class="pre">skew_out_of_range</span></code>: the bus is not matched)</p></td>
+<td class="text-right"><p>161 / 163</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="ci-test-rungs">
+<h3>CI test rungs<a class="headerlink" href="#ci-test-rungs" title="Link to this heading">¶</a></h3>
+<p>The other hard rungs vary one dimension of a base (stackup, via policy, sides, placement
+constraints, search, parts) and stay CI test rungs: the <code class="docutils literal notranslate"><span class="pre">nightly</span></code> lane runs every night
+(informational), the <code class="docutils literal notranslate"><span class="pre">manual</span></code> lane on request. The same campaign’s results:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rung</p></th>
+<th class="head"><p>Lane</p></th>
+<th class="head"><p>Dimension</p></th>
+<th class="head text-right"><p>Parts</p></th>
+<th class="head text-right"><p>Cu</p></th>
+<th class="head"><p>Seed 0</p></th>
+<th class="head"><p>Seed 1</p></th>
+<th class="head text-right"><p>Vias</p></th>
+<th class="head text-right"><p>Time (s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-4L-SGPS</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>stackup 4L-SGPS</p></td>
+<td class="text-right"><p>31</p></td>
+<td class="text-right"><p>4</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>73 / 82</p></td>
+<td class="text-right"><p>110 / 129</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-4L-SSGS</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>stackup 4L-SSGS</p></td>
+<td class="text-right"><p>31</p></td>
+<td class="text-right"><p>4</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>69 / 77</p></td>
+<td class="text-right"><p>233 / 182</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-6L-SGSGPS</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>stackup 6L-SGSGPS</p></td>
+<td class="text-right"><p>31</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>76 / 84</p></td>
+<td class="text-right"><p>120 / 162</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-abs</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>constraints absolute</p></td>
+<td class="text-right"><p>33</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>56 / 53</p></td>
+<td class="text-right"><p>307 / 265</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-rel</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>constraints relative</p></td>
+<td class="text-right"><p>31</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>50 / 50</p></td>
+<td class="text-right"><p>326 / 341</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-sidelock</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>sides assigned</p></td>
+<td class="text-right"><p>31</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>43 / 51</p></td>
+<td class="text-right"><p>313 / 329</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-mc</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>search mc</p></td>
+<td class="text-right"><p>31</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>41 / 40</p></td>
+<td class="text-right"><p>277 / 265</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>parts tht-header</p></td>
+<td class="text-right"><p>31</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p><strong>fail</strong> (<code class="docutils literal notranslate"><span class="pre">stage_failure</span></code>)</p></td>
+<td><p><strong>fail</strong> (<code class="docutils literal notranslate"><span class="pre">stage_failure</span></code>)</p></td>
+<td class="text-right"><p>-</p></td>
+<td class="text-right"><p>25 / 26</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-4L-SGPS</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 4L-SGPS</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>4</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>28 / 32</p></td>
+<td class="text-right"><p>27 / 51</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-4L-SGGS</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 4L-SGGS</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>4</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>25 / 29</p></td>
+<td class="text-right"><p>31 / 40</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-4L-SSGS</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 4L-SSGS</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>4</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>29 / 30</p></td>
+<td class="text-right"><p>32 / 32</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-6L-SGSSPS</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 6L-SGSSPS</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>26 / 34</p></td>
+<td class="text-right"><p>32 / 33</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-6L-SGSGPS</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 6L-SGSGPS</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>30 / 32</p></td>
+<td class="text-right"><p>30 / 30</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-8L-SGSGPSGS</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 8L-SGSGPSGS</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>8</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>30 / 30</p></td>
+<td class="text-right"><p>31 / 49</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-6L-SGSGPS-BB</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 6L-SGSGPS, via policy blind-buried</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>31 / 34</p></td>
+<td class="text-right"><p>78 / 91</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-6L-SGSGPS-HDI</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 6L-SGSGPS, via policy hdi</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>32 / 38</p></td>
+<td class="text-right"><p>96 / 88</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-double</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>sides double</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>14 / 15</p></td>
+<td class="text-right"><p>45 / 46</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-4L-SGPS-double</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 4L-SGPS, sides double</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>4</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>24 / 24</p></td>
+<td class="text-right"><p>36 / 36</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-abs</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>constraints absolute</p></td>
+<td class="text-right"><p>22</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>22 / 22</p></td>
+<td class="text-right"><p>36 / 38</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-rel</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>constraints relative</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>21 / 21</p></td>
+<td class="text-right"><p>37 / 31</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-sidelock</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>sides assigned</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>2</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>15 / 18</p></td>
+<td class="text-right"><p>75 / 82</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-4L-SGPS-arcblock</span></code></p></td>
+<td><p>nightly</p></td>
+<td><p>stackup 4L-SGPS, parts arcblock</p></td>
+<td class="text-right"><p>22</p></td>
+<td class="text-right"><p>4</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>38 / 43</p></td>
+<td class="text-right"><p>32 / 30</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>stackup 6L-SGSGPS</p></td>
+<td class="text-right"><p>17</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>133 / 135</p></td>
+<td class="text-right"><p>89 / 89</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-block</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>stackup 6L-SGSGPS, parts block</p></td>
+<td class="text-right"><p>18</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>142 / 141</p></td>
+<td class="text-right"><p>103 / 92</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-classes</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>stackup 6L-SGSGPS, constraints classes</p></td>
+<td class="text-right"><p>18</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>133 / 133</p></td>
+<td class="text-right"><p>94 / 96</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-partial</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>stackup 6L-SGSGPS, constraints partial</p></td>
+<td class="text-right"><p>17</p></td>
+<td class="text-right"><p>6</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>131 / 133</p></td>
+<td class="text-right"><p>91 / 89</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">11-buck-vqfnhr-4L-SGPS</span></code></p></td>
+<td><p>manual</p></td>
+<td><p>stackup 4L-SGPS</p></td>
+<td class="text-right"><p>10</p></td>
+<td class="text-right"><p>4</p></td>
+<td><p>pass</p></td>
+<td><p>pass</p></td>
+<td class="text-right"><p>12 / 12</p></td>
+<td class="text-right"><p>14 / 14</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> fails in this configuration because the initial pool cannot place its
+pin-1-origin header; it passes with compact placement (see
+<a class="reference internal" href="#compact-placement-opt-in">Compact placement</a>).</p>
+</section>
 <section id="showcases">
 <h3>Showcases<a class="headerlink" href="#showcases" title="Link to this heading">¶</a></h3>
 <p>Four more cases show what the engine does with placement constraints and with hierarchy: the
@@ -1061,8 +1540,10 @@ compared with <a href="animations/manifest.json"><code>animations/manifest.json<
 is a notice); the traced run and the showcases take the animations’ options, <code class="docutils literal notranslate"><span class="pre">--compact</span> <span class="pre">--gloss</span></code>,
 so their traces compare with the committed ones. The nightly run also takes the opt-in
 <a class="reference internal" href="#gloss-opt-in">gloss stage</a> through <code class="docutils literal notranslate"><span class="pre">04-inverter-leds-8</span></code> and <code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code> (seed 0): a stage
-error fails the job, and a stage that kept no edit on either case is a warning. The lane is
-informational, not a required check yet; its aggregate check is named <code class="docutils literal notranslate"><span class="pre">ladder</span></code>.</p>
+error fails the job, and a stage that kept no edit on either case is a warning. Nightly it then runs
+the hard rungs of the <code class="docutils literal notranslate"><span class="pre">ladder</span></code> lane (<a class="reference internal" href="#rungs-09-to-12">rungs 09 to 11</a>) and of the <code class="docutils literal notranslate"><span class="pre">nightly</span></code> lane
+(the chaser variants), seed 0, with the initial pool: informational, a hard rung never decides the
+job. The lane is informational, not a required check yet; its aggregate check is named <code class="docutils literal notranslate"><span class="pre">ladder</span></code>.</p>
 </section>
 </section>
 
@@ -1122,7 +1603,10 @@ informational, not a required check yet; its aggregate check is named <code clas
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Regression ladder</a><ul>
-<li><a class="reference internal" href="#the-cases">The cases</a><ul>
+<li><a class="reference internal" href="#the-cases">The cases</a></li>
+<li><a class="reference internal" href="#rungs-09-to-12">Rungs 09 to 12</a><ul>
+<li><a class="reference internal" href="#push-and-shove-rungs">Push-and-shove rungs</a></li>
+<li><a class="reference internal" href="#ci-test-rungs">CI test rungs</a></li>
 <li><a class="reference internal" href="#showcases">Showcases</a></li>
 </ul>
 </li>

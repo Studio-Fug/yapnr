@@ -987,6 +987,9 @@ def run(root, seed):
 
 
 def main(argv=None):
+    from pnr.place.route_compact import arm_deadline
+
+    arm_deadline()  # PNR_ROUTE_COMPACT keeps to the runner's stage budget from here
     argv = sys.argv[1:] if argv is None else argv
     root, seed = Path(argv[0]), int(argv[1])
     report, _case = run(root, seed)

@@ -1074,6 +1074,8 @@ def main():
                 "--route-compact takes 1 or a comma list of %s" % ", ".join(ROUTE_COMPACT_PARTS)
             )
         env["PNR_ROUTE_COMPACT"] = args.route_compact
+        # The pass stops before a reroute would run past the place-route stage's budget.
+        env["PNR_ROUTE_COMPACT_TIMEOUT_S"] = repr(float(args.timeout))
     if args.macro_hull:
         env["PNR_MACRO_HULL"] = "1"
     if args.hull_dovetail is not None:

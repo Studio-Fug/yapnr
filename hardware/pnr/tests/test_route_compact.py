@@ -378,6 +378,28 @@ class LoopTest(unittest.TestCase):
         self.assertEqual(report["accepted"], 0)
         self.assertEqual(report["attempts"][0]["result"], "hard violation")
 
+    def test_stops_at_the_deadline(self):
+        calls = []
+
+        def reroute(candidate, axis):
+            calls.append(axis)
+            return candidate, dict(missing=0, unresolved=0, vias=4, copper_mm=90.0)
+
+        env = {rc.TIMEOUT_ENV: "100", rc.DEADLINE_ENV: repr(__import__("time").time() - 1.0)}
+        with mock.patch.dict(os.environ, env, clear=True):
+            placed, _route, report = self.run_loop(reroute)
+        self.assertEqual(calls, [])
+        self.assertEqual(report["stopped"], "deadline")
+        self.assertEqual(xs(placed), xs(self.g))
+
+    def test_arm_deadline(self):
+        with mock.patch.dict(os.environ, {rc.TIMEOUT_ENV: "100"}, clear=True):
+            rc.arm_deadline(now=1000.0)
+            self.assertEqual(float(os.environ[rc.DEADLINE_ENV]), 1090.0)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            rc.arm_deadline(now=1000.0)
+            self.assertNotIn(rc.DEADLINE_ENV, os.environ)
+
     def test_not_worse(self):
         s = rc.Settings(copper_tol=0.01, via_tol=2)
         base = dict(missing=0, unresolved=0, vias=10, copper_mm=100.0)
@@ -386,6 +408,8 @@ class LoopTest(unittest.TestCase):
         self.assertTrue(rc.not_worse(base, dict(base, vias=12), s)[0])
         self.assertFalse(rc.not_worse(base, dict(base, vias=13), s)[0])
         self.assertFalse(rc.not_worse(base, dict(base, unresolved=1), s)[0])
+        self.assertFalse(rc.not_worse(base, dict(base, uncoupled_pairs=1), s)[0])
+        self.assertFalse(rc.not_worse(base, dict(base, plane_blocked=1), s)[0])
 
 
 if __name__ == "__main__":

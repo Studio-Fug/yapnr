@@ -12,6 +12,7 @@ from pnr.dru_rules import attach_dru
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
 from pnr.length_model import attach_board
+from pnr.place.route_compact import arm_deadline
 from pnr.place.sides import plan as side_plan
 from pnr.place.sides import report as sides_report
 from pnr.place.sides import with_policy
@@ -20,6 +21,8 @@ from pnr.route.detail.native_maze import status as maze_status
 from pnr.route.feedback import route_and_place
 from pnr.via_policy import board_policy
 
+# PNR_ROUTE_COMPACT: the post-route pass keeps to the runner's stage budget from here.
+arm_deadline()
 root = Path(sys.argv[1])
 seed = int(sys.argv[2])
 rounds = int(sys.argv[3])

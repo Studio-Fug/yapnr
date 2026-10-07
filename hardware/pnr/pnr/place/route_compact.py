@@ -782,7 +782,7 @@ def plane_blocked(graph, tracks, vias, rules) -> int:
 
 def not_worse(base: dict, new: dict, settings: Settings) -> Tuple[bool, str]:
     """``new`` route metrics against ``base``: completion first, then vias and copper."""
-    for key in ("missing", "unresolved", "unmatched", "plane_blocked"):
+    for key in ("missing", "unresolved", "unmatched", "uncoupled_pairs", "plane_blocked"):
         if new.get(key, 0) > base.get(key, 0):
             return False, "%s %s > %s" % (key, new.get(key, 0), base.get(key, 0))
     via_tol = max(settings.via_tol, int(0.05 * base.get("vias", 0)))
@@ -802,10 +802,15 @@ def route_summary(route) -> dict:
     from pnr.place.initial_pool import _route_metrics
 
     m = _route_metrics(route)
+    pairs = ((getattr(route, "escape_diagnostics", None) or {}).get("coupled_pairs") or {}).get(
+        "pairs"
+    ) or {}
     return dict(
         missing=m["missing_connections"],
         unresolved=len(m["unresolved_nets"]),
         unmatched=m.get("length_unmatched", 0),
+        # declared pairs the coupled router left as two legs (route_pairs: coupled)
+        uncoupled_pairs=sum(1 for row in pairs.values() if row.get("status") != "coupled"),
         vias=m["vias"],
         copper_mm=round(m["copper_length_mm"], 3),
     )
@@ -815,6 +820,30 @@ def route_summary(route) -> dict:
 
 
 PIN_RETRIES = 3  # re-plans per axis that hold the parts a hard violation named
+DEADLINE_ENV = "PNR_ROUTE_COMPACT_DEADLINE"  # epoch seconds: no reroute may run past it
+TIMEOUT_ENV = "PNR_ROUTE_COMPACT_TIMEOUT_S"  # the driver's stage budget (run.py --timeout)
+DEADLINE_SHARE = 0.9
+
+
+def arm_deadline(now=None):
+    """Called by a driver at its start: with ``PNR_ROUTE_COMPACT_TIMEOUT_S`` (the runner's
+    stage timeout) set, the pass stops before a reroute that would run past 90 % of it."""
+    timeout = os.environ.get(TIMEOUT_ENV)
+    if timeout and not os.environ.get(DEADLINE_ENV):
+        start = time.time() if now is None else now
+        os.environ[DEADLINE_ENV] = repr(start + DEADLINE_SHARE * float(timeout))
+
+
+def time_left():
+    """Seconds to the deadline (inf without one) and the seconds the driver has run."""
+    deadline = os.environ.get(DEADLINE_ENV)
+    if not deadline:
+        return math.inf, None
+    deadline = float(deadline)
+    timeout = float(os.environ.get(TIMEOUT_ENV) or 0.0)
+    now = time.time()
+    ran = now - (deadline - DEADLINE_SHARE * timeout) if timeout else None
+    return deadline - now, ran
 
 
 def _violation_refs(bad) -> set:
@@ -901,6 +930,7 @@ def compact_loop(
         return outline(r) if callable(outline) else outline
 
     base = metrics_of(route)
+    reroutes = []  # seconds per reroute: the estimate the deadline check uses
     report = dict(
         label=label,
         settings=settings.to_dict(),
@@ -913,6 +943,8 @@ def compact_loop(
     for rnd in range(max(0, settings.rounds)):
         progressed = False
         for axis in (0, 1):
+            if report.get("stopped"):
+                break
             pinned = set()  # refs a hard violation named: held in the next attempt
             back_off = 0
             for _ in range(settings.attempts + PIN_RETRIES):
@@ -968,12 +1000,22 @@ def compact_loop(
                     else:
                         back_off += 1
                     continue
+                left, ran = time_left()
+                expect = max(reroutes) if reroutes else (0.5 * ran if ran else 0.0)
+                if expect > left:
+                    rec["result"] = "out of time (%.0f s left, a reroute takes ~%.0f s)" % (
+                        left,
+                        expect,
+                    )
+                    report["stopped"] = "deadline"
+                    break
                 if announce is not None:
                     announce(candidate, axis, rec)
                 with span("route_compact.reroute"):
                     new_placed, new_route = reroute(candidate, axis)
                 t3 = time.monotonic()
                 report["seconds"]["reroute"] += t3 - t2
+                reroutes.append(t3 - t2)
                 rec["reroute_seconds"] = round(t3 - t2, 3)
                 if new_route is None:
                     rec["result"] = new_placed if isinstance(new_placed, str) else "reroute failed"
@@ -994,7 +1036,7 @@ def compact_loop(
                 if observe is not None:
                     observe("%s-r%d-%s" % (label, rnd + 1, "xy"[axis]), placed, route, rec)
                 break
-        if not progressed:
+        if not progressed or report.get("stopped"):
             break
     report["after"] = dict(metrics=base, **area_metrics(placed, *size(route)))
     report["seconds"] = {k: round(v, 3) for k, v in report["seconds"].items()}

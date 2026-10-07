@@ -111,75 +111,156 @@ function countDetail(counts){
 
 // ------------------------------------------------------------------ DOM
 let rows=[],focusIndex=-1,onSelect=()=>{};
+// Row elements, keyed by node id and reused across renders -- a live poll fires every 1.2s
+// (app.js's poll() -> updateControls() -> YapnrTree.update()), and a full rebuild each time
+// (the old body.replaceChildren(...rows.map(buildRow))) tore down and recreated every row's DOM
+// node on every single poll. That (a) detached whatever had focus, so the row-refocus below had
+// to run on every render just to get back to where it already was, and a focus() call scrolls
+// its container to reveal the focused element by default -- yanking a user's manual scroll back
+// to the focused row on every update even though that row never moved; and (b) discarded hover
+// state and any per-row affordance tied to the DOM node itself. Keeping the same element for a
+// node across renders (created once, then mutated in place by updateRowContent()) means an
+// unaffected row's focus/hover simply isn't touched at all, so most updates need no refocus and
+// no scroll adjustment of any kind.
+let elByNodeId=new Map();
 
 function rowText(r){
  let base=r.node.name||'(root)';
  if(!r.lane)return base;
  return base;
 }
+// Creates a row's DOM skeleton once; everything that can change between renders of the *same*
+// node (label text, bar, badge, status, expanded/active state, title, index-derived id/tabIndex)
+// is applied by updateRowContent() instead, both right after creation and on every later render.
 function buildRow(r,i){
  let el=document.createElement('div');
  el.className='tr-row';
  el.setAttribute('role','treeitem');
+ el.onclick=e=>{
+  let rr=rows[Number(el.dataset.index)];if(!rr)return;
+  if(e.shiftKey&&rr.node.lane_id&&typeof askAdd==='function'){askAdd({kind:'lane',lane:rr.node.lane_id});return}
+  activate(Number(el.dataset.index));
+ };
+ let main=document.createElement('div');main.className='tr-row-main';
+ let tw=document.createElement('button');
+ tw.type='button';tw.className='tr-twirl';tw.tabIndex=-1;
+ tw.onclick=e=>{
+  let rr=rows[Number(el.dataset.index)];
+  if(!rr||!hasChildren(rr.node))return; // a leaf's twirl is just a spacer: let the click bubble to the row (select), as a plain <span> there would have
+  e.stopPropagation();setExpanded(rr.node,rr.depth,!isExpanded(rr.node,rr.depth));renderBody();
+ };
+ main.append(tw);
+ let label=document.createElement('span');label.className='tr-label';
+ main.append(label);
+ let badge=document.createElement('span');badge.className='tr-count';
+ main.append(badge);
+ let barWrap=document.createElement('div');barWrap.className='tr-bar';
+ let barFill=document.createElement('div');barFill.className='tr-bar-fill';
+ barWrap.append(barFill);
+ main.append(barWrap);
+ el.append(main);
+ let status=document.createElement('div');status.className='tr-status';
+ el.append(status);
+ el._refs={tw,label,badge,barWrap,barFill,status};
+ updateRowContent(el,r,i);
+ return el;
+}
+// Mutates an existing row element (new or reused) to match `r` at index `i` -- never recreates
+// or reorders its children, so an element that already has focus or is mid-:hover keeps it.
+function updateRowContent(el,r,i){
+ let refs=el._refs;
  el.setAttribute('aria-level',String(r.depth+1));
  el.style.paddingLeft=(6+r.depth*14)+'px';
  el.dataset.index=String(i);
  el.id='tr-row-'+i;
- let main=document.createElement('div');main.className='tr-row-main';
- if(hasChildren(r.node)){
+ let kids=hasChildren(r.node);
+ if(kids){
   el.setAttribute('aria-expanded',String(r.open));
-  let tw=document.createElement('button');
-  tw.type='button';tw.className='tr-twirl';tw.tabIndex=-1;
-  tw.textContent=r.open?'▾':'▸';
-  tw.title=(r.open?'Collapse ':'Expand ')+r.node.id;
-  tw.onclick=e=>{e.stopPropagation();setExpanded(r.node,r.depth,!isExpanded(r.node,r.depth));renderBody()};
-  main.append(tw);
- } else main.append(spacer());
- let label=document.createElement('span');label.className='tr-label';label.textContent=rowText(r);
- label.title=r.node.id;
- main.append(label);
- if(r.node.counts.total&&hasChildren(r.node)){
-  let badge=document.createElement('span');badge.className='tr-count';
-  badge.textContent=countBadge(r.node.counts);badge.title=countDetail(r.node.counts);
-  main.append(badge);
+  refs.tw.textContent=r.open?'▾':'▸';
+  refs.tw.title=(r.open?'Collapse ':'Expand ')+r.node.id;
+  refs.tw.classList.remove('tr-twirl-spacer');
+  refs.tw.removeAttribute('aria-hidden');
+ } else {
+  el.removeAttribute('aria-expanded');
+  refs.tw.textContent='';refs.tw.title='';
+  refs.tw.classList.add('tr-twirl-spacer');
+  refs.tw.setAttribute('aria-hidden','true');
  }
+ refs.label.textContent=rowText(r);
+ refs.label.title=r.node.id;
+ if(r.node.counts.total&&kids){
+  refs.badge.hidden=false;
+  refs.badge.textContent=countBadge(r.node.counts);refs.badge.title=countDetail(r.node.counts);
+ } else refs.badge.hidden=true;
  let state=r.lane?(r.lane.progress?.state||'running'):dominantState(r.node);
- main.append(bar(r.node.fraction,STATE_COLOR[state]||STATE_COLOR.running,
-  r.lane?r.lane.status_text||'':countDetail(r.node.counts)));
- el.append(main);
+ refs.barWrap.title=r.lane?r.lane.status_text||'':countDetail(r.node.counts);
+ refs.barFill.style.width=(Math.max(0,Math.min(1,r.node.fraction))*100).toFixed(1)+'%';
+ refs.barFill.style.background=STATE_COLOR[state]||STATE_COLOR.running;
  if(r.lane){
-  let st=document.createElement('div');st.className='tr-status';
-  st.textContent=r.lane.status_text||'';st.title=`${r.lane.id}\n${r.lane.phase||''}`;
-  el.append(st);
- }
+  refs.status.hidden=false;
+  refs.status.textContent=r.lane.status_text||'';refs.status.title=`${r.lane.id}\n${r.lane.phase||''}`;
+ } else refs.status.hidden=true;
  el.tabIndex=i===focusIndex?0:-1;
  el.classList.toggle('tr-active',r.node.lane_id===laneId);
  el.title=r.lane?'Click: show this lane · Shift+click: add it to the Ask context':'Click: expand/select';
- el.onclick=e=>{
-  if(e.shiftKey&&r.node.lane_id&&typeof askAdd==='function'){askAdd({kind:'lane',lane:r.node.lane_id});return}
-  activate(i);
- };
- return el;
 }
-function spacer(){let s=document.createElement('span');s.className='tr-twirl tr-twirl-spacer';return s}
+
+// Keyed reconciliation of `body`'s children against `rows` (keyed by node.id): reuses each row's
+// existing element when its node is still present (updating it in place), creates one only for a
+// node that just appeared, and removes only the elements for nodes no longer present -- the same
+// approach a keyed virtual-DOM diff uses, so an update's DOM churn is proportional to what
+// actually changed instead of the whole visible list. Nodes that persist keep their element (and
+// therefore keep focus, hover and any open native tooltip) even when their position in the list
+// shifts; insertBefore() is only called for elements that are actually out of place (a move
+// blurs a focused element; renderBody() then refocuses it with preventScroll).
+function reconcileRows(){
+ // Drop departed rows (and any placeholder text) first, so a row disappearing above the focused
+ // one does not make every later row look out of place and get moved -- a moved element loses
+ // focus and :hover in Chrome.
+ let keep=new Set(rows.map(r=>r.node.id));
+ for(let n of [...body.childNodes])if(!(n._nodeId&&keep.has(n._nodeId)&&elByNodeId.get(n._nodeId)===n))n.remove();
+ let next=new Map();
+ for(let i=0;i<rows.length;i++){
+  let r=rows[i],el=elByNodeId.get(r.node.id);
+  if(el)updateRowContent(el,r,i);else{el=buildRow(r,i);el._nodeId=r.node.id}
+  next.set(r.node.id,el);
+  if(body.childNodes[i]!==el)body.insertBefore(el,body.childNodes[i]||null);
+ }
+ while(body.childNodes.length>rows.length)body.removeChild(body.lastChild);
+ elByNodeId=next;
+}
 
 function renderBody(){
  let s=display&&display();
  let tree=s?.tree,lanes=s?.lanes||{};
- // Live polling rebuilds every row on every update (buildRow makes new DOM nodes each time), so
- // replaceChildren() below always detaches whatever was focused and the browser falls back to
- // focusing <body> -- breaking arrow-key navigation mid-stream. Find the same node again by id
- // (its *position* in `rows` can shift as lanes come and go) and refocus it if it had focus.
  let hadFocus=!!(document.activeElement&&body.contains(document.activeElement));
  let focusedId=rows[focusIndex]?.node.id;
- if(!tree){body.textContent='Waiting for experiment events…';rows=[];return}
+ // trust the row that actually has focus over the roving-tabindex bookkeeping
+ if(hadFocus){let a=document.activeElement.closest?.('.tr-row');if(a&&a._nodeId)focusedId=a._nodeId}
+ if(!tree){body.textContent='Waiting for experiment events…';rows=[];elByNodeId.clear();return}
  rows=flatten(tree,lanes);
- if(!rows.length){body.textContent=filterText||filterStates.size<ALL_STATES.length?'No lanes match this filter.':'No experiments yet.';return}
+ if(!rows.length){body.textContent=filterText||filterStates.size<ALL_STATES.length?'No lanes match this filter.':'No experiments yet.';elByNodeId.clear();return}
  if(focusedId){let idx=rows.findIndex(r=>r.node.id===focusedId);if(idx>=0)focusIndex=idx}
  if(focusIndex<0||focusIndex>=rows.length)focusIndex=rows.findIndex(r=>r.node.lane_id===laneId);
  if(focusIndex<0)focusIndex=0;
- body.replaceChildren(...rows.map((r,i)=>buildRow(r,i)));
- if(hadFocus)document.getElementById('tr-row-'+focusIndex)?.focus();
+ // Every scroll container this panel has (the row list itself, and the Experiments panel/drawer
+ // around it, both `overflow:auto`) keeps its exact scroll offset across the update: this is a
+ // belt-and-suspenders restore on top of the keyed reconciliation above, in case anything about
+ // the DOM mutation nudges either container (a browser clamping scrollTop mid-mutation, say).
+ let panel=document.getElementById('lanes-panel');
+ let bodyTop=body.scrollTop,panelTop=panel?panel.scrollTop:null;
+ reconcileRows();
+ body.scrollTop=bodyTop;
+ if(panel)panel.scrollTop=panelTop;
+ // The focused row's *element* survives the reconcile above untouched when its node persisted,
+ // so it is still the active element already -- no focus() call, and so no scroll, needed. Only
+ // when the previously-focused node is gone (filtered out, collapsed away, pruned) do we need to
+ // move focus ourselves, and this is a programmatic refocus following a live update, not user
+ // navigation, so it must never scroll the row into view on its own (preventScroll:true) --
+ // scrolling here is reserved for arrow keys, click and activate (moveFocus/activate below).
+ if(hadFocus&&document.activeElement!==document.getElementById('tr-row-'+focusIndex)){
+  document.getElementById('tr-row-'+focusIndex)?.focus({preventScroll:true});
+ }
 }
 
 function activate(i){
@@ -261,5 +342,8 @@ window.YapnrTree={update,
  rows:()=>rows,isExpanded:(id,depth)=>{let n=rows.find(r=>r.node.id===id);return n?isExpanded(n.node,n.depth):isExpanded({id},depth||0)},
  setFilterText:t=>{filterText=t.toLowerCase();if(search)search.value=t;renderBody()},
  setFilterStates:arr=>{filterStates=new Set(arr);for(let s in chips)chips[s].setAttribute('aria-pressed',String(filterStates.has(s)));renderBody()},
+ // a node's current row element, so a test can confirm the same DOM node survives an update
+ // (reconcileRows() reuses it) rather than being torn down and recreated.
+ elementFor:id=>elByNodeId.get(id),
 };
 })();

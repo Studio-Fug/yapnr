@@ -154,6 +154,68 @@ Every rail in this example reports `"status": "ok"` and zero necks; the full rep
 current, width, IPC and budget widths, tree length, reached/unreached counts, area and the
 smallest gap to another rail.
 
+## Which rails get the plane: the allocation search
+
+A dedicated plane layer's `nets` are **candidates**. Which of them get a territory, which are
+routed as ordinary traces, and which net takes what is left of the layer is decided by
+`pnr.rail_alloc`, the way the engine decides everything else: by trying alternatives and
+keeping the one that routes best.
+
+1. **Alternatives.** Every split of the candidates into plane rails (at least one) and traced
+   rails, times every leftover option: none (the plane rails compete for it), one of the plane
+   rails (it alone grows; the others keep their trunk, their lands and a 1 mm apron for thermal
+   reliefs), or a `fill_candidates` net. A spec can force a rail with `must_plane` /
+   `must_trace` or the leftover with `fill`; whatever it leaves open is the engine's.
+2. **Hard constraints only** prune: a traced rail must carry its current at its class width
+   (IPC-2221, external, 10 C) and meet its IR budget along its estimated trace.
+3. **Screen.** One probe route (the real grid and fanouts, every candidate a plane) supplies
+   the partition's inputs; each alternative is partitioned on them at 0.25 mm and scored in
+   millimetres of track: the partition's quality penalty (below), each traced rail's spanning
+   tree (longer through crowded pads) plus its vias, each plane rail's drop vias, and the old
+   rule of thumb (a declared budget, 10 mA, 6 terminals) as a 5 mm prior per rail it disagrees
+   with -- a prior only, never the decision.
+4. **Route the finalists.** The best three (each plane/trace split's best first) are routed by
+   the real router on the same placement; the fewest missing connections and unresolved nets
+   win, then the lowest copper length + vias + partition penalty.
+
+The decision is made on a design's first route in a process (the initial pool's first
+finalist, or the first P/R round) and held for its later routes. The route's
+`escape_diagnostics.rail_allocation` names the chosen allocation, every screened and routed
+alternative, and per rail the numbers that decided it, e.g. for the `-rails` rung:
+`VDDA: trace, routed 986.8 mm-eq (copper 852.8, 134 vias, partition 0.0) vs plane 998.8`.
+`PNR_RAIL_ALLOC=static` (`run.py --rail-alloc static`) restores the rule of thumb as the
+decision, for A/B runs.
+
+## Judging a partition
+
+Every partition reports `quality` per rail and per layer (`pnr.plane_quality`): area given
+against area its terminals need (the trunk at its width plus the lands), compactness, trunk
+length against the terminals' minimum spanning tree, terminals that cannot reach the layer
+(no trunk, no free cell in reach, no via site on the router's grid), dead area serving no
+terminal, the narrowest neck, the estimated IR margin, how much a region fragments its
+neighbours, the split length it cuts into the plane, and a redundant fill (a fill net with a
+dedicated plane elsewhere in the stack). The same numbers become quantified ERC-style
+warnings (`code`, `net`, `value`, `limit`, `message`) and the allocation search's penalty.
+
+The ladder judges the routed board's filled zones with the same measure (`plane_quality`
+check, `pnr.plane_quality.judge`, plain Python under KiCad): a partition fails when a region
+serves fewer than two terminals (one for an outer pour's pieces), a region other than the
+owner's (the candidate with the most current) holds more than 6x the copper its terminals
+need, a region's geodesic tree runs more than 1.6x its terminals' spanning tree, or a fill net
+already has a dedicated plane elsewhere. The limits come from measured layouts:
+
+| layouts (boards)                                              | regions      | area / need, non-owner           | tree / MST   | fewest terminals       | redundant fill   |
+| ------------------------------------------------------------- | ------------ | -------------------------------- | ------------ | ---------------------- | ---------------- |
+| `-pour`, every seed of the 2026-10-06 R6 campaigns (32)       | VIN, SW, GND | at most 3.24                     | at most 1.34 | 1 (a land's own piece) | none             |
+| `-rails`, the allocation search (seeds 0, 1)                  | VDD          | (owner only)                     | at most 1.03 | 19                     | none             |
+| `-rails`, the rule of thumb (seed 0)                          | VDD, VDDA    | VDDA 14.5                        | VDDA 2.20    | 3                      | none             |
+| `-rails` before candidates, VDD + VDDA + VBAT + GND fill (32) | four         | VDDA 8.3 to 2165, VBAT 3.6 to 18 | up to 3.97   | 1 (six boards)         | GND, every board |
+
+The area limit sits at about twice the worst good layout (3.24) and the detour limit about 1.2x
+its worst (1.34); every good board passes and every board of the last row fails at least two
+ways (the owner's 2026-10-06 review found the last row's In4 split nonsense: VBAT's ball had no
+way onto its region, and GND already had In1 and In3).
+
 ## Limits
 
 - **One shared plane layer at a time.** The section divides one declared layer among its

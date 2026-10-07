@@ -483,7 +483,20 @@ hulls) and slide into each other's notches; `--hull-dovetail W` (`PNR_HULL_DOVET
 packing term to global placement over the hull bodies. `pnr-report.json` records the pass as
 `route_compact` (gutters, steps, bounding box and the outline shrink it frees, seconds).
 
-RESULTS-PLACEHOLDER
+Results (2026-10-07, GCP C4D, flags off against each arm, KiCad's DRC judging every board):
+
+| Rungs (cells)                                             | Arm                                              | Pass  | Bounding box | Copper  | Vias | Place-route time |
+| --------------------------------------------------------- | ------------------------------------------------ | ----- | ------------ | ------- | ---- | ---------------- |
+| ladder 01-08, pool 8/3 (16)                               | off                                              | 16/16 | 3151 mm²     | 1136 mm | 70   | 115 s            |
+|                                                           | `--route-compact`                                | 16/16 | -21.5 %      | -11.3 % | -3 % | +32 %            |
+| hier-twin-bank, 10-quad-bank, 13-dovetail, seeds 0-3 (12) | off                                              | 12/12 | 5336 mm²     | 2181 mm | 144  | 245 s            |
+|                                                           | `--route-compact`                                | 12/12 | -6.7 %       | -4.4 %  | +4 % | +84 %            |
+|                                                           | `--macro-hull`                                   | 12/12 | -6.2 %       | -0.8 %  | +3 % | +35 %            |
+|                                                           | `--route-compact --macro-hull --hull-dovetail 1` | 12/12 | -19.2 %      | -5.3 %  | +4 % | +64 %            |
+
+Bounding box, copper and vias are sums of the per-rung means over the cells; time is the
+place-route stage. The time goes to the reroutes (measuring and checking take under a
+second per board).
 
 ## In CI
 

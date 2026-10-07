@@ -76,20 +76,25 @@ The rung `13-dovetail-blocks-23` (`regression/dovetail_rung.py`) has L-shaped bl
 
 ## Measured
 
-A/B on GCP (2026-10-07), flags off against each arm; hierarchical rungs seeds 0-3, the
-ladder (initial pool 8/3) and the hard rungs seeds 0-1. Bounding box of the placed bodies,
-copper and vias of the routed board; KiCad's DRC judges every board.
+A/B on GCP (2026-10-07), flags off against each arm; the hierarchical rungs on seeds 0-3, the
+ladder (initial pool 8/3) and the hard rungs on seeds 0-1. Sums of per-rung means of the
+bounding box of the placed bodies and of the routed board's copper and vias; KiCad's DRC
+judges every board. The full tables are in the pull request and in
+[the ladder's page](../regression-ladder.md#route-then-compact-opt-in).
 
-| rungs                                                | arm                                              | pass      | bbox     | copper  | vias |
-| ---------------------------------------------------- | ------------------------------------------------ | --------- | -------- | ------- | ---- |
-| hier-twin-bank, 10-quad-bank, 13-dovetail (12 cells) | off                                              | 12/12     | 5336 mm2 | 2181 mm | 144  |
-|                                                      | `--route-compact`                                | 12/12     | -6.7 %   | -4.4 %  | +4 % |
-|                                                      | `--macro-hull`                                   | 12/12     | -6.2 %   | -0.8 %  | +3 % |
-|                                                      | `--route-compact --macro-hull --hull-dovetail 1` | 12/12     | -19.2 %  | -5.3 %  | +4 % |
-| ladder 01-08 (16 cells)                              | off                                              | 16/16     | 3151 mm2 | 1136 mm | 70   |
-|                                                      | `--route-compact`                                | see below | -23 %    | -13 %   | -3 % |
+| Rungs                                                | Arm                                              | Pass  | Bounding box | Copper  | Vias |
+| ---------------------------------------------------- | ------------------------------------------------ | ----- | ------------ | ------- | ---- |
+| hier-twin-bank, 10-quad-bank, 13-dovetail (12 cells) | off                                              | 12/12 | 5336 mm²     | 2181 mm | 144  |
+|                                                      | `--route-compact`                                | 12/12 | -6.7 %       | -4.4 %  | +4 % |
+|                                                      | `--macro-hull`                                   | 12/12 | -6.2 %       | -0.8 %  | +3 % |
+|                                                      | `--route-compact --macro-hull --hull-dovetail 1` | 12/12 | -19.2 %      | -5.3 %  | +4 % |
+| ladder 01-08 (16 cells)                              | off                                              | 16/16 | 3151 mm²     | 1136 mm | 70   |
+|                                                      | `--route-compact`                                | 16/16 | -21.5 %      | -11.3 % | -3 % |
 
-The hard rungs and the final ladder numbers are in the pull request.
+Three guards came out of the first runs: a legacy plane pad left without writeback's
+dog-bone room (`08-chaser-20-plane`), a coupled pair whose copper the reroute moved
+(KiCad's pair gap rule on `11-ufbga201-...-pairs`) and the place-route stage budget
+(`12-soc-bga-113`).
 
 ## Limits and next steps
 

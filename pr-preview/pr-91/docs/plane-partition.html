@@ -242,6 +242,7 @@
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -334,15 +335,17 @@ stills are this script’s direct output, not a hand-drawn illustration.</p>
 a cell is free if it is inside the outline, past the edge clearance, and not on another net’s
 copper (vias, fixed copper, plated holes, mounting holes, and <code class="docutils literal notranslate"><span class="pre">copper_keepout</span></code>s that bar pours)
 at the pair’s clearance – the larger class clearance of the two nets, as KiCad’s own fill
-keeps it.</p>
+keeps it. A plated pad is blocked by its rectangle grown by the clearance, not the disc inside
+it: KiCad clears the clearance about the pad’s outline, past a square pad’s corners.</p>
 <p><img alt="Free copper and other nets' blocked copper, rasterized inside the region" src="../images/plane-partition-raster.png" /></p>
 </section>
 <section id="terminals">
 <h3>2. Terminals<a class="headerlink" href="#terminals" title="Link to this heading">¶</a></h3>
-<p>A rail’s terminals are its planned drop vias (fanout and fixed vias) and, on an outer pour
-with <code class="docutils literal notranslate"><span class="pre">terminals:</span> <span class="pre">pad</span></code>, the pad’s whole land (claimed before any tree, like a via land); on a
-plane layer without that key a surface pad without a via yet gets a reach disc instead, the
-circle within <code class="docutils literal notranslate"><span class="pre">terminal_reach_mm</span></code> where its drop will land.</p>
+<p>A rail’s terminals are its planned drop vias (fanout and fixed vias), its plated through-hole
+pads (each pad’s whole rectangle, claimed like a via land) and, on an outer pour with
+<code class="docutils literal notranslate"><span class="pre">terminals:</span> <span class="pre">pad</span></code>, the pad’s whole land (claimed before any tree, like a via land); on a plane
+layer without that key a surface pad without a via yet gets a reach disc instead, the circle
+within <code class="docutils literal notranslate"><span class="pre">terminal_reach_mm</span></code> where its drop will land.</p>
 <p><img alt="Every rail's terminals, each in its own colour" src="../images/plane-partition-terminals.png" /></p>
 </section>
 <section id="a-minimum-width-tree-per-rail">
@@ -447,9 +450,11 @@ keeping the one that routes best.</p>
 <ol class="arabic simple">
 <li><p><strong>Alternatives.</strong> Every split of the candidates into plane rails (at least one) and traced
 rails, times every leftover option: none (the plane rails compete for it), one of the plane
-rails (it alone grows; the others keep their trunk, their lands and a 1 mm apron for thermal
-reliefs), or a <code class="docutils literal notranslate"><span class="pre">fill_candidates</span></code> net. A spec can force a rail with <code class="docutils literal notranslate"><span class="pre">must_plane</span></code> /
-<code class="docutils literal notranslate"><span class="pre">must_trace</span></code> or the leftover with <code class="docutils literal notranslate"><span class="pre">fill</span></code>; whatever it leaves open is the engine’s.</p></li>
+rails (it alone grows; the others keep their trunk, their lands and a 1 mm apron, and round
+a pad’s land they grow past its thermal relief, 0.5 mm about the pad’s outline, by their
+minimum width, so the fill round the relief is one piece), or a <code class="docutils literal notranslate"><span class="pre">fill_candidates</span></code> net. A
+spec can force a rail with <code class="docutils literal notranslate"><span class="pre">must_plane</span></code> / <code class="docutils literal notranslate"><span class="pre">must_trace</span></code> or the leftover with <code class="docutils literal notranslate"><span class="pre">fill</span></code>; whatever
+it leaves open is the engine’s.</p></li>
 <li><p><strong>Hard constraints only</strong> prune: a traced rail must carry its current at its class width
 (IPC-2221, external, 10 C) and meet its IR budget along its estimated trace.</p></li>
 <li><p><strong>Screen.</strong> One probe route (the real grid and fanouts, every candidate a plane) supplies

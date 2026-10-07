@@ -242,6 +242,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
@@ -300,7 +301,8 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
+<p>Last updated: 2026-10-07 (energy-track macOS ABI-path assertion, #90). Previous status:
+2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>). Earlier the same day: RF round 2 with the native FDTD kernel
 on <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>, merged with <code class="docutils literal notranslate"><span class="pre">main</span></code>; the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the
 engine’s fixes for them on <code class="docutils literal notranslate"><span class="pre">claude/gap-fixes</span></code>, with <code class="docutils literal notranslate"><span class="pre">claude/gap-constraints</span></code> merged; the gloss
@@ -312,6 +314,10 @@ board edges, the hierarchical ladder driver and their animations on
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul>
+<li><p><strong>PR integration review (2026-10-07).</strong> PR #91 integrates main through #90. Nesting stays
+default-off. Completed ladder and flat-hard A/B arms agree; twin-bank passes all arms. Dovetail
+and quad-bank campaigns remain queued on a missing GCP template. See <a class="reference internal" href="docs/design/hull-nest-validation.html"><span class="std std-doc">validation
+status</span></a>.</p></li>
 <li><p><strong>Route-then-compact and hull packing</strong> (PR #86, branch <code class="docutils literal notranslate"><span class="pre">claude/route-compact</span></code>; design
 <a class="reference internal" href="docs/design/route-compact.html"><span class="std std-doc">docs/design/route-compact.md</span></a>). <code class="docutils literal notranslate"><span class="pre">PNR_ROUTE_COMPACT</span></code>
 (<code class="docutils literal notranslate"><span class="pre">TOP</span></code>, <code class="docutils literal notranslate"><span class="pre">BLOCK</span></code>, <code class="docutils literal notranslate"><span class="pre">FLAT</span></code>; default off): after routing, order-preserving 1D compaction (x then
@@ -332,6 +338,19 @@ in progress (campaign <code class="docutils literal notranslate"><span class="pr
 rebase on #64/#70 and A/B again on top of detailed placement; hull support in <code class="docutils literal notranslate"><span class="pre">compact.py</span></code>
 and the keep legalizer (gp_polish still turns off over hull bodies); the push-and-shove
 router as the reroute.</p></li>
+<li><p><strong>Energy track optimization (#90, default off).</strong> The witness-growth/reverse-cost proposer is
+wired into the native gloss transaction controller with exact native checks, joint-refill IR
+and reference evidence gates, protected metadata/copper guards, spatial quiet-chain invalidation,
+and phase-end rollback. Shapely/GEOS dependencies are hash-locked separately for controller and
+KiCad Python ABIs. Focused tests and actual clean-fixture native acceptance/refusal/byte-identity
+checks pass; a four-state recorded native animation documents the change. The KiCad dependency
+install now uses root’s build cache and copy links, preserving runtime-home ownership; a focused
+regression checks its environment. Image build/smoke and Linux aggregate CI pass. The macOS
+ABI-path test now checks only the canonical path is added; all 16 integration tests and eight
+hard-edge tests pass locally, the latter within its unchanged 60-second limit. Next: fresh macOS
+CI, then review before merge.
+RF/SI-dependent plane edits without complete external evidence remain refused; no radar-board
+completion or joint pair solver claim.</p></li>
 <li><p><strong>Routing engine for radar60 Rev A, stage 3b</strong> (#49, branch <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>;
 all opt-in, byte-identical where undeclared). Router: pad-local clearance and mask margin (data),
 <code class="docutils literal notranslate"><span class="pre">board.class_clearance:</span> <span class="pre">maze</span> <span class="pre">|</span> <span class="pre">repair</span></code>, <code class="docutils literal notranslate"><span class="pre">board.dru_routing</span></code> (a board’s <code class="docutils literal notranslate"><span class="pre">.kicad_dru</span></code> where it
@@ -412,8 +431,10 @@ declared stack can build, one build per board, return ties between two planes of
 side of free parts; writeback mirrors bottom parts on <code class="docutils literal notranslate"><span class="pre">B.*</span></code>;</p></li>
 <li><p>length matching (<code class="docutils literal notranslate"><span class="pre">pnr/route/detail/tune.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr/length_model.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr/place/matched.py</span></code>):
 declared pairs and groups are tuned with meanders against KiCad’s own length measure;</p></li>
-<li><p>router speed: the packed kernel with dense per-net fields is the default (identical routes),
-an optional C search loop (<code class="docutils literal notranslate"><span class="pre">PNR_MAZE_KERNEL=native</span></code>), and an exact-separation recovery
+<li><p>router speed: the native kernel (the packed search over dense per-net fields, in C; identical
+routes; the packed Python kernel where no library loads, <code class="docutils literal notranslate"><span class="pre">PNR_MAZE_KERNEL=packed</span></code> on request)
+is the default (2026-10-07: a 192-cell GCP A/B, every route identical, -54% task time), and an
+exact-separation recovery
 (<code class="docutils literal notranslate"><span class="pre">PNR_EXACT_SEPARATION=recover</span></code>, the default) for routes the halo model leaves open.</p></li>
 </ul>
 <p>Results (two seeds each): ladder and showcases 24 of 24, CPU 2,281 s to 442 s; hard rungs clean
@@ -618,12 +639,12 @@ make the <code class="docutils literal notranslate"><span class="pre">image</spa
 <li><p>Owner, fab and ordering (design §12): decisions D1 to D5. For the first OSH Park order, route
 the board under an OSH Park profile, run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">BOARD</span> <span class="pre">--vendor</span> <span class="pre">oshpark</span></code>, drop the
 zip on oshpark.com, check the preview and pay there; RF boards also pin <code class="docutils literal notranslate"><span class="pre">--stackup</span></code> (D4).</p></li>
-<li><p>Owner decision (2026-10-06, <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>): not yet. The gate was “flip to
-<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> only when all 21 of <code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code>’s jlc-pofv failures
-pass on <code class="docutils literal notranslate"><span class="pre">claude/defaults-rails-fab</span></code>”; campaign <code class="docutils literal notranslate"><span class="pre">20261007-ladder-7fe33f</span></code> got 20 of 21 (the
-remaining one, <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code> seed 0, is rail-allocation territory,
-not fab-profile, and <code class="docutils literal notranslate"><span class="pre">legacy</span></code> fails it on both seeds). Stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code> default until that
-cell passes or the gate is revisited; see <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>.</p></li>
+<li><p>Owner decision (2026-10-07, <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>): the <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> default flip. All 21 of
+<code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code>’s jlc-pofv failures pass on <code class="docutils literal notranslate"><span class="pre">claude/rails-settle</span></code> (the <code class="docutils literal notranslate"><span class="pre">-rails</span></code>
+cell was a plane-partition bug, fixed there), and the 45 gated cells pass 90 of 90 under
+<code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> (88 under <code class="docutils literal notranslate"><span class="pre">legacy</span></code>), but the manual target rungs leave more open under it
+(<code class="docutils literal notranslate"><span class="pre">11-shove-channel-lm-14</span></code> 3 vs 2, <code class="docutils literal notranslate"><span class="pre">12-soc-bga-113</span></code> 51 vs 33 and 35 and one 3600 s
+timeout). Stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code> until the owner says whether those count for “no rung worse”.</p></li>
 <li><p>Rebuild the KiCad base monthly (bump <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/TAG</span></code> to the next <code class="docutils literal notranslate"><span class="pre">-N</span></code>), or with the
 Dependabot <code class="docutils literal notranslate"><span class="pre">ubuntu</span></code> digest update (docs/releases.md, “Maintaining the images”).</p></li>
 <li><p>Showcases (<code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>): the first nightly showcase step on the arm64
@@ -636,9 +657,9 @@ track in seven placement files) and rerun the <code class="docutils literal notr
 an origin-to-courtyard offset (the THT header’s origin is pin 1, so its courtyard is placed
 off by half its length and never legalizes); carry the three Ladder fixes (plane check, side
 check, HDI microvia) to <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code>, or land the rungs and the fixes together.</p></li>
-<li><p>Owner: whether the optional C maze kernel becomes “use it when present”. Recommended once CI
-runs <code class="docutils literal notranslate"><span class="pre">dense_maze_native_test</span></code> and <code class="docutils literal notranslate"><span class="pre">exact_route_native_test</span></code> on both Linux architectures; until
-then the packed Python kernel stays the default and no C toolchain is needed.</p></li>
+<li><p>Done (2026-10-07, owner: flip to native if no rung is worse and routes are equivalent): the C
+maze kernel is the default where its library loads (Bazel, the wheel and so the image, or a
+host compiler); CI runs <code class="docutils literal notranslate"><span class="pre">dense_maze_native_test</span></code> and <code class="docutils literal notranslate"><span class="pre">exact_route_native_test</span></code> in <code class="docutils literal notranslate"><span class="pre">//...</span></code>.</p></li>
 <li><p>Boards with blind, buried or micro vias: the packed and native kernels hand them to the
 reference kernel (so no exact-separation recovery there), the length tuner only adds
 meanders, and the native KiCad repair loop and the hierarchical driver add through vias only.</p></li>

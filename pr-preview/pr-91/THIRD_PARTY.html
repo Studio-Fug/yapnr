@@ -242,6 +242,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
@@ -334,6 +335,21 @@ build files are larger than the repository’s 600 KB file limit.</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">tests/unit/viewer/test_dist.py</span></code> checks the sha256 of every served third-party file.</p>
 </section>
+<section id="shapely-and-geos">
+<h3>Shapely and GEOS<a class="headerlink" href="#shapely-and-geos" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>What:</strong> Shapely 2.1.2 supplies polygonal offsets and exact-distance predicates for the
+opt-in energy-track proposal generator. Native KiCad DRC remains the acceptance authority.</p></li>
+<li><p><strong>License:</strong> Shapely is BSD-3-Clause. Its binary wheels bundle GEOS 3.13.1 under LGPL-2.1;
+both notices remain in the installed <code class="docutils literal notranslate"><span class="pre">shapely-2.1.2.dist-info/licenses/</span></code> directory.</p></li>
+<li><p><strong>How:</strong> pinned and hash-checked wheels in the Bazel/controller requirements and the separate
+Python 3.12 KiCad geometry locks. No GEOS source or binary is vendored in the repository.
+The libraries remain dynamically loaded and replaceable. Sources and license information:
+<a class="reference external" href="https://github.com/shapely/shapely/tree/2.1.2">Shapely 2.1.2</a>,
+<a class="reference external" href="https://shapely.readthedocs.io/en/2.1.2/release/2.x.html">bundled GEOS version</a>, and
+<a class="reference external" href="https://libgeos.org/usage/download/">GEOS source releases</a>.</p></li>
+</ul>
+</section>
 <section id="google-api-discovery-documents">
 <h3>Google API discovery documents<a class="headerlink" href="#google-api-discovery-documents" title="Link to this heading">¶</a></h3>
 <ul class="simple">
@@ -402,9 +418,11 @@ image build copies their license texts from that release’s full archive (check
 <code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/licenses/python-build-standalone/</span></code>. uv itself is used during the build only
 and is not in the image.</p></li>
 <li><p><strong>Python packages</strong> from <code class="docutils literal notranslate"><span class="pre">docker/yapnr/runtime-&lt;arch&gt;.lock</span></code> (the runtime subset of
-<code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code>: numpy, torch, PyYAML and their dependencies) under <code class="docutils literal notranslate"><span class="pre">/opt/venv</span></code>, from PyPI
+<code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code>: numpy, torch, PyYAML, Shapely and their dependencies) under <code class="docutils literal notranslate"><span class="pre">/opt/venv</span></code>,
+from PyPI
 and, for torch on linux/amd64, the PyTorch CPU index. Mostly BSD, MIT and Apache-2.0 licensed;
-each package’s <code class="docutils literal notranslate"><span class="pre">.dist-info</span></code> directory holds its license files. The numpy and torch wheels also
+each package’s <code class="docutils literal notranslate"><span class="pre">.dist-info</span></code> directory holds its license files. The numpy, torch and Shapely
+wheels also
 bundle native libraries, listed per architecture in
 <code class="docutils literal notranslate"><span class="pre">docker/yapnr/native-libraries-&lt;arch&gt;.txt</span></code> (appended to <code class="docutils literal notranslate"><span class="pre">SOURCES</span></code>) with the exact source of each
 GCC runtime library, which the wheels’ own notices do not give:</p>
@@ -531,6 +549,7 @@ of the wheel or the container images.</p></li>
 <li><a class="reference internal" href="#shipped-or-served-with-yapnr">Shipped or served with yapnr</a><ul>
 <li><a class="reference internal" href="#elkjs">elkjs</a></li>
 <li><a class="reference internal" href="#three-js">three.js</a></li>
+<li><a class="reference internal" href="#shapely-and-geos">Shapely and GEOS</a></li>
 <li><a class="reference internal" href="#google-api-discovery-documents">Google API discovery documents</a></li>
 <li><a class="reference internal" href="#palace-configuration-schema">Palace configuration schema</a></li>
 </ul>

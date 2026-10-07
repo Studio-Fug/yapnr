@@ -242,6 +242,7 @@
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -531,6 +532,44 @@ best.</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span>run<span class="w"> </span>//yapnr/rf:animate<span class="w"> </span>--<span class="w"> </span>runs/divider<span class="w"> </span>--out<span class="w"> </span>divider.webp
 </pre></div>
 </div>
+</section>
+<section id="multi-start">
+<h2>Multi-start<a class="headerlink" href="#multi-start" title="Link to this heading">¶</a></h2>
+<p>A spec’s top-level <code class="docutils literal notranslate"><span class="pre">starts</span></code> key (not <code class="docutils literal notranslate"><span class="pre">optimizer.starts</span></code>, so a plain run’s optimizer never reads
+it) runs the same design from several starting points — varied <code class="docutils literal notranslate"><span class="pre">move</span></code>, <code class="docutils literal notranslate"><span class="pre">move_late</span></code>, <code class="docutils literal notranslate"><span class="pre">init</span></code>,
+<code class="docutils literal notranslate"><span class="pre">seed</span></code>, or a new deterministic perturbation of x0 — and keeps the best one by the case’s own
+pass criteria, mirroring <code class="docutils literal notranslate"><span class="pre">pnr.mc.halving</span></code>’s mechanical Monte Carlo selection:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">starts</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vary</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">move</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0.20</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.18</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.19</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.21</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.22</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">combine</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zip</span><span class="w"> </span><span class="c1"># zip (lists of length n or 1) | product</span>
+<span class="w">  </span><span class="nt">halving</span><span class="p">:</span><span class="w"> </span><span class="c1"># optional; omitted runs every start to the end</span>
+<span class="w">    </span><span class="nt">rungs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt"> after_epoch</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="nt"> keep</span><span class="p">:</span><span class="w"> </span><span class="nv">0.5</span><span class="w"> </span><span class="p p-Indicator">},</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> after_epoch</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> keep</span><span class="p">:</span><span class="w"> </span><span class="nv">0.5</span><span class="w"> </span><span class="p p-Indicator">}]</span>
+<span class="w">    </span><span class="nt">min_keep</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<span class="w">  </span><span class="nt">select</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">criteria</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">case</span><span class="w"> </span><span class="c1"># case | spec | path of a criteria file</span>
+<span class="w">    </span><span class="nt">quantum_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.001</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr.rf.multistart.derive_starts</span></code> builds each start’s <code class="docutils literal notranslate"><span class="pre">Spec</span></code> (the base spec with <code class="docutils literal notranslate"><span class="pre">starts</span></code>
+stripped, plus that start’s overrides) and refuses anything the design calls out: an unknown
+<code class="docutils literal notranslate"><span class="pre">vary</span></code> key, start 0 not equal to the base, two starts with the same design sha256 (the native
+path is deterministic, so a duplicate would only recompute an identical run), or a halving rung
+at or past the schedule’s last epoch (it would be silently skipped). <code class="docutils literal notranslate"><span class="pre">Optimizer.run(until_epoch=)</span></code>
+is the pause primitive halving needs: it stops once <code class="docutils literal notranslate"><span class="pre">state.epoch</span> <span class="pre">&gt;=</span> <span class="pre">until_epoch</span></code>, before the
+next iteration, without touching anything else in <code class="docutils literal notranslate"><span class="pre">state</span></code>, so resuming with a later or <code class="docutils literal notranslate"><span class="pre">None</span></code>
+<code class="docutils literal notranslate"><span class="pre">until_epoch</span></code> continues exactly as an uninterrupted run would.</p>
+<p>Perturbation (<code class="docutils literal notranslate"><span class="pre">optimizer.perturb_amplitude</span></code>, <code class="docutils literal notranslate"><span class="pre">optimizer.perturb_seed</span></code>; both 0 by default, and
+left out of <code class="docutils literal notranslate"><span class="pre">Spec.to_dict</span></code>/the hash at their defaults, so no existing preset’s hash moves) adds
+<code class="docutils literal notranslate"><span class="pre">perturb_amplitude·(2u</span> <span class="pre">−</span> <span class="pre">1)</span></code> to x0 after the seed or <code class="docutils literal notranslate"><span class="pre">init</span></code>, clipped to [0, 1]; <code class="docutils literal notranslate"><span class="pre">u</span></code> is a
+counter-based SplitMix64 draw on <code class="docutils literal notranslate"><span class="pre">(perturb_seed,</span> <span class="pre">dof</span> <span class="pre">index)</span></code> (<code class="docutils literal notranslate"><span class="pre">yapnr.rf.multistart.perturb</span></code>), not
+numpy’s <code class="docutils literal notranslate"><span class="pre">Generator</span></code>, so it is the same on any numpy version or machine. A nonzero <code class="docutils literal notranslate"><span class="pre">perturb_seed</span></code>
+with <code class="docutils literal notranslate"><span class="pre">perturb_amplitude</span></code> at 0 does nothing (<code class="docutils literal notranslate"><span class="pre">derive_starts</span></code> refuses it, rather than silently
+spending N× the compute of one real run). See <code class="docutils literal notranslate"><span class="pre">docs/design/rf-multistart.md</span></code> for the halving
+rung ranking, final selection rule and the replication evidence behind making halving opt-in.</p>
+<p>Successive halving’s rung ranking and the final-selection rule, the per-start execution (local
+subprocesses or cloud waves) and a CLI entry point are not implemented yet; a spec with no
+<code class="docutils literal notranslate"><span class="pre">starts</span></code> key is unaffected (one run, today’s behavior).</p>
 </section>
 <section id="end-to-end-cases">
 <h2>End-to-end cases<a class="headerlink" href="#end-to-end-cases" title="Link to this heading">¶</a></h2>
@@ -1583,6 +1622,7 @@ on the next layer is assumed and named in the footprint, not enforced.</p></li>
 <li><a class="reference internal" href="#a-spec">A spec</a></li>
 <li><a class="reference internal" href="#antennas-the-radiated-fraction-boards-and-patterns">Antennas: the radiated fraction, boards and patterns</a></li>
 <li><a class="reference internal" href="#running-a-design">Running a design</a></li>
+<li><a class="reference internal" href="#multi-start">Multi-start</a></li>
 <li><a class="reference internal" href="#end-to-end-cases">End-to-end cases</a><ul>
 <li><a class="reference internal" href="#a-power-divider">(a) Power divider</a></li>
 <li><a class="reference internal" href="#a2-wilkinson-type-combiner">(a2) Wilkinson-type combiner</a></li>

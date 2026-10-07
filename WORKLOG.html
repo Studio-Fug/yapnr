@@ -412,8 +412,10 @@ declared stack can build, one build per board, return ties between two planes of
 side of free parts; writeback mirrors bottom parts on <code class="docutils literal notranslate"><span class="pre">B.*</span></code>;</p></li>
 <li><p>length matching (<code class="docutils literal notranslate"><span class="pre">pnr/route/detail/tune.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr/length_model.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr/place/matched.py</span></code>):
 declared pairs and groups are tuned with meanders against KiCad’s own length measure;</p></li>
-<li><p>router speed: the packed kernel with dense per-net fields is the default (identical routes),
-an optional C search loop (<code class="docutils literal notranslate"><span class="pre">PNR_MAZE_KERNEL=native</span></code>), and an exact-separation recovery
+<li><p>router speed: the native kernel (the packed search over dense per-net fields, in C; identical
+routes; the packed Python kernel where no library loads, <code class="docutils literal notranslate"><span class="pre">PNR_MAZE_KERNEL=packed</span></code> on request)
+is the default (2026-10-07: a 192-cell GCP A/B, every route identical, -54% task time), and an
+exact-separation recovery
 (<code class="docutils literal notranslate"><span class="pre">PNR_EXACT_SEPARATION=recover</span></code>, the default) for routes the halo model leaves open.</p></li>
 </ul>
 <p>Results (two seeds each): ladder and showcases 24 of 24, CPU 2,281 s to 442 s; hard rungs clean
@@ -618,12 +620,12 @@ make the <code class="docutils literal notranslate"><span class="pre">image</spa
 <li><p>Owner, fab and ordering (design §12): decisions D1 to D5. For the first OSH Park order, route
 the board under an OSH Park profile, run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">BOARD</span> <span class="pre">--vendor</span> <span class="pre">oshpark</span></code>, drop the
 zip on oshpark.com, check the preview and pay there; RF boards also pin <code class="docutils literal notranslate"><span class="pre">--stackup</span></code> (D4).</p></li>
-<li><p>Owner decision (2026-10-06, <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>): not yet. The gate was “flip to
-<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> only when all 21 of <code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code>’s jlc-pofv failures
-pass on <code class="docutils literal notranslate"><span class="pre">claude/defaults-rails-fab</span></code>”; campaign <code class="docutils literal notranslate"><span class="pre">20261007-ladder-7fe33f</span></code> got 20 of 21 (the
-remaining one, <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code> seed 0, is rail-allocation territory,
-not fab-profile, and <code class="docutils literal notranslate"><span class="pre">legacy</span></code> fails it on both seeds). Stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code> default until that
-cell passes or the gate is revisited; see <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>.</p></li>
+<li><p>Owner decision (2026-10-07, <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>): the <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> default flip. All 21 of
+<code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code>’s jlc-pofv failures pass on <code class="docutils literal notranslate"><span class="pre">claude/rails-settle</span></code> (the <code class="docutils literal notranslate"><span class="pre">-rails</span></code>
+cell was a plane-partition bug, fixed there), and the 45 gated cells pass 90 of 90 under
+<code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> (88 under <code class="docutils literal notranslate"><span class="pre">legacy</span></code>), but the manual target rungs leave more open under it
+(<code class="docutils literal notranslate"><span class="pre">11-shove-channel-lm-14</span></code> 3 vs 2, <code class="docutils literal notranslate"><span class="pre">12-soc-bga-113</span></code> 51 vs 33 and 35 and one 3600 s
+timeout). Stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code> until the owner says whether those count for “no rung worse”.</p></li>
 <li><p>Rebuild the KiCad base monthly (bump <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/TAG</span></code> to the next <code class="docutils literal notranslate"><span class="pre">-N</span></code>), or with the
 Dependabot <code class="docutils literal notranslate"><span class="pre">ubuntu</span></code> digest update (docs/releases.md, “Maintaining the images”).</p></li>
 <li><p>Showcases (<code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>): the first nightly showcase step on the arm64
@@ -636,9 +638,9 @@ track in seven placement files) and rerun the <code class="docutils literal notr
 an origin-to-courtyard offset (the THT header’s origin is pin 1, so its courtyard is placed
 off by half its length and never legalizes); carry the three Ladder fixes (plane check, side
 check, HDI microvia) to <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code>, or land the rungs and the fixes together.</p></li>
-<li><p>Owner: whether the optional C maze kernel becomes “use it when present”. Recommended once CI
-runs <code class="docutils literal notranslate"><span class="pre">dense_maze_native_test</span></code> and <code class="docutils literal notranslate"><span class="pre">exact_route_native_test</span></code> on both Linux architectures; until
-then the packed Python kernel stays the default and no C toolchain is needed.</p></li>
+<li><p>Done (2026-10-07, owner: flip to native if no rung is worse and routes are equivalent): the C
+maze kernel is the default where its library loads (Bazel, the wheel and so the image, or a
+host compiler); CI runs <code class="docutils literal notranslate"><span class="pre">dense_maze_native_test</span></code> and <code class="docutils literal notranslate"><span class="pre">exact_route_native_test</span></code> in <code class="docutils literal notranslate"><span class="pre">//...</span></code>.</p></li>
 <li><p>Boards with blind, buried or micro vias: the packed and native kernels hand them to the
 reference kernel (so no exact-separation recovery there), the length tuner only adds
 meanders, and the native KiCad repair loop and the hierarchical driver add through vias only.</p></li>

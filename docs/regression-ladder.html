@@ -319,18 +319,20 @@ gloss (the animations’ configuration). The ladder routes and is judged under i
 fabrication rules (<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">legacy</span></code>, the runner’s default; see below). Under the engine’s
 default JLCPCB profile (<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code>), where the router keeps vias 0.127 mm off SMD
 pads, every case passes too (other boards; for the hard rungs see the gate below).</p>
-<p><strong>Default-flip gate (2026-10-06, campaign <code class="docutils literal notranslate"><span class="pre">20261007-ladder-7fe33f</span></code>,
-<a class="reference internal" href="decisions.html"><span class="std std-doc">decisions.md</span></a>):</strong> the runner’s default stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code>. Of the 21 cells
-<code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code> found failing under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>, 20 now pass (the fab-profile-territory
-ones; rail allocation search is the default separately, PR #81) but
-<code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code> seed 0 still fails its <code class="docutils literal notranslate"><span class="pre">rails-In4</span></code> plane-partition check
-under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> (<code class="docutils literal notranslate"><span class="pre">legacy</span></code> fails that cell on <em>both</em> seeds, so the flip is not a regression
-there, but the gate text is “all 21 pass” and this is 20 of 21). Across all 45 cells (90 seed
-runs), <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> passes 89 to <code class="docutils literal notranslate"><span class="pre">legacy</span></code>’s 86 (<code class="docutils literal notranslate"><span class="pre">legacy</span></code> also fails <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> seed 0
-and <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-mc</span></code> seed 1 on a skew finding), has the same or fewer opens and DRC findings
-everywhere, and uses fewer vias (3627 vs 3894; fewer on 37 cases, more on 4) and less copper
-(29.5 m vs 31.9 m; less on 30 cases, more on 14, e.g. <code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>: 93.1/113.9 mm vs
-80.8/101.1 mm). The <code class="docutils literal notranslate"><span class="pre">-rails</span></code> cell is the only thing holding the flip.</p>
+<p><strong>Default-flip gate (2026-10-07, campaigns <code class="docutils literal notranslate"><span class="pre">20261007-ladder-4f191e</span></code>, <code class="docutils literal notranslate"><span class="pre">-0abe44</span></code> and <code class="docutils literal notranslate"><span class="pre">-a98686</span></code>,
+<a class="reference internal" href="decisions.html"><span class="std std-doc">decisions.md</span></a>):</strong> the runner’s default stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code>, for the owner to decide.
+All 21 cells <code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code> found failing under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> now pass: the last one,
+<code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code>, was a plane-partition bug (a plated through-hole pad was
+modelled as the disc inside it, so VBAT’s In4 fill round J7.1’s 1.7 mm square pad fell into
+three pieces whenever the allocation gave VBAT a plane; fixed, <code class="docutils literal notranslate"><span class="pre">-rails</span></code> passes 16 of 16 on seeds
+0 to 7 under both profiles). Across the 45 gated cells (90 seed runs) <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> passes 90 to
+<code class="docutils literal notranslate"><span class="pre">legacy</span></code>’s 88 (<code class="docutils literal notranslate"><span class="pre">legacy</span></code> fails <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> seed 0 and <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-mc</span></code> seed 1 on
+skew findings), with the same opens and fewer vias (3627 vs 3894) and less copper (29.5 m vs
+31.9 m). But the three manual target rungs, which fail under both profiles, leave more open
+under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>: <code class="docutils literal notranslate"><span class="pre">11-shove-channel-lm-14</span></code> 3 nets vs 2 (both seeds), <code class="docutils literal notranslate"><span class="pre">12-soc-bga-113</span></code> (under
+its declared <code class="docutils literal notranslate"><span class="pre">jlc-6l-hdi</span></code>) 51 unrouted nets on seed 1 vs 33 and 35, and seed 0 past its
+3600 s place-and-route budget; <code class="docutils literal notranslate"><span class="pre">11-shove-channel-14</span></code> is equal (2). The gate’s “no rung is
+worse than <code class="docutils literal notranslate"><span class="pre">legacy</span></code>” therefore does not hold for those rungs, and the flip waits for the owner.</p>
 </div></blockquote>
 <section id="the-cases">
 <h2>The cases<a class="headerlink" href="#the-cases" title="Link to this heading">¶</a></h2>

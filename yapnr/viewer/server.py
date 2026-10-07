@@ -970,11 +970,24 @@ class Viewer:
             )
             rev = self.state["revision"]
             run = self.state["run"]
-            if query.get("since", [None])[0] == str(rev) and query.get("run", [None])[0] == run:
+            # _run_finished() is cheap (a file-existence check, occasionally a tiny read) and
+            # tracked outside "revision": a quiescent campaign's MIRROR_FINISHED_MARKER can
+            # appear (yapnr.exp.live.synthesize_task_events) with no new event ever following
+            # it to bump revision. Folding it in here -- rather than only inside _annotate_lanes,
+            # which a cache hit below would skip calling at all -- is what lets a lane stop
+            # reading "stalled" once the campaign is actually over, even on an otherwise-idle
+            # poll loop that would otherwise keep serving the same cached, pre-finished response
+            # (or the "unchanged" shortcut) forever.
+            finished = self._run_finished()
+            if (
+                query.get("since", [None])[0] == str(rev)
+                and query.get("run", [None])[0] == run
+                and finished == self.state.get("campaign_finished", False)
+            ):
                 return json.dumps(
                     dict(unchanged=True, revision=rev, run=run), separators=(",", ":")
                 ).encode()
-            key = (rev, selected)
+            key = (rev, selected, finished)
             if key not in self.response_cache:
                 # Cache only the current revision; no retained historical geometry copies.
                 for old in list(self.response_cache):

@@ -62,6 +62,8 @@ class FeedbackReport:
     shrink: Optional[dict] = None  # PNR_SHRINK search record (None without the flag)
     # PNR_COMPACT RELAX: the rounds run without compact placement (None: none was).
     relaxed: Optional[dict] = None
+    # PNR_ROUTE_COMPACT FLAT: the post-route compaction record (None without the flag).
+    route_compact: Optional[dict] = None
 
     @property
     def final_overflow(self) -> float:
@@ -926,6 +928,38 @@ def route_and_place(
         if report.converged or not auto_outline or scale >= outline_max_scale - 1e-9:
             break
         scale = min(outline_max_scale, scale * outline_grow)
+    from pnr.place import route_compact
+
+    if route_compact.enabled("FLAT") and detail_rules is not None and report.detail_result:
+        # PNR_ROUTE_COMPACT FLAT: squeeze the parts by the copper routed, then route again.
+        with _trace.scope("route-compact", "stage", kind="route-compact"):
+            placed, report.detail_result, report.route_compact = route_compact.flat_pass(
+                placed,
+                report.detail_result,
+                constraints,
+                detail_rules,
+                pitch=detail_pitch_mm,
+                iters=detail_iters,
+                outline=outline_size(graph, constraints),
+            )
+        # FLAT may replace the route with a different one (a reroute that is accepted,
+        # or the original when every step backed off); either way report.deferred_nets,
+        # report.converged and the last connection_history entry were stamped from the
+        # route *before* this pass and must be refreshed from what detail_result now is,
+        # or route_case.py / run.py's incomplete_pnr check (deferred, unrouted, converged)
+        # reads a route that no longer exists.
+        broute = report.detail_result
+        report.deferred_nets = sorted(getattr(broute, "deferred_nets", ()) or ())
+        n_unrouted = len(set(broute.result.unrouted) - set(report.deferred_nets))
+        missing = sum(
+            max(1, broute.result.nets[n].remaining_connections)
+            for n in set(broute.result.unrouted) - set(report.deferred_nets)
+        )
+        if report.connection_history:
+            report.connection_history[-1] = missing
+        else:
+            report.connection_history.append(missing)
+        report.converged = bool(n_unrouted <= 0)
     return placed, report
 
 

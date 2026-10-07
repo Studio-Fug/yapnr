@@ -19,6 +19,7 @@ with live_stage("driver-setup"):
     from pnr.fab_profile import apply_rules
     from pnr.graph import BoardGraph
     from pnr.length_model import attach_board
+    from pnr.place.route_compact import arm_deadline
     from pnr.place.sides import plan as side_plan
     from pnr.place.sides import report as sides_report
     from pnr.place.sides import with_policy
@@ -27,6 +28,9 @@ with live_stage("driver-setup"):
     from pnr.route.detail.native_maze import status as maze_status
     from pnr.route.feedback import route_and_place
     from pnr.via_policy import board_policy
+
+    # PNR_ROUTE_COMPACT: the post-route pass keeps to the runner's stage budget from here.
+    arm_deadline()
 
     root = Path(sys.argv[1])
     seed = int(sys.argv[2])
@@ -134,6 +138,12 @@ with live_stage("artifacts"):
                 **({"shrink": report.shrink} if report.shrink is not None else {}),
                 # PNR_COMPACT RELAX only (absent otherwise): the rounds placed relaxed.
                 **({"relaxed": report.relaxed} if getattr(report, "relaxed", None) else {}),
+                # PNR_ROUTE_COMPACT FLAT only (absent otherwise): the post-route compaction.
+                **(
+                    {"route_compact": dict(flat=report.route_compact)}
+                    if getattr(report, "route_compact", None)
+                    else {}
+                ),
             ),
             indent=2,
         )

@@ -57,6 +57,10 @@ CHAPTERS = {
     1: ("1 · Blocks", "each block template is placed and routed on its own board"),
     2: ("2 · Top level", "the blocks become rigid macros and are placed on the board"),
     3: ("3 · Knitting", "the nets between the blocks are routed"),
+    4: (
+        "4 · Compaction",
+        "the gutters close to the copper they hold, then the nets between the blocks route again",
+    ),
 }
 CHAPTER_S = 0.9
 GRID_S = 6.0
@@ -144,6 +148,12 @@ def build(trace, title=None, subtitle=None):
             seed.candidates
         )
         scenes.append(montage)
+    steps = compaction_steps(trace)
+    if steps:
+        scenes.append(_chapter(4))
+        for stage, route_scope, caption in steps:
+            scenes.append(dict(type="move", scope=stage, label=caption))
+            scenes.append(dict(type="route", scope=route_scope, label=route_scope))
     for node in order:
         if node.id.startswith("native:"):
             scenes.append(dict(type="native", stage=node.label, seq=node.meta.get("event")))
@@ -166,6 +176,30 @@ def build(trace, title=None, subtitle=None):
         path=[n.id for n in order],
         scenes=scenes,
     )
+
+
+def compaction_steps(trace):
+    """``[(stage scope, route scope, caption)]``: the route-then-compact steps the driver kept
+    (``PNR_ROUTE_COMPACT`` TOP, the ``route-compact`` selection), in order; [] without."""
+    out = []
+    for event in trace.selects:
+        if event["id"] != "route-compact":
+            continue
+        chosen = event.get("chosen")
+        for route in [chosen] if isinstance(chosen, str) else list(chosen or []):
+            scope = trace.scopes.get(route)
+            stage = scope and trace.scopes.get(scope.meta.get("start"))
+            if stage is None or not trace.kind(stage.id, "poses"):
+                continue
+            m = stage.meta
+            caption = "%s: %.1f -> %.1f mm %s, each gutter sized by its copper" % (
+                m.get("axis", "?"),
+                m.get("span_before_mm") or 0.0,
+                m.get("span_after_mm") or 0.0,
+                "wide" if m.get("axis") == "x" else "tall",
+            )
+            out.append((stage.id, route, caption))
+    return out
 
 
 def _chapter(number):

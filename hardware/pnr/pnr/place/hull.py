@@ -540,3 +540,59 @@ def gp_overlap(bodies, pos, p, clearance):
     ox = torch.clamp(half[..., :, None, 0] + half[..., None, :, 0] + clearance - dx, min=0.0)
     oy = torch.clamp(half[..., :, None, 1] + half[..., None, :, 1] + clearance - dy, min=0.0)
     return (ox * oy * bodies["pair"]).sum((-1, -2))
+
+
+def dovetail_weight() -> float:
+    """``PNR_HULL_DOVETAIL`` (default 0: off): the weight, in wirelength millimetres per
+    millimetre, of :func:`gp_pack` in global placement with hull macros."""
+    raw = os.environ.get("PNR_HULL_DOVETAIL")
+    if not raw:
+        return 0.0
+    value = float(raw)
+    if not math.isfinite(value) or value < 0:
+        raise ValueError("PNR_HULL_DOVETAIL takes a finite non-negative weight, got %r" % raw)
+    return value
+
+
+def macro_overlap_area_mm2(components) -> float:
+    """Summed overlap area of hull-bearing macros' *plain* courtyard rectangles (the
+    simple box every stage but the hull-aware ones still sees) at their placed poses.
+
+    Two macros' simple boxes overlapping is illegal for an ordinary part -- it is only
+    legal here because their real, hull-shaped copper does not actually collide in that
+    shared square millimetre. A placement where this is 0 may still look "closer
+    together" (smaller gutters, a smaller bounding box) without a single block having
+    moved into a neighbour's notch; this is the number that tells the two apart."""
+    from .geometry import courtyard_rect
+
+    macros = [c for c in components if getattr(c, "hull", None)]
+    total = 0.0
+    for i, a in enumerate(macros):
+        ra = courtyard_rect(a)
+        for b in macros[i + 1 :]:
+            rb = courtyard_rect(b)
+            dx = min(ra.right, rb.right) - max(ra.left, rb.left)
+            dy = min(ra.top, rb.top) - max(ra.bottom, rb.bottom)
+            if dx > 0.0 and dy > 0.0:
+                total += dx * dy
+    return total
+
+
+def gp_pack(bodies, pos, p, gamma):
+    """Smooth half-perimeter of the box around every overlap body (log-sum-exp extremes).
+
+    With the hull-shaped overlap of :func:`gp_overlap` this is a packing pressure: the
+    cluster shrinks where the bodies can interlock, so a block slides into a notch of
+    another (``PNR_HULL_DOVETAIL``), not only where wires pull it."""
+    import torch
+
+    from . import portable_math as pm
+
+    own = bodies["owner"]
+    pb = p[..., own, :]
+    off = (pb.unsqueeze(-1) * bodies["off4"]).sum(-2)
+    half = (pb.unsqueeze(-1) * bodies["half4"]).sum(-2)
+    xy = pos[..., own, :] + off
+    lo, hi = xy - half, xy + half
+    ext = pm.logsumexp(torch.stack((hi[..., 0], -lo[..., 0], hi[..., 1], -lo[..., 1])) / gamma, -1)
+    return gamma * ext.sum()

@@ -57,6 +57,9 @@ _ALIAS = {
     # internally (pnr.native_loop); until it reports its own sub-stage boundaries this whole call
     # is attributed to "detailed-placement" rather than split arbitrarily. Documented gap.
     "native-loop": "detailed-placement",
+    # PNR_ROUTE_COMPACT's rip-up-and-reroute step (pnr.place.route_compact): the same
+    # kind of work as the initial route, just run again on a squeezed placement.
+    "route-compact": "route",
     "coalesce": "route",
     "geometry-relax": "gloss",
     "pad-entry": "fanout-escape",

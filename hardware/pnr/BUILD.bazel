@@ -594,6 +594,7 @@ py_test(
         "regression/hard_rungs.py",
         "regression/shove_rungs.py",
         "regression/soc_rung.py",
+        "regression/dovetail_rung.py",
         "regression/stackup.py",
         "tests/test_stack.py",
     ],
@@ -637,6 +638,7 @@ py_test(
         "regression/hard_rungs.py",
         "regression/shove_rungs.py",
         "regression/soc_rung.py",
+        "regression/dovetail_rung.py",
         "regression/stackup.py",
         "tests/test_via_policy.py",
     ],
@@ -1844,6 +1846,7 @@ py_test(
         "regression/hard_rungs.py",
         "regression/shove_rungs.py",
         "regression/soc_rung.py",
+        "regression/dovetail_rung.py",
         "regression/run.py",
         "regression/test_contract.py",
         "regression/trace_native.py",
@@ -1870,6 +1873,7 @@ py_test(
         "regression/hard_rungs.py",
         "regression/shove_rungs.py",
         "regression/soc_rung.py",
+        "regression/dovetail_rung.py",
         "regression/run.py",
         "regression/test_hard_rungs.py",
     ],
@@ -1890,6 +1894,7 @@ py_test(
         "regression/hard_rungs.py",
         "regression/shove_rungs.py",
         "regression/soc_rung.py",
+        "regression/dovetail_rung.py",
         "regression/native.py",
         "regression/run.py",
         "regression/stackup.py",
@@ -1949,6 +1954,7 @@ py_binary(
         "regression/hard_rungs.py",
         "regression/shove_rungs.py",
         "regression/soc_rung.py",
+        "regression/dovetail_rung.py",
         "regression/run.py",
     ],
     main = "regression/run.py",
@@ -2162,6 +2168,58 @@ py_test(
         ":pnr_hier",
         ":pnr_place",
         ":pnr_route",
+        requirement("pyyaml"),
+    ],
+)
+
+# Route-then-compact (PNR_ROUTE_COMPACT=1, pnr.place.route_compact): the order-preserving 1D
+# compaction by routed copper, its back-off, the hull shapes it slides by and the
+# PNR_HULL_DOVETAIL packing term of global placement.
+py_test(
+    name = "route_compact_test",
+    size = "small",
+    srcs = ["tests/test_route_compact.py"],
+    # The runner's --route-compact parts (regression/run.py) must equal the engine's.
+    data = glob(["regression/*.py"]),
+    main = "tests/test_route_compact.py",
+    deps = [
+        ":pnr",
+        ":pnr_hier",
+        ":pnr_place",
+        requirement("numpy"),
+        requirement("torch"),
+    ],
+)
+
+# pnr.hier.compact_block's own violation-counting helper (not routed, no KiCad/torch
+# needed; the hierarchical driver's end-to-end behavior is hier_case_test's job).
+py_test(
+    name = "compact_block_test",
+    size = "small",
+    srcs = ["tests/test_compact_block.py"],
+    main = "tests/test_compact_block.py",
+    deps = [
+        ":pnr_hier",
+    ],
+)
+
+# Block macro hulls (PNR_MACRO_HULL=1, pnr.place.hull / pnr.hier.extent), shrink and the
+# used-area library ranking (N-0001). The real-board cases skip without their fixtures.
+py_test(
+    name = "macro_hull_test",
+    size = "medium",
+    srcs = ["tests/test_macro_hull.py"],
+    # pnr.mc is not in :pnr yet (PR3b).
+    data = glob(["pnr/**/*.py"]),
+    imports = ["."],
+    main = "tests/test_macro_hull.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
         requirement("pyyaml"),
     ],
 )

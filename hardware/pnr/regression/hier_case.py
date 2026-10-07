@@ -227,7 +227,39 @@ def synthesize(source, constraints, rules, budget, seed, trace_root=None):
                 "block-rank",
                 {r["id"]: list(rank_key(r)) for r in trials},
             )
-        out.append(dict(template=tid, blocks=names, trials=trials, chosen=chosen))
+        compacted = None
+        from pnr.place import route_compact
+
+        if route_compact.enabled("BLOCK"):
+            # PNR_ROUTE_COMPACT BLOCK: the chosen layout squeezed by its own copper.
+            from pnr.hier.compact_block import compact_block
+
+            with trace.suspended():  # the block traces keep their trials only
+                chosen, compacted = compact_block(
+                    source,
+                    constraints,
+                    rules,
+                    by_name,
+                    names,
+                    chosen,
+                    iters=budget["block_iters"],
+                    route_iters=budget["route_iters"],
+                    pitch=budget["route_pitch_mm"],
+                )
+            print(
+                "Block %s route-compact: %s -> %s mm, %d step(s) accepted%s"
+                % (
+                    names[0],
+                    compacted.get("block_mm", {}).get("before"),
+                    compacted.get("block_mm", {}).get("after"),
+                    compacted["accepted"],
+                    (", " + compacted["error"]) if "error" in compacted else "",
+                ),
+                flush=True,
+            )
+        out.append(
+            dict(template=tid, blocks=names, trials=trials, chosen=chosen, compacted=compacted)
+        )
     return blocks, out
 
 
@@ -450,13 +482,14 @@ def route_rank(record):
     return rank(record)
 
 
-def knit(case, k, flat, reps, choice=None, attempt=0):
+def knit(case, k, flat, reps, choice=None, attempt=0, label=None, start=None):
     """Route the nets between blocks for one placed seed; returns its record.
 
     ``attempt`` numbers the representative-pad retries of a seed: each attempt routes in
     its own trace scope (``top-NN-route``, then ``top-NN-route-r1``, ...), and the record's
     ``id`` is the scope id the recorder assigned, so a selection names exactly the route
-    whose copper the record carries."""
+    whose copper the record carries. ``label`` names the scope instead (the route-then-
+    compact reroutes, ``compact-...-route``)."""
     from pnr.route.detail.router import route_board
 
     frames, fab, budget = case["frames"], case["rules"]["fab"], case["budget"]
@@ -470,9 +503,9 @@ def knit(case, k, flat, reps, choice=None, attempt=0):
     top = top_graph(flat, frames, reps, choice)
     fixed = fixed_copper(tracks, vias, fab)
     groups = pin_groups(flat, tracks, vias, float(fab["via_diameter_mm"]))
-    label = "top-%02d-route" % k + ("-r%d" % attempt if attempt else "")
+    label = label or "top-%02d-route" % k + ("-r%d" % attempt if attempt else "")
     retry = dict(attempt=attempt) if attempt else {}
-    with trace.scope(label, "route", start="top-%02d" % k, **retry):
+    with trace.scope(label, "route", start=start or "top-%02d" % k, **retry):
         recorder = trace.current()
         if recorder is not None:
             label = recorder.scope_id
@@ -502,8 +535,11 @@ def knit(case, k, flat, reps, choice=None, attempt=0):
         top_tracks=top_tracks,
         top_vias=top_vias,
         missing=missing(final),
+        choice=dict(choice or {}),
+        seed_index=k,
         split_nets=sorted(split),
         unresolved=metrics["unresolved_nets"],
+        deferred_nets=metrics["deferred_nets"],
         objective=[
             missing(final),
             len(metrics["unresolved_nets"]),
@@ -520,6 +556,201 @@ def knit(case, k, flat, reps, choice=None, attempt=0):
             for key in sorted(reps)
         },
     )
+
+
+# ------------------------------------------------------------------------ route-then-compact
+
+
+def routed_geometry(rules):
+    """``geometry_of`` for :func:`pnr.hier.top.hierarchical_place`: an instance's measured
+    extent and shapes (PNR_MACRO_SHRINK / PNR_MACRO_HULL) from its trial's in-memory
+    routes, as this driver keeps no native board per block."""
+    from pnr.hier.extent import BlockGeometry, routes_geometry
+
+    def measure(block, sub, rec):
+        routes = (rec.get("routes") or {}).get(block.name)
+        if routes is None:
+            return BlockGeometry(ok=False, reason="no routes for %s" % block.name)
+        try:
+            return routes_geometry(sub.components, routes["tracks"], routes["vias"], rules)
+        except Exception as error:  # the macro keeps its rectangle, with the reason
+            return BlockGeometry(ok=False, reason="%s: %s" % (type(error).__name__, error))
+
+    return measure
+
+
+def macro_shapes(frame, centre, turn, margin, hull=None):
+    """A placed macro's compaction shapes (board frame): its hull cover rectangles per plane
+    (``hull`` = (hull, origin in the block frame), PNR_MACRO_HULL), else its outline grown
+    by ``margin`` on every plane (a block reserves both sides)."""
+    from pnr.graph import Component
+    from pnr.place import route_compact as rc
+    from pnr.place.hull import hull_placement_rects
+
+    w, h = frame["width"], frame["height"]
+    if hull is not None:
+        shape, origin = hull
+        dx, dy = _rot(origin[0] - w / 2, origin[1] - h / 2, turn)
+        body = Component(
+            ref="hull",
+            footprint="block:hull",
+            pos=(centre[0] + dx, centre[1] + dy),
+            rot=turn,
+            side="top",
+            courtyard=tuple(shape["courtyard"]),
+            bbox=tuple(shape["courtyard"]),
+            hull=shape,
+        )
+        return [
+            (plane, r.left, r.bottom, r.right, r.top) for plane, r in hull_placement_rects(body)
+        ]
+    cw, ch = (w, h) if int(round(turn)) % 180 == 0 else (h, w)
+    return [
+        (
+            rc.ALL,
+            centre[0] - cw / 2 - margin,
+            centre[1] - ch / 2 - margin,
+            centre[0] + cw / 2 + margin,
+            centre[1] + ch / 2 + margin,
+        )
+    ]
+
+
+def top_compact(case, best, graph, constraints, reps):
+    """PNR_ROUTE_COMPACT TOP: the gutters between the placed macros and top-level parts
+    shrink to the knitted copper they hold (x, then y), the nets between the blocks are
+    ripped up and knitted again, a worse knit backs off (:mod:`pnr.place.route_compact`).
+    Returns ``(record, report)``: the knit record to keep and the compaction report."""
+    from pnr.hier.extent import copper_clearance
+    from pnr.live import emit
+    from pnr.place import route_compact as rc
+    from pnr.place.geometry import outline_size
+
+    frames, rules = case["frames"], case["rules"]
+    fab = rules["fab"]
+    margin = float(fab.get("edge_clearance_mm", 0.2))
+    macros = case["macros"]
+    hulls = case.get("hulls") or {}
+    via_d = float(fab["via_diameter_mm"])
+    clearance = copper_clearance(rules)
+    k = int(best["seed_index"])
+    steps, routed, kept = [], [], []
+
+    def items_of(flat):
+        rigid, shapes = [], {}
+        for name, frame in sorted(frames.items()):
+            centre, turn = macro_pose(frame, flat)
+            rigid.append((macros[name], [c.ref for c in frame["sub"].components]))
+            shapes[macros[name]] = macro_shapes(frame, centre, turn, margin, hulls.get(name))
+        return rc.graph_items(flat, constraints, rigid=rigid, shapes=shapes)
+
+    def copper_of(rec):
+        return rc.Copper.from_routes(rec["top_tracks"], rec["top_vias"], via_d, clearance)
+
+    def announce(candidate, axis, record):
+        steps.append(axis)
+        label = "compact-%02d-%s" % (len(steps), "xy"[axis])
+        stats = {
+            key: record.get(key)
+            for key in (
+                "moved",
+                "gutter_mean_mm",
+                "gutter_need_mean_mm",
+                "gutter_after_mean_mm",
+                "span_before_mm",
+                "span_after_mm",
+                "anchor",
+            )
+        }
+        with trace.scope(label, "stage", kind="route-compact", axis="xy"[axis], **stats):
+            recorder = trace.current()
+            if recorder is not None:
+                recorder.poses("compaction", candidate, phase="placement")
+        emit(
+            "route_compact",
+            layout=json.loads(candidate.to_json()),
+            data=dict(phase="route-compact %s (top level)" % "xy"[axis], step=len(steps), **stats),
+        )
+
+    def reroute(candidate, axis):
+        label = "compact-%02d-%s" % (len(steps), "xy"[axis])
+        rec = knit(
+            case, k, candidate, reps, best.get("choice"), label=label + "-route", start=label
+        )
+        routed.append(rec)
+        return candidate, rec
+
+    import math as _math
+
+    block_mm = sum(_math.dist(a, b) for _n, _la, a, b, _w in best["block_tracks"])
+    # The flat board's pair and plane guards apply at the top level too: the knit may
+    # leave a coupled pair's legs uncoupled or starve a legacy plane pad of its
+    # dog-bone site, the same KiCad failures a flat board's reroute guards against.
+    # ``rec["placed"]`` is the fully flattened graph (every block's own parts at their
+    # placed pose), so the whole board's pads and copper are available here, not just
+    # the inter-block nets ``copper_of`` measures gutters from.
+    legacy_planes = rc.legacy_plane_path(rules, best["placed"])
+    pair_nets = rc.pair_nets_of(rules)
+
+    def pair_copper(rec):
+        return sorted(
+            (t[0], t[1], round(t[2][0], 4), round(t[2][1], 4), round(t[3][0], 4), round(t[3][1], 4))
+            for t in rec["block_tracks"] + rec["top_tracks"]
+            if t[0] in pair_nets
+        )
+
+    base_pairs = pair_copper(best) if pair_nets else None
+
+    def metrics_of(rec):
+        out = dict(
+            missing=rec["missing"],
+            unresolved=len(rec["unresolved"]),
+            deferred=len(rec.get("deferred_nets") or []),
+            unmatched=rec.get("length_unmatched", 0),
+            vias=len(rec["top_vias"]),
+            copper_mm=round(float(rec["objective"][3]), 3),
+            # the copper tolerance is a share of the whole board's copper (blocks included)
+            copper_ref_mm=round(float(rec["objective"][3]) + block_mm, 3),
+        )
+        if legacy_planes:
+            out["plane_blocked"] = rc.plane_blocked(
+                rec["placed"],
+                rec["block_tracks"] + rec["top_tracks"],
+                rec["block_vias"] + rec["top_vias"],
+                rules,
+            )
+        if base_pairs is not None:
+            out["pairs_moved"] = int(pair_copper(rec) != base_pairs)
+        return out
+
+    placed, rec, report = rc.guarded(
+        "top",
+        (best["placed"], best),
+        lambda: rc.compact_loop(
+            best["placed"],
+            best,
+            constraints=constraints,
+            items_of=items_of,
+            copper_of=copper_of,
+            reroute=reroute,
+            metrics_of=metrics_of,
+            min_gap=float(constraints.board.default_clearance_mm),
+            outline=outline_size(graph, constraints),
+            label="top",
+            announce=announce,
+            observe=lambda stage, placed, route, record: kept.append(route["id"]),
+        ),
+    )
+    # The knits kept, in order (the hierarchical animation replays them as chapter 4).
+    trace.select(
+        "route-compact",
+        [best["id"]] + [r["id"] for r in routed],
+        kept or [best["id"]],
+        "not-worse-knit",
+        {r["id"]: r["objective"] for r in [best] + routed},
+    )
+    report["routes"] = len(routed)
+    return rec, report
 
 
 # ------------------------------------------------------------------------ the run
@@ -597,12 +828,20 @@ def run(root, seed):
         with trace.scope(record["id"], "start", kind="hier-top", seed=top_seed):
             try:
                 flat, report, placement = hierarchical_place(
-                    graph, constraints, rules, library, top_seed, iters=budget["top_iters"]
+                    graph,
+                    constraints,
+                    rules,
+                    library,
+                    top_seed,
+                    iters=budget["top_iters"],
+                    geometry_of=routed_geometry(rules),
                 )
             except LegalizationError as error:
                 record.update(legal=False, error=str(error))
                 trace.note(status="illegal")
                 continue
+            if placement.get("hulls"):  # PNR_MACRO_HULL: the shapes route-compact slides
+                case["hulls"] = placement["hulls"]
             got = {v["block"]: m for m, v in placement["macros"].items()}
             if got != macros:
                 raise RuntimeError("macro naming differs from the block event: %r" % got)
@@ -659,6 +898,29 @@ def run(root, seed):
         "route-objective",
         {r["id"]: r["objective"] for r in routed},
     )
+    from pnr.place import route_compact
+
+    compaction = {}
+    if route_compact.enabled("TOP"):
+        # PNR_ROUTE_COMPACT TOP: gutters shrink to the knitted copper, then knit again.
+        best, compaction["top"] = top_compact(case, best, graph, constraints, reps)
+        top = compaction["top"]
+        if "error" in top:
+            print("Hierarchical route-compact failed (kept the knit): %s" % top["error"])
+        else:
+            print(
+                "Hierarchical route-compact: bbox %.0f -> %.0f mm2, %d step(s) accepted, %.1fs"
+                % (
+                    top["before"]["bbox_mm2"],
+                    top["after"]["bbox_mm2"],
+                    top["accepted"],
+                    top["seconds"]["total"],
+                ),
+                flush=True,
+            )
+    blocks_compacted = {t["template"]: t["compacted"] for t in synth if t.get("compacted")}
+    if blocks_compacted:
+        compaction["blocks"] = blocks_compacted
     placed = best["placed"]
     (root / "placed.json").write_text(placed.to_json())
     unrouted = sorted(set(best["unresolved"]) | set(best["split_nets"]))
@@ -743,6 +1005,27 @@ def run(root, seed):
             seeds=seeds,
             selected=best["id"],
             block_copper=dict(tracks=len(best["block_tracks"]), vias=len(best["block_vias"])),
+            **(
+                {
+                    "hulls": {b: h[0].get("stats") for b, h in sorted(case["hulls"].items())},
+                    # Board-frame hull cover rectangles at the final (possibly compacted)
+                    # macro poses, for renders to draw: the same geometry compaction and
+                    # global placement actually slide, not an approximation of it.
+                    "hull_rects": {
+                        name: macro_shapes(
+                            frames[name],
+                            best["macro_poses"][name][:2],
+                            best["macro_poses"][name][2],
+                            0.0,
+                            case["hulls"].get(name),
+                        )
+                        for name in sorted(frames)
+                        if name in case["hulls"]
+                    },
+                }
+                if case.get("hulls")
+                else {}
+            ),
             top_copper=dict(tracks=len(best["top_tracks"]), vias=len(best["top_vias"])),
         ),
     )
@@ -750,11 +1033,16 @@ def run(root, seed):
 
     if compact.shrink_enabled():  # PNR_SHRINK is the flat driver's: recorded as skipped
         report["shrink"] = dict(skipped="hier driver")
+    if compaction:
+        report["route_compact"] = compaction
     (root / "pnr-report.json").write_text(json.dumps(report, indent=2))
     return report, case
 
 
 def main(argv=None):
+    from pnr.place.route_compact import arm_deadline
+
+    arm_deadline()  # PNR_ROUTE_COMPACT keeps to the runner's stage budget from here
     argv = sys.argv[1:] if argv is None else argv
     root, seed = Path(argv[0]), int(argv[1])
     report, _case = run(root, seed)

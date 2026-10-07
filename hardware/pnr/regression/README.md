@@ -290,6 +290,19 @@ so the bus needs meander room where the late nets pass. Every part is fixed. Bot
 `ci.target` (`push-and-shove`): the current router leaves nets open on them, and they wait
 for the queued push-and-shove router.
 
+## Dovetail rung
+
+`13-dovetail-blocks-23` (`dovetail_rung.py`, manual lane) is a hierarchical board whose
+blocks pack best interlocked: two port blocks of one template (a 12-pin JST SH side-entry
+connector with four series resistors and a decoupling capacitor, the passives held by a hard
+group within 8 mm of the connector's pin 1, so the routed block is an L) and a core of four
+SOT-23-5 AND gates with their capacitors, each gate taking one input of each port. It is
+the rung of the hull packing (`--macro-hull`: blocks enter the top level as their per-side
+routed outlines, and `--hull-dovetail W` packs them in global placement) and of the
+route-then-compact pass (`--route-compact`, [design](../../../docs/design/route-compact.md)),
+whose `pnr-report.json` `route_compact` record carries the bounding box, the outline
+shrink it frees and the gutters before and after.
+
 ## Length-matching scratch designs
 
 `12-soc-bga-113` and `11-shove-channel-lm-14` declare length-match groups; a group with a

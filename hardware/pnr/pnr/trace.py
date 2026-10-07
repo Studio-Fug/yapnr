@@ -610,6 +610,18 @@ def current():
     return recorder if recorder.active else None
 
 
+@contextlib.contextmanager
+def suspended():
+    """No tracing while open (``PNR_TRACE_DIR`` unset), restored on the way out: work that
+    is not one of the trace's scopes (a route-then-compact reroute) records nothing."""
+    previous = os.environ.pop(ENV_DIR, None)
+    try:
+        yield
+    finally:
+        if previous is not None:
+            os.environ[ENV_DIR] = previous
+
+
 class _Scope:
     def __init__(self, recorder, name, type, meta):
         self.recorder, self.name, self.type, self.meta = recorder, name, type, meta

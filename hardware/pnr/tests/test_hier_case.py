@@ -275,6 +275,94 @@ class HierCaseTest(unittest.TestCase):
             sub.write_text(text)
 
 
+class RouteCompactTest(unittest.TestCase):
+    """PNR_ROUTE_COMPACT TOP and BLOCK on the synthetic design (and with PNR_MACRO_HULL):
+    the knit stays complete, the layout gets no larger, every kept step is traced."""
+
+    def run_case(self, **flags):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "case"
+        root.mkdir()
+        (root / "design.json").write_text(json.dumps(design()))
+        (root / "source-graph.json").write_text(graph().to_json())
+        clean = {k: v for k, v in os.environ.items() if not k.startswith("PNR_")}
+        clean[trace.ENV_DIR] = str(root / "trace")
+        clean.update(flags)
+        with mock.patch.dict(os.environ, clean, clear=True):
+            report, case = hier_case.run(root, 0)
+            recorder = trace.current()
+            if recorder is not None:
+                recorder.close()
+        return root, report, case
+
+    def check(self, root, report, require_accepted=True):
+        self.assertTrue(report["legal"])
+        self.assertTrue(report["converged"], report["summary"])
+        placed = BoardGraph.from_json((root / "placed.json").read_text())
+        routes = json.loads((root / "routes.json").read_text())
+        groups = hier_case.pin_groups(placed, routes["tracks"], routes["vias"], 0.6)
+        for net in placed.nets:
+            self.assertEqual(groups[net.name], [list(range(len(net.pins)))], net.name)
+        top = report["route_compact"]["top"]
+        self.assertNotIn("error", top)
+        self.assertLessEqual(top["after"]["bbox_mm2"], top["before"]["bbox_mm2"] + 1e-6)
+        self.assertEqual(top["after"]["metrics"]["missing"], 0)
+        if require_accepted:
+            # A run that accepted nothing would still satisfy every check above (the
+            # "no worse" bar), so this design's own gutters must actually have room to
+            # close: otherwise the test exercises route-compact wiring, never its real
+            # behavior.
+            self.assertGreaterEqual(top["accepted"], 1, top["attempts"])
+        case = provenance.Trace(root / "trace")
+        (select,) = [s for s in case.selects if s["id"] == "route-compact"]
+        stages = [s for s in case.of_type("stage") if s.meta.get("kind") == "route-compact"]
+        self.assertEqual(len(stages), top["routes"])
+        for stage in stages:
+            self.assertTrue(case.kind(stage.id, "poses"))
+            route = case.scopes[stage.id + "-route"]
+            self.assertEqual(route.meta.get("start"), stage.id)
+        kept = [a for a in top["attempts"] if a.get("result") == "accepted"]
+        chosen = select["chosen"] if isinstance(select["chosen"], list) else [select["chosen"]]
+        self.assertEqual(len(chosen), max(1, len(kept)))
+        self.assertFalse((root / "trace" / "errors.json").exists())
+        return top
+
+    def test_top_and_blocks(self):
+        root, report, _case = self.run_case(PNR_ROUTE_COMPACT="TOP,BLOCK")
+        top = self.check(root, report)
+        self.assertGreaterEqual(top["routes"], 1)
+        blocks = report["route_compact"]["blocks"]
+        self.assertEqual(len(blocks), 2)  # one per template
+        for template in blocks.values():
+            self.assertNotIn("error", template)
+            before, after = template["block_mm"]["before"], template["block_mm"]["after"]
+            self.assertLessEqual(after[0] * after[1], before[0] * before[1] + 1e-9)
+        sizes = {m["template"]: m["size_mm"] for m in report["hier"]["macros"].values()}
+        for tid, template in blocks.items():
+            self.assertEqual(sizes[tid], template["block_mm"]["after"])
+
+    def test_with_hulls(self):
+        root, report, _case = self.run_case(PNR_ROUTE_COMPACT="TOP", PNR_MACRO_HULL="1")
+        # This fixture's hull outlines already sit snug against their neighbours (the
+        # hulls themselves, not this pass, close the gap -- see the dovetail rung for
+        # that), so top-level compaction accepting nothing here is expected, not a
+        # silently-broken pass.
+        self.check(root, report, require_accepted=False)
+        # hull_rects: board-frame hull cover rectangles a render can draw, one entry
+        # per hull-bearing macro, each a non-empty list of (plane, x0, y0, x1, y1).
+        rects = report["hier"]["hull_rects"]
+        self.assertEqual(set(rects), set(report["hier"]["hulls"]))
+        for shapes in rects.values():
+            self.assertTrue(shapes)
+            for plane, x0, y0, x1, y1 in shapes:
+                self.assertIsInstance(plane, str)
+                self.assertLess(x0, x1)
+                self.assertLess(y0, y1)
+        self.assertEqual(set(report["hier"]["hulls"]), {"top.ch_a", "top.ch_b", "top.drv"})
+        self.assertNotIn("blocks", report["route_compact"])
+
+
 class RetryTest(unittest.TestCase):
     """A representative-pad retry that wins: the top-seed selection names the retry's own
     route scope, whose recorded copper is the top copper in routes.json."""

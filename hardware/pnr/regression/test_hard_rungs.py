@@ -165,6 +165,7 @@ class HardRungContract(unittest.TestCase):
                 "buck-vqfnhr",
                 "shove-channel",
                 "soc-bga",
+                "dovetail-blocks",
             },
         )
         family = {}
@@ -621,6 +622,34 @@ class HardRungContract(unittest.TestCase):
         self.assertTrue(args.hard)
         args = parser().parse_args(["--out", "x", "--lane", "ladder", "--lane", "nightly"])
         self.assertEqual(args.lane, ["ladder", "nightly"])
+
+    def test_hierarchical_driver_defaults_route_compact_and_hulls(self):
+        """The hierarchical driver (design.json ``driver == "hier"``) defaults to
+        ``PNR_ROUTE_COMPACT=TOP,BLOCK`` plus the hull-packing bundle (2026-10 A/B, campaign
+        20261007-ladder-01bca2 at head); the flat driver never gets it; any of the three
+        flags given explicitly (including the ``0``/``off`` opt-out) turns the default off."""
+        from run import HIER_COMPACT_DEFAULT_ENV, hier_compact_explicit, hier_compact_extra
+
+        bare = parser().parse_args(["--out", "x"])
+        self.assertFalse(hier_compact_explicit(bare))
+        extra = hier_compact_extra(bare, "hier_case.py", 600.0)
+        self.assertEqual(extra["PNR_ROUTE_COMPACT"], "TOP,BLOCK")
+        self.assertEqual(extra["PNR_MACRO_HULL"], "1")
+        self.assertEqual(extra["PNR_HULL_DOVETAIL"], HIER_COMPACT_DEFAULT_ENV["PNR_HULL_DOVETAIL"])
+        self.assertEqual(extra["PNR_ROUTE_COMPACT_TIMEOUT_S"], repr(600.0))
+        # Never for the flat driver.
+        self.assertEqual(hier_compact_extra(bare, "route_case.py", 600.0), {})
+        # Every explicit opt-out/opt-in leaves the default alone.
+        for flags in (
+            ["--route-compact", "0"],
+            ["--route-compact", "off"],
+            ["--route-compact", "FLAT"],
+            ["--macro-hull"],
+            ["--hull-dovetail", "0"],
+        ):
+            args = parser().parse_args(["--out", "x"] + flags)
+            self.assertTrue(hier_compact_explicit(args), flags)
+            self.assertEqual(hier_compact_extra(args, "hier_case.py", 600.0), {}, flags)
 
 
 if __name__ == "__main__":

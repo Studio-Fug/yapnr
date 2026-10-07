@@ -482,6 +482,38 @@ their copper from 4777 to 4022 mm, for 28 more vias. It stays off by default bec
 manual `09-mcu-usb-31` rung cells, which pass without it, end with a USB pair out of skew or a
 leg unrouted (3 with `COURTYARD` alone): see the [design](design/compact-placement.md).
 
+## Route-then-compact (opt-in)
+
+`run.py --route-compact [PARTS]` (`PNR_ROUTE_COMPACT`, off by default;
+[design](design/route-compact.md))
+squeezes a routed placement by the copper each gutter actually holds, x then y, and routes it
+again; a worse route backs off and the routed result stands. `PARTS` is `1` (all) or a comma
+list: `TOP` (the hierarchical top level, after the knit), `BLOCK` (inside each block template,
+whose outline then shrinks) and `FLAT` (flat boards, after the place-route loop). With
+`--macro-hull` (`PNR_MACRO_HULL`) hierarchical blocks enter as their routed outlines (per-side
+hulls) and slide into each other's notches; `--hull-dovetail W` (`PNR_HULL_DOVETAIL`) adds a
+packing term to global placement over the hull bodies. `pnr-report.json` records the pass as
+`route_compact` (gutters, steps, bounding box and the outline shrink it frees, seconds).
+
+Results (2026-10-07, GCP C4D, flags off against each arm, KiCad's DRC judging every board):
+
+| Rungs (cells)                                             | Arm                                              | Pass  | Bounding box | Copper   | Vias   | Place-route time |
+| --------------------------------------------------------- | ------------------------------------------------ | ----- | ------------ | -------- | ------ | ---------------- |
+| ladder 01-08, pool 8/3 (16)                               | off                                              | 16/16 | 3151 mm²     | 1136 mm  | 70     | 115 s            |
+|                                                           | `--route-compact`                                | 16/16 | -21.5 %      | -11.3 %  | -3 %   | +32 %            |
+| hier-twin-bank, 10-quad-bank, 13-dovetail, seeds 0-3 (12) | off                                              | 12/12 | 5336 mm²     | 2181 mm  | 144    | 245 s            |
+|                                                           | `--route-compact`                                | 12/12 | -6.7 %       | -4.4 %   | +4 %   | +84 %            |
+|                                                           | `--macro-hull`                                   | 12/12 | -6.2 %       | -0.8 %   | +3 %   | +35 %            |
+|                                                           | `--route-compact --macro-hull --hull-dovetail 1` | 12/12 | -19.2 %      | -5.3 %   | +4 %   | +64 %            |
+| 35 other hard rungs, seeds 0-1 (70)                       | off                                              | 60/70 | 39029 mm²    | 19266 mm | 2225   | 1939 s           |
+|                                                           | `--route-compact`                                | 61/70 | -6.8 %       | -3.3 %   | -0.4 % | +101 %           |
+
+Bounding box, copper and vias are sums of the per-rung means over the cells that placed in
+both arms; time is the place-route stage. No rung passes less often or ends with more than 1 %
+more copper. The time goes to the reroutes (measuring and checking take under a second per
+board): a few seconds a step on the small boards, one to two minutes on the MCU and BGA
+rungs. The BGA rungs keep their bounding box (the parts at its extremes are fixed).
+
 ## In CI
 
 `.github/workflows/ladder.yaml` runs the ladder inside the published arm64 image: cases 01 to 06

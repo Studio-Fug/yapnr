@@ -75,6 +75,9 @@ OPTIONS = {
     "channel_layers": bool,
     "power_first": bool,
     "route_pairs_diff_pairs": bool,
+    "route_compact": (bool, str),
+    "macro_hull": bool,
+    "hull_dovetail": (int, float),
     "rail_alloc": str,
     "exact_late_room": bool,
     "maze_kernel": str,
@@ -103,11 +106,17 @@ FLAGS = {
     # ladder-v2 ab-pairs-pool A/B.
     "power_first": "--power-first",
     "route_pairs_diff_pairs": "--route-pairs-diff-pairs",
+    # PNR_MACRO_HULL (hardware/pnr/pnr/place/hull.py).
+    "macro_hull": "--macro-hull",
     # The exact-separation recovery beside late plane drops (router-keepouts).
     "exact_late_room": "--exact-late-room",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
-WEIGHTS = {"gp_channels": "--gp-channels", "legalize_hpwl": "--legalize-hpwl"}
+WEIGHTS = {
+    "gp_channels": "--gp-channels",
+    "legalize_hpwl": "--legalize-hpwl",
+    "hull_dovetail": "--hull-dovetail",
+}
 # The PNR_COMPACT parts ``compact_off`` may name (run.py --compact-off; equal to
 # hardware/pnr/pnr/compact_flags.py PARTS, which test_kinds checks).
 COMPACT_PARTS = (
@@ -122,6 +131,10 @@ COMPACT_PARTS = (
     "PAIRS",
     "RELAX",
 )
+
+# The parts of PNR_ROUTE_COMPACT ``route_compact`` may name (run.py --route-compact; equal to
+# hardware/pnr/pnr/place/route_compact.py PARTS).
+ROUTE_COMPACT_PARTS = ("TOP", "BLOCK", "FLAT")
 
 SUMMARY = [
     "run/summary.json",
@@ -170,6 +183,15 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
         args += ["--legalize-reorient", "wire"]  # the in-place turns without the channel guard
     if options.get("legalize_channel_clearance_fab"):
         args += ["--legalize-channel-clearance", "fab"]
+    compact_parts = options.get("route_compact")
+    if compact_parts is not None:
+        # PNR_ROUTE_COMPACT (hardware/pnr/pnr/place/route_compact.py): true for every part,
+        # false (an explicit `route_compact = false`, distinct from leaving the key out) opts
+        # a hierarchical cell out of the driver's default bundle (run.py --route-compact 0).
+        if compact_parts is False:
+            args += ["--route-compact", "0"]
+        else:
+            args += ["--route-compact", "1" if compact_parts is True else str(compact_parts)]
     if options.get("rail_alloc"):
         args += ["--rail-alloc", options["rail_alloc"]]  # PNR_RAIL_ALLOC (pnr.rail_alloc)
     return args
@@ -222,7 +244,11 @@ class LadderCell(base.Kind):
                 if kind is None:
                     if where != "config":
                         errors.append("%s.%s is not a runner option" % (where, key))
-                elif isinstance(value, bool) and kind is not bool or not isinstance(value, kind):
+                elif (
+                    isinstance(value, bool)
+                    and bool not in (kind if isinstance(kind, tuple) else (kind,))
+                    or not isinstance(value, kind)
+                ):
                     errors.append("%s.%s has the wrong type" % (where, key))
             if options.get("fab_profile", "legacy") not in FAB_PROFILES:
                 errors.append("%s.fab_profile is one of %s" % (where, ", ".join(FAB_PROFILES)))
@@ -232,6 +258,17 @@ class LadderCell(base.Kind):
             if isinstance(off, list) and any(p not in COMPACT_PARTS for p in off):
                 errors.append(
                     "%s.compact_off names parts of %s" % (where, ", ".join(COMPACT_PARTS))
+                )
+            parts = options.get("route_compact")
+            if (
+                isinstance(parts, str)
+                and parts != "1"
+                and not {p.strip().upper() for p in parts.split(",") if p.strip()}
+                <= set(ROUTE_COMPACT_PARTS)
+            ):
+                errors.append(
+                    "%s.route_compact is true or a comma list of %s"
+                    % (where, ", ".join(ROUTE_COMPACT_PARTS))
                 )
             if options.get("legalize_reorient") and options.get("legalize_reorient_wire"):
                 errors.append("%s: legalize_reorient and legalize_reorient_wire exclude" % where)

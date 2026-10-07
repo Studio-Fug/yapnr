@@ -125,11 +125,16 @@ def draw_layout(tier, rng, ratio=None):
     return len(tier) - 1, tier[-1]
 
 
-def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair_weights=None):
+def hierarchical_place(
+    graph, constraints, rules, library, seed, iters=600, pair_weights=None, geometry_of=None
+):
     """Return (flat placed graph, placement report, choice record).
 
     ``pair_weights`` (flat refs, pnr.feedback) become a pad-pair attraction on the
-    macro placement; None leaves it as before."""
+    macro placement; None leaves it as before. ``geometry_of(block, sub, rec)`` (with
+    PNR_MACRO_SHRINK / PNR_MACRO_HULL) measures an instance's routed layout instead of
+    its native board directory (a driver that routes blocks in memory); the choice
+    record then also carries ``hulls`` ({block: (hull, frame origin)})."""
     from pnr.place.initial_pool import _prepared_source, preserve_source_locks
     from pnr.place.placer import place
 
@@ -172,9 +177,14 @@ def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair
                 from pnr.hier.extent import safe_geometry
 
                 d = boards.get(b.name)
-                geometry[b.name] = safe_geometry(
-                    sub.components, d and os.path.join(d, "electrical", "board.kicad_pcb"), rules
-                )
+                if geometry_of is not None:
+                    geometry[b.name] = geometry_of(b, sub, rec)
+                else:
+                    geometry[b.name] = safe_geometry(
+                        sub.components,
+                        d and os.path.join(d, "electrical", "board.kicad_pcb"),
+                        rules,
+                    )
     if shaped:
         mgraph, mcon, mrules, plan = collapse(
             source, constraints, rules, layouts, geometry=geometry
@@ -217,6 +227,11 @@ def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair
             if geo is not None and geo.ok:
                 macros[m]["extent"] = [round(x, 4) for x in geo.extent]
         out["nested"] = nested_parts(placed_macro, plan)
+        out["hulls"] = {
+            v["block"]: (by_ref[m].hull, list(v.get("origin", ())))
+            for m, v in plan.macros.items()
+            if getattr(by_ref[m], "hull", None)
+        }
     return flat, report, out
 
 

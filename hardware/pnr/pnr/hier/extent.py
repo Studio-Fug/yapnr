@@ -334,13 +334,40 @@ def block_geometry(
     kept inside the outline keeps both rules. The ``inner`` plane collects what a
     drilled part (or another block's inner copper) must clear: inner-layer tracks,
     every via barrel and the member drilled pads."""
-    from pnr.place.geometry import courtyard_rect, pad_rects, placement_rects
-
     comps = list(components)
     board = read_board(board_path)
     if board["arcs"]:
         raise ValueError(f"block board has {board['arcs']} arcs (pnr.hier.assemble refuses arcs)")
     tx, ty, residual = solve_frame(board["footprints"], comps)
+    return _geometry(comps, board, tx, ty, residual, rules, margin, str(board_path))
+
+
+def routes_geometry(components, tracks, vias, rules: dict, margin: Optional[float] = None):
+    """:func:`block_geometry` of a block routed in memory: ``tracks`` ``[net, layer, (x, y),
+    (x, y), width]`` and ``vias`` ``[net, x, y]`` (through, the fab via) in the frame of
+    ``components`` (a hierarchical trial's ``routes``), no board file needed."""
+    fab = rules.get("fab") or {}
+    size = float(fab.get("via_diameter_mm", 0.6))
+    drill = float(fab.get("via_drill_mm", 0.3))
+    board = dict(
+        footprints={},
+        segments=[
+            (float(a[0]), -float(a[1]), float(b[0]), -float(b[1]), float(w), la)
+            for _n, la, a, b, w in tracks
+        ],
+        vias=[(float(v[1]), -float(v[2]), size, ("F.Cu", "B.Cu")) for v in vias],
+        via_drills=[drill for _ in vias],
+        arcs=0,
+        zones=0,
+    )
+    return _geometry(list(components), board, 0.0, 0.0, 0.0, rules, margin, "routes")
+
+
+def _geometry(comps, board, tx, ty, residual, rules, margin, source) -> "BlockGeometry":
+    """The shapes and extent of ``comps`` and ``board``'s copper (KiCad frame, y down,
+    offset ``tx, ty`` from the components' frame)."""
+    from pnr.place.geometry import courtyard_rect, pad_rects, placement_rects
+
     m = macro_margin(rules) if margin is None else float(margin)
     c_cu = copper_clearance(rules)
     h_edge = hole_edge(rules)
@@ -421,7 +448,7 @@ def block_geometry(
         margin=m,
         track_width=track_width(rules),
         residual_mm=residual,
-        source=str(board_path),
+        source=source,
         stats=stats,
     )
 

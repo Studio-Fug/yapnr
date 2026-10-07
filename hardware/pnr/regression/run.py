@@ -299,12 +299,20 @@ ROUTE_COMPACT_PARTS = ("TOP", "BLOCK", "FLAT")
 
 # The hierarchical driver's default bundle (2026-10 A/B, campaign 20261007-ladder-01bca2 at
 # head: 12/12 pass in every arm, bbox -13.1 %, copper -5.7 %, no rung worse): TOP,BLOCK
-# compaction plus hull packing, applied by hier_compact_extra() below. FLAT is never in it.
+# compaction plus hull packing, applied by hier_compact_extra() below. Hull nesting joins
+# the bundle by owner decision (2026-10-07, PR #91); --hull-nest 0 opts out. FLAT is never in it.
 HIER_COMPACT_DEFAULT_ENV = {
     "PNR_ROUTE_COMPACT": "TOP,BLOCK",
     "PNR_MACRO_HULL": "1",
     "PNR_HULL_DOVETAIL": repr(1.0),
+    "PNR_HULL_NEST": "1",
 }
+
+
+def hull_nest_environment(args) -> dict:
+    """Preserve either explicit nest setting, including opt-out outside the default bundle."""
+    nest = getattr(args, "hull_nest", None)
+    return {"PNR_HULL_NEST": nest} if nest is not None else {}
 
 
 def hier_compact_explicit(args) -> bool:
@@ -318,16 +326,12 @@ def hier_compact_extra(args, driver: str, timeout: float) -> dict:
     """The per-case env overrides for the hierarchical driver's default bundle (``driver ==
     "hier_case.py"`` and nothing in :func:`hier_compact_explicit` was given), else ``{}``.
 
-    ``--hull-nest`` (PNR_HULL_NEST, pnr.place.hull.nest) rides on top: ``1`` adds it to the
-    bundle, ``0`` drops it from it, unset keeps the bundle's own setting."""
+    ``--hull-nest`` (PNR_HULL_NEST, pnr.place.hull.nest) rides on top: ``0`` explicitly
+    disables nesting, ``1`` enables it, and unset keeps the bundle's default-on setting."""
     if driver != "hier_case.py" or hier_compact_explicit(args):
         return {}
     env = dict(HIER_COMPACT_DEFAULT_ENV, PNR_ROUTE_COMPACT_TIMEOUT_S=repr(float(timeout)))
-    nest = getattr(args, "hull_nest", None)
-    if nest == "1":
-        env["PNR_HULL_NEST"] = "1"
-    elif nest == "0":
-        env.pop("PNR_HULL_NEST", None)
+    env.update(hull_nest_environment(args))
     return env
 
 
@@ -1028,7 +1032,7 @@ def parser():
             "PNR_HULL_NEST=1: with --macro-hull, the legalized block macros slide into each "
             "other's notches by their hulls, and a hierarchical seed whose hull placement does "
             "not knit (route-then-compact off) falls back to its rectangle placement "
-            "(pnr.place.hull.nest); 0 drops it from the hierarchical driver's default bundle"
+            "(pnr.place.hull.nest); enabled by default for hull macros, 0 explicitly opts out"
         ),
     )
     ap.add_argument(
@@ -1202,9 +1206,7 @@ def main():
         if not (isfinite(args.hull_dovetail) and args.hull_dovetail >= 0):
             raise SystemExit("--hull-dovetail takes a non-negative weight")
         env["PNR_HULL_DOVETAIL"] = repr(float(args.hull_dovetail))
-    if args.hull_nest == "1" and hier_compact_explicit(args):
-        # Outside the default bundle (hier_compact_extra adds it there).
-        env["PNR_HULL_NEST"] = "1"
+    env.update(hull_nest_environment(args))
     if args.route_pairs_diff_pairs:
         env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
     if args.rail_alloc:

@@ -605,12 +605,12 @@ NEST_RADIUS_MM = 6.0  # how far one nest move may take a macro from its pose
 
 
 def nest_enabled() -> bool:
-    """``PNR_HULL_NEST=1`` (default off): :func:`nest` slides the legalized hull macros into
+    """On for hull macros unless ``PNR_HULL_NEST=0``: :func:`nest` slides them into
     each other's notches, and the hierarchical driver keeps a rectangle-placement fallback
     when a hull placement does not route (``regression/hier_case.py``). Inert without
     ``PNR_MACRO_HULL=1``. (The global-placement polish, ``PNR_GP_POLISH``, measures overlap
     between hull bodies whenever hull macros are present: :func:`polish_bodies`.)"""
-    return enabled() and os.environ.get("PNR_HULL_NEST") == "1"
+    return enabled() and os.environ.get("PNR_HULL_NEST", "1") == "1"
 
 
 def _area(a, b) -> float:

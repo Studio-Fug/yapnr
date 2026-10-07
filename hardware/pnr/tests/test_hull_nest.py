@@ -157,7 +157,7 @@ class NestTest(unittest.TestCase):
         return board(a, b, nets=[("N", [("MA", "X.1"), ("MB", "X.1")])])
 
     def test_blocks_slide_into_each_other(self):
-        with mock.patch.dict(os.environ, dict(HULL_ON, PNR_HULL_NEST="1")):
+        with mock.patch.dict(os.environ, HULL_ON, clear=True):
             g = self.apart()
             self.assertEqual(H.component_nesting(g.components)["macro_overlap_mm2"], 0.0)
             report = self.nest(g)
@@ -197,10 +197,15 @@ class NestTest(unittest.TestCase):
             self.assertEqual(g.component("MB").pos, (X0 + 0.1, Y0 + 4.0))
 
     def test_flag(self):
-        with mock.patch.dict(os.environ, dict(HULL_ON, PNR_HULL_NEST="1")):
-            self.assertTrue(H.nest_enabled())
-        with mock.patch.dict(os.environ, {"PNR_HULL_NEST": "1", "PNR_MACRO_HULL": "0"}):
-            self.assertFalse(H.nest_enabled())  # inert without hulls
+        for env, expected in (
+            (HULL_ON, True),
+            (dict(HULL_ON, PNR_HULL_NEST="1"), True),
+            (dict(HULL_ON, PNR_HULL_NEST="0"), False),
+            ({}, False),
+            ({"PNR_HULL_NEST": "1", "PNR_MACRO_HULL": "0"}, False),
+        ):
+            with self.subTest(env=env), mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(H.nest_enabled(), expected)
 
 
 class PolishBodiesTest(unittest.TestCase):
@@ -317,7 +322,8 @@ class SafetyNetTest(unittest.TestCase):
         return out, report, seen, knit, after
 
     def test_rectangle_fallback_wins_when_it_knits(self):
-        out, report, seen, knit, after = self.run_net(0, dict(HULL_ON, PNR_HULL_NEST="1"))
+        with mock.patch.dict(os.environ, HULL_ON, clear=True):
+            out, report, seen, knit, after = self.run_net(0, HULL_ON)
         self.assertEqual(out["id"], "top-00-rect-route")
         self.assertEqual(report["kept"], "rect")
         self.assertEqual(report["seed"], 7)
@@ -330,9 +336,8 @@ class SafetyNetTest(unittest.TestCase):
         self.assertEqual(out["id"], "top-00-route")
         self.assertEqual(report["kept"], "hull")
 
-    def test_off_without_the_flag(self):
-        with mock.patch.dict(os.environ, HULL_ON):
-            os.environ.pop("PNR_HULL_NEST", None)
+    def test_explicit_opt_out_disables_the_fallback(self):
+        with mock.patch.dict(os.environ, dict(HULL_ON, PNR_HULL_NEST="0"), clear=True):
             best = self.record(2, "top-00-route")
             out, report = self.hc.safety_net({}, best, [], None, None, None, {}, {})
         self.assertIs(out, best)

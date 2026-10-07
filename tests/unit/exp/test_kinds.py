@@ -235,6 +235,30 @@ class RfTest(unittest.TestCase):
 
 
 class LadderOptionsTest(unittest.TestCase):
+    def test_hull_nesting_campaign_preserves_default_and_explicit_opt_out(self):
+        campaign = {
+            "schema": spec.CAMPAIGN_SCHEMA,
+            "kind": "ladder-cell",
+            "matrix": {
+                "case": ["13-dovetail-blocks-23"],
+                "seed": [0],
+                "config": ["default", "off", "on"],
+            },
+            "config": {"hard": True},
+            "configs": {"default": {}, "off": {"hull_nest": False}, "on": {"hull_nest": True}},
+        }
+        kind = kinds.get("ladder-cell")
+        self.assertEqual(kind.check(campaign), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            default, off, on = kind.expand(campaign, context(tmp))
+        # An omitted option inherits the runner's default-on hierarchical bundle.
+        self.assertNotIn("--hull-nest", default["command"])
+        for task, value in ((off, "0"), (on, "1")):
+            args = task["command"]
+            self.assertEqual(args[args.index("--hull-nest") + 1], value)
+        self.assertEqual(default["resources"], off["resources"])
+        self.assertEqual(default["verdict"], off["verdict"])
+
     def test_the_bundle_carries_the_fab_profile_data(self):
         # run.py FAB_DATA_SOURCES and the profiles: a data profile (jlc-6l-hdi, which the
         # UFBGA-201 rungs declare) resolves from the cell's own checkout, not the image's.

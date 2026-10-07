@@ -16,10 +16,11 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
-- **PR integration review (2026-10-07).** PR #91 integrates main through #90. Nesting stays
-  default-off. Completed ladder and flat-hard A/B arms agree; twin-bank passes all arms. Dovetail
-  and quad-bank campaigns remain queued on a missing GCP template. See [validation
-  status](docs/design/hull-nest-validation.md).
+- **Hull nesting default (2026-10-07, PR #91).** Owner requested default-on nesting for hull
+  macros with explicit opt-out. Legality/native gates and both routing fallbacks are unchanged.
+  The integrated native dovetail example is clean with nonzero interlock; vias increase in
+  that one pair. Final-head versus main dovetail and quad-bank campaigns remain pending under
+  the approved total budget. See [validation status](docs/design/hull-nest-validation.md).
 
 - **Route-then-compact and hull packing** (PR #86, branch `claude/route-compact`; design
   [docs/design/route-compact.md](docs/design/route-compact.md)). `PNR_ROUTE_COMPACT`

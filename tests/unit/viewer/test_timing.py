@@ -380,28 +380,38 @@ class MirrorLagTests(unittest.TestCase):
             expected = max(e["time"] for e in events) - min(e["time"] for e in events)
             self.assertAlmostEqual(result["wall_seconds"], expected, places=3)
 
-    def test_unattributed_absorbs_the_mirror_gap_not_the_stage(self):
-        # The gap between the last real marker and the delayed task_complete is real wall-clock
-        # time; after the fix it shows up as unattributed, not as part of "route"/"gloss".
+    def test_mirror_gap_does_not_inflate_unattributed_or_deflate_coverage(self):
+        # The gap between the last real marker and the delayed task_complete is a mirror-
+        # detection artifact, not pipeline activity (see MIRROR_TERMINAL_KINDS and this module's
+        # docstring): lacking a task_timing "run" span, `coverage_wall` falls back to the same
+        # mirror-lag-excluding bound a span's own open_bound already uses (`last_real`), not the
+        # raw lane_wall/wall_seconds -- a dangling task_complete must not dilute coverage any more
+        # than it is allowed to inflate a span. These three fixtures' real activity is almost
+        # entirely covered by (estimated) spans once the trailing mirror gap is excluded, so
+        # coverage reads high and unattributed near zero, even though `wall_seconds` (asserted
+        # separately above) still honestly reports the full multi-hour span.
         for name in ("lv2p2", "dp-ab2", "demo"):
             result = self._aggregate(name)
             self.assertIn("unattributed", result)
-            self.assertGreater(result["unattributed"]["total"], 1000.0)
-            self.assertLess(result["coverage"], 0.01)
+            self.assertLess(result["unattributed"]["total"], 1.0)
+            self.assertGreater(result["coverage"], 0.95)
 
-    def test_coverage_is_attributed_over_lane_wall(self):
+    def test_coverage_is_attributed_over_coverage_wall(self):
         for name in ("lv2p2", "dp-ab2", "demo"):
+            root = self.MIRROR_LAG / name
             result = self._aggregate(name)
-            # None of these lanes are running (asserted above), so each lane's own wall time is
-            # simply its last event minus its first -- `timeline` doesn't expose "seconds"
-            # directly (that's a `slowest`-only field), so it's reconstructed here.
-            lane_wall_total = sum(lane["end"] - lane["start"] for lane in result["timeline"])
-            expected = result["total_seconds"] / lane_wall_total if lane_wall_total else 1.0
+            # None of these lanes are running or have a task_timing run span, so each lane's own
+            # coverage_wall is its last *real* (non-mirror) event minus its first.
+            coverage_wall_total = sum(
+                self._lane_last_real_time(root, lane["candidate"]) - lane["start"]
+                for lane in result["timeline"]
+            )
+            expected = result["total_seconds"] / coverage_wall_total if coverage_wall_total else 1.0
             self.assertAlmostEqual(result["coverage"], expected, places=6)
-            # And the two rows account for the whole lane-wall total, by construction.
+            # And the two rows account for the whole coverage_wall total, by construction.
             self.assertAlmostEqual(
                 result["total_seconds"] + result["unattributed"]["total"],
-                lane_wall_total,
+                coverage_wall_total,
                 places=3,
             )
 

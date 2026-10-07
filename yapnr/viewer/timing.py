@@ -84,17 +84,22 @@ really running at once.
 
 **Unattributed time and coverage.** Per lane, a ``coverage_wall`` figure minus the sum of its
 pipeline-span seconds is that lane's ``unattributed`` time: wall-clock the lane genuinely spent
-somewhere, with no stage event to say where. ``coverage_wall`` is the task's own ``run``
-task_timing span (real Batch RUNNING-state transitions, GCP only) when one exists, since a lane's
-full first-to-last-event range (``lane_wall``, the same figure as the lane's own ``seconds``) also
-spans queue-wait/boot (already its own ``task_overhead`` row, never meant to double as pipeline
-coverage) and any mirror-detection lag past the lane's terminal event (the same artifact
-``open_bound`` already excludes from spans themselves, above) -- both would otherwise dilute
-coverage for reasons that have nothing to do with how well the pipeline is instrumented. Lacking a
-run span (the local backend, or a campaign predating task_timing), ``coverage_wall`` is
-``lane_wall`` unchanged. Aggregated in the same shape as a stage (:func:`_stat_block`) under the
-top-level ``unattributed`` key, and ``coverage`` (also top-level, and in the CLI table) is
-attributed total over ``coverage_wall`` total across the scope -- the fraction of a lane's real
+*doing something real*, with no stage event to say where. ``coverage_wall`` is, in order: the
+task's own ``run`` task_timing span (real Batch RUNNING-state transitions, GCP only) when one
+exists; else ``last_real - start`` (extended to ``now`` while running) -- the exact same
+mirror-lag-excluding bound a span's own ``open_bound`` already uses, above, not the lane's raw
+``lane_wall``/``seconds`` (first-to-last-*recorded*-event). Both exclusions matter for the same
+reason: queue-wait/boot is already its own ``task_overhead`` row, and a trailing
+mirror-synthesized terminal event's detection lag is not pipeline activity at all -- a dangling
+``task_complete`` must not dilute coverage any more than :func:`_estimate_spans` lets it inflate a
+span. The trade-off this accepts: a campaign whose only telemetry is one early marker and then
+genuine hours of silent, real, unobserved work (rather than a mirror catching up late) reads a
+misleadingly high coverage too, since there's nothing left to measure the gap against once the
+trailing mirror event is excluded -- ``wall_seconds`` (never adjusted by any of this) is what
+still shows that discrepancy, by staying far larger than ``total_seconds``. Aggregated in the same
+shape as a stage (:func:`_stat_block`) under the top-level ``unattributed`` key, and ``coverage``
+(also top-level, and in the CLI table) is attributed total over ``coverage_wall`` total across the
+scope -- the fraction of a lane's real
 run time any stage actually accounts for. A campaign relying on marker-estimated spans with a
 sparse marker set reads a low coverage; one instrumented with ``stage_start``/``stage_end``
 through its last real phase reads close to 1.0.
@@ -502,16 +507,20 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
         # GCP mirror's task_timing, real Batch status transitions) rather than the lane's full
         # first-to-last-event range: that range also spans queue-wait and boot (already their own
         # task_overhead stage, never meant to count as pipeline coverage) and any mirror-detection
-        # lag past the lane's terminal event (the same artifact `open_bound` excludes above). A
-        # lane with no task_timing (the local backend, or a campaign predating it) falls back to
-        # `lane_wall` unchanged.
+        # lag past the lane's terminal event (the same artifact `open_bound` excludes above).
+        # Lacking a run span -- the local backend, a campaign predating task_timing, or (seen
+        # live: GCP Batch's statusEvents are not always still listable once a job has fully
+        # finished, even moments later) a late mirror poll that simply missed catching it -- the
+        # fallback is `last_real`, the exact same mirror-lag-excluding bound `open_bound` already
+        # uses for spans, not the raw `lane_wall`: a dangling task_complete must not dilute
+        # coverage any more than it is allowed to inflate a span.
         run_spans = [s for s in task_spans if s["stage"] == "run"]
         if run_spans:
             coverage_wall = max(
                 0.0, max(s["end"] for s in run_spans) - min(s["start"] for s in run_spans)
             )
         else:
-            coverage_wall = lane_wall
+            coverage_wall = (now - start) if running else (last_real - start)
         attributed = sum(span["seconds"] for span in spans)
         unattributed = max(0.0, coverage_wall - attributed)
         unattributed_durations.append(unattributed)

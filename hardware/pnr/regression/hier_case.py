@@ -998,7 +998,23 @@ def run(root, seed):
             selected=best["id"],
             block_copper=dict(tracks=len(best["block_tracks"]), vias=len(best["block_vias"])),
             **(
-                {"hulls": {b: h[0].get("stats") for b, h in sorted(case["hulls"].items())}}
+                {
+                    "hulls": {b: h[0].get("stats") for b, h in sorted(case["hulls"].items())},
+                    # Board-frame hull cover rectangles at the final (possibly compacted)
+                    # macro poses, for renders to draw: the same geometry compaction and
+                    # global placement actually slide, not an approximation of it.
+                    "hull_rects": {
+                        name: macro_shapes(
+                            frames[name],
+                            best["macro_poses"][name][:2],
+                            best["macro_poses"][name][2],
+                            0.0,
+                            case["hulls"].get(name),
+                        )
+                        for name in sorted(frames)
+                        if name in case["hulls"]
+                    },
+                }
                 if case.get("hulls")
                 else {}
             ),

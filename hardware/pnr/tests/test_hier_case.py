@@ -349,6 +349,16 @@ class RouteCompactTest(unittest.TestCase):
         # that), so top-level compaction accepting nothing here is expected, not a
         # silently-broken pass.
         self.check(root, report, require_accepted=False)
+        # hull_rects: board-frame hull cover rectangles a render can draw, one entry
+        # per hull-bearing macro, each a non-empty list of (plane, x0, y0, x1, y1).
+        rects = report["hier"]["hull_rects"]
+        self.assertEqual(set(rects), set(report["hier"]["hulls"]))
+        for shapes in rects.values():
+            self.assertTrue(shapes)
+            for plane, x0, y0, x1, y1 in shapes:
+                self.assertIsInstance(plane, str)
+                self.assertLess(x0, x1)
+                self.assertLess(y0, y1)
         self.assertEqual(set(report["hier"]["hulls"]), {"top.ch_a", "top.ch_b", "top.drv"})
         self.assertNotIn("blocks", report["route_compact"])
 

@@ -938,6 +938,15 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--exact-late-room",
+        action="store_true",
+        help=(
+            "PNR_EXACT_LATE_ROOM=1: the exact-separation recovery also runs on a board whose "
+            "plane pads writeback drops after routing, keeping its route only when every drop "
+            "keeps its room (pnr.route.detail.maze.late_drop_room)"
+        ),
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
@@ -1054,6 +1063,8 @@ def main():
         env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
     if args.rail_alloc:
         env["PNR_RAIL_ALLOC"] = args.rail_alloc
+    if args.exact_late_room:
+        env["PNR_EXACT_LATE_ROOM"] = "1"
     if args.detail_pitch_mm is not None:
         import math
 

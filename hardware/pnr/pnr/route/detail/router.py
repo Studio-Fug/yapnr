@@ -100,6 +100,52 @@ def _bottom_site_reuse(graph: BoardGraph, rules: Optional[dict]) -> dict:
     return out
 
 
+def _late_pads(graph: BoardGraph, planes: Set[str], escapes=()) -> list:
+    """``[(pad id, net, (x, y), surface side, half diagonal)]``: the plane nets' surface
+    pads whose via drop writeback adds after routing (no escape of their net at the
+    pad centre, ``escapes``; a far-side twin's near land holds its drop)."""
+    planned = {
+        (esc.net, round(esc.pad_xy[0], 6), round(esc.pad_xy[1], 6))
+        for esc in escapes
+        if esc.net in planes and esc.kind != "blocked"
+    }
+    out = []
+    for comp in graph.components:
+        twins = far_twins(comp)
+        for k, ((name, net, r), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
+            if net not in planes or pad.through_hole or k in twins:
+                continue
+            if (net, round(r.cx, 6), round(r.cy, 6)) in planned:
+                continue
+            side = comp.side
+            if getattr(pad, "far_side", None):
+                side = "bottom" if side == "top" else "top"
+            out.append(
+                ("%s.%s" % (comp.ref, name), net, (r.cx, r.cy), side, math.hypot(r.w, r.h) / 2)
+            )
+    return sorted(out)
+
+
+def _late_drops(grid, graph, planes, deferred, escapes, fab):
+    """PNR_EXACT_LATE_ROOM=1 (default off): the drop sites the plane pads writeback
+    drops after routing need (:func:`_late_pads`), as :func:`.maze.late_drop_room`
+    judges them, so :func:`.maze.route` may run its exact-separation recovery on a
+    board with such pads and keep the recovered route only when it leaves fewer
+    connections open *and* room for every drop the negotiated route left room for.
+    None (the recovery is skipped, as before) with the flag off, or when deferred nets
+    (routed natively after the grid) are late copper too: their room is not judged.
+    Each site: ``(pad, net, centre, surface layer, nearest and farthest via centre)``,
+    the via ring writeback's dog-bone searches (pad half diagonal + via radius +
+    clearance, up to 1.5 mm further)."""
+    if os.environ.get("PNR_EXACT_LATE_ROOM") != "1" or deferred:
+        return None
+    reach = fab["via_diameter_mm"] / 2 + fab["clearance_mm"]
+    return [
+        (pad, net, xy, grid.side_layer(side), half + reach, half + reach + 1.5)
+        for pad, net, xy, side, half in _late_pads(graph, planes, escapes)
+    ]
+
+
 def _late_copper(
     graph: BoardGraph, planes: Set[str], deferred: Set[str], escapes=()
 ) -> Optional[str]:
@@ -109,20 +155,7 @@ def _late_copper(
     pair nets (routed natively after the grid). A pad whose drop the escape plan
     already holds (an escape of its net at its centre, ``escapes``) is not late.
     :func:`.maze.route` skips its exact-separation recovery when there is any."""
-    planned = {
-        (esc.net, round(esc.pad_xy[0], 6), round(esc.pad_xy[1], 6))
-        for esc in escapes
-        if esc.net in planes and esc.kind != "blocked"
-    }
-    pads = sorted(
-        "%s.%s" % (comp.ref, name)
-        for comp in graph.components
-        for k, ((name, net, r), pad) in enumerate(zip(pad_rects(comp), comp.pads))
-        if net in planes
-        and not pad.through_hole
-        and k not in far_twins(comp)  # its near land holds the drop
-        and (net, round(r.cx, 6), round(r.cy, 6)) not in planned
-    )
+    pads = [pad for pad, *_rest in _late_pads(graph, planes, escapes)]
     parts = []
     if pads:
         parts.append(
@@ -540,15 +573,26 @@ def _diag_unrouted(grid, net_access, unrouted, via_keepout):
     import sys
 
     alone_ok = 0
+    verdicts = {}
     for net in unrouted:
+        if net not in net_access:  # a plane net's drops (no signal access to route)
+            verdicts[net] = "no-access"
+            continue
         # The halo model alone, as documented: what negotiation could not separate.
         r = route(grid, {net: net_access[net]}, max_iters=6, via_keepout=via_keepout, exact="off")
+        verdicts[net] = "blocked" if r.unrouted else "alone-ok"
         if not r.unrouted:
             alone_ok += 1
     sys.stderr.write(
         "DIAG unrouted=%d: routable-alone=%d (negotiation-limited), "
-        "blocked-alone=%d (resource-limited)\n"
-        % (len(unrouted), alone_ok, len(unrouted) - alone_ok)
+        "blocked-alone=%d (resource-limited), no-access=%d: %s\n"
+        % (
+            len(unrouted),
+            alone_ok,
+            sum(v == "blocked" for v in verdicts.values()),
+            sum(v == "no-access" for v in verdicts.values()),
+            " ".join("%s=%s" % kv for kv in sorted(verdicts.items())),
+        )
     )
 
 
@@ -1491,6 +1535,7 @@ def _route_board(
         rrr_rounds=ripup_rounds,
         via_cost=3.0 / grid.pitch,
         late_copper=_late_copper(graph, planes, deferred, plan.escapes),
+        late_drops=_late_drops(grid, graph, planes, deferred, plan.escapes, fab),
         **({"via_keepouts": via_keepouts} if via_keepouts else {}),
     )
     class_report = None

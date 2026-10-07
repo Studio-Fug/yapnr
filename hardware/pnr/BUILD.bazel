@@ -2675,6 +2675,24 @@ py_test(
     ],
 )
 
+# PNR_EXACT_LATE_ROOM: the exact-separation recovery beside late plane drops (the drop
+# room check, the recovery's keep/discard choice, the router's drop sites).
+py_test(
+    name = "exact_late_room_test",
+    size = "small",
+    srcs = ["tests/test_exact_late_room.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_exact_late_room.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
 # The same judged by KiCad: ingest and writeback of a footprint's rule area, the native
 # Oracle and the shove world reading it, and (with --test_env=PNR_KICAD_PYTHON=... and
 # --test_env=PNR_KICAD_CLI=..., headless KiCad) a routed board's DRC: no

@@ -76,6 +76,8 @@ OPTIONS = {
     "power_first": bool,
     "route_pairs_diff_pairs": bool,
     "rail_alloc": str,
+    "exact_late_room": bool,
+    "maze_kernel": str,
 }
 FLAGS = {
     "packed_maze": "--packed-maze",
@@ -101,6 +103,8 @@ FLAGS = {
     # ladder-v2 ab-pairs-pool A/B.
     "power_first": "--power-first",
     "route_pairs_diff_pairs": "--route-pairs-diff-pairs",
+    # The exact-separation recovery beside late plane drops (router-keepouts).
+    "exact_late_room": "--exact-late-room",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
 WEIGHTS = {"gp_channels": "--gp-channels", "legalize_hpwl": "--legalize-hpwl"}
@@ -151,6 +155,8 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
             "--initial-finalists",
             str(options.get("initial_finalists", 3)),
         ]
+    if options.get("maze_kernel"):
+        args += ["--maze-kernel", str(options["maze_kernel"])]  # packed or native
     if options.get("detail_pitch_mm") is not None:
         args += ["--detail-pitch-mm", str(options["detail_pitch_mm"])]
     if options.get("trace_placement_every") is not None:

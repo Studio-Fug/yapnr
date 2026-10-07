@@ -135,13 +135,17 @@ def _late_drops(grid, graph, planes, deferred, escapes, fab):
     None (the recovery is skipped, as before) with the flag off, or when deferred nets
     (routed natively after the grid) are late copper too: their room is not judged.
     Each site: ``(pad, net, centre, surface layer, nearest and farthest via centre)``,
-    the via ring writeback's dog-bone searches (pad half diagonal + via radius +
-    clearance, up to 1.5 mm further)."""
+    the exact ring :func:`pnr.writeback._dogbone_fanout_net` searches
+    (:func:`pnr.writeback.via_drop_span_mm`): pad half diagonal + via radius +
+    clearance, out to its farthest extra search step."""
     if os.environ.get("PNR_EXACT_LATE_ROOM") != "1" or deferred:
         return None
-    reach = fab["via_diameter_mm"] / 2 + fab["clearance_mm"]
+    from pnr.writeback import via_drop_span_mm
+
+    via_r = fab["via_diameter_mm"] / 2
+    clr = fab["clearance_mm"]
     return [
-        (pad, net, xy, grid.side_layer(side), half + reach, half + reach + 1.5)
+        (pad, net, xy, grid.side_layer(side), *via_drop_span_mm(half, via_r, clr))
         for pad, net, xy, side, half in _late_pads(graph, planes, escapes)
     ]
 
@@ -1397,26 +1401,29 @@ def _route_board(
         )
         coupled_nets = set(coupled_route.nets)
         signal_nets -= coupled_nets
-    plan = plan_escapes(
-        grid,
-        graph,
-        signal_nets,
-        via_keepout=via_keepout,
-        allow_via_in_pad=escape_via_in_pad,
-        allow_dogbone=escape_dogbone,
-        dogbone_reach=escape_reach_cells(grid.pitch, track_width_mm, clearance_mm),
-        joint=os.environ.get("PNR_JOINT_ACCESS", "1") != "0",
-        joint_max_options=int(os.environ.get("PNR_JOINT_ACCESS_OPTIONS", "16")),
-        joint_max_states=int(os.environ.get("PNR_JOINT_ACCESS_STATES", "20000")),
-        joint_max_cluster_size=int(os.environ.get("PNR_JOINT_ACCESS_CLUSTER", "24")),
-        drop_widths=drop_widths or None,
-        drop_in_pad=grid.in_pad is not None,
-        drop_pad_width=pad_drop_width,
-        plane_access=plane_access,
-        drop_span=drop_span,
-        **({"skip_pads": escape_skip} if fanouts is not None or escape_skip else {}),
-        **({"drop_reuse": _bottom_site_reuse(graph, rules)} if fanouts is not None else {}),
-    )
+    from pnr.profile import span as profile_span  # aliased: "span" means via/layer span here
+
+    with profile_span("escape_plan"):
+        plan = plan_escapes(
+            grid,
+            graph,
+            signal_nets,
+            via_keepout=via_keepout,
+            allow_via_in_pad=escape_via_in_pad,
+            allow_dogbone=escape_dogbone,
+            dogbone_reach=escape_reach_cells(grid.pitch, track_width_mm, clearance_mm),
+            joint=os.environ.get("PNR_JOINT_ACCESS", "1") != "0",
+            joint_max_options=int(os.environ.get("PNR_JOINT_ACCESS_OPTIONS", "16")),
+            joint_max_states=int(os.environ.get("PNR_JOINT_ACCESS_STATES", "20000")),
+            joint_max_cluster_size=int(os.environ.get("PNR_JOINT_ACCESS_CLUSTER", "24")),
+            drop_widths=drop_widths or None,
+            drop_in_pad=grid.in_pad is not None,
+            drop_pad_width=pad_drop_width,
+            plane_access=plane_access,
+            drop_span=drop_span,
+            **({"skip_pads": escape_skip} if fanouts is not None or escape_skip else {}),
+            **({"drop_reuse": _bottom_site_reuse(graph, rules)} if fanouts is not None else {}),
+        )
     if pour_pads:
         plan.diagnostics["pour_pads"] = sorted("%s.%s" % p for p in pour_pads)
     if poured:

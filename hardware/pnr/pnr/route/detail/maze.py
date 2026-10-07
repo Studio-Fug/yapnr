@@ -1259,6 +1259,7 @@ def route(grid, net_access, *, late_copper=None, late_drops=None, exact=None, **
     import os
     import sys
 
+    from pnr.profile import span as profile_span  # aliased: "span" is a via/layer span here
     from pnr.runtime_controls import route_workers
 
     from .exact_route import exact_mode
@@ -1271,20 +1272,22 @@ def route(grid, net_access, *, late_copper=None, late_drops=None, exact=None, **
             mode = "off"
     if mode == "full":
         events = []
-        result = route_exact(grid, net_access, _events=events, **kwargs)
+        with profile_span("maze_exact_route"):
+            result = route_exact(grid, net_access, _events=events, **kwargs)
         _replay(grid, None, events, result.iterations)
         return result
     workers = route_workers("grid-start")
-    if workers == 1 and not os.environ.get("PNR_CONTROL_FILE"):
-        result = _route_impl(grid, net_access, **kwargs)
-    else:
-        from .parallel import NetPool
+    with profile_span("maze_halo_route"):
+        if workers == 1 and not os.environ.get("PNR_CONTROL_FILE"):
+            result = _route_impl(grid, net_access, **kwargs)
+        else:
+            from .parallel import NetPool
 
-        pool = NetPool(grid, workers)
-        try:
-            result = _route_impl(grid, net_access, **kwargs, _pool=pool)
-        finally:
-            pool.close()
+            pool = NetPool(grid, workers)
+            try:
+                result = _route_impl(grid, net_access, **kwargs, _pool=pool)
+            finally:
+                pool.close()
     if mode == "recover" and result.unrouted:
         from .exact_route import missing_connections
 
@@ -1304,7 +1307,8 @@ def route(grid, net_access, *, late_copper=None, late_drops=None, exact=None, **
         # Open connections left: route again with the exact pairwise separation
         # and keep it only when it leaves strictly fewer connections open.
         events = []
-        exact_result = route_exact(grid, net_access, _events=events, **kwargs)
+        with profile_span("maze_exact_recovery"):
+            exact_result = route_exact(grid, net_access, _events=events, **kwargs)
         after = missing_connections(exact_result)
         roomy = True
         note = ""

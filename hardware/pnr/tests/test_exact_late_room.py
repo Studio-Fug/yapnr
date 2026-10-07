@@ -133,6 +133,51 @@ class RouterSitesTest(unittest.TestCase):
         self.assertAlmostEqual(near, half + 0.3)
         self.assertAlmostEqual(far, half + 1.8)
 
+    def test_span_shares_writebacks_search_ring(self):
+        """_late_drops' (near, far) is pnr.writeback.via_drop_span_mm exactly, so the
+        two searches (this one on the signal grid, writeback's dog-bone fanout after
+        routing) cannot drift apart (review finding on #85: maze.py:1173,
+        router.py:129 used to re-derive the ring by hand)."""
+        from pnr.route.detail.router import _late_drops, _late_pads
+        from pnr.writeback import VIA_DROP_SEARCH_MM, via_drop_span_mm
+
+        part = Component(
+            "C1",
+            "c",
+            (5.0, 3.0),
+            0.0,
+            "top",
+            (1.6, 0.8),
+            (1.6, 0.8),
+            pads=[Pad("1", "GND", (-0.5, 0.0), (0.6, 0.6))],
+        )
+        graph = BoardGraph("t", [part], [Net("GND", 1, [("C1", "1")])])
+        ((_, _, _, _, half),) = _late_pads(graph, {"GND"})
+        fab = dict(via_diameter_mm=0.4, clearance_mm=0.1)
+        with mock.patch.dict(os.environ, {"PNR_EXACT_LATE_ROOM": "1"}):
+            ((_, _, _, _, near, far),) = _late_drops(grid(), graph, {"GND"}, set(), (), fab)
+        want_near, want_far = via_drop_span_mm(
+            half, fab["via_diameter_mm"] / 2, fab["clearance_mm"]
+        )
+        self.assertAlmostEqual(near, want_near)
+        self.assertAlmostEqual(far, want_far)
+        self.assertAlmostEqual(far - near, VIA_DROP_SEARCH_MM[-1])
+
+
+class ViaDropSpanTest(unittest.TestCase):
+    def test_near_is_half_diagonal_plus_via_radius_plus_clearance(self):
+        from pnr.writeback import via_drop_span_mm
+
+        near, far = via_drop_span_mm(0.5, 0.2, 0.1)
+        self.assertAlmostEqual(near, 0.8)
+        self.assertAlmostEqual(far, 2.3)
+
+    def test_far_is_near_plus_the_farthest_search_step(self):
+        from pnr.writeback import VIA_DROP_SEARCH_MM, via_drop_span_mm
+
+        near, far = via_drop_span_mm(1.1, 0.3, 0.2)
+        self.assertAlmostEqual(far - near, VIA_DROP_SEARCH_MM[-1])
+
 
 if __name__ == "__main__":
     unittest.main()

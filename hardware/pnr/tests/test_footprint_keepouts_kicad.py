@@ -291,6 +291,64 @@ class NativeReadersTest(unittest.TestCase):
         self.assertTrue(all(p["zone"] == dict(tracks=True, vias=True) for p in rules))
 
 
+@unittest.skipUnless(HAVE_PCBNEW, "requires KiCad's pcbnew")
+class RuleAreaIntrusionTest(unittest.TestCase):
+    """pnr.electrical_audit.rule_area_intrusions: the ``pads``/``footprints`` area
+    kinds nothing else acts on yet (review finding on #85: fixed_block.py:228) are
+    at least surfaced as a quantified warning when a foreign pad lands in one."""
+
+    def board(self, root, tp_xy):
+        import pcbnew as k
+
+        library = write_library(root)
+        b = k.BOARD()
+        b.SetCopperLayerCount(2)
+
+        def nm(v):
+            return int(round(v * 1e6))
+
+        def V(x, y):
+            return k.VECTOR2I(nm(x), nm(y))
+
+        for a, z in [((0, 0), (20, 8)), ((20, 8), (0, 0))]:  # a loose diagonal is enough
+            s = k.PCB_SHAPE(b)
+            s.SetShape(k.SHAPE_T_SEGMENT)
+            s.SetStart(V(*a))
+            s.SetEnd(V(*z))
+            s.SetLayer(k.Edge_Cuts)
+            s.SetWidth(nm(0.1))
+            b.Add(s)
+        net = k.NETINFO_ITEM(b, "A")
+        b.Add(net)
+
+        def place(name, ref, at):
+            fp = k.FootprintLoad(str(library), name)
+            fp.SetReference(ref)
+            b.Add(fp)
+            fp.SetPosition(V(*at))
+            for pad in fp.Pads():
+                pad.SetNet(net)
+            return fp
+
+        place("SOCKET", "J3", (10, 4))  # keep-out (library frame) -> world x 9..11, y 1.4..5.0
+        place("TP", "T1", tp_xy)
+        return b
+
+    def test_a_foreign_pad_inside_the_area_is_reported(self):
+        from pnr.electrical_audit import rule_area_intrusions
+
+        with tempfile.TemporaryDirectory() as tmp:
+            got = rule_area_intrusions(self.board(Path(tmp), (10, 2)))  # inside
+        self.assertEqual([(g["owner"], g["ref"]) for g in got], [("J3", "T1")])
+
+    def test_a_pad_outside_the_area_is_not_reported(self):
+        from pnr.electrical_audit import rule_area_intrusions
+
+        with tempfile.TemporaryDirectory() as tmp:
+            got = rule_area_intrusions(self.board(Path(tmp), (10, 7)))  # outside
+        self.assertEqual(got, [])
+
+
 # Ingests the source board and writes the graph (KiCad's Python). argv: board, out json.
 INGEST = r"""
 import sys

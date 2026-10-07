@@ -317,17 +317,19 @@ and no findings in KiCad’s DRC, in the default configuration and with compact 
 gloss (the animations’ configuration). The ladder routes and is judged under its fixtures’ own
 fabrication rules (<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">legacy</span></code>, the runner’s default; see below). Under the engine’s
 default JLCPCB profile (<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code>), where the router keeps vias 0.127 mm off SMD
-pads, every case passes too (other boards).</p>
+pads, every case passes too (other boards; for the hard rungs see the gate below).</p>
 <p><strong>Default-flip gate (2026-10-06, campaign <code class="docutils literal notranslate"><span class="pre">20261007-ladder-7fe33f</span></code>,
 <a class="reference internal" href="decisions.html"><span class="std std-doc">decisions.md</span></a>):</strong> the runner’s default stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code>. Of the 21 cells
 <code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code> found failing under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>, 20 now pass (the fab-profile-territory
 ones; rail allocation search is the default separately, PR #81) but
 <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code> seed 0 still fails its <code class="docutils literal notranslate"><span class="pre">rails-In4</span></code> plane-partition check
 under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> (<code class="docutils literal notranslate"><span class="pre">legacy</span></code> fails that cell on <em>both</em> seeds, so the flip is not a regression
-there, but the gate text is “all 21 pass” and this is 20 of 21). Across the other 44 cells,
-<code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> is never worse on opens or DRC, but its copper length runs higher on most rungs
-(e.g. <code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>: 93.1/113.9 mm vs 80.8/101.1 mm) from the wider via-to-pad keepout, so
-this stays open even past the one cell.</p>
+there, but the gate text is “all 21 pass” and this is 20 of 21). Across all 45 cells (90 seed
+runs), <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> passes 89 to <code class="docutils literal notranslate"><span class="pre">legacy</span></code>’s 86 (<code class="docutils literal notranslate"><span class="pre">legacy</span></code> also fails <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> seed 0
+and <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-mc</span></code> seed 1 on a skew finding), has the same or fewer opens and DRC findings
+everywhere, and uses fewer vias (3627 vs 3894; fewer on 37 cases, more on 4) and less copper
+(29.5 m vs 31.9 m; less on 30 cases, more on 14, e.g. <code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>: 93.1/113.9 mm vs
+80.8/101.1 mm). The <code class="docutils literal notranslate"><span class="pre">-rails</span></code> cell is the only thing holding the flip.</p>
 </div></blockquote>
 <section id="the-cases">
 <h2>The cases<a class="headerlink" href="#the-cases" title="Link to this heading">¶</a></h2>

@@ -1376,14 +1376,21 @@ placement runs with compact instead of refusing it.</p></li>
 <code class="docutils literal notranslate"><span class="pre">20261007-ladder-7fe33f</span></code>, <a class="reference internal" href="regression-ladder.html"><span class="std std-doc">regression-ladder.md</span></a>):</p>
 <ul class="simple">
 <li><p><strong>Gate: flip <code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code> default to <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> only if all 21 of <code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code>’s
-jlc-pofv failures pass on this commit, and no rung is worse than <code class="docutils literal notranslate"><span class="pre">legacy</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">experiments/</span> <span class="pre">defaults-rails-fab.toml</span></code>: the full ladder + showcases + 33 hard rungs, both fab profiles, seeds
-0 and 1, rail allocation search as the default in both arms, PR #81).</p></li>
+jlc-pofv failures pass on this commit, and no rung is worse than <code class="docutils literal notranslate"><span class="pre">legacy</span></code></strong>
+(<code class="docutils literal notranslate"><span class="pre">experiments/defaults-rails-fab.toml</span></code>: the full ladder + showcases + 33 hard rungs, both fab
+profiles, seeds 0 and 1, rail allocation search as the default in both arms, PR #81).</p></li>
 <li><p><strong>Outcome: stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code>.</strong> 20 of the 21 now pass; <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code> seed 0
 still fails a <code class="docutils literal notranslate"><span class="pre">rails-In4</span></code> plane-partition check under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>. That cell is rail-allocation
 territory, not fab-profile (<code class="docutils literal notranslate"><span class="pre">legacy</span></code> fails it on both seeds, so <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> is not a regression
-there), but the gate as stated is 21 of 21, not 20. Separately, <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> is never worse on
-opens, DRC or vias across the other 44 cells, but its copper length is higher on most of them
-(the wider via-to-pad keepout), so this is not a one-cell decision even past the rail issue.</p></li>
+there), but the gate as stated is 21 of 21, not 20. Otherwise <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> is no worse than
+<code class="docutils literal notranslate"><span class="pre">legacy</span></code> anywhere: 89 of 90 seed runs pass vs 86 (<code class="docutils literal notranslate"><span class="pre">legacy</span></code> also fails <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> s0
+and <code class="docutils literal notranslate"><span class="pre">-mc</span></code> s1 on skew), opens and DRC findings are the same or fewer, and it uses fewer vias
+(3627 vs 3894) and less copper (29.5 m vs 31.9 m; less on 30 of 45 cases, more on 14). The
+<code class="docutils literal notranslate"><span class="pre">-rails</span></code> cell is the only thing holding the flip.</p></li>
+<li><p><strong>Rail allocation on <code class="docutils literal notranslate"><span class="pre">-rails</span></code>:</strong> with search the default (both arms), <code class="docutils literal notranslate"><span class="pre">-rails</span></code> passes 1 of 4
+cells here (<code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> s1 only; <code class="docutils literal notranslate"><span class="pre">rails-In4</span></code> on the rest), in this campaign’s configuration
+(compact, gloss, initial pool), against #81’s 4 of 4 for search in its own A/B. Search is still
+not worse than static (0 of 4 in #81), but the rung is not settled.</p></li>
 <li><p><strong>Revisit when</strong> the <code class="docutils literal notranslate"><span class="pre">-rails</span></code> cell passes under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> on both seeds (rail allocation or
 the plane-partition checker), or the owner decides the one rail-allocation-territory cell is
 out of scope for this gate.</p></li>

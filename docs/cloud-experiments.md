@@ -402,9 +402,11 @@ So the estimate (`plan`, and the caps at `submit`) prices the VM time of the cla
   adds task records to the history (`[prices] durations`, default `<store>/durations.json`);
   each sample is scaled by its machine family's speed. The plan prints how many predictions came
   from where.
-- **Longest first**: a job's tasks are submitted in decreasing predicted duration (Batch hands
-  out task indices in order, so this is LPT scheduling, and the longest tasks gather on the first
-  VM that comes up).
+- **Longest first**: the lines of a job's `submissions/<n>.indices` are in decreasing predicted
+  duration. Batch starts a job's task indices in no particular order (measured), so on a packed
+  job each task, when it starts, claims the first line no other task has claimed (an object
+  created only if absent in the runs bucket; a retry finds its own claim): LPT scheduling, with
+  the longest work on the first slots to come up.
 - **VM count**: as few VMs as keep the simulated makespan within 25% of the shortest the quota
   allows (`parallelism` = VMs x tasks per VM, at most `max_parallel_vcpus`), so VMs stay busy
   and the makespan stays near the longest task.

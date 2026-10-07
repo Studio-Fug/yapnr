@@ -29,7 +29,8 @@ Packing (``pack``) of one class's pending tasks, all pure and deterministic:
 - each job's VM count comes from its predicted work: as few VMs as keep the simulated makespan
   within ``1 + slack`` of the shortest the quota's VMs allow (about the longest unit when the
   work fits, so VMs stay busy and the makespan stays near the longest task);
-- units are ordered longest first (Batch hands out task indices in order, so this is LPT).
+- units are ordered longest first; Batch starts task indices in no particular order, so the
+  wrapper's claims (``task.Claims``) hand them out in this order as tasks start (LPT).
 
 Nothing about a task changes: the same lines of ``tasks.jsonl`` run with the same commands,
 seeds and outputs; only which Batch task runs them, in which order and on how many VMs.
@@ -276,9 +277,9 @@ def simulate(
 ) -> Tuple[float, float]:
     """(VM-seconds, makespan seconds) of tasks handed out in order to ``vms`` x ``per_vm`` slots.
 
-    Each next task starts on the slot that frees first (Batch hands out task indices in order,
-    and fills the first VM that comes up first); a VM is billed from ``boot_s`` before its first
-    task to ``idle_s`` after its last one. A VM that gets no task is never started.
+    Each next task starts on the slot that frees first (the wrapper's claims hand lines out in
+    order as tasks start); a VM is billed from ``boot_s`` before its first task to ``idle_s``
+    after its last one. A VM that gets no task is never started.
     """
     if not seconds:
         return 0.0, 0.0

@@ -312,13 +312,26 @@ board edges, the hierarchical ladder driver and their animations on
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul>
-<li><p><strong>Route-then-compact and hull packing</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/route-compact</span></code>; design
+<li><p><strong>Route-then-compact and hull packing</strong> (PR #86, branch <code class="docutils literal notranslate"><span class="pre">claude/route-compact</span></code>; design
 <a class="reference internal" href="docs/design/route-compact.html"><span class="std std-doc">docs/design/route-compact.md</span></a>). <code class="docutils literal notranslate"><span class="pre">PNR_ROUTE_COMPACT</span></code>
 (<code class="docutils literal notranslate"><span class="pre">TOP</span></code>, <code class="docutils literal notranslate"><span class="pre">BLOCK</span></code>, <code class="docutils literal notranslate"><span class="pre">FLAT</span></code>; default off): after routing, order-preserving 1D compaction (x then
 y) by the copper each gutter holds, rip-up and reroute, back-off on a worse route; the
 hierarchical driver measures block hulls from its in-memory routes (<code class="docutils literal notranslate"><span class="pre">PNR_MACRO_HULL</span></code>), GP
-packs hull bodies (<code class="docutils literal notranslate"><span class="pre">PNR_HULL_DOVETAIL</span></code>), new rung <code class="docutils literal notranslate"><span class="pre">13-dovetail-blocks-23</span></code>. Next: rebase on
-#64/#70 and A/B again on top of detailed placement; the push-and-shove router as the reroute.</p></li>
+packs hull bodies (<code class="docutils literal notranslate"><span class="pre">PNR_HULL_DOVETAIL</span></code>), new rung <code class="docutils literal notranslate"><span class="pre">13-dovetail-blocks-23</span></code>. Rebased on main
+(#80’s viewer stage timing wraps the reroute step now). Review-fix round (2026-10-06):
+<code class="docutils literal notranslate"><span class="pre">not_worse</span></code> counts deferred nets and <code class="docutils literal notranslate"><span class="pre">port_debt_mm</span></code>, not just missing/unresolved; its vias/
+copper tolerance is a share of the pass’s original route, not the previous accepted step
+(no more ratcheting); <code class="docutils literal notranslate"><span class="pre">feedback.py</span></code> refreshes <code class="docutils literal notranslate"><span class="pre">deferred_nets</span></code>/<code class="docutils literal notranslate"><span class="pre">converged</span></code> after FLAT instead
+of leaving them stamped from the pre-compaction route; the pass skips outright when the base
+route is itself incomplete; the deadline’s first-reroute estimate no longer borrows from wall
+time spent before route-compact started; <code class="docutils literal notranslate"><span class="pre">compact_block</span></code> counts violations, not kinds, and
+gains the flat board’s legacy-plane/coupled-pair guards; soft <code class="docutils literal notranslate"><span class="pre">edge_align</span></code>/<code class="docutils literal notranslate"><span class="pre">region</span></code> refs hold
+during compaction; new <code class="docutils literal notranslate"><span class="pre">pnr.place.hull.macro_overlap_area_mm2</span></code> metric and
+<code class="docutils literal notranslate"><span class="pre">hier[&quot;hull_rects&quot;]</span></code> for renders to draw real hull geometry. Hierarchical A/B rerun at head
+in progress (campaign <code class="docutils literal notranslate"><span class="pre">20261007-ladder-01bca2</span></code>, adds a hulls-only-no-compaction arm). Next:
+rebase on #64/#70 and A/B again on top of detailed placement; hull support in <code class="docutils literal notranslate"><span class="pre">compact.py</span></code>
+and the keep legalizer (gp_polish still turns off over hull bodies); the push-and-shove
+router as the reroute.</p></li>
 <li><p><strong>Routing engine for radar60 Rev A, stage 3b</strong> (#49, branch <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>;
 all opt-in, byte-identical where undeclared). Router: pad-local clearance and mask margin (data),
 <code class="docutils literal notranslate"><span class="pre">board.class_clearance:</span> <span class="pre">maze</span> <span class="pre">|</span> <span class="pre">repair</span></code>, <code class="docutils literal notranslate"><span class="pre">board.dru_routing</span></code> (a board’s <code class="docutils literal notranslate"><span class="pre">.kicad_dru</span></code> where it

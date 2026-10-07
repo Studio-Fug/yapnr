@@ -15,13 +15,26 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
-- **Route-then-compact and hull packing** (branch `claude/route-compact`; design
+- **Route-then-compact and hull packing** (PR #86, branch `claude/route-compact`; design
   [docs/design/route-compact.md](docs/design/route-compact.md)). `PNR_ROUTE_COMPACT`
   (`TOP`, `BLOCK`, `FLAT`; default off): after routing, order-preserving 1D compaction (x then
   y) by the copper each gutter holds, rip-up and reroute, back-off on a worse route; the
   hierarchical driver measures block hulls from its in-memory routes (`PNR_MACRO_HULL`), GP
-  packs hull bodies (`PNR_HULL_DOVETAIL`), new rung `13-dovetail-blocks-23`. Next: rebase on
-  #64/#70 and A/B again on top of detailed placement; the push-and-shove router as the reroute.
+  packs hull bodies (`PNR_HULL_DOVETAIL`), new rung `13-dovetail-blocks-23`. Rebased on main
+  (#80's viewer stage timing wraps the reroute step now). Review-fix round (2026-10-06):
+  `not_worse` counts deferred nets and `port_debt_mm`, not just missing/unresolved; its vias/
+  copper tolerance is a share of the pass's original route, not the previous accepted step
+  (no more ratcheting); `feedback.py` refreshes `deferred_nets`/`converged` after FLAT instead
+  of leaving them stamped from the pre-compaction route; the pass skips outright when the base
+  route is itself incomplete; the deadline's first-reroute estimate no longer borrows from wall
+  time spent before route-compact started; `compact_block` counts violations, not kinds, and
+  gains the flat board's legacy-plane/coupled-pair guards; soft `edge_align`/`region` refs hold
+  during compaction; new `pnr.place.hull.macro_overlap_area_mm2` metric and
+  `hier["hull_rects"]` for renders to draw real hull geometry. Hierarchical A/B rerun at head
+  in progress (campaign `20261007-ladder-01bca2`, adds a hulls-only-no-compaction arm). Next:
+  rebase on #64/#70 and A/B again on top of detailed placement; hull support in `compact.py`
+  and the keep legalizer (gp_polish still turns off over hull bodies); the push-and-shove
+  router as the reroute.
 
 - **Routing engine for radar60 Rev A, stage 3b** (#49, branch `claude/radar-routing-engine-2`;
   all opt-in, byte-identical where undeclared). Router: pad-local clearance and mask margin (data),

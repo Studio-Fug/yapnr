@@ -416,6 +416,28 @@ class SpendTest(unittest.TestCase):
         readings = spend.readings(guard)
         self.assertEqual(readings[1].billed(100.0), 1.0)  # ratio x the budget given
 
+    def test_a_raised_budget_is_found_from_the_ratio_drop(self):
+        t = [_dt.datetime(2026, 10, 6, h, tzinfo=UTC) for h in (1, 2, 3, 4)]
+        guard = [
+            spend.Reading(t[0], 0.30),
+            spend.Reading(t[1], 0.336),
+            spend.Reading(t[2], 0.224),  # budget 100 -> 150
+            spend.Reading(t[3], 0.226),
+        ]
+        budgets, changes = spend.budget_history(guard, 150.0)
+        self.assertEqual(budgets[2:], [150.0, 150.0])
+        self.assertAlmostEqual(budgets[0], 100.0, places=0)
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]["at"], t[2].isoformat())
+        billed = [r.billed(b) for r, b in zip(guard, budgets)]
+        self.assertAlmostEqual(billed[1], 33.6, places=1)
+        self.assertAlmostEqual(billed[3], 33.9, places=1)
+
+    def test_a_reading_above_a_later_one_is_dropped(self):
+        t = [_dt.datetime(2026, 10, 3, h, tzinfo=UTC) for h in (1, 2, 3)]
+        kept = spend.monotone([(t[0], 102.0), (t[1], 0.0), (t[2], 0.5)])
+        self.assertEqual(kept, [(t[1], 0.0), (t[2], 0.5)])
+
     def test_job_shapes_from_job_listings(self):
         cloud = FakeCloud(impersonate="x")
         jobs = [

@@ -373,21 +373,70 @@ def month_spend(
             if vm.start < until and (vm.end is None or vm.end > start)
         )
 
-    points = [(r.time, r.billed(budget)) for r in guard]
+    budgets, changes = budget_history(guard, budget)
+    points = monotone([(r.time, r.billed(amount)) for r, amount in zip(guard, budgets)])
     out = reconcile(points, vm_usd, now)
     out.update(
         month=start.strftime("%Y-%m"),
         budget_usd=budget,
         readings=len(guard),
+        readings_used=len(points),
         ratio=guard[-1].ratio if guard else None,
         vms=sum(1 for vm in found if vm.end is None or vm.end > start),
         running_vms=sum(1 for vm in found if vm.end is None),
         vm_hours=round(sum(vm.hours(now, since=start) for vm in found), 2),
         unknown_jobs=unknown,
+        budget_changes=changes,
     )
     if guard and all(r.cost_usd is None and r.budget_usd is None for r in guard) and not budget:
         out["warning"] = "no budget amount: set [prices] budget_usd or pass --budget-usd"
     return out
+
+
+def monotone(points: Sequence[Tuple[_dt.datetime, Optional[float]]]):
+    """The readings a month-to-date cost can have produced: none above a later one (a
+    kill-switch drill's test message, a late message of another period)."""
+    out: List[Tuple[_dt.datetime, Optional[float]]] = []
+    floor = float("inf")
+    for when, billed in reversed(list(points)):
+        if billed is None:
+            continue
+        if billed <= floor + 0.01:
+            out.append((when, billed))
+            floor = min(floor, billed)
+    return list(reversed(out))
+
+
+def budget_history(
+    guard: Sequence[Reading], budget: Optional[float]
+) -> Tuple[List[Optional[float]], List[Dict[str, Any]]]:
+    """The budget each reading's ratio is of, with ``budget`` the current one.
+
+    A month's cost never falls, so a ratio that drops between two readings (that log no amounts)
+    means the budget was raised: the earlier readings are of a budget smaller by the drop's
+    factor (the cost is taken as unchanged across the change).
+    """
+    out: List[Optional[float]] = [budget] * len(guard)
+    changes: List[Dict[str, Any]] = []
+    if not budget:
+        return out, changes
+    current = budget
+    for index in range(len(guard) - 1, -1, -1):
+        out[index] = current
+        if index == 0:
+            break
+        before, after = guard[index - 1], guard[index]
+        if (
+            before.cost_usd is None
+            and after.cost_usd is None
+            and after.ratio > 0
+            and before.ratio > after.ratio * 1.02
+        ):
+            current = current * after.ratio / before.ratio
+            changes.append(
+                {"at": after.time.isoformat(), "from_usd": round(current, 2), "to_usd": out[index]}
+            )
+    return out, list(reversed(changes))
 
 
 def job_shapes(cloud, regions: Sequence[str]) -> Dict[str, Tuple[str, str]]:

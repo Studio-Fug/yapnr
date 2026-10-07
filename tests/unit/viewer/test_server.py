@@ -136,6 +136,48 @@ class ServerIngestionTest(unittest.TestCase):
             finally:
                 stop(process)
 
+    def test_case_and_task_complete_events_set_a_real_verdict(self):
+        """hardware/pnr/regression/run.py's own case_complete/case_failed, and
+        yapnr.exp.live's mirror-synthesized task_complete (no engine ever reported a terminal
+        event for this task at all): both set a lane's status from a real verdict, the same way
+        candidate_complete/candidate_failed already do -- not something that should ever need
+        yapnr.viewer.lane_tree's children-derivation fallback."""
+        with tempfile.TemporaryDirectory(prefix="viewer-case-") as tmp:
+            root = Path(tmp) / "live"
+            (root / "events").mkdir(parents=True)
+
+            def write(event_id, kind, candidate, **data):
+                event = dict(
+                    schema="pnr-live-event-v1",
+                    id=event_id,
+                    time=time.time(),
+                    kind=kind,
+                    candidate=candidate,
+                    iteration=None,
+                    data=data,
+                )
+                (root / "events" / (event_id + ".json")).write_text(json.dumps(event))
+
+            write("e1", "case_complete", "ladder/case-a/s0", passed=True, opens=0, violations=0)
+            write("e2", "case_failed", "ladder/case-b/s0", passed=False, reasons=["designed_open"])
+            write("e3", "task_complete", "ladder/case-c/s0", verdict="pass")
+            write("e4", "task_complete", "ladder/case-d/s0", verdict="fail")
+            process, base = start_viewer(root, "--net-summaries", "off", "--agent", "off")
+            try:
+                deadline = time.monotonic() + 5
+                while True:
+                    with urlopen(base + "/api/state", timeout=5) as response:
+                        state = json.load(response)
+                    if len(state["lanes"]) >= 4 or time.monotonic() > deadline:
+                        break
+                    time.sleep(0.05)
+                self.assertEqual(state["lanes"]["ladder/case-a/s0"]["progress"]["state"], "done")
+                self.assertEqual(state["lanes"]["ladder/case-b/s0"]["progress"]["state"], "failed")
+                self.assertEqual(state["lanes"]["ladder/case-c/s0"]["progress"]["state"], "done")
+                self.assertEqual(state["lanes"]["ladder/case-d/s0"]["progress"]["state"], "failed")
+            finally:
+                stop(process)
+
 
 # Stand-in for the Claude CLI: stream-json with one text delta that reports whether the selection
 # dossier reached the prompt; sleeps so the test can prove the server stays responsive. Notes: with

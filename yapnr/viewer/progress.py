@@ -140,15 +140,20 @@ _PHASE_FRACTION_UNKNOWN = 0.5
 STALE_SECONDS = 600.0
 
 
-def classify(lane: dict, held_over: Optional[dict] = None, now: Optional[float] = None) -> dict:
+def classify(
+    lane: dict,
+    held_over: Optional[dict] = None,
+    now: Optional[float] = None,
+    finished: bool = False,
+) -> dict:
     """Where ``lane`` is on the canonical pipeline right now.
 
-    Returns a dict: ``state`` (one of ``queued``/``running``/``done``/``failed``), ``phase_key``
-    (a key from :data:`PHASE_KEYS`, or ``None`` for a lane that has not started), ``phase_label``
-    (the human label for that key, or ``None``), ``phase_fraction`` (0..1 progress *within* the
-    current phase; always 1.0 once a phase is behind the lane), ``fraction`` (0..1 overall, the
-    quantity a progress bar should fill to), and ``raw_phase`` (the untouched telemetry string,
-    for a tooltip).
+    Returns a dict: ``state`` (one of ``queued``/``running``/``done``/``failed``/``stalled``/
+    ``rejected``/``finished``), ``phase_key`` (a key from :data:`PHASE_KEYS`, or ``None`` for a
+    lane that has not started), ``phase_label`` (the human label for that key, or ``None``),
+    ``phase_fraction`` (0..1 progress *within* the current phase; always 1.0 once a phase is
+    behind the lane), ``fraction`` (0..1 overall, the quantity a progress bar should fill to), and
+    ``raw_phase`` (the untouched telemetry string, for a tooltip).
 
     ``held_over`` is the previous call's result for this same lane (``classify_lane`` passes the
     lane's own last-stored ``progress``), used so that an event with no phase information at all
@@ -160,8 +165,15 @@ def classify(lane: dict, held_over: Optional[dict] = None, now: Optional[float] 
 
     ``now`` is the current wall-clock time (``time.time()``); when given and ``lane["time"]`` (its
     last event) is more than :data:`STALE_SECONDS` behind it, a lane that would otherwise read
-    ``running`` instead reads ``stalled`` -- a lane with no final event is not distinguishable
-    from a dead worker or a viewer restart otherwise.
+    ``running`` instead reads ``stalled`` (``finished`` is false) or ``finished`` (``finished`` is
+    true) -- a lane with no final event is not distinguishable from a dead worker, a viewer
+    restart or a campaign that simply ended without this lane ever reporting a terminal event
+    (the ladder runner's parent "case" lanes before ``hardware/pnr/regression/run.py`` learned to
+    emit one) otherwise. ``finished`` is how :mod:`yapnr.viewer.server` tells this module the
+    whole run is already known to be over (its own marker, or -- for a campaign mirrored locally
+    -- :mod:`yapnr.exp.live`'s finished marker); see ``yapnr.viewer.lane_tree`` for the companion
+    rule that derives a lane with no terminal event of its own from its children once *they* have
+    all ended, which does not need this flag at all.
     """
     status = lane.get("status")
     raw_phase = lane.get("phase")
@@ -218,7 +230,7 @@ def classify(lane: dict, held_over: Optional[dict] = None, now: Optional[float] 
     if now is not None and isinstance(lane.get("time"), (int, float)):
         idle_seconds = now - lane["time"]
         if idle_seconds > STALE_SECONDS:
-            state = "stalled"
+            state = "finished" if finished else "stalled"
 
     if phase_key is None:
         # Never seen a classifiable event yet: at the very start of the pipeline, not nowhere.
@@ -333,6 +345,12 @@ def humanize(lane: dict, classified: Optional[dict] = None) -> str:
         if isinstance(secs, (int, float)):
             return f"Stalled: idle {max(1, int(secs / 60))} min"
         return "Stalled"
+    if state == "finished":
+        # The run is known to be over (yapnr.viewer.server's marker/result-file check) but this
+        # lane itself never reported a terminal event and yapnr.viewer.lane_tree could not derive
+        # one from its children either (no children, or they did not all end the same way) -- see
+        # classify()'s docstring. Distinct from "stalled": idling is no longer in question.
+        return "Finished (no final event)"
     if state == "rejected":
         label = classified.get("phase_label")
         return f"Rejected candidate (reached {label})" if label else "Rejected candidate"
@@ -387,10 +405,11 @@ def humanize(lane: dict, classified: Optional[dict] = None) -> str:
     return PHASE_LABELS[phase_key]
 
 
-def classify_lane(lane: dict, now: Optional[float] = None) -> dict:
+def classify_lane(lane: dict, now: Optional[float] = None, finished: bool = False) -> dict:
     """``classify`` + ``humanize`` together, carrying over the lane's own previous ``progress``
     (if any) as the held-over phase bucket. The one function :mod:`yapnr.viewer.server` calls per
     lane per poll; it does not mutate ``lane``. ``now`` (``time.time()``), when given, is how a
-    running lane with no recent event gets classified ``stalled`` instead of ``running`` forever."""
-    classified = classify(lane, held_over=lane.get("progress"), now=now)
+    running lane with no recent event gets classified ``stalled`` (or, with ``finished`` true,
+    ``finished``) instead of ``running`` forever."""
+    classified = classify(lane, held_over=lane.get("progress"), now=now, finished=finished)
     return dict(classified, status_text=humanize(lane, classified))

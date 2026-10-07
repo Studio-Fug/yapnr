@@ -14,6 +14,15 @@ This module does no I/O and knows nothing about HTTP: :mod:`yapnr.viewer.server`
 ships the result as ``state["tree"]``, so the front end never re-derives the hierarchy from
 scratch. It is unit-tested directly against lane-id samples (including odd shapes) without a
 running viewer.
+
+One exception to "does no I/O": :func:`_annotate`'s children-derivation rule (a lane with no
+terminal event of its own, every child already ended) also corrects that lane's own entry in
+``lanes`` (``progress``/``status_text``) in place, not just this module's own aggregate counts --
+a case/seed lane is both a tree node *and* a row the Experiments drawer shows on its own, and a
+person reading that row must see "Done"/"Finished", the same thing the tree says about it, not
+"Stalled" because :mod:`yapnr.viewer.progress` never learns anything about children by itself.
+Still a pure function of its inputs (``lanes``), still no filesystem or network I/O; "I/O" here
+means exactly that one qualifier, not a broader exemption.
 """
 
 from __future__ import annotations
@@ -21,7 +30,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from yapnr.viewer.progress import classify_lane
+from yapnr.viewer.progress import classify_lane, humanize
 
 # Lanes under this suffix are the candidate-search audit's own bookkeeping (app.js's `r<iter>
 # /search`), not a browsable experiment; excluded from the tree the same way the flat lane list
@@ -41,7 +50,22 @@ def _natural_key(segment: str):
 
 # The full set of states yapnr.viewer.progress.classify can return, listed once here so a new
 # state only needs adding in this one place (plus the matching bucket in COUNT_STATES below).
-STATES = ("running", "stalled", "failed", "rejected", "queued", "done")
+# "finished" is the fallback for a lane with no terminal event of its own whose verdict cannot be
+# derived either (see _NO_TERMINAL_EVENT_STATES/_annotate below and progress.classify's docstring).
+STATES = ("running", "stalled", "failed", "rejected", "queued", "finished", "done")
+
+# A lane in one of these states never received its own terminal event (``candidate_complete``,
+# ``candidate_failed``, ``iteration_complete``, or a case lane's new ``case_complete``/
+# ``case_failed`` from ``hardware/pnr/regression/run.py``) -- "finished" itself is already a
+# fallback (progress.classify, idle past STALE_SECONDS with the run known over), and "queued"
+# means it never ran at all. Only a lane in one of these states is eligible for the
+# children-derivation rule below; a lane whose own terminal event already carries a verdict
+# (done/failed/rejected) is never overridden by it.
+# "running" is deliberately not in the set: a lane with recent activity of its own is still
+# working (a ladder case keeps routing after its initial-start candidates end), so deriving
+# "done" from its children there would announce a verdict before the case has one. It only
+# becomes eligible once it has gone idle (``stalled``) or the run is known over (``finished``).
+_NO_TERMINAL_EVENT_STATES = frozenset({"stalled", "queued", "finished"})
 
 # Lower number wins when picking a group's `best_leaf` (the "select this group, show one board"
 # representative): prefer whatever is still actively happening (running, then stalled) over a
@@ -108,7 +132,22 @@ def build_tree(lanes: dict) -> dict:
 def _annotate(node: dict, lanes: dict) -> None:
     """Fill in ``counts``/``fraction``/``best_leaf`` for ``node`` from its already-annotated
     children plus its own lane (if it is also a leaf); post-order, so a node's aggregate always
-    reflects its whole subtree."""
+    reflects its whole subtree.
+
+    A node that is both a group and a lane (``.../s0`` is both the parent of ``.../s0/initial-
+    start-00`` and a lane in its own right) folds its children in first: when its own lane has no
+    terminal event of its own (:data:`_NO_TERMINAL_EVENT_STATES`) but every child leaf underneath
+    it has already ended, its contribution to this node's counts is derived from theirs instead of
+    read verbatim -- "done" if every child is done, "failed" if any is, else "finished" (no event
+    of its own and no clear verdict from the children either) -- rather than reading "stalled" (or
+    "running") forever once the engine that was supposed to report it has moved on. This is the
+    ladder runner's real shape before ``hardware/pnr/regression/run.py`` learned to emit a case-
+    lane terminal event: a case/seed lane's last event is ``source_round_start`` or
+    ``worker_config_applied``, never anything :mod:`yapnr.viewer.progress` recognises as terminal,
+    while its ``initial-start-NN`` candidate children each end in ``candidate_complete``/
+    ``candidate_failed``. Purely structural: it needs no outside "is the run finished" signal (see
+    ``progress.classify``'s ``finished`` flag for the complementary case, a lane with no children
+    to derive anything from)."""
     counts = {state: 0 for state in STATES}
     counts["total"] = 0
     fraction_sum = 0.0
@@ -124,6 +163,21 @@ def _annotate(node: dict, lanes: dict) -> None:
         if best is None or rank < best_rank:
             best, best_rank = lane_id, rank
 
+    child_counts = {state: 0 for state in STATES}
+    child_counts["total"] = 0
+    for seg in node["order"]:
+        child = node["children"][seg]
+        for state in STATES:
+            counts[state] += child["counts"][state]
+            child_counts[state] += child["counts"][state]
+        counts["total"] += child["counts"]["total"]
+        child_counts["total"] += child["counts"]["total"]
+        fraction_sum += child["fraction"] * child["counts"]["total"]
+        if child["best_leaf"] is not None:
+            rank = _STATE_PRIORITY.get(_leaf_state(child), 0)
+            if best is None or rank < best_rank:
+                best, best_rank = child["best_leaf"], rank
+
     if node["lane_id"] is not None:
         lane = lanes.get(node["lane_id"], {})
         # Use the lane's own already-computed classification (yapnr.viewer.server annotates every
@@ -134,18 +188,33 @@ def _annotate(node: dict, lanes: dict) -> None:
         # round/lap-compounding carry-over every poll. Tests that build lane dicts directly
         # (without a running server) fall back to computing it fresh.
         classified = lane.get("progress") or classify_lane(lane)
-        consider(node["lane_id"], classified["state"], classified["fraction"])
-
-    for seg in node["order"]:
-        child = node["children"][seg]
-        for state in STATES:
-            counts[state] += child["counts"][state]
-        counts["total"] += child["counts"]["total"]
-        fraction_sum += child["fraction"] * child["counts"]["total"]
-        if child["best_leaf"] is not None:
-            rank = _STATE_PRIORITY.get(_leaf_state(child), 0)
-            if best is None or rank < best_rank:
-                best, best_rank = child["best_leaf"], rank
+        state, fraction = classified["state"], classified["fraction"]
+        children_all_ended = child_counts["total"] > 0 and not (
+            child_counts["running"] or child_counts["stalled"] or child_counts["queued"]
+        )
+        derived = False
+        if state == "stalled" and child_counts["running"]:
+            # Idle itself, but a candidate underneath it is still actively reporting: the case is
+            # waiting on its own children, not stuck -- the subtree is not stalled.
+            state, derived = "running", True
+        elif state in _NO_TERMINAL_EVENT_STATES and children_all_ended:
+            derived = True
+            if child_counts["failed"]:
+                state, fraction = "failed", 1.0
+            elif child_counts["done"] == child_counts["total"]:
+                state, fraction = "done", 1.0
+            else:
+                state, fraction = "finished", 1.0
+        if derived:
+            # Correct this lane's own row too (see the module docstring's "one exception"): a
+            # person looking at the Experiments drawer must see the same verdict the tree's
+            # aggregate counts below are about to reflect, not whatever progress.classify made of
+            # this lane's last raw event on its own.
+            classified = dict(classified, state=state, fraction=fraction)
+            if isinstance(lanes.get(node["lane_id"]), dict):
+                lanes[node["lane_id"]]["progress"] = classified
+                lanes[node["lane_id"]]["status_text"] = humanize(lane, classified)
+        consider(node["lane_id"], state, fraction)
 
     node["counts"] = counts
     node["fraction"] = (fraction_sum / counts["total"]) if counts["total"] else 0.0

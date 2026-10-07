@@ -47,6 +47,11 @@ PACKAGE = Path(__file__).parent
 EXTRACT_SCRIPT = PACKAGE / "kicad_scripts" / "extract.py"
 EXTRACT_TIMEOUT = 40
 LICENSE = "AGPL-3.0-or-later"
+# Written by ``yapnr exp live`` (yapnr.exp.live.FINISHED_MARKER) directly under the live root
+# once every task in the mirrored campaign has a ``_DONE`` marker; see Viewer._run_finished. Kept
+# as a matching literal in both files rather than a cross-package import -- yapnr.viewer and
+# yapnr.exp are independent Bazel targets.
+MIRROR_FINISHED_MARKER = "campaign-finished.json"
 # Third-party files served unmodified from the assembled dist; the browser may cache them.
 PINNED_PREFIXES = ("elk.bundled.js", "vendor/", "third_party/")
 CONTENT_TYPES = {
@@ -838,11 +843,13 @@ class Viewer:
             lane["draft"].pop(data["net"], None)
         if kind == "placement_costs":
             lane["costs"][data["ref"]] = data
-        if kind in ("candidate_complete", "candidate_failed"):
+        if kind in ("candidate_complete", "candidate_failed", "case_complete", "case_failed"):
             # The full payload, for yapnr.viewer.progress's status text: a screening-only
             # candidate reports its unconnected count as data.missing_connections (no DRC stage
             # ever ran), while a later, fuller evaluation can report data.opens/data.violations
-            # the same way a route_result frame does; progress.py checks both names.
+            # the same way a route_result frame does; progress.py checks both names. A case
+            # lane's own case_complete/case_failed (hardware/pnr/regression/run.py) always has
+            # opens/violations, the same shape a fuller candidate evaluation does.
             lane["last_candidate"] = data
         if kind == "batch_alternatives":
             state["search"][str(e["iteration"])] = data
@@ -853,6 +860,22 @@ class Viewer:
             "candidate_failed",
         ):
             lane["status"] = kind.removeprefix("candidate_")
+        if kind in ("case_complete", "case_failed"):
+            # The ladder runner's terminal event for a case/seed lane (run.py emits it once, when
+            # the case ends): a real verdict, not something yapnr.viewer.lane_tree needs to derive
+            # from this lane's candidate children once they have all ended.
+            lane["status"] = "complete" if kind == "case_complete" else "failed"
+        if kind == "task_complete":
+            # yapnr.exp.live's mirror-synthesized terminal event (its own SYNTHETIC_KIND -- a
+            # plain string here too, same reason MIRROR_FINISHED_MARKER is: yapnr.viewer and
+            # yapnr.exp are independent targets) for a task the engine itself never reported a
+            # terminal event for at all. Its verdict (from the task's own _DONE marker, which the
+            # wrapper always writes regardless of what pnr.live heard) is authoritative, same as
+            # case_complete/case_failed above -- yapnr.exp.task._verdict's "pass"/"done" mean
+            # success, anything else ("fail", "timeout", "error", or an arbitrary custom string)
+            # does not.
+            lane["last_candidate"] = data
+            lane["status"] = "complete" if data.get("verdict") in ("pass", "done") else "failed"
         if kind == "iteration_complete":
             lane["status"] = "accepted" if data.get("accepted") else "rejected"
         summary = {k: e[k] for k in ("id", "time", "kind", "candidate", "iteration")}
@@ -862,6 +885,38 @@ class Viewer:
         state["revision"] += 1
 
     # ------------------------------------------------------------------ state
+    def _run_finished(self) -> bool:
+        """Whether this run is already known to be over, so an idle lane with no terminal event
+        of its own reads "finished" (yapnr.viewer.progress's ``finished`` flag) rather than
+        "stalled" forever -- a mirrored campaign that is simply done looks identical to a dead
+        worker otherwise. Two sources, cheap enough to re-check every poll:
+
+        - :data:`MIRROR_FINISHED_MARKER` directly under ``self.root``, written once by
+          ``yapnr exp live`` (:mod:`yapnr.exp.live`'s own ``FINISHED_MARKER``, same name -- kept
+          as a plain string in both rather than a cross-package import so the viewer and the exp
+          CLI stay independently buildable) when every task in the campaign's ``tasks.jsonl`` has
+          a ``_DONE`` marker.
+        - for a local (non-mirrored) run, a ``summary.json`` with ``"complete": true`` in ``root``
+          or one of its first few parents -- ``hardware/pnr/regression/run.py --out`` always
+          writes one there when it exits, campaign machinery or not (``PNR_LIVE_DIR`` is commonly
+          a dot-directory a level or two below that same ``--out``, e.g. ``<out>/.yapnr/live``).
+        """
+        if (self.root / MIRROR_FINISHED_MARKER).exists():
+            return True
+        probe = self.root
+        for _ in range(4):
+            candidate = probe / "summary.json"
+            if candidate.is_file():
+                try:
+                    if json.loads(candidate.read_text()).get("complete"):
+                        return True
+                except (OSError, ValueError):
+                    pass
+            if probe.parent == probe:
+                break
+            probe = probe.parent
+        return False
+
     def _annotate_lanes(self):
         """Fold each lane's raw telemetry into the phase/progress model (yapnr.viewer.progress),
         in place on ``self.state["lanes"]`` (lock held), so a lane with no classifiable event in
@@ -872,11 +927,13 @@ class Viewer:
         several raw events in between two polls only has its *last* one's phase visible to the
         held-over fallback, not each intermediate one; see yapnr.viewer.progress's module
         docstring. ``now`` (``time.time()``) is threaded through so a lane with no event in the
-        last :data:`yapnr.viewer.progress.STALE_SECONDS` classifies ``stalled`` instead of
-        ``running`` forever."""
+        last :data:`yapnr.viewer.progress.STALE_SECONDS` classifies ``stalled`` (or, once
+        :func:`_run_finished`, ``finished``) instead of ``running`` forever."""
         now = time.time()
+        finished = self._run_finished()
+        self.state["campaign_finished"] = finished
         for lane in self.state["lanes"].values():
-            classified = classify_lane(lane, now=now)
+            classified = classify_lane(lane, now=now, finished=finished)
             lane["status_text"] = classified.pop("status_text")
             lane["progress"] = classified
 

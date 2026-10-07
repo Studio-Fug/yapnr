@@ -266,6 +266,38 @@ class FormatTableTests(unittest.TestCase):
         self.assertIn("route", table)
         self.assertIn("a", table)
 
+    def test_missing_wall_and_coverage_default_rather_than_raise(self):
+        # Older callers' result dicts (and this test's own synthetic one above) may not carry
+        # wall_seconds/coverage/unattributed -- format_table must not KeyError on them.
+        result = dict(
+            mode="empty", lane_count=0, running_count=0, stage_order=[], stages={}, slowest=[]
+        )
+        table = timing.format_table(result)
+        self.assertIn("wall:", table)
+        self.assertIn("coverage:", table)
+
+    def test_includes_unattributed_row_and_coverage(self):
+        result = dict(
+            mode="estimated",
+            lane_count=1,
+            running_count=0,
+            wall_seconds=100.0,
+            coverage=0.2,
+            stage_order=["route"],
+            stages={
+                "route": dict(
+                    count=1, total=20.0, mean=20.0, median=20.0, p90=20.0, max=20.0, share=1.0
+                )
+            },
+            unattributed=dict(
+                count=1, total=80.0, mean=80.0, median=80.0, p90=80.0, max=80.0, share=0.8
+            ),
+            slowest=[dict(candidate="a", seconds=100.0, running=False)],
+        )
+        table = timing.format_table(result)
+        self.assertIn("coverage: 20.0%", table)
+        self.assertIn("unattributed", table)
+
 
 if __name__ == "__main__":
     unittest.main()

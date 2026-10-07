@@ -30,26 +30,68 @@ ends, and showing both would double count). The aggregate response carries ``mod
 ("observed"/"estimated"/"mixed"/"empty") so the panel can say plainly which numbers, if any, are
 derived rather than measured.
 
+**Bounding spans to a lane's own event window.** An unclosed span -- an ``_estimate_spans``
+marker with no following marker, or a ``stage_start`` whose ``stage_end`` never arrived (the
+process crashed or was preempted mid-stage) -- must never be stretched past what the lane itself
+actually reports. :func:`_lane_pipeline_spans` takes an explicit ``open_bound`` (computed once per
+lane in :func:`aggregate`, see below) and every such span closes there, never at a later event's
+raw timestamp and never at the live wall clock unless the lane is genuinely still running.
+
+A lane's **terminal event** is not necessarily trustworthy as *when the work ended*, only as
+*that it ended*: ``task_complete`` (:data:`MIRROR_TERMINAL_KINDS`) is synthesized by an external
+mirror/catch-up process once it notices a GCP task finished (``yapnr.exp.live``'s synthesizer),
+potentially long after the engine's own last real event -- a campaign that is actually done in
+twenty minutes can sit with nothing happening until the next catch-up poll hours later, and that
+whole gap must not be charged to whichever pipeline stage happened to be open when the engine
+stopped. This is exactly what produced multi-hour "route"/"gloss" medians against lv2p2-rungs-all
+and dp-ab2 (real fixtures, see ``tests/unit/viewer/fixtures/timing/``): one trailing marker
+stretched across the mirror's detection lag. ``case_complete``/``case_failed``/
+``candidate_complete``/``candidate_failed``/``iteration_complete`` are emitted in-process by the
+engine itself and their timestamps are real -- ``open_bound`` only ever excludes
+:data:`MIRROR_TERMINAL_KINDS` events, never these.
+
+Concretely, per lane: ``last_real`` is the latest event time among the lane's events excluding any
+:data:`MIRROR_TERMINAL_KINDS` event (falling back to the lane's actual last event if every event
+is one); the lane is ``terminal`` if it has *any* event in :data:`TERMINAL_KINDS` (unchanged -- a
+mirror-synthesized terminal event still means "done", just not "done right at this timestamp");
+it is ``running`` iff not terminal and ``now - last_real <= STALE_SECONDS``; and ``open_bound`` is
+``now`` while running, else ``last_real``. A span that comes out empty (its only content was the
+trailing, now-unbounded marker) contributes nothing to that stage -- the time is real, but which
+stage it belongs to is not known, so it surfaces as ``unattributed`` instead of a guess (see
+below).
+
 **Running.** A lane reads ``running`` unless: it has its own terminal event (:data:`TERMINAL_KINDS`
 -- ``candidate_complete``/``candidate_failed``/``case_complete``/``case_failed``/
-``iteration_complete``, and ``claude/viewer-done``'s mirror-synthesized ``task_complete``, kept
-here even before that branch merges since the kind costs nothing to recognise early); or a GCP
-task_timing ``run`` span closed by a genuinely terminal Batch state (``data.terminal``, set by
-:mod:`yapnr.exp.timing` -- a span merely closed by a *retry* after preemption must not read as the
-lane finishing, see its module docstring); or, lacking either, its last event is more than
-:data:`yapnr.viewer.progress.STALE_SECONDS` behind ``now`` (a campaign that ended five minutes ago
-is not "still running" just because none of its lanes happened to report a terminal event -- the
-same reasoning :func:`yapnr.viewer.progress.classify` already applies lane-by-lane). ``now``
-defaults to the wall clock; a test wanting deterministic "still running" behaviour against
-synthetic timestamps passes an explicit ``now`` close to them, exactly as
-``tests/unit/viewer/test_progress.py`` does for :func:`yapnr.viewer.progress.classify`.
+``iteration_complete``/``task_complete``); or a GCP task_timing ``run`` span closed by a genuinely
+terminal Batch state (``data.terminal``, set by :mod:`yapnr.exp.timing` -- a span merely closed by
+a *retry* after preemption must not read as the lane finishing, see its module docstring); or,
+lacking either, its last event is more than :data:`yapnr.viewer.progress.STALE_SECONDS` behind
+``now`` (a campaign that ended five minutes ago is not "still running" just because none of its
+lanes happened to report a terminal event -- the same reasoning
+:func:`yapnr.viewer.progress.classify` already applies lane-by-lane). ``now`` defaults to the wall
+clock; a test wanting deterministic "still running" behaviour against synthetic timestamps passes
+an explicit ``now`` close to them, exactly as ``tests/unit/viewer/test_progress.py`` does for
+:func:`yapnr.viewer.progress.classify`.
 
 ``total_seconds`` sums stage time *across lanes that ran in parallel* -- it is a lane-seconds
 total, not a wall-clock figure. ``wall_seconds`` is the actual wall-clock span of the scope (its
-last event minus its first). Concurrency counts only *leaf* lanes (a lane with no child lane
-under it in the same scope) -- counting a parent candidate lane and the child lanes it spawned
-(e.g. ``initial-start-NN`` screening candidates) together overstates how many things were really
-running at once.
+last event minus its first), extended to ``now`` only while some lane in scope is genuinely
+``running`` (a live campaign's span keeps growing as it runs; a finished one's does not, no matter
+when someone happens to load the panel). Concurrency counts only *leaf* lanes (a lane with no
+child lane under it in the same scope) -- counting a parent candidate lane and the child lanes it
+spawned (e.g. ``initial-start-NN`` screening candidates) together overstates how many things were
+really running at once.
+
+**Unattributed time and coverage.** Per lane, ``lane_wall`` (first event to terminal/last event,
+or to ``now`` while running -- the same figure already shown as the lane's own ``seconds``) minus
+the sum of its pipeline-span seconds is that lane's ``unattributed`` time: wall-clock the lane
+genuinely spent somewhere, with no stage event to say where. Aggregated in the same shape as a
+stage (:func:`_stat_block`) under the top-level ``unattributed`` key, and ``coverage`` (also
+top-level, and in the CLI table) is attributed total over lane-wall total across the scope -- the
+fraction of real time any stage actually accounts for. A campaign relying on marker-estimated
+spans with a sparse marker set, or one whose last lane event predates a mirror catch-up, reads a
+low coverage; one instrumented with ``stage_start``/``stage_end`` through its last real phase
+reads close to 1.0.
 
 Caching: one :class:`_RootCache` per live root, keyed off the ``events`` directory's mtime and the
 set of filenames already parsed (the same incremental-scan shape as ``Viewer.ingest`` in
@@ -82,10 +124,7 @@ except ImportError:  # pragma: no cover - the viewer always has pnr on its path 
 
 
 # A lane's own terminal event: it never reads "running" once one of these appears, regardless of
-# staleness. ``case_complete``/``case_failed``/``task_complete`` are not emitted by anything on
-# this branch yet (hardware/pnr/regression/run.py and yapnr.exp.live's synthesizer, both
-# claude/viewer-done/PR #79) -- recognising them now costs nothing and avoids a second fix the day
-# that branch merges (see the module docstring).
+# staleness.
 TERMINAL_KINDS = frozenset(
     {
         "candidate_complete",
@@ -96,6 +135,16 @@ TERMINAL_KINDS = frozenset(
         "task_complete",
     }
 )
+
+# The subset of TERMINAL_KINDS synthesized by an external mirror/catch-up process after the fact
+# (``yapnr.exp.live``'s synthesizer) rather than emitted in-process by the engine when the work
+# actually finished. Their own timestamp is when the mirror *noticed*, not when the lane's real
+# work ended -- trustworthy for "is this lane done" (TERMINAL_KINDS, unchanged), not for "bound an
+# open span's end" (see the module docstring's "Bounding spans" section). `case_complete`/
+# `case_failed` are emitted by hardware/pnr/regression/run.py itself, in-process, and
+# `candidate_complete`/`candidate_failed`/`iteration_complete` by the engine's own candidate loop
+# -- all four real timestamps, excluded from this set on purpose.
+MIRROR_TERMINAL_KINDS = frozenset({"task_complete"})
 
 # GCP task-level spans (yapnr.exp.timing): infrastructure overhead, never a pipeline stage. Kept
 # out of `stages`/`total_seconds` (see module docstring); aggregated on their own as
@@ -194,9 +243,13 @@ def load_events(root: Path) -> List[dict]:
 # ------------------------------------------------------------------ span extraction
 
 
-def _observed_spans(lane_events: Sequence[dict]) -> List[dict]:
-    """``stage_start``/``stage_end`` pairs only -- real pipeline-stage spans. ``task_timing``
-    (GCP infrastructure spans) is handled separately by :func:`_task_spans`."""
+def _observed_spans(lane_events: Sequence[dict], open_bound: Optional[float] = None) -> List[dict]:
+    """``stage_start``/``stage_end`` pairs -- real pipeline-stage spans -- plus, for any
+    ``stage_start`` whose ``stage_end`` never arrived (the process crashed or was preempted
+    mid-stage), one span closed at ``open_bound`` (the lane's last real event, or ``now`` while
+    genuinely running; see the module docstring). The latter are marked ``estimated=True``: the
+    start was observed, the end was not. ``task_timing`` (GCP infrastructure spans) is handled
+    separately by :func:`_task_spans`."""
     spans = []
     open_by_label: Dict[str, List[dict]] = {}
     for e in lane_events:
@@ -221,6 +274,23 @@ def _observed_spans(lane_events: Sequence[dict]) -> List[dict]:
             spans.append(
                 dict(stage=canonical(stage), start=start, end=end, seconds=seconds, estimated=False)
             )
+    if open_bound is not None:
+        for pending in open_by_label.values():
+            for start_event in pending:
+                data = start_event.get("data", {})
+                stage = canonical(data.get("stage") or data.get("label"))
+                start = start_event["time"]
+                if open_bound <= start:
+                    continue
+                spans.append(
+                    dict(
+                        stage=stage,
+                        start=start,
+                        end=open_bound,
+                        seconds=open_bound - start,
+                        estimated=True,
+                    )
+                )
     return spans
 
 
@@ -253,7 +323,11 @@ def _task_spans(lane_events: Sequence[dict]) -> List[dict]:
     return spans
 
 
-def _estimate_spans(lane_events: Sequence[dict]) -> List[dict]:
+def _estimate_spans(lane_events: Sequence[dict], open_bound: Optional[float] = None) -> List[dict]:
+    """Marker-to-marker spans; the trailing marker (no following marker on this lane) closes at
+    ``open_bound`` rather than the lane's raw last event -- see the module docstring's "Bounding
+    spans" section for why (a lane whose last real marker predates a delayed terminal event must
+    not have that whole gap folded into the marker's stage)."""
     markers = []
     for e in lane_events:
         if e["kind"] not in _FALLBACK_KINDS:
@@ -262,7 +336,7 @@ def _estimate_spans(lane_events: Sequence[dict]) -> List[dict]:
         markers.append((e["time"], label))
     if not markers:
         return []
-    last_time = lane_events[-1]["time"]
+    last_time = open_bound if open_bound is not None else lane_events[-1]["time"]
     spans = []
     for i, (t, label) in enumerate(markers):
         if label is None:
@@ -276,15 +350,19 @@ def _estimate_spans(lane_events: Sequence[dict]) -> List[dict]:
     return spans
 
 
-def _lane_pipeline_spans(lane_events: Sequence[dict]) -> List[dict]:
+def _lane_pipeline_spans(
+    lane_events: Sequence[dict], open_bound: Optional[float] = None
+) -> List[dict]:
     """A lane's pipeline-stage spans: every observed span, plus an estimated span for any stage
     the lane has *no* observed span for (gloss, most often -- see the module docstring). Sorted
-    by start time."""
-    observed = _observed_spans(lane_events)
+    by start time. ``open_bound`` closes any unclosed span (a dangling ``stage_start``, or the
+    trailing fallback marker) -- see :func:`_observed_spans`/:func:`_estimate_spans`."""
+    observed = _observed_spans(lane_events, open_bound)
+    estimated_all = _estimate_spans(lane_events, open_bound)
     if not observed:
-        return _estimate_spans(lane_events)
+        return estimated_all
     covered = {span["stage"] for span in observed}
-    estimated = [span for span in _estimate_spans(lane_events) if span["stage"] not in covered]
+    estimated = [span for span in estimated_all if span["stage"] not in covered]
     return sorted(observed + estimated, key=lambda s: s["start"])
 
 
@@ -386,10 +464,24 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
     any_estimated = False
     total_seconds = 0.0
 
+    unattributed_durations: List[float] = []
+    lane_wall_total = 0.0
+
     for candidate, lane_events in sorted(by_lane.items()):
         lane_events.sort(key=lambda e: e.get("time", 0))
-        spans = _lane_pipeline_spans(lane_events)
         task_spans = _task_spans(lane_events)
+        terminal = _lane_terminal(lane_events, task_spans)
+        start = lane_events[0]["time"]
+        end = lane_events[-1]["time"]
+        idle_seconds = now - end
+        running = not terminal and idle_seconds <= STALE_SECONDS
+        # The bound an unclosed span may extend to: the lane's own last *real* event (excluding
+        # MIRROR_TERMINAL_KINDS, whose timestamp is detection time, not completion time -- see the
+        # module docstring), or `now` while the lane is genuinely still running.
+        real_events = [e for e in lane_events if e["kind"] not in MIRROR_TERMINAL_KINDS]
+        last_real = real_events[-1]["time"] if real_events else end
+        open_bound = now if running else last_real
+        spans = _lane_pipeline_spans(lane_events, open_bound)
         for span in spans:
             any_observed = any_observed or not span["estimated"]
             any_estimated = any_estimated or span["estimated"]
@@ -399,11 +491,11 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
             if span["stage"] in task_durations:
                 task_durations[span["stage"]].append(span["seconds"])
 
-        terminal = _lane_terminal(lane_events, task_spans)
-        start = lane_events[0]["time"]
-        end = lane_events[-1]["time"]
-        idle_seconds = now - end
-        running = not terminal and idle_seconds <= STALE_SECONDS
+        lane_wall = (end - start) if not running else max(end - start, now - start)
+        attributed = sum(span["seconds"] for span in spans)
+        unattributed = max(0.0, lane_wall - attributed)
+        unattributed_durations.append(unattributed)
+        lane_wall_total += lane_wall
         lanes_out.append(
             dict(
                 candidate=candidate,
@@ -411,9 +503,10 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
                 end=end,
                 running=running,
                 leaf=candidate not in has_children,
-                seconds=(end - start) if not running else max(end - start, now - start),
+                seconds=lane_wall,
                 spans=sorted(spans + task_spans, key=lambda s: s["start"]),
                 pipeline_spans=spans,
+                unattributed=unattributed,
             )
         )
 
@@ -453,6 +546,10 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
     if lanes_out:
         t0 = min(lane["start"] for lane in lanes_out)
         t1 = max(lane["end"] for lane in lanes_out)
+        if any(lane["running"] for lane in lanes_out):
+            # A still-running scope's wall-clock span keeps growing with the live clock, not just
+            # whatever's been seen so far -- a finished scope's never reaches past its last event.
+            t1 = max(t1, now)
         wall_seconds = max(0.0, t1 - t0)
         points = 60
         span = (t1 - t0) or 1.0
@@ -472,6 +569,15 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
     else:
         mode = "empty"
 
+    # Unattributed: real lane wall-clock time no stage span claims (see the module docstring).
+    # Aggregated the same shape as a stage; `coverage` is attributed/lane-wall across the scope.
+    unattributed_stats = (
+        _stat_block(unattributed_durations, total_for_share=lane_wall_total)
+        if unattributed_durations
+        else {}
+    )
+    coverage = (total_seconds / lane_wall_total) if lane_wall_total else 1.0
+
     return dict(
         schema="pnr-timing-v1",
         scope=scope,
@@ -482,6 +588,8 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
         wall_seconds=wall_seconds,  # the scope's actual wall-clock span (last event - first)
         stage_order=stage_order(list(stages)),
         stages=stages,
+        unattributed=unattributed_stats,
+        coverage=coverage,
         task_overhead=task_overhead,
         groups=group_breakdown,
         timeline=[

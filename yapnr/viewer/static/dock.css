@@ -347,6 +347,10 @@ body.dk-min #dock .dk-rail{display:flex}
 .tm-table td{padding:3px 6px;border-bottom:1px solid #202b30;color:#dce5e9;white-space:nowrap;vertical-align:middle}
 .tm-table td.tm-stage{display:flex;align-items:center;gap:6px}
 .tm-table td.tm-stage i{width:8px;height:8px;border-radius:50%;background:var(--c);flex:none;display:inline-block}
+/* Real lane wall-clock time no stage span claims (yapnr.viewer.timing's "unattributed" row) --
+   muted and italic so it reads as a gap, not another measured stage. */
+.tm-table tr.tm-unattributed td{color:#8a9ea7;font-style:italic}
+.tm-table tr.tm-unattributed td.tm-stage i{background:#555}
 .tm-hist{display:block;width:140px;height:auto;max-width:140px}
 .tm-hist-bar:hover,.tm-gantt-seg:hover{opacity:.75;cursor:pointer}
 .tm-hist-bar.tm-hl,.tm-gantt-seg.tm-hl{stroke:#9ee6d1;stroke-width:1.5px}

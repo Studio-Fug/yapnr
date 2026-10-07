@@ -62,6 +62,20 @@ _ALIAS = {
     "pad-entry": "fanout-escape",
     "audit": "drc-judge",
     "feedback": "artifacts",
+    # hardware/pnr/regression/run.py's own per-case stage names (the ladder-cell path: no
+    # native-loop, no KiCad-subprocess full_iteration.py -- see its `run()` closure). "place-route"
+    # itself is deliberately never wrapped there: it shells out to route_case.py/hier_case.py/
+    # mc_case.py, which call pnr.route.feedback.route_and_place *in that subprocess*, already
+    # emitting its own "source-round-place"/"route" spans; an outer span here would overlap them
+    # and double count. "generate"/"writeback" build the initial board (board-gen/placement's
+    # ladder-path equivalent); "drc"/"via-scan"/"checks" are the cold kicad-cli judge, same bucket
+    # as "audit"; "gloss-measure" is the optional --gloss-measure A/B run, same bucket as "gloss".
+    "generate": "setup",
+    "writeback": "setup",
+    "drc": "drc-judge",
+    "via-scan": "drc-judge",
+    "checks": "drc-judge",
+    "gloss-measure": "gloss",
 }
 
 

@@ -1,0 +1,13 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791329510982713721-2bed7fab",
+  "time": 1791329510.982726,
+  "kind": "stage_start",
+  "candidate": "ladder/01-connector-led-2/s0",
+  "iteration": null,
+  "data": {
+    "stage": "route",
+    "label": "route",
+    "source_round": 1
+  }
+}

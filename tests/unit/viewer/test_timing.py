@@ -1,7 +1,14 @@
 """yapnr.viewer.timing: stage aggregation, the event-timestamp fallback estimator, scope
 filtering, caching, and running-lane handling -- against both a synthetic "observed" fixture
 (stage_start/stage_end, as the engine now emits them) and a real event slice cut from a finished
-ladder campaign's live directory (dp-ab2) that predates stage events, exercising the fallback."""
+ladder campaign's live directory (dp-ab2) that predates stage events, exercising the fallback.
+
+``MirrorLagTests`` below uses three more real slices (``fixtures/timing/mirror-lag/``, cut from
+the live-hub's finished lv2p2-rungs-all, dp-ab2 and timing-demo2 runs) that pin the actual bug
+this branch fixes: a lane's last real marker (``source_round_start``/``phase_start``/
+``geometry_result``, or in the "demo" slice's case a real ``stage_end``) followed, hours later, by
+a mirror-synthesized ``task_complete`` -- before the fix, the whole mirror-detection gap got
+charged to whichever stage that marker opened."""
 
 import json
 import shutil
@@ -319,6 +326,215 @@ class ObservedStageEventTests(unittest.TestCase):
         # span is ~1s, not the 2s a naive sum across lanes would give.
         self.assertAlmostEqual(result["wall_seconds"], 1.0, places=3)
         self.assertAlmostEqual(result["total_seconds"], 2.0, places=3)
+
+
+class MirrorLagTests(unittest.TestCase):
+    """Real event slices cut from finished live-hub campaigns, each with a lane whose last real
+    event is followed, hours later, by a mirror-synthesized ``task_complete``
+    (:data:`timing.MIRROR_TERMINAL_KINDS`). Before this branch, that whole gap was folded into
+    whichever stage marker was still "open" when the mirror caught up -- see the module
+    docstring's "Bounding spans to a lane's own event window" section, and the comment at the top
+    of this file for where each slice comes from."""
+
+    MIRROR_LAG = FIXTURES / "mirror-lag"
+
+    def _aggregate(self, name):
+        return timing.aggregate(self.MIRROR_LAG / name)
+
+    def _lane_last_real_time(self, root, candidate):
+        events = [e for e in timing.load_events(root) if e.get("candidate") == candidate]
+        real = [e for e in events if e["kind"] not in timing.MIRROR_TERMINAL_KINDS]
+        return (real or events)[-1]["time"]
+
+    def test_no_span_exceeds_its_lanes_last_real_event(self):
+        # The regression itself: a pipeline span's end must never reach past the lane's own last
+        # non-mirror event, no matter how much later a mirror-synthesized terminal event landed.
+        for name in ("lv2p2", "dp-ab2", "demo"):
+            root = self.MIRROR_LAG / name
+            result = self._aggregate(name)
+            for lane in result["timeline"]:
+                bound = self._lane_last_real_time(root, lane["candidate"])
+                for span in lane["pipeline_spans"]:
+                    self.assertLessEqual(
+                        span["end"],
+                        bound + 1e-6,
+                        "%s: %s span %s end %.3f exceeds last real event %.3f"
+                        % (name, lane["candidate"], span["stage"], span["end"], bound),
+                    )
+
+    def test_stage_medians_are_no_longer_hours(self):
+        # The exact numbers the owner's spot check flagged: lv2p2's "route" and dp-ab2's "gloss"
+        # used to report multi-hour medians (12702s / full campaign span). Any real pipeline
+        # stage in these tiny slices is sub-minute.
+        for name, stage in (("lv2p2", "route"), ("dp-ab2", "gloss")):
+            result = self._aggregate(name)
+            self.assertIn(stage, result["stages"])
+            self.assertLess(result["stages"][stage]["max"], 60.0)
+
+    def test_wall_seconds_equals_the_event_range_for_a_finished_campaign(self):
+        for name in ("lv2p2", "dp-ab2", "demo"):
+            root = self.MIRROR_LAG / name
+            result = self._aggregate(name)
+            events = timing.load_events(root)
+            self.assertEqual(result["running_count"], 0)
+            expected = max(e["time"] for e in events) - min(e["time"] for e in events)
+            self.assertAlmostEqual(result["wall_seconds"], expected, places=3)
+
+    def test_unattributed_absorbs_the_mirror_gap_not_the_stage(self):
+        # The gap between the last real marker and the delayed task_complete is real wall-clock
+        # time; after the fix it shows up as unattributed, not as part of "route"/"gloss".
+        for name in ("lv2p2", "dp-ab2", "demo"):
+            result = self._aggregate(name)
+            self.assertIn("unattributed", result)
+            self.assertGreater(result["unattributed"]["total"], 1000.0)
+            self.assertLess(result["coverage"], 0.01)
+
+    def test_coverage_is_attributed_over_lane_wall(self):
+        for name in ("lv2p2", "dp-ab2", "demo"):
+            result = self._aggregate(name)
+            # None of these lanes are running (asserted above), so each lane's own wall time is
+            # simply its last event minus its first -- `timeline` doesn't expose "seconds"
+            # directly (that's a `slowest`-only field), so it's reconstructed here.
+            lane_wall_total = sum(lane["end"] - lane["start"] for lane in result["timeline"])
+            expected = result["total_seconds"] / lane_wall_total if lane_wall_total else 1.0
+            self.assertAlmostEqual(result["coverage"], expected, places=6)
+            # And the two rows account for the whole lane-wall total, by construction.
+            self.assertAlmostEqual(
+                result["total_seconds"] + result["unattributed"]["total"],
+                lane_wall_total,
+                places=3,
+            )
+
+
+class UnattributedSyntheticTests(unittest.TestCase):
+    """Synthetic observed-mode fixtures isolating the unattributed/coverage math itself, and the
+    "only extend to now while genuinely running" rule for an unclosed stage_start."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.events_dir = Path(self.tmp) / "events"
+        self.events_dir.mkdir()
+        self._idx = 0
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _next_idx(self):
+        self._idx += 1
+        return self._idx
+
+    def test_fully_covered_lane_has_zero_unattributed(self):
+        t = 1000.0
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=t,
+            kind="stage_start",
+            candidate="ladder/a/s0",
+            data=dict(stage="route", label="route"),
+        )
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=t + 2.0,
+            kind="stage_end",
+            candidate="ladder/a/s0",
+            data=dict(stage="route", label="route", seconds=2.0),
+        )
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=t + 2.0,
+            kind="candidate_complete",
+            candidate="ladder/a/s0",
+            data={},
+        )
+        result = timing.aggregate(Path(self.tmp))
+        self.assertAlmostEqual(result["unattributed"]["total"], 0.0, places=6)
+        self.assertAlmostEqual(result["coverage"], 1.0, places=6)
+
+    def test_dangling_stage_start_closes_at_the_terminal_event_not_now(self):
+        # A stage_start with no stage_end (the process died mid-stage) must become a span closed
+        # at the lane's own terminal event, never silently dropped (the old behaviour) and never
+        # stretched to whatever "now" happens to be when the panel is queried.
+        t = 1000.0
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=t,
+            kind="stage_start",
+            candidate="ladder/b/s0",
+            data=dict(stage="route", label="route"),
+        )
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=t + 3.0,
+            kind="candidate_complete",
+            candidate="ladder/b/s0",
+            data={},
+        )
+        result = timing.aggregate(Path(self.tmp), now=t + 999999.0)
+        lane = result["timeline"][0]
+        self.assertEqual(len(lane["pipeline_spans"]), 1)
+        span = lane["pipeline_spans"][0]
+        self.assertEqual(span["stage"], "route")
+        self.assertAlmostEqual(span["seconds"], 3.0, places=6)
+        self.assertTrue(span["estimated"])  # the end was inferred, not observed
+        self.assertAlmostEqual(result["unattributed"]["total"], 0.0, places=6)
+
+    def test_dangling_stage_start_on_a_running_lane_extends_to_now(self):
+        t = 1000.0
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=t,
+            kind="stage_start",
+            candidate="ladder/c/s0",
+            data=dict(stage="route", label="route"),
+        )
+        now = t + STALE_SECONDS / 2
+        result = timing.aggregate(Path(self.tmp), now=now)
+        lane = result["timeline"][0]
+        self.assertTrue(lane["running"])
+        span = lane["pipeline_spans"][0]
+        self.assertAlmostEqual(span["end"], now, places=6)
+
+    def test_campaign_wall_seconds_extends_to_now_only_while_running(self):
+        t = 1000.0
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=t,
+            kind="stage_start",
+            candidate="ladder/d/s0",
+            data=dict(stage="route", label="route"),
+        )
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=t + 1.0,
+            kind="stage_end",
+            candidate="ladder/d/s0",
+            data=dict(stage="route", label="route", seconds=1.0),
+        )
+        running_now = t + 1.0 + STALE_SECONDS / 2
+        result = timing.aggregate(Path(self.tmp), now=running_now)
+        self.assertEqual(result["running_count"], 1)
+        self.assertAlmostEqual(result["wall_seconds"], running_now - t, places=3)
+
+        stale_now = t + 1.0 + STALE_SECONDS * 10
+        result = timing.aggregate(Path(self.tmp), now=stale_now)
+        self.assertEqual(result["running_count"], 0)
+        self.assertAlmostEqual(result["wall_seconds"], 1.0, places=3)
+
+    def test_a_native_terminal_event_is_never_excluded_from_the_open_bound(self):
+        # candidate_complete/case_complete/case_failed/iteration_complete are emitted in-process
+        # and are real timestamps -- only MIRROR_TERMINAL_KINDS (task_complete) is excluded.
+        self.assertEqual(timing.MIRROR_TERMINAL_KINDS, frozenset({"task_complete"}))
+        for kind in ("candidate_complete", "candidate_failed", "case_complete", "case_failed"):
+            self.assertNotIn(kind, timing.MIRROR_TERMINAL_KINDS)
+            self.assertIn(kind, timing.TERMINAL_KINDS)
 
 
 if __name__ == "__main__":

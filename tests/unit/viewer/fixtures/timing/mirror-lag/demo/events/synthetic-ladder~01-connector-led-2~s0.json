@@ -1,0 +1,16 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "synthetic-ladder~01-connector-led-2~s0",
+  "time": 1791342466.818629,
+  "kind": "task_complete",
+  "candidate": "ladder/01-connector-led-2/s0",
+  "iteration": null,
+  "data": {
+    "verdict": "pass",
+    "attempt": "s1r0",
+    "exit_code": 0,
+    "wall_s": 5.004,
+    "timed_out": false
+  },
+  "synthetic": true
+}

@@ -36,6 +36,16 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent))
 from pnr.live import emit as live_emit  # noqa: E402
 
+# Same no-op-without-PNR_LIVE_DIR reasoning as live_emit above: `stage()` emits a
+# stage_start/stage_end pair around the wrapped block and otherwise costs nothing. Used by the
+# `run()` closure below (main()) to give the ladder-cell path's own stages -- generate,
+# writeback, planes, gloss, refill, audit, drc, via-scan, checks -- real observed spans in the
+# live Timing panel, which before this only ever saw the "source_round_start"/"phase_start"
+# markers pnr.route.feedback and pnr.gloss emit internally, covering a sliver of a case's real
+# wall time (see yapnr.viewer.timing's docstring on MIRROR_TERMINAL_KINDS, and this file's own
+# PNR_LIVE_CANDIDATE comment at the case_complete/case_failed emit site below).
+from pnr.stage_timing import stage as live_stage  # noqa: E402
+
 KI = "/Applications/KiCad/KiCad.app/Contents"
 
 
@@ -1160,7 +1170,20 @@ def main():
                 def run(name, cmd, extra=None):
                     if case_profile != args.fab_profile:
                         extra = dict(extra or {}, PNR_FAB_PROFILE=case_profile)
-                    result["stages"][name] = stage(root, name, cmd, extra, result["cpu_stages"])
+                    # "place-route" is the one stage never wrapped in a live span here: that
+                    # subprocess calls pnr.route.feedback.route_and_place directly, which already
+                    # emits its own "source-round-place"/"route" stage_start/stage_end pairs under
+                    # this same candidate -- an outer span here would overlap them and double
+                    # count the live Timing panel's stage totals (see the _ALIAS comment in
+                    # pnr/stage_timing.py). Every other named stage below emits nothing live on
+                    # its own, so wrapping it here is purely additive coverage.
+                    if name == "place-route":
+                        result["stages"][name] = stage(root, name, cmd, extra, result["cpu_stages"])
+                    else:
+                        with live_stage(name):
+                            result["stages"][name] = stage(
+                                root, name, cmd, extra, result["cpu_stages"]
+                            )
 
                 native = tracing.NativeTrace(root, spec, seed, args, out.name) if tracing else None
                 run(

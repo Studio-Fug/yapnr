@@ -1,0 +1,12 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791329510260103190-86fc31f1",
+  "time": 1791329510.2601187,
+  "kind": "stage_start",
+  "candidate": "ladder/02-resistor-led-3/s0",
+  "iteration": null,
+  "data": {
+    "stage": "global-placement",
+    "label": "source-round-place"
+  }
+}

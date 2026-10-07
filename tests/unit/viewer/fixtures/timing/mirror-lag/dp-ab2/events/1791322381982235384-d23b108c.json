@@ -1,0 +1,21 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791322381982235384-d23b108c",
+  "time": 1791322381.982257,
+  "kind": "geometry_result",
+  "candidate": "ladder/01-connector-led-2/s1",
+  "iteration": null,
+  "data": {
+    "phase": "gloss",
+    "label": "07g-gloss",
+    "transaction": 1,
+    "step": "normalize",
+    "nets": ["LED_A"],
+    "edits": 1,
+    "accepted": true,
+    "reason": null,
+    "delta": {
+      "segments": -4
+    }
+  }
+}

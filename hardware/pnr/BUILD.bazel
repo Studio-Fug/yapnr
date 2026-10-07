@@ -857,6 +857,37 @@ py_test(
     deps = [":pnr"],
 )
 
+# PNR_SKIP_PASTE_PADS: an exposed pad's paste windows no longer bar the vias in it
+# (router side), and ingest leaves them off the graph (KiCad side, manual lane).
+py_test(
+    name = "paste_pads_test",
+    size = "small",
+    srcs = ["tests/test_paste_pads.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_paste_pads.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+    ],
+)
+
+py_test(
+    name = "paste_pads_kicad_test",
+    size = "small",
+    srcs = ["tests/test_paste_pads_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_paste_pads_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 # The rail IR-drop solver (pnr.ir_drop) against analytic resistances (numpy only).
 py_test(
     name = "ir_drop_test",

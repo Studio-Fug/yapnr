@@ -18,6 +18,7 @@ and is unit-testable without KiCad. Run this module under that interpreter:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from typing import List, Optional, Tuple
 
@@ -81,6 +82,19 @@ def _board_frame(board) -> Tuple[_Frame, Optional[BoardOutline]]:
     # touch pcbnew so linters don't flag the import as unused on some versions
     _ = pcbnew.F_Cu
     return frame, outline
+
+
+def _paste_only(pad) -> bool:
+    """A pad on no copper layer and without a hole: a solder-paste window (an exposed
+    pad's paste apertures are drawn as such pads). It holds no copper, so with
+    ``PNR_SKIP_PASTE_PADS=1`` (off by default) it is not on the graph: kept, the
+    router took it for an SMD land of no net and barred vias and tracks from the
+    exposed pad it sits on (no via in that pad, no drop for its plane net)."""
+    import pcbnew
+
+    if pad.GetDrillSize().x > 0 or pad.GetDrillSize().y > 0:
+        return False
+    return not any(pad.IsOnLayer(layer) for layer in pcbnew.LSET.AllCuMask().Seq())
 
 
 def _pad_name(pad) -> str:
@@ -341,7 +355,10 @@ def _component(fp, frame: _Frame) -> Component:
         body = None  # centred: the courtyard box itself
 
     pads: List[Pad] = []
+    skip_paste = os.environ.get("PNR_SKIP_PASTE_PADS") == "1"
     for pad in fp.Pads():
+        if skip_paste and _paste_only(pad):
+            continue
         # Pad centre in the footprint's unrotated local frame. KiCad 9 renamed
         # the old GetPos0(); GetFPRelativePosition() is the current accessor.
         get_rel = getattr(pad, "GetFPRelativePosition", None) or pad.GetPos0

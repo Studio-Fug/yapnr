@@ -1038,6 +1038,14 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--skip-paste-pads",
+        action="store_true",
+        help=(
+            "PNR_SKIP_PASTE_PADS=1: ingest leaves a footprint's paste-only pads (no copper, "
+            "no hole) off the graph (pnr.ingest._paste_only)"
+        ),
+    )
+    ap.add_argument(
         "--in-pad-scan",
         action="store_true",
         help=(
@@ -1203,6 +1211,8 @@ def main():
         env["PNR_EXACT_SETTLE"] = "1"
     if args.fanout_best_round:
         env["PNR_FANOUT_BEST_ROUND"] = "1"
+    if args.skip_paste_pads:
+        env["PNR_SKIP_PASTE_PADS"] = "1"
     if args.in_pad_scan:
         env["PNR_IN_PAD_SCAN"] = "1"
     if args.fanout_band_mm:

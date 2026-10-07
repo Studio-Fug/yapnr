@@ -83,6 +83,7 @@ OPTIONS = {
     "exact_settle": bool,
     "fanout_best_round": bool,
     "in_pad_scan": bool,
+    "skip_paste_pads": bool,
     "fanout_band_mm": (int, float),
     "maze_kernel": str,
 }
@@ -118,6 +119,7 @@ FLAGS = {
     "exact_settle": "--exact-settle",
     "fanout_best_round": "--fanout-best-round",
     "in_pad_scan": "--in-pad-scan",
+    "skip_paste_pads": "--skip-paste-pads",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
 WEIGHTS = {

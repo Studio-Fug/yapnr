@@ -51,13 +51,15 @@ the old rule of thumb (:func:`pnr.plane_partition._rail_decision`).
 (``escape_diagnostics.rail_allocation``) names the chosen allocation and, per rail,
 the numbers that decided it.
 
-A/B (#81, GCP c4d spot us-west4, this change's commit): ``-rails`` search 4/4 seeds
-0-3 vs static 0/4 (VDDA competes with VDD for the plane and fails the quality judge
+A/B (#81, GCP c4d spot us-west4, PR #81's commit): ``-rails`` search 4/4 seeds 0-3
+vs static 0/4 (VDDA competes with VDD for the plane and fails the quality judge
 every seed); ``-pour`` identical both arms (no candidates, 4/4 both); the other 31
 hard rungs' 62 cells identical both arms (59/62, the 3 failures pre-existing and
-reproduced on main). Re-checked after the default flip (20261006-ladder-b0ec34's 21
-previously-failing cells under ``--fab-profile jlc-pofv``): ``-rails`` is the only
-one of the 21 that depends on this flag, and search is required for it to pass.
+reproduced on main). Of the 21 cells 20261006-ladder-b0ec34 found failing under
+``--fab-profile jlc-pofv`` (campaign on an older commit, before #76 and #81),
+``-rails`` is the only one this flag can change the result of; the other 20 are
+MCU-stackup and BGA-fanout cases #76's fab-profile adaptation fixes, independent of
+rail allocation.
 """
 
 from __future__ import annotations

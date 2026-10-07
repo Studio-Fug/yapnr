@@ -1,0 +1,16 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "synthetic-ladder~11-buck-vqfnhr-4L-SGPS-pour~s1",
+  "time": 1791326308.775969,
+  "kind": "task_complete",
+  "candidate": "ladder/11-buck-vqfnhr-4L-SGPS-pour/s1",
+  "iteration": null,
+  "data": {
+    "verdict": "pass",
+    "attempt": "s2r0",
+    "exit_code": 0,
+    "wall_s": 16.516,
+    "timed_out": false
+  },
+  "synthetic": true
+}

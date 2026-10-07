@@ -1,0 +1,17 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791329511138420573-11dd818a",
+  "time": 1791329511.1384249,
+  "kind": "signal_net_removed",
+  "candidate": "ladder/02-resistor-led-3/s0",
+  "iteration": null,
+  "data": {
+    "net": "LED_A",
+    "phase": "signals",
+    "pass_index": 1,
+    "pres_fac": 0.5,
+    "provisional": true,
+    "tracks": [],
+    "preview_width": true
+  }
+}

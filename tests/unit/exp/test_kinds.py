@@ -356,6 +356,11 @@ class LadderOptionsTest(unittest.TestCase):
         self.assertIn("--macro-hull", args)
         self.assertEqual(args[args.index("--hull-dovetail") + 1], "1.5")
         self.assertNotIn("--route-compact", ladder.runner_arguments({}))
+        # An explicit `route_compact = false` (distinct from leaving the key out) opts a
+        # hierarchical cell out of the driver's default bundle (run.py --route-compact 0).
+        self.assertEqual(
+            ladder.runner_arguments(dict(route_compact=False))[-2:], ["--route-compact", "0"]
+        )
         kind = kinds.get("ladder-cell")
         campaign = {
             "schema": spec.CAMPAIGN_SCHEMA,

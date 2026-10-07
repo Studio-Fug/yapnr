@@ -174,9 +174,14 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
     if options.get("legalize_channel_clearance_fab"):
         args += ["--legalize-channel-clearance", "fab"]
     compact_parts = options.get("route_compact")
-    if compact_parts:
-        # PNR_ROUTE_COMPACT (hardware/pnr/pnr/place/route_compact.py): true for every part.
-        args += ["--route-compact", "1" if compact_parts is True else str(compact_parts)]
+    if compact_parts is not None:
+        # PNR_ROUTE_COMPACT (hardware/pnr/pnr/place/route_compact.py): true for every part,
+        # false (an explicit `route_compact = false`, distinct from leaving the key out) opts
+        # a hierarchical cell out of the driver's default bundle (run.py --route-compact 0).
+        if compact_parts is False:
+            args += ["--route-compact", "0"]
+        else:
+            args += ["--route-compact", "1" if compact_parts is True else str(compact_parts)]
     if options.get("rail_alloc"):
         args += ["--rail-alloc", options["rail_alloc"]]  # PNR_RAIL_ALLOC (pnr.rail_alloc)
     return args

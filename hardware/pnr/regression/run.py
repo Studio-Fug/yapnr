@@ -270,6 +270,30 @@ COMPACT_PARTS = (
 # them equal) --route-compact may name.
 ROUTE_COMPACT_PARTS = ("TOP", "BLOCK", "FLAT")
 
+# The hierarchical driver's default bundle (2026-10 A/B, campaign 20261007-ladder-01bca2 at
+# head: 12/12 pass in every arm, bbox -13.1 %, copper -5.7 %, no rung worse): TOP,BLOCK
+# compaction plus hull packing, applied by hier_compact_extra() below. FLAT is never in it.
+HIER_COMPACT_DEFAULT_ENV = {
+    "PNR_ROUTE_COMPACT": "TOP,BLOCK",
+    "PNR_MACRO_HULL": "1",
+    "PNR_HULL_DOVETAIL": repr(1.0),
+}
+
+
+def hier_compact_explicit(args) -> bool:
+    """True when ``args`` names any of the hierarchical driver's default-bundle flags
+    (``--route-compact`` including its ``0``/``off`` opt-out, ``--macro-hull``,
+    ``--hull-dovetail``) explicitly, so :func:`hier_compact_extra` leaves the default alone."""
+    return args.route_compact is not None or args.macro_hull or args.hull_dovetail is not None
+
+
+def hier_compact_extra(args, driver: str, timeout: float) -> dict:
+    """The per-case env overrides for the hierarchical driver's default bundle (``driver ==
+    "hier_case.py"`` and nothing in :func:`hier_compact_explicit` was given), else ``{}``."""
+    if driver != "hier_case.py" or hier_compact_explicit(args):
+        return {}
+    return dict(HIER_COMPACT_DEFAULT_ENV, PNR_ROUTE_COMPACT_TIMEOUT_S=repr(float(timeout)))
+
 
 # Ambient PNR_* switches an operator happens to have set must not silently change the suite's
 # configuration; telemetry is the exception: PNR_LIVE_* (hardware/pnr/pnr/live.py) and
@@ -922,7 +946,10 @@ def parser():
         help=(
             "PNR_ROUTE_COMPACT: after routing, squeeze the placement by the copper actually "
             "routed and route again (pnr.place.route_compact); PARTS is 1 (all) or a comma "
-            "list of TOP, BLOCK, FLAT"
+            "list of TOP, BLOCK, FLAT. The hierarchical driver (design.json driver 'hier') "
+            "defaults this on as TOP,BLOCK, plus --macro-hull and --hull-dovetail 1.0, unless "
+            "any of the three is given explicitly here; FLAT is never in that default. '0' "
+            "(or 'off') opts a hierarchical run out of the whole default bundle"
         ),
     )
     ap.add_argument(
@@ -930,7 +957,8 @@ def parser():
         action="store_true",
         help=(
             "PNR_MACRO_HULL=1: hierarchical block macros carry per-side occupancy hulls from "
-            "their routed copper, so blocks nest and dovetail (pnr.place.hull)"
+            "their routed copper, so blocks nest and dovetail (pnr.place.hull); part of the "
+            "hierarchical driver's default bundle (see --route-compact)"
         ),
     )
     ap.add_argument(
@@ -940,7 +968,8 @@ def parser():
         metavar="W",
         help=(
             "PNR_HULL_DOVETAIL=W: with --macro-hull, global placement packs the hull bodies "
-            "(their smooth bounding box, weight W), so blocks interlock"
+            "(their smooth bounding box, weight W), so blocks interlock; part of the "
+            "hierarchical driver's default bundle (see --route-compact)"
         ),
     )
     ap.add_argument(
@@ -1079,11 +1108,12 @@ def main():
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.power_first:
         env["PNR_POWER_FIRST"] = "1"
-    if args.route_compact:
+    if args.route_compact and args.route_compact not in ("0", "off"):
         parts = {p.strip().upper() for p in args.route_compact.split(",") if p.strip()}
         if args.route_compact != "1" and not parts <= set(ROUTE_COMPACT_PARTS):
             raise SystemExit(
-                "--route-compact takes 1 or a comma list of %s" % ", ".join(ROUTE_COMPACT_PARTS)
+                "--route-compact takes 1, 0/off, or a comma list of %s"
+                % ", ".join(ROUTE_COMPACT_PARTS)
             )
         env["PNR_ROUTE_COMPACT"] = args.route_compact
         # The pass stops before a reroute would run past the place-route stage's budget.
@@ -1265,6 +1295,10 @@ def main():
                     # A hard rung's outline is part of its contract: never shrunk.
                     extra["PNR_SHRINK"] = "0"
                     result["shrink_exempt"] = True
+                default_bundle = hier_compact_extra(args, driver, args.timeout)
+                if default_bundle:
+                    extra.update(default_bundle)
+                    result["route_compact_default"] = True
                 run(
                     "place-route",
                     [args.python, frozen_here / driver, root, seed, args.rounds],

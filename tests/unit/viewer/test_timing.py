@@ -528,6 +528,61 @@ class UnattributedSyntheticTests(unittest.TestCase):
         self.assertEqual(result["running_count"], 0)
         self.assertAlmostEqual(result["wall_seconds"], 1.0, places=3)
 
+    def test_coverage_uses_the_tasks_run_span_not_mirror_lag_or_queue_wait(self):
+        # The live timing-bounds GCP check's own finding: a mirror-synthesized task_complete can
+        # land well after the task's real "run" span (Batch status events) closes -- lane_wall
+        # (first event to terminal) counts that whole lag against coverage unless the run span
+        # itself (real, closed, never open-ended) is used instead.
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=1010.0,
+            kind="stage_start",
+            candidate="ladder/h/s0",
+            data=dict(stage="route", label="route"),
+        )
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=1012.0,
+            kind="stage_end",
+            candidate="ladder/h/s0",
+            data=dict(stage="route", label="route", seconds=2.0),
+        )
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=1012.0,
+            kind="candidate_complete",
+            candidate="ladder/h/s0",
+            data={},
+        )
+        # The task's own run span (Batch RUNNING -> SUCCEEDED): [1000, 1012], 12s, 2s attributed.
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=1012.0,
+            kind="task_timing",
+            candidate="ladder/h/s0",
+            data=dict(stage="run", seconds=12.0, terminal=True),
+        )
+        # The mirror only notices 68s later.
+        _write_event(
+            self.events_dir,
+            self._next_idx(),
+            time=1080.0,
+            kind="task_complete",
+            candidate="ladder/h/s0",
+            data={},
+        )
+        result = timing.aggregate(Path(self.tmp))
+        # The Gantt/slowest "seconds" figure is untouched by this refinement: first event (1010)
+        # to the raw last event, the lagged task_complete (1080) -- 70s.
+        self.assertAlmostEqual(result["slowest"][0]["seconds"], 70.0, places=3)
+        # But unattributed/coverage are measured against the 12s run span, not the 70s lane wall.
+        self.assertAlmostEqual(result["unattributed"]["total"], 10.0, places=3)
+        self.assertAlmostEqual(result["coverage"], 2.0 / 12.0, places=6)
+
     def test_a_native_terminal_event_is_never_excluded_from_the_open_bound(self):
         # candidate_complete/case_complete/case_failed/iteration_complete are emitted in-process
         # and are real timestamps -- only MIRROR_TERMINAL_KINDS (task_complete) is excluded.

@@ -82,16 +82,22 @@ child lane under it in the same scope) -- counting a parent candidate lane and t
 spawned (e.g. ``initial-start-NN`` screening candidates) together overstates how many things were
 really running at once.
 
-**Unattributed time and coverage.** Per lane, ``lane_wall`` (first event to terminal/last event,
-or to ``now`` while running -- the same figure already shown as the lane's own ``seconds``) minus
-the sum of its pipeline-span seconds is that lane's ``unattributed`` time: wall-clock the lane
-genuinely spent somewhere, with no stage event to say where. Aggregated in the same shape as a
-stage (:func:`_stat_block`) under the top-level ``unattributed`` key, and ``coverage`` (also
-top-level, and in the CLI table) is attributed total over lane-wall total across the scope -- the
-fraction of real time any stage actually accounts for. A campaign relying on marker-estimated
-spans with a sparse marker set, or one whose last lane event predates a mirror catch-up, reads a
-low coverage; one instrumented with ``stage_start``/``stage_end`` through its last real phase
-reads close to 1.0.
+**Unattributed time and coverage.** Per lane, a ``coverage_wall`` figure minus the sum of its
+pipeline-span seconds is that lane's ``unattributed`` time: wall-clock the lane genuinely spent
+somewhere, with no stage event to say where. ``coverage_wall`` is the task's own ``run``
+task_timing span (real Batch RUNNING-state transitions, GCP only) when one exists, since a lane's
+full first-to-last-event range (``lane_wall``, the same figure as the lane's own ``seconds``) also
+spans queue-wait/boot (already its own ``task_overhead`` row, never meant to double as pipeline
+coverage) and any mirror-detection lag past the lane's terminal event (the same artifact
+``open_bound`` already excludes from spans themselves, above) -- both would otherwise dilute
+coverage for reasons that have nothing to do with how well the pipeline is instrumented. Lacking a
+run span (the local backend, or a campaign predating task_timing), ``coverage_wall`` is
+``lane_wall`` unchanged. Aggregated in the same shape as a stage (:func:`_stat_block`) under the
+top-level ``unattributed`` key, and ``coverage`` (also top-level, and in the CLI table) is
+attributed total over ``coverage_wall`` total across the scope -- the fraction of a lane's real
+run time any stage actually accounts for. A campaign relying on marker-estimated spans with a
+sparse marker set reads a low coverage; one instrumented with ``stage_start``/``stage_end``
+through its last real phase reads close to 1.0.
 
 Caching: one :class:`_RootCache` per live root, keyed off the ``events`` directory's mtime and the
 set of filenames already parsed (the same incremental-scan shape as ``Viewer.ingest`` in
@@ -492,10 +498,24 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
                 task_durations[span["stage"]].append(span["seconds"])
 
         lane_wall = (end - start) if not running else max(end - start, now - start)
+        # Unattributed/coverage measure against the task's own "run" span when one is known (the
+        # GCP mirror's task_timing, real Batch status transitions) rather than the lane's full
+        # first-to-last-event range: that range also spans queue-wait and boot (already their own
+        # task_overhead stage, never meant to count as pipeline coverage) and any mirror-detection
+        # lag past the lane's terminal event (the same artifact `open_bound` excludes above). A
+        # lane with no task_timing (the local backend, or a campaign predating it) falls back to
+        # `lane_wall` unchanged.
+        run_spans = [s for s in task_spans if s["stage"] == "run"]
+        if run_spans:
+            coverage_wall = max(
+                0.0, max(s["end"] for s in run_spans) - min(s["start"] for s in run_spans)
+            )
+        else:
+            coverage_wall = lane_wall
         attributed = sum(span["seconds"] for span in spans)
-        unattributed = max(0.0, lane_wall - attributed)
+        unattributed = max(0.0, coverage_wall - attributed)
         unattributed_durations.append(unattributed)
-        lane_wall_total += lane_wall
+        lane_wall_total += coverage_wall
         lanes_out.append(
             dict(
                 candidate=candidate,

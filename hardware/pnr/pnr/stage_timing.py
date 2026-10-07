@@ -76,6 +76,14 @@ _ALIAS = {
     "via-scan": "drc-judge",
     "checks": "drc-judge",
     "gloss-measure": "gloss",
+    # Once-per-task bootstrap before the per-case loop even starts (main(), ahead of its own
+    # `run()` closure): hashing and freezing every source file, the optional native maze-kernel
+    # compile, and the python/kicad version probes. The live timing-bounds check measured this as
+    # the dominant share of a cold GCP task's otherwise-unattributed time (~16s of a ~26s task,
+    # almost all of it "freeze-source") -- real setup work, same bucket as "generate"/"placement".
+    "freeze-source": "setup",
+    "maze-kernel-build": "setup",
+    "version-check": "setup",
 }
 
 

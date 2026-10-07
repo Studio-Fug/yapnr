@@ -659,6 +659,11 @@ def _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, dige
                 conflicts_per_round=assigner.report["conflicts_per_round"],
                 legalized=assigner.report["legalized"],
                 repaired=assigner.report["repaired"],
+                **(
+                    {"restored_round": assigner.report["restored_round"]}
+                    if "restored_round" in assigner.report
+                    else {}
+                ),
             ),
             warnings=warnings,
             # Only with a reused fixed via, so other plans keep their bytes.

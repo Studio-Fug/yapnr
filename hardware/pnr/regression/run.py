@@ -1021,6 +1021,23 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--exact-settle",
+        action="store_true",
+        help=(
+            "PNR_EXACT_SETTLE=1: the exact-separation route negotiates while its overuse still "
+            "falls and then lets each open net displace a few routed nets by transaction "
+            "(pnr.route.detail.exact_route.settle_mode)"
+        ),
+    )
+    ap.add_argument(
+        "--fanout-best-round",
+        action="store_true",
+        help=(
+            "PNR_FANOUT_BEST_ROUND=1: a BGA fanout's assignment legalizes its least-conflicted "
+            "round as well as its last and keeps the better (pnr.fanout.assign.best_round)"
+        ),
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
@@ -1164,6 +1181,10 @@ def main():
         env["PNR_RAIL_ALLOC"] = args.rail_alloc
     if args.exact_late_room:
         env["PNR_EXACT_LATE_ROOM"] = "1"
+    if args.exact_settle:
+        env["PNR_EXACT_SETTLE"] = "1"
+    if args.fanout_best_round:
+        env["PNR_FANOUT_BEST_ROUND"] = "1"
     if args.detail_pitch_mm is not None:
         import math
 

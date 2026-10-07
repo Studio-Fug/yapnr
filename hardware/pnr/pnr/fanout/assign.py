@@ -38,6 +38,15 @@ PF_MAX = 1e9
 HISTORY_STEP = 0.2
 
 
+def best_round() -> bool:
+    """``PNR_FANOUT_BEST_ROUND=1`` (off by default): when conflicts are left after
+    the last round, legalize the round that left the fewest as well and keep the
+    better of the two outcomes (:meth:`Assigner.run`)."""
+    import os
+
+    return os.environ.get("PNR_FANOUT_BEST_ROUND") == "1"
+
+
 @dataclass
 class Task:
     pad: str
@@ -307,11 +316,14 @@ class Assigner:
                 unreachable.add(t.pad)
             self.commit(t, found)
         rounds = 1
+        best = None  # (conflicted tasks, round, {pad: (path, route)}) of the best round
         while rounds < self.max_rounds:
             bad = self.conflicted()
             self.report["conflicts_per_round"].append(len(bad))
             if not bad:
                 break
+            if best_round() and (best is None or len(bad) < best[0]):
+                best = (len(bad), rounds, {t.pad: (t.path, t.route) for t in self.tasks})
             for t in bad:
                 for o in t.path:
                     if self.present(o, t.net):
@@ -323,8 +335,52 @@ class Assigner:
                     self.commit(t, self.search(t))
             rounds += 1
         self.report["rounds"] = rounds
+        if not best_round() or best is None or len(self.conflicted()) <= best[0]:
+            self._legalize()
+            return self.tasks
+        # PathFinder need not settle monotonically (its present factor outgrows the
+        # history): conflicts can climb again after their minimum. Legalize the last
+        # round and the round that left the fewest conflicts, and keep the better
+        # outcome (most signals escaped, then most drops); the last round on a tie.
+        last = self._state()
         self._legalize()
+        last_done, last_score = self._state(), self._score()
+        self._restore(best[2], last)
+        self._legalize()
+        if self._score() > last_score:
+            self.report["restored_round"] = best[1]
+        else:
+            self._restore(None, last_done)
         return self.tasks
+
+    def _score(self):
+        signals = sum(1 for t in self.tasks if t.priority == 0 and t.path)
+        drops = sum(1 for t in self.tasks if t.priority != 0 and t.path)
+        return signals, drops
+
+    def _state(self):
+        """Every task's path, route and failure, and the legalization report."""
+        return (
+            {t.pad: (t.path, t.route, t.failed) for t in self.tasks},
+            list(self.report["legalized"]),
+            list(self.report["repaired"]),
+        )
+
+    def _restore(self, paths, state):
+        """Every task back on a recorded state: ``state`` (:meth:`_state`), with the
+        paths of ``paths`` (pad -> ``(path, route)``) when given."""
+        tasks, legalized, repaired = state
+        for t in self.tasks:
+            self.ripup(t)
+        for t in self.tasks:
+            path, route, failed = tasks[t.pad]
+            if paths is not None:
+                path, route = paths.get(t.pad, (None, None))
+            t.failed = failed
+            if path:
+                t.path, t.route = path, route
+                self._apply(t.net, path, +1)
+        self.report["legalized"], self.report["repaired"] = list(legalized), list(repaired)
 
     def _owners(self, objs, net):
         """The tasks of other nets whose committed objects conflict with ``objs``."""

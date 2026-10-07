@@ -462,8 +462,11 @@ def route_exact(
         negotiate(net)
     iters = 0
     # The exact model resolves its last few contested cores late: negotiate up
-    # to twice as long (stopping at convergence) before the commit passes.
-    for it in range(2 * max_iters):
+    # to twice as long (stopping at convergence) before the commit passes. Settling
+    # (PNR_EXACT_SETTLE) goes on past that while the overuse keeps falling.
+    settle = settle_mode()
+    least, since = math.inf, 0
+    for it in range((SETTLE_ITER_FACTOR if settle else 2) * max_iters):
         iters = it + 1
         for net in nets:
             negotiate(net)
@@ -472,6 +475,14 @@ def route_exact(
             break
         history += hist_fac * increment
         pres_fac += pres_inc
+        if settle:
+            total = float(increment.sum())
+            if total < least * (1.0 - SETTLE_GAIN):
+                least, since = total, 0
+            else:
+                since += 1
+            if iters >= 2 * max_iters and since >= SETTLE_PATIENCE:
+                break
 
     # Pass 1: commit the negotiated routes that conflict with nothing committed.
     committed = Occupancy(grid, sep)
@@ -524,15 +535,24 @@ def route_exact(
 
     # Pass 3: negotiated rip-up with a rising per-net crossing price; keep the
     # best (most connected terminal branches) state seen.
-    def routed_count():
-        return sum(
-            max(
-                0,
-                len(set(net_access[n])) - 1 - remaining_connections(net_access[n], routes[n].edges),
-            )
-            for n in nets
-            if n in routes
+    # Connected terminal branches per committed route, kept per net (the route
+    # object it belongs to is checked): a rip-up step changes only a few nets, so
+    # the count after each step costs those nets only (the same numbers).
+    branch_count: Dict[str, tuple] = {}
+
+    def branches(n):
+        route = routes[n]
+        known = branch_count.get(n)
+        if known is not None and known[0] is route:
+            return known[1]
+        value = max(
+            0, len(set(net_access[n])) - 1 - remaining_connections(net_access[n], route.edges)
         )
+        branch_count[n] = (route, value)
+        return value
+
+    def routed_count():
+        return sum(branches(n) for n in nets if n in routes)
 
     def snapshot():
         return {n: routes[n] for n in nets if n in routes and result_nets[n].routed}
@@ -581,6 +601,26 @@ def route_exact(
         if count > best_count:
             best_count = count
             best_snap = snapshot()
+
+    def soft_field(net, occupancy, price):
+        track, via, _ = occupancy.blocked(net)
+        return build_exact_field(
+            static, net, track_soft=np.where(track, price, 0.0), via_soft=np.where(via, price, 0.0)
+        )
+
+    if settle:
+        best_snap = _settle(
+            grid,
+            sep,
+            nets,
+            net_access,
+            best_snap,
+            route_net=route_net,
+            blocked_field=blocked_field,
+            soft_field=soft_field,
+            order=lambda n: (span(n), n),
+            prices=(rip_penalty, 4 * rip_penalty, 16 * rip_penalty),
+        )
 
     # Restore the best snapshot; then keep useful branches of incomplete nets
     # and connect what still can be, around everything else.
@@ -655,6 +695,101 @@ def route_exact(
         )
     unrouted = [net for net in nets if not result_nets[net].routed]
     return RouteResult(nets=result_nets, unrouted=sorted(unrouted), iterations=iters)
+
+
+def settle_mode() -> bool:
+    """``PNR_EXACT_SETTLE=1`` (off by default): settle contested space. The
+    negotiation goes on past its usual ``2 * max_iters`` rounds while the overuse
+    still falls (by :data:`SETTLE_GAIN` within :data:`SETTLE_PATIENCE` rounds, up to
+    ``SETTLE_ITER_FACTOR * max_iters``), and after the rip-up pass each open net
+    may displace a few committed nets by transaction (:func:`_settle`)."""
+    import os
+
+    return os.environ.get("PNR_EXACT_SETTLE") == "1"
+
+
+# Settling: the negotiation's round cap (times max_iters), the overuse fall that counts
+# as progress and the rounds without it before it stops; the most committed nets an open
+# net may displace, and the passes over the open nets.
+SETTLE_ITER_FACTOR = 10
+SETTLE_GAIN = 0.05
+SETTLE_PATIENCE = 8
+SETTLE_MAX_DISPLACED = 4
+SETTLE_PASSES = 3
+
+
+def _settle(
+    grid, sep, nets, net_access, snap, *, route_net, blocked_field, soft_field, order, prices
+):
+    """Settle contested space by transactions on the best state ``snap`` (net ->
+    committed route). An open net routes with a price on crossing committed nets
+    (``prices``, cheapest first, until it crosses at most
+    :data:`SETTLE_MAX_DISPLACED`); the nets it crosses are ripped and each routes
+    again strictly around everything committed. The transaction stands only when
+    the open net completes and every displaced net keeps at least the terminal
+    branches it had; otherwise everything is put back. So the connected branches
+    only grow: contested room goes to the net that leaves both connected, where
+    such a route exists. Deterministic (``order``: the open nets' order). Returns
+    the new state; the transactions kept are in ``_settle.kept``."""
+    from .maze import remaining_connections
+
+    def branches(net, route):
+        if route is None:
+            return 0
+        terminals = len(set(net_access[net]))
+        return max(0, terminals - 1 - remaining_connections(net_access[net], route.edges))
+
+    def complete(net, route):
+        return route is not None and remaining_connections(net_access[net], route.edges) == 0
+
+    snap = dict(snap)
+    occupancy = Occupancy(grid, sep)
+    for name, route in snap.items():
+        occupancy.add(Zone(grid, sep, name, route))
+    kept = []
+    for _ in range(SETTLE_PASSES):
+        improved = False
+        for net in sorted((n for n in nets if not complete(n, snap.get(n))), key=order):
+            for price in prices:
+                route = route_net(net, soft_field(net, occupancy, price))
+                if not complete(net, route):
+                    continue
+                zone = Zone(grid, sep, net, route)
+                crossed = occupancy.crossed(zone)
+                if len(crossed) > SETTLE_MAX_DISPLACED:
+                    continue
+                saved = {n: snap.get(n) for n in [net] + crossed}
+                for other in crossed:
+                    occupancy.remove(other)
+                    snap.pop(other, None)
+                occupancy.add(zone)
+                snap[net] = route
+                ok = True
+                for other in sorted(crossed, key=order):
+                    again = route_net(other, blocked_field(other, occupancy))
+                    if again is None or branches(other, again) < branches(other, saved[other]):
+                        ok = False
+                        break
+                    again_zone = Zone(grid, sep, other, again)
+                    if occupancy.conflicts(again_zone):
+                        ok = False
+                        break
+                    occupancy.add(again_zone)
+                    snap[other] = again
+                if ok:
+                    kept.append(dict(net=net, displaced=crossed, price=price))
+                    improved = True
+                    break
+                for name, old in saved.items():
+                    occupancy.remove(name)
+                    snap.pop(name, None)
+                    if old is not None:
+                        occupancy.add(Zone(grid, sep, name, old))
+                        snap[name] = old
+        if not improved:
+            break
+    _settle.kept = kept
+    return snap
 
 
 def missing_connections(result) -> int:

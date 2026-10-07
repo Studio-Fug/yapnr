@@ -80,6 +80,8 @@ OPTIONS = {
     "hull_dovetail": (int, float),
     "rail_alloc": str,
     "exact_late_room": bool,
+    "exact_settle": bool,
+    "fanout_best_round": bool,
     "maze_kernel": str,
 }
 FLAGS = {
@@ -110,6 +112,9 @@ FLAGS = {
     "macro_hull": "--macro-hull",
     # The exact-separation recovery beside late plane drops (router-keepouts).
     "exact_late_room": "--exact-late-room",
+    # Settled contested space and the fanout's best-round legalization (top-rung).
+    "exact_settle": "--exact-settle",
+    "fanout_best_round": "--fanout-best-round",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
 WEIGHTS = {

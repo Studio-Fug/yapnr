@@ -21,8 +21,18 @@ two opt-in stages, both off by default: [compact placement](#compact-placement-o
 > gloss (the animations' configuration). The ladder routes and is judged under its fixtures' own
 > fabrication rules (`--fab-profile legacy`, the runner's default; see below). Under the engine's
 > default JLCPCB profile (`--fab-profile jlc-pofv`), where the router keeps vias 0.127 mm off SMD
-> pads, every case passes too (other boards); which profile the ladder uses by default is an
-> owner decision ([WORKLOG.md](../WORKLOG.md)).
+> pads, every case passes too (other boards).
+>
+> **Default-flip gate (2026-10-06, campaign `20261007-ladder-7fe33f`,
+> [decisions.md](decisions.md)):** the runner's default stays `legacy`. Of the 21 cells
+> `20261006-ladder-b0ec34` found failing under `jlc-pofv`, 20 now pass (the fab-profile-territory
+> ones; rail allocation search is the default separately, PR #81) but
+> `11-ufbga201-fanout-6L-SGSGPS-rails` seed 0 still fails its `rails-In4` plane-partition check
+> under `jlc-pofv` (`legacy` fails that cell on _both_ seeds, so the flip is not a regression
+> there, but the gate text is "all 21 pass" and this is 20 of 21). Across the other 44 cells,
+> `jlc-pofv` is never worse on opens or DRC, but its copper length runs higher on most rungs
+> (e.g. `05-timer-led-10`: 93.1/113.9 mm vs 80.8/101.1 mm) from the wider via-to-pad keepout, so
+> this stays open even past the one cell.
 
 ## The cases
 

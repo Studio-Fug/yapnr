@@ -1,0 +1,80 @@
+# Order 0 run 0b (D-O0-11): R1 forward on the M equivalent substrate and four
+# straight lines (0.40 and 0.70 mm, 10 and 30 mm) for the solver's loss. One
+# family (c4-highcpu-16) for the comparison. Written by python -m yapnr.rf.order0 write.
+name = "order0-run0b"
+image = "edge"
+
+[defaults]
+threads = 16
+cpus = 8
+memory_gb = 24
+disk_gb = 10
+max_wall_s = 10800
+require_native = true
+
+[placement]
+shape = "c4-highcpu-16"
+
+[[jobs]]
+id = "diag"
+diagnostic = true
+threads = 8
+cpus = 4
+memory_gb = 6
+disk_gb = 4
+
+[[jobs]]
+id = "r1-m-eq"
+case = "divider"
+validate = "runs/r1-m-eq"
+criteria = "criteria/ref-m.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+
+[[jobs]]
+id = "line-m-w040-l10"
+case = "divider"
+validate = "runs/line-m-w040-l10"
+criteria = "criteria/line.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+threads = 8
+cpus = 4
+memory_gb = 6
+disk_gb = 4
+
+[[jobs]]
+id = "line-m-w040-l30"
+case = "divider"
+validate = "runs/line-m-w040-l30"
+criteria = "criteria/line.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+threads = 8
+cpus = 4
+memory_gb = 6
+disk_gb = 4
+
+[[jobs]]
+id = "line-m-w070-l10"
+case = "divider"
+validate = "runs/line-m-w070-l10"
+criteria = "criteria/line.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+threads = 8
+cpus = 4
+memory_gb = 6
+disk_gb = 4
+
+[[jobs]]
+id = "line-m-w070-l30"
+case = "divider"
+validate = "runs/line-m-w070-l30"
+criteria = "criteria/line.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+threads = 8
+cpus = 4
+memory_gb = 6
+disk_gb = 4

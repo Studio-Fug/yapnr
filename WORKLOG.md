@@ -20,9 +20,11 @@ board edges, the hierarchical ladder driver and their animations on
   solver/gradient/design and coupon fitting coverage moves to nightly/manual Linux and macOS;
   ordinary CI keeps inexpensive RF units and a deterministic native optimizer smoke. Expanded
   Bazel targets are checked against an exhaustive lane inventory. Explicit cache saves retain
-  completed outputs after test failures with fork PRs restore-only. Native smoke, 13 focused
-  policy regressions, changed-file hooks and actionlint pass; expanded Bazel selection and fresh
-  hosted lane/cache validation are pending. [Lane inventory and policy](docs/ci-lanes.md).
+  completed outputs after test failures with fork PRs restore-only. The existing CI dispatch can
+  explicitly invoke the RF lane before merge. Native smoke, 14 focused policy regressions,
+  changed-file hooks and actionlint pass; both hosted platforms verify the expanded 65-target
+  inventory. Hosted RF execution and repeated-cache measurements are tracked in PR #95.
+  [Lane inventory and policy](docs/ci-lanes.md).
 
 - **Route-then-compact and hull packing** (PR #86, branch `claude/route-compact`; design
   [docs/design/route-compact.md](docs/design/route-compact.md)). `PNR_ROUTE_COMPACT`

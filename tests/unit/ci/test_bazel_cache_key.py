@@ -14,13 +14,18 @@ class CacheKeyTest(unittest.TestCase):
             BAZEL_INPUTS_HASH="locked-inputs",
             GITHUB_RUN_ID="100",
             GITHUB_RUN_ATTEMPT="1",
+            GITHUB_JOB="test",
             ImageOS="macos26",
             ImageVersion="20260907.0351.1",
         )
 
     def test_new_run_and_retry_snapshot_keep_compatible_restore_prefix(self):
         first = cache_keys(self.env, "compiler/sdk")
-        for changes in ({"GITHUB_RUN_ID": "101"}, {"GITHUB_RUN_ATTEMPT": "2"}):
+        for changes in (
+            {"GITHUB_RUN_ID": "101"},
+            {"GITHUB_RUN_ATTEMPT": "2"},
+            {"GITHUB_JOB": "rf"},
+        ):
             with self.subTest(changes=changes):
                 next_keys = cache_keys(dict(self.env, **changes), "compiler/sdk")
                 self.assertNotEqual(first["disk-key"], next_keys["disk-key"])

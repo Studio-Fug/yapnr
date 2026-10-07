@@ -9,6 +9,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      rf_nightly:
+        description: Also run the expensive RF lane on Linux and macOS
+        type: boolean
+        default: false
   # The release workflow runs all of CI at the tag being released (release.yaml).
   workflow_call:
 
@@ -25,6 +30,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Existing workflow entry point can dispatch the new lane on a feature branch
+  # before rf-nightly.yaml is registered on the default branch.
+  rf-nightly:
+    if: github.event_name == 'workflow_dispatch' && inputs.rf_nightly
+    uses: ./.github/workflows/rf-nightly.yaml
+
   # Presubmit lints: the same prek version and config as ./setup-precommit.sh,
   # so a local commit and CI can never disagree. Also checks every new commit
   # of the push or PR: an allowed identity (the owner's public commit address
@@ -134,7 +145,7 @@ jobs:
       - name: Check RF lane inventory
         timeout-minutes: 3
         run: |
-          bazel query 'kind(".*_test rule", //tests/unit/rf/... + //tests/unit/rf_coupons/... + //tests/e2e/rf/...)' --output=xml > "$RUNNER_TEMP/rf-targets.xml"
+          bazel query --config=ci --repository_cache="$HOME/.cache/bazel-repo" 'kind(".*_test rule", //tests/unit/rf/... + //tests/unit/rf_coupons/... + //tests/e2e/rf/...)' --output=xml > "$RUNNER_TEMP/rf-targets.xml"
           python3 tools/ci/check_rf_lanes.py "$RUNNER_TEMP/rf-targets.xml"
 
       - name: Test

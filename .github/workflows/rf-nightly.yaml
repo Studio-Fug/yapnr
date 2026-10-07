@@ -5,6 +5,8 @@ on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+  # Only the explicit manual input in CI calls this workflow.
+  workflow_call:
 
 permissions:
   contents: read
@@ -37,7 +39,7 @@ jobs:
       - name: Check RF lane inventory
         timeout-minutes: 3
         run: |
-          bazel query 'kind(".*_test rule", //tests/unit/rf/... + //tests/unit/rf_coupons/... + //tests/e2e/rf/...)' --output=xml > "$RUNNER_TEMP/rf-targets.xml"
+          bazel query --config=ci --repository_cache="$HOME/.cache/bazel-repo" 'kind(".*_test rule", //tests/unit/rf/... + //tests/unit/rf_coupons/... + //tests/e2e/rf/...)' --output=xml > "$RUNNER_TEMP/rf-targets.xml"
           python3 tools/ci/check_rf_lanes.py "$RUNNER_TEMP/rf-targets.xml"
 
       - name: Test RF nightly lane

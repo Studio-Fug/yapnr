@@ -59,6 +59,11 @@ def main():
         print(error)
     if not errors:
         print(f"RF lane inventory: {len(inventory)} targets accounted for")
+        for lane in ("ordinary", "nightly", "manual", "kicad"):
+            targets = sorted(name for name, value in inventory.items() if value == lane)
+            print(f"{lane}: {len(targets)} targets")
+            for target in targets:
+                print(f"  {target}")
     return bool(errors)
 
 

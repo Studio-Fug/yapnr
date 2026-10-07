@@ -31,7 +31,7 @@ class CILanesTest(unittest.TestCase):
 
     def test_nightly_is_only_scheduled_or_dispatched_on_both_platforms(self):
         workflow = self.load(".github/workflows/rf-nightly.yaml")
-        self.assertEqual(set(workflow["on"]), {"schedule", "workflow_dispatch"})
+        self.assertEqual(set(workflow["on"]), {"schedule", "workflow_dispatch", "workflow_call"})
         self.assertEqual(
             set(workflow["jobs"]["rf"]["strategy"]["matrix"]["os"]),
             {"ubuntu-24.04-arm", "macos-latest"},
@@ -40,6 +40,22 @@ class CILanesTest(unittest.TestCase):
         test = next(s for s in workflow["jobs"]["rf"]["steps"] if s.get("id") == "test")
         self.assertIn("--config=rf-nightly", test["run"])
         self.assertNotIn("continue-on-error", test)
+
+    def test_reusable_rf_lane_requires_explicit_manual_ci_input(self):
+        workflow = self.load(".github/workflows/ci.yaml")
+        option = workflow["on"]["workflow_dispatch"]["inputs"]["rf_nightly"]
+        self.assertEqual(option["default"], "false")
+        self.assertEqual(option["type"], "boolean")
+        job = workflow["jobs"]["rf-nightly"]
+        self.assertEqual(job["uses"], "./.github/workflows/rf-nightly.yaml")
+        for event in ("push", "pull_request", "workflow_dispatch", "workflow_call"):
+            for opted_in in (True, False):
+                self.assertEqual(
+                    condition(
+                        job["if"], **{"github.event_name": event, "inputs.rf_nightly": opted_in}
+                    ),
+                    event == "workflow_dispatch" and opted_in,
+                )
 
     def test_ordinary_and_quick_lanes_exclude_expensive_rf_but_nightly_selects_it(self):
         lines = (self.root / ".bazelrc").read_text().splitlines()
@@ -77,7 +93,9 @@ class CILanesTest(unittest.TestCase):
                             ),
                             not cancelled and outcome in ("success", "failure"),
                         )
-            self.assertTrue(any("check_rf_lanes.py" in s.get("run", "") for s in steps))
+            inventory_step = next(s for s in steps if "check_rf_lanes.py" in s.get("run", ""))
+            self.assertIn("bazel query --config=ci", inventory_step["run"])
+            self.assertIn('--repository_cache="$HOME/.cache/bazel-repo"', inventory_step["run"])
 
     def test_forks_restore_only_and_download_hits_are_not_saved_again(self):
         action = self.load(".github/actions/bazel-cache-save/action.yaml")

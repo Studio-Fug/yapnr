@@ -18,7 +18,7 @@ def cache_keys(env, toolchain):
     prefix = f"bazel-disk-v2-{platform}-{digest}-{inputs}-"
     return {
         "disk-prefix": prefix,
-        "disk-key": f"{prefix}{env['GITHUB_RUN_ID']}-{env['GITHUB_RUN_ATTEMPT']}",
+        "disk-key": f"{prefix}{env['GITHUB_RUN_ID']}-{env['GITHUB_RUN_ATTEMPT']}-{env['GITHUB_JOB']}",
         "repo-key": f"bazel-repo-v2-{platform}-{inputs}",
     }
 

@@ -1,3 +1,4 @@
+load("@yapnr_pypi//:requirements.bzl", "requirement")
 load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 
 # These checks read the whole working tree, which is not a declared input, so
@@ -5,6 +6,10 @@ load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 # See tools/repo_root.py.
 yapnr_py_tests(
     data = ["//:MODULE.bazel"],
+    overrides = {"test_ci_lanes": {"deps": [
+        "//tools/ci:ci_lib",
+        requirement("pyyaml"),
+    ]}},
     tags = [
         "external",
         "no-remote",

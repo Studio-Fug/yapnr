@@ -8,6 +8,8 @@ py_library(
     name = "ci_lib",
     srcs = [
         "__init__.py",
+        "bazel_cache_key.py",
+        "check_rf_lanes.py",
         "check_run_inputs.py",
         "ladder_summary.py",
     ],

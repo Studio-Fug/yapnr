@@ -1,5 +1,6 @@
 load("@rules_python//python:defs.bzl", "py_test")
 load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+load("//tools/bazel:rf_lanes.bzl", "rf_overrides")
 
 # One thread per test (`YAPNR_RF_THREADS` caps torch's and sets the native pool's, the others
 # numpy's and OpenMP's): Bazel runs as many tests side by side as the machine has cores, and
@@ -14,7 +15,7 @@ _ENV = {
     "YAPNR_RF_THREADS": "1",
 }
 
-# Fast tests (design §12): seconds to about four minutes each on one thread. The optimizer
+# RF tests (design §12), split by //tools/bazel:rf_lanes.bzl. The optimizer
 # tests share a tiny two-port spec (//yapnr/rf:testing); the pipeline gradient and the tiny
 # design are split in two files each so that the halves run side by side. Tests that took more
 # than 40 s on one thread of the development Mac (shared with other work) get the long timeout
@@ -39,7 +40,7 @@ _NATIVE_ENV = {
 
 yapnr_py_tests(
     env = _ENV,
-    overrides = {
+    overrides = rf_overrides({
         "test_adjoint_gradients": _SLOW,
         "test_animate": {
             "deps": [
@@ -56,6 +57,14 @@ yapnr_py_tests(
             "size": "medium",
         },
         "test_dtft": _SLOW,
+        "test_inverse_smoke": {
+            "deps": ["//yapnr/rf:testing"],
+            "env": dict(
+                _ENV,
+                YAPNR_RF_REQUIRE_NATIVE = "1",
+            ),
+            "tags": ["rf-smoke"],
+        },
         "test_kicad_cli": {"tags": ["kicad"]},
         "test_lumped_ports": {"size": "medium"},
         "test_microstrip": _SLOW,
@@ -88,7 +97,7 @@ yapnr_py_tests(
         "test_sheet": {"size": "medium"},
         "test_tiny_design": _SLOW_TESTING,
         "test_tiny_design_options": _SLOW_TESTING,
-    },
+    }),
     deps = ["//yapnr/rf"],
 )
 

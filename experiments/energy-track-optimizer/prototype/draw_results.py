@@ -2,12 +2,13 @@
 
 import json
 from pathlib import Path
-import matplotlib
 
-matplotlib.use("Agg")
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon as Patch
-from shapely.geometry import shape, LineString
+from shapely.geometry import LineString, shape
+
+matplotlib.use("Agg")
 
 ROOT = Path(__file__).resolve().parents[1]
 (ROOT / "deliverables").mkdir(exist_ok=True)
@@ -138,7 +139,8 @@ def real():
     fig.text(
         0.055,
         0.045,
-        "Gray = other fixed copper. Plane fill omitted for clarity; its refill is included in validation. Dashed = previous route.",
+        "Gray = other fixed copper. Plane fill omitted for clarity; its refill is included in validation. "
+        "Dashed = previous route.",
         color=FG,
         fontsize=10,
     )
@@ -193,7 +195,8 @@ def multi():
     fig.text(
         0.055,
         0.12,
-        f'Length {LineString(old).length:.6f} → {LineString(new).length:.6f} mm. Energy {p["energy_before"]:.6f} → {p["energy_after"]:.6f} mm-equivalent.',
+        f"Length {LineString(old).length:.6f} → {LineString(new).length:.6f} mm. "
+        f'Energy {p["energy_before"]:.6f} → {p["energy_after"]:.6f} mm-equivalent.',
         color="white",
         fontsize=11,
     )

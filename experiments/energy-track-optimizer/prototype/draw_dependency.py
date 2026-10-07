@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
-import matplotlib
 
-matplotlib.use("Agg")
+import matplotlib
 import matplotlib.pyplot as plt
 from prototype.energy_track import Config, Controller, Track, length
+
+matplotlib.use("Agg")
 
 ROOT = Path(__file__).resolve().parents[1]
 (ROOT / "deliverables").mkdir(exist_ok=True)
@@ -86,7 +87,8 @@ fig.text(
 fig.text(
     0.055,
     0.07,
-    "Fixed endpoints, net, layer and 0.20 mm width. Hard 0.20 mm edge-to-edge clearance. No length matching or pair routing in this case.",
+    "Fixed endpoints, net, layer and 0.20 mm width. Hard 0.20 mm edge-to-edge clearance. "
+    "No length matching or pair routing in this case.",
     color="#b7d0df",
     fontsize=10,
 )

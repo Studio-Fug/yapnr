@@ -5,20 +5,18 @@ by energy_track.py. Existing proof candidates/results are never imported.
 """
 
 import argparse
-from collections import Counter
-from dataclasses import asdict
 import hashlib
 import json
-import os
-from pathlib import Path
 import shutil
 import subprocess
 import time
+from collections import Counter
+from dataclasses import asdict
+from pathlib import Path
 
+from prototype.energy_track import Config, Controller, Energy, Obstacle, Planner, Track, length
 from shapely.geometry import LineString, Point, Polygon, mapping
 from shapely.ops import unary_union
-
-from prototype.energy_track import Config, Energy, Obstacle, Planner, Track, length
 
 
 def dump(path, value):
@@ -126,10 +124,15 @@ def main():
     ap.add_argument("--rules", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--kicad-cli", required=True)
+    ap.add_argument(
+        "--spatial", action="store_true", help="Use the optional layer-aware obstacle broadphase"
+    )
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     import pcbnew as k
-    from pnr import gloss as gl, gloss_geometry as g
+
+    from pnr import gloss as gl
+    from pnr import gloss_geometry as g
     from pnr.fab_profile import load_board
     from pnr.ir_extract import report as ir_report
 
@@ -231,7 +234,9 @@ def main():
         bounds=original_ctx.bounds,
         clearance=original_ctx.clearance,
     )
-    nm = lambda p: [tuple(round(v * 1e6) for v in q) for q in p]
+
+    def nm(points):
+        return [tuple(round(v * 1e6) for v in point) for point in points]
 
     def segment_gate(a, b):
         aa, bb = nm((a, b))
@@ -253,15 +258,22 @@ def main():
     )
     config = Config(
         growth_mm=1,
+        spatial_broadphase=a.spatial,
         growth_levels=(1.0,),
         max_nodes=150,
         max_states=50000,
         max_edges_checked=20000,
         seconds=90,
     )
+    lookup = Controller([track], obstacles, config=config) if a.spatial else None
+    candidate_obstacles = lookup.environment(track.id) if lookup else obstacles
     started = time.monotonic()
     plan = Planner(config, Energy()).plan(
-        track, obstacles, allow_dependent=True, segment_gate=segment_gate, path_gate=path_gate
+        track,
+        candidate_obstacles,
+        allow_dependent=True,
+        segment_gate=segment_gate,
+        path_gate=path_gate,
     )
     dump(a.out / "plan.json", asdict(plan))
     dump(
@@ -403,6 +415,10 @@ def main():
         and metadata_ok
         and not ir_reasons,
         "engine_commit": "dd1ba7d47c2e18607f1772a9a48acabe8a62045d",
+        "spatial_broadphase": a.spatial,
+        "obstacles_before_broadphase": len(obstacles),
+        "obstacles_after_broadphase": len(candidate_obstacles),
+        "spatial_stats": dict(lookup._spatial.stats) if lookup else None,
         "kicad": k.Version(),
         "source_sha256": input_hash,
         "source_unchanged": digest(a.board) == input_hash,

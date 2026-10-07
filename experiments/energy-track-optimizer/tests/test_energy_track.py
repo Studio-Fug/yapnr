@@ -2,8 +2,6 @@ import dataclasses
 import math
 import unittest
 
-from shapely.geometry import LineString, Point, box
-
 from prototype.energy_track import (
     Config,
     Controller,
@@ -16,6 +14,7 @@ from prototype.energy_track import (
     normalize,
 )
 from prototype.hook import optimize_if_enabled
+from shapely.geometry import LineString, Point, box
 
 
 def bent(id="a", y=0):

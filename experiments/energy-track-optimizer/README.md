@@ -1,6 +1,8 @@
-# Energy track optimizer: isolated prototype v0.1
+# Energy track optimizer: isolated prototype v0.2
 
-A reviewable candidate generator and transactional controller. The production
+A reviewable candidate generator and transactional controller.
+The optional spatial follow-on is documented in [SPATIAL.md](SPATIAL.md); it is
+default-off and preserves the separately delivered v0.1 baseline. The production
 router and active board are unchanged. No remote push, merge, paid compute or
 production integration took place. `prototype/hook.py` is a lazy, default-off
 hook; no existing engine code imports it.
@@ -62,10 +64,11 @@ constraints, not a promise that a matched-length route will be found.
 
 ## Important limits and refusal cases
 
-- v0.1 neighbor discovery and per-track obstacle collection are LINEAR SCANS.
+- With the spatial option off, neighbor discovery and per-track obstacle collection are LINEAR SCANS.
   Sparse requeue is not sublinear discovery. Each accepted move sorts/scans N
   tracks, then checks dirty-region intersection: O(N log N) sorting plus O(N)
-  geometry checks. No adjacency matrix or spatial index exists in v0.1.
+  geometry checks. No adjacency matrix is used. Opt-in v0.2 spatial lookup and its remaining
+  linear/global costs are documented in SPATIAL.md.
 - The finite, capped roadmap is incomplete. Node pruning, the witness-progress
   DAG, conservative growth spokes and homotopy checks can miss legal
   improvements. Minimum means minimum of the explored unconstrained energy
@@ -142,7 +145,7 @@ Do not substitute an active board or suppress any failing gate.
 
 ## Verification status
 
-28 prototype unit tests passed. The pinned upstream glosser's 65 pure-geometry
+43 prototype unit tests passed (28 baseline plus 15 spatial follow-on tests). The pinned upstream glosser's 65 pure-geometry
 tests passed. Source privacy scan passed. Full Bazel and presubmit results are
 recorded separately in `results/check-status.json`; focused passes do not imply
 those aggregate gates passed. No engine source was edited.

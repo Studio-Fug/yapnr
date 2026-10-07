@@ -1,11 +1,13 @@
 # Status
 
-- Completed: isolated v0.1 witness-growth planner, reverse-cost energy search,
-  default-off hook, atomic gate interface, linear dirty-neighbor requeue.
-- Completed: real single-track native/IR no-regression reproduction, synthetic
-  dependency and multiple-obstacle proofs, 28 unit tests and 65 upstream tests.
-- Next: layer-aware spatial broadphase with brute-force no-false-negative tests.
-- Blockers: no pair/serpentine group proposal planner, null existing LVDS skews,
-  no new full-wave RF validation, incomplete bounded geometry search.
-- Do not retry: do not enable the algorithm in the active radar work, mutate the
-  active board or suppress native/electrical findings to claim completion.
+- Completed: preserved v0.1 default-off prototype, real single-track native/IR
+  no-regression, synthetic dependency and multiple-obstacle proofs.
+- Completed: v0.2 opt-in layer-aware dynamic grid for neighbor/obstacle lookup,
+  no-rebuild local updates, refill updates, brute-force oracle tests and A/B.
+- Verification: 43 prototype tests, 65 pinned upstream geometry tests; native
+  spatial A/B and final lint results are recorded with the deliverable.
+- Limits: state copying/fingerprinting remains global; worst-case lookup can
+  fall back to O(N). No pair/serpentine planner, null existing LVDS skew values,
+  no new full-wave RF solve, incomplete bounded candidate search.
+- Do not retry: no automatic production integration, active-board mutation,
+  relaxed native/electrical gates or production-completion claim.

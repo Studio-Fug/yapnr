@@ -10,4 +10,4 @@ mkdir -p results/reproduction
 # Every worker, native DRC subprocess, and the planner has a finite budget.
 timeout 600 "$KICAD_PYTHON" -m prototype.real_case \
   --board fixtures/input/candidate.kicad_pcb --case fixtures/case.json \
-  --rules fixtures/rules.json --out results/reproduction --kicad-cli "$KICAD_CLI"
+  --rules fixtures/rules.json --out results/reproduction --kicad-cli "$KICAD_CLI" "$@"

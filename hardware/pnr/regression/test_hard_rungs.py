@@ -651,6 +651,23 @@ class HardRungContract(unittest.TestCase):
             self.assertTrue(hier_compact_explicit(args), flags)
             self.assertEqual(hier_compact_extra(args, "hier_case.py", 600.0), {}, flags)
 
+    def test_hull_nest_rides_on_the_hierarchical_bundle(self):
+        """``--hull-nest 1`` adds PNR_HULL_NEST to the hierarchical default bundle and ``0``
+        drops it, without counting as an explicit bundle flag; never for the flat driver."""
+        from run import HIER_COMPACT_DEFAULT_ENV, hier_compact_explicit, hier_compact_extra
+
+        on = parser().parse_args(["--out", "x", "--hull-nest", "1"])
+        self.assertFalse(hier_compact_explicit(on))
+        self.assertEqual(hier_compact_extra(on, "hier_case.py", 600.0)["PNR_HULL_NEST"], "1")
+        self.assertEqual(hier_compact_extra(on, "route_case.py", 600.0), {})
+        off = parser().parse_args(["--out", "x", "--hull-nest", "0"])
+        self.assertNotIn("PNR_HULL_NEST", hier_compact_extra(off, "hier_case.py", 600.0))
+        bare = parser().parse_args(["--out", "x"])
+        self.assertEqual(
+            hier_compact_extra(bare, "hier_case.py", 600.0).get("PNR_HULL_NEST"),
+            HIER_COMPACT_DEFAULT_ENV.get("PNR_HULL_NEST"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

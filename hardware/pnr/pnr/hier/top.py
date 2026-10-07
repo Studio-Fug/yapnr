@@ -227,6 +227,12 @@ def hierarchical_place(
             if geo is not None and geo.ok:
                 macros[m]["extent"] = [round(x, 4) for x in geo.extent]
         out["nested"] = nested_parts(placed_macro, plan)
+        from pnr.place.hull import component_nesting
+
+        # How far the macros nest (pnr.place.hull.nesting_metrics), and PNR_HULL_NEST's moves.
+        out["nesting"] = component_nesting(placed_macro.components)
+        if getattr(placed_macro, "hull_nest", None) is not None:
+            out["hull_nest"] = placed_macro.hull_nest
         out["hulls"] = {
             v["block"]: (by_ref[m].hull, list(v.get("origin", ())))
             for m, v in plan.macros.items()

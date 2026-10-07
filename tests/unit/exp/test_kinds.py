@@ -361,6 +361,10 @@ class LadderOptionsTest(unittest.TestCase):
         self.assertEqual(
             ladder.runner_arguments(dict(route_compact=False))[-2:], ["--route-compact", "0"]
         )
+        # hull_nest (PNR_HULL_NEST) is explicit both ways; leaving it out passes nothing.
+        self.assertEqual(ladder.runner_arguments(dict(hull_nest=True))[-2:], ["--hull-nest", "1"])
+        self.assertEqual(ladder.runner_arguments(dict(hull_nest=False))[-2:], ["--hull-nest", "0"])
+        self.assertNotIn("--hull-nest", ladder.runner_arguments({}))
         kind = kinds.get("ladder-cell")
         campaign = {
             "schema": spec.CAMPAIGN_SCHEMA,

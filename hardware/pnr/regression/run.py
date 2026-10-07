@@ -299,10 +299,19 @@ def hier_compact_explicit(args) -> bool:
 
 def hier_compact_extra(args, driver: str, timeout: float) -> dict:
     """The per-case env overrides for the hierarchical driver's default bundle (``driver ==
-    "hier_case.py"`` and nothing in :func:`hier_compact_explicit` was given), else ``{}``."""
+    "hier_case.py"`` and nothing in :func:`hier_compact_explicit` was given), else ``{}``.
+
+    ``--hull-nest`` (PNR_HULL_NEST, pnr.place.hull.nest) rides on top: ``1`` adds it to the
+    bundle, ``0`` drops it from it, unset keeps the bundle's own setting."""
     if driver != "hier_case.py" or hier_compact_explicit(args):
         return {}
-    return dict(HIER_COMPACT_DEFAULT_ENV, PNR_ROUTE_COMPACT_TIMEOUT_S=repr(float(timeout)))
+    env = dict(HIER_COMPACT_DEFAULT_ENV, PNR_ROUTE_COMPACT_TIMEOUT_S=repr(float(timeout)))
+    nest = getattr(args, "hull_nest", None)
+    if nest == "1":
+        env["PNR_HULL_NEST"] = "1"
+    elif nest == "0":
+        env.pop("PNR_HULL_NEST", None)
+    return env
 
 
 # Ambient PNR_* switches an operator happens to have set must not silently change the suite's
@@ -989,6 +998,17 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--hull-nest",
+        choices=("0", "1"),
+        default=None,
+        help=(
+            "PNR_HULL_NEST=1: with --macro-hull, the legalized block macros slide into each "
+            "other's notches by their hulls, and a hierarchical seed whose hull placement does "
+            "not knit (route-then-compact off) falls back to its rectangle placement "
+            "(pnr.place.hull.nest); 0 drops it from the hierarchical driver's default bundle"
+        ),
+    )
+    ap.add_argument(
         "--power-first",
         action="store_true",
         help="PNR_POWER_FIRST=1: lexicographic power-first placement (pnr.place.power_first)",
@@ -1158,6 +1178,9 @@ def main():
         if not (isfinite(args.hull_dovetail) and args.hull_dovetail >= 0):
             raise SystemExit("--hull-dovetail takes a non-negative weight")
         env["PNR_HULL_DOVETAIL"] = repr(float(args.hull_dovetail))
+    if args.hull_nest == "1" and hier_compact_explicit(args):
+        # Outside the default bundle (hier_compact_extra adds it there).
+        env["PNR_HULL_NEST"] = "1"
     if args.route_pairs_diff_pairs:
         env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
     if args.rail_alloc:

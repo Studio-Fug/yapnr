@@ -25,8 +25,11 @@ matched lengths, side terms) stays active. During them:
   Adam (positions only) decays its step exponentially from :data:`LR_START` to :data:`LR_END` mm.
 
 Fixed step counts, no random draws: deterministic per platform like the rest of the global stage.
-Not with hull macros (``PNR_MACRO_HULL=1``: the switch is ignored there) or power-first placement
-(which never calls it).
+With hull macros (``PNR_MACRO_HULL=1``) the overlap term is taken between bodies instead
+(:func:`pnr.place.hull.polish_bodies`): every ordinary part is its slot as above, every hull macro
+its per-side cover boxes grown by half the clearance and half a cell, so two macros whose
+rectangles overlap stay interlocked wherever their hulls miss each other. Not with power-first
+placement (which never calls it).
 """
 
 from __future__ import annotations

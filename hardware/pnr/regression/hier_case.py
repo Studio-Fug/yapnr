@@ -756,6 +756,77 @@ def top_compact(case, best, graph, constraints, reps):
 # ------------------------------------------------------------------------ the run
 
 
+def knit_incomplete(record) -> bool:
+    """A knit that left a connection missing, a net unresolved or split."""
+    return bool(record["missing"] or record["unresolved"] or record["split_nets"])
+
+
+def safety_net(case, best, seeds, graph, constraints, rules, library, reps):
+    """The rectangle fallback of a hull placement that did not knit (``PNR_HULL_NEST``,
+    route-then-compact off): the same top seed placed again with plain block rectangles
+    (``PNR_MACRO_HULL`` off for the placement only) and knitted; the better knit
+    (:func:`route_rank`) is kept. Returns ``(record, report)``."""
+    from pnr import trace
+    from pnr.hier.top import hierarchical_place
+    from pnr.place import hull as hullmod
+    from pnr.place.legalize import LegalizationError
+    from pnr.profile import span
+    from pnr.stage_timing import stage as stage_timing
+
+    if not hullmod.nest_enabled():
+        return best, None
+    k = best["seed_index"]
+    top_seed = seeds[k]["seed"]
+    report = dict(trigger=best["objective"], seed=top_seed)
+    started = time.monotonic()
+    with span("hier.safety_net"), stage_timing("hull-safety-net"):
+        saved = os.environ.pop("PNR_MACRO_HULL", None)
+        try:
+            with trace.scope("top-%02d-rect" % k, "start", kind="hier-top", seed=top_seed):
+                flat, placement_report, _ = hierarchical_place(
+                    graph,
+                    constraints,
+                    rules,
+                    library,
+                    top_seed,
+                    iters=case["budget"]["top_iters"],
+                )
+        except LegalizationError as error:
+            flat = None
+            report["error"] = str(error)
+        finally:
+            if saved is not None:
+                os.environ["PNR_MACRO_HULL"] = saved
+        if flat is not None and placement_report.legal:
+            rect = knit(case, k, flat, reps, label="top-%02d-rect-route" % k)
+            report["rect"] = rect["objective"]
+            if route_rank(rect) < route_rank(best):
+                best = rect
+                report["kept"] = "rect"
+    report.setdefault("kept", "hull")
+    report["seconds"] = round(time.monotonic() - started, 3)
+    print("Hierarchical hull safety net: %s" % json.dumps(report), flush=True)
+    return best, report
+
+
+def final_nesting(case, best, seeds):
+    """:func:`pnr.place.hull.nesting_metrics` of the selected seed as placed (``placed``) and
+    at the final, possibly compacted, macro poses (``final``)."""
+    from pnr.place.hull import nesting_metrics
+
+    frames, hulls = case["frames"], case["hulls"]
+    outlines, shapes = {}, {}
+    for name, pose in best["macro_poses"].items():
+        outlines[name] = tuple(macro_shapes(frames[name], pose[:2], pose[2], 0.0)[0][1:])
+        if name in hulls:
+            shapes[name] = macro_shapes(frames[name], pose[:2], pose[2], 0.0, hulls[name])
+    out = dict(final=nesting_metrics(outlines, shapes))
+    placed = seeds[best["seed_index"]].get("nesting")
+    if placed is not None:
+        out["placed"] = placed
+    return out
+
+
 def run(root, seed):
     """The whole hierarchical flow for one case directory: ``(pnr report, case)``, where
     ``case`` holds the block frames, synthesis records and representatives."""
@@ -842,6 +913,9 @@ def run(root, seed):
                 continue
             if placement.get("hulls"):  # PNR_MACRO_HULL: the shapes route-compact slides
                 case["hulls"] = placement["hulls"]
+            for key in ("nesting", "hull_nest"):
+                if key in placement:
+                    record[key] = placement[key]
             got = {v["block"]: m for m, v in placement["macros"].items()}
             if got != macros:
                 raise RuntimeError("macro naming differs from the block event: %r" % got)
@@ -900,6 +974,11 @@ def run(root, seed):
     )
     from pnr.place import route_compact
 
+    net = None
+    if case.get("hulls") and not route_compact.enabled("TOP") and knit_incomplete(best):
+        # PNR_HULL_NEST: without the route-then-compact reroute, a hull placement that does
+        # not knit gets the rectangle placement of the same seed as a fallback.
+        best, net = safety_net(case, best, seeds, graph, constraints, rules, library, reps)
     compaction = {}
     if route_compact.enabled("TOP"):
         # PNR_ROUTE_COMPACT TOP: gutters shrink to the knitted copper, then knit again.
@@ -1027,6 +1106,8 @@ def run(root, seed):
                 else {}
             ),
             top_copper=dict(tracks=len(best["top_tracks"]), vias=len(best["top_vias"])),
+            **({"nesting": final_nesting(case, best, seeds)} if case.get("hulls") else {}),
+            **({"safety_net": net} if net is not None else {}),
         ),
     )
     from pnr.place import compact

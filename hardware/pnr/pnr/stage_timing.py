@@ -60,6 +60,11 @@ _ALIAS = {
     # PNR_ROUTE_COMPACT's rip-up-and-reroute step (pnr.place.route_compact): the same
     # kind of work as the initial route, just run again on a squeezed placement.
     "route-compact": "route",
+    # PNR_HULL_NEST (pnr.place.hull.nest): legalized hull macros slid into each other's
+    # notches, a detailed-placement move; its hierarchical rectangle fallback re-places and
+    # knits one top seed again, routing work.
+    "hull-nest": "detailed-placement",
+    "hull-safety-net": "route",
     "coalesce": "route",
     "geometry-relax": "gloss",
     "pad-entry": "fanout-escape",

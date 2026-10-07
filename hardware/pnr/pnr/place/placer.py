@@ -445,6 +445,24 @@ def place(
             **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
         )
         check_held(placed, side_plan)
+    from . import hull
+
+    if hull.nest_enabled() and hull.active(placed.components):
+        # PNR_HULL_NEST: the legalized hull macros slide into each other's notches.
+        from pnr.stage_timing import stage as stage_timing
+
+        with profile_span("place_hull_nest"), stage_timing("hull-nest"):
+            placed.hull_nest = hull.nest(
+                placed,
+                constraints,
+                width,
+                height,
+                clearance=clearance,
+                grid=grid_mm,
+                keepouts=keepouts,
+                fixed=set(poses),
+                pad_edge=pad_edge,
+            )
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 
 

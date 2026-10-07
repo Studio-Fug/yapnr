@@ -2224,6 +2224,32 @@ py_test(
     ],
 )
 
+# Hull-aware placement (PNR_HULL_NEST, pnr.place.hull): nesting metrics, the keep-legalizer
+# hook, the legalizer keeping interlocked poses, hull compaction, the polish over hull bodies,
+# the compact hull area and the hierarchical driver's rectangle safety net.
+py_test(
+    name = "hull_nest_test",
+    size = "small",
+    srcs = [
+        "regression/hier_case.py",
+        "tests/test_hull_nest.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
+    main = "tests/test_hull_nest.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("torch"),
+    ],
+)
+
 # Power-first placement (PNR_POWER_FIRST=1): derivation, staged objective, legalizer,
 # ranking, routed metrics; and the compact parts under it.
 py_test(

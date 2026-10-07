@@ -78,6 +78,7 @@ OPTIONS = {
     "route_compact": (bool, str),
     "macro_hull": bool,
     "hull_dovetail": (int, float),
+    "hull_nest": bool,
     "rail_alloc": str,
     "exact_late_room": bool,
     "maze_kernel": str,
@@ -194,6 +195,10 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
             args += ["--route-compact", "1" if compact_parts is True else str(compact_parts)]
     if options.get("rail_alloc"):
         args += ["--rail-alloc", options["rail_alloc"]]  # PNR_RAIL_ALLOC (pnr.rail_alloc)
+    if options.get("hull_nest") is not None:
+        # PNR_HULL_NEST (hardware/pnr/pnr/place/hull.py nest): true or false, explicitly
+        # (false opts a hierarchical cell out where the driver's default bundle has it).
+        args += ["--hull-nest", "1" if options["hull_nest"] else "0"]
     return args
 
 

@@ -300,10 +300,26 @@ def _cmd_logs(args) -> int:
                 line = plan.tasks.index(task)
                 hits = [n for n, group in enumerate(groups) if line in group]
                 if hits:
+                    # With claims on, Batch starts task indices in no particular order and
+                    # each task claims whichever line of the indices file it runs: the line's
+                    # position (`hits[0]`) is no longer that task's Batch index. The claim
+                    # object at that line (written as the claiming task's own index) says
+                    # which task index actually ran it; absent one (claims were off, or
+                    # nothing claimed it), the line's own position is still the task index.
+                    claim_path = "campaigns/%s/submissions/%d.claims/%d" % (
+                        plan.id,
+                        record["submission"],
+                        hits[0],
+                    )
+                    task_index = hits[0]
+                    if stores.runs.exists(claim_path):
+                        claimed_by = stores.runs.read_text(claim_path).strip()
+                        if claimed_by.isdigit():
+                            task_index = int(claimed_by)
                     print(
                         "== %s (Cloud Logging, submission %d)" % (task["id"], record["submission"])
                     )
-                    for text in backend.logs(record, cfg, cloud, hits[0], args.limit):
+                    for text in backend.logs(record, cfg, cloud, task_index, args.limit):
                         print(text)
     return 0
 

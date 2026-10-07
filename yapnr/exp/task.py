@@ -186,6 +186,11 @@ class Claims:
                 return response.status, response.read()
         except urllib.error.HTTPError as err:
             return err.code, err.read()
+        except (urllib.error.URLError, OSError) as err:
+            # A timeout or connection reset, not an HTTP error response: without this, it
+            # propagates out of main() uncaught (main only catches TaskFailure), the task
+            # exits 1, Batch does not retry exit 1, and the claimed line never runs.
+            raise TaskFailure(EXIT_TEMPFAIL, "claims request: %s" % err) from err
 
     def claimed(self):
         """{line of the indices file: the claiming task index}."""

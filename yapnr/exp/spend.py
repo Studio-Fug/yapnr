@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import zoneinfo as _zoneinfo
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -28,6 +29,7 @@ from yapnr.exp import cost
 
 COST_SCHEMA = "yapnr-campaign-cost-v1"
 INSTANCE_PREFIX = "yapnr-"
+BILLING_TZ = "America/Los_Angeles"  # Cloud Billing's month boundary, not UTC's
 # A Batch VM's name: <job uid>-group<n>-<m>-<suffix>.
 GROUP_SEP = "-group"
 MAX_LAG_H = 48.0
@@ -38,8 +40,13 @@ def parse_time(text: str) -> _dt.datetime:
     text = text.strip().replace("Z", "+00:00")
     if "." in text:
         head, rest = text.split(".", 1)
-        digits = "".join(ch for ch in rest if ch.isdigit())
-        zone = rest[len(digits) :] or "+00:00"
+        # Only the fractional-second digits, stopping at the zone's sign: "".join(isdigit())
+        # over the whole tail also ate the "00:00" of a +00:00 zone, truncating or losing the
+        # zone and raising ValueError on every real (fractional-second) timestamp.
+        cut = 0
+        while cut < len(rest) and rest[cut].isdigit():
+            cut += 1
+        digits, zone = rest[:cut], rest[cut:] or "+00:00"
         text = "%s.%s%s" % (head, (digits + "000000")[:6], zone)
     value = _dt.datetime.fromisoformat(text)
     return value if value.tzinfo else value.replace(tzinfo=_dt.timezone.utc)
@@ -278,10 +285,22 @@ def guard_readings(cloud, freshness: str = "35d") -> List[Reading]:
     return readings(entries if isinstance(entries, list) else [])
 
 
+def _billing_tz():
+    try:
+        return _zoneinfo.ZoneInfo(BILLING_TZ)
+    except _zoneinfo.ZoneInfoNotFoundError:
+        # No tzdata installed: Pacific's fixed-offset approximation (wrong across a DST
+        # transition, right on every other day) beats UTC's being off by a steady 7-8 h.
+        return _dt.timezone(_dt.timedelta(hours=-8))
+
+
 def month_start(when: _dt.datetime) -> _dt.datetime:
-    # Budgets run in the billing account's time zone; Pacific time is the common case, but UTC
-    # is close enough for a month-to-date figure that lags by hours anyway.
-    return when.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    """UTC midnight is 7-8 h off Cloud Billing's own month boundary (Pacific time): a guard
+    reading taken in that gap is still of the previous month, and read as this month's it can
+    look, wrongly, like a drop in the ratio -- which ``budget_history`` reads as a raised
+    budget."""
+    local = when.astimezone(_billing_tz()).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return local.astimezone(_dt.timezone.utc)
 
 
 def reconcile(

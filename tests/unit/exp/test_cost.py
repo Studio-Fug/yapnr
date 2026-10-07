@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as _dt
 import unittest
 
-from yapnr.exp import calibration, config, cost, prices
+from yapnr.exp import calibration, config, cost, packing, prices
 
 TABLE = {
     "schema": "yapnr-price-table-v1",
@@ -206,6 +206,34 @@ class CostTest(unittest.TestCase):
         )
         self.assertAlmostEqual(est.classes[0].slot_utilisation, 4 * task_s / ((75 + task_s) * 8), 3)
         self.assertAlmostEqual(est.ceiling_usd, (4 * 2.0 / 4 + 75 / 3600.0) * vm_hour, places=6)
+
+    def test_the_ceiling_uses_each_jobs_own_occupancy_not_the_classs_average(self):
+        # A straggler job (1 task on an 8-slot VM, occupancy 1) pooled with a full main job
+        # (8 tasks on its own 8-slot VM, occupancy 8) must not average out to occupancy 5: that
+        # understates the straggler's near-idle VM and the ceiling stops being a safe upper
+        # bound. Each job's own occupancy, then summed, costs more (the straggler's VM alone).
+        p = cost.place(self.table, self.none, cpus=1, memory_gb=2, families=["c4d"], regions=["r1"])
+        straggler = packing.Job(groups=[[0]], seconds=[100.0], vms=1, per_vm=8, parallelism=1)
+        main = packing.Job(
+            groups=[[i] for i in range(1, 9)], seconds=[100.0] * 8, vms=1, per_vm=8, parallelism=8
+        )
+        packed = packing.Packing(jobs=[straggler, main])
+        reference = [100.0] * 9
+        max_wall = [3600.0] * 9
+        est = cost.estimate_gcp(
+            self.table,
+            [("c1m2", p, reference, max_wall, 9, packed)],
+            max_retries=0,
+            max_parallel_vcpus=64,
+            max_campaign_hours=12,
+        )
+        vm_hour = 16 * 0.01 + 30 * 0.001 + 0.08 * 30 / 730.0
+        start_h = 75 / 3600.0  # table.vm_boot_s (30) + table.vm_idle_s (45), per job
+        per_task_h = (sum(max_wall) / 3600.0) / len(reference)
+        expected = (per_task_h * 1 / 1 + start_h + per_task_h * 8 / 8 + start_h) * vm_hour
+        self.assertAlmostEqual(est.ceiling_usd, expected, places=6)
+        pooled = (sum(max_wall) / 3600.0 / 5 + 2 * start_h) * vm_hour  # the old, wrong, average
+        self.assertGreater(est.ceiling_usd, pooled)
 
     def test_the_vm_count_follows_the_work_and_the_longest_task(self):
         p = cost.place(self.table, self.none, cpus=1, memory_gb=2, families=["c4d"], regions=["r1"])

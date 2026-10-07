@@ -11,6 +11,8 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
+import urllib.error
 from pathlib import Path
 
 from yapnr.exp import task as wrapper
@@ -323,6 +325,21 @@ class WrapperTest(unittest.TestCase):
         self.assertEqual(wrapper.Claims("bucket", prefix, 2, http).pick(3), 1)  # a retry
         self.assertIsNone(wrapper.Claims("bucket", prefix, 4, http).pick(3))
         self.assertEqual(objects[prefix + "0"], {"index": "7"})
+
+    def test_claims_http_turns_a_timeout_into_a_retry_not_a_crash(self):
+        # A URLError (timeout, connection reset) is not an HTTPError: Claims._http must still
+        # turn it into TaskFailure(EXIT_TEMPFAIL), or it escapes main() uncaught, the task
+        # exits 1, and Batch does not retry exit 1 -- the claimed line never runs.
+        claims = wrapper.Claims("bucket", "campaigns/c/submissions/1.claims/", 7)
+        claims._token = "t"  # skip the metadata-server token fetch
+
+        def raises(*a, **kw):
+            raise urllib.error.URLError("timed out")
+
+        with unittest.mock.patch("urllib.request.urlopen", raises):
+            with self.assertRaises(wrapper.TaskFailure) as ctx:
+                claims.claimed()
+        self.assertEqual(ctx.exception.code, wrapper.EXIT_TEMPFAIL)
 
     def test_environment_is_scrubbed_and_home_isolated(self):
         script = (

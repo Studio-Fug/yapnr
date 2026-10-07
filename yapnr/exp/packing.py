@@ -419,7 +419,9 @@ def pack(
     if cut:
         s_per_vm, ratio = small or (per_vm, 1.0)
         side = _job(units[:cut], s_per_vm, max_vms, slack, boot_s, idle_s, True, ratio)
-        main = _job(units[cut:], per_vm, max_vms, slack, boot_s, idle_s)
+        # side and main run at once and share the one quota max_vms is drawn from, so main
+        # cannot also get the full max_vms: that lets the pair's VM count exceed the quota.
+        main = _job(units[cut:], per_vm, max(1, max_vms - side.vms), slack, boot_s, idle_s)
         split_cost = side.vm_hours * ratio + main.vm_hours
         if split_cost < 0.98 * joint.vm_hours:
             out.jobs = [side, main]

@@ -458,10 +458,19 @@ def estimate_gcp(
         expected = vm_hours * per_vm_hour
         vms = max(1, sum(job.vms for job in packed.jobs))
         at_once = max(1, sum(job.parallelism for job in packed.jobs))
-        occupancy = max(1, min(p.tasks_per_vm, math.ceil(at_once / vms)))
-        start_hours = vms * (table.vm_boot_s + table.vm_idle_s) / 3600.0
         worst_task_hours = sum(max_wall) / 3600.0 * (1 + max_retries)
-        worst = (worst_task_hours / occupancy + start_hours) * per_vm_hour
+        # Per job, not pooled: a straggler job's own occupancy (its own vms and parallelism),
+        # not the class's average, which hides a near-idle straggler VM behind a busy main job.
+        per_task_worst_h = worst_task_hours / max(1, len(reference))
+        worst_hours = 0.0
+        for job in packed.jobs:
+            job_vms = max(1, job.vms)
+            job_occupancy = max(
+                1, min(p.tasks_per_vm, math.ceil(max(1, job.parallelism) / job_vms))
+            )
+            job_start_hours = job_vms * (table.vm_boot_s + table.vm_idle_s) / 3600.0
+            worst_hours += per_task_worst_h * len(job.lines) / job_occupancy + job_start_hours
+        worst = worst_hours * per_vm_hour
         quota = quota_vms * (max_campaign_hours + REAPER_INTERVAL_H) * per_vm_hour
         makespan = (packed.makespan_s + table.vm_start_s) / 3600.0
         est.classes.append(

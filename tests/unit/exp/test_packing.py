@@ -175,6 +175,18 @@ class PackerTest(unittest.TestCase):
         self.assertLess(split.priced_vm_hours, joint.priced_vm_hours)
         self.assertEqual(sorted(split.jobs[1].lines), list(range(1, 101)))
 
+    def test_a_straggler_split_never_asks_for_more_vms_than_the_quota(self):
+        # The straggler's own job and the main job run at once and share one quota: giving
+        # both the full max_vms (as if each had it to itself) can ask for more VMs than the
+        # quota allows. 300 short tasks alone would use all 4 VMs; with a straggler split off
+        # to its own VM, main must fit in what is left (3), not ask for 4 again.
+        seconds = {0: 14400.0, **{i: 300.0 for i in range(1, 301)}}
+        split = packing.pack(
+            list(seconds), seconds, per_vm=8, max_vms=4, bundle=False, small=(1, 0.125)
+        )
+        self.assertEqual(len(split.jobs), 2)
+        self.assertLessEqual(sum(job.vms for job in split.jobs), 4)
+
     def test_indices_round_trip(self):
         groups = [[4], [0, 3, 1], [2]]
         self.assertEqual(packing.parse_indices(packing.indices_text(groups)), groups)
@@ -313,6 +325,44 @@ class SpendTest(unittest.TestCase):
             audit(VM2, DELETE, "2026-10-07T10:33:00Z"),
             audit(VM1, INSERT, "2026-10-07T12:00:00Z"),  # the name again: still running
         ]
+
+    def test_parse_time_handles_a_z_zone_with_fractional_seconds(self):
+        # "".join(isdigit()) over the whole tail of a fractional timestamp also ate the zone's
+        # own digits ("+00:00" has four), corrupting or dropping the zone: every real audit or
+        # guard log timestamp (always fractional, "Z") hit this.
+        self.assertEqual(
+            spend.parse_time("2026-10-06T20:10:46.585049Z"),
+            _dt.datetime(2026, 10, 6, 20, 10, 46, 585049, tzinfo=UTC),
+        )
+        self.assertEqual(
+            spend.parse_time("2026-10-07T03:36:57.510458000Z"),  # 9 fractional digits
+            _dt.datetime(2026, 10, 7, 3, 36, 57, 510458, tzinfo=UTC),
+        )
+        self.assertEqual(
+            spend.parse_time("2026-10-07T03:36:57.5+05:30"),
+            _dt.datetime(
+                2026,
+                10,
+                7,
+                3,
+                36,
+                57,
+                500000,
+                tzinfo=_dt.timezone(_dt.timedelta(hours=5, minutes=30)),
+            ),
+        )
+
+    def test_month_start_is_billings_time_zone_not_utc_midnight(self):
+        # UTC midnight on the 1st is still the evening of the last day of the previous month
+        # in Pacific time (Cloud Billing's own boundary): a reading taken in that gap is still
+        # of the previous month, not (as UTC midnight would read it) the new one.
+        just_after_utc_midnight = _dt.datetime(2026, 10, 1, 3, tzinfo=UTC)
+        self.assertEqual(spend.month_start(just_after_utc_midnight).astimezone(UTC).month, 9)
+        well_into_october = _dt.datetime(2026, 10, 1, 10, tzinfo=UTC)  # 03:00 Pacific
+        start = spend.month_start(well_into_october)
+        self.assertEqual(start.astimezone(UTC).month, 10)
+        self.assertEqual(start.astimezone(spend._billing_tz()).day, 1)
+        self.assertEqual(start.astimezone(spend._billing_tz()).hour, 0)
 
     def test_vm_lifetimes_from_the_audit_log(self):
         found = spend.vms(self.entries())

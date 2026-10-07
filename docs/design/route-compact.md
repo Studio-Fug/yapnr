@@ -1,6 +1,12 @@
 # Route-then-compact and hull packing
 
-Status: behind default-off flags (`PNR_ROUTE_COMPACT`, `PNR_MACRO_HULL`, `PNR_HULL_DOVETAIL`).
+Status: the hierarchical driver (`regression/hier_case.py`, `design.json driver == "hier"`)
+defaults to `PNR_ROUTE_COMPACT=TOP,BLOCK` plus `PNR_MACRO_HULL` and `PNR_HULL_DOVETAIL=1.0`
+(2026-10 A/B at head, campaigns `20261007-ladder-01bca2`/`-15d134`: 12/12 pass, bbox -13.1 %,
+copper -5.7 %, no rung worse); `regression/run.py`'s `hier_compact_extra()` applies it unless
+any of `--route-compact` (its `0`/`off` opts out), `--macro-hull` or `--hull-dovetail` is given
+explicitly. Everywhere else — `FLAT`, and the flags read directly (not through the runner) —
+stays behind default-off flags (`PNR_ROUTE_COMPACT`, `PNR_MACRO_HULL`, `PNR_HULL_DOVETAIL`).
 Code: `hardware/pnr/pnr/place/route_compact.py`, `hardware/pnr/pnr/hier/compact_block.py`,
 `hardware/pnr/pnr/place/hull.py`, hooks in `regression/hier_case.py` and
 `pnr.route.feedback.route_and_place`.

@@ -1096,6 +1096,7 @@ def compact_loop(
     candidate about to be routed (tracing, live view). ``check(before, after)`` ->
     violations dict (default :func:`new_violations`). Returns ``(placed, route, report)``."""
     from pnr.profile import span
+    from pnr.stage_timing import stage as stage_timing
 
     settings = settings or Settings.from_environment()
     started = time.monotonic()
@@ -1201,9 +1202,7 @@ def compact_loop(
                     break
                 if announce is not None:
                     announce(candidate, axis, rec)
-                from pnr.stage_timing import stage as _stage_timing
-
-                with span("route_compact.reroute"), _stage_timing("route-compact"):
+                with span("route_compact.reroute"), stage_timing("route-compact"):
                     new_placed, new_route = reroute(candidate, axis)
                 t3 = time.monotonic()
                 report["seconds"]["reroute"] += t3 - t2

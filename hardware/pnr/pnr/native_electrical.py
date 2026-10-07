@@ -381,7 +381,11 @@ class Oracle:
             # no pad: foreign copper keeps the via hole clearance (0.20) from the wall.
             for la, hole, hole_gap in hole_keepouts(g, t, self.layers):
                 self.add(hole, t.GetBoundingBox(), hole_gap, t.GetNetname(), uid(t), la)
-        for z in b.Zones():
+        # The board's zones and rule areas, and the rule areas built into footprints
+        # (KiCad judges both).
+        owned = [z for fp in b.GetFootprints() for z in fp.Zones() if z.GetIsRuleArea()]
+        self.rule_zones = [z for z in b.Zones() if z.GetIsRuleArea()] + owned
+        for z in list(b.Zones()) + owned:
             for la in self.layers:
                 if not z.IsOnLayer(la):
                     continue
@@ -695,7 +699,7 @@ class Oracle:
                 if other_net != net and other.Collide(shape, round(max(gap, other_gap) * 1e6)):
                     self.via_hits[identity] += 1
                     return False
-        for z in self.b.Zones():
+        for z in self.rule_zones:
             if (
                 z.GetIsRuleArea()
                 and z.GetDoNotAllowVias()

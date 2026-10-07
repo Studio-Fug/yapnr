@@ -1706,7 +1706,10 @@ def for_route(
                 if poly.get("net") not in terms:
                     rings = [poly["outline"]] + list(poly.get("holes") or [])
                     keepouts.append(([[tuple(p) for p in ring] for ring in rings], frozenset()))
-        for spec in rules.get("copper_keepouts") or []:
+        from pnr.fixed_block import copper_keepouts
+
+        # The declared keepouts and the footprints' own rule areas (pnr.ingest).
+        for spec in copper_keepouts(graph, rules):
             layers = spec.get("layers")
             items = spec.get("items") or ("tracks", "vias", "pours")
             if layers and layer not in layers or "pours" not in items:

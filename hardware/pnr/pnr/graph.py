@@ -141,6 +141,14 @@ class Component:
     hull: Optional[dict] = None
     # The off-centre body box (see above); None, and omitted from the JSON, when centred.
     body: Optional[Tuple[float, float, float, float]] = None
+    # Rule areas (keep-outs) built into the footprint (pnr.ingest): JSON dicts with
+    # ``outline`` (the polygon in the footprint's own frame as the library draws it on
+    # the top side, mm, y up: :func:`footprint_point` places it), ``layers`` and
+    # ``layers_bottom`` (the copper layers it covers with the part on the top or the
+    # bottom side) and ``items`` (what it bars: tracks, vias, pads, pours, footprints).
+    # Every copper producer reads them through pnr.fixed_block.copper_keepouts. Empty
+    # (the default) is omitted from JSON, keeping graphs without them byte-identical.
+    rule_areas: List[dict] = field(default_factory=list)
 
     def __post_init__(self):
         self.pos = _fpair(self.pos)
@@ -241,6 +249,8 @@ class BoardGraph:
                 c.pop("hull", None)
             if c.get("body") is None:
                 c.pop("body", None)
+            if not c.get("rule_areas"):
+                c.pop("rule_areas", None)
             for p in c.get("pads", ()):
                 # Pad-local rules only where a footprint sets them (pnr.ingest).
                 for key in ("clearance_mm", "mask_margin_mm", "far_side"):
@@ -272,6 +282,7 @@ class BoardGraph:
                 reserves=[dict(r) for r in c.get("reserves", [])],
                 hull=c.get("hull"),
                 body=c.get("body"),
+                rule_areas=[dict(a) for a in c.get("rule_areas", [])],
                 pads=[
                     Pad(
                         name=p["name"],

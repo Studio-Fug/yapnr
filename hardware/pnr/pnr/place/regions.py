@@ -760,20 +760,16 @@ def check_feasible(graph, constraints, width, height, orient=True, trials_fixed=
                 return None, "region %r within the board outline" % con.name
         if ref in bands:
             edge, tol = bands[ref]
-            if body is None:
-                k, b_lo, b_hi = {
-                    "south": (2, -math.inf, tol + h / 2),
-                    "north": (2, height - tol - h / 2, math.inf),
-                    "west": (0, -math.inf, tol + w / 2),
-                    "east": (0, width - tol - w / 2, math.inf),
-                }[edge]
-            else:
-                k, b_lo, b_hi = {
-                    "south": (2, -math.inf, tol - lo[1]),
-                    "north": (2, height - tol - hi[1], math.inf),
-                    "west": (0, -math.inf, tol - lo[0]),
-                    "east": (0, width - tol - hi[0], math.inf),
-                }[edge]
+            # The real body box, whatever the flags (as the legalizer's band holds it).
+            from .geometry import placed_body
+
+            bx0, by0, bx1, by1 = placed_body(comp, rot)
+            k, b_lo, b_hi = {
+                "south": (2, -math.inf, tol - by0),
+                "north": (2, height - tol - by1, math.inf),
+                "west": (0, -math.inf, tol - bx0),
+                "east": (0, width - tol - bx1, math.inf),
+            }[edge]
             box[k], box[k + 1] = max(box[k], b_lo), min(box[k + 1], b_hi)
             if box[k] > box[k + 1] + CHECK_EPS_MM:
                 return None, "its hard edge_align (%s, %g mm)" % (edge, tol)

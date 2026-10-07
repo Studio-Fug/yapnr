@@ -484,6 +484,25 @@ class SynthesizeTaskEventsTest(unittest.TestCase):
             record.update(record_extra)
             (record_dir / "record.json").write_text(json.dumps(record))
 
+    def write_submission(self, number, indices, dry_run=False):
+        """A submission record + its ``.indices`` file, the way ``Backend.submit`` writes them
+        (``yapnr.exp.backends.base``) -- ``indices`` are 0-based positions into ``tasks.jsonl``'s
+        order, exactly as ``pending()`` produces them."""
+        sub_dir = self.prefix / "submissions"
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        (sub_dir / ("%d.indices" % number)).write_text("".join("%d\n" % i for i in indices))
+        record = {
+            "schema": "yapnr-submission-v1",
+            "campaign": self.cid,
+            "submission": number,
+            "backend": "local",
+            "class": "default",
+            "tasks": len(indices),
+            "dry_run": dry_run,
+            "job": {},
+        }
+        (sub_dir / ("%d.json" % number)).write_text(json.dumps(record))
+
     def test_writes_one_synthetic_event_per_done_task(self):
         self.write_tasks_jsonl(["ladder/case-a/s0", "ladder/case-b/s0"])
         self.write_done("ladder/case-a/s0", verdict="pass")
@@ -566,6 +585,115 @@ class SynthesizeTaskEventsTest(unittest.TestCase):
         dest = self.tmp / "mirror"
         found = livemod.synthesize_task_events(self.store, self.cid, dest)
         self.assertEqual(found["synthetic_events"], 1)  # the marker alone is already enough
+
+    def test_partial_plan_submission_finishes_without_the_unsubmitted_tasks(self):
+        # 4 tasks in the plan, but only the first 2 were ever submitted (the real bug report:
+        # a 96-task plan with a 56-task submission never looked finished).
+        self.write_tasks_jsonl(["t/0", "t/1", "t/2", "t/3"])
+        self.write_submission(1, [0, 1])
+        self.write_done("t/0")
+        found = livemod.synthesize_task_events(self.store, self.cid, self.tmp / "mirror")
+        self.assertFalse(found["finished"])
+        self.write_done("t/1")
+        found = livemod.synthesize_task_events(self.store, self.cid, self.tmp / "mirror")
+        self.assertTrue(found["finished"])  # t/2, t/3 were never submitted; not waited on
+        marker = json.loads((self.tmp / "mirror" / livemod.FINISHED_MARKER).read_text())
+        self.assertEqual(marker["tasks"], 2)
+        self.assertEqual(marker["submissions"], [1])
+
+    def test_multiple_submissions_require_the_union_of_both(self):
+        self.write_tasks_jsonl(["t/0", "t/1", "t/2"])
+        self.write_submission(1, [0])
+        self.write_submission(2, [1, 2])
+        self.write_done("t/0")
+        self.write_done("t/1")
+        dest = self.tmp / "mirror"
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertFalse(found["finished"])  # t/2 (submission 2) still pending
+        self.write_done("t/2", verdict="fail")
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertTrue(found["finished"])
+        marker = json.loads((dest / livemod.FINISHED_MARKER).read_text())
+        self.assertEqual(marker["tasks"], 3)
+        self.assertEqual(marker["submissions"], [1, 2])
+
+    def test_a_later_submission_withdraws_an_already_written_marker(self):
+        self.write_tasks_jsonl(["t/0", "t/1"])
+        self.write_submission(1, [0])
+        self.write_done("t/0")
+        dest = self.tmp / "mirror"
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertTrue(found["finished"])
+        marker_path = dest / livemod.FINISHED_MARKER
+        self.assertTrue(marker_path.exists())
+        # A second submit (more of the plan) lands after the marker was written.
+        self.write_submission(2, [1])
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertFalse(found["finished"])
+        self.assertFalse(marker_path.exists())  # withdrawn, not left stale
+        self.write_done("t/1")
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertTrue(found["finished"])
+        self.assertTrue(marker_path.exists())
+        marker = json.loads(marker_path.read_text())
+        self.assertEqual(marker["submissions"], [1, 2])
+
+    def test_retried_task_in_a_partial_submission_still_counts_via_its_done_marker(self):
+        self.write_tasks_jsonl(["t/0", "t/1"])
+        self.write_submission(1, [0])
+        preempted = self.prefix / "tasks" / livemod.task_key("t/0") / "s1r0"
+        preempted.mkdir(parents=True)
+        (preempted / "record.json").write_text(json.dumps(dict(exit_code=137)))
+        self.write_done("t/0", attempt="s1r1", verdict="pass")  # the retry finished
+        found = livemod.synthesize_task_events(self.store, self.cid, self.tmp / "mirror")
+        self.assertTrue(found["finished"])  # t/1 was never submitted
+
+    def test_dry_run_submission_is_not_required_work(self):
+        self.write_tasks_jsonl(["t/0", "t/1"])
+        self.write_submission(1, [0], dry_run=True)
+        self.write_submission(2, [1])
+        self.write_done("t/1")
+        found = livemod.synthesize_task_events(self.store, self.cid, self.tmp / "mirror")
+        self.assertTrue(found["finished"])  # t/0 only ever dry-run-previewed, never really run
+
+    def test_unreadable_indices_is_inconclusive_not_finished(self):
+        self.write_tasks_jsonl(["t/0", "t/1"])
+        self.write_submission(1, [0])
+        self.write_done("t/0")
+        # Corrupt/replace the submission record to point at an indices file that is never
+        # written (simulates a record that landed in the store before its indices did).
+        (self.prefix / "submissions" / "1.indices").unlink()
+        dest = self.tmp / "mirror"
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertFalse(found["finished"])
+        self.assertFalse((dest / livemod.FINISHED_MARKER).exists())
+
+    def test_marker_is_idempotent_and_refreshes_a_stale_submission_list(self):
+        self.write_tasks_jsonl(["t/0"])
+        self.write_submission(1, [0])
+        self.write_done("t/0")
+        dest = self.tmp / "mirror"
+        marker_path = dest / livemod.FINISHED_MARKER
+        dest.mkdir(parents=True)
+        # A marker from before submissions were recorded (no "submissions" key) is rewritten.
+        marker_path.write_text(json.dumps({"campaign": self.cid, "tasks": 1, "finished_at": 1}))
+        livemod.synthesize_task_events(self.store, self.cid, dest)
+        first = json.loads(marker_path.read_text())
+        self.assertEqual(first["submissions"], [1])
+        # A repeat poll with nothing new leaves it byte-for-byte alone.
+        livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertEqual(json.loads(marker_path.read_text()), first)
+
+    def test_unreadable_indices_keeps_an_existing_marker_rather_than_flapping(self):
+        self.write_tasks_jsonl(["t/0"])
+        self.write_submission(1, [0])
+        self.write_done("t/0")
+        dest = self.tmp / "mirror"
+        self.assertTrue(livemod.synthesize_task_events(self.store, self.cid, dest)["finished"])
+        (self.prefix / "submissions" / "1.indices").unlink()
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertTrue(found["finished"])
+        self.assertTrue((dest / livemod.FINISHED_MARKER).exists())
 
     def test_mirror_calls_synthesize_and_reports_it(self):
         self.write_tasks_jsonl(["t/a"])

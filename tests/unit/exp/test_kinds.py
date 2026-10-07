@@ -326,6 +326,21 @@ class LadderOptionsTest(unittest.TestCase):
         errors = kind.check(campaign)
         self.assertEqual(errors, ["configs.bad.gp_channels is a positive weight"])
 
+    def test_the_rail_allocation_arm_reaches_the_runner(self):
+        from yapnr.exp.kinds import ladder
+
+        args = ladder.runner_arguments(dict(rail_alloc="static"))
+        self.assertEqual(args[args.index("--rail-alloc") + 1], "static")
+        self.assertNotIn("--rail-alloc", ladder.runner_arguments({}))
+        kind = kinds.get("ladder-cell")
+        campaign = {
+            "schema": spec.CAMPAIGN_SCHEMA,
+            "kind": "ladder-cell",
+            "matrix": {"case": ["01-connector-led-2"], "seed": [0], "config": ["a", "b"]},
+            "configs": {"a": {"rail_alloc": "search"}, "b": {"rail_alloc": "rule"}},
+        }
+        self.assertEqual(kind.check(campaign), ["configs.b.rail_alloc is search or static"])
+
     def test_compact_parts_match_the_engine(self):
         """The kind's PNR_COMPACT parts are the engine's (hardware/pnr/pnr/compact_flags.py,
         read without importing the engine)."""

@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from yapnr.exp import bundle
-from yapnr.exp.backends.base import campaign_prefix, done_markers, task_key
+from yapnr.exp.backends.base import campaign_prefix, done_markers, submissions, task_key
 from yapnr.exp.store import Store
 
 EVENT_SCHEMA = "pnr-live-event-v1"
@@ -40,8 +40,9 @@ LIVE_GLOB = "live/*/*/*.tar.gz"
 BUNDLE_RE = re.compile(r"^(?P<task_key>[^/]+)/(?P<attempt>[^/]+)/(?P<seq>[0-9]{6})\.tar\.gz$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
-# Written into the local mirror directory, next to events/ and boards/, once every task named by
-# the campaign's tasks.jsonl has a _DONE marker; yapnr.viewer.server's own copy of this name
+# Written into the local mirror directory, next to events/ and boards/, once every task the
+# campaign actually submitted (required_task_ids -- its submissions when it has any, else the
+# full tasks.jsonl plan) has a _DONE marker; yapnr.viewer.server's own copy of this name
 # (MIRROR_FINISHED_MARKER) must match -- see synthesize_task_events and that module's
 # Viewer._run_finished.
 FINISHED_MARKER = "campaign-finished.json"
@@ -224,6 +225,77 @@ def task_ids(runs: Store, cid: str) -> List[str]:
     return out
 
 
+def _submission_task_ids(
+    runs: Store, cid: str, ordinal_ids: List[str], number: int
+) -> Optional[List[str]]:
+    """The task ids one submission covers, resolved from its ``<n>.indices`` file (line numbers
+    into the plan, in ``tasks.jsonl`` order) against ``ordinal_ids``; ``None`` when the indices
+    file cannot be read yet (a submission whose record just landed but whose indices write has
+    not; ``Backend.submit`` writes indices first, so this should be momentary) or at all."""
+    rel = "%s/submissions/%d.indices" % (campaign_prefix(cid), number)
+    try:
+        text = runs.read_text(rel)
+    except Exception:
+        return None
+    out = []
+    for line in text.split():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            index = int(line)
+        except ValueError:
+            continue
+        if 0 <= index < len(ordinal_ids):
+            out.append(ordinal_ids[index])
+    return out
+
+
+def required_task_ids(runs: Store, cid: str) -> Tuple[List[str], List[int], bool]:
+    """The tasks a campaign must finish before :data:`FINISHED_MARKER` is written.
+
+    A campaign rarely submits its whole plan at once (``yapnr exp submit`` re-run after a
+    partial failure, ``--only``, a class added later): the set that must all be ``_DONE`` is the
+    *union of what every submission actually covers*, not everything :func:`task_ids` names --
+    ``tasks.jsonl`` is the full plan, which may hold many tasks no submission has ever launched
+    and that may never run. Each submission's own record (``submissions/<n>.json``, read by
+    :func:`yapnr.exp.backends.base.submissions`) only carries a task *count*; which tasks those
+    are comes from its ``<n>.indices`` file, resolved against ``tasks.jsonl``'s order.
+
+    Falls back to every id :func:`task_ids` names when the campaign has not written a single
+    submission record yet -- a plan this mirror cannot tell apart from "about to submit
+    everything in one call" without one, so requiring the full plan is the only sound default.
+
+    A ``dry_run`` submission (``yapnr exp submit --dry-run``, previewing cost/placement) never
+    actually launches anything -- the same reason :func:`yapnr.exp.backends.base.Backend.
+    live_overlap` ignores them -- so it never counts toward what the campaign must finish either;
+    counting it would make a campaign that was only ever dry-run-previewed, then really submitted
+    in full elsewhere, wait forever on tasks nothing real ever touched.
+
+    Returns ``(ids, submission numbers, complete)``; ``complete`` is false when some submission's
+    indices could not be read, in which case the ids returned are a partial union and the caller
+    must not treat them as the whole story (never finished on an incomplete read)."""
+    ordinal_ids = task_ids(runs, cid)
+    records = [r for r in submissions(runs, cid) if not r.get("dry_run")]
+    if not records:
+        return ordinal_ids, [], True
+    seen: Dict[str, None] = {}
+    numbers: List[int] = []
+    complete = True
+    for record in records:
+        number = record.get("submission")
+        if not isinstance(number, int):
+            continue
+        numbers.append(number)
+        found = _submission_task_ids(runs, cid, ordinal_ids, number)
+        if found is None:
+            complete = False
+            continue
+        for tid in found:
+            seen[tid] = None
+    return list(seen), numbers, complete
+
+
 def _record_extra(runs: Store, cid: str, task_id: str, marker: Dict[str, Any]) -> Dict[str, Any]:
     """Best-effort extra fields (``exit_code``, ``wall_s``, ``timed_out``) from the task's own
     ``record.json``, read directly from the store at the attempt the ``_DONE`` marker names --
@@ -243,6 +315,16 @@ def _record_extra(runs: Store, cid: str, task_id: str, marker: Dict[str, Any]) -
     return {k: record[k] for k in ("exit_code", "wall_s", "timed_out") if k in record}
 
 
+def _marker_submissions(path: Path) -> Optional[List[int]]:
+    """The ``submissions`` an existing :data:`FINISHED_MARKER` names, or ``None`` when there is
+    no marker (or it cannot be read, so it gets rewritten)."""
+    try:
+        value = json.loads(path.read_text()).get("submissions")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return value if isinstance(value, list) else None
+
+
 def synthesize_task_events(runs: Store, cid: str, dest: Path) -> Dict[str, Any]:
     """Give every finished task lane a terminal event, even one the engine itself never emitted.
 
@@ -254,10 +336,19 @@ def synthesize_task_events(runs: Store, cid: str, dest: Path) -> Dict[str, Any]:
     into ``dest/events`` (named deterministically from the task id, so a repeat call never
     duplicates one -- idempotent and safe to call every poll), with ``kind`` ``SYNTHETIC_KIND``,
     ``data.verdict``/``data.attempt`` plus whatever :func:`_record_extra` found, and a top-level
-    ``synthetic: true``. Once every task ``task_ids`` names has one, :data:`FINISHED_MARKER` is
-    written into ``dest`` as well, which is how :mod:`yapnr.viewer.server` tells an otherwise-idle
-    lane with no terminal event of its own (and no children to derive one from) "finished"
-    instead of "stalled" forever.
+    ``synthetic: true``. Once every task :func:`required_task_ids` names has one,
+    :data:`FINISHED_MARKER` is written into ``dest`` as well, which is how
+    :mod:`yapnr.viewer.server` tells an otherwise-idle lane with no terminal event of its own (and
+    no children to derive one from) "finished" instead of "stalled" forever.
+
+    A campaign that only ever submitted part of its plan (``tasks.jsonl`` names more tasks than
+    any submission covers) finishes once its *submitted* tasks are all done -- never waiting on
+    tasks nothing ever launched. Should a later poll see a submission (``yapnr exp submit`` run
+    again, adding more of the plan) that is not yet all done, an already-written marker is
+    withdrawn (deleted) rather than left to claim a campaign is finished when it no longer is; it
+    is rewritten once that submission's tasks finish too. An inconclusive poll (a submission's own
+    ``.indices`` file could not be read) touches no marker either way and reports the previous
+    on-disk state, rather than risk flapping on a transient store error.
 
     Resumable the same way :func:`mirror_once` is: nothing here depends on having run before, a
     task whose marker has not landed yet is simply picked up on the next call, and an interrupted
@@ -286,18 +377,35 @@ def synthesize_task_events(runs: Store, cid: str, dest: Path) -> Dict[str, Any]:
         )
         _write_atomic(path, json.dumps(event, separators=(",", ":"), default=str).encode())
         added += 1
-    ids = task_ids(runs, cid)
-    finished = bool(ids) and all(tid in markers for tid in ids)
-    if finished:
-        marker_path = dest / FINISHED_MARKER
-        if not marker_path.exists():
-            _write_atomic(
-                marker_path,
-                json.dumps(
-                    {"campaign": cid, "tasks": len(ids), "finished_at": time.time()},
-                    sort_keys=True,
-                ).encode(),
-            )
+    ids, submission_numbers, complete = required_task_ids(runs, cid)
+    marker_path = dest / FINISHED_MARKER
+    if complete:
+        finished = bool(ids) and all(tid in markers for tid in ids)
+        if finished:
+            # Idempotent: only (re)written when absent or when it names a different set of
+            # submissions than the ones it now covers, so its "submissions" never goes stale.
+            if _marker_submissions(marker_path) != sorted(submission_numbers):
+                _write_atomic(
+                    marker_path,
+                    json.dumps(
+                        {
+                            "campaign": cid,
+                            "tasks": len(ids),
+                            "submissions": sorted(submission_numbers),
+                            "finished_at": time.time(),
+                        },
+                        sort_keys=True,
+                    ).encode(),
+                )
+        elif marker_path.exists():
+            # A newer submission (or one whose indices only just became readable) added tasks
+            # that are not all done yet: the marker's claim no longer holds, so withdraw it
+            # rather than let the viewer keep reporting a finished campaign that is not.
+            marker_path.unlink()
+    else:
+        # Could not tell this poll (an indices file failed to read): report the marker's
+        # existing on-disk state rather than guess, and leave it untouched either way.
+        finished = marker_path.exists()
     return {"tasks": len(markers), "synthetic_events": added, "finished": finished}
 
 

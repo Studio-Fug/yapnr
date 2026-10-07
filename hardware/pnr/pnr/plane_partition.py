@@ -6,14 +6,16 @@ whose balls spread over the same package overlap, and the smaller box wins. A
 partition instead gives each rail a **connected territory** built from its own
 terminals:
 
-0. ``entry["nets"]`` lists **candidate** rails, not a guarantee: :func:`for_route`
-   decides each one plane or trace (its own IR budget, else its share of the
-   layer's declared current, else its terminal count; :func:`_rail_decision`) and
-   drops a traced one from the partition before step 1 (its terminals become
-   foreign copper, as for any net the entry does not name; the router then routes
-   it as an ordinary trace, as it already does for every other net). An entry with
-   a ``region`` (an outer pour) is unaffected: every one of its candidates keeps a
-   piece of the pour;
+0. ``entry["nets"]`` lists **candidate** rails, not a guarantee: the allocation
+   (:mod:`pnr.rail_alloc`, by routing the best alternatives; :func:`for_route`'s
+   ``decisions``) says which get a territory and which are traced, and the
+   entry's ``fill`` which net takes the leftover; a traced one is dropped from the
+   partition before step 1 (its terminals become foreign copper, as for any net the
+   entry does not name; the router then routes it as an ordinary trace, as it
+   already does for every other net). A ``fill`` naming one of the rails makes it
+   the leftover's owner: it alone grows in step 5, the others keep their claimed
+   copper and an apron (``APRON_MM``). An entry with a ``region`` (an outer pour) is
+   unaffected: every one of its candidates keeps a piece of the pour;
 1. the layer is rasterized at ``h_mm`` (0.1 mm) inside the outline less the edge
    clearance; foreign through copper is blocked with its clearance (other nets'
    planned vias, fixed vias, plated holes, mounting holes), and so are keepouts
@@ -47,8 +49,10 @@ terminals:
    along the path, the terminal discs exempt): a terminal behind copper narrower
    than ``min_width_mm`` is **necked** (reported with the neck's width and place,
    a failure site of the route, and a warning), as is a trunk narrower than its
-   IPC-2221 width (``ipc_neck``). ``fill`` takes what is left (a zone of that net
-   over the whole outline at priority 0, under the rails);
+   IPC-2221 width (``ipc_neck``). A non-rail ``fill`` takes what is left (a zone of
+   that net over the whole outline at priority 0, under the rails), and the report's
+   ``quality`` (:mod:`pnr.plane_quality`) measures how well the partition serves its
+   rails;
 7. with ``core_no_vias`` other nets' vias may not land on a trunk's claimed copper
    (its width ``w`` about the centre line, where the trunk could take it: the
    router's net keepouts), so a row of vias cannot cut a rail's trunk.
@@ -74,6 +78,7 @@ import numpy as np
 
 _CACHE: Dict[str, "Partition"] = {}
 MAX_WIDTH_MM = 10.0  # a trunk's widest target (its room decides below that)
+APRON_MM = 1.0  # beside a leftover owner, how far another rail grows past its claim
 OUTER_PRIORITY = 100  # an outer pour's zones fill above the layer's other zones
 
 
@@ -800,7 +805,22 @@ def _partition(
         free = free & ~lanes
         if walled:
             report["walled_in"] = walled
-    grown = _grow(label, free, per_net_block, nets, order, trace=trace)
+    # A rail named as the ``fill`` owns the leftover: it alone grows, the other rails
+    # keep their claimed copper (trunk at width and terminal lands). Otherwise every
+    # rail competes for it (a non-rail fill net takes only what none of them reaches).
+    owner = entry.get("fill") if entry.get("fill") in nets else None
+    grow_block = per_net_block
+    if owner is not None:
+        # The others grow only an apron about their claimed copper: room for a
+        # through-hole terminal's thermal relief (its gap and spokes) and a margin
+        # round the trunk, not a share of the layer.
+        report["leftover"] = owner
+        apron = float(entry.get("apron_mm", APRON_MM)) / h
+        grow_block = {
+            n: (m if n == owner else m | ~dilate(label == nets.index(n), apron))
+            for n, m in per_net_block.items()
+        }
+    grown = _grow(label, free, grow_block, nets, order, trace=trace)
     # A grown cell keeps gap + h (centre to centre) from another rail's claimed copper
     # and gap / 2 + h from another rail's grown copper (which carves the other half).
     carves = []
@@ -917,8 +937,29 @@ def _partition(
         )
     if occupied.any():
         report["gap_min_mm"] = _gap_min(grown, len(nets), h)
+    from pnr.plane_quality import measure, owner_of
+
+    report["quality"] = measure(
+        h=h,
+        nets=nets,
+        terminals=terminals,
+        cells_of=cells_of,
+        free=free,
+        per_net_block=per_net_block,
+        grown=grown,
+        spines=trunks,
+        widths=widths,
+        report=report,
+        currents=currents,
+        budgets=budgets,
+        owner=owner_of(nets, entry.get("fill"), currents),
+        r_sq=r_sq,
+        barrel_mohm=1e3 * barrel_ohm(0.6, via_drill_mm, rho=rho),
+        gap_mm=gap,
+    )
     shapes.sort(key=lambda s: (-s[0], s[1]))
-    base = 1 if entry.get("fill") else 0
+    fill_net = entry.get("fill") if entry.get("fill") not in nets else None
+    base = 1 if fill_net else 0
     for rank, (_a, n, lp, holes) in enumerate(shapes):
         regions.append(
             Region(
@@ -930,8 +971,8 @@ def _partition(
                 tuple(tuple((round(x * h, 6), round(y * h, 6)) for x, y in hole) for hole in holes),
             )
         )
-    if entry.get("fill"):
-        regions.insert(0, Region(layer, entry["fill"], 0, None))
+    if fill_net:
+        regions.insert(0, Region(layer, fill_net, 0, None))
     cores = {}
     if entry.get("core_no_vias", True):
         # The trunk's claimed copper at its full width (not only the minimum width's
@@ -1447,10 +1488,12 @@ CANDIDATE_TERMINALS_MIN = 6  # a rail under the current floor still gets a
 
 
 def _rail_decision(n_candidates, n_terms, current, budget):
-    """Plane or trace for one candidate rail sharing a dedicated plane layer's
-    ``plane_partition`` entry (:func:`for_route`; an entry with a ``region`` is an
-    outer pour and never goes through this: those candidates keep today's rule,
-    every one of them a piece of the pour). A design's own IR budget for the rail
+    """The static rule of thumb, plane or trace, for one candidate rail sharing a
+    dedicated plane layer's ``plane_partition`` entry: never the decision itself (that
+    is :mod:`pnr.rail_alloc`'s, by routing), only its screening prior, the
+    ``PNR_RAIL_ALLOC=static`` A/B arm and :func:`for_route`'s fallback without an
+    allocation (an entry with a ``region`` is an outer pour and never goes through
+    this: every one of its candidates keeps a piece of the pour). A design's own IR budget for the rail
     earns a territory outright, as does a current worth the trouble (undeclared
     current is kept a plane too: absence of a number is not evidence the rail does
     not need one); short of that, enough terminals still earn one (a mesh beats a
@@ -1518,14 +1561,10 @@ def _static_terminal_count(entry, net, graph, fixed_copper=None) -> int:
 
 
 def decide_rails(rules, graph, fixed_copper=None) -> Dict[str, Tuple[str, str]]:
-    """net -> (decision, reason) (:func:`_rail_decision`) for every candidate of
-    every non-outer ``plane_partition`` entry in ``rules``, from data available
-    before routing (:func:`_static_terminal_count`). The single, early source of
-    truth :func:`for_route` reuses (its ``decisions``) and callers carry into the
-    routing rules before :func:`pnr.route.detail.router.layer_plan` runs, so a
-    candidate decided "trace" is never left a dead plane drop (route/detail/router.py
-    excluding it from signal routing on ``net_class.plane_layer`` alone, unaware of
-    this module's own decision, was the bug an owner review on 2026-10-06 found)."""
+    """net -> (decision, reason) (:func:`_rail_decision`, the static prior) for every
+    candidate of every non-outer ``plane_partition`` entry in ``rules``, from data
+    available before routing (:func:`_static_terminal_count`): the allocation search's
+    prior and the static A/B arm (:mod:`pnr.rail_alloc`)."""
     from pnr.power_spec import rail_current
 
     out: Dict[str, Tuple[str, str]] = {}
@@ -1557,6 +1596,7 @@ def for_route(
     fanouts=None,
     outer=False,
     decisions=None,
+    capture=None,
 ):
     """Every declared partition of ``rules`` on this route: its inputs from the grid
     after the fanouts are planned (their vias are terminals or foreign copper), the
@@ -1571,8 +1611,11 @@ def for_route(
     (the single source of truth a caller also carries into the routing rules), and
     one it does not (an entry :func:`decide_rails` itself skips, or a fresh
     ``rules['plane_partition']`` this call sees that a stale ``decisions`` does not)
-    falls back to a fresh :func:`_rail_decision` call, as if ``decisions`` were
-    None."""
+    falls back to the static prior :func:`_rail_decision`.
+
+    ``capture``: a dict that receives, per partitioned layer, every candidate's
+    inputs before any is traced (:mod:`pnr.rail_alloc` screens its alternatives on
+    them)."""
     from pnr.fanout.planner import fixed_items
     from pnr.fixed_block import keepout_polygon
     from pnr.place.geometry import pad_rects
@@ -1688,39 +1731,62 @@ def for_route(
                 elif ir.get("budget_mv") and amps:
                     budgets[n] = ir["budget_mv"] / amps
         # Candidates, decided: ``nets`` lists candidate rails for this layer, not a
-        # guarantee. A candidate the rule leaves off (see :func:`_rail_decision`) is
-        # not partitioned at all: its terminals become foreign copper (blocking the
-        # rails that do get a territory, same as any other net's), and the router
-        # routes it as a normal trace elsewhere, as it already does for every net
-        # this layer's partition does not name. The decision looks only at a budget
-        # the entry itself declares (``budgets_mohm``), not one merged in from a
-        # plain ``ir_drop`` check: a design verifying every rail's drop is no reason
-        # to plane every rail.
+        # guarantee. ``decisions`` (pnr.rail_alloc: the allocation the caller routes,
+        # the single source of truth it also carried into the routing rules) says
+        # which; without it, the static prior (:func:`_rail_decision`). A candidate
+        # decided ``trace`` is not partitioned at all: its terminals become foreign
+        # copper (blocking the rails that do get a territory, same as any other
+        # net's), and the router routes it as a normal trace elsewhere. The prior looks
+        # only at a budget the entry itself declares (``budgets_mohm``), not one merged
+        # in from a plain ``ir_drop`` check.
         net_decisions = {}
         for n in nets:
-            fresh = _rail_decision(
+            given = (decisions or {}).get(n)
+            net_decisions[n] = given or _rail_decision(
                 len(nets), len(terms[n]), currents.get(n), explicit_budgets.get(n)
             )
-            early = (decisions or {}).get(n)
-            if early is not None and early[0] != fresh[0]:
-                # The caller already acted on ``early`` (excluded or kept the net out of
-                # signal routing, a plane's drop planning) before this partition ran; a
-                # disagreement now would silently repeat the bug an owner review on
-                # 2026-10-06 found (a traced candidate with nowhere left to route), so
-                # this fails loudly instead of picking either decision.
-                raise ValueError(
-                    "plane_partition: %s decided %r before routing (%s) and %r once routed "
-                    "(%d terminal(s)): the two must agree"
-                    % (n, early[0], early[1], fresh[0], len(terms[n]))
-                )
-            net_decisions[n] = early or fresh
         traced = [n for n in nets if net_decisions[n][0] == "trace"]
-        for n in traced:
-            for t in terms.pop(n):
-                blocked.append((t.at, t.radius + gap_to(n)))
+        # A pad terminal with no free through-via site within its reach on the router's
+        # grid (an inner BGA ball walled in by its neighbours' vias) cannot drop onto
+        # any plane: a reachability input of the quality report (pnr.plane_quality).
+        via_blocked = {
+            n: sorted(
+                t.name
+                for t in ts
+                if t.kind == "pad"
+                and not _via_site(grid, n, t.at, reach + DOGBONE_CELLS * grid.pitch)
+            )
+            for n, ts in terms.items()
+        }
         sources = {}
         for n, text in (entry.get("sources") or {}).items():
             sources[n] = text.replace(":", ".", 1)
+        if capture is not None:
+            # pnr.rail_alloc's screen: every candidate's inputs, before any is traced.
+            capture[layer] = dict(
+                entry=entry,
+                width=width,
+                height=height,
+                terminals={n: list(ts) for n, ts in terms.items()},
+                blocked=list(blocked),
+                gaps={n: gap_to(n) for n in nets},
+                blocked_polygons=list(keepouts),
+                currents={n: c for n, c in currents.items() if c},
+                budgets_mohm=dict(budgets),
+                sources=dict(sources),
+                copper_mm=lay.copper_mm or 0.035,
+                edge_mm=edge,
+                via_drill_mm=via_h,
+                fill_min_mm=fill_min,
+                via_blocked=via_blocked,
+                planes_elsewhere={
+                    n: [x for x in stack.net_planes(n) if x != layer]
+                    for n in sorted(set(stack.plane_nets) | set(entry.get("fill_candidates") or ()))
+                },
+            )
+        for n in traced:
+            for t in terms.pop(n):
+                blocked.append((t.at, t.radius + gap_to(n)))
         part = partition(
             entry,
             width=width,
@@ -1739,6 +1805,12 @@ def for_route(
         part.report["candidates"] = {
             n: dict(decision=d, reason=r) for n, (d, r) in sorted(net_decisions.items())
         }
+        finish_quality(
+            part.report,
+            layer,
+            via_blocked,
+            {n: [x for x in stack.net_planes(n) if x != layer] for n in [entry.get("fill")] if n},
+        )
         if traced:
             part.report["traced_nets"] = sorted(traced)
         if skipped:
@@ -1763,6 +1835,47 @@ def for_route(
             _core_keepouts(grid, part, grid.via_radius + clearance, spare, reach, extra)
         out.append(part)
     return out
+
+
+DOGBONE_CELLS = 4  # a drop's dog-bone reach beyond its pad (route.detail.escape's default)
+
+
+def _via_site(grid, net, at, reach) -> bool:
+    """A through via of ``net`` fits on ``grid`` within ``reach`` of ``at`` (every
+    routed layer :meth:`via_passable` at one cell)."""
+    pitch = grid.pitch
+    i0, j0 = int((at[0] - reach) / pitch), int((at[1] - reach) / pitch)
+    i1, j1 = int((at[0] + reach) / pitch) + 1, int((at[1] + reach) / pitch) + 1
+    for j in range(max(j0, 0), min(j1, grid.ny - 1) + 1):
+        for i in range(max(i0, 0), min(i1, grid.nx - 1) + 1):
+            x, y = grid.center_of(i, j)
+            if (x - at[0]) ** 2 + (y - at[1]) ** 2 > reach * reach + 1e-12:
+                continue
+            if all(grid.via_passable(la, i, j, net, point=(x, y)) for la in range(grid.nlayers)):
+                return True
+    i, j = grid.cell_of(*at)  # a via in the pad itself (a filled in-pad via)
+    return all(grid.via_passable(la, i, j, net, point=tuple(at)) for la in range(grid.nlayers))
+
+
+def finish_quality(report, layer, via_blocked=None, planes_elsewhere=None):
+    """Complete a partition report's ``quality`` (pnr.plane_quality) with what only
+    the caller knows -- terminals without a via site on the router's grid, a fill net's
+    dedicated planes elsewhere in the stack -- then its penalty and warnings."""
+    from pnr.plane_quality import penalty, warnings
+
+    quality = report.get("quality")
+    if quality is None:
+        return
+    for n, row in quality["nets"].items():
+        row["via_blocked"] = list((via_blocked or {}).get(n) or ())
+    quality["layer"].pop("redundant_fill", None)
+    for net, planes in sorted((planes_elsewhere or {}).items()):
+        if planes and net not in quality["nets"]:
+            quality["layer"]["redundant_fill"] = dict(
+                net=net, planes=list(planes), area_mm2=quality["layer"]["unassigned_mm2"]
+            )
+    quality["penalty_mm"], quality["penalty"] = penalty(quality)
+    quality["warnings"] = warnings(quality, layer)
 
 
 def _core_keepouts(grid, part, via_reach, spare=(), spare_reach=0.0, spare_sites=()):
@@ -1987,4 +2100,10 @@ def _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanout
     skipped = [n for n in entry["nets"] if n not in names]
     if skipped:
         part.report["not_board_nets"] = skipped
+    if part.report.get("quality"):
+        # An outer pour fills its region by design: its regions' area is not judged
+        # against their lands' need (the ladder's plane_quality judges its pieces).
+        part.report = dict(part.report, quality=dict(part.report["quality"]))
+        part.report["quality"]["layer"] = dict(part.report["quality"]["layer"], outer=True)
+    finish_quality(part.report, entry["layer"])
     return part

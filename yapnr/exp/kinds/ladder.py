@@ -78,6 +78,7 @@ OPTIONS = {
     "channel_layers": bool,
     "power_first": bool,
     "route_pairs_diff_pairs": bool,
+    "rail_alloc": str,
 }
 FLAGS = {
     "packed_maze": "--packed-maze",
@@ -165,6 +166,8 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
         args += ["--legalize-reorient", "wire"]  # the in-place turns without the channel guard
     if options.get("legalize_channel_clearance_fab"):
         args += ["--legalize-channel-clearance", "fab"]
+    if options.get("rail_alloc"):
+        args += ["--rail-alloc", options["rail_alloc"]]  # PNR_RAIL_ALLOC (pnr.rail_alloc)
     return args
 
 
@@ -221,6 +224,8 @@ class LadderCell(base.Kind):
                 errors.append("%s.fab_profile is one of %s" % (where, ", ".join(FAB_PROFILES)))
             if options.get("maze_kernel", "native") not in MAZE_KERNELS:
                 errors.append("%s.maze_kernel is one of %s" % (where, ", ".join(MAZE_KERNELS)))
+            if options.get("rail_alloc", "search") not in ("search", "static"):
+                errors.append("%s.rail_alloc is search or static" % where)
             off = options.get("compact_off")
             if isinstance(off, list) and any(p not in COMPACT_PARTS for p in off):
                 errors.append(

@@ -61,6 +61,8 @@ class FeedbackReport:
     shrink: Optional[dict] = None  # PNR_SHRINK search record (None without the flag)
     # PNR_COMPACT RELAX: the rounds run without compact placement (None: none was).
     relaxed: Optional[dict] = None
+    # PNR_ROUTE_COMPACT FLAT: the post-route compaction record (None without the flag).
+    route_compact: Optional[dict] = None
 
     @property
     def final_overflow(self) -> float:
@@ -924,6 +926,20 @@ def route_and_place(
         if report.converged or not auto_outline or scale >= outline_max_scale - 1e-9:
             break
         scale = min(outline_max_scale, scale * outline_grow)
+    from pnr.place import route_compact
+
+    if route_compact.enabled("FLAT") and detail_rules is not None and report.detail_result:
+        # PNR_ROUTE_COMPACT FLAT: squeeze the parts by the copper routed, then route again.
+        with _trace.scope("route-compact", "compact"):
+            placed, report.detail_result, report.route_compact = route_compact.flat_pass(
+                placed,
+                report.detail_result,
+                constraints,
+                detail_rules,
+                pitch=detail_pitch_mm,
+                iters=detail_iters,
+                outline=outline_size(graph, constraints),
+            )
     return placed, report
 
 

@@ -113,6 +113,12 @@ routes.update(
             **({"shrink": report.shrink} if report.shrink is not None else {}),
             # PNR_COMPACT RELAX only (absent otherwise): the rounds placed relaxed.
             **({"relaxed": report.relaxed} if getattr(report, "relaxed", None) else {}),
+            # PNR_ROUTE_COMPACT FLAT only (absent otherwise): the post-route compaction.
+            **(
+                {"route_compact": dict(flat=report.route_compact)}
+                if getattr(report, "route_compact", None)
+                else {}
+            ),
         ),
         indent=2,
     )

@@ -266,6 +266,11 @@ COMPACT_PARTS = (
 )
 
 
+# The parts of PNR_ROUTE_COMPACT (pnr.place.route_compact.PARTS; test_route_compact keeps
+# them equal) --route-compact may name.
+ROUTE_COMPACT_PARTS = ("TOP", "BLOCK", "FLAT")
+
+
 # Ambient PNR_* switches an operator happens to have set must not silently change the suite's
 # configuration; PNR_LIVE_* is the one exception, since it is telemetry only (hardware/pnr/pnr/
 # live.py: no routing/placement decision reads it) and letting it through is what lets a task run
@@ -907,6 +912,26 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--route-compact",
+        nargs="?",
+        const="1",
+        default=None,
+        metavar="PARTS",
+        help=(
+            "PNR_ROUTE_COMPACT: after routing, squeeze the placement by the copper actually "
+            "routed and route again (pnr.place.route_compact); PARTS is 1 (all) or a comma "
+            "list of TOP, BLOCK, FLAT"
+        ),
+    )
+    ap.add_argument(
+        "--macro-hull",
+        action="store_true",
+        help=(
+            "PNR_MACRO_HULL=1: hierarchical block macros carry per-side occupancy hulls from "
+            "their routed copper, so blocks nest and dovetail (pnr.place.hull)"
+        ),
+    )
+    ap.add_argument(
         "--power-first",
         action="store_true",
         help="PNR_POWER_FIRST=1: lexicographic power-first placement (pnr.place.power_first)",
@@ -1032,6 +1057,15 @@ def main():
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.power_first:
         env["PNR_POWER_FIRST"] = "1"
+    if args.route_compact:
+        parts = {p.strip().upper() for p in args.route_compact.split(",") if p.strip()}
+        if args.route_compact != "1" and not parts <= set(ROUTE_COMPACT_PARTS):
+            raise SystemExit(
+                "--route-compact takes 1 or a comma list of %s" % ", ".join(ROUTE_COMPACT_PARTS)
+            )
+        env["PNR_ROUTE_COMPACT"] = args.route_compact
+    if args.macro_hull:
+        env["PNR_MACRO_HULL"] = "1"
     if args.route_pairs_diff_pairs:
         env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
     if args.detail_pitch_mm is not None:

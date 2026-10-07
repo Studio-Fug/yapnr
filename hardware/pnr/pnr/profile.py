@@ -23,6 +23,20 @@ from pathlib import Path
 
 spans = {}
 active = False
+# Seconds between the live checkpoints of a profiled run (its .live.pstats/.live.json).
+CHECKPOINT_SECONDS = 60
+
+
+def _dump_live(profile, path):
+    """Write ``profile``'s statistics so far to ``path`` without stopping it.
+    ``Profile.dump_stats`` goes through ``create_stats``, which disables the profiler,
+    and since Python 3.12 (sys.monitoring) that holds for every thread: a checkpoint
+    written that way ended the profile after its first minute."""
+    import marshal
+
+    profile.snapshot_stats()
+    with open(path, "wb") as fh:
+        marshal.dump(profile.stats, fh)
 
 
 @contextmanager
@@ -72,9 +86,9 @@ def _profiled_run(label, fn):
     stopped = threading.Event()
 
     def checkpoint():
-        while not stopped.wait(60):
+        while not stopped.wait(CHECKPOINT_SECONDS):
             try:
-                profile.dump_stats(str(root / (key + ".live.pstats")))
+                _dump_live(profile, str(root / (key + ".live.pstats")))
                 record = dict(
                     schema="pnr-profile-live-v1",
                     label=label,

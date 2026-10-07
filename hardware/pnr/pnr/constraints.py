@@ -632,6 +632,66 @@ def _keepout_rules(spec: Dict, compiled: "CompiledConstraints", net_names: Seque
     return out
 
 
+def fanout_band_mm() -> float:
+    """``PNR_FANOUT_BAND_MM`` (unset or 0: off): the depth of the placement band a
+    declared fanout keeps clear beside its part (:func:`_fanout_bands`)."""
+    raw = os.environ.get("PNR_FANOUT_BAND_MM", "").strip()
+    if not raw:
+        return 0.0
+    value = float(raw)
+    if not math.isfinite(value) or value < 0:
+        raise ConstraintError("PNR_FANOUT_BAND_MM must be a finite depth >= 0 (mm)")
+    return value
+
+
+def _fanout_bands(fanouts: Sequence[Dict], constraints: Sequence["Constraint"]) -> List:
+    """Placement keep-outs that hold a declared fanout's surface escapes clear: on each
+    edge of the fanned-out part where its surface exits are allowed, a band
+    ``PNR_FANOUT_BAND_MM`` deep against the part's courtyard (a ref-relative keep-out:
+    no other part's courtyard in it). The fanout plans its exits from the part alone
+    (pnr.fanout.planner), so a part placed against them (a decoupling capacitor beside
+    the array) boxes the balls behind it in. Off (no band) unless the depth is set.
+    Board edges are mapped to the part's own edges by its fixed rotation; a part
+    without one gets a band on every edge only when no surface edge is forbidden."""
+    depth = fanout_band_mm()
+    if depth <= 0:
+        return []
+    rotations = {
+        r: float(c.params.get("rot") or 0.0)
+        for c in constraints
+        if c.kind == "fixed"
+        for r in c.refs
+        if c.params.get("rot") is not None
+    }
+    order = ("east", "north", "west", "south")  # counter-clockwise, 90 degrees apart
+    out = []
+    for f in fanouts:
+        ref = f["ref"]
+        forbidden = set(f.get("forbidden_exits", {}).get("*", []))
+        for layer, edges in f.get("forbidden_exits", {}).items():
+            if layer != "*" and layer in ("F.Cu", "B.Cu"):
+                forbidden |= set(edges)
+        rot = rotations.get(ref)
+        if rot is None and forbidden:
+            continue
+        turns = int(round((rot or 0.0) / 90.0)) % 4
+        for edge in order:
+            if edge in forbidden:
+                continue
+            # The part's own edge that its rotation turns onto this board edge.
+            local = order[(order.index(edge) - turns) % 4]
+            out.append(
+                Constraint(
+                    kind="keepout",
+                    enforcement=Enforcement.HARD,
+                    refs=(ref,),
+                    name="fanout-band:%s:%s" % (f["name"], edge),
+                    params={"extent": {"edge": local, "depth_mm": depth}, "polygon": None},
+                )
+            )
+    return out
+
+
 def _fanout_nets(spec: Dict, net_names: Sequence[str]) -> Dict:
     from pnr.fanout.spec import expand_nets
 
@@ -1771,6 +1831,7 @@ def compile_constraints(
                     "fanout %s: %s is not fixed; its fanout is planned at each placed pose"
                     % (f["name"], f["ref"])
                 )
+        constraints.extend(_fanout_bands(fanouts, constraints))
 
     # plane_partition / ir_drop: supply rails on a shared plane layer and their IR
     # reports (pnr.power_spec), validated here; the router and pnr.ir_extract use them.

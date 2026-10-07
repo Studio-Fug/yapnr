@@ -3,7 +3,9 @@
 import cProfile
 import json
 import os
+import pstats
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -65,6 +67,30 @@ class ProfileTests(unittest.TestCase):
                 self.assertTrue(record["hot_functions"])
                 self.assertTrue(Path(record["profile"]).is_file())
                 self.assertFalse(profiling.active)
+
+    def test_live_checkpoints_keep_the_profile_running(self):
+        # A checkpoint between two halves of the work: both halves are profiled (the
+        # checkpoint used Profile.dump_stats, which stops the profiler).
+        def half():
+            return sum(i * i for i in range(200000))
+
+        def work():
+            half()
+            deadline = time.monotonic() + 5
+            while not list(Path(directory).glob("*.live.pstats")) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            seen = bool(list(Path(directory).glob("*.live.pstats")))
+            half()
+            return seen
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"PNR_PROFILE_DIR": directory}), patch(
+                "pnr.live.emit"
+            ), patch.object(profiling, "CHECKPOINT_SECONDS", 0.05):
+                self.assertTrue(profiling.run("test", work))  # a checkpoint was written
+            (raw,) = [p for p in Path(directory).glob("*.pstats") if ".live." not in p.name]
+            calls = [v[1] for k, v in pstats.Stats(str(raw)).stats.items() if k[2] == "half"]
+            self.assertEqual(calls, [2])
 
 
 import gc

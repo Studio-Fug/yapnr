@@ -821,12 +821,27 @@ py_test(
 
 py_test(
     name = "fanout_test",
-    size = "small",
+    size = "medium",
     srcs = ["tests/test_fanout.py"],
     main = "tests/test_fanout.py",
     deps = [
         ":pnr",
         ":pnr_hier",
+        ":pnr_place",
+    ],
+)
+
+# PNR_FANOUT_BAND_MM: a declared fanout's placement band (compiled keep-outs, the part's
+# rotation, the forbidden exits) and its rectangles against the courtyard.
+py_test(
+    name = "fanout_band_test",
+    size = "small",
+    srcs = ["tests/test_fanout_band.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_fanout_band.py",
+    deps = [
+        ":pnr",
         ":pnr_place",
     ],
 )
@@ -2747,6 +2762,27 @@ py_test(
         ":pnr_detail",
         ":pnr_place",
         ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# PNR_EXACT_SETTLE: the longer exact negotiation and the settle transactions (never fewer
+# connected branches, the exact clearance kept, a contested channel given to the net that
+# leaves both connected).
+py_test(
+    name = "exact_settle_test",
+    size = "medium",
+    srcs = [
+        "tests/test_exact_route.py",
+        "tests/test_exact_settle.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_exact_settle.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
         requirement("numpy"),
     ],
 )

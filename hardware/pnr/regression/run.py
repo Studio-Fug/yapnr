@@ -1038,6 +1038,15 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--fanout-band-mm",
+        type=float,
+        metavar="MM",
+        help=(
+            "PNR_FANOUT_BAND_MM=MM: placement keeps a band MM deep clear beside each declared "
+            "fanout's part on its surface-exit edges (pnr.constraints.fanout_band_mm)"
+        ),
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
@@ -1185,6 +1194,8 @@ def main():
         env["PNR_EXACT_SETTLE"] = "1"
     if args.fanout_best_round:
         env["PNR_FANOUT_BEST_ROUND"] = "1"
+    if args.fanout_band_mm:
+        env["PNR_FANOUT_BAND_MM"] = repr(args.fanout_band_mm)
     if args.detail_pitch_mm is not None:
         import math
 

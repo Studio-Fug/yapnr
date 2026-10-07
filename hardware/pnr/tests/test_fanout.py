@@ -582,6 +582,38 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(terminal_required_width("U1", "C3", "S_X", rr), 0.1)
         self.assertEqual(violations(p, graph), [])
 
+    def test_best_round_legalizes_the_least_conflicted_round_too(self):
+        # Every other ball of the outer four rings a signal, the rest ground: more than
+        # the array can escape, and the negotiation's conflicts climb again after round
+        # 7. PNR_FANOUT_BEST_ROUND legalizes that round as well and keeps the better.
+        import os
+        from unittest.mock import patch
+
+        from pnr.fanout import planner
+
+        positions = array(15, ufbga201)
+        signals = {
+            b
+            for b in positions
+            if min(ROWS.index(b[0]), int(b[1:]) - 1, 14 - ROWS.index(b[0]), 15 - int(b[1:])) < 4
+            and (ROWS.index(b[0]) + int(b[1:]) - 1) % 2 == 0
+        }
+        graph = board(positions, self.nets(positions, signals))
+        plans = {}
+        for flag in ("0", "1"):
+            planner._CACHE.clear()
+            with patch.dict(os.environ, {"PNR_FANOUT_BEST_ROUND": flag}):
+                plans[flag] = run(graph, spec())
+        planner._CACHE.clear()
+        off, on = plans["0"]["diagnostics"], plans["1"]["diagnostics"]
+        self.assertNotIn("restored_round", off["search"])
+        rounds = on["search"]["conflicts_per_round"]
+        self.assertEqual(on["search"]["restored_round"], 1 + rounds.index(min(rounds)))
+        self.assertEqual(on["search"]["conflicts_per_round"], off["search"]["conflicts_per_round"])
+        self.assertGreater(on["signals_escaped"], off["signals_escaped"])
+        self.assertGreaterEqual(on["drops_placed"], off["drops_placed"])
+        self.assertEqual(violations(plans["1"], graph), [])
+
     def test_failed_pad_has_a_reason(self):
         positions = array(5)
         signals = {"C3", "A1"}

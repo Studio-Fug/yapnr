@@ -6,6 +6,7 @@ load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 yapnr_py_tests(
     data = [
         "//:requirements-runtime.in",
+        "//hardware/pnr:pnr/route/detail/native/maze.c",
         "//release:wheel_for_test",
     ],
     overrides = {

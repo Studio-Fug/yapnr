@@ -35,3 +35,6 @@ yapnr-out/
 
 # Locally built native FDTD stepper (python -m yapnr.rf.fdtd.native_kernel build)
 yapnr/rf/fdtd/native/libyapnr_fdtd.*
+
+# Locally built native maze kernel (python -m pnr.route.detail.native_maze build)
+hardware/pnr/pnr/route/detail/native/libpnr_maze.*

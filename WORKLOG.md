@@ -119,8 +119,10 @@ board edges, the hierarchical ladder driver and their animations on
     side of free parts; writeback mirrors bottom parts on `B.*`;
   - length matching (`pnr/route/detail/tune.py`, `pnr/length_model.py`, `pnr/place/matched.py`):
     declared pairs and groups are tuned with meanders against KiCad's own length measure;
-  - router speed: the packed kernel with dense per-net fields is the default (identical routes),
-    an optional C search loop (`PNR_MAZE_KERNEL=native`), and an exact-separation recovery
+  - router speed: the native kernel (the packed search over dense per-net fields, in C; identical
+    routes; the packed Python kernel where no library loads, `PNR_MAZE_KERNEL=packed` on request)
+    is the default (2026-10-07: a 192-cell GCP A/B, every route identical, -54% task time), and an
+    exact-separation recovery
     (`PNR_EXACT_SEPARATION=recover`, the default) for routes the halo model leaves open.
 
   Results (two seeds each): ladder and showcases 24 of 24, CPU 2,281 s to 442 s; hard rungs clean
@@ -344,9 +346,9 @@ board edges, the hierarchical ladder driver and their animations on
     an origin-to-courtyard offset (the THT header's origin is pin 1, so its courtyard is placed
     off by half its length and never legalizes); carry the three Ladder fixes (plane check, side
     check, HDI microvia) to `claude/ladder-hard-rungs`, or land the rungs and the fixes together.
-19. Owner: whether the optional C maze kernel becomes "use it when present". Recommended once CI
-    runs `dense_maze_native_test` and `exact_route_native_test` on both Linux architectures; until
-    then the packed Python kernel stays the default and no C toolchain is needed.
+19. Done (2026-10-07, owner: flip to native if no rung is worse and routes are equivalent): the C
+    maze kernel is the default where its library loads (Bazel, the wheel and so the image, or a
+    host compiler); CI runs `dense_maze_native_test` and `exact_route_native_test` in `//...`.
 20. Boards with blind, buried or micro vias: the packed and native kernels hand them to the
     reference kernel (so no exact-separation recovery there), the length tuner only adds
     meanders, and the native KiCad repair loop and the hierarchical driver add through vias only.

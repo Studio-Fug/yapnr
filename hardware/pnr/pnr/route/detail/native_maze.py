@@ -1,18 +1,21 @@
-"""Optional native maze kernel: the packed A* loop in C, loaded with ctypes.
+"""Native maze kernel: the packed A* loop in C, loaded with ctypes.
 
-Selected with ``PNR_MAZE_KERNEL=native``. The C side (``native/maze.c``) runs
-only the search loop over a dense field (:mod:`.dense_maze`): the same moves,
-prices, octile heuristic, ``(f, tie)`` heap order and relaxation rules as the
-packed and reference kernels, compiled without floating-point contraction, so
-it returns the same paths. The library is looked up at ``PNR_MAZE_LIB``, then
-beside the package (Bazel runfiles); when it is absent or fails to load, the
-packed Python kernel runs and :func:`status` says why. A compiled dependency is
-never required.
+The default kernel (``PNR_MAZE_KERNEL`` unset or ``native``; :func:`.maze.maze_kernel`). The C
+side (``native/maze.c``) runs only the search loop over a dense field (:mod:`.dense_maze`): the
+same moves, prices, octile heuristic, ``(f, tie)`` heap order and relaxation rules as the packed
+and reference kernels, compiled without floating-point contraction, so it returns the same
+paths, ties included, on every machine (IEEE doubles, no libm, no fused multiply-add: the loader
+probes that). The library is looked up at ``PNR_MAZE_LIB``, beside the package (a local build,
+Bazel's runfiles), then in the installed yapnr wheel (``yapnr/native/``, which the container
+image carries); a library is refused unless it records the sha256 of the ``maze.c`` beside this
+module, so a stale one never runs. When none loads, the packed Python kernel runs (the same
+routes, slower) and :func:`status` says why. A compiled dependency is never required.
 """
 
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -30,14 +33,68 @@ def library_names():
     )
 
 
+# Where the yapnr wheel carries the library (//yapnr/native:libpnr_maze.so).
+WHEEL_DIR = "yapnr/native"
+
+
+def _installed():
+    """The installed yapnr wheel's libraries (found through its metadata, so a frozen
+    ``yapnr`` on ``PYTHONPATH`` does not hide them)."""
+    try:
+        from importlib import metadata
+
+        dist = metadata.distribution("yapnr")
+        return [Path(dist.locate_file("%s/%s" % (WHEEL_DIR, name))) for name in library_names()]
+    except Exception:  # not installed, or no metadata
+        return []
+
+
 def _candidates():
     configured = os.environ.get("PNR_MAZE_LIB")
     if configured:
         yield Path(configured)
-    here = Path(__file__).resolve()
-    for root in (here.parent / "native", here.parents[3]):
+    # Beside the package (a local build), then Bazel's runfiles, where
+    # //hardware/pnr:libpnr_maze.so lands: the module's own (unresolved) path is inside the
+    # runfiles tree, the resolved one is the source tree.
+    roots = []
+    for here in (Path(os.path.abspath(__file__)), Path(__file__).resolve()):
+        roots += [here.parent / "native", here.parents[3]]
+    for env in ("RUNFILES_DIR", "TEST_SRCDIR"):
+        if os.environ.get(env):
+            roots.append(Path(os.environ[env]) / "_main" / "hardware" / "pnr")
+    seen = set()
+    for root in roots:
         for name in library_names():
-            yield root / name
+            if root / name not in seen:
+                seen.add(root / name)
+                yield root / name
+    yield from _installed()
+
+
+def source_sha256():
+    """sha256 of ``native/maze.c`` beside this module (what a library must record), or None
+    when it is not there."""
+    try:
+        return hashlib.sha256(SOURCE.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def fp_check(library):
+    """Why the library's double arithmetic is not Python's, or None: ``pnr_maze_fp_probe``
+    computes x*y - p with p = fl(x*y) (0 unless fused into a multiply-add) and (u + v) - u
+    with v below u's ulp (0 unless reassociated), on inputs the compiler cannot see."""
+    eps = 2.0**-30
+    x = 1.0 + eps
+    probe = (ctypes.c_double * 5)(x, x, x * x, 1.0, eps * eps)
+    out = (ctypes.c_double * 2)(float("nan"), float("nan"))
+    library.pnr_maze_fp_probe(probe, out)
+    problems = []
+    if out[0] != 0.0:
+        problems.append("multiply-add fused")
+    if out[1] != 0.0:
+        problems.append("sums reassociated")
+    return "; ".join(problems) or None
 
 
 class _Field(ctypes.Structure):
@@ -67,8 +124,29 @@ def _pointer(array, ctype):
 
 
 class NativeKernel:
-    def __init__(self, library):
+    """The loaded library, refused (OSError) unless its arithmetic is Python's
+    (:func:`fp_check`) and it records the sha256 of the ``maze.c`` beside this module."""
+
+    def __init__(self, library, path=None):
+        self.context = None
         self.lib = library
+        self.path = None if path is None else Path(path)
+        library.pnr_maze_src_sha.restype = ctypes.c_char_p
+        library.pnr_maze_fp_probe.restype = None
+        library.pnr_maze_fp_probe.argtypes = [
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.POINTER(ctypes.c_double),
+        ]
+        problem = fp_check(library)
+        if problem:
+            raise OSError("not Python's arithmetic (%s): build with %s" % (problem, CFLAGS[1]))
+        self.src_sha = library.pnr_maze_src_sha().decode()
+        here = source_sha256()
+        if here and self.src_sha != here:
+            raise OSError(
+                "stale: built from maze.c %s, this is %s"
+                % (self.src_sha[:12] or "(unrecorded)", here[:12])
+            )
         library.pnr_maze_abi.restype = ctypes.c_int32
         library.pnr_maze_new.restype = ctypes.c_void_p
         library.pnr_maze_new.argtypes = [ctypes.c_int32]
@@ -163,23 +241,37 @@ CFLAGS = ["-O2", "-ffp-contract=off", "-fno-fast-math", "-fPIC", "-shared"]
 
 def build_library(out_dir, compiler=None, timeout=300):
     """Compile ``native/maze.c`` into ``out_dir`` with the host C compiler
-    (``$CC`` or ``cc``) and return the library path. For runners and tests;
-    Bazel builds the same source with the same flags."""
+    (``$CC``, ``cc`` or ``gcc``) and return the library path. For runners and tests;
+    Bazel builds the same source with the same flags. The build records the source's
+    sha256 (``PNR_MAZE_SRC_SHA``), so the loader refuses it once ``maze.c`` changes."""
     import shutil
     import subprocess
 
-    compiler = compiler or os.environ.get("CC") or shutil.which("cc")
+    compiler = compiler or os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if not compiler:
         raise FileNotFoundError("no C compiler (set CC)")
     out = Path(out_dir) / library_names()[0]
     out.parent.mkdir(parents=True, exist_ok=True)
+    define = '-DPNR_MAZE_SRC_SHA="%s"' % source_sha256()
     subprocess.run(
-        [compiler, *CFLAGS, "-o", str(out), str(SOURCE)],
+        [compiler, *CFLAGS, define, "-o", str(out), str(SOURCE)],
         check=True,
         timeout=timeout,
         capture_output=True,
     )
     return out
+
+
+def prebuilt():
+    """``(path, reason)``: the path of a library that loads and matches this ``maze.c``
+    (``PNR_MAZE_LIB``, beside the package, or the installed wheel's) or None, and what the
+    loader said. For runners deciding whether to compile one."""
+    reset()
+    try:
+        kernel = load()
+        return (None if kernel is None else kernel.path), _STATE["reason"]
+    finally:
+        reset()
 
 
 def reset():
@@ -201,7 +293,7 @@ def load():
             if library.pnr_maze_abi() != _ABI:
                 reasons.append("%s: ABI mismatch" % path.name)
                 continue
-            _STATE["kernel"] = NativeKernel(library)
+            _STATE["kernel"] = NativeKernel(library, path)
             _STATE["reason"] = "loaded " + path.name
             return _STATE["kernel"]
         except (OSError, AttributeError) as error:
@@ -211,13 +303,15 @@ def load():
 
 
 def active():
-    """The native kernel when ``PNR_MAZE_KERNEL=native`` selects it and it loads."""
+    """The native kernel when it is selected (the default, or ``PNR_MAZE_KERNEL=native``)
+    and it loads. An explicit ``PNR_MAZE_KERNEL=native`` without a library says so once on
+    stderr; the default falls back quietly (:func:`status` records it either way)."""
     from .maze import maze_kernel
 
     if maze_kernel() != "native":
         return None
     kernel = load()
-    if kernel is None and not _STATE.get("warned"):
+    if kernel is None and not _STATE.get("warned") and os.environ.get("PNR_MAZE_KERNEL"):
         _STATE["warned"] = True
         sys.stderr.write("PNR_MAZE_KERNEL=native: %s; packed kernel used\n" % _STATE["reason"])
     return kernel
@@ -232,9 +326,34 @@ def status():
 
     kernel = maze_kernel()
     if kernel == "native":
-        out = dict(kernel="native" if load() is not None else "packed", reason=_STATE["reason"])
+        loaded = load()
+        out = dict(kernel="native" if loaded is not None else "packed", reason=_STATE["reason"])
+        if loaded is not None:
+            out["src_sha256"] = loaded.src_sha
     else:
         out = dict(kernel=kernel, reason="")
     if kernel != "reference" and fallbacks():
         out["reference_fallback"] = fallbacks()
     return out
+
+
+def main(argv=None):
+    """``python -m pnr.route.detail.native_maze build [DIR]``: compile the library (into
+    ``native/`` beside the source by default, where the loader and ``run.py`` find it);
+    ``status``: which kernel this process would route with, and why."""
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(prog="python -m pnr.route.detail.native_maze")
+    parser.add_argument("command", choices=("build", "status"))
+    parser.add_argument("dir", nargs="?", default=str(SOURCE.parent))
+    args = parser.parse_args(argv)
+    if args.command == "build":
+        print(build_library(args.dir))
+    else:
+        print(json.dumps(status(), indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

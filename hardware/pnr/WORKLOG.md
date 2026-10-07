@@ -957,13 +957,15 @@ four showcases give byte-identical `placed.json`, `routes.json` and boards on tw
 | the rules' `via_policy` (ladder drivers: `via_policy.board_policy`) | blind, buried and micro spans the stack can build, one build per board, return ties | `pnr/via_policy.py` |
 | `board.sides: double` | placement chooses the side of free parts (global relaxation, legalizer, flips and swaps) | `pnr/place/sides.py`, `place/detail_moves.py` |
 | `diff_pairs` / `length_match` (`tuning.meanders`, `tuning.placement`, both on) | meander tuning to KiCad's length measure; matched-leg placement | `route/detail/tune.py`, `length_model.py`, `place/matched.py` |
-| none: default kernel | packed A* with dense per-net fields (identical routes) | `route/detail/dense_maze.py`, `packed_maze.py` |
+| none: default kernel (`route/detail/kernels.py`) | native A*: the packed search over dense per-net fields, in C (identical routes; packed Python where no library loads) | `route/detail/dense_maze.py`, `packed_maze.py`, `native_maze.py`, `native/maze.c` |
 | none: `PNR_EXACT_SEPARATION=recover` (default; `full`, `off`) | a route the halo model leaves open is routed again with the exact pairwise separation, kept if fewer open | `route/detail/exact_route.py` |
 
-Opt-ins: `PNR_MAZE_KERNEL=native` (the C search loop, `route/detail/native/maze.c`, loaded with
-ctypes from `PNR_MAZE_LIB` or beside the package; falls back to packed), `PNR_PACKED_MAZE=0` or
+Opt-ins: `PNR_MAZE_KERNEL=packed` (the search in Python; the default is `native`, the C loop of
+`route/detail/native/maze.c` loaded with ctypes from `PNR_MAZE_LIB`, beside the package, Bazel's
+runfiles or the yapnr wheel's `yapnr/native/`, only when it records this `maze.c`'s sha256; packed
+otherwise), `PNR_PACKED_MAZE=0` or
 `PNR_MAZE_KERNEL=reference` (the reference A*), `PNR_TUNE_STRICT=1` (a tuning error raises instead
-of keeping the untuned route). `run.py`: `--maze-kernel native`, `--reference-maze`,
+of keeping the untuned route). `run.py`: `--maze-kernel packed|native`, `--reference-maze`,
 `--exact-separation`, `--design-json` (the length-matching scratch designs); `--packed-maze` is a
 no-op kept for recorded configurations.
 

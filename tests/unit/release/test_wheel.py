@@ -29,6 +29,8 @@ PLATFORM_TAGS = {
     ("linux", "x86_64"): "manylinux_2_34_x86_64",
 }
 LIBRARY = "yapnr/rf/libyapnr_fdtd.so"
+MAZE_LIBRARY = "yapnr/native/libpnr_maze.so"
+MAZE_SOURCE = "hardware/pnr/pnr/route/detail/native/maze.c"
 
 
 def _runfile(*parts):
@@ -117,6 +119,28 @@ class WheelTest(unittest.TestCase):
         kernel = native_kernel.Kernel(ctypes.CDLL(path), path)
         self.assertEqual(kernel.src_sha, native_kernel.source_sha256())
         self.assertTrue(kernel.isa)
+
+    def test_maze_library(self):
+        """The router's native maze kernel: built from this checkout's maze.c (the sha256 it
+        records), with Python's double arithmetic (no fused multiply-add)."""
+        import ctypes
+        import hashlib
+
+        self.assertIn(MAZE_LIBRARY, self.names)
+        out = tempfile.mkdtemp(prefix="yapnr-wheel-")
+        self.addCleanup(shutil.rmtree, out, True)
+        library = ctypes.CDLL(self.zip.extract(MAZE_LIBRARY, out))
+        self.assertEqual(library.pnr_maze_abi(), 2)
+        library.pnr_maze_src_sha.restype = ctypes.c_char_p
+        with open(MAZE_SOURCE, "rb") as source:
+            want = hashlib.sha256(source.read()).hexdigest()
+        self.assertEqual(library.pnr_maze_src_sha().decode(), want)
+        eps = 2.0**-30
+        x = 1.0 + eps
+        probe = (ctypes.c_double * 5)(x, x, x * x, 1.0, eps * eps)
+        out = (ctypes.c_double * 2)()
+        library.pnr_maze_fp_probe(probe, out)
+        self.assertEqual(list(out), [0.0, 0.0])
 
     def test_license(self):
         self.assertEqual(self.metadata["License"], "AGPL-3.0-or-later")

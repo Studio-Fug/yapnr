@@ -20,6 +20,9 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
 package(default_visibility = ["//visibility:public"])
 
+# The native maze kernel's source, for the wheel's test (//tests/unit/release).
+exports_files(["pnr/route/detail/native/maze.c"])
+
 py_test(
     name = "channels_test",
     size = "small",
@@ -260,6 +263,11 @@ py_library(
 py_library(
     name = "pnr_detail",
     srcs = glob(["pnr/route/detail/*.py"]),
+    # The native maze kernel (the default where it loads) and the source it must match.
+    data = [
+        "pnr/route/detail/native/maze.c",
+        ":libpnr_maze.so",
+    ],
     imports = ["."],
     deps = [
         ":pnr",
@@ -2492,27 +2500,57 @@ py_test(
     deps = [":pnr", ":pnr_detail", ":pnr_place"],
 )
 
-# Optional native maze kernel (pnr.route.detail.native_maze, PNR_MAZE_KERNEL=native): the
-# packed A* loop in C, loaded with ctypes. Nothing depends on it; without it the packed
-# Python kernel runs. No floating-point contraction, so every double matches Python.
-# Manual: `bazel build //...` and `bazel test //...` need no C toolchain; the native
-# parity tests below name it, and run only when asked for.
+# The native maze kernel (pnr.route.detail.native_maze; the default kernel,
+# pnr/route/detail/kernels.py): the packed A* loop in C, loaded with ctypes. :pnr_detail
+# carries it, //yapnr/native puts it into the wheel (so the image has it), and without it the
+# packed Python kernel runs (the same routes). No floating-point contraction, so every double
+# matches Python's; the library records maze.c's sha256 (:maze_src_sha) and the loader refuses
+# it under another maze.c. Linux: no libstdc++ (the toolchain's default link libraries are
+# off); macOS: from macOS 11 on, like the wheel's tag (//release).
 cc_binary(
     name = "libpnr_maze.so",
-    srcs = ["pnr/route/detail/native/maze.c"],
+    srcs = [
+        "pnr/route/detail/native/maze.c",
+        ":maze_src_sha",
+    ],
     copts = [
         "-O2",
+        "-std=c11",
         "-ffp-contract=off",
         "-fno-fast-math",
-    ],
+    ] + select({
+        "@bazel_tools//src/conditions:darwin": ["-mmacosx-version-min=11.0"],
+        "//conditions:default": [],
+    }),
+    features = ["-default_link_libs"],
+    linkopts = select({
+        "@bazel_tools//src/conditions:darwin": [
+            "-mmacosx-version-min=11.0",
+            "-Wl,-install_name,@rpath/libpnr_maze.so",
+        ],
+        "//conditions:default": [],
+    }),
     linkshared = True,
-    tags = ["manual"],
+)
+
+# sha256 of maze.c (native_maze.source_sha256), as the header maze.c includes when
+# PNR_MAZE_SRC_SHA is not defined on the command line.
+genrule(
+    name = "maze_src_sha",
+    srcs = ["pnr/route/detail/native/maze.c"],
+    outs = ["pnr/route/detail/native/maze_src_sha.h"],
+    cmd = " ".join([
+        "sha=$$(cat $(location pnr/route/detail/native/maze.c)",
+        "| { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64) &&",
+        "echo \"$${sha}\" | grep -Eq '^[0-9a-f]{64}$$' &&",
+        "printf '#define PNR_MAZE_SRC_SHA \"%s\"\\n' \"$${sha}\" > $@",
+    ]),
 )
 
 # Dense fields and the packed kernel against the reference A* (searches, whole negotiated
 # routes, the real fixture grid, two route workers), and the guard that keeps them in step.
-# The native cases compile the kernel with a host compiler when one is on PATH, and skip
-# otherwise; dense_maze_native_test runs them on the Bazel-built library.
+# The native cases use the Bazel-built library (:pnr_detail carries it), else compile the
+# kernel with a host compiler, else skip; dense_maze_native_test runs them on the library.
 py_test(
     name = "dense_maze_test",
     size = "medium",
@@ -2639,8 +2677,8 @@ py_test(
     deps = [":pnr"],
 )
 
-# The native kernel's parity cases on the Bazel-built library (needs a C toolchain):
-# bazel test //hardware/pnr:dense_maze_native_test //hardware/pnr:exact_route_native_test
+# The native kernel's parity cases on the Bazel-built library (needs a C toolchain, like
+# `bazel build //...`): searches with ties, whole routes, the default switch.
 py_test(
     name = "dense_maze_native_test",
     size = "medium",
@@ -2650,13 +2688,13 @@ py_test(
         "KernelParityTest.test_native_runs_when_selected",
         "KernelParityTest.test_missing_library_falls_back_to_packed",
         "RouteParityTest.test_packed_and_native_routes_equal_reference",
+        "TieParityTest",
+        "DefaultKernelTest",
     ],
     data = [":libpnr_maze.so"],
+    env = {"PNR_MAZE_TEST_REQUIRE_NATIVE": "1"},
     main = "tests/test_dense_maze.py",
-    tags = [
-        "manual",
-        "native",
-    ],
+    tags = ["native"],
     deps = [
         ":pnr",
         ":pnr_detail",
@@ -2675,10 +2713,7 @@ py_test(
     ],
     data = [":libpnr_maze.so"],
     main = "tests/test_exact_route.py",
-    tags = [
-        "manual",
-        "native",
-    ],
+    tags = ["native"],
     deps = [
         ":pnr",
         ":pnr_detail",

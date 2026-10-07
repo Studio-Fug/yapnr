@@ -180,7 +180,10 @@ def native_kernel(test):
         with patch.dict(os.environ, {"PNR_MAZE_LIB": str(library)}):
             kernel = native_maze.load()
     if kernel is None:
-        test.skipTest("native maze library unavailable: " + native_maze._STATE["reason"])
+        reason = "native maze library unavailable: " + native_maze._STATE["reason"]
+        if os.environ.get("PNR_MAZE_TEST_REQUIRE_NATIVE"):  # dense_maze_native_test
+            test.fail(reason)
+        test.skipTest(reason)
     return kernel
 
 
@@ -354,6 +357,126 @@ class KernelParityTest(unittest.TestCase):
             self.assertIsNotNone(
                 astar(grid, {Cell(0, 0, 0)}, {Cell(0, 4, 4)}, "N", {}, {}, 3.0, 0.5)
             )
+
+
+class TieParityTest(unittest.TestCase):
+    """Searches full of equal ``f`` values: uniform or coarsely quantised prices, integer via
+    costs and symmetric endpoints, so many paths share the optimal cost and the ``(f, tie)``
+    heap order alone picks one. Native, packed and reference must pick the same."""
+
+    SEEDS = 150
+
+    def searches(self):
+        for seed in range(self.SEEDS):
+            rng = random.Random(7000 + seed)
+            grid, cells = random_grid(rng)
+            if seed % 3 == 0:  # an open grid: no obstacles, drills or owners
+                grid = RouteGrid(
+                    grid.nx * grid.pitch,
+                    grid.ny * grid.pitch,
+                    grid.pitch,
+                    layers=LAYERS[: rng.choice((1, 2, 4))],
+                )
+                cells = [
+                    Cell(la, i, j)
+                    for la in range(grid.nlayers)
+                    for i in range(grid.nx)
+                    for j in range(grid.ny)
+                ]
+            nx, ny = grid.nx, grid.ny
+            for _ in range(3):
+                args = random_search(rng, grid, cells)
+                mode = rng.randrange(3)
+                if mode == 0:  # every price 1.0
+                    args.update(occ={}, history={}, soft=None, pres_fac=0.0)
+                elif mode == 1:  # few distinct prices
+                    args.update(
+                        occ={c: rng.randrange(2) for c in rng.sample(cells, len(cells) // 5)},
+                        history={
+                            c: rng.choice((0.5, 1.0)) for c in rng.sample(cells, len(cells) // 6)
+                        },
+                        soft=None,
+                        pres_fac=1.0,
+                    )
+                else:  # mirror-symmetric endpoints on a uniform grid
+                    layer = rng.randrange(grid.nlayers)
+                    j = rng.randrange(ny)
+                    args.update(
+                        occ={},
+                        history={},
+                        soft=None,
+                        pres_fac=0.0,
+                        blocked=None,
+                        sources={Cell(layer, nx // 2, j)},
+                        targets={Cell(layer, 0, ny - 1 - j), Cell(layer, nx - 1, ny - 1 - j)},
+                    )
+                args["via_cost"] = float(rng.choice((0, 1, 2, 3)))
+                yield seed, grid, args
+
+    def test_native_and_packed_equal_reference_at_ties(self):
+        kernel = native_kernel(self)
+        compared = 0
+        for seed, grid, args in self.searches():
+            with self.subTest(seed=seed):
+                expected = reference(grid, args)
+                with patch.dict(os.environ, {"PNR_MAZE_KERNEL": "packed"}):
+                    self.assertEqual(packed(grid, args), expected)
+                with patch.object(native_maze, "load", return_value=kernel), patch.dict(
+                    os.environ, {"PNR_MAZE_KERNEL": "native"}
+                ):
+                    self.assertEqual(packed(grid, args), expected)
+                compared += expected is not None
+        self.assertGreater(compared, self.SEEDS)  # most searches find a path
+
+
+class DefaultKernelTest(unittest.TestCase):
+    """The default kernel (pnr/route/detail/kernels.py) and the loader's refusals."""
+
+    def setUp(self):
+        native_maze.reset()
+        self.addCleanup(native_maze.reset)
+
+    def test_default_is_native_and_env_overrides(self):
+        from pnr.route.detail.kernels import DEFAULT_MAZE_KERNEL
+        from pnr.route.detail.maze import maze_kernel
+
+        environ = {
+            k: v for k, v in os.environ.items() if k not in ("PNR_MAZE_KERNEL", "PNR_PACKED_MAZE")
+        }
+        with patch.dict(os.environ, environ, clear=True):
+            self.assertEqual(DEFAULT_MAZE_KERNEL, "native")
+            self.assertEqual(maze_kernel(), "native")
+            for kernel in ("packed", "native", "reference"):
+                with patch.dict(os.environ, {"PNR_MAZE_KERNEL": kernel}):
+                    self.assertEqual(maze_kernel(), kernel)
+            with patch.dict(os.environ, {"PNR_PACKED_MAZE": "0"}):
+                self.assertEqual(maze_kernel(), "reference")
+
+    def test_default_without_library_routes_packed_quietly(self):
+        import io
+
+        environ = {
+            k: v for k, v in os.environ.items() if k not in ("PNR_MAZE_KERNEL", "PNR_PACKED_MAZE")
+        }
+        err = io.StringIO()
+        with patch.dict(os.environ, environ, clear=True), patch.object(
+            native_maze, "_candidates", return_value=iter(())
+        ), patch("sys.stderr", err):
+            self.assertIsNone(native_maze.active())
+            self.assertEqual(native_maze.status()["kernel"], "packed")
+            grid = RouteGrid(5, 5, 1)
+            self.assertIsNotNone(
+                astar(grid, {Cell(0, 0, 0)}, {Cell(0, 4, 4)}, "N", {}, {}, 3.0, 0.5)
+            )
+        self.assertEqual(err.getvalue(), "")
+
+    def test_stale_library_is_refused(self):
+        kernel = native_kernel(self)
+        self.assertEqual(kernel.src_sha, native_maze.source_sha256())
+        self.assertIsNone(native_maze.fp_check(kernel.lib))
+        with patch.object(native_maze, "source_sha256", return_value="0" * 64):
+            with self.assertRaisesRegex(OSError, "stale"):
+                native_maze.NativeKernel(kernel.lib, kernel.path)
 
 
 class RouteParityTest(unittest.TestCase):
@@ -536,7 +659,7 @@ class GridModelGuardTest(unittest.TestCase):
 
         with patch.object(dense_maze, "_WARNED", set()), patch.dict(os.environ):
             os.environ.pop("PNR_PACKED_MAZE", None)
-            os.environ.pop("PNR_MAZE_KERNEL", None)
+            os.environ["PNR_MAZE_KERNEL"] = "packed"
             self.assertEqual(native_maze.status(), dict(kernel="packed", reason=""))
             grid = RouteGrid(4, 4, 1)
             grid.via_model = {"spans": [(0, 1)]}

@@ -1,0 +1,8 @@
+[project]
+name = "energy-track-optimizer-prototype"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["shapely==2.1.2"]
+
+[tool.black]
+line-length = 100

@@ -695,9 +695,94 @@ def area_metrics(graph, width, height, items=None) -> dict:
     )
 
 
+def plane_blocked(graph, tracks, vias, rules) -> int:
+    """SMD pads of a ``plane_layer`` net (the legacy plane path, whose pads writeback drops
+    to the plane after routing) with no clear dog-bone site: a via ring around the pad
+    (16 directions, writeback's base distance plus up to 1.5 mm) clear of other nets'
+    tracks, vias and pads, its stub clear of other nets' surface copper. Compaction may
+    not raise this count: a router that leaves a plane pad no room is a native open."""
+    plane = {
+        n
+        for nc in rules.get("net_classes") or []
+        if isinstance(nc, dict) and nc.get("plane_layer")
+        for n in nc.get("nets") or []
+    }
+    if not plane:
+        return 0
+    from pnr.place.geometry import pad_rects
+
+    fab = rules.get("fab") or {}
+    via_r = float(fab.get("via_diameter_mm", 0.6)) / 2.0
+    clr = max(0.2, float(fab.get("clearance_mm", 0.2)))
+    stub = float(fab.get("track_width_mm", 0.25)) / 2.0
+    seg = np.array(
+        [(a[0], a[1], b[0], b[1], w / 2.0) for _n, _la, a, b, w in tracks], dtype=np.float64
+    ).reshape(-1, 5)
+    seg_net = np.array([t[0] for t in tracks], dtype=object)
+    seg_layer = np.array([t[1] for t in tracks], dtype=object)
+    via = np.array([(v[1], v[2]) for v in vias], dtype=np.float64).reshape(-1, 2)
+    via_net = np.array([v[0] for v in vias], dtype=object)
+    pads = []  # (net, rect, side, smd)
+    for c in graph.components:
+        for (_name, net, r), pad in zip(pad_rects(c), c.pads):
+            pads.append((net, r, c.side, not pad.through_hole))
+
+    def seg_dist(px, py, k):
+        x0, y0, x1, y1 = seg[k, 0], seg[k, 1], seg[k, 2], seg[k, 3]
+        dx, dy = x1 - x0, y1 - y0
+        L2 = dx * dx + dy * dy
+        safe = np.where(L2 > 0, L2, 1.0)
+        t = np.clip(np.where(L2 > 0, ((px - x0) * dx + (py - y0) * dy) / safe, 0.0), 0.0, 1.0)
+        return np.hypot(px - (x0 + t * dx), py - (y0 + t * dy))
+
+    def rect_dist(px, py, r):
+        return math.hypot(max(r.left - px, 0.0, px - r.right), max(r.bottom - py, 0.0, py - r.top))
+
+    def clear(px, py, net, side, mids):
+        idx = np.nonzero(seg_net != net)[0]
+        if len(idx) and np.any(seg_dist(px, py, idx) < via_r + clr + seg[idx, 4] - 1e-9):
+            return False
+        vi = np.nonzero(via_net != net)[0]
+        if len(vi) and np.any(np.hypot(via[vi, 0] - px, via[vi, 1] - py) < 2 * via_r + clr):
+            return False
+        if any(n2 != net and rect_dist(px, py, r2) < via_r + clr for n2, r2, _s, _m in pads):
+            return False
+        surface = "F.Cu" if side == "top" else "B.Cu"
+        si = np.nonzero((seg_net != net) & (seg_layer == surface))[0]
+        for mx, my in mids:
+            if len(si) and np.any(seg_dist(mx, my, si) < stub + clr + seg[si, 4] - 1e-9):
+                return False
+            if any(
+                n2 != net and s2 == side and rect_dist(mx, my, r2) < stub + clr
+                for n2, r2, s2, _m in pads
+            ):
+                return False
+        return True
+
+    blocked = 0
+    for net, r, side, smd in pads:
+        if net not in plane or not smd:
+            continue
+        base = math.hypot(r.w, r.h) / 2.0 + via_r + clr
+        ok = False
+        for k in range(7):
+            for a in range(16):
+                th = 2 * math.pi * a / 16
+                dist = base + 0.25 * k
+                px, py = r.cx + dist * math.cos(th), r.cy + dist * math.sin(th)
+                mids = [(r.cx + (px - r.cx) * f, r.cy + (py - r.cy) * f) for f in (0.5, 0.8)]
+                if clear(px, py, net, side, mids):
+                    ok = True
+                    break
+            if ok:
+                break
+        blocked += 0 if ok else 1
+    return blocked
+
+
 def not_worse(base: dict, new: dict, settings: Settings) -> Tuple[bool, str]:
     """``new`` route metrics against ``base``: completion first, then vias and copper."""
-    for key in ("missing", "unresolved", "unmatched"):
+    for key in ("missing", "unresolved", "unmatched", "plane_blocked"):
         if new.get(key, 0) > base.get(key, 0):
             return False, "%s %s > %s" % (key, new.get(key, 0), base.get(key, 0))
     via_tol = max(settings.via_tol, int(0.05 * base.get("vias", 0)))
@@ -942,11 +1027,18 @@ def flat_pass(placed, route, constraints, rules, *, pitch, iters, outline):
             data=dict(phase="route-compact %s (flat)" % "xy"[axis], **stats),
         )
 
+    graphs = {id(route): placed}  # id(route) -> its placed graph (the plane-pad check)
+
     def reroute(candidate, axis):
         with trace.suspended():  # the flat trace's rounds stay as they were
-            return candidate, route_board(
-                candidate, constraints, rules, pitch=pitch, max_iters=iters
-            )
+            out = route_board(candidate, constraints, rules, pitch=pitch, max_iters=iters)
+        graphs[id(out)] = candidate
+        return candidate, out
+
+    def metrics_of(r):
+        m = route_summary(r)
+        m["plane_blocked"] = plane_blocked(graphs[id(r)], r.tracks, r.vias, rules)
+        return m
 
     return guarded(
         "flat",
@@ -958,7 +1050,7 @@ def flat_pass(placed, route, constraints, rules, *, pitch, iters, outline):
             items_of=lambda p: graph_items(p, constraints),
             copper_of=lambda r: Copper.from_routes(r.tracks, r.vias, via_d, clearance),
             reroute=reroute,
-            metrics_of=route_summary,
+            metrics_of=metrics_of,
             min_gap=float(constraints.board.default_clearance_mm),
             outline=outline,
             label="flat",

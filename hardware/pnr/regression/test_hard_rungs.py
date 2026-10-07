@@ -600,6 +600,11 @@ class HardRungContract(unittest.TestCase):
         (quality,) = [c for c in pour["checks"] if c["kind"] == "plane_quality"]
         self.assertEqual((quality["layer"], quality["candidates"]), ("F.Cu", entry["nets"]))
         self.assertTrue(quality["lands"])
+        # The check is scoped to the pour's own region: a GND or VIN pad elsewhere on
+        # the board (the FB divider, PG pull-up, J1/J2) reaches its net by some other
+        # path and is not this zone's to answer for (regression: it was judged
+        # unreached, failing every outer-pour board).
+        self.assertEqual(quality["region"], entry["region"])
 
     def test_every_partitioned_layer_is_judged_for_sense(self):
         for spec in self.rungs:

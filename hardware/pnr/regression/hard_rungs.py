@@ -1782,9 +1782,14 @@ RAIL_CAPS = {"C1": "VDD", "C2": "VDD", "C3": "VDD", "C4": "VDD", "C5": "VDDA", "
 RAIL_FILL_CANDIDATES = ["GND"]
 
 
-def plane_quality_check(layer, candidates, currents=None, min_width_mm=1.0, lands=False):
+def plane_quality_check(
+    layer, candidates, currents=None, min_width_mm=1.0, lands=False, region=None
+):
     """The ``plane_quality`` check of a partitioned layer (check_constraints.py,
-    pnr.plane_quality.judge): its regions make sense."""
+    pnr.plane_quality.judge): its regions make sense. ``region`` (an outer pour's
+    ``plane_partition`` entry's own ``region``) scopes reachability to it: a pad or
+    via elsewhere on the board reaches the net by some other path (a different
+    region, a via straight to an inner plane) and is not this zone's to answer for."""
     out = dict(
         id="plane-quality-" + layer.split(".")[0],
         kind="plane_quality",
@@ -1796,6 +1801,8 @@ def plane_quality_check(layer, candidates, currents=None, min_width_mm=1.0, land
     )
     if lands:
         out["lands"] = True
+    if region:
+        out["region"] = region
     return out
 
 
@@ -2007,11 +2014,12 @@ def buck_pour_rung(spec):
     """``spec`` (the four-layer buck stage) with its outer pours."""
     spec = deepcopy(spec)
     cons = spec["constraints"]
+    region = dict(refs=["U1", "L1", "C1"], margin_mm=0.6)
     cons["plane_partition"] = [
         dict(
             layer="F.Cu",
             nets=["VIN", "SW", "GND"],
-            region=dict(refs=["U1", "L1", "C1"], margin_mm=0.6),
+            region=region,
             terminals="pad",
             connect="solid",
             stitch_vias=3,
@@ -2020,7 +2028,7 @@ def buck_pour_rung(spec):
         )
     ]
     spec["checks"] = list(spec.get("checks") or []) + [
-        plane_quality_check("F.Cu", ["VIN", "SW", "GND"], None, 0.25, lands=True)
+        plane_quality_check("F.Cu", ["VIN", "SW", "GND"], None, 0.25, lands=True, region=region)
     ]
     spec["name"] += "-pour"
     spec["dims"]["parts"] = "pour"

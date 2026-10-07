@@ -739,12 +739,55 @@ def check_rail_zones(b, c):
     )
 
 
+def region_box(b, region):
+    """``region`` (:func:`pnr.plane_partition.region_polygon`'s ``{refs, margin_mm}``,
+    or a point list) as an (x0, y0, x1, y1) box in :func:`plane_layer_geometry`'s own
+    frame (raw board mm, the same one its zones and terminals are read in -- not
+    ``Board.courtyard``'s shifted, y-flipped engine frame): the scope an outer pour's
+    zone is meant to serve. A pad or via outside it reaches the net by some other path
+    (a different region, a via straight to an inner plane) and is not a terminal of
+    this zone at all, so :func:`plane_layer_geometry` leaves it out rather than judge
+    it unreached."""
+    if isinstance(region, dict):
+        boxes = []
+        for ref in region["refs"]:
+            fp = b.fps.get(ref)
+            if fp is None:
+                continue
+            layer = pcbnew.B_CrtYd if fp.IsFlipped() else pcbnew.F_CrtYd
+            box = None
+            try:
+                poly = fp.GetCourtyard(layer)
+                if poly.OutlineCount():
+                    box = poly.BBox()
+            except Exception:  # pragma: no cover - version shim
+                box = None
+            if box is None:
+                box = fp.GetBoundingBox(False)
+            boxes.append(
+                (mm(box.GetLeft()), mm(box.GetTop()), mm(box.GetRight()), mm(box.GetBottom()))
+            )
+        if not boxes:
+            return None
+        m = float(region.get("margin_mm", 0.0) or 0.0)
+        x0 = min(bx[0] for bx in boxes) - m
+        y0 = min(bx[1] for bx in boxes) - m
+        x1 = max(bx[2] for bx in boxes) + m
+        y1 = max(bx[3] for bx in boxes) + m
+        return (x0, y0, x1, y1)
+    xs = [p[0] for p in region]
+    ys = [p[1] for p in region]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
 def plane_layer_geometry(b, c):
     """What :func:`pnr.plane_quality.judge` reads off the board for ``c["layer"]``:
     each zone net's filled pieces (outline then holes, mm), each net's terminals on
     the layer (its vias and through-hole pads; with ``lands`` its surface pads there
-    too) and, for a net that is not a candidate, the other copper layers it covers
-    with at least half the board's area (its dedicated planes)."""
+    too; with ``region`` only those inside it, :func:`region_box`: an outer pour never
+    answers for a pad it was never asked to reach) and, for a net that is not a
+    candidate, the other copper layers it covers with at least half the board's area
+    (its dedicated planes)."""
     board = b.board
     _filled(board)
     lid = board.GetLayerID(c["layer"])
@@ -778,6 +821,14 @@ def plane_layer_geometry(b, c):
                 terms.setdefault(pad.GetNetname(), []).append(
                     (mm(p.x), mm(p.y), max(mm(size.x), mm(size.y)) / 2)
                 )
+    if c.get("region"):
+        box = region_box(b, c["region"])
+        if box is not None:
+            x0, y0, x1, y1 = box
+            terms = {
+                n: [t for t in pts if x0 <= t[0] <= x1 and y0 <= t[1] <= y1]
+                for n, pts in terms.items()
+            }
     area_board = b.w * b.h
     elsewhere = {}
     for net in set(zones) - set(c["candidates"]):

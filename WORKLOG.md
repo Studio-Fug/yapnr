@@ -305,12 +305,12 @@ board edges, the hierarchical ladder driver and their animations on
 14. Owner, fab and ordering (design §12): decisions D1 to D5. For the first OSH Park order, route
     the board under an OSH Park profile, run `yapnr order stage BOARD --vendor oshpark`, drop the
     zip on oshpark.com, check the preview and pay there; RF boards also pin `--stackup` (D4).
-15. Owner decision (2026-10-06, `docs/decisions.md`): not yet. The gate was "flip to
-    `--fab-profile jlc-pofv` only when all 21 of `20261006-ladder-b0ec34`'s jlc-pofv failures
-    pass on `claude/defaults-rails-fab`"; campaign `20261007-ladder-7fe33f` got 20 of 21 (the
-    remaining one, `11-ufbga201-fanout-6L-SGSGPS-rails` seed 0, is rail-allocation territory,
-    not fab-profile, and `legacy` fails it on both seeds). Stays `legacy` default until that
-    cell passes or the gate is revisited; see `docs/regression-ladder.md`.
+15. Owner decision (2026-10-07, `docs/decisions.md`): the `jlc-pofv` default flip. All 21 of
+    `20261006-ladder-b0ec34`'s jlc-pofv failures pass on `claude/rails-settle` (the `-rails`
+    cell was a plane-partition bug, fixed there), and the 45 gated cells pass 90 of 90 under
+    `jlc-pofv` (88 under `legacy`), but the manual target rungs leave more open under it
+    (`11-shove-channel-lm-14` 3 vs 2, `12-soc-bga-113` 51 vs 33 and 35 and one 3600 s
+    timeout). Stays `legacy` until the owner says whether those count for "no rung worse".
 16. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
 17. Showcases (`claude/animations-groups-hier`): the first nightly showcase step on the arm64

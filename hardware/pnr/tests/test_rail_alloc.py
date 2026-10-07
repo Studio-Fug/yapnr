@@ -18,7 +18,15 @@ from pnr import rail_alloc
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.plane_partition import for_route
 from pnr.power_spec import parse_partition
-from pnr.rail_alloc import Choice, choices, hard_reason, routed_rules, trace_estimate, with_fills
+from pnr.rail_alloc import (
+    Choice,
+    choices,
+    hard_reason,
+    pick_finalists,
+    routed_rules,
+    trace_estimate,
+    with_fills,
+)
 from pnr.route.detail.grid import RouteGrid
 
 W, H = 24.0, 20.0
@@ -223,10 +231,11 @@ class SearchTest(unittest.TestCase):
     def test_the_decision_is_held_for_later_routes_of_the_design(self):
         rail_alloc._MEMO.clear()
         g, rules = n0001(), rules_of()
-        first = FakeRouter()
-        rail_alloc.route(g, None, rules, {}, first)
-        again = FakeRouter()
-        board_ = rail_alloc.route(g, None, rules, {}, again)
+        with mock.patch.dict(os.environ, {"PNR_RAIL_ALLOC": "search"}):
+            first = FakeRouter()
+            rail_alloc.route(g, None, rules, {}, first)
+            again = FakeRouter()
+            board_ = rail_alloc.route(g, None, rules, {}, again)
         self.assertEqual(again.calls, ["route"])
         report = board_.escape_diagnostics["rail_allocation"]
         self.assertTrue(report["held"])
@@ -336,6 +345,168 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(with_fills(rules, alloc)["plane_partition"][0]["fill"], "VDD")
         self.assertIsNone(rules["plane_partition"][0].get("fill"))
         self.assertIs(with_fills(rules, dict(decisions={}, fills={})), rules)
+
+
+def _row(layer, plane, trace, fill, score, net="X"):
+    return (score, Choice(layer, plane, trace, fill), dict(choice="%s:%s" % (plane, trace)))
+
+
+class PickFinalistsTest(unittest.TestCase):
+    """:func:`pick_finalists` (review, 2026-10-06: the top-k-per-layer slice taken
+    before the distinct-split pass let several leftovers of one split fill every
+    slot, so a different split never got routed even when it screened only a
+    little worse)."""
+
+    def test_a_splits_leftovers_do_not_crowd_out_a_different_split(self):
+        # One layer, one split (plane A) scored by three leftover variants that all
+        # beat the only row of a second split (plane B). A per-layer top-3 slice
+        # would have picked all three leftovers of the A split and never B's; the
+        # fix must still route B.
+        rows = [
+            _row("L", ("A",), ("B",), "A", 1.0),
+            _row("L", ("A",), ("B",), None, 1.1),
+            _row("L", ("A",), ("B",), "B", 1.2),
+            _row("L", ("B",), ("A",), "B", 1.3),
+        ]
+        picked = pick_finalists({"L": rows}, k=3)
+        splits = {(c[0].layer, c[0].plane, c[0].trace) for _s, c in picked}
+        self.assertEqual(len(picked), 3)
+        self.assertIn(("L", ("B",), ("A",)), splits)  # the only row of the B split
+        self.assertEqual(len(splits), 2)  # just the two splits that exist
+
+    def test_every_candidate_combination_of_two_layers_is_considered(self):
+        # Two layers, each with two distinct splits: the cheapest combined pick must
+        # cross both layers (not stop at one layer's own best row), and the two
+        # picked combos must be the two cheapest *distinct* cross-layer combinations.
+        la = [
+            _row("A", ("P",), ("Q",), "P", 1.0),
+            _row("A", ("Q",), ("P",), "Q", 5.0),
+        ]
+        lb = [
+            _row("B", ("R",), ("S",), "R", 0.0),
+            _row("B", ("S",), ("R",), "S", 2.0),
+        ]
+        picked = pick_finalists({"A": la, "B": lb}, k=2)
+        self.assertEqual(len(picked), 2)
+        self.assertEqual(picked[0][0], 1.0)  # A's best (1.0) + B's best (0.0)
+        self.assertEqual(picked[1][0], 3.0)  # the next cheapest combination, not a repeat
+        combos = [tuple(c.key() for c in combo) for _s, combo in picked]
+        self.assertEqual(len(combos), len(set(combos)))
+
+    def test_bounded_by_k_and_deterministic(self):
+        rows = [_row("L", ("A",), ("B",), "A", float(i)) for i in range(5)]
+        for _ in range(3):
+            picked = pick_finalists({"L": rows}, k=2)
+            self.assertEqual(len(picked), 2)
+            self.assertEqual(picked[0][0], 0.0)
+
+    def test_too_many_combinations_raise_rather_than_hang(self):
+        many = {"L%d" % i: [_row("L%d" % i, ("A",), ("B",), "A", 0.0)] * 50 for i in range(4)}
+        with mock.patch.object(rail_alloc, "MAX_COMBOS", 1000):
+            with self.assertRaises(ValueError):
+                pick_finalists(many, k=3)
+
+
+class RankingTest(unittest.TestCase):
+    """The routed finalists' order: :func:`_rank` picks by what is actually routed
+    (``total_mm`` on each finalist's own board, at its full resolution), not by the
+    cheap probe's coarser guess (``screen_mm``, kept on the row only to report, never
+    compared) -- so a finalist the screen liked less can still win once it is really
+    routed (review, 2026-10-06: a test that the screen's own order never changed
+    across 4 measured seeds was missing). A partition that fails the judge's own
+    sense checks must never win on copper alone, whatever the screen said either."""
+
+    def _row(self, choice="x", screen_mm=None, **over):
+        m = dict(
+            missing_connections=0,
+            unresolved=0,
+            length_unmatched=0,
+            copper_mm=100.0,
+            vias=10,
+            copper_vias_mm=110.0,
+            partition_mm=0.0,
+            sense_fails=0,
+            total_mm=110.0,
+        )
+        m.update(over)
+        row = dict(choice=choice, routed=m)
+        if screen_mm is not None:
+            row["screen_mm"] = screen_mm
+        return row
+
+    def test_a_finalist_the_screen_liked_less_can_still_win(self):
+        # The probe's coarse raster scored "a" cheaper than "b". Routed at full
+        # resolution, "a" needed more copper and vias than the probe guessed, and
+        # "b" needed less: the real total_mm swaps the order the screen predicted.
+        a = self._row("a", screen_mm=100.0, copper_mm=130.0, vias=14, total_mm=144.0)
+        b = self._row("b", screen_mm=120.0, copper_mm=110.0, vias=11, total_mm=121.0)
+        self.assertLess(a["screen_mm"], b["screen_mm"])  # the screen preferred a
+        winner = min((a, b), key=rail_alloc._rank)
+        self.assertEqual(winner["choice"], "b")  # routing it overturned that
+
+    def test_a_partition_that_fails_the_judge_never_wins_on_copper_alone(self):
+        cheap_but_nonsense = self._row(copper_mm=50.0, vias=1, copper_vias_mm=51.0, sense_fails=1)
+        pricier_but_sensible = self._row(copper_mm=90.0, vias=5, copper_vias_mm=95.0, sense_fails=0)
+        self.assertLess(
+            rail_alloc._rank(pricier_but_sensible), rail_alloc._rank(cheap_but_nonsense)
+        )
+
+    def test_missing_connections_still_outrank_everything(self):
+        incomplete = self._row(missing_connections=1, copper_mm=10.0, copper_vias_mm=11.0)
+        complete = self._row(copper_mm=500.0, vias=90, copper_vias_mm=590.0)
+        self.assertLess(rail_alloc._rank(complete), rail_alloc._rank(incomplete))
+
+
+class ModeTest(unittest.TestCase):
+    def test_default_off(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("PNR_RAIL_ALLOC", None)
+            self.assertEqual(rail_alloc.mode(), "static")
+
+    def test_search_opts_in(self):
+        with mock.patch.dict(os.environ, {"PNR_RAIL_ALLOC": "search"}):
+            self.assertEqual(rail_alloc.mode(), "search")
+
+
+class EnumerationCapTest(unittest.TestCase):
+    def test_too_many_open_candidates_force_a_spec_decision(self):
+        many = ["R%d" % i for i in range(rail_alloc.MAX_OPEN + 1)]
+        with self.assertRaises(ValueError) as err:
+            choices(dict(ENTRY, nets=many), many)
+        self.assertIn("must_plane", str(err.exception))
+
+
+class MemoPlacementTest(unittest.TestCase):
+    """The decision is held across P/R rounds of the identical placement and fanout
+    (review, 2026-10-06: the memo key left out both, so it could not tell a later
+    round's placement apart from the first's)."""
+
+    def test_a_different_placement_is_decided_afresh(self):
+        rail_alloc._MEMO.clear()
+        g, rules = n0001(), rules_of()
+        with mock.patch.dict(os.environ, {"PNR_RAIL_ALLOC": "search"}):
+            first = FakeRouter()
+            rail_alloc.route(g, None, rules, {}, first)
+            g2 = n0001()
+            # Move VBAT's ball far from its header: a materially different placement
+            # of the identical design (same nets, same candidates).
+            for c in g2.components:
+                if c.ref == "B1":
+                    c.pos = (21.5, 17.5)
+            second = FakeRouter()
+            rail_alloc.route(g2, None, rules, {}, second)
+        self.assertIn("route", second.calls)
+        self.assertGreater(second.calls.count("route"), 1)  # not just the one held call
+
+    def test_the_identical_placement_is_held(self):
+        rail_alloc._MEMO.clear()
+        g, rules = n0001(), rules_of()
+        with mock.patch.dict(os.environ, {"PNR_RAIL_ALLOC": "search"}):
+            first = FakeRouter()
+            rail_alloc.route(g, None, rules, {}, first)
+            again = FakeRouter()
+            rail_alloc.route(g, None, rules, {}, again)
+        self.assertEqual(again.calls, ["route"])
 
 
 if __name__ == "__main__":

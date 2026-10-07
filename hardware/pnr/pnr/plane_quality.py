@@ -47,8 +47,10 @@ The limits (``LIMITS``) were derived from measured layouts: the ladder's partiti
 rungs whose layouts are good (``11-buck-vqfnhr-4L-SGPS-pour``, every seed; the
 ``-rails`` rung under the allocation search) against the one an owner review found
 nonsense (the ``-rails`` rung's In4 split into VDD, VDDA and VBAT with a GND fill,
-2026-10-06): each limit sits at about twice the worst good value and below the bad
-one. ``docs/plane-partition.md`` gives the table.
+2026-10-06): each limit sits above the worst good value measured and below the bad
+one, with the margin that leaves -- about 2x for ``area_ratio_max`` (3.24 measured),
+closer for ``detour_max`` (1.34 measured, the worse bad case 3.97). ``docs/plane-
+partition.md`` gives the table.
 """
 
 from __future__ import annotations
@@ -530,12 +532,15 @@ def judge(layer, *, h=0.2, limits=None):
     for n in nets:
         cells_of[n] = raster_polygons(layer["zones"][n], x0, y0, nx, ny, h)
         area[n] = len(cells_of[n]) * h * h
+    # The owner is the highest-current rail of every *candidate* (not only the ones
+    # with a zone here): a rail traced away keeps its claim on the layer, so a
+    # milliamp rail left holding it all is still judged a non-owner, not waved
+    # through as the owner by default.
     owner = None
-    if nets:
-        owner = max(
-            (n for n in nets if n in cand) or nets,
-            key=lambda n: (currents.get(n) or 0.0, area[n], n),
-        )
+    if cand:
+        owner = max(cand, key=lambda n: (currents.get(n) or 0.0, area.get(n, 0.0), n))
+    elif nets:
+        owner = max(nets, key=lambda n: (currents.get(n) or 0.0, area[n], n))
     failures = []
     rows = {}
     for n in nets:
@@ -552,6 +557,7 @@ def judge(layer, *, h=0.2, limits=None):
             continue
         terms = layer["terminals"].get(n) or []
         row["slivers"] = 0
+        matched = set()
         for piece in _components(cells_of[n]):
             if len(piece) * h * h < lim["piece_min_mm2"]:
                 row["slivers"] += 1
@@ -571,6 +577,7 @@ def judge(layer, *, h=0.2, limits=None):
                 )
                 if hit is not None:
                     mine.append(((x, y, r), hit))
+                    matched.add((x, y, r))
             parea = len(piece) * h * h
             pts = [(t[0], t[1]) for t, _ in mine]
             steiner = emst(pts)
@@ -603,6 +610,13 @@ def judge(layer, *, h=0.2, limits=None):
                     "%s: tree %.1f mm for %.1f mm of terminal MST (%.2fx > %.2fx)"
                     % (n, geo * h, steiner, detour, lim["detour_max"])
                 )
+        unreached = [t for t in terms if t not in matched]
+        if unreached:
+            row["unreached"] = len(unreached)
+            failures.append(
+                "%s: %d terminal(s) cannot reach the region (no via site, or walled off "
+                "by a neighbour's copper)" % (n, len(unreached))
+            )
         rows[n] = row
     measured = dict(nets=rows, owner=owner, failures=failures)
     return not failures, measured, dict(lim)

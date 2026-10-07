@@ -268,6 +268,46 @@ class JudgeTest(unittest.TestCase):
         for w in warnings(part.report["quality"], "In4.Cu"):
             self.assertEqual(set(w), {"code", "layer", "net", "value", "limit", "message"})
 
+    def test_the_owner_is_the_highest_current_candidate_even_when_traced(self):
+        # Review, 2026-10-06: the owner was picked only from the nets with a zone, so
+        # a traced high-current rail let a milliamp rail own the whole plane for free.
+        # VDD (0.15 A) is traced away (no zone here); VBAT (1 mA) holds everything.
+        vbat = [(5.0 + 2 * k, 10.0, 0.2) for k in range(8)]
+        layer = self.layer(
+            {"VBAT": [square(0.5, 0.5, 29.5, 19.5)]},
+            {"VBAT": vbat},
+            candidates=["VDD", "VBAT"],
+            currents={"VDD": 0.15, "VBAT": 0.001},
+        )
+        ok, measured, limits = judge(layer)
+        self.assertEqual(measured["owner"], "VDD")  # not VBAT, though only VBAT has copper
+        self.assertFalse(measured["nets"]["VBAT"]["owner"])
+        (piece,) = measured["nets"]["VBAT"]["pieces"]
+        self.assertGreater(piece["area_ratio"], limits["area_ratio_max"])
+        self.assertFalse(ok)
+
+    def test_a_terminal_with_no_copper_anywhere_in_its_zone_fails(self):
+        # A ball placed well outside the net's zone (no via site reached it at all):
+        # unlike test_a_pad_terminal_walled_in_by_foreign_copper_is_blocked, there is
+        # no foreign copper here either -- the terminal simply never got a piece.
+        zones = {"VDD": [square(0.5, 0.5, 14.5, 19.5)], "VBAT": [square(15.5, 0.5, 29.5, 19.5)]}
+        vdd = [
+            (5.0, 10.0, 0.2),
+            (10.0, 10.0, 0.2),
+            (25.0, 10.0, 0.2),
+        ]  # the third is on VBAT's side
+        ok, measured, _ = judge(self.layer(zones, {"VDD": vdd, "VBAT": [(20.0, 10.0, 0.2)]}))
+        self.assertFalse(ok)
+        self.assertEqual(measured["nets"]["VDD"]["unreached"], 1)
+        self.assertIn("cannot reach the region", " ".join(measured["failures"]))
+
+    def test_every_terminal_landing_in_its_zone_leaves_no_unreached(self):
+        vdd = [(10.0, 10.0, 0.2), (20.0, 10.0, 0.2)]
+        zones = {"VDD": [square(0.5, 0.5, 29.5, 19.5)]}
+        ok, measured, _ = judge(self.layer(zones, {"VDD": vdd}, candidates=["VDD"]))
+        self.assertTrue(ok, measured["failures"])
+        self.assertNotIn("unreached", measured["nets"]["VDD"])
+
 
 if __name__ == "__main__":
     unittest.main()

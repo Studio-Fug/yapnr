@@ -161,6 +161,14 @@ routes.update(
     getattr(route, "extras", dict)()
 )  # a declared fanout's via sizes and locked copper (pnr.fanout)
 (root / "routes.json").write_text(json.dumps(routes, indent=2))
+if getattr(route, "traced_rails", None):
+    # plane_partition candidates the allocation traced (pnr.rail_alloc): ordinary
+    # nets for writeback, the planes stage and the checks, as they were for routing
+    # (route_case.py's own rewrite; this driver writes rules.json too, earlier).
+    from pnr.rail_alloc import routed_rules
+
+    rules = routed_rules(rules, route.traced_rails)
+    (root / "rules.json").write_text(json.dumps(rules, indent=2))
 status = json.loads((out / "status.json").read_text())
 legal = [r for r in placed.values() if r.get("status") == "legal"]
 summary = dict(

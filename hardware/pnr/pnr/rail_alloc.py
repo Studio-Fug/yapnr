@@ -27,17 +27,30 @@ engine makes decisions -- by enumerating, screening and routing:
    plane rail's drop vias, and the static rule of thumb (:func:`pnr.plane_partition.
    _rail_decision`: a declared budget, 10 mA, 6 terminals) as a small prior only.
 4. **Route the finalists.** The best ``FINALISTS`` (3; ``PNR_RAIL_FINALISTS``)
-   alternatives, each plane / trace split's best first, are each routed by the real
-   router on the same placement, and the one
-   with the fewest missing connections and unresolved nets, then the lowest copper
-   length plus vias plus partition penalty, wins (ties: the alternative's name).
+   alternatives are routed by the real router on the same placement: every distinct
+   plane / trace split's best-screened leftover first (a leftover variant of an
+   already-picked split would route the same signals), then the next best overall,
+   over *every* surviving alternative (not a per-layer top slice first, so a split
+   that only scores well once its leftover is right is not starved out before it is
+   compared). The winner is picked by the routed objective (:func:`_rank`): fewest
+   missing connections and unresolved nets; then whether its partition makes sense
+   (the same :func:`pnr.plane_quality.warnings` limits the judge enforces -- a
+   finalist that fails them never wins over one that passes, whatever its copper);
+   then the lower *routed* copper length plus vias plus partition penalty, each
+   measured on this finalist's own routed board rather than guessed at the probe's
+   coarser raster; the alternative's name breaks what is still tied.
 
 The decision is made on the first route of a board in a process (the initial pool's
-first finalist, or the first P/R round) and held for its later routes (other
-placements of the same design), so the placement search compares like with like and
-pays for the comparison once. ``PNR_RAIL_ALLOC=static`` restores the rule of thumb as
-the decision (the A/B arm). The report (``escape_diagnostics.rail_allocation``) names
-the chosen allocation and, per rail, the numbers that decided it.
+first finalist, or the first P/R round) and held for its later routes of the *same*
+placement and fanout (other P/R rounds of the same design), so the placement search
+compares like with like and pays for the comparison once; a different placement or
+fanout assignment is decided afresh. Default off (AGENTS.md): the static rule of
+thumb (:func:`pnr.plane_partition._rail_decision`) decides unless
+``PNR_RAIL_ALLOC=search`` opts in (``run.py --rail-alloc search``), which every A/B
+campaign and the hard-rung CI lane that exercises this rung pass explicitly.
+``PNR_RAIL_ALLOC=static`` is still accepted, to force the A/B arm when the default
+ever changes. The report (``escape_diagnostics.rail_allocation``) names the chosen
+allocation and, per rail, the numbers that decided it.
 """
 
 from __future__ import annotations
@@ -57,6 +70,11 @@ VIA_MM = 1.0  # a via costs this much track (the routed objective and the screen
 PRIOR_MM = 5.0  # per rail the static rule of thumb would decide otherwise
 TRACE_DETOUR = 1.2  # a trace's length over its terminals' spanning tree
 TRACE_DT_C = 10.0  # IPC-2221 temperature rise a traced rail's width must carry
+MAX_OPEN = 10  # a layer may leave at most this many candidates open to the search
+# (2**MAX_OPEN subsets, each times its fill options): force the rest with
+# must_plane/must_trace if a design needs more.
+MAX_COMBOS = 20000  # the cross product of every layer's screened alternatives is
+# scored (cheap: no routing); past this the spec should narrow the search instead.
 _MEMO: Dict[str, dict] = {}
 
 
@@ -79,7 +97,10 @@ class Choice:
 
 
 def mode() -> str:
-    value = os.environ.get("PNR_RAIL_ALLOC", "search")
+    # Default off (AGENTS.md): the static rule of thumb, unless PNR_RAIL_ALLOC=search
+    # opts in (run.py --rail-alloc search; every A/B campaign and the hard-rung CI lane
+    # that exercises this rung pass it explicitly).
+    value = os.environ.get("PNR_RAIL_ALLOC", "static")
     if value not in ("search", "static"):
         raise ValueError("PNR_RAIL_ALLOC is search or static, not %r" % value)
     return value
@@ -123,6 +144,11 @@ def choices(entry, cands: Sequence[str]) -> List[Choice]:
             % (layer, ", ".join(sorted(must_plane & must_trace)))
         )
     open_ = [n for n in cands if n not in must_plane | must_trace]
+    if len(open_) > MAX_OPEN:
+        raise ValueError(
+            "plane_partition %s: %d candidates open to the search (max %d); force some with "
+            "must_plane/must_trace" % (layer, len(open_), MAX_OPEN)
+        )
     extra = [n for n in entry.get("fill_candidates") or () if n not in cands]
     out, seen = [], set()
     for mask in range(1 << len(open_)):
@@ -443,16 +469,23 @@ def routed_rules(rules, traced):
 
 
 def _metrics(board, layers):
+    """``board``'s routed objective, and its plane_partition quality reports for
+    ``layers``. ``sense_fails`` counts the same warnings the ``plane_quality`` judge
+    would fail the board on (:func:`pnr.plane_quality.warnings`): the ranking gate
+    that keeps a nonsense partition from winning on copper alone (below)."""
     from pnr.place.initial_pool import _route_metrics
+    from pnr.plane_quality import warnings as pq_warnings
 
     m = _route_metrics(board)
     penalty = 0.0
+    fails = 0
     quality = {}
     for rep in (getattr(board, "escape_diagnostics", None) or {}).get("plane_partition") or ():
         if rep.get("layer") in layers and rep.get("quality"):
             penalty += rep["quality"]["penalty_mm"]
             quality[rep["layer"]] = rep["quality"]
-    total = m["copper_length_mm"] + VIA_MM * m["vias"] + penalty
+            fails += len(pq_warnings(rep["quality"], rep["layer"]))
+    copper_vias = m["copper_length_mm"] + VIA_MM * m["vias"]
     return (
         dict(
             missing_connections=m["missing_connections"],
@@ -460,19 +493,38 @@ def _metrics(board, layers):
             length_unmatched=m.get("length_unmatched", 0),
             vias=m["vias"],
             copper_mm=round(m["copper_length_mm"], 3),
+            copper_vias_mm=round(copper_vias, 3),
             partition_mm=round(penalty, 3),
-            total_mm=round(total, 3),
+            sense_fails=fails,
+            total_mm=round(copper_vias + penalty, 3),
         ),
         quality,
     )
 
 
 def _rank(row):
+    """The routed finalists' order: fewest missing connections and unresolved nets
+    first; then a partition that makes no sense (the same limits the ``plane_quality``
+    judge enforces) never wins over one that does, whatever its ``total_mm``; then the
+    *routed* objective (``total_mm``: real copper length plus vias plus the real
+    partition's quality penalty, all measured on this finalist's own routed board, at
+    its full resolution -- not the coarser probe :func:`screen` guessed at); the
+    alternative's name breaks what is still tied.
+
+    A plane and a trace are not otherwise comparable in copper alone: a filled zone
+    adds no track length or vias (``copper_vias_mm`` can read 0 for a plane that
+    nonetheless claims real board area), so ranking on copper and vias with the
+    partition penalty held outside the comparison -- rather than inside it, as
+    ``total_mm`` does -- would let every rail prefer a plane for the rest of the layer
+    for a false saving (verified: a synthetic case split this way). ``copper_vias_mm``
+    is still carried on the row (and in the finalist report) so the two components of
+    ``total_mm`` are visible next to each other, not folded away."""
     m = row["routed"]
     return (
         m["missing_connections"],
         m["unresolved"],
         m["length_unmatched"],
+        m["sense_fails"],
         m["total_mm"],
         row["choice"],
     )
@@ -480,6 +532,21 @@ def _rank(row):
 
 def _digest(payload) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _placement_fingerprint(graph, nets) -> List[tuple]:
+    """``[(ref, pad, x, y)]`` of every pad of ``nets`` (0.001 mm), so the allocation
+    memo (:func:`route`) tells one placement or fanout assignment of a board from
+    another: the decision is held only across routes of the identical one."""
+    from pnr.place.geometry import pad_rects
+
+    out = []
+    want = set(nets)
+    for comp in graph.components:
+        for name, n, r in pad_rects(comp):
+            if n in want:
+                out.append((comp.ref, name, round(r.cx, 3), round(r.cy, 3)))
+    return sorted(out)
 
 
 def route(graph, constraints, rules, kw, route_once):
@@ -506,12 +573,17 @@ def route(graph, constraints, rules, kw, route_once):
         board = route_once(graph, constraints, rules, **kw, allocation=alloc)
         _attach(board, dict(mode="search", chosen=[c.key() for c in combo], alternatives=1))
         return board
+    all_cands = sorted({n for _e, c in per_layer.values() for n in c})
     key = _digest(
         dict(
             entries=entries,
             candidates={k: v[1] for k, v in per_layer.items()},
             nets=sorted(n.name for n in graph.nets),
             finalists=finalists(),
+            # A different placement or fanout assignment is decided afresh (the
+            # module doc): held only across P/R rounds of the identical board.
+            placement=_placement_fingerprint(graph, all_cands),
+            fanouts=(rules or {}).get("fanouts"),
         )
     )
     held = _MEMO.get(key)
@@ -535,6 +607,43 @@ def _plain(alloc):
 def _attach(board, report):
     if board is not None:
         board.escape_diagnostics["rail_allocation"] = report
+
+
+def pick_finalists(screened: Dict[str, List[tuple]], k: int) -> List[Tuple[float, tuple]]:
+    """The ``k`` alternatives to route (the module doc's step 4): every combination of
+    each layer's *full* screened list (``screened[layer]``, ``[(score, Choice,
+    row), ...]``, already sorted lowest first), the best of each distinct plane /
+    trace split picked before a second alternative of a split already picked (a
+    different leftover of the same split routes the same signals), then whatever is
+    lowest-scored overall to fill any slots still open.
+
+    Scoring every layer's full list, not a per-layer top-``k`` slice, matters: when a
+    split's best-scoring row is a leftover variant rather than its very best screened
+    row, several of a layer's top rows can share one split (one leftover each),
+    leaving no room in a top-``k`` slice for a different, only slightly worse split --
+    which this pass would otherwise never see to pick."""
+    combos = []
+    for picks in itertools.product(*(rows for _l, rows in sorted(screened.items()))):
+        combos.append((sum(p[0] for p in picks), tuple(p[1] for p in picks)))
+        if len(combos) > MAX_COMBOS:
+            raise ValueError(
+                "plane_partition: %d+ allocation combinations (max %d); force some "
+                "candidates with must_plane/must_trace" % (len(combos), MAX_COMBOS)
+            )
+    combos.sort(key=lambda x: (x[0], tuple(c.key() for c in x[1])))
+    picked, splits = [], set()
+    for score, combo in combos:
+        split = tuple((c.layer, c.plane, c.trace) for c in combo)
+        if split not in splits and len(picked) < k:
+            splits.add(split)
+            picked.append((score, combo))
+    for item in combos:
+        if len(picked) >= k:
+            break
+        if item not in picked:
+            picked.append(item)
+    picked.sort(key=lambda x: (x[0], tuple(c.key() for c in x[1])))
+    return picked
 
 
 def decide(graph, constraints, rules, kw, route_once, stack, per_layer, options):
@@ -578,29 +687,10 @@ def decide(graph, constraints, rules, kw, route_once, stack, per_layer, options)
             )
         rows.sort(key=lambda r: (r[0], r[1].key()))
         screened[layer] = rows
-    k = finalists()
-    combos = []
-    for picks in itertools.product(*(rows[:k] for _l, rows in sorted(screened.items()))):
-        combos.append((sum(p[0] for p in picks), tuple(p[1] for p in picks)))
-    combos.sort(key=lambda x: (x[0], tuple(c.key() for c in x[1])))
+    picked = pick_finalists(screened, finalists())
     finals = []
     tried = []
     best = None
-    # The routed finalists: the best screened alternative of each distinct plane /
-    # trace split first (a leftover variant of a split the router already tries
-    # routes the same signals), then the next best.
-    picked, splits = [], set()
-    for score, combo in combos:
-        split = tuple((c.layer, c.plane, c.trace) for c in combo)
-        if split not in splits and len(picked) < k:
-            splits.add(split)
-            picked.append((score, combo))
-    for item in combos:
-        if len(picked) >= k:
-            break
-        if item not in picked:
-            picked.append(item)
-    picked.sort(key=lambda x: (x[0], tuple(c.key() for c in x[1])))
     for score, combo in picked:
         alloc = allocation_of(combo, " (routed finalist)")
         board = route_once(graph, constraints, rules, **kw, allocation=alloc)

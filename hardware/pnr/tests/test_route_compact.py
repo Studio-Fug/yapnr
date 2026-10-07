@@ -289,6 +289,53 @@ class DovetailTermTest(unittest.TestCase):
         self.assertEqual(tuple(run.ROUTE_COMPACT_PARTS), rc.PARTS)
 
 
+class PlaneGuardTest(unittest.TestCase):
+    """plane_blocked: a legacy plane pad needs writeback's dog-bone room (or a via on its
+    own net's copper)."""
+
+    RULES = dict(
+        net_classes=[dict(name="return", nets=["GND"], plane_layer="In1.Cu")],
+        fab=dict(
+            via_diameter_mm=0.6,
+            via_drill_mm=0.3,
+            clearance_mm=0.2,
+            hole_clearance_mm=0.25,
+            edge_clearance_mm=0.3,
+            track_width_mm=0.25,
+        ),
+    )
+
+    def board(self):
+        g = board([part("C1", 20, 20, nets=("VCC", "GND"))])
+        g.outline = __import__("pnr.graph", fromlist=["BoardOutline"]).BoardOutline(W, H)
+        return g
+
+    def ring(self, gap=1.2):
+        """VCC tracks boxing the GND pad (at x=20.5) in on every side."""
+        x0, x1, y0, y1 = 20.5 - gap, 20.5 + gap, 20 - gap, 20 + gap
+        return [
+            ["VCC", "F.Cu", (x0, y0), (x1, y0), 0.25],
+            ["VCC", "F.Cu", (x1, y0), (x1, y1), 0.25],
+            ["VCC", "F.Cu", (x1, y1), (x0, y1), 0.25],
+            ["VCC", "F.Cu", (x0, y1), (x0, y0), 0.25],
+        ]
+
+    def test_free_pad(self):
+        self.assertEqual(rc.plane_blocked(self.board(), [], [], self.RULES), 0)
+
+    def test_boxed_in_pad(self):
+        self.assertEqual(rc.plane_blocked(self.board(), self.ring(), [], self.RULES), 1)
+
+    def test_own_via_reaches_the_plane(self):
+        tracks = self.ring() + [["GND", "F.Cu", (20.5, 20.0), (20.9, 20.0), 0.25]]
+        vias = [["GND", 20.9, 20.0]]
+        self.assertEqual(rc.plane_blocked(self.board(), tracks, vias, self.RULES), 0)
+
+    def test_no_plane_class(self):
+        rules = dict(self.RULES, net_classes=[])
+        self.assertEqual(rc.plane_blocked(self.board(), self.ring(), [], rules), 0)
+
+
 class LoopTest(unittest.TestCase):
     def setUp(self):
         self.g = board([part("R1", 10, 20), part("R2", 40, 20)])

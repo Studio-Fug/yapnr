@@ -695,12 +695,43 @@ def area_metrics(graph, width, height, items=None) -> dict:
     )
 
 
-def plane_blocked(graph, tracks, vias, rules) -> int:
-    """SMD pads of a ``plane_layer`` net (the legacy plane path, whose pads writeback drops
-    to the plane after routing) with no clear dog-bone site: a via ring around the pad
-    (16 directions, writeback's base distance plus up to 1.5 mm) clear of other nets'
-    tracks, vias and pads, its stub clear of other nets' surface copper. Compaction may
-    not raise this count: a router that leaves a plane pad no room is a native open."""
+def _seg_seg(a0, a1, b0, b1):
+    """Distance between segments a0-a1 and b0-b1 (numpy arrays of shape (..., 2) for b)."""
+
+    def point_seg(p, q0, q1):
+        d = q1 - q0
+        L2 = (d * d).sum(-1)
+        safe = np.where(L2 > 0, L2, 1.0)
+        t = np.clip(np.where(L2 > 0, ((p - q0) * d).sum(-1) / safe, 0.0), 0.0, 1.0)
+        return np.hypot(*np.moveaxis(p - (q0 + t[..., None] * d), -1, 0))
+
+    a0, a1 = np.asarray(a0, dtype=float), np.asarray(a1, dtype=float)
+    out = np.minimum(
+        np.minimum(point_seg(a0, b0, b1), point_seg(a1, b0, b1)),
+        np.minimum(point_seg(b0, a0, a1), point_seg(b1, a0, a1)),
+    )
+
+    # proper crossings
+    def cross(o, p, q):
+        return (p[..., 0] - o[..., 0]) * (q[..., 1] - o[..., 1]) - (p[..., 1] - o[..., 1]) * (
+            q[..., 0] - o[..., 0]
+        )
+
+    a0b, a1b = np.broadcast_to(a0, b0.shape), np.broadcast_to(a1, b0.shape)
+    d1, d2 = cross(b0, b1, a0b), cross(b0, b1, a1b)
+    d3, d4 = cross(a0b, a1b, b0), cross(a0b, a1b, b1)
+    hit = (d1 * d2 < 0) & (d3 * d4 < 0)
+    return np.where(hit, 0.0, out)
+
+
+def plane_blocked(graph, tracks, vias, rules, outline=None) -> int:
+    """SMD pads of a ``plane_layer`` net (the legacy plane path: writeback drops them to the
+    plane after routing, ``pnr.writeback._dogbone_fanout_net``) with no clear dog-bone, by
+    writeback's own search: the via at the pad's half diagonal plus the via radius and the
+    clearance, plus 0 to 1.5 mm, outward from the part's centre and turned by 45 degree
+    steps, clear of other nets' tracks, vias and pads (its drill by the hole clearance) and
+    the board edge, its stub clear of other nets' copper on the pad's side. Compaction may
+    not raise this count: a plane pad the route leaves no room is a native open."""
     plane = {
         n
         for nc in rules.get("net_classes") or []
@@ -713,7 +744,10 @@ def plane_blocked(graph, tracks, vias, rules) -> int:
 
     fab = rules.get("fab") or {}
     via_r = float(fab.get("via_diameter_mm", 0.6)) / 2.0
+    drill = float(fab.get("via_drill_mm", 0.3))
     clr = max(0.2, float(fab.get("clearance_mm", 0.2)))
+    keep = max(via_r + clr, drill / 2.0 + float(fab.get("hole_clearance_mm", 0.25)))
+    edge = via_r + float(fab.get("edge_clearance_mm", 0.3))
     stub = float(fab.get("track_width_mm", 0.25)) / 2.0
     seg = np.array(
         [(a[0], a[1], b[0], b[1], w / 2.0) for _n, _la, a, b, w in tracks], dtype=np.float64
@@ -722,61 +756,139 @@ def plane_blocked(graph, tracks, vias, rules) -> int:
     seg_layer = np.array([t[1] for t in tracks], dtype=object)
     via = np.array([(v[1], v[2]) for v in vias], dtype=np.float64).reshape(-1, 2)
     via_net = np.array([v[0] for v in vias], dtype=object)
-    pads = []  # (net, rect, side, smd)
+    pads = []  # (net, rect, side, smd, ref, corner radius)
     for c in graph.components:
         for (_name, net, r), pad in zip(pad_rects(c), c.pads):
-            pads.append((net, r, c.side, not pad.through_hole))
+            corner = float(getattr(pad, "land_corner", 0.0) or 0.0) * min(r.w, r.h)
+            pads.append((net, r, c.side, not pad.through_hole, c.ref, corner))
+    width, height = outline or (getattr(graph.outline, "width", None), None)
+    if outline is None and graph.outline is not None:
+        width, height = graph.outline.width, graph.outline.height
 
-    def seg_dist(px, py, k):
-        x0, y0, x1, y1 = seg[k, 0], seg[k, 1], seg[k, 2], seg[k, 3]
-        dx, dy = x1 - x0, y1 - y0
-        L2 = dx * dx + dy * dy
-        safe = np.where(L2 > 0, L2, 1.0)
-        t = np.clip(np.where(L2 > 0, ((px - x0) * dx + (py - y0) * dy) / safe, 0.0), 0.0, 1.0)
-        return np.hypot(px - (x0 + t * dx), py - (y0 + t * dy))
+    def rect_seg(r, a, b, corner=0.0):
+        """Distance from segment a-b to the pad ``r`` (a rounded rectangle: KiCad's
+        roundrect lands, ``corner`` the radius)."""
+        if corner > 0:
+            from pnr.place.geometry import Rect
 
-    def rect_dist(px, py, r):
-        return math.hypot(max(r.left - px, 0.0, px - r.right), max(r.bottom - py, 0.0, py - r.top))
+            inner = Rect(r.cx, r.cy, max(r.w - 2 * corner, 0.0), max(r.h - 2 * corner, 0.0))
+            return max(0.0, rect_seg(inner, a, b) - corner)
+        corners = np.array(
+            [[r.left, r.bottom], [r.right, r.bottom], [r.right, r.top], [r.left, r.top]]
+        )
+        inside = lambda p: r.left <= p[0] <= r.right and r.bottom <= p[1] <= r.top  # noqa: E731
+        if inside(a) or inside(b):
+            return 0.0
+        return float(np.min(_seg_seg(a, b, corners, np.roll(corners, -1, axis=0))))
 
-    def clear(px, py, net, side, mids):
-        idx = np.nonzero(seg_net != net)[0]
-        if len(idx) and np.any(seg_dist(px, py, idx) < via_r + clr + seg[idx, 4] - 1e-9):
-            return False
-        vi = np.nonzero(via_net != net)[0]
-        if len(vi) and np.any(np.hypot(via[vi, 0] - px, via[vi, 1] - py) < 2 * via_r + clr):
-            return False
-        if any(n2 != net and rect_dist(px, py, r2) < via_r + clr for n2, r2, _s, _m in pads):
-            return False
-        surface = "F.Cu" if side == "top" else "B.Cu"
-        si = np.nonzero((seg_net != net) & (seg_layer == surface))[0]
-        for mx, my in mids:
-            if len(si) and np.any(seg_dist(mx, my, si) < stub + clr + seg[si, 4] - 1e-9):
+    def clear(net, side, point, target):
+        other = seg_net != net
+        if other.any():
+            k = np.nonzero(other)[0]
+            t = np.array(target, dtype=float)
+            d = _seg_seg(t, t, seg[k, 0:2], seg[k, 2:4])
+            if np.any(d < keep + seg[k, 4] - 1e-9):
                 return False
-            if any(
-                n2 != net and s2 == side and rect_dist(mx, my, r2) < stub + clr
-                for n2, r2, s2, _m in pads
-            ):
+            surface = "F.Cu" if side == "top" else "B.Cu"
+            k2 = np.nonzero(other & (seg_layer == surface))[0]
+            if len(k2):
+                d2 = _seg_seg(np.array(point), t, seg[k2, 0:2], seg[k2, 2:4])
+                if np.any(d2 < stub + clr + seg[k2, 4] - 1e-9):
+                    return False
+        vi = np.nonzero(via_net != net)[0]
+        if len(vi) and np.any(
+            np.hypot(via[vi, 0] - target[0], via[vi, 1] - target[1]) < keep + via_r - 1e-9
+        ):
+            return False
+        for n2, r2, s2, _smd2, _ref2, corner in pads:
+            if n2 == net:
+                continue
+            if rect_seg(r2, target, target, corner) < keep - 1e-9:
+                return False
+            if s2 == side and rect_seg(r2, point, target, corner) < stub + clr - 1e-9:
                 return False
         return True
 
-    blocked = 0
-    for net, r, side, smd in pads:
-        if net not in plane or not smd:
-            continue
+    def has_site(net, r, side, ref):
+        comp = graph.component(ref)
+        angle = math.atan2(r.cy - comp.pos[1], r.cx - comp.pos[0])
         base = math.hypot(r.w, r.h) / 2.0 + via_r + clr
-        ok = False
-        for k in range(7):
-            for a in range(16):
-                th = 2 * math.pi * a / 16
-                dist = base + 0.25 * k
-                px, py = r.cx + dist * math.cos(th), r.cy + dist * math.sin(th)
-                mids = [(r.cx + (px - r.cx) * f, r.cy + (py - r.cy) * f) for f in (0.5, 0.8)]
-                if clear(px, py, net, side, mids):
-                    ok = True
-                    break
-            if ok:
-                break
-        blocked += 0 if ok else 1
+        for extra in (0.0, 0.25, 0.5, 0.9, 1.5):
+            for delta in (0, 45, -45, 90, -90, 135, -135, 180):
+                th = angle + math.radians(delta)
+                x = r.cx + math.cos(th) * (base + extra)
+                y = r.cy + math.sin(th) * (base + extra)
+                if width and not (edge <= x <= width - edge and edge <= y <= height - edge):
+                    continue
+                if clear(net, side, (r.cx, r.cy), (x, y)):
+                    return True
+        return False
+
+    # A plane pad joined by its own net's routed copper to a via, a drilled pad or another
+    # plane pad with a site reaches the plane through it: count the joined groups.
+    blocked = 0
+    for net in sorted(plane):
+        mine = [k for k, p in enumerate(pads) if p[0] == net]
+        if not mine:
+            continue
+        nseg = np.nonzero(seg_net == net)[0]
+        nvia = np.nonzero(via_net == net)[0]
+        nodes = [("pad", k) for k in mine] + [("seg", k) for k in nseg] + [("via", k) for k in nvia]
+        parent = list(range(len(nodes)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        def touch(a, b):
+            (ka, ia), (kb, ib) = a, b
+            if ka == "pad" and kb == "pad":
+                ra, rb = pads[ia][1], pads[ib][1]
+                return not (
+                    ra.right < rb.left
+                    or rb.right < ra.left
+                    or ra.top < rb.bottom
+                    or rb.top < ra.bottom
+                )
+            if ka == "pad":
+                rr = pads[ia][1]
+                if kb == "seg":
+                    return rect_seg(rr, seg[ib, 0:2], seg[ib, 2:4]) <= seg[ib, 4] + 1e-6
+                return rect_seg(rr, via[ib], via[ib]) <= via_r + 1e-6
+            if kb == "pad":
+                return touch(b, a)
+            ea = (
+                (seg[ia, 0:2], seg[ia, 2:4], seg[ia, 4])
+                if ka == "seg"
+                else (via[ia], via[ia], via_r)
+            )
+            eb = (
+                (seg[ib, 0:2], seg[ib, 2:4], seg[ib, 4])
+                if kb == "seg"
+                else (via[ib], via[ib], via_r)
+            )
+            d = float(_seg_seg(ea[0], ea[1], eb[0][None, :], eb[1][None, :])[0])
+            return d <= ea[2] + eb[2] + 1e-6
+
+        for i in range(len(nodes)):
+            for j in range(i + 1, len(nodes)):
+                if find(i) != find(j) and touch(nodes[i], nodes[j]):
+                    parent[find(i)] = find(j)
+        groups = {}
+        for i, node in enumerate(nodes):
+            groups.setdefault(find(i), []).append(node)
+        for members in groups.values():
+            smd = [k for kind, k in members if kind == "pad" and pads[k][3]]
+            if not smd:
+                continue
+            if any(kind == "via" for kind, _k in members) or any(
+                kind == "pad" and not pads[k][3] for kind, k in members
+            ):
+                continue  # a via or a drilled pad of the group reaches the plane
+            if not any(has_site(net, pads[k][1], pads[k][2], pads[k][4]) for k in smd):
+                blocked += 1
     return blocked
 
 

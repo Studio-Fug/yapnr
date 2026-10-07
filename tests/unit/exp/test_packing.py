@@ -62,6 +62,18 @@ def task(case, seed=0, config="a", max_wall=900):
     }
 
 
+class FetchExcludeTest(unittest.TestCase):
+    def test_summaries_only_skips_nested_archives_under_match_and_search(self):
+        import re
+
+        from yapnr.exp import fetch
+
+        for path in ("ladder~a~s0/s1r0/result.tar.gz", "result.tar.gz"):
+            self.assertTrue(re.match(fetch.NOT_FULL, path))  # gcloud storage rsync
+            self.assertTrue(re.search(fetch.NOT_FULL, path))  # LocalStore
+        self.assertFalse(re.match(fetch.NOT_FULL, "ladder~a~s0/s1r0/record.json"))
+
+
 class PredictorTest(unittest.TestCase):
     def test_history_beats_the_calibration_and_the_kind_default(self):
         history = packing.ingest(

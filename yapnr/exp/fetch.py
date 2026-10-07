@@ -30,7 +30,9 @@ from yapnr.exp.backends.base import campaign_prefix, done_markers, task_key
 from yapnr.exp.config import Config
 from yapnr.exp.store import Store
 
-NOT_FULL = r"(^|/)result\.tar\.gz$"
+# `gcloud storage rsync --exclude` matches from the start of the relative path (re.match), so
+# the pattern spans the directories before the name; LocalStore's re.search agrees.
+NOT_FULL = r"(.*/)?result\.tar\.gz$"
 
 
 class FetchError(RuntimeError):

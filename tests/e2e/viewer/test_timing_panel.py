@@ -165,7 +165,11 @@ class TimingPanelTest(unittest.TestCase):
         )
 
     def test_renders_estimated_and_observed_stages(self):
-        self.goto(width=1440, height=900)
+        # A short viewport (not the usual 900px): the whole point of the height assertion below
+        # is a flex min-height collapse that only bites once the panel's content actually
+        # overflows the dock's available height -- this fixture's 2 lanes are not much content,
+        # so a tall viewport would not reproduce it.
+        self.goto(width=1440, height=280)
         # app.js auto-selects some lane for the main PCB view the moment data loads
         # (updateControls()) -- not a deliberate choice for the Timing panel's own scope, so this
         # checks the whole-campaign view: clear it the same way test_touch_and_panels.py seeds a
@@ -177,6 +181,17 @@ class TimingPanelTest(unittest.TestCase):
         stage_text = self.page.eval("document.querySelector('.timing-panel .tm-table').textContent")
         self.assertIn("setup", stage_text)
         self.assertIn("route", stage_text)
+        # .dk-panel (every dock tab) is a column flexbox; .tm-table-wrap's own overflow-x:auto
+        # gives it an automatic flex min-height of 0 by spec, so a tall panel (lots of groups,
+        # like a real multi-case campaign) could squash it to a real, textContent-bearing table
+        # that is nonetheless rendered at zero height -- invisible despite "passing" a textContent
+        # assertion. This is the actual regression check for that (dock.css's `.timing-panel>*`).
+        self.assertGreater(
+            self.page.eval(
+                "document.querySelector('.timing-panel .tm-table-wrap').getBoundingClientRect().height"
+            ),
+            0,
+        )
         self.assertTrue(
             self.page.eval("document.querySelectorAll('.timing-panel .tm-gantt-seg').length>0")
         )

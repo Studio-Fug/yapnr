@@ -164,6 +164,7 @@ class HardRungContract(unittest.TestCase):
                 "buck-vqfnhr",
                 "shove-channel",
                 "soc-bga",
+                "dovetail-blocks",
             },
         )
         family = {}

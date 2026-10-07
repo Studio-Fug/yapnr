@@ -432,10 +432,9 @@ def plan_axis(
     now). Each gutter closes by the share ``close`` of what it may give up (1: down to
     its copper's need; the back-off steps take less). The items close up on an anchor line,
     at each fraction of ``anchors`` across that span (0: everything packs toward lo, 0.5: on
-    the centre); with ``score(delta)`` (lower
-    is better, e.g. the wirelength of the moved placement) the best anchor wins, ties to
-    the one nearest the centre. Deltas are multiples of ``grid``; all zero when nothing can
-    close up."""
+    the centre); with ``score(delta)`` (lower is better, e.g. the wirelength of the moved
+    placement) the best anchor wins, ties to the one nearest the centre. Deltas are
+    multiples of ``grid``; all zero when nothing can close up."""
     n = len(items)
     perp = 1 - axis
     o = [it.pos[axis] for it in items]
@@ -894,7 +893,14 @@ def plane_blocked(graph, tracks, vias, rules, outline=None) -> int:
 
 def not_worse(base: dict, new: dict, settings: Settings) -> Tuple[bool, str]:
     """``new`` route metrics against ``base``: completion first, then vias and copper."""
-    for key in ("missing", "unresolved", "unmatched", "uncoupled_pairs", "plane_blocked"):
+    for key in (
+        "missing",
+        "unresolved",
+        "unmatched",
+        "uncoupled_pairs",
+        "pairs_moved",
+        "plane_blocked",
+    ):
         if new.get(key, 0) > base.get(key, 0):
             return False, "%s %s > %s" % (key, new.get(key, 0), base.get(key, 0))
     via_tol = max(settings.via_tol, int(0.05 * base.get("vias", 0)))
@@ -1182,6 +1188,28 @@ def flat_pass(placed, route, constraints, rules, *, pitch, iters, outline):
         )
 
     graphs = {id(route): placed}  # id(route) -> its placed graph (the plane-pad check)
+    from pnr.stack import resolve as resolve_stack
+
+    stack = resolve_stack(rules, getattr(placed, "stack", None))
+    # The legacy plane path drops plane pads at writeback, after routing; a declared stack
+    # has the router plan them (and writeback only falls back), so only the former is guarded.
+    legacy_planes = not (stack is not None and stack.dedicated)
+    pair_nets = (
+        {n for d in rules.get("diff_pairs") or [] for n in (d.get("p"), d.get("n")) if n}
+        if rules.get("route_pairs") == "coupled"
+        else set()
+    )
+
+    def pair_copper(r):
+        """The coupled pairs' copper (KiCad judges their gap and coupling, the route's own
+        report does not): a step may not change it."""
+        return sorted(
+            (t[0], t[1], round(t[2][0], 4), round(t[2][1], 4), round(t[3][0], 4), round(t[3][1], 4))
+            for t in r.tracks
+            if t[0] in pair_nets
+        )
+
+    base_pairs = pair_copper(route) if pair_nets else None
 
     def reroute(candidate, axis):
         with trace.suspended():  # the flat trace's rounds stay as they were
@@ -1191,7 +1219,10 @@ def flat_pass(placed, route, constraints, rules, *, pitch, iters, outline):
 
     def metrics_of(r):
         m = route_summary(r)
-        m["plane_blocked"] = plane_blocked(graphs[id(r)], r.tracks, r.vias, rules)
+        if legacy_planes:
+            m["plane_blocked"] = plane_blocked(graphs[id(r)], r.tracks, r.vias, rules)
+        if base_pairs is not None:
+            m["pairs_moved"] = int(pair_copper(r) != base_pairs)
         return m
 
     return guarded(

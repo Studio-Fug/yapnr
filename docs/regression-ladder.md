@@ -470,6 +470,21 @@ their copper from 4777 to 4022 mm, for 28 more vias. It stays off by default bec
 manual `09-mcu-usb-31` rung cells, which pass without it, end with a USB pair out of skew or a
 leg unrouted (3 with `COURTYARD` alone): see the [design](design/compact-placement.md).
 
+## Route-then-compact (opt-in)
+
+`run.py --route-compact [PARTS]` (`PNR_ROUTE_COMPACT`, off by default;
+[design](design/route-compact.md))
+squeezes a routed placement by the copper each gutter actually holds, x then y, and routes it
+again; a worse route backs off and the routed result stands. `PARTS` is `1` (all) or a comma
+list: `TOP` (the hierarchical top level, after the knit), `BLOCK` (inside each block template,
+whose outline then shrinks) and `FLAT` (flat boards, after the place-route loop). With
+`--macro-hull` (`PNR_MACRO_HULL`) hierarchical blocks enter as their routed outlines (per-side
+hulls) and slide into each other's notches; `--hull-dovetail W` (`PNR_HULL_DOVETAIL`) adds a
+packing term to global placement over the hull bodies. `pnr-report.json` records the pass as
+`route_compact` (gutters, steps, bounding box and the outline shrink it frees, seconds).
+
+RESULTS-PLACEHOLDER
+
 ## In CI
 
 `.github/workflows/ladder.yaml` runs the ladder inside the published arm64 image: cases 01 to 06

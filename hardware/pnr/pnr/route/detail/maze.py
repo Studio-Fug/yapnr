@@ -1284,6 +1284,9 @@ def route(grid, net_access, *, late_copper=None, late_drops=None, exact=None, **
     pads, :func:`pnr.route.detail.router._late_drops`) lets it judge that: the
     recovered route is then kept only when it leaves fewer connections open and
     room (:func:`late_drop_room`) for every drop the negotiated route left room for.
+    When the recovery takes the room of some, their sites (as the negotiated route
+    left them) are held for their nets (:func:`_drop_reserve`) and it runs once more,
+    judged the same way.
 
     ``via_keepouts`` (net -> cells) widens the via keep-out of the nets whose class
     clearance needs more than ``via_keepout`` (:func:`net_via_keepout`).

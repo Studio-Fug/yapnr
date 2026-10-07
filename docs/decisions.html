@@ -238,6 +238,7 @@
 <li class="toctree-l1"><a class="reference internal" href="design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/clearance-index-validation.html">Clearance index: integration validation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
@@ -1649,6 +1650,17 @@ adds a separate x86_64 lock with the CPU torch index (<code class="docutils lite
 <code class="docutils literal notranslate"><span class="pre">manual</span></code> and runs in exactly one CI job (<code class="docutils literal notranslate"><span class="pre">test</span></code>).</p>
 </section>
 </section>
+<section id="optional-energy-track-geometry-dependency">
+<h2>Optional energy-track geometry dependency<a class="headerlink" href="#optional-energy-track-geometry-dependency" title="Link to this heading">¶</a></h2>
+<p>The energy proposal generator uses pinned Shapely 2.1.2 rather than introducing a second routing
+kernel or large meshing toolchain. Polygon offsets supply candidates; exact native KiCad checks,
+cold DRC and electrical transaction gates still decide acceptance. GEOS 3.13.1 ships in the
+Shapely wheel and is documented in <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code>.</p>
+<p>Controller/Bazel Python is 3.11; the KiCad worker Python is 3.12. Their compiled geometry wheels
+are separately hash-locked. The image stores worker geometry in <code class="docutils literal notranslate"><span class="pre">/opt/energy-kicad</span></code>, with its ABI
+marker, and only an explicitly enabled energy worker adds it to its import path. This does not
+change the default worker interpreter, system packages or off-path imports.</p>
+</section>
 </section>
 
         </article>
@@ -1713,6 +1725,7 @@ adds a separate x86_64 lock with the CPU torch index (<code class="docutils lite
 <li><a class="reference internal" href="#the-requirements-lock">The requirements lock</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#optional-energy-track-geometry-dependency">Optional energy-track geometry dependency</a></li>
 </ul>
 </li>
 </ul>

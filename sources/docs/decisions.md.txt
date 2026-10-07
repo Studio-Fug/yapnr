@@ -1265,3 +1265,15 @@ adds a separate x86_64 lock with the CPU torch index (`requirements_by_platform`
 
 `//:requirements.test` re-resolves and diffs the lock. It needs network access, so it is tagged
 `manual` and runs in exactly one CI job (`test`).
+
+## Optional energy-track geometry dependency
+
+The energy proposal generator uses pinned Shapely 2.1.2 rather than introducing a second routing
+kernel or large meshing toolchain. Polygon offsets supply candidates; exact native KiCad checks,
+cold DRC and electrical transaction gates still decide acceptance. GEOS 3.13.1 ships in the
+Shapely wheel and is documented in `THIRD_PARTY.md`.
+
+Controller/Bazel Python is 3.11; the KiCad worker Python is 3.12. Their compiled geometry wheels
+are separately hash-locked. The image stores worker geometry in `/opt/energy-kicad`, with its ABI
+marker, and only an explicitly enabled energy worker adds it to its import path. This does not
+change the default worker interpreter, system packages or off-path imports.

@@ -8,7 +8,7 @@
         <link rel="prefetch" href="../../static/yapnr-logo-light.png" as="image">
 
     <link rel="shortcut icon" href="../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
-        <title>yapnr.rf multi-start with mechanical selection - yapnr documentation</title>
+        <title>Opt-in energy-track integration - yapnr documentation</title>
       <link rel="stylesheet" type="text/css" href="../../static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../static/copybutton.css?v=76b2166b" />
@@ -275,12 +275,12 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/design/rf-multistart.md?plain=true" title="View this page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/design/energy-track.md?plain=true" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
 </div><div class="edit-this-page">
-  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/design/rf-multistart.md" rel="edit" title="Edit this page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/design/energy-track.md" rel="edit" title="Edit this page">
     <svg><use href="#svg-pencil"></use></svg>
     <span class="visually-hidden">Edit this page</span>
   </a>
@@ -297,105 +297,121 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="yapnr-rf-multi-start-with-mechanical-selection">
-<h1>yapnr.rf multi-start with mechanical selection<a class="headerlink" href="#yapnr-rf-multi-start-with-mechanical-selection" title="Link to this heading">¶</a></h1>
-<p>Owner approval: multi-start in <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> — N starts with varied step sizes or seeds, each
-validated from its footprint, the best kept mechanically, mirroring PnR’s Monte Carlo selection
-and successive halving (<code class="docutils literal notranslate"><span class="pre">pnr.mc.halving</span></code>).</p>
-<p>This covers the schema (§1) and the halving pause primitive (§2) landed so far. Rung ranking,
-final selection, per-start execution (local subprocesses or cloud waves) and a CLI entry point
-are not implemented yet; a spec with no <code class="docutils literal notranslate"><span class="pre">starts</span></code> key is unaffected (one run, today’s behavior).</p>
-<section id="summary">
-<h2>0. Summary<a class="headerlink" href="#summary" title="Link to this heading">¶</a></h2>
+          <section id="opt-in-energy-track-integration">
+<h1>Opt-in energy-track integration<a class="headerlink" href="#opt-in-energy-track-integration" title="Link to this heading">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">PNR_GLOSS=1</span> <span class="pre">PNR_GLOSS_ENERGY=1</span></code> enables the energy proposal generator inside the
+existing native gloss pass. Both defaults remain off. <code class="docutils literal notranslate"><span class="pre">PNR_GLOSS_ENERGY</span></code> replaces
+only the <code class="docutils literal notranslate"><span class="pre">gloss</span></code> pull-tight proposal step; normalize, dekink, corridor and the
+outer loop’s native gate retain their existing behavior.</p>
+<p><img alt="Recorded accepted energy transactions" src="../../images/energy-track-native.gif" /></p>
+<p>The animation is a synthetic native fixture, not the radar board. It shows four
+recorded states with no interpolated geometry: 24.485281 → 22.438324 mm and
+12 → 2 bends across three accepted transactions. Every shown transaction passed
+cold KiCad DRC, and the phase-end six-component objective stayed <code class="docutils literal notranslate"><span class="pre">[0,0,0,0,0,0]</span></code>.</p>
+<section id="engine-path">
+<h2>Engine path<a class="headerlink" href="#engine-path" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>A <strong>start</strong> is the base spec with a few optimizer <em>path</em> fields overridden: <code class="docutils literal notranslate"><span class="pre">move</span></code>,
-<code class="docutils literal notranslate"><span class="pre">move_late</span></code>, <code class="docutils literal notranslate"><span class="pre">init</span></code>, <code class="docutils literal notranslate"><span class="pre">seed</span></code>, and two new fields, <code class="docutils literal notranslate"><span class="pre">perturb_amplitude</span></code> and <code class="docutils literal notranslate"><span class="pre">perturb_seed</span></code>. Each
-start’s run directory is an ordinary run directory, with its own <code class="docutils literal notranslate"><span class="pre">spec.json</span></code> and checkpoint.
-Start 0 is the base spec. Identity is the <strong>design sha256</strong>: the spec’s sha256 with <code class="docutils literal notranslate"><span class="pre">name</span></code> and
-the execution fields (<code class="docutils literal notranslate"><span class="pre">backend</span></code>, <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">threads</span></code>, as in <code class="docutils literal notranslate"><span class="pre">cases.resume_spec</span></code>) set to the
-base’s. A finished run with the same design sha256 can be imported as a start.</p></li>
-<li><p><strong>Halving is optional</strong> and happens at epoch ends. Starts would be ranked there by a short
-validation, not by the epigraph t: the best binarized design so far, swept on the coarse grid
-and judged by the case’s fine-level criteria. A within-case replication round (the same spec,
-several moves/seeds, several window sizes) is needed to measure whether that ranking agrees
-with the final result before halving is turned on by default — a single run is path-sensitive
-(a rounding-level kernel change can move a result 2–4 dB), so any such measurement needs
-replicates, and halving should report a confidence interval rather than a point estimate.</p></li>
-<li><p><strong>Final rule</strong>, from the owner’s order: pass all criteria on all validation grids first, then
-the worst fine/finer margin, then the fewest repaired pixels, then the start id.</p></li>
-<li><p><strong>Outputs:</strong> every start is kept. <code class="docutils literal notranslate"><span class="pre">starts.json</span></code> would summarize them, and the winner’s run is
-copied to the top of the directory, so it reads as a run directory does today.</p></li>
-<li><p><strong>Execution:</strong> locally, each start is a time-bounded subprocess, P processes × T threads. In
-the cloud, each start is one <code class="docutils literal notranslate"><span class="pre">rf_stage_plan</span></code> line per wave, and halving runs on the Mac between
-waves. Multi-start is orthogonal to the spec’s objectives (radiation box, NTFF, antenna
-objectives, …): it only touches the optimizer path fields above, so it works with any spec.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pnr.gloss.Settings.energy</span></code> and <code class="docutils literal notranslate"><span class="pre">--energy</span></code> worker flag are default-off. An
+unset/false energy flag preserves the pre-feature settings digest exactly.
+The default path never imports Shapely or the new geometry modules.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pnr.energy_track.propose</span></code> adapts an already eligible native chain to
+<code class="docutils literal notranslate"><span class="pre">pnr.energy_track_geometry.Planner</span></code>. Native item-grid lookup, the optional
+local layer grid and exact native segment/contact predicates constrain the
+proposal. No candidate, net or branch is selected by hand.</p></li>
+<li><p>The search grows a corridor around the existing legal polyline, samples
+relevant clearance-offset contours, and finds an endpoint-to-endpoint span
+on a finite witness-progress roadmap. Reverse remaining-length costs guide
+incoming-edge-state energy search. It is not a literal Steiner solver or a
+guarantee of a global geometric optimum.</p></li>
+<li><p>Energy is length in mm plus 0.15 mm per bend by default. Curvature weight is
+explicit (default zero). Length, endpoints, width, layer, net, vias, native
+contact, clearance, turn, homotopy, guard and group-cap rules remain hard.</p></li>
+<li><p>The existing transactional controller applies proposals to disposable
+checkpoints, checks native geometry and facts, runs cold KiCad DRC, and then
+accepts, splits or rejects. Its phase-end bisection/rollback and native-loop
+outer gate are still required. Worker output remains provisional until the
+controller has completed the cold-DRC and electrical acceptance gates.</p></li>
+<li><p>Accepted moves invalidate quiet chains through a dynamic layer grid. Plane
+refill symmetric-difference boxes also invalidate affected chains. The
+energy gloss step re-inventories until no improvement or an existing
+transaction/time budget stops it. Global inventory serialization, board
+reconstruction and native validation remain global work; this is not an
+end-to-end sublinear-complexity claim.</p></li>
 </ul>
 </section>
-<section id="spec-schema">
-<h2>1. Spec schema<a class="headerlink" href="#spec-schema" title="Link to this heading">¶</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">starts</span></code> is a new top-level key of the spec, next to <code class="docutils literal notranslate"><span class="pre">optimizer</span></code>, so it is not
-<code class="docutils literal notranslate"><span class="pre">optimizer.starts</span></code>. A start’s spec is the base minus <code class="docutils literal notranslate"><span class="pre">starts</span></code>, plus its optimizer overrides; one
-run’s optimizer never reads <code class="docutils literal notranslate"><span class="pre">starts</span></code>, and dropping it keeps start 0’s hash equal to the single
-run’s.</p>
-<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">starts</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">vary</span><span class="p">:</span><span class="w"> </span><span class="c1"># optimizer path fields only</span>
-<span class="w">    </span><span class="nt">move</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0.20</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.18</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.19</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.21</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0.22</span><span class="p p-Indicator">]</span>
-<span class="w">    </span><span class="nt">perturb_seed</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># a length-1 list broadcasts</span>
-<span class="w">  </span><span class="nt">combine</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zip</span><span class="w"> </span><span class="c1"># zip (lists of length n or 1) | product</span>
-<span class="w">  </span><span class="nt">halving</span><span class="p">:</span><span class="w"> </span><span class="c1"># optional; omitted = every start runs to the end</span>
-<span class="w">    </span><span class="nt">rungs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt"> after_epoch</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="nt"> keep</span><span class="p">:</span><span class="w"> </span><span class="nv">0.5</span><span class="w"> </span><span class="p p-Indicator">},</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> after_epoch</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> keep</span><span class="p">:</span><span class="w"> </span><span class="nv">0.5</span><span class="w"> </span><span class="p p-Indicator">}]</span>
-<span class="w">    </span><span class="nt">min_keep</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
-<span class="w">    </span><span class="nt">control</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w"> </span><span class="c1"># seeded uniform sample of eliminated starts kept on as controls</span>
-<span class="w">    </span><span class="nt">seed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
-<span class="w">  </span><span class="nt">select</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">criteria</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">case</span><span class="w"> </span><span class="c1"># case | spec | path of a criteria file (rf_job&#39;s format)</span>
-<span class="w">    </span><span class="nt">quantum_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.001</span>
+<section id="exact-eligibility-and-refusal-boundaries">
+<h2>Exact eligibility and refusal boundaries<a class="headerlink" href="#exact-eligibility-and-refusal-boundaries" title="Link to this heading">¶</a></h2>
+<p>Ordinary native signal-chain eligibility is inherited from the glosser. Power,
+paired and length-matched routes remain excluded. SI chains and group-owned
+copper are additionally refused by the energy proposer, even if the older SI
+option is enabled. Locked copper, vias, pads, footprints, group membership,
+board outline and zone definitions cannot silently change.</p>
+<p>An unlocked, ungrouped foreign plane is provisional only when its exact net
+has an explicit IR contract. The candidate oracle excludes only the validated
+zone IDs, not all copper on their net. An uncontracted or protected plane stays
+an obstacle. Any spec that claims such a plane as a dependency is refused
+before application (<code class="docutils literal notranslate"><span class="pre">energy:protected_or_uncontracted_plane</span></code>).</p>
+<p>With energy enabled, joint refill occurs before native shape recheck. The full
+post-refill oracle checks clearance again. Homotopy excludes only the validated
+regenerated zones; fixed copper still cannot switch side. Protected zone fills
+are included in the immutable checksum. Full configured IR reports, native
+connectivity, pad entry, skew and reference facts accompany every checkpoint.</p>
+<p>Local edits that do not change plane copper retain existing no-regression gate
+semantics; unchanged unrelated pre-existing unknown pair or failed-rail facts
+do not become a new claim of success. If any plane fill changes, stricter gates
+apply:</p>
+<ul class="simple">
+<li><p>Every actually changed plane net needs measured, passing IR within its
+original budget. New opens, unknown values or missing contracts refuse it.</p></li>
+<li><p>Existing passing rails cannot become failing. Unrelated existing failed
+rails must remain exactly unchanged; they are never relabeled as passing.</p></li>
+<li><p>Pairs must be qualified, with finite measured skew before and after. Missing
+or null skew is a refusal, not zero skew.</p></li>
+<li><p>A board with declared RF/SI contracts or an RF macro requires external
+verification for a changed plane. This integration has no full-wave verifier
+callback, so such joint-refill edits are refused with
+<code class="docutils literal notranslate"><span class="pre">energy:rf_si_verification_required</span></code>. Existing reference-shape checks alone
+are not presented as RF certification.</p></li>
+</ul>
+<p>The historical radar single-chain experiment remains useful geometric evidence
+but is not production-promotable under these stricter missing-evidence gates.
+There is no paired shove/serpentine proposal solver in this change.</p>
+</section>
+<section id="dependencies-and-runtime-abi">
+<h2>Dependencies and runtime ABI<a class="headerlink" href="#dependencies-and-runtime-abi" title="Link to this heading">¶</a></h2>
+<p>Shapely 2.1.2 is pinned in Bazel/controller/runtime locks. The image’s KiCad
+workers use Python 3.12, while the controller uses 3.11. A separate, hash-locked
+NumPy/Shapely set is installed under <code class="docutils literal notranslate"><span class="pre">/opt/energy-kicad</span></code>, never into system
+Python. Only enabled workers add <code class="docutils literal notranslate"><span class="pre">PNR_ENERGY_SITE_PACKAGES</span></code> to their import
+path, after checking its Python-version marker. Wrong ABI fails closed.</p>
+<p>An existing headless KiCad environment may instead supply matching Shapely and
+NumPy normally. Missing geometry dependencies produce an explicit
+<code class="docutils literal notranslate"><span class="pre">energy_dependency_unavailable</span></code> inventory result and preserve the input;
+they do not trigger a fallback that skips native/electrical gates.</p>
+</section>
+<section id="reproduce-and-validate">
+<h2>Reproduce and validate<a class="headerlink" href="#reproduce-and-validate" title="Link to this heading">¶</a></h2>
+<p>Focused hermetic targets:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--config<span class="o">=</span>lowmem<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>//hardware/pnr:energy_track_geometry_test<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>//hardware/pnr:energy_track_spatial_test<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>//hardware/pnr:energy_track_integration_test
 </pre></div>
 </div>
-<p>The spec is checked when it loads (<code class="docutils literal notranslate"><span class="pre">yapnr.rf.spec._validate_starts_structure</span></code>, and, per start,
-<code class="docutils literal notranslate"><span class="pre">yapnr.rf.multistart.derive_starts</span></code>):</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">vary</span></code> keys must be on the allow-list (<code class="docutils literal notranslate"><span class="pre">STARTS_VARY_ALLOWED</span></code>). <code class="docutils literal notranslate"><span class="pre">betas</span></code>, the iteration caps,
-objectives, robust variants, the solver and the requirements are refused, because halving
-compares starts at the same epoch of the same problem.</p></li>
-<li><p>Start 0 must equal the base spec.</p></li>
-<li><p>Two starts may not have the same design sha256. The native f64 path is deterministic, so a
-duplicate would only recompute an identical run.</p></li>
-<li><p>n is at most 64.</p></li>
-<li><p>Rung <code class="docutils literal notranslate"><span class="pre">after_epoch</span></code> values must be strictly increasing, non-negative integers, and come before
-the last epoch of the spec’s β schedule — a rung at or past the last epoch would be silently
-skipped by halving, so <code class="docutils literal notranslate"><span class="pre">derive_starts</span></code> refuses it once the spec (and so the schedule length)
-is known.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">keep</span></code> must be a number in (0, 1).</p></li>
-<li><p>A nonzero <code class="docutils literal notranslate"><span class="pre">perturb_seed</span></code> with <code class="docutils literal notranslate"><span class="pre">perturb_amplitude</span></code> at 0 does nothing (<code class="docutils literal notranslate"><span class="pre">Optimizer.__init__</span></code> only
-perturbs x0 when the amplitude is nonzero), so <code class="docutils literal notranslate"><span class="pre">derive_starts</span></code> refuses that combination rather
-than silently spending N× the compute of one real run while exploring only one point.</p></li>
-<li><p>Every derived spec must pass <code class="docutils literal notranslate"><span class="pre">Spec.validate</span></code>.</p></li>
-</ul>
-<p><code class="docutils literal notranslate"><span class="pre">Spec.to_dict</span></code> leaves out <code class="docutils literal notranslate"><span class="pre">starts</span></code>, <code class="docutils literal notranslate"><span class="pre">perturb_amplitude</span></code> (default 0) and <code class="docutils literal notranslate"><span class="pre">perturb_seed</span></code> while they
-are at their defaults, and <code class="docutils literal notranslate"><span class="pre">starts</span></code> is excluded from the dataclass’s generated <code class="docutils literal notranslate"><span class="pre">__hash__</span></code> (it’s a
-plain dict); every preset’s published hash is unchanged, and tests check both.</p>
-<p><strong>Perturbation</strong> (default off, <code class="docutils literal notranslate"><span class="pre">yapnr.rf.multistart.perturb</span></code>). After the seed or <code class="docutils literal notranslate"><span class="pre">init</span></code>:</p>
-<ul class="simple">
-<li><p>x0 += amplitude·(2u − 1), clipped to [0, 1].</p></li>
-<li><p>The noise is added to the design-variable vector, so symmetry and fixed pixels still hold.</p></li>
-<li><p>u comes from a counter-based SplitMix64 on <code class="docutils literal notranslate"><span class="pre">(perturb_seed,</span> <span class="pre">dof</span> <span class="pre">index)</span></code>, written in 64-bit
-integer arithmetic. It does not depend on numpy’s <code class="docutils literal notranslate"><span class="pre">Generator</span></code> streams, so it is the same on
-any numpy version or machine.</p></li>
-</ul>
-<p><strong>Start ids and records.</strong> Starts are numbered <code class="docutils literal notranslate"><span class="pre">s00</span></code>, <code class="docutils literal notranslate"><span class="pre">s01</span></code>, and so on, in plan order. Each
-start’s spec keeps the base name; its <code class="docutils literal notranslate"><span class="pre">spec.json</span></code> alone reproduces it with the plain driver.</p>
-</section>
-<section id="the-halving-pause-primitive">
-<h2>2. The halving pause primitive<a class="headerlink" href="#the-halving-pause-primitive" title="Link to this heading">¶</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">Optimizer.run(until_epoch=)</span></code> stops once <code class="docutils literal notranslate"><span class="pre">state.epoch</span> <span class="pre">&gt;=</span> <span class="pre">until_epoch</span></code>, checked before the next
-iteration, without touching <code class="docutils literal notranslate"><span class="pre">stop_reason</span></code> or anything else in <code class="docutils literal notranslate"><span class="pre">state</span></code> — a run can also end early
-on convergence, so <code class="docutils literal notranslate"><span class="pre">until_epoch</span></code> is a rung on epoch boundaries, not on iteration counts. Resuming
-with a later <code class="docutils literal notranslate"><span class="pre">until_epoch</span></code> (or <code class="docutils literal notranslate"><span class="pre">None</span></code>, to run to the end) continues exactly as an uninterrupted
-run would: x, the history and the MMA state are bit-identical whether the run paused there or
-not. This is the primitive successive halving’s rung bookkeeping (binarize-and-judge, rank by
-worst fine/finer margin, <code class="docutils literal notranslate"><span class="pre">keep</span> <span class="pre">=</span> <span class="pre">max(min_keep,</span> <span class="pre">ceil(keep</span> <span class="pre">·</span> <span class="pre">live))</span></code>) and final selection will be
-built on; neither is implemented yet.</p>
+<p>With a supported headless KiCad Python/CLI configured, the native test also
+covers actual accepted improvements, disabled no-op byte identity, and an
+uncontracted-plane dependency refused before application:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--config<span class="o">=</span>lowmem<span class="w"> </span>//hardware/pnr:energy_track_native_test
+</pre></div>
+</div>
+<p>To regenerate the truthful animation from an actual saved clean fixture run:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/animate_energy_track.py<span class="w"> </span>--run-dir<span class="w"> </span>ENERGY_RUN<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>docs/feature-animations/energy-track-native.gif
+</pre></div>
+</div>
+<p>The renderer requires optional Matplotlib/Pillow and consumes only recorded
+accepted transactions. It refuses a non-clean or phase-end-failed run. It uses
+<code class="docutils literal notranslate"><span class="pre">gloss_fixture</span></code>’s known fixed foreign pad and labels the synthetic scope.</p>
 </section>
 </section>
 
@@ -436,10 +452,11 @@ built on; neither is implemented yet.</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">yapnr.rf multi-start with mechanical selection</a><ul>
-<li><a class="reference internal" href="#summary">0. Summary</a></li>
-<li><a class="reference internal" href="#spec-schema">1. Spec schema</a></li>
-<li><a class="reference internal" href="#the-halving-pause-primitive">2. The halving pause primitive</a></li>
+<li><a class="reference internal" href="#">Opt-in energy-track integration</a><ul>
+<li><a class="reference internal" href="#engine-path">Engine path</a></li>
+<li><a class="reference internal" href="#exact-eligibility-and-refusal-boundaries">Exact eligibility and refusal boundaries</a></li>
+<li><a class="reference internal" href="#dependencies-and-runtime-abi">Dependencies and runtime ABI</a></li>
+<li><a class="reference internal" href="#reproduce-and-validate">Reproduce and validate</a></li>
 </ul>
 </li>
 </ul>

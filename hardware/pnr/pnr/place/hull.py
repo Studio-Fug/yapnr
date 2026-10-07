@@ -772,8 +772,10 @@ def nest(
     repeat (:data:`NEST_ROUNDS`) while some macro moves. A result with a hard violation the
     input did not have is undone; with the pad-edge rule (``pad_edge``,
     :func:`pnr.place.legalize.pad_edge_rule`) a pose must also keep the macro's pads inside
-    :func:`pnr.place.legalize.pad_edge_box`. Returns a report dict (``moved``, ``turned``,
-    ``cost_before``/``cost_after``, ``skipped``)."""
+    :func:`pnr.place.legalize.pad_edge_box`. Returns a report dict: ``moved``, ``turned``,
+    ``rounds``, the ``nesting`` (:func:`component_nesting`) after the moves, ``skipped`` (why
+    nothing was tried) or ``undone``, and with moves the ``before`` poses ({ref: [x, y,
+    rot]}) they started from and ``nesting_before``."""
     from .geometry import courtyard_rect, pin_positions
     from .metrics import hard_violations
 
@@ -897,6 +899,7 @@ def nest(
 
     before_bad = {k: v for k, v in hard_violations(graph, constraints).items() if v}
     saved = {c.ref: (c.pos, c.rot) for c in macros}
+    nesting_before = component_nesting(comps)
     total_before = None
     radius = max(1, int(round(NEST_RADIUS_MM / g)))
     for rnd in range(NEST_ROUNDS):
@@ -978,6 +981,14 @@ def nest(
             c.pos, c.rot = saved[c.ref]
         report.update(moved=0, turned=0, undone=sorted(new))
     report["nesting"] = component_nesting(comps)
+    if report["moved"]:
+        # The legalized poses the moves started from (the driver's fallback, pnr.hier.top).
+        report["before"] = {
+            ref: [pos[0], pos[1], rot]
+            for ref, (pos, rot) in sorted(saved.items())
+            if (pos, rot) != (graph.component(ref).pos, graph.component(ref).rot)
+        }
+        report["nesting_before"] = nesting_before
     return report
 
 

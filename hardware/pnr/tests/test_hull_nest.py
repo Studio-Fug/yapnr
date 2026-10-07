@@ -168,6 +168,11 @@ class NestTest(unittest.TestCase):
             self.assertEqual(overlap_pairs(g), [])
             self.assertFalse(any(hard_violations(g, constraints_for(g)).values()))
             self.assertEqual(report["nesting"], m)
+            # The poses the moves started from, for the driver's un-nested fallback.
+            self.assertEqual(report["nesting_before"]["macro_overlap_mm2"], 0.0)
+            self.assertTrue(set(report["before"]) <= {"MA", "MB"})
+            for ref, (x, y, _rot) in report["before"].items():
+                self.assertEqual((x, y), self.apart().component(ref).pos)
 
     def test_fixed_macro_stays(self):
         with mock.patch.dict(os.environ, dict(HULL_ON, PNR_HULL_NEST="1")):

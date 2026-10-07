@@ -941,6 +941,19 @@ def run(root, seed):
             retry = knit(case, k, flat, reps, choice, attempt=tries)
             if route_rank(retry) < route_rank(result):
                 result = retry
+        if knit_incomplete(result) and placement.get("unnested") is not None:
+            # PNR_HULL_NEST safety net: the nest moves sealed a route; knit the seed's
+            # legalized poses from before them and keep the better knit.
+            from pnr.profile import span
+            from pnr.stage_timing import stage as stage_timing
+
+            with span("hier.unnested_knit"), stage_timing("hull-safety-net"):
+                alt = knit(case, k, placement["unnested"], reps, label="top-%02d-unnested" % k)
+            record["unnested"] = dict(nested=result["objective"], unnested=alt["objective"])
+            if route_rank(alt) < route_rank(result):
+                result = alt
+                record["unnested"]["kept"] = True
+                record["nesting"] = placement["hull_nest"].get("nesting_before")
         record.update(
             objective=result["objective"],
             missing=result["missing"],
@@ -975,9 +988,10 @@ def run(root, seed):
     from pnr.place import route_compact
 
     net = None
-    if case.get("hulls") and not route_compact.enabled("TOP") and knit_incomplete(best):
-        # PNR_HULL_NEST: without the route-then-compact reroute, a hull placement that does
-        # not knit gets the rectangle placement of the same seed as a fallback.
+    if case.get("hulls") and knit_incomplete(best):
+        # PNR_HULL_NEST: a hull placement that does not knit (route-then-compact refuses an
+        # incomplete base, and without it nothing reroutes) gets the rectangle placement of
+        # the same seed as a fallback.
         best, net = safety_net(case, best, seeds, graph, constraints, rules, library, reps)
     compaction = {}
     if route_compact.enabled("TOP"):

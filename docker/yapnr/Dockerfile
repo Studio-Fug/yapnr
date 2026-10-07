@@ -103,7 +103,22 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
       --requirements "/tmp/runtime-${TARGETARCH}.lock"; \
     torch_dir=/opt/venv/lib/python3.11/site-packages/torch; \
     rm -rf "${torch_dir}/include" "${torch_dir}/test"; \
-    /opt/venv/bin/python -c 'import numpy, torch, yaml; print(torch.__version__, numpy.__version__)'
+    /opt/venv/bin/python -c 'import numpy, torch, yaml, shapely; print(torch.__version__, numpy.__version__, shapely.__version__)'
+
+# The energy pass's geometry is a different Python ABI from the controller.
+# Install its separately hash-locked wheels into a private target, never system Python.
+# Default workers do not see this directory; --energy activates it explicitly.
+RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
+    --mount=type=bind,source=docker/yapnr/energy-kicad-amd64.lock,target=/tmp/energy-kicad-amd64.lock \
+    --mount=type=bind,source=docker/yapnr/energy-kicad-arm64.lock,target=/tmp/energy-kicad-arm64.lock \
+    --mount=type=cache,target=/root/.cache/uv \
+    set -eux; \
+    export HOME=/root UV_CACHE_DIR=/root/.cache/uv UV_LINK_MODE=copy; \
+    uv pip install --python /usr/bin/python3 --target /opt/energy-kicad --require-hashes --no-deps \
+      --requirements "/tmp/energy-kicad-${TARGETARCH}.lock"; \
+    /usr/bin/python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' > /opt/energy-kicad/python-version.txt; \
+    PYTHONPATH=/opt/energy-kicad /usr/bin/python3 -c 'import pcbnew, shapely; assert shapely.__version__ == "2.1.2"; print(shapely.geos_version_string)'
+ENV PNR_ENERGY_SITE_PACKAGES=/opt/energy-kicad
 
 # Declared after the runtime layer: each of these changes with every commit or base.
 ARG KICAD_BASE

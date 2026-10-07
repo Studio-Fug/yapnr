@@ -30,3 +30,11 @@ The yapnr wheel's own native library (linux/amd64), under /opt/venv/lib/python3.
       x86_64 runner with Ubuntu 24.04's GCC 13. It needs only libc; the parts of libgcc that
       GCC links statically are under the GCC runtime library exception
       (/usr/share/doc/yapnr/licenses/GCC-COPYING.RUNTIME).
+
+Shapely wheels in the controller and /opt/energy-kicad worker target:
+
+  shapely.libs/libgeos-*.so.*, shapely.libs/libgeos_c-*.so.*
+      GEOS 3.13.1, LGPL-2.1; notices in shapely-2.1.2.dist-info/licenses/LICENSE_GEOS.
+      Dynamically loaded, unmodified wheel libraries. Source releases:
+      https://libgeos.org/usage/download/
+      Shapely wrapper source (BSD-3-Clause): https://github.com/shapely/shapely/tree/2.1.2

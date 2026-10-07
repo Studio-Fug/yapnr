@@ -1,0 +1,6 @@
+# Geometry dependencies for the opt-in energy pass in KiCad's Python 3.12.
+# Install into the separate worker-only directory, never the system interpreter
+# or the controller's Python 3.11 environment. The generator constrains these
+# versions to requirements.lock, the same code and geometry used by Bazel tests.
+numpy>=1.26,<2
+shapely==2.1.2

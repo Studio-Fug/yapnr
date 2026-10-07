@@ -17,6 +17,8 @@
       (`tools/privacy_scan.py`); commits use the owner's public commit address
       (`tools/privacy/allowed_identities.txt`) or a GitHub noreply address
 - [ ] Docs and `WORKLOG.md` updated where this PR changes behaviour, layout or status
+- [ ] Feature animation attached or embedded, using reproducible before/after or recorded events
+      with synthetic/native scope labeled (or: explain why no meaningful visual applies)
 - [ ] Labels (release notes, `docs/releases.md`): one area label (`engine`, `viewer`, `cli`,
       `bazel`, `release`, `docs`, `ci`, `dependencies`), plus `breaking` and `results-change`
       when they apply

@@ -155,7 +155,9 @@ class WheelTest(unittest.TestCase):
 
     def test_requires_dist_is_requirements_runtime_in(self):
         wanted = _requirement_lines(_runfile("requirements-runtime.in"))
-        self.assertEqual(wanted, ["torch>=2.2,<2.4", "numpy>=1.26,<2", "pyyaml>=6"])
+        self.assertEqual(
+            wanted, ["torch>=2.2,<2.4", "numpy>=1.26,<2", "pyyaml>=6", "shapely==2.1.2"]
+        )
 
         def normal(requirements):
             parsed = [Requirement(r) for r in requirements]

@@ -232,6 +232,48 @@ The density evolution renders as an animation (Pillow, like the place-and-route 
 bazel run //yapnr/rf:animate -- runs/divider --out divider.webp
 ```
 
+## Multi-start
+
+A spec's top-level `starts` key (not `optimizer.starts`, so a plain run's optimizer never reads
+it) runs the same design from several starting points — varied `move`, `move_late`, `init`,
+`seed`, or a new deterministic perturbation of x0 — and keeps the best one by the case's own
+pass criteria, mirroring `pnr.mc.halving`'s mechanical Monte Carlo selection:
+
+```yaml
+starts:
+  vary:
+    move: [0.20, 0.18, 0.19, 0.21, 0.22]
+  combine: zip # zip (lists of length n or 1) | product
+  halving: # optional; omitted runs every start to the end
+    rungs: [{ after_epoch: 0, keep: 0.5 }, { after_epoch: 1, keep: 0.5 }]
+    min_keep: 2
+  select:
+    criteria: case # case | spec | path of a criteria file
+    quantum_db: 0.001
+```
+
+`yapnr.rf.multistart.derive_starts` builds each start's `Spec` (the base spec with `starts`
+stripped, plus that start's overrides) and refuses anything the design calls out: an unknown
+`vary` key, start 0 not equal to the base, two starts with the same design sha256 (the native
+path is deterministic, so a duplicate would only recompute an identical run), or a halving rung
+at or past the schedule's last epoch (it would be silently skipped). `Optimizer.run(until_epoch=)`
+is the pause primitive halving needs: it stops once `state.epoch >= until_epoch`, before the
+next iteration, without touching anything else in `state`, so resuming with a later or `None`
+`until_epoch` continues exactly as an uninterrupted run would.
+
+Perturbation (`optimizer.perturb_amplitude`, `optimizer.perturb_seed`; both 0 by default, and
+left out of `Spec.to_dict`/the hash at their defaults, so no existing preset's hash moves) adds
+`perturb_amplitude·(2u − 1)` to x0 after the seed or `init`, clipped to [0, 1]; `u` is a
+counter-based SplitMix64 draw on `(perturb_seed, dof index)` (`yapnr.rf.multistart.perturb`), not
+numpy's `Generator`, so it is the same on any numpy version or machine. A nonzero `perturb_seed`
+with `perturb_amplitude` at 0 does nothing (`derive_starts` refuses it, rather than silently
+spending N× the compute of one real run). See `docs/design/rf-multistart.md` for the halving
+rung ranking, final selection rule and the replication evidence behind making halving opt-in.
+
+Successive halving's rung ranking and the final-selection rule, the per-start execution (local
+subprocesses or cloud waves) and a CLI entry point are not implemented yet; a spec with no
+`starts` key is unaffected (one run, today's behavior).
+
 ## End-to-end cases
 
 Five cases exercise the whole method on the common tasks: a power divider and a Wilkinson-type

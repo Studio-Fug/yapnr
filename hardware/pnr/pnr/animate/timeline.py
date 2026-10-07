@@ -666,6 +666,10 @@ class Timeline:
         return units
 
     def _final_poses(self, scope):
+        nest = [e for e in self.trace.kind(scope, "poses") if e.get("stage") == "hull-nest"]
+        if nest:
+            # PNR_HULL_NEST moved the legalized blocks (pnr.place.hull.nest): its last poses.
+            return event_poses(self.trace, nest[-1])
         order, legal = self._legal_order(scope)
         if legal:
             return legal

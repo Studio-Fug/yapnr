@@ -972,6 +972,7 @@ def nest(
                 pins[m.ref] = dict(pin_positions(m))
                 report["moved"] += 1
                 moved = True
+                trace_move(graph, report["moved"])
         if not moved:
             break
     after_bad = {k: v for k, v in hard_violations(graph, constraints).items() if v}
@@ -980,6 +981,8 @@ def nest(
         for c in macros:
             c.pos, c.rot = saved[c.ref]
         report.update(moved=0, turned=0, undone=sorted(new))
+    if new:
+        trace_move(graph, report.get("moved", 0) + 1)  # the undo, for the animation
     report["nesting"] = component_nesting(comps)
     if report["moved"]:
         # The legalized poses the moves started from (the driver's fallback, pnr.hier.top).
@@ -990,6 +993,16 @@ def nest(
         }
         report["nesting_before"] = nesting_before
     return report
+
+
+def trace_move(graph, step):
+    """A ``poses`` event (stage ``hull-nest``) of ``graph`` when tracing (``PNR_TRACE_DIR``):
+    the animation slides the blocks into their notches (:mod:`pnr.animate.hier`)."""
+    from pnr import trace
+
+    recorder = trace.current()
+    if recorder is not None:
+        recorder.poses("hull-nest", graph, iter=step, phase="placement")
 
 
 def _turned(comp, rot):

@@ -23,8 +23,9 @@ and for area-array parts
 copper reaches a via or leaves the courtyard) and ``pad_distance`` (parts' pads near their
 net's pads on an anchor); for supplies ``unconnected`` (exactly the listed pads are cut off
 from the rest of their net), ``rail_zones`` (each rail of ``nets`` fills as one piece; a
-candidate the engine decided to trace, named in ``trace_nets``, fills none) and ``ir_drop``
-(a rail's DC drop within its budget, measured by pnr.ir_extract).
+candidate the engine decided to trace, named in ``trace_nets``, fills none), ``ir_drop``
+(a rail's DC drop within its budget, measured by pnr.ir_extract) and ``plane_quality``
+(a partitioned layer's regions make sense: pnr.plane_quality.judge).
 
     python3 check_constraints.py BOARD.kicad_pcb --spec SPEC.json --out OUT.json
 
@@ -498,12 +499,23 @@ def _ref_pads(b, ref):
     return out
 
 
+def traced_rails(b):
+    """The plane_partition candidates the route traced (pnr.rail_alloc): the routed
+    rules beside the board (``rules.json``, rewritten after routing) name them."""
+    path = Path(b.path).with_name("rules.json")
+    if not path.is_file():
+        return set()
+    return set(json.loads(path.read_text()).get("traced_rails") or ())
+
+
 def check_via_class(b, c):
     """Every via of ``nets`` inside ``ref``'s courtyard is ``diameter_mm``/``drill_mm``
     and, with ``site: interstitial``, sits at the centre of a cell of the part's ball
-    lattice (pitch per axis from its pads, in the footprint's own frame)."""
+    lattice (pitch per axis from its pads, in the footprint's own frame). With
+    ``allocated``, a candidate rail the route traced (:func:`traced_rails`) is an
+    ordinary signal there, its vias routing vias, and leaves ``nets``."""
     x0, y0, x1, y1 = b.courtyard(c["ref"])
-    nets = set(c["nets"])
+    nets = set(c["nets"]) - (traced_rails(b) if c.get("allocated") else set())
     fp = b.fps[c["ref"]]
     # The ball lattice in the footprint's own frame: pitch per axis, origin at a ball.
     local = [(mm(p.GetFPRelativePosition().x), mm(p.GetFPRelativePosition().y)) for p in fp.Pads()]
@@ -545,7 +557,12 @@ def check_via_class(b, c):
     return (
         count > 0 and not wrong and not off_site,
         dict(vias=count, wrong_size=wrong[:10], off_site=off_site[:10]),
-        dict(diameter_mm=c["diameter_mm"], drill_mm=c["drill_mm"], site=c.get("site")),
+        dict(
+            diameter_mm=c["diameter_mm"],
+            drill_mm=c["drill_mm"],
+            site=c.get("site"),
+            nets=sorted(nets),
+        ),
     )
 
 
@@ -681,8 +698,10 @@ def check_unconnected(b, c):
 def check_rail_zones(b, c):
     """Each rail of ``nets`` fills ``layer`` as one piece of at least ``min_area_mm2``;
     a candidate the engine decided to trace (``trace_nets``, a subset of ``nets``)
-    fills none there, confirming the engine left it out of the partition. No other
-    net (but the ``fill`` net) pours on the layer."""
+    fills none there, confirming the engine left it out of the partition. With
+    ``candidates`` (the engine decides each rail, pnr.rail_alloc) a rail fills one
+    such piece or none, and at least one rail fills the layer. No other net (but the
+    ``fill`` net or one of ``fill_candidates``) pours on the layer."""
     board = b.board
     lid = board.GetLayerID(c["layer"])
     _filled(board)
@@ -700,12 +719,17 @@ def check_rail_zones(b, c):
         measured[net] = dict(pieces=pieces, area_mm2=round(area, 3))
         if net in trace_nets:
             ok = ok and pieces == 0
+        elif c.get("candidates"):
+            ok = ok and (pieces == 0 or (pieces == 1 and area >= c["min_area_mm2"]))
         else:
             ok = ok and pieces == 1 and area >= c["min_area_mm2"]
+    if c.get("candidates"):
+        ok = ok and any(measured[n]["pieces"] for n in c["nets"])
     foreign = sorted(
         {z.GetNetname() or "<no net>" for z in zones}
         - set(c["nets"])
         - ({c["fill"]} if c.get("fill") else set())
+        - set(c.get("fill_candidates") or ())
     )
     measured["foreign"] = foreign
     return (
@@ -713,6 +737,134 @@ def check_rail_zones(b, c):
         measured,
         dict(pieces=1, min_area_mm2=c["min_area_mm2"], trace_nets=sorted(trace_nets)),
     )
+
+
+def region_box(b, region):
+    """``region`` (:func:`pnr.plane_partition.region_polygon`'s ``{refs, margin_mm}``,
+    or a point list) as an (x0, y0, x1, y1) box in :func:`plane_layer_geometry`'s own
+    frame (raw board mm, the same one its zones and terminals are read in -- not
+    ``Board.courtyard``'s shifted, y-flipped engine frame): the scope an outer pour's
+    zone is meant to serve. A pad or via outside it reaches the net by some other path
+    (a different region, a via straight to an inner plane) and is not a terminal of
+    this zone at all, so :func:`plane_layer_geometry` leaves it out rather than judge
+    it unreached."""
+    if isinstance(region, dict):
+        boxes = []
+        for ref in region["refs"]:
+            fp = b.fps.get(ref)
+            if fp is None:
+                continue
+            layer = pcbnew.B_CrtYd if fp.IsFlipped() else pcbnew.F_CrtYd
+            box = None
+            try:
+                poly = fp.GetCourtyard(layer)
+                if poly.OutlineCount():
+                    box = poly.BBox()
+            except Exception:  # pragma: no cover - version shim
+                box = None
+            if box is None:
+                box = fp.GetBoundingBox(False)
+            boxes.append(
+                (mm(box.GetLeft()), mm(box.GetTop()), mm(box.GetRight()), mm(box.GetBottom()))
+            )
+        if not boxes:
+            return None
+        m = float(region.get("margin_mm", 0.0) or 0.0)
+        x0 = min(bx[0] for bx in boxes) - m
+        y0 = min(bx[1] for bx in boxes) - m
+        x1 = max(bx[2] for bx in boxes) + m
+        y1 = max(bx[3] for bx in boxes) + m
+        return (x0, y0, x1, y1)
+    xs = [p[0] for p in region]
+    ys = [p[1] for p in region]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def plane_layer_geometry(b, c):
+    """What :func:`pnr.plane_quality.judge` reads off the board for ``c["layer"]``:
+    each zone net's filled pieces (outline then holes, mm), each net's terminals on
+    the layer (its vias and through-hole pads; with ``lands`` its surface pads there
+    too; with ``region`` only those inside it, :func:`region_box`: an outer pour never
+    answers for a pad it was never asked to reach) and, for a net that is not a
+    candidate, the other copper layers it covers with at least half the board's area
+    (its dedicated planes)."""
+    board = b.board
+    _filled(board)
+    lid = board.GetLayerID(c["layer"])
+    zones = {}
+    for z in board.Zones():
+        if z.GetIsRuleArea() or not z.IsOnLayer(lid) or not z.GetNetname():
+            continue
+        fill = z.GetFilledPolysList(lid)
+        for k in range(fill.OutlineCount()):
+            rings = [fill.COutline(k)] + [fill.CHole(k, h) for h in range(fill.HoleCount(k))]
+            zones.setdefault(z.GetNetname(), []).append(
+                [
+                    [(mm(ring.CPoint(i).x), mm(ring.CPoint(i).y)) for i in range(ring.PointCount())]
+                    for ring in rings
+                ]
+            )
+    terms = {}
+    for v in board.GetTracks():
+        if v.GetClass() not in ("PCB_VIA", "VIA") or not v.IsOnLayer(lid):
+            continue
+        p = v.GetPosition()
+        terms.setdefault(v.GetNetname(), []).append((mm(p.x), mm(p.y), mm(v.GetWidth(lid)) / 2))
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if not pad.GetNetname() or not pad.IsOnLayer(lid):
+                continue
+            through = pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH
+            if through or c.get("lands"):
+                p = pad.GetPosition()
+                size = pad.GetSize()
+                terms.setdefault(pad.GetNetname(), []).append(
+                    (mm(p.x), mm(p.y), max(mm(size.x), mm(size.y)) / 2)
+                )
+    if c.get("region"):
+        box = region_box(b, c["region"])
+        if box is not None:
+            x0, y0, x1, y1 = box
+            terms = {
+                n: [t for t in pts if x0 <= t[0] <= x1 and y0 <= t[1] <= y1]
+                for n, pts in terms.items()
+            }
+    area_board = b.w * b.h
+    elsewhere = {}
+    for net in set(zones) - set(c["candidates"]):
+        layers = set()
+        for z in board.Zones():
+            if z.GetIsRuleArea() or z.GetNetname() != net:
+                continue
+            for other in z.GetLayerSet().CuStack():
+                if other == lid:
+                    continue
+                if mm(mm(z.GetFilledPolysList(other).Area())) >= 0.5 * area_board:
+                    layers.add(board.GetLayerName(other))
+        if layers:
+            elsewhere[net] = sorted(layers)
+    return dict(
+        outline=[b.x0, b.y0, b.x1, b.y1],
+        zones=zones,
+        terminals=terms,
+        candidates=list(c["candidates"]),
+        currents=dict(c.get("currents") or {}),
+        min_width_mm=c.get("min_width_mm", 0.0),
+        planes_elsewhere=elsewhere,
+        lands=bool(c.get("lands")),
+    )
+
+
+def check_plane_quality(b, c):
+    """The partition of ``layer`` makes sense (pnr.plane_quality.judge): no region
+    serving fewer than two terminals, no region but the owner's (the candidate with
+    the most current) holding far more copper than its terminals need, no region whose
+    tree runs far longer than its terminals' spanning tree, and no fill net that has a
+    dedicated plane elsewhere in the stack."""
+    from pnr.plane_quality import judge
+
+    ok, measured, limit = judge(plane_layer_geometry(b, c), limits=c.get("limits"))
+    return ok, measured, limit
 
 
 def check_ir_drop(b, c):
@@ -770,6 +922,7 @@ KINDS = dict(
     net_vias=check_net_vias,
     unconnected=check_unconnected,
     rail_zones=check_rail_zones,
+    plane_quality=check_plane_quality,
     ir_drop=check_ir_drop,
 )
 

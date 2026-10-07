@@ -1,0 +1,51 @@
+# The plane-allocation A/B's other arm set: every hard rung without a plane_partition, seeds 0
+# and 1, the allocation search (the default) against the static rule (rail_alloc = "static").
+# Neither arm may change these rungs (no candidates to decide); both arms of a cell in one
+# submit, one machine family.
+schema = "yapnr-campaign-v1"
+kind = "ladder-cell"
+name = "rails-feedback-hard"
+source = "HEAD"
+image = "edge"
+determinism = "wall_clock_budgeted"
+
+[matrix]
+case = [
+  "09-mcu-usb-31", "09-mcu-usb-31-4L-SGPS", "09-mcu-usb-31-4L-SSGS", "09-mcu-usb-31-6L-SGSGPS",
+  "09-mcu-usb-31-abs", "09-mcu-usb-31-rel", "09-mcu-usb-31-sidelock", "09-mcu-usb-31-mc",
+  "09-mcu-usb-31-header", "07-chaser-20-4L-SGPS", "07-chaser-20-4L-SGGS", "07-chaser-20-4L-SSGS",
+  "07-chaser-20-6L-SGSSPS", "07-chaser-20-6L-SGSGPS", "07-chaser-20-8L-SGSGPSGS",
+  "07-chaser-20-6L-SGSGPS-BB", "07-chaser-20-6L-SGSGPS-HDI", "07-chaser-20-double",
+  "07-chaser-20-4L-SGPS-double", "07-chaser-20-abs", "07-chaser-20-rel", "07-chaser-20-sidelock",
+  "07-chaser-20-4L-SGPS-arcblock", "10-quad-bank-56", "11-power-switch-31",
+  "11-ufbga201-fanout-6L-SGSGPS", "11-ufbga201-fanout-6L-SGSGPS-block",
+  "11-ufbga201-fanout-6L-SGSGPS-classes", "11-ufbga201-fanout-6L-SGSGPS-partial",
+  "11-ufbga201-fanout-6L-SGSGPS-pairs", "11-buck-vqfnhr-4L-SGPS",
+]
+seed = [0, 1]
+config = ["search", "static"]
+
+[config]
+hard = true
+timeout = 1200
+
+[configs.search]
+rail_alloc = "search"
+
+[configs.static]
+rail_alloc = "static"
+
+[resources]
+cpus = 1
+memory_gb = 3
+disk_gb = 2
+max_wall_s = 1800
+
+[placement]
+families = ["c4d"]
+spot = true
+
+[live]
+enabled = true
+interval_s = 45
+mode = "thin"

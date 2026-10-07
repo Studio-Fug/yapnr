@@ -741,11 +741,15 @@ and reports below explained, the method's limits, and a prior-art review.
 ```yaml
 plane_partition:
   - layer: In3.Cu
-    nets: [1V0_RF1, 1V0_RF2, 1V2, 1V8] # names or globs; each a plane net of the layer
+    nets: [1V0_RF1, 1V0_RF2, 1V2, 1V8] # names or globs: candidate plane nets of the layer
+    must_plane: [1V2] # forced onto the layer (default: the engine decides each candidate)
+    must_trace: [1V8] # forced off it, routed as an ordinary trace
+    fill_candidates: [GND] # nets besides the plane rails that may take the leftover
     order: current # by peak current, then terminal count (or: listed)
     split_gap_mm: 0.3 # copper gap between two rails
     min_width_mm: 1.0 # a rail's narrowest trunk
-    fill: GND # what is left (a zone over the outline at priority 0), or absent
+    fill: GND # forces the leftover: a net (a zone over the outline at priority 0) or
+    #           a rail (it alone grows); absent: the engine chooses
     core_no_vias: true # other nets' vias stay out of each trunk's core
     terminal_reach_mm: 0.8 # a pad without a drop yet: where its drop will land
     currents: { 1V2: 1.0 } # A; default the @pnr-current peak, else the class current_a
@@ -755,6 +759,12 @@ plane_partition:
     protect_fanouts: true # declared fanouts' access cells stay open (default false)
     fixed_lands: true # own-net fixed pads and zones on the layer are terminals (default false)
 ```
+
+Without a `region`, `nets` are candidates: which of them get a territory, which are
+traced and who takes the leftover is decided by `pnr.rail_alloc`, which routes the best
+few alternatives and keeps the one that routes best (see [which rails get the
+plane](../plane-partition.md#which-rails-get-the-plane-the-allocation-search)); the
+route's `rail_allocation` report gives the numbers that decided each rail.
 
 How it works (`pnr/plane_partition.py`, run by the router after the declared
 fanouts are planned): the layer is rasterized inside the outline less the edge

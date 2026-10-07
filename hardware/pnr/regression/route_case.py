@@ -95,6 +95,13 @@ routes.update(
     getattr(r, "extras", dict)()
 )  # a declared fanout's via sizes and locked copper (pnr.fanout)
 (root / "routes.json").write_text(json.dumps(routes, indent=2))
+if getattr(r, "traced_rails", None):
+    # plane_partition candidates the allocation traced (pnr.rail_alloc): ordinary
+    # nets for writeback, the planes stage and the checks, as they were for routing.
+    from pnr.rail_alloc import routed_rules
+
+    rules = routed_rules(rules, r.traced_rails)
+    (root / "rules.json").write_text(json.dumps(rules, indent=2))
 (root / "pnr-report.json").write_text(
     json.dumps(
         dict(

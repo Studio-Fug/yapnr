@@ -1,25 +1,43 @@
-# The rails rung (11-ufbga201-fanout-6L-SGSGPS-rails) under the new plane-vs-trace
-# candidate decision (pnr.plane_partition._rail_decision): VDD and VDDA stay on the
-# supply plane, VBAT is traced. Four seeds, one task per cell
-# (hardware/pnr/regression/README.md).
+# The plane-allocation A/B on the rungs that use plane_partition (the -rails rung's dedicated
+# plane, the -pour rung's outer pour): the allocation search (pnr.rail_alloc, the default)
+# against the static rule of thumb (rail_alloc = "static"), seeds 0-3, both arms of a cell in
+# one submit, one machine family. hardware/pnr/regression/README.md describes a cell.
 schema = "yapnr-campaign-v1"
 kind = "ladder-cell"
-name = "rails-candidates"
+name = "rails-feedback-planes"
 source = "HEAD"
 image = "edge"
+determinism = "wall_clock_budgeted"
 
 [matrix]
-case = ["11-ufbga201-fanout-6L-SGSGPS-rails"]
+case = ["11-ufbga201-fanout-6L-SGSGPS-rails", "11-buck-vqfnhr-4L-SGPS-pour"]
 seed = [0, 1, 2, 3]
+config = ["search", "static"]
 
 [config]
 hard = true
-timeout = 600
+timeout = 1200
 initial_pool = true
 initial_starts = 8
 initial_finalists = 3
 
+[configs.search]
+rail_alloc = "search"
+
+[configs.static]
+rail_alloc = "static"
+
 [resources]
 cpus = 1
 memory_gb = 3
+disk_gb = 2
 max_wall_s = 1800
+
+[placement]
+families = ["c4d"]
+spot = true
+
+[live]
+enabled = true
+interval_s = 45
+mode = "thin"

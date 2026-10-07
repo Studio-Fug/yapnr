@@ -380,6 +380,8 @@ jobs:
 
       # Informational: the hard rungs of the CI lanes given (hardware/pnr/regression/hard_rungs.py),
       # seed 0, with the initial pool. A failure or a timeout is a notice, never the job.
+      # --rail-alloc search opts in to the plane-allocation search (pnr.rail_alloc; default
+      # off, AGENTS.md) explicitly, since the -rails rung's plane_quality check needs it.
       - name: Run the hard rungs (informational)
         if: always() && needs.plan.outputs.hard_lane != 'none'
         env:
@@ -396,6 +398,7 @@ jobs:
                 --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
                 --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
                 --timeout 3600 --seed 0 --initial-pool --initial-starts 8 --initial-finalists 3 \
+                --rail-alloc search \
                 "${lanes[@]}" || status=$?
           python3 tools/ci/ladder_summary.py out/hard --title "Hard rungs, lanes: ${LANE} (informational)" \
             >> "${GITHUB_STEP_SUMMARY}" || true

@@ -665,11 +665,24 @@ class Timeline:
                 units.append((name, [r for r in members[name] if r in placed]))
         return units
 
-    def _final_poses(self, scope):
+    def _nest_event(self, scope):
+        """The last ``hull-nest`` poses event of ``scope`` (PNR_HULL_NEST moved the legalized
+        blocks, :func:`pnr.place.hull.nest`), None without one."""
         nest = [e for e in self.trace.kind(scope, "poses") if e.get("stage") == "hull-nest"]
-        if nest:
-            # PNR_HULL_NEST moved the legalized blocks (pnr.place.hull.nest): its last poses.
-            return event_poses(self.trace, nest[-1])
+        return nest[-1] if nest else None
+
+    def _final_bodies(self, scope):
+        """``{body: pose}`` of the rigid bodies as ``scope`` left them (nest, else legal)."""
+        nest = self._nest_event(scope)
+        if nest is not None:
+            return event_bodies(nest)
+        legal = self.trace.kind(scope, "legal")
+        return event_bodies(legal[-1]) if legal else {}
+
+    def _final_poses(self, scope):
+        nest = self._nest_event(scope)
+        if nest is not None:
+            return event_poses(self.trace, nest)
         order, legal = self._legal_order(scope)
         if legal:
             return legal
@@ -792,6 +805,9 @@ class Timeline:
             return
         target = event_poses(self.trace, events[-1])
         start = self.view.poses
+        # Rigid bodies (block macros) move with their members when the event records them.
+        target_bodies = event_bodies(events[-1])
+        start_bodies = dict(self.view.bodies or {})
         outline = outline_camera(self.header)
         camera = self.view.camera
         self.view = self.view.copy(
@@ -815,6 +831,11 @@ class Timeline:
             self.view = self.view.copy(
                 poses=lerp_poses(start, target, t, self.flip),
                 camera=lerp_rect(camera, outline, t),
+                **(
+                    dict(bodies=lerp_poses(start_bodies, target_bodies, t, self.flip))
+                    if target_bodies
+                    else {}
+                ),
             )
             self.emit()
 

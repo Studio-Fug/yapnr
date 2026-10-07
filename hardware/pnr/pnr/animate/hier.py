@@ -510,8 +510,7 @@ class HierTimeline(Timeline):
             return super()._tile_view(tile)
         start = scope.meta.get("start")
         poses = self._final_poses(start)
-        legal = self.trace.kind(start, "legal")
-        bodies = event_bodies(legal[-1]) if legal else {}
+        bodies = self._final_bodies(start)
         ends = [e for e in scope.events if e["kind"] == "route_end"]
         committed, groups = {}, {}
         if ends:

@@ -71,7 +71,8 @@ class SettingsTests(unittest.TestCase):
             try:
                 with patch.dict(os.environ, {"PNR_ENERGY_SITE_PACKAGES": root}):
                     energy_track.configure_worker_dependencies()
-                self.assertIn(root, sys.path)
+                # Temporary roots may be symlink aliases; only the canonical ABI path is added.
+                self.assertEqual(sys.path, before + [str(directory.resolve())])
             finally:
                 sys.path[:] = before
 

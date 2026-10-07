@@ -1,0 +1,23 @@
+"""Native libraries the wheel carries for the engine sources that are not part of it.
+
+libpnr_maze.so: the router's native maze kernel (//hardware/pnr:libpnr_maze.so, loaded by
+hardware/pnr/pnr/route/detail/native_maze.py, which finds it here through the installed
+wheel's metadata). The ladder and `yapnr exp` tasks run frozen engine sources, not the wheel's;
+the loader uses this library only when it records the sha256 of their maze.c.
+"""
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+genrule(
+    name = "libpnr_maze",
+    srcs = ["//hardware/pnr:libpnr_maze.so"],
+    outs = ["libpnr_maze.so"],
+    cmd = "cp $< $@",
+)
+
+py_library(
+    name = "wheel_files",
+    data = [":libpnr_maze.so"],
+)

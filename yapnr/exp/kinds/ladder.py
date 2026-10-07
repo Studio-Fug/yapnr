@@ -25,6 +25,9 @@ RUNNER = "src/hardware/pnr/regression/run.py"
 # rungs without it.
 CASE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,80}$")
 FAB_PROFILES = ("legacy", "jlc-pofv")
+# run.py --maze-kernel; without the option the runner's default (native, from
+# hardware/pnr/pnr/route/detail/kernels.py) applies, so the default lives in one place.
+MAZE_KERNELS = ("native", "packed")
 
 # Seconds per case on the development Mac (Apple M4 performance core) with the initial pool of
 # 8 starts and 3 finalists, from docs/animations/ladder-results.json (2026-10). Without the pool a
@@ -51,6 +54,7 @@ OPTIONS = {
     "initial_starts": int,
     "initial_finalists": int,
     "packed_maze": bool,
+    "maze_kernel": str,
     "batched_wirelength": bool,
     "dense_maze_cost": bool,
     "detail_pitch_mm": (int, float),
@@ -146,6 +150,8 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
             "--initial-finalists",
             str(options.get("initial_finalists", 3)),
         ]
+    if options.get("maze_kernel"):
+        args += ["--maze-kernel", options["maze_kernel"]]
     if options.get("detail_pitch_mm") is not None:
         args += ["--detail-pitch-mm", str(options["detail_pitch_mm"])]
     if options.get("trace_placement_every") is not None:
@@ -213,6 +219,8 @@ class LadderCell(base.Kind):
                     errors.append("%s.%s has the wrong type" % (where, key))
             if options.get("fab_profile", "legacy") not in FAB_PROFILES:
                 errors.append("%s.fab_profile is one of %s" % (where, ", ".join(FAB_PROFILES)))
+            if options.get("maze_kernel", "native") not in MAZE_KERNELS:
+                errors.append("%s.maze_kernel is one of %s" % (where, ", ".join(MAZE_KERNELS)))
             off = options.get("compact_off")
             if isinstance(off, list) and any(p not in COMPACT_PARTS for p in off):
                 errors.append(

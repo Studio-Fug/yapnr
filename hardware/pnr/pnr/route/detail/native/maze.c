@@ -7,7 +7,8 @@
  * octile heuristic; a binary heap ordered on (f, tie) with a strictly
  * increasing tie, so pops happen in the same order as Python's heapq; the
  * first pop of a cell closes it; relaxation on a strictly smaller distance,
- * closed or not. Every double is computed in the same order as the Python
+ * closed or not, than the cell's (infinity when unseen, as Python's
+ * `distances.get(key, inf)`: an infinite or NaN distance never relaxes). Every double is computed in the same order as the Python
  * kernels; build with -ffp-contract=off (no fused multiply-add).
  *
  * Drill spacing against the vias of the path being searched is evaluated with
@@ -16,11 +17,28 @@
  * improved it, exactly like the Python kernels' per-cell tuples.
  */
 
+#include <math.h> /* INFINITY only: nothing from libm */
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__clang__) /* gcc ignores it (and warns): its ISO modes do not contract */
+#pragma STDC FP_CONTRACT OFF
+#endif
+
 #define PNR_MAZE_ABI 2
+
+/* sha256 of this file, so that the loader can tell a library built from other sources:
+ * -DPNR_MAZE_SRC_SHA from native_maze.build_library, or the header Bazel generates beside
+ * this file (//hardware/pnr:maze_src_sha); "" when unknown (the loader refuses that). */
+#if !defined(PNR_MAZE_SRC_SHA) && defined(__has_include)
+#if __has_include("hardware/pnr/pnr/route/detail/native/maze_src_sha.h")
+#include "hardware/pnr/pnr/route/detail/native/maze_src_sha.h"
+#endif
+#endif
+#ifndef PNR_MAZE_SRC_SHA
+#define PNR_MAZE_SRC_SHA ""
+#endif
 
 typedef struct {
   int32_t nx, ny, nl, diagonal;
@@ -58,6 +76,16 @@ typedef struct {
 } context;
 
 int32_t pnr_maze_abi(void) { return PNR_MAZE_ABI; }
+
+const char *pnr_maze_src_sha(void) { return PNR_MAZE_SRC_SHA; }
+
+/* The arithmetic probe the loader runs: in[0] * in[1] - in[2] with in[2] = fl(in[0] * in[1])
+ * (0 unless fused into a multiply-add) and (in[3] + in[4]) - in[3] with in[4] below in[3]'s
+ * ulp (0 unless reassociated). A library that fails it would not price paths like Python. */
+void pnr_maze_fp_probe(const double *in, double *out) {
+  out[0] = in[0] * in[1] - in[2];
+  out[1] = (in[3] + in[4]) - in[3];
+}
 
 void pnr_maze_free(void *pointer) {
   context *c = (context *)pointer;
@@ -239,7 +267,7 @@ int32_t pnr_maze_search(void *pointer, const pnr_field *f, const int32_t *starts
 
 #define RELAX(NEXT, DISTANCE, DRILL)                                                     \
   do {                                                                                 \
-    if (c->seen[NEXT] != gen || (DISTANCE) < c->g[NEXT]) {                             \
+    if ((DISTANCE) < (c->seen[NEXT] == gen ? c->g[NEXT] : INFINITY)) {                 \
       int32_t drill_ = (DRILL);                                                        \
       if (drill_ < -1) return -2;                                                      \
       c->seen[NEXT] = gen;                                                             \

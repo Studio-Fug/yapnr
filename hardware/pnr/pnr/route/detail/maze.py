@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 from .grid import Cell, RouteGrid
+from .kernels import DEFAULT_MAZE_KERNEL, MAZE_KERNELS
 
 # A move is (dlayer, di, dj); layer moves are vias (same i,j).
 _INPLANE = ((0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
@@ -120,21 +121,21 @@ def net_via_keepout(grid, net, default=None) -> int:
 
 
 def maze_kernel() -> str:
-    """The A\\* kernel this process routes with.
+    """The A\\* kernel this process routes with (:mod:`.kernels`).
 
-    * ``"packed"`` (the default): integer keys over a dense per-net field
-      (:mod:`.dense_maze`), the same predicates, prices and tie order, so the
-      same paths;
-    * ``"native"`` (``PNR_MAZE_KERNEL=native``): the packed search loop in C
-      (:mod:`.native_maze`), when its library loads; otherwise packed;
+    * ``"native"`` (the default, :data:`.kernels.DEFAULT_MAZE_KERNEL`, or
+      ``PNR_MAZE_KERNEL=native``): the packed search loop in C (:mod:`.native_maze`),
+      when its library loads; otherwise packed;
+    * ``"packed"`` (``PNR_MAZE_KERNEL=packed``): integer keys over a dense per-net field
+      (:mod:`.dense_maze`), the same predicates, prices and tie order, so the same paths;
     * ``"reference"`` (``PNR_PACKED_MAZE=0`` or ``PNR_MAZE_KERNEL=reference``):
       the dict/Cell search :func:`_astar_reference`, kept as the specification
       the faster kernels are tested against.
     """
     if os.environ.get("PNR_PACKED_MAZE") == "0":
         return "reference"
-    kernel = os.environ.get("PNR_MAZE_KERNEL") or "packed"
-    if kernel not in ("packed", "reference", "native"):
+    kernel = os.environ.get("PNR_MAZE_KERNEL") or DEFAULT_MAZE_KERNEL
+    if kernel not in MAZE_KERNELS:
         raise ValueError("PNR_MAZE_KERNEL must be packed, native or reference, not %r" % kernel)
     return kernel
 

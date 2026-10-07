@@ -275,6 +275,27 @@ class LadderOptionsTest(unittest.TestCase):
         self.assertTrue(any("compact_off names" in e for e in errors), errors)
         self.assertTrue(any("compact_off needs compact" in e for e in errors), errors)
 
+    def test_maze_kernel_reaches_the_runner_only_when_named(self):
+        # Without the option the runner's default kernel applies (one place: run.py reads
+        # hardware/pnr/pnr/route/detail/kernels.py); either kernel can be named for an A/B.
+        from yapnr.exp.kinds import ladder
+
+        self.assertNotIn("--maze-kernel", ladder.runner_arguments({}))
+        for kernel in ("packed", "native"):
+            args = ladder.runner_arguments(dict(maze_kernel=kernel))
+            self.assertEqual(args[args.index("--maze-kernel") + 1], kernel)
+        kind = kinds.get("ladder-cell")
+        campaign = {
+            "schema": spec.CAMPAIGN_SCHEMA,
+            "kind": "ladder-cell",
+            "matrix": {"case": ["01-connector-led-2"], "seed": [0], "config": ["py", "c"]},
+            "configs": {"py": {"maze_kernel": "packed"}, "c": {"maze_kernel": "native"}},
+        }
+        self.assertEqual(kind.check(campaign), [])
+        campaign["configs"]["c"]["maze_kernel"] = "reference"
+        errors = kind.check(campaign)
+        self.assertTrue(any("maze_kernel is one of" in e for e in errors), errors)
+
     def test_legalizer_switches_reach_the_runner(self):
         from yapnr.exp.kinds import ladder
 

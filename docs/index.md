@@ -109,6 +109,7 @@ design/fab-and-ordering
 design/gloss
 design/compact-placement
 design/route-compact
+design/clearance-index-validation
 history/import-manifest
 about-the-name
 references

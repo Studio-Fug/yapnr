@@ -294,6 +294,50 @@ class ExperimentTreeTest(unittest.TestCase):
         )
         self.assertTrue(same_node, "the row's DOM element was recreated instead of reused")
 
+    def test_keyed_rows_keep_dom_order_through_filters_and_new_lanes(self):
+        # Keyed in-place updates must keep the DOM order identical to rows() when rows are
+        # filtered away, come back, or appear from a live stream, with no stray/duplicate nodes
+        # and with a persisting row keeping its element throughout.
+        self.goto(width=1400, height=900)
+        self.page.eval("document.querySelector('.tr-btns button').click();1")
+        wait_for(lambda: ("initial-start-01" in self.row_texts()) or None, 5)
+        in_order = (
+            "(function(){let b=document.querySelector('.tr-body'),rs=YapnrTree.rows();"
+            "return b.children.length===rs.length&&b.childNodes.length===rs.length&&"
+            "rs.every((r,i)=>b.children[i]===YapnrTree.elementFor(r.node.id)&&"
+            "b.children[i].id==='tr-row-'+i)})()"
+        )
+        root_id = self.page.eval("YapnrTree.rows()[0].node.id")
+        self.assertTrue(self.page.eval(in_order))
+        # focus a row below others that the filter removes: it must stay focused, same element
+        self.page.eval(
+            "window._f=[...document.querySelectorAll('.tr-row')].find(e=>"
+            "e.querySelector('.tr-label').textContent==='initial-start-01');"
+            "window._f.focus({preventScroll:true});1"
+        )
+        self.page.eval("YapnrTree.setFilterText('initial-start-01');1")
+        self.assertTrue(self.page.eval(in_order))
+        self.assertTrue(self.page.eval("document.activeElement===window._f"))
+        self.page.eval("YapnrTree.setFilterText('no-such-lane-anywhere');1")
+        self.page.eval("YapnrTree.setFilterText('');1")
+        self.assertTrue(self.page.eval(in_order))
+        # (an empty filter result shows placeholder text, so rows are rebuilt after it)
+        self.page.eval(f"window._rootEl=YapnrTree.elementFor({root_id!r});1")
+        self.stream_events(
+            [
+                dict(
+                    candidate=f"ladder/keep-on/case-a/s0/aa-new-{i}",
+                    kind="candidate_queued",
+                    data={},
+                )
+                for i in range(2)
+            ]
+        )
+        self.page.eval("document.querySelector('.tr-btns button').click();1")
+        wait_for(lambda: ("aa-new-1" in self.row_texts()) or None, 5)
+        self.assertTrue(self.page.eval(in_order))
+        self.assertTrue(self.page.eval(f"YapnrTree.elementFor({root_id!r})===window._rootEl"))
+
     # ------------------------------------------------------------------ scroll position across live updates
     def test_tree_body_scroll_position_survives_live_updates(self):
         # The reported bug: every update to the experiment progress (a real engine streaming new

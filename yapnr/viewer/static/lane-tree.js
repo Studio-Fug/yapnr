@@ -179,10 +179,12 @@ function updateRowContent(el,r,i){
   refs.tw.textContent=r.open?'▾':'▸';
   refs.tw.title=(r.open?'Collapse ':'Expand ')+r.node.id;
   refs.tw.classList.remove('tr-twirl-spacer');
+  refs.tw.removeAttribute('aria-hidden');
  } else {
   el.removeAttribute('aria-expanded');
   refs.tw.textContent='';refs.tw.title='';
   refs.tw.classList.add('tr-twirl-spacer');
+  refs.tw.setAttribute('aria-hidden','true');
  }
  refs.label.textContent=rowText(r);
  refs.label.title=r.node.id;
@@ -209,13 +211,18 @@ function updateRowContent(el,r,i){
 // approach a keyed virtual-DOM diff uses, so an update's DOM churn is proportional to what
 // actually changed instead of the whole visible list. Nodes that persist keep their element (and
 // therefore keep focus, hover and any open native tooltip) even when their position in the list
-// shifts; insertBefore() is only called for elements that are actually out of place, and moving
-// a node that already has focus does not blur or scroll it (it stays connected throughout).
+// shifts; insertBefore() is only called for elements that are actually out of place (a move
+// blurs a focused element; renderBody() then refocuses it with preventScroll).
 function reconcileRows(){
+ // Drop departed rows (and any placeholder text) first, so a row disappearing above the focused
+ // one does not make every later row look out of place and get moved -- a moved element loses
+ // focus and :hover in Chrome.
+ let keep=new Set(rows.map(r=>r.node.id));
+ for(let n of [...body.childNodes])if(!(n._nodeId&&keep.has(n._nodeId)&&elByNodeId.get(n._nodeId)===n))n.remove();
  let next=new Map();
  for(let i=0;i<rows.length;i++){
   let r=rows[i],el=elByNodeId.get(r.node.id);
-  if(el)updateRowContent(el,r,i);else el=buildRow(r,i);
+  if(el)updateRowContent(el,r,i);else{el=buildRow(r,i);el._nodeId=r.node.id}
   next.set(r.node.id,el);
   if(body.childNodes[i]!==el)body.insertBefore(el,body.childNodes[i]||null);
  }
@@ -228,6 +235,8 @@ function renderBody(){
  let tree=s?.tree,lanes=s?.lanes||{};
  let hadFocus=!!(document.activeElement&&body.contains(document.activeElement));
  let focusedId=rows[focusIndex]?.node.id;
+ // trust the row that actually has focus over the roving-tabindex bookkeeping
+ if(hadFocus){let a=document.activeElement.closest?.('.tr-row');if(a&&a._nodeId)focusedId=a._nodeId}
  if(!tree){body.textContent='Waiting for experiment events…';rows=[];elByNodeId.clear();return}
  rows=flatten(tree,lanes);
  if(!rows.length){body.textContent=filterText||filterStates.size<ALL_STATES.length?'No lanes match this filter.':'No experiments yet.';elByNodeId.clear();return}

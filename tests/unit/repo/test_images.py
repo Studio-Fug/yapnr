@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import platform
 import re
+import subprocess
 import unittest
 from typing import Dict, List, Tuple
 
@@ -171,6 +172,34 @@ class KicadEnergyLockTest(unittest.TestCase):
         self.assertIn("--python-version 3.12", script)
         self.assertIn("compile_energy_kicad arm64 aarch64-manylinux_2_28", script)
         self.assertIn("compile_energy_kicad amd64 x86_64-manylinux_2_28", script)
+
+    def test_dependency_install_uses_root_build_cache(self):
+        instructions = _read("docker/yapnr/Dockerfile").replace("\\\n", "").splitlines()
+        installs = [
+            line
+            for line in instructions
+            if line.startswith("RUN ") and "--target /opt/energy-kicad" in line
+        ]
+        self.assertEqual(len(installs), 1)
+        self.assertIn("--mount=type=cache,target=/root/.cache/uv", installs[0])
+        # Run only the install's environment setup, with the inherited runtime HOME.
+        # No uv invocation or container build is needed to detect cache pollution.
+        setup = installs[0].split("uv pip install", 1)[0]
+        setup = setup[setup.index("set -eux;") :]
+        result = subprocess.run(
+            ["sh", "-c", setup + 'printf "%s\\n" "$HOME" "$UV_CACHE_DIR" "$UV_LINK_MODE"'],
+            env={
+                **os.environ,
+                "HOME": "/var/lib/yapnr",
+                "UV_CACHE_DIR": "/var/lib/yapnr/.cache/uv",
+                "UV_LINK_MODE": "hardlink",
+            },
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        self.assertEqual(result.stdout.splitlines(), ["/root", "/root/.cache/uv", "copy"])
 
 
 class KicadBaseTest(unittest.TestCase):

@@ -113,6 +113,7 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
     --mount=type=bind,source=docker/yapnr/energy-kicad-arm64.lock,target=/tmp/energy-kicad-arm64.lock \
     --mount=type=cache,target=/root/.cache/uv \
     set -eux; \
+    export HOME=/root UV_CACHE_DIR=/root/.cache/uv UV_LINK_MODE=copy; \
     uv pip install --python /usr/bin/python3 --target /opt/energy-kicad --require-hashes --no-deps \
       --requirements "/tmp/energy-kicad-${TARGETARCH}.lock"; \
     /usr/bin/python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' > /opt/energy-kicad/python-version.txt; \

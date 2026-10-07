@@ -1099,6 +1099,35 @@ Ladder fab-profile default (2026-10-06, `claude/defaults-rails-fab`, campaign
   the plane-partition checker), or the owner decides the one rail-allocation-territory cell is
   out of scope for this gate.
 
+Ladder fab-profile default, rerun (2026-10-07, `claude/rails-settle`, campaigns
+`20261007-ladder-4f191e` (the 45-cell gate), `-0abe44` (`-rails` seeds 0 to 7) and `-a98686` (the
+three manual rungs), [regression-ladder.md](regression-ladder.md)):
+
+- **The `-rails` failure was a plane-partition bug, not rail allocation or the checker.**
+  `rails-In4` failed whenever the search chose "plane VDD+VBAT | trace VDDA | leftover VDD":
+  VBAT's In4 fill came out in three pieces (44.4 mm^2: 43.0 plus two 0.70 mm^2 slivers) round
+  J7.1, a 1.7 mm square through-hole pad. `pnr.plane_partition` modelled a plated pad as the disc
+  inside it, so the non-owner rail's 1 mm apron ended about 1.6 mm from the pad's centre while
+  KiCad's 0.5 mm thermal relief reaches 1.70 mm at the square's corners; the relief cut the ring
+  at each diagonal and every fragment hung on one spoke. Bisect: #81's head fails identically
+  with `--compact` (the gate's configuration, which #81's recheck did not use: compact
+  placement tips the search to the VBAT plane by about 1 mm-eq); `main` without compact passes.
+  Fix: a plated pad is its whole rectangle (claimed as a land; another net's, or a traced
+  candidate's, blocked by the rectangle at the clearance), and a non-owner rail grows past a
+  land's relief by its minimum width. Result: `-rails` 16 of 16 (seeds 0 to 7, both profiles),
+  four of them with VBAT a plane, now one piece.
+- **Gate: still not met as stated; the default stays `legacy` for the owner to decide.** All 21
+  of `20261006-ladder-b0ec34`'s `jlc-pofv` failures pass (the eleven cases, both seeds); over
+  the 45 gated cells `jlc-pofv` passes 90 of 90 to `legacy`'s 88, with fewer vias (3627 vs 3894)
+  and less copper (29.5 m vs 31.9 m). But "no rung worse than `legacy`" fails on the manual
+  target rungs, which fail under both profiles: `11-shove-channel-lm-14` leaves 3 nets open
+  under `jlc-pofv` against 2 (both seeds), and `12-soc-bga-113` (its declared `jlc-6l-hdi`)
+  leaves 51 unrouted against 33 and 35 on seed 1 and runs past its 3600 s place-and-route
+  budget on seed 0 (3485 s on seed 1, against 2500 to 2680 s under `legacy`).
+  `11-shove-channel-14` is equal.
+- **Revisit when** the owner decides whether the manual target rungs count for the gate, or the
+  router closes the gap on them under `jlc-pofv`.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

@@ -1,0 +1,51 @@
+# The three manual rungs with an open target (11-shove-channel-14, 11-shove-channel-lm-14,
+# 12-soc-bga-113: push-and-shove and dense-board routing targets, ci.target) under both fab
+# profiles, seeds 0 and 1, in the ladder gate's configuration (rails-settle.toml) but with
+# the top rung's room: two vCPUs and an hour per stage. Not gated (their open nets are the
+# router's targets); the comparison is jlc-pofv against legacy.
+schema = "yapnr-campaign-v1"
+kind = "ladder-cell"
+name = "rails-settle-new"
+source = "HEAD"
+image = "edge"
+determinism = "wall_clock_budgeted"
+
+[matrix]
+case = ["11-shove-channel-14", "11-shove-channel-lm-14", "12-soc-bga-113"]
+seed = [0, 1]
+config = ["jlc-pofv", "legacy"]
+
+[config]
+rounds = 4
+timeout = 3600
+initial_pool = true
+initial_starts = 8
+initial_finalists = 3
+showcases = true
+hard = true
+gloss = true
+compact = true
+route_pairs_diff_pairs = true
+
+[configs.jlc-pofv]
+fab_profile = "jlc-pofv"
+
+[configs.legacy]
+fab_profile = "legacy"
+
+[resources]
+cpus = 2
+memory_gb = 6
+disk_gb = 2
+max_wall_s = 10800
+
+# Both ranked families, so a submit can spill to the fallback region when the first one's
+# Spot quota is in use by other campaigns.
+[placement]
+families = ["c4d", "c4"]
+spot = true
+
+[live]
+enabled = true
+interval_s = 45
+mode = "thin"

@@ -87,22 +87,32 @@ d = json.load(sys.stdin)
 terms = {n: [Terminal(**t) for t in ts] for n, ts in d["terms"].items()}
 blocked = [(tuple(c), r) for c, r in d["blocked"]]
 _CACHE.clear()
-part = partition(d["entry"], width=d["w"], height=d["h"], terminals=terms, blocked=blocked)
+part = partition(d["entry"], width=d["w"], height=d["h"], terminals=terms, blocked=blocked,
+                 fill_min_mm=d.get("fill_min", 0.0))
 json.dump(part.rows(), sys.stdout)
 """
 
 
-def partition_rows(entry, pads, blocked):
+def partition_rows(entry, pads, blocked, terms=None, fill_min=0.0):
     """The partition's region rows (pnr.plane_partition, numpy): here, or in the numeric
-    Python PNR_PYTHON names when this one has no numpy."""
-    terms = {
-        net: [
-            dict(name="%s%d.1" % (net, n), kind="via", at=list(p), radius=0.2)
-            for n, p in enumerate(points)
-        ]
-        for net, points in pads.items()
-    }
-    payload = dict(entry=entry, terms=terms, blocked=[[list(c), r] for c, r in blocked], w=W, h=H)
+    Python PNR_PYTHON names when this one has no numpy. ``terms`` (net -> Terminal
+    fields) replaces the default (a via of 0.2 mm radius under each of ``pads``)."""
+    if terms is None:
+        terms = {
+            net: [
+                dict(name="%s%d.1" % (net, n), kind="via", at=list(p), radius=0.2)
+                for n, p in enumerate(points)
+            ]
+            for net, points in pads.items()
+        }
+    payload = dict(
+        entry=entry,
+        terms=terms,
+        blocked=[[list(c), r] for c, r in blocked],
+        w=W,
+        h=H,
+        fill_min=fill_min,
+    )
     if importlib.util.find_spec("numpy") is not None:
         from pnr.plane_partition import _CACHE, Terminal, partition
 
@@ -113,6 +123,7 @@ def partition_rows(entry, pads, blocked):
             height=H,
             terminals={n: [Terminal(**t) for t in ts] for n, ts in terms.items()},
             blocked=blocked,
+            fill_min_mm=fill_min,
         )
         return part.rows()
     python = os.environ.get("PNR_PYTHON")
@@ -189,6 +200,114 @@ class DrawTest(unittest.TestCase):
             result = report(b, rules, Path(tmp) / "ir", path)
         for net in ("A", "B"):
             self.assertEqual(result[net]["status"], "pass", result[net].get("opens"))
+
+
+@unittest.skipUnless(NATIVE, "requires KiCad Python")
+class ThroughLandTest(unittest.TestCase):
+    """A rail that does not own the leftover, with a square through-hole terminal
+    (pnr.plane_partition.through_land): KiCad relieves the pad about its outline, and
+    the rail's zone still fills as one piece round the relief. Modelled as the disc
+    inside the pad (before 2026-10-07), the territory left the relief's corners out
+    and the fill fell into three pieces, two of them slivers held by one spoke each
+    (the -rails rung's VBAT on J7.1)."""
+
+    def test_the_fill_round_a_square_pad_is_one_piece(self):
+        import pcbnew as k
+
+        from pnr.writeback import draw_plane_regions
+
+        b, _pads, v = board()
+        for z in list(b.Zones()):
+            b.Delete(z)
+        net_b = b.FindNet("B")
+        f = k.FOOTPRINT(b)
+        f.SetReference("J7")
+        b.Add(f)
+        f.SetPosition(v(2.5, 3.0))
+        p = k.PAD(f)
+        p.SetNumber("1")
+        p.SetAttribute(k.PAD_ATTRIB_PTH)
+        p.SetShape(k.PAD_SHAPE_RECT)
+        p.SetSize(k.VECTOR2I(1700000, 1700000))
+        p.SetDrillSize(k.VECTOR2I(1000000, 1000000))
+        p.SetLayerSet(k.PAD.PTHMask())
+        p.SetPosition(v(2.5, 3.0))
+        p.SetNet(net_b)
+        f.Add(p)
+        # A's terminals: the vias of its first two pads; B's: J7.1 and the via of its
+        # third pad (10, 7.5).
+        terms = dict(
+            A=[
+                dict(name="A0.1", kind="via", at=[2.0, 2.0], radius=0.2),
+                dict(name="A1.1", kind="via", at=[18.0, 2.0], radius=0.2),
+                dict(name="A2.1", kind="via", at=[10.0, 4.5], radius=0.2),
+            ],
+            B=[
+                dict(name="J7.1", kind="land", at=[2.5, 3.0], radius=1.2021, size=[1.7, 1.7]),
+                dict(name="B2.1", kind="via", at=[10.0, 7.5], radius=0.2),
+            ],
+        )
+        # B's pads B0, B1 sit in A's leftover here: off the layer for this test.
+        for t in list(b.GetTracks()):
+            q = t.GetPosition()
+            if t.GetClass() == "PCB_VIA" and t.GetNetname() == "B":
+                if (q.x, q.y) != (v(10.0, 7.5).x, v(10.0, 7.5).y):
+                    b.Delete(t)
+            elif t.GetClass() == "PCB_VIA" and t.GetNetname() == "A":
+                if (q.x, q.y) == (v(2.0, 2.0).x, v(2.0, 2.0).y):
+                    b.Delete(t)  # under J7.1's land
+        terms["A"] = terms["A"][1:]
+        entry = dict(
+            layer="In2.Cu",
+            nets=["A", "B"],
+            order="current",
+            split_gap_mm=0.3,
+            min_width_mm=1.0,
+            fill="A",
+            terminal_reach_mm=0.8,
+            h_mm=0.1,
+        )
+        rows = partition_rows(entry, None, [], terms=terms, fill_min=0.1)
+        rules = dict(fab=dict(clearance_mm=0.1, track_width_mm=0.1))
+        full = [v(0, 0), v(W, 0), v(W, H), v(0, H)]
+        made = draw_plane_regions(b, rows, rules, lambda q: v(*q), full)
+        k.ZONE_FILLER(b).Fill(b.Zones())
+        lid = b.GetLayerID("In2.Cu")
+        fills = {z.GetNetname(): z.GetFilledPolysList(lid) for z in made}
+        self.assertEqual(fills["B"].OutlineCount(), 1, "B fills in pieces round J7.1")
+        self.assertEqual(fills["A"].OutlineCount(), 1)
+        # The ladder's judges of a partition on the drawn board: one piece per rail
+        # (rail_zones) and no region the judge's raster sees serving a lone terminal
+        # (plane_quality: a relief ring narrower than its raster fell apart there).
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "regression"))
+        from check_constraints import run_checks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "through.kicad_pcb")
+            k.SaveBoard(path, b)
+            spec = dict(
+                checks=[
+                    dict(
+                        id="rails",
+                        kind="rail_zones",
+                        layer="In2.Cu",
+                        nets=["A", "B"],
+                        candidates=True,
+                        min_area_mm2=1.0,
+                    ),
+                    dict(
+                        id="quality",
+                        kind="plane_quality",
+                        layer="In2.Cu",
+                        candidates=["A", "B"],
+                        currents={"A": 1.0, "B": 0.01},
+                        min_width_mm=1.0,
+                    ),
+                ]
+            )
+            result = run_checks(path, spec)
+        for row in result["checks"]:
+            self.assertEqual(row["status"], "satisfied", row)
 
 
 @unittest.skipUnless(NATIVE, "requires KiCad Python")

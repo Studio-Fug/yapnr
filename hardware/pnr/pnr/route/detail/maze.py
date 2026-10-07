@@ -1170,13 +1170,15 @@ def _route_impl(
     return RouteResult(nets=result_nets, unrouted=sorted(unrouted), iterations=iters)
 
 
-def late_drop_room(grid, result, sites, via_keepout, net_halo=None) -> frozenset:
+def late_drop_room(grid, result, sites, via_keepout, net_halo=None, where=None) -> frozenset:
     """The pads of ``sites`` (:func:`pnr.route.detail.router._late_drops`) that keep
     room for their via drop beside ``result``'s copper: a via column at a cell centre
     between the site's nearest and farthest via centre from the pad, clear of static
     copper on every layer (:meth:`RouteGrid.via_passable`, the drill spacing) and of
     every other net's routed footprint, with a stub from the pad on its surface layer
-    clear of them too. A frozenset of pad ids."""
+    clear of them too. A frozenset of pad ids. ``where`` (a dict), when given,
+    receives each such pad's first site: pad -> ``(net, surface layer, pad centre,
+    (i, j))``."""
     import math
 
     halo = net_halo or {}
@@ -1218,12 +1220,52 @@ def late_drop_room(grid, result, sites, via_keepout, net_halo=None) -> frozenset
                 ):
                     continue
                 found = True
+                if where is not None:
+                    where[pad] = (net, layer, (x, y), (i, j))
                 break
             if found:
                 break
         if found:
             out.add(pad)
     return frozenset(out)
+
+
+def _drop_reserve(grid, sites, net_access, via_keepout, net_halo=None):
+    """A net keep-out (:meth:`RouteGrid.add_net_keepout` form) holding the late drop
+    ``sites`` (:func:`late_drop_room`'s ``where``) for their own nets, in the terms
+    :func:`late_drop_room` judges them by (other nets' footprints, where a column a
+    net holds on two layers counts as its via): no other net's copper, on any
+    layer, within the largest via keep-out plus track halo of the site's column or
+    of the cells of the stub from the pad. Access cells stay open. None without
+    sites."""
+    import math
+
+    import numpy as np
+
+    if not sites:
+        return None
+    halo = max([0] + [int(h) for h in (net_halo or {}).values()])
+    keepouts = getattr(grid, "routing_via_keepouts", None) or {}
+    reach = max([via_keepout] + [int(k) for k in keepouts.values()]) + halo
+    mask = np.zeros((grid.nlayers, grid.ny, grid.nx), dtype=bool)
+    step = grid.pitch / 2
+    nets = set()
+    for _pad, (net, _layer, (x, y), (si, sj)) in sorted(sites.items()):
+        nets.add(net)
+        cx, cy = grid.center_of(si, sj)
+        n = max(1, int(math.ceil(math.dist((cx, cy), (x, y)) / step)))
+        held = {(si, sj)}
+        held.update(grid.cell_of(x + (cx - x) * k / n, y + (cy - y) * k / n) for k in range(n))
+        for i, j in held:
+            mask[
+                :,
+                max(0, j - reach) : max(0, j + reach + 1),
+                max(0, i - reach) : max(0, i + reach + 1),
+            ] = True
+    for cells in net_access.values():
+        for c in cells:
+            mask[c.layer, c.j, c.i] = False
+    return mask, mask.copy(), frozenset(nets)
 
 
 def route(grid, net_access, *, late_copper=None, late_drops=None, exact=None, **kwargs):
@@ -1314,8 +1356,32 @@ def route(grid, net_access, *, late_copper=None, late_drops=None, exact=None, **
         note = ""
         if room is not None:
             kept = late_drop_room(grid, exact_result, late_drops, *keep)
+            lost = room - kept
+            if lost:
+                # The recovery took the room of drops the negotiated route left: hold
+                # those drops' sites (as the negotiated route left them) for their own
+                # nets and recover once more.
+                sites = {}
+                lost_sites = [site for site in late_drops if site[0] in lost]
+                late_drop_room(grid, result, lost_sites, *keep, where=sites)
+                reserve = _drop_reserve(grid, sites, net_access, *keep)
+                if reserve is not None:
+                    saved = list(grid.net_keepouts)
+                    grid.add_net_keepout(*reserve)
+                    retry_events = []
+                    try:
+                        with profile_span("maze_exact_recovery"):
+                            retry = route_exact(grid, net_access, _events=retry_events, **kwargs)
+                    finally:
+                        grid.net_keepouts = saved
+                    retry_kept = late_drop_room(grid, retry, late_drops, *keep)
+                    retry_after = missing_connections(retry)
+                    if room <= retry_kept and retry_after < before:
+                        exact_result, events = retry, retry_events
+                        after, kept = retry_after, retry_kept
+                        note = "; %d late drop site(s) held" % len(sites)
             roomy = room <= kept
-            note = "; late drop room %d of %d kept" % (len(room & kept), len(room))
+            note = "; late drop room %d of %d kept%s" % (len(room & kept), len(room), note)
         better = after < before and roomy
         sys.stderr.write(
             "exact-separation recovery: %d -> %d open connections%s (%s)\n"

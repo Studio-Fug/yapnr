@@ -75,7 +75,12 @@ class RecoveryTest(unittest.TestCase):
         with mock.patch.object(maze, "_route_impl", return_value=halo), mock.patch(
             "pnr.route.detail.exact_route.supported", return_value=True
         ), mock.patch(
-            "pnr.route.detail.exact_route.route_exact", return_value=exact_result
+            "pnr.route.detail.exact_route.route_exact",
+            **(
+                {"side_effect": exact_result}
+                if callable(exact_result)
+                else {"return_value": exact_result}
+            ),
         ) as exact, mock.patch.dict(
             os.environ, {"PNR_SINGLE_TRACK_WORKERS": "1", "PNR_EXACT_SEPARATION": "recover"}
         ), mock.patch(
@@ -103,6 +108,63 @@ class RecoveryTest(unittest.TestCase):
         greedy.nets["A"] = RoutedNet("A", routed=True)
         got, _exact = self.run_route(greedy)
         self.assertEqual(got.unrouted, ["A"])
+
+    def test_a_lost_drop_is_held_and_the_recovery_runs_again(self):
+        # The first recovery walls the drop in; the drop's site (as the negotiated
+        # route left it) is then held for its net and the second recovery keeps it.
+        g = grid()
+        greedy = walled(g)
+        greedy.nets["A"] = RoutedNet("A", routed=True)
+        roomy = RouteResult(nets={"A": RoutedNet("A", routed=True)}, unrouted=[], iterations=2)
+        held = []
+
+        def exact(grid_, *_args, **_kwargs):
+            held.append([allowed for _t, _v, allowed in grid_.net_keepouts])
+            return greedy if len(held) == 1 else roomy
+
+        got, calls = self.run_route(exact)
+        self.assertEqual(calls.call_count, 2)
+        self.assertEqual(held, [[], [frozenset({"GND"})]])
+        self.assertIs(got, roomy)
+
+    def test_the_held_site_is_released_and_a_worse_retry_discarded(self):
+        g = grid()
+        greedy = walled(g)
+        greedy.nets["A"] = RoutedNet("A", routed=True)
+        got, calls = self.run_route(lambda *a, **k: greedy)
+        self.assertEqual(calls.call_count, 2)
+        self.assertEqual(got.unrouted, ["A"])
+
+
+class ReserveTest(unittest.TestCase):
+    def test_the_held_site_keeps_its_room(self):
+        g = grid()
+        empty = RouteResult(nets={}, unrouted=[], iterations=0)
+        where = {}
+        self.assertEqual(late_drop_room(g, empty, [SITE], 1, where=where), {"U1.9"})
+        ((net, layer, centre, (i, j)),) = where.values()
+        self.assertEqual((net, layer, centre), ("GND", 0, (5.0, 3.0)))
+        access = {"S": [Cell(0, i + 1, j)]}
+        track, via, allowed = maze._drop_reserve(g, where, access, 1)
+        self.assertEqual(allowed, {"GND"})
+        # The column (every layer) and the stub are held, the access cell is not.
+        self.assertTrue(track[:, j, i].all() and via[:, j, i].all())
+        self.assertFalse(track[0, j, i + 1])
+        stub = g.cell_of(5.0, 3.0)
+        self.assertTrue(track[0, stub[1], stub[0]])
+        # Copper of another net anywhere outside the held cells leaves the room.
+        cells = [
+            Cell(la, a, b)
+            for la in range(g.nlayers)
+            for b in range(g.ny)
+            for a in range(g.nx)
+            if not track[la, b, a]
+        ]
+        other = RouteResult(
+            nets={"S": RoutedNet("S", cells=cells, routed=True)}, unrouted=[], iterations=1
+        )
+        self.assertEqual(late_drop_room(g, other, [SITE], 1), {"U1.9"})
+        self.assertIsNone(maze._drop_reserve(g, {}, access, 1))
 
 
 class RouterSitesTest(unittest.TestCase):

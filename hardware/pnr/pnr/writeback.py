@@ -123,6 +123,25 @@ def to_pcb_nm(x_mm: float, y_mm: float, height_mm: float, offset_mm: float = _PA
     return px, py
 
 
+# How far past the nearest legal via centre :func:`_dogbone_fanout_net` keeps
+# searching for a clear dog-bone site (mm, nearest first).
+VIA_DROP_SEARCH_MM = (0.0, 0.25, 0.5, 0.9, 1.5)
+
+
+def via_drop_span_mm(half_diagonal_mm: float, via_radius_mm: float, clearance_mm: float):
+    """``(near, far)`` via-centre distance (mm) from a pad centre for its dog-bone
+    drop: the nearest legal site (half diagonal + via radius + clearance) out to
+    ``VIA_DROP_SEARCH_MM[-1]`` further.
+
+    Pure (no pcbnew): this is the exact search ring :func:`_dogbone_fanout_net`
+    walks, factored out so :func:`pnr.route.detail.router._late_drops` (which
+    checks the same ring ahead of time, on the signal grid, via
+    :func:`pnr.route.detail.maze.late_drop_room`) cannot drift from it.
+    """
+    near = half_diagonal_mm + via_radius_mm + clearance_mm
+    return near, near + VIA_DROP_SEARCH_MM[-1]
+
+
 class _WriteFrame:
     """engine (mm, y-up, origin BL) -> pcbnew (nm, y-down, page-offset)."""
 
@@ -967,8 +986,13 @@ def _dogbone_fanout_net(
                 via_r = via_d / 2.0
                 via_keep = max(via_r + clr, drill_d / 2.0 + _nm(fab["hole_clearance_mm"]))
             span = None if drop is None else drop[:2]
-            # Via outside the complete pad, avoiding unsupported via-in-pad fab.
-            base = math.hypot(size.x, size.y) / 2.0 + via_r + clr
+            # Via outside the complete pad, avoiding unsupported via-in-pad fab
+            # (near, far) via_drop_span_mm: shared with pnr.route.detail.router
+            # ._late_drops so the two search rings cannot drift apart.
+            near_mm, _far_mm = via_drop_span_mm(
+                math.hypot(size.x, size.y) / 2.0 / _NM_PER_MM, via_r / _NM_PER_MM, clr / _NM_PER_MM
+            )
+            base = _nm(near_mm)
             angle = math.atan2(pos.y - center.y, pos.x - center.x)
             placed = False
             # Nearest via distance first (stub length dominates inductance), then the
@@ -987,7 +1011,7 @@ def _dogbone_fanout_net(
             tries = [
                 (graze, e, w)
                 for graze in ((False, True) if lands else (True,))
-                for e in (0.0, 0.25, 0.5, 0.9, 1.5)
+                for e in VIA_DROP_SEARCH_MM
                 for w in widths
             ]
             for graze, extra, trace_w in tries:

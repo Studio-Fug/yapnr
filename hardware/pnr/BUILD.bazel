@@ -2714,6 +2714,68 @@ py_test(
     ],
 )
 
+# Rule areas built into footprints bind every copper producer (graph, grid, route,
+# fanout access tails, the BGA planner, the plane partition), and a via's drill keeps
+# the board's hole-to-hole minimum from footprint drills under one-gap fab rules.
+py_test(
+    name = "footprint_keepouts_test",
+    size = "small",
+    srcs = ["tests/test_footprint_keepouts.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_footprint_keepouts.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# PNR_EXACT_LATE_ROOM: the exact-separation recovery beside late plane drops (the drop
+# room check, the recovery's keep/discard choice, the router's drop sites).
+py_test(
+    name = "exact_late_room_test",
+    size = "small",
+    srcs = ["tests/test_exact_late_room.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_exact_late_room.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# The same judged by KiCad: ingest and writeback of a footprint's rule area, the native
+# Oracle and the shove world reading it, and (with --test_env=PNR_KICAD_PYTHON=... and
+# --test_env=PNR_KICAD_CLI=..., headless KiCad) a routed board's DRC: no
+# items_not_allowed, no hole_to_hole. It skips without them.
+py_test(
+    name = "footprint_keepouts_kicad_test",
+    size = "small",
+    srcs = ["tests/test_footprint_keepouts_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_footprint_keepouts_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
 py_test(
     name = "batched_cost_test",
     size = "small",

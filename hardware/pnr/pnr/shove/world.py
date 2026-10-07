@@ -367,7 +367,8 @@ class World:
                     r=t.GetWidth() / 2e6,
                     width=t.GetWidth() / 1e6,
                 )
-        for z in b.Zones():
+        # The board's rule areas and those built into footprints (KiCad judges both).
+        for z in list(b.Zones()) + [z for fp in b.GetFootprints() for z in fp.Zones()]:
             if not z.GetIsRuleArea():
                 continue
             bb = z.GetBoundingBox()

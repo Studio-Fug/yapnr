@@ -209,6 +209,72 @@ def _atopile_address(fp) -> str:
     return ""
 
 
+def _flag(zone, *getters) -> bool:
+    """A rule-area flag by its first getter this KiCad version has."""
+    for name in getters:
+        get = getattr(zone, name, None)
+        if get is not None:
+            return bool(get())
+    return False
+
+
+def _rule_areas(fp, frame: _Frame, pos, rot: float, bottom: bool) -> List[dict]:
+    """The rule areas (keep-outs) built into footprint ``fp``
+    (:attr:`pnr.graph.Component.rule_areas`): each outline in the footprint's own
+    frame as the library draws it on the top side (the inverse of
+    :func:`pnr.graph.footprint_point` at the part's ingest pose), the copper layers
+    it covers with the part on either side (KiCad ``Flip`` mirrors the copper stack)
+    and what it bars. Holes in an outline are dropped (conservative); an area that
+    bars nothing, or covers no enabled copper layer, is left out."""
+    import math
+
+    board = fp.GetBoard()
+    copper = list(board.GetEnabledLayers().CuStack()) if board is not None else []
+    names = [board.GetLayerName(la) for la in copper] if board is not None else []
+    flip = {n: names[len(names) - 1 - i] for i, n in enumerate(names)}
+    a = math.radians(rot)
+    co, si = math.cos(a), math.sin(a)
+    out = []
+    for zone in fp.Zones():
+        if not zone.GetIsRuleArea():
+            continue
+        items = [
+            item
+            for item, getters in (
+                ("tracks", ("GetDoNotAllowTracks",)),
+                ("vias", ("GetDoNotAllowVias",)),
+                ("pads", ("GetDoNotAllowPads",)),
+                ("pours", ("GetDoNotAllowZoneFills", "GetDoNotAllowCopperPour")),
+                ("footprints", ("GetDoNotAllowFootprints",)),
+            )
+            if _flag(zone, *getters)
+        ]
+        here = [board.GetLayerName(la) for la in copper if zone.IsOnLayer(la)]
+        if not items or not here:
+            continue
+        top = sorted({flip[n] for n in here} if bottom else set(here), key=names.index)
+        polys = zone.Outline()
+        for k in range(polys.OutlineCount()):
+            chain = polys.Outline(k)
+            outline = []
+            for n in range(chain.PointCount()):
+                q = chain.CPoint(n)
+                x, y = frame.point(q.x, q.y)
+                dx, dy = x - pos[0], y - pos[1]
+                lx, ly = co * dx + si * dy, -si * dx + co * dy
+                outline.append((round(lx, 6), round(-ly if bottom else ly, 6)))
+            if len(outline) >= 3:
+                out.append(
+                    dict(
+                        outline=[list(p) for p in outline],
+                        layers=top,
+                        layers_bottom=sorted({flip[n] for n in top}, key=names.index),
+                        items=items,
+                    )
+                )
+    return out
+
+
 def _component(fp, frame: _Frame) -> Component:
     import pcbnew
 
@@ -384,6 +450,7 @@ def _component(fp, frame: _Frame) -> Component:
         pads=pads,
         smd_body=bool(fp.GetAttributes() & pcbnew.FP_SMD),
         body=body,
+        rule_areas=_rule_areas(fp, frame, (x, y), fp.GetOrientationDegrees(), side == SIDE_BOTTOM),
     )
 
 

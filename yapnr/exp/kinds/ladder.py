@@ -55,6 +55,7 @@ OPTIONS = {
     "dense_maze_cost": bool,
     "detail_pitch_mm": (int, float),
     "trace": bool,
+    "profile": bool,
     "trace_placement_every": int,
     "showcases": bool,
     "hard": bool,
@@ -78,12 +79,16 @@ OPTIONS = {
     "macro_hull": bool,
     "hull_dovetail": (int, float),
     "rail_alloc": str,
+    "exact_late_room": bool,
+    "maze_kernel": str,
 }
 FLAGS = {
     "packed_maze": "--packed-maze",
     "batched_wirelength": "--batched-wirelength",
     "dense_maze_cost": "--dense-maze-cost",
     "trace": "--trace",
+    # pnr.profile around each cell's place-route stage (CASE/profile/*.json).
+    "profile": "--profile",
     "showcases": "--showcases",
     # The hard rungs (hardware/pnr/regression/hard_rungs.py) become selectable cases.
     "hard": "--hard",
@@ -103,6 +108,8 @@ FLAGS = {
     "route_pairs_diff_pairs": "--route-pairs-diff-pairs",
     # PNR_MACRO_HULL (hardware/pnr/pnr/place/hull.py).
     "macro_hull": "--macro-hull",
+    # The exact-separation recovery beside late plane drops (router-keepouts).
+    "exact_late_room": "--exact-late-room",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
 WEIGHTS = {
@@ -137,6 +144,7 @@ SUMMARY = [
     "run/*/result.json",
     "run/*/drc.json",
     "run/*/design.json",
+    "run/*/profile/*.json",
 ]
 
 
@@ -160,6 +168,8 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
             "--initial-finalists",
             str(options.get("initial_finalists", 3)),
         ]
+    if options.get("maze_kernel"):
+        args += ["--maze-kernel", str(options["maze_kernel"])]  # packed or native
     if options.get("detail_pitch_mm") is not None:
         args += ["--detail-pitch-mm", str(options["detail_pitch_mm"])]
     if options.get("trace_placement_every") is not None:

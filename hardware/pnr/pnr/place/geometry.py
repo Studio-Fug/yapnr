@@ -70,15 +70,33 @@ def hard_edge_bands(constraints):
 
 
 def edge_distance(comp, edge, width, height):
-    """Distance (mm) from ``comp``'s placed courtyard to the named board edge (negative
-    when the courtyard crosses it)."""
-    r = courtyard_rect(comp)
+    """Distance (mm) from ``comp``'s placed body to the named board edge (negative when
+    the body crosses it): its real, possibly off-centre body box
+    (:func:`placed_body`), as the checker measures the footprint's courtyard, not the
+    symmetric envelope a hard edge band would otherwise read short by the offset."""
+    x0, y0, x1, y1 = placed_body(comp)
+    px, py = comp.pos
     return {
-        "south": r.bottom,
-        "north": height - r.top,
-        "west": r.left,
-        "east": width - r.right,
+        "south": py + y0,
+        "north": height - (py + y1),
+        "west": px + x0,
+        "east": width - (px + x1),
     }[edge]
+
+
+def placed_body(comp, rot=None):
+    """``(x0, y0, x1, y1)``: the part's body box about ``comp.pos`` at ``rot`` (default
+    ``comp.rot``): its off-centre ``body`` turned with it whatever the PNR_COMPACT
+    flags, else the centred courtyard. Hard edge bands judge this box, the box a
+    footprint's courtyard is; the placer may still reserve the symmetric envelope."""
+    rot = comp.rot if rot is None else rot
+    body = comp.body
+    if body is not None and not str(comp.footprint).startswith(("block:", "line:")):
+        return _turned(body, rot)
+    w, h = comp.courtyard
+    if int(round(rot)) % 180 == 90:
+        w, h = h, w
+    return (-w / 2.0, -h / 2.0, w / 2.0, h / 2.0)
 
 
 def edge_band_violations(graph, constraints, width, height):

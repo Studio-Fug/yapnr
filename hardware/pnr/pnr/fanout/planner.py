@@ -105,7 +105,16 @@ def _inputs(graph, rules, spec, layers, plane_nets, signal_nets, fixed_copper):
         if ref in graph.refs
     }
     sites = (spec.get("bottom_sites") or {}).get("parts") or []
+    from pnr.fixed_block import footprint_keepouts
+
+    # The footprints' own rule areas at their poses; only when there are any, so the
+    # digest of a board without them is unchanged.
+    extra = {}
+    owned = footprint_keepouts(graph)
+    if owned:
+        extra["footprint_keepouts"] = owned
     return dict(
+        **extra,
         schema=SCHEMA,
         spec=spec,
         site_parts=[
@@ -218,7 +227,10 @@ def _obstacles(graph, rules, spec, comp, pose, layers, fixed_copper):
         )
     for net, xy, diameter, drill in vias:
         obs.vias.append((net, pose.to_local(tuple(xy)), diameter, drill))
-    for k, spec_k in enumerate(rules.get("copper_keepouts") or []):
+    from pnr.fixed_block import copper_keepouts
+
+    # The declared keepouts, then the footprints' own rule areas (pnr.ingest).
+    for k, spec_k in enumerate(copper_keepouts(graph, rules)):
         name = "keepout:" + str(spec_k.get("name") or k)
         if spec_k.get("ref") and spec_k.get("rect_mm"):
             if spec_k["ref"] not in graph.refs:

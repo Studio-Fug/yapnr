@@ -13,6 +13,44 @@ from pnr.electrical import net_policy
 from pnr.route.detail.coupled import path_metrics
 
 
+def rule_area_intrusions(board):
+    """Foreign pads sitting inside a footprint rule area that bars ``pads`` or
+    ``footprints`` (``GetDoNotAllowPads`` / ``GetDoNotAllowFootprints``):
+    ``[{owner, ref, zone}]``, one entry per intruding footprint per area.
+
+    No copper producer or placement stage treats these area kinds as an
+    obstacle yet (only ``tracks``, ``vias`` and ``pours`` are, pnr.fixed_block.
+    footprint_keepouts); this is report-only, so a part placed inside one is
+    surfaced as a quantified warning (not a pass/fail count) rather than
+    silently missed. KiCad's own DRC (``items_not_allowed``) is the real judge
+    of the final board and already catches it; this exists to flag the gap
+    before that final check rather than find out from it."""
+    out = []
+    owned = [
+        (fp.GetReference(), z)
+        for fp in board.GetFootprints()
+        for z in fp.Zones()
+        if z.GetIsRuleArea() and (z.GetDoNotAllowPads() or z.GetDoNotAllowFootprints())
+    ]
+    if not owned:
+        return out
+    cu_layers = list(board.GetEnabledLayers().CuStack())
+    for owner_ref, z in owned:
+        outline = z.Outline()
+        layers = [la for la in cu_layers if z.IsOnLayer(la)]
+        for fp in board.GetFootprints():
+            if fp.GetReference() == owner_ref:
+                continue  # a rule area never bars its own footprint's pads (KiCad's rule)
+            if any(
+                outline.Collide(pad.GetEffectiveShape(la), 0)
+                for pad in fp.Pads()
+                for la in layers
+                if pad.IsOnLayer(la)
+            ):
+                out.append(dict(owner=owner_ref, ref=fp.GetReference(), zone=z.GetZoneName()))
+    return out
+
+
 def audit_board(board, rules, board_text=""):
     import pcbnew as k
 
@@ -133,6 +171,7 @@ def audit_board(board, rules, board_text=""):
     # lists the qualified ones, which pad_entry counts as entries). Not scored.
     from pnr.via_in_pad import audit as via_in_pad_audit
 
+    intrusions = rule_area_intrusions(board)
     result = dict(
         reference_failures=reference,
         stackup=dict(
@@ -145,6 +184,8 @@ def audit_board(board, rules, board_text=""):
         subwidth_tracks=undersized,
         pairs=pair_reports,
         vias_in_smd_pads=via_in_pad_audit(board, rules),
+        rule_area_intrusion_count=len(intrusions),
+        rule_area_intrusions=intrusions,
         qualified=False,
     )
     import os

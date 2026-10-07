@@ -1567,6 +1567,34 @@ relocated, against 148, 285 mm and 29 with KEEP alone: on four cells the pool no
 source start, whose global placement leaves 4 to 12 parts mostly occluded; without those 155 of
 1455 parts and 283 mm (KEEP alone on the same cells: 131 and 237 mm).</p>
 </section>
+<section id="i-the-pool-s-own-screen-penalizes-wholesale-relocation-pnr-pool-motion-penalty-2026-10-06">
+<h3>I. The pool’s own screen penalizes wholesale relocation (<code class="docutils literal notranslate"><span class="pre">PNR_POOL_MOTION_PENALTY</span></code>, 2026-10-06)<a class="headerlink" href="#i-the-pool-s-own-screen-penalizes-wholesale-relocation-pnr-pool-motion-penalty-2026-10-06" title="Link to this heading">¶</a></h3>
+<p>Review of the A/B above (section H): “legalization motion stays at the KEEP level” missed its own
+pass mark (999 mm / 43 relocated against 285 mm / 29 with KEEP alone), driven by cells where the
+initial pool picked a start whose global placement left 4 to 12 parts mostly occluded, so
+<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> correctly relocated them (the packer’s cost and turn search, per its own
+triage) but the <em>pool</em> had a legal, lower-relocation alternative on the shortlist and never
+screened for that. <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code> seeds 3, 4, 6 and 7 (11 of 11 parts, 356 mm
+each) and the <code class="docutils literal notranslate"><span class="pre">07-chaser-20-4L-SGPS</span></code> family seed 0 (12 parts, 617 mm) carried most of the overshoot.</p>
+<p><strong>Change</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.initial_pool.pool_motion_penalty_factor</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_flags.pool_motion_penalty</span></code>,
+<code class="docutils literal notranslate"><span class="pre">PNR_POOL_MOTION_PENALTY</span></code>; unset follows <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>, <code class="docutils literal notranslate"><span class="pre">0</span></code> off for an A/B): each start’s
+<code class="docutils literal notranslate"><span class="pre">cheap_score</span></code> (the pool’s own screen, before the capacity proxy and the routed comparison) is
+multiplied by <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">+</span> <span class="pre">4</span> <span class="pre">*</span> <span class="pre">max(0,</span> <span class="pre">relocated_fraction</span> <span class="pre">-</span> <span class="pre">0.2)</span></code>, where <code class="docutils literal notranslate"><span class="pre">relocated_fraction</span></code> is that
+start’s <code class="docutils literal notranslate"><span class="pre">legal_motion.relocated</span></code> (parts <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> actually relocated, not pushed) over
+the movable part count. A start under the fifth of the board the owner’s principle treats as
+normal (only a mostly occluded part relocates) screens exactly as before; a start that forces
+relocation of most or all of the board, as <code class="docutils literal notranslate"><span class="pre">-rails</span></code>/<code class="docutils literal notranslate"><span class="pre">07-SGPS</span></code> did, loses its shortlist slot to any
+legal alternative at a comparable raw screen, before proxy scoring or routing ever sees it. The
+penalty is diagnostic-visible (<code class="docutils literal notranslate"><span class="pre">pool_motion_penalty</span></code>, <code class="docutils literal notranslate"><span class="pre">raw_cheap_score</span></code> on the candidate record)
+and never improves a start’s score, so a design with no low-relocation alternative is unaffected.</p>
+<p><strong>Status.</strong> Unit-level (<code class="docutils literal notranslate"><span class="pre">initial_pool_test</span></code>: <code class="docutils literal notranslate"><span class="pre">PoolMotionPenaltyTest</span></code>) and the full legalizer/pool
+suites (<code class="docutils literal notranslate"><span class="pre">legalize_flags_test</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_keep_test</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_wire_test</span></code>, <code class="docutils literal notranslate"><span class="pre">detail_place_test</span></code>)
+pass; CI’s ladder is green on both <code class="docutils literal notranslate"><span class="pre">#64</span></code> and <code class="docutils literal notranslate"><span class="pre">#70</span></code>. This has <em>not</em> yet been re-measured on
+<code class="docutils literal notranslate"><span class="pre">-rails</span></code>/<code class="docutils literal notranslate"><span class="pre">07-SGPS</span></code> themselves on GCP (the A/B in section H predates this change) — that re-run,
+plus whether it also narrows the <code class="docutils literal notranslate"><span class="pre">-pairs</span></code> seed-1 gap (a pool-selection problem, not relocation:
+every routed finalist had the LVDS pair uncoupled or a connection missing), is the next step before
+reconsidering the section H merge decision.</p>
+</section>
 </section>
 <section id="layer-aware-channel-model-pnr-channel-layers-2026-10-06">
 <h2>14. Layer-aware channel model (<code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS</span></code>, 2026-10-06)<a class="headerlink" href="#layer-aware-channel-model-pnr-channel-layers-2026-10-06" title="Link to this heading">¶</a></h2>
@@ -1760,6 +1788,7 @@ flag-off identity goldens (<code class="docutils literal notranslate"><span clas
 <li><a class="reference internal" href="#f-block-level-motion-reserving-channel-room-in-gp-not-only-in-the-push">F. Block-level motion: reserving channel room in GP, not only in the push</a></li>
 <li><a class="reference internal" href="#g-a-slight-overlap-is-nudged-never-re-placed-2026-10-06">G. A slight overlap is nudged, never re-placed (2026-10-06)</a></li>
 <li><a class="reference internal" href="#h-detailed-placement-after-legalization-pnr-detail-place-on-with-keep-2026-10-06">H. Detailed placement after legalization (<code class="docutils literal notranslate"><span class="pre">PNR_DETAIL_PLACE</span></code>, on with KEEP; 2026-10-06)</a></li>
+<li><a class="reference internal" href="#i-the-pool-s-own-screen-penalizes-wholesale-relocation-pnr-pool-motion-penalty-2026-10-06">I. The pool’s own screen penalizes wholesale relocation (<code class="docutils literal notranslate"><span class="pre">PNR_POOL_MOTION_PENALTY</span></code>, 2026-10-06)</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#layer-aware-channel-model-pnr-channel-layers-2026-10-06">14. Layer-aware channel model (<code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS</span></code>, 2026-10-06)</a></li>

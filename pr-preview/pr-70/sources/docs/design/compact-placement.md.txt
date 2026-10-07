@@ -871,6 +871,36 @@ relocated, against 148, 285 mm and 29 with KEEP alone: on four cells the pool no
 source start, whose global placement leaves 4 to 12 parts mostly occluded; without those 155 of
 1455 parts and 283 mm (KEEP alone on the same cells: 131 and 237 mm).
 
+### I. The pool's own screen penalizes wholesale relocation (`PNR_POOL_MOTION_PENALTY`, 2026-10-06)
+
+Review of the A/B above (section H): "legalization motion stays at the KEEP level" missed its own
+pass mark (999 mm / 43 relocated against 285 mm / 29 with KEEP alone), driven by cells where the
+initial pool picked a start whose global placement left 4 to 12 parts mostly occluded, so
+`PNR_LEGALIZE_KEEP` correctly relocated them (the packer's cost and turn search, per its own
+triage) but the _pool_ had a legal, lower-relocation alternative on the shortlist and never
+screened for that. `11-ufbga201-fanout-6L-SGSGPS-rails` seeds 3, 4, 6 and 7 (11 of 11 parts, 356 mm
+each) and the `07-chaser-20-4L-SGPS` family seed 0 (12 parts, 617 mm) carried most of the overshoot.
+
+**Change** (`pnr.place.initial_pool.pool_motion_penalty_factor`, `legalize_flags.pool_motion_penalty`,
+`PNR_POOL_MOTION_PENALTY`; unset follows `PNR_LEGALIZE_KEEP`, `0` off for an A/B): each start's
+`cheap_score` (the pool's own screen, before the capacity proxy and the routed comparison) is
+multiplied by `1 + 4 * max(0, relocated_fraction - 0.2)`, where `relocated_fraction` is that
+start's `legal_motion.relocated` (parts `PNR_LEGALIZE_KEEP` actually relocated, not pushed) over
+the movable part count. A start under the fifth of the board the owner's principle treats as
+normal (only a mostly occluded part relocates) screens exactly as before; a start that forces
+relocation of most or all of the board, as `-rails`/`07-SGPS` did, loses its shortlist slot to any
+legal alternative at a comparable raw screen, before proxy scoring or routing ever sees it. The
+penalty is diagnostic-visible (`pool_motion_penalty`, `raw_cheap_score` on the candidate record)
+and never improves a start's score, so a design with no low-relocation alternative is unaffected.
+
+**Status.** Unit-level (`initial_pool_test`: `PoolMotionPenaltyTest`) and the full legalizer/pool
+suites (`legalize_flags_test`, `legalize_keep_test`, `legalize_wire_test`, `detail_place_test`)
+pass; CI's ladder is green on both `#64` and `#70`. This has _not_ yet been re-measured on
+`-rails`/`07-SGPS` themselves on GCP (the A/B in section H predates this change) — that re-run,
+plus whether it also narrows the `-pairs` seed-1 gap (a pool-selection problem, not relocation:
+every routed finalist had the LVDS pair uncoupled or a connection missing), is the next step before
+reconsidering the section H merge decision.
+
 ## 14. Layer-aware channel model (`PNR_CHANNEL_LAYERS`, 2026-10-06)
 
 The routing-channel model (`pnr.place.channels.ChannelModel`) prices the gap between two facing

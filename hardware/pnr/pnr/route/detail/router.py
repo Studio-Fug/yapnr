@@ -100,6 +100,56 @@ def _bottom_site_reuse(graph: BoardGraph, rules: Optional[dict]) -> dict:
     return out
 
 
+def _late_pads(graph: BoardGraph, planes: Set[str], escapes=()) -> list:
+    """``[(pad id, net, (x, y), surface side, half diagonal)]``: the plane nets' surface
+    pads whose via drop writeback adds after routing (no escape of their net at the
+    pad centre, ``escapes``; a far-side twin's near land holds its drop)."""
+    planned = {
+        (esc.net, round(esc.pad_xy[0], 6), round(esc.pad_xy[1], 6))
+        for esc in escapes
+        if esc.net in planes and esc.kind != "blocked"
+    }
+    out = []
+    for comp in graph.components:
+        twins = far_twins(comp)
+        for k, ((name, net, r), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
+            if net not in planes or pad.through_hole or k in twins:
+                continue
+            if (net, round(r.cx, 6), round(r.cy, 6)) in planned:
+                continue
+            side = comp.side
+            if getattr(pad, "far_side", None):
+                side = "bottom" if side == "top" else "top"
+            out.append(
+                ("%s.%s" % (comp.ref, name), net, (r.cx, r.cy), side, math.hypot(r.w, r.h) / 2)
+            )
+    return sorted(out)
+
+
+def _late_drops(grid, graph, planes, deferred, escapes, fab):
+    """PNR_EXACT_LATE_ROOM=1 (default off): the drop sites the plane pads writeback
+    drops after routing need (:func:`_late_pads`), as :func:`.maze.late_drop_room`
+    judges them, so :func:`.maze.route` may run its exact-separation recovery on a
+    board with such pads and keep the recovered route only when it leaves fewer
+    connections open *and* room for every drop the negotiated route left room for.
+    None (the recovery is skipped, as before) with the flag off, or when deferred nets
+    (routed natively after the grid) are late copper too: their room is not judged.
+    Each site: ``(pad, net, centre, surface layer, nearest and farthest via centre)``,
+    the exact ring :func:`pnr.writeback._dogbone_fanout_net` searches
+    (:func:`pnr.writeback.via_drop_span_mm`): pad half diagonal + via radius +
+    clearance, out to its farthest extra search step."""
+    if os.environ.get("PNR_EXACT_LATE_ROOM") != "1" or deferred:
+        return None
+    from pnr.writeback import via_drop_span_mm
+
+    via_r = fab["via_diameter_mm"] / 2
+    clr = fab["clearance_mm"]
+    return [
+        (pad, net, xy, grid.side_layer(side), *via_drop_span_mm(half, via_r, clr))
+        for pad, net, xy, side, half in _late_pads(graph, planes, escapes)
+    ]
+
+
 def _late_copper(
     graph: BoardGraph, planes: Set[str], deferred: Set[str], escapes=()
 ) -> Optional[str]:
@@ -109,20 +159,7 @@ def _late_copper(
     pair nets (routed natively after the grid). A pad whose drop the escape plan
     already holds (an escape of its net at its centre, ``escapes``) is not late.
     :func:`.maze.route` skips its exact-separation recovery when there is any."""
-    planned = {
-        (esc.net, round(esc.pad_xy[0], 6), round(esc.pad_xy[1], 6))
-        for esc in escapes
-        if esc.net in planes and esc.kind != "blocked"
-    }
-    pads = sorted(
-        "%s.%s" % (comp.ref, name)
-        for comp in graph.components
-        for k, ((name, net, r), pad) in enumerate(zip(pad_rects(comp), comp.pads))
-        if net in planes
-        and not pad.through_hole
-        and k not in far_twins(comp)  # its near land holds the drop
-        and (net, round(r.cx, 6), round(r.cy, 6)) not in planned
-    )
+    pads = [pad for pad, *_rest in _late_pads(graph, planes, escapes)]
     parts = []
     if pads:
         parts.append(
@@ -391,18 +428,20 @@ def _exact_edge(grid: RouteGrid, rules: Optional[dict], width: float, height: fl
 
 
 def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict]) -> None:
-    """Apply the same physical copper exclusions as KiCad writeback.
+    """Apply the same physical copper exclusions as KiCad writeback, and the rule
+    areas built into the footprints (judged by KiCad's DRC as they are).
 
     Reserve a conservative bounding box for rotated rule areas and round screw
     clearances. Grow by via radius so both tracks and through-vias stay clear.
     """
-    if not rules:
-        return
-    for spec in rules.get("mounting_holes", []):
+    from pnr.fixed_block import copper_keepouts
+
+    for spec in (rules or {}).get("mounting_holes", []):
         x, y = spec["at"]
         diameter = spec["clearance_diameter_mm"]
         grid.block_region(Rect(x, y, diameter, diameter), grow=grid.via_radius)
-    for spec in rules.get("copper_keepouts", []):
+    # The declared keepouts and the footprints' own rule areas (pnr.ingest).
+    for spec in copper_keepouts(graph, rules):
         if "items" in spec:  # v1: per layer, per item, optional allow lists
             _mark_keepout_v1(grid, graph, spec)
             continue
@@ -538,15 +577,26 @@ def _diag_unrouted(grid, net_access, unrouted, via_keepout):
     import sys
 
     alone_ok = 0
+    verdicts = {}
     for net in unrouted:
+        if net not in net_access:  # a plane net's drops (no signal access to route)
+            verdicts[net] = "no-access"
+            continue
         # The halo model alone, as documented: what negotiation could not separate.
         r = route(grid, {net: net_access[net]}, max_iters=6, via_keepout=via_keepout, exact="off")
+        verdicts[net] = "blocked" if r.unrouted else "alone-ok"
         if not r.unrouted:
             alone_ok += 1
     sys.stderr.write(
         "DIAG unrouted=%d: routable-alone=%d (negotiation-limited), "
-        "blocked-alone=%d (resource-limited)\n"
-        % (len(unrouted), alone_ok, len(unrouted) - alone_ok)
+        "blocked-alone=%d (resource-limited), no-access=%d: %s\n"
+        % (
+            len(unrouted),
+            alone_ok,
+            sum(v == "blocked" for v in verdicts.values()),
+            sum(v == "no-access" for v in verdicts.values()),
+            " ".join("%s=%s" % kv for kv in sorted(verdicts.items())),
+        )
     )
 
 
@@ -1106,6 +1156,13 @@ def _route_board(
         grid.npth_hole_gap = float(
             extra.get("filled_via_hole_to_hole_mm", extra["pth_hole_to_hole_mm"])
         )
+    elif extra.get("hole_to_hole_mm") is not None:
+        # One drill gap for every hole kind (no per-kind profile values), but never
+        # under the board's hole-to-hole minimum: KiCad judges a via's drill against a
+        # PTH or NPTH drill (a connector's shield hole) by it, whatever the nets. The
+        # hole clearance alone (hole to copper) let a via sit 0.19 mm from one.
+        gap = max(grid.hole_clearance, float(extra["hole_to_hole_mm"]))
+        grid.pth_hole_gap = grid.npth_hole_gap = gap
     if extra.get("pth_hole_clearance_mm") is not None:
         grid.mark_pth_hole_keepouts(float(extra["pth_hole_clearance_mm"]), grid.hole_clearance)
     if extra.get("via_to_smd_pad_mm") is not None:
@@ -1344,26 +1401,29 @@ def _route_board(
         )
         coupled_nets = set(coupled_route.nets)
         signal_nets -= coupled_nets
-    plan = plan_escapes(
-        grid,
-        graph,
-        signal_nets,
-        via_keepout=via_keepout,
-        allow_via_in_pad=escape_via_in_pad,
-        allow_dogbone=escape_dogbone,
-        dogbone_reach=escape_reach_cells(grid.pitch, track_width_mm, clearance_mm),
-        joint=os.environ.get("PNR_JOINT_ACCESS", "1") != "0",
-        joint_max_options=int(os.environ.get("PNR_JOINT_ACCESS_OPTIONS", "16")),
-        joint_max_states=int(os.environ.get("PNR_JOINT_ACCESS_STATES", "20000")),
-        joint_max_cluster_size=int(os.environ.get("PNR_JOINT_ACCESS_CLUSTER", "24")),
-        drop_widths=drop_widths or None,
-        drop_in_pad=grid.in_pad is not None,
-        drop_pad_width=pad_drop_width,
-        plane_access=plane_access,
-        drop_span=drop_span,
-        **({"skip_pads": escape_skip} if fanouts is not None or escape_skip else {}),
-        **({"drop_reuse": _bottom_site_reuse(graph, rules)} if fanouts is not None else {}),
-    )
+    from pnr.profile import span as profile_span  # aliased: "span" means via/layer span here
+
+    with profile_span("escape_plan"):
+        plan = plan_escapes(
+            grid,
+            graph,
+            signal_nets,
+            via_keepout=via_keepout,
+            allow_via_in_pad=escape_via_in_pad,
+            allow_dogbone=escape_dogbone,
+            dogbone_reach=escape_reach_cells(grid.pitch, track_width_mm, clearance_mm),
+            joint=os.environ.get("PNR_JOINT_ACCESS", "1") != "0",
+            joint_max_options=int(os.environ.get("PNR_JOINT_ACCESS_OPTIONS", "16")),
+            joint_max_states=int(os.environ.get("PNR_JOINT_ACCESS_STATES", "20000")),
+            joint_max_cluster_size=int(os.environ.get("PNR_JOINT_ACCESS_CLUSTER", "24")),
+            drop_widths=drop_widths or None,
+            drop_in_pad=grid.in_pad is not None,
+            drop_pad_width=pad_drop_width,
+            plane_access=plane_access,
+            drop_span=drop_span,
+            **({"skip_pads": escape_skip} if fanouts is not None or escape_skip else {}),
+            **({"drop_reuse": _bottom_site_reuse(graph, rules)} if fanouts is not None else {}),
+        )
     if pour_pads:
         plan.diagnostics["pour_pads"] = sorted("%s.%s" % p for p in pour_pads)
     if poured:
@@ -1482,6 +1542,7 @@ def _route_board(
         rrr_rounds=ripup_rounds,
         via_cost=3.0 / grid.pitch,
         late_copper=_late_copper(graph, planes, deferred, plan.escapes),
+        late_drops=_late_drops(grid, graph, planes, deferred, plan.escapes, fab),
         **({"via_keepouts": via_keepouts} if via_keepouts else {}),
     )
     class_report = None

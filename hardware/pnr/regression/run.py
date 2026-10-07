@@ -797,6 +797,12 @@ def parser():
     ap.add_argument("--initial-starts", type=int, default=8)
     ap.add_argument("--initial-finalists", type=int, default=3)
     ap.add_argument(
+        "--profile",
+        action="store_true",
+        help="Profile each case's place-route stage (pnr.profile: CASE/profile/*.json, its "
+        "cProfile functions and pnr.profile.span stages); observational only",
+    )
+    ap.add_argument(
         "--trace",
         action="store_true",
         help="Record a pnr-trace-v1 trace per case (CASE/trace) for pnr.animate; observational only",
@@ -965,6 +971,15 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--exact-late-room",
+        action="store_true",
+        help=(
+            "PNR_EXACT_LATE_ROOM=1: the exact-separation recovery also runs on a board whose "
+            "plane pads writeback drops after routing, keeping its route only when every drop "
+            "keeps its room (pnr.route.detail.maze.late_drop_room)"
+        ),
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
@@ -1089,6 +1104,8 @@ def main():
         env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
     if args.rail_alloc:
         env["PNR_RAIL_ALLOC"] = args.rail_alloc
+    if args.exact_late_room:
+        env["PNR_EXACT_LATE_ROOM"] = "1"
     if args.detail_pitch_mm is not None:
         import math
 
@@ -1268,11 +1285,12 @@ def main():
                     # A hard rung's outline is part of its contract: never shrunk.
                     extra["PNR_SHRINK"] = "0"
                     result["shrink_exempt"] = True
-                run(
-                    "place-route",
-                    [args.python, frozen_here / driver, root, seed, args.rounds],
-                    extra or None,
-                )
+                place_route = [args.python, frozen_here / driver, root, seed, args.rounds]
+                if args.profile:
+                    # pnr.profile runs the driver under cProfile with its spans recorded.
+                    place_route[1:1] = ["-m", "pnr.profile", "--label", "place-route"]
+                    extra["PNR_PROFILE_DIR"] = str(root / "profile")
+                run("place-route", place_route, extra or None)
                 board = root / "routed.kicad_pcb"
                 run(
                     "writeback",

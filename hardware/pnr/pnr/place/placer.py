@@ -294,33 +294,36 @@ def place(
         pad_edge=pad_edge,
         margins=tight.margins if tight else None,
     )
-    placement = global_place(
-        graph,
-        constraints,
-        width,
-        height,
-        seed=seed,
-        iters=iters,
-        orient=orient,
-        inflation=inflation,
-        spread=spread,
-        initial_positions=initial_positions,
-        initial_rotations=initial_rotations,
-        pair_weights=pair_weights,
-        **(
-            dict(side_plan=side_plan, initial_sides=initial_sides, return_sides=True)
-            if sided
-            else {}
-        ),
-        # PNR_COMPACT GP: the random starts are drawn in the cluster box.
-        **(
-            dict(start_box=compact.cluster_box(graph, constraints, width, height))
-            if compact.enabled("GP")
-            else {}
-        ),
-        # PNR_GP_POLISH: a final phase on the legalizer's slots (pnr.place.gp_polish).
-        **({} if polish is None else dict(polish=polish)),
-    )
+    from pnr.profile import span as profile_span
+
+    with profile_span("place_global"):
+        placement = global_place(
+            graph,
+            constraints,
+            width,
+            height,
+            seed=seed,
+            iters=iters,
+            orient=orient,
+            inflation=inflation,
+            spread=spread,
+            initial_positions=initial_positions,
+            initial_rotations=initial_rotations,
+            pair_weights=pair_weights,
+            **(
+                dict(side_plan=side_plan, initial_sides=initial_sides, return_sides=True)
+                if sided
+                else {}
+            ),
+            # PNR_COMPACT GP: the random starts are drawn in the cluster box.
+            **(
+                dict(start_box=compact.cluster_box(graph, constraints, width, height))
+                if compact.enabled("GP")
+                else {}
+            ),
+            # PNR_GP_POLISH: a final phase on the legalizer's slots (pnr.place.gp_polish).
+            **({} if polish is None else dict(polish=polish)),
+        )
     positions, rotations = placement[:2]
     cont = BoardGraph.from_json(graph.to_json())
     for comp in cont.components:
@@ -340,38 +343,39 @@ def place(
     # PNR_LEGALIZE_CHANNEL_CLEARANCE=fab: unclassed nets at the fab clearance.
     channels = ChannelModel(cont, routing_rules, **_channel_kwargs(routing_rules))
     # 2. Legalization (snap to a non-overlapping, in-outline layout).
-    placed = legalize(
-        cont,
-        width,
-        height,
-        allow_rotation=orient,
-        channel_model=channels,
-        mobility={
-            ref: dict(
-                source_fixed=not bool(c.params.get("row_trial")),
-                row_trial=c.params.get("row_trial"),
-            )
-            for c in constraints.constraints
-            if c.kind == "fixed"
-            for ref in c.refs
-        },
-        clearance=clearance,
-        grid_mm=grid_mm,
-        inflation=inflation,
-        # The global spread already distributes parts across the board; the
-        # legalizer only needs enough per-part slack to keep routing channels — a
-        # full spread here would over-reserve and fail to fit on a tight outline
-        # (grow the outline via the rubber-band instead).
-        spread=min(spread, _LEGALIZE_SPREAD_CAP),
-        # Fixed poses, keep-outs, hard groups and rotations, plus the optional
-        # relations (pad-edge rule, hard edge_align, region, align) only when declared.
-        **legalize_constraint_kwargs(graph, constraints, poses, pad_edge),
-        **(_side_legalization(side_plan) if sided else {}),
-        **({} if not stack else dict(stack=stack)),
-        **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
-        # PNR_LEGALIZE_HPWL: the wirelength term and the four-turn search (not for matched parts).
-        **_wire_kwargs(cont, constraints),
-    )
+    with profile_span("place_legalize"):
+        placed = legalize(
+            cont,
+            width,
+            height,
+            allow_rotation=orient,
+            channel_model=channels,
+            mobility={
+                ref: dict(
+                    source_fixed=not bool(c.params.get("row_trial")),
+                    row_trial=c.params.get("row_trial"),
+                )
+                for c in constraints.constraints
+                if c.kind == "fixed"
+                for ref in c.refs
+            },
+            clearance=clearance,
+            grid_mm=grid_mm,
+            inflation=inflation,
+            # The global spread already distributes parts across the board; the
+            # legalizer only needs enough per-part slack to keep routing channels — a
+            # full spread here would over-reserve and fail to fit on a tight outline
+            # (grow the outline via the rubber-band instead).
+            spread=min(spread, _LEGALIZE_SPREAD_CAP),
+            # Fixed poses, keep-outs, hard groups and rotations, plus the optional
+            # relations (pad-edge rule, hard edge_align, region, align) only when declared.
+            **legalize_constraint_kwargs(graph, constraints, poses, pad_edge),
+            **(_side_legalization(side_plan) if sided else {}),
+            **({} if not stack else dict(stack=stack)),
+            **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
+            # PNR_LEGALIZE_HPWL: the wirelength term and the four-turn search (not matched parts).
+            **_wire_kwargs(cont, constraints),
+        )
     if related:
         # Hard aligns onto one exact line where that is legal (pnr.place.regions).
         from .regions import snap_aligns

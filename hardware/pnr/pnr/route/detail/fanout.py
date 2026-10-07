@@ -213,14 +213,14 @@ def _access(
 
 
 def _keepout_areas(graph, rules, fixed_copper=None):
-    """``[(polygon, track layer names, allowed nets)]`` of the v1 copper keepouts and
-    the fixed blocks' rule areas that bar tracks, in the board frame: what the fanout
-    planner judges exactly."""
+    """``[(polygon, track layer names, allowed nets)]`` of the v1 copper keepouts (the
+    footprints' own rule areas among them) and the fixed blocks' rule areas that bar
+    tracks, in the board frame: what the fanout planner judges exactly."""
     from pnr.fanout.planner import fixed_items
-    from pnr.fixed_block import keepout_polygon
+    from pnr.fixed_block import copper_keepouts, keepout_polygon
 
     out = []
-    for spec in (rules or {}).get("copper_keepouts") or []:
+    for spec in copper_keepouts(graph, rules):
         if "items" not in spec or "tracks" not in spec["items"]:
             continue
         allowed = frozenset(spec.get("allowed_nets") or ())

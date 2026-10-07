@@ -1171,7 +1171,63 @@ def _route_impl(
     return RouteResult(nets=result_nets, unrouted=sorted(unrouted), iterations=iters)
 
 
-def route(grid, net_access, *, late_copper=None, exact=None, **kwargs):
+def late_drop_room(grid, result, sites, via_keepout, net_halo=None) -> frozenset:
+    """The pads of ``sites`` (:func:`pnr.route.detail.router._late_drops`) that keep
+    room for their via drop beside ``result``'s copper: a via column at a cell centre
+    between the site's nearest and farthest via centre from the pad, clear of static
+    copper on every layer (:meth:`RouteGrid.via_passable`, the drill spacing) and of
+    every other net's routed footprint, with a stub from the pad on its surface layer
+    clear of them too. A frozenset of pad ids."""
+    import math
+
+    halo = net_halo or {}
+    owner: Dict[tuple, str] = {}
+    for name, rn in result.nets.items():
+        if not rn.cells:
+            continue
+        for c in _footprint(grid, rn.cells, via_keepout, halo.get(name, 0), net=name):
+            key = (c.layer, c.i, c.j)
+            owner[key] = name if owner.get(key, name) == name else "\0shared"
+
+    def foreign(layer, i, j, net):
+        other = owner.get((layer, i, j))
+        return other is not None and other != net
+
+    out = set()
+    step = grid.pitch / 2
+    for pad, net, (x, y), layer, near, far in sites:
+        lo_i, lo_j = grid.cell_of(x - far, y - far)
+        hi_i, hi_j = grid.cell_of(x + far, y + far)
+        found = False
+        for j in range(max(0, lo_j), min(grid.ny - 1, hi_j) + 1):
+            for i in range(max(0, lo_i), min(grid.nx - 1, hi_i) + 1):
+                cx, cy = grid.center_of(i, j)
+                d = math.hypot(cx - x, cy - y)
+                if not near - 1e-9 <= d <= far + 1e-9:
+                    continue
+                if not all(
+                    grid.via_passable(la, i, j, net) and not foreign(la, i, j, net)
+                    for la in range(grid.nlayers)
+                ):
+                    continue
+                if not grid.hole_site_clear((cx, cy)):
+                    continue
+                n = max(1, int(math.ceil(d / step)))
+                if any(
+                    foreign(layer, *grid.cell_of(x + (cx - x) * k / n, y + (cy - y) * k / n), net)
+                    for k in range(1, n)
+                ):
+                    continue
+                found = True
+                break
+            if found:
+                break
+        if found:
+            out.add(pad)
+    return frozenset(out)
+
+
+def route(grid, net_access, *, late_copper=None, late_drops=None, exact=None, **kwargs):
     """Detailed route of ``net_access`` on ``grid``: :func:`_route_impl` (the halo
     model), and the exact-separation model (:mod:`.exact_route`) by its mode
     (``exact``, else ``PNR_EXACT_SEPARATION``): ``recover`` routes again with it
@@ -1182,7 +1238,11 @@ def route(grid, net_access, *, late_copper=None, exact=None, **kwargs):
     this grid holding it (the plane drops writeback places after routing, natively
     routed deferred nets), or is None. The recovery packs nets as tightly as the
     rules allow and can only count this route's own connections, so it cannot
-    tell whether it took room those stages need: it is skipped then (logged).
+    tell whether it took room those stages need: it is skipped then (logged),
+    unless ``late_drops`` (PNR_EXACT_LATE_ROOM=1: the via drop sites of the late plane
+    pads, :func:`pnr.route.detail.router._late_drops`) lets it judge that: the
+    recovered route is then kept only when it leaves fewer connections open and
+    room (:func:`late_drop_room`) for every drop the negotiated route left room for.
 
     ``via_keepouts`` (net -> cells) widens the via keep-out of the nets whose class
     clearance needs more than ``via_keepout`` (:func:`net_via_keepout`).
@@ -1200,6 +1260,7 @@ def route(grid, net_access, *, late_copper=None, exact=None, **kwargs):
     import os
     import sys
 
+    from pnr.profile import span as profile_span  # aliased: "span" is a via/layer span here
     from pnr.runtime_controls import route_workers
 
     from .exact_route import exact_mode
@@ -1212,40 +1273,56 @@ def route(grid, net_access, *, late_copper=None, exact=None, **kwargs):
             mode = "off"
     if mode == "full":
         events = []
-        result = route_exact(grid, net_access, _events=events, **kwargs)
+        with profile_span("maze_exact_route"):
+            result = route_exact(grid, net_access, _events=events, **kwargs)
         _replay(grid, None, events, result.iterations)
         return result
     workers = route_workers("grid-start")
-    if workers == 1 and not os.environ.get("PNR_CONTROL_FILE"):
-        result = _route_impl(grid, net_access, **kwargs)
-    else:
-        from .parallel import NetPool
+    with profile_span("maze_halo_route"):
+        if workers == 1 and not os.environ.get("PNR_CONTROL_FILE"):
+            result = _route_impl(grid, net_access, **kwargs)
+        else:
+            from .parallel import NetPool
 
-        pool = NetPool(grid, workers)
-        try:
-            result = _route_impl(grid, net_access, **kwargs, _pool=pool)
-        finally:
-            pool.close()
+            pool = NetPool(grid, workers)
+            try:
+                result = _route_impl(grid, net_access, **kwargs, _pool=pool)
+            finally:
+                pool.close()
     if mode == "recover" and result.unrouted:
         from .exact_route import missing_connections
 
         before = missing_connections(result)
-        if late_copper:
+        if late_copper and late_drops is None:
             sys.stderr.write(
                 "exact-separation recovery skipped (%d open connections): later stages add "
                 "copper this route cannot see: %s\n" % (before, late_copper)
             )
             return result
+        room = None
+        if late_copper:
+            # The late drops' room under the negotiated route: the recovered route
+            # must keep every one of them (late_drop_room).
+            keep = kwargs.get("via_keepout", 1), kwargs.get("net_halo")
+            room = late_drop_room(grid, result, late_drops, *keep)
         # Open connections left: route again with the exact pairwise separation
         # and keep it only when it leaves strictly fewer connections open.
         events = []
-        exact_result = route_exact(grid, net_access, _events=events, **kwargs)
+        with profile_span("maze_exact_recovery"):
+            exact_result = route_exact(grid, net_access, _events=events, **kwargs)
         after = missing_connections(exact_result)
+        roomy = True
+        note = ""
+        if room is not None:
+            kept = late_drop_room(grid, exact_result, late_drops, *keep)
+            roomy = room <= kept
+            note = "; late drop room %d of %d kept" % (len(room & kept), len(room))
+        better = after < before and roomy
         sys.stderr.write(
-            "exact-separation recovery: %d -> %d open connections (%s)\n"
-            % (before, after, "kept" if after < before else "discarded")
+            "exact-separation recovery: %d -> %d open connections%s (%s)\n"
+            % (before, after, note, "kept" if better else "discarded")
         )
-        if after < before:
+        if better:
             _replay(grid, result, events, exact_result.iterations)
             return exact_result
     return result

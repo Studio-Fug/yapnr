@@ -13,7 +13,7 @@ function h(t,a,...k){let e=D.createElement(t);if(a)for(let [x,v] of Object.entri
 
 // ------------------------------------------------------------------ dock
 const DOCK=window.YapnrDock||(function(){
- const TABS=[['inspect','Inspect'],['source','Source'],['ask','Ask'],['notes','Notes']],pref=store.get('yapnr-dock',{}),wide=()=>innerWidth>1360;
+ const TABS=[['inspect','Inspect'],['source','Source'],['ask','Ask'],['notes','Notes'],['timing','Timing']],pref=store.get('yapnr-dock',{}),wide=()=>innerWidth>1360;
  let cur=TABS.some(t=>t[0]===pref.tab)?pref.tab:'inspect',open=wide()&&pref.open!==false,w=+pref.w||380,kt=0;
  const el=h('aside',{id:'dock','aria-label':'Inspect, source, assistant and notes'},
   h('div',{class:'dk-grip',title:'Drag to resize'}),

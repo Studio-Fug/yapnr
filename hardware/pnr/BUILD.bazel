@@ -2645,6 +2645,25 @@ py_test(
 )
 
 py_test(
+    name = "stage_timing_test",
+    size = "large",  # RouteFeedbackStageEventsTests + ByteIdenticalResultTests run the placement
+    # loop three times over (route_feedback_test): ~240s observed locally, too close to
+    # "medium"'s 300s budget to risk on a slower CI runner.
+    srcs = ["tests/test_stage_timing.py"],
+    data = glob(["testdata/splanc_dev/*"]),
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_stage_timing.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
+)
+
+py_test(
     name = "pair_portals_test",
     size = "small",
     srcs = ["tests/test_pair_portals.py"],

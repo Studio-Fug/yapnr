@@ -1044,33 +1044,35 @@ def select_initial_placement(
         # Each complete placement has a separate live lane; route workers inherit it.
         # Restore the caller's lane even if a finalist fails.
         from pnr.live import emit
+        from pnr.stage_timing import stage
 
         previous_lane = os.environ.get("PNR_LIVE_CANDIDATE")
         os.environ["PNR_LIVE_CANDIDATE"] = (previous_lane or "source") + "/initial-" + name
         try:
-            emit(
-                "candidate_start",
-                layout=json.loads(candidate["graph"].to_json()),
-                data=dict(
-                    phase="initial-placement signals",
-                    provisional=True,
-                    finalist=name,
-                    proxy=record.get("proxy"),
-                    budget=dict(pitch_mm=pitch, max_iters=route_iters),
-                ),
-            )
-            with _trace.scope(name + "-route", "route", start=name):
-                route = route_board(
-                    candidate["graph"], constraints, rules, pitch=pitch, max_iters=route_iters
+            with stage("initial-pool-screening", finalist=name):
+                emit(
+                    "candidate_start",
+                    layout=json.loads(candidate["graph"].to_json()),
+                    data=dict(
+                        phase="initial-placement signals",
+                        provisional=True,
+                        finalist=name,
+                        proxy=record.get("proxy"),
+                        budget=dict(pitch_mm=pitch, max_iters=route_iters),
+                    ),
                 )
-            emit(
-                "candidate_complete",
-                data=dict(
-                    phase="initial-placement screening complete",
-                    provisional=True,
-                    **_route_metrics(route),
-                ),
-            )
+                with _trace.scope(name + "-route", "route", start=name):
+                    route = route_board(
+                        candidate["graph"], constraints, rules, pitch=pitch, max_iters=route_iters
+                    )
+                emit(
+                    "candidate_complete",
+                    data=dict(
+                        phase="initial-placement screening complete",
+                        provisional=True,
+                        **_route_metrics(route),
+                    ),
+                )
         finally:
             if previous_lane is None:
                 os.environ.pop("PNR_LIVE_CANDIDATE", None)

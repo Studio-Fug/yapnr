@@ -1,0 +1,14 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791322374417669689-5572757e",
+  "time": 1791322374.4176853,
+  "kind": "worker_config_applied",
+  "candidate": "ladder/01-connector-led-2/s1/initial-start-00",
+  "iteration": null,
+  "data": {
+    "route_workers": 1,
+    "requested_revision": 0,
+    "boundary": "grid-start",
+    "candidate_workers_at_round_start": 1
+  }
+}

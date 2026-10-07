@@ -110,6 +110,7 @@ design/fab-and-ordering
 design/gloss
 design/compact-placement
 design/route-compact
+design/hull-nest-validation
 history/import-manifest
 about-the-name
 references

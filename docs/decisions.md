@@ -7,6 +7,14 @@ PR7 under `docs/adr/`.
 
 ## Decision log
 
+Owner decision of 2026-10-07 (PR #91): enable hull nesting by default for hull macros.
+Keep explicit opt-out through `PNR_HULL_NEST=0`, `run.py --hull-nest 0` and campaign
+`hull_nest = false`; keep legality, native validation and routing fallbacks unchanged.
+This is an explicit exception to the usual default-off rollout. The matched local
+native example and the broader pending campaign are documented in
+[hull nesting validation](design/hull-nest-validation.md); the decision is not a claim
+that every routing metric improves.
+
 Owner decisions of 2026-09-29, taken while planning the migration (see
 [the migration plan](migration-plan.md), §0.2):
 

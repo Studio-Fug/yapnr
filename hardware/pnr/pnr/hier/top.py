@@ -227,6 +227,23 @@ def hierarchical_place(
             if geo is not None and geo.ok:
                 macros[m]["extent"] = [round(x, 4) for x in geo.extent]
         out["nested"] = nested_parts(placed_macro, plan)
+        from pnr.place.hull import component_nesting
+
+        # How far the macros nest (pnr.place.hull.nesting_metrics), and PNR_HULL_NEST's moves.
+        out["nesting"] = component_nesting(placed_macro.components)
+        nest = getattr(placed_macro, "hull_nest", None)
+        if nest is not None:
+            out["hull_nest"] = {k: v for k, v in nest.items() if k != "before"}
+            if nest.get("before"):
+                # PNR_HULL_NEST moved macros: the legalized poses before the moves, expanded
+                # too, so the driver can fall back to them when the nested seed does not knit.
+                import copy
+
+                legal = copy.deepcopy(placed_macro)
+                for ref, (x, y, rot) in nest["before"].items():
+                    comp = legal.component(ref)
+                    comp.pos, comp.rot = (x, y), rot
+                out["unnested"] = plan.expand(legal, source)
         out["hulls"] = {
             v["block"]: (by_ref[m].hull, list(v.get("origin", ())))
             for m, v in plan.macros.items()

@@ -121,8 +121,27 @@ def body_rect(comp) -> Tuple[float, float, float, float]:
     return (x + x0, y + y0, x + x1, y + y1)
 
 
+def hull_area(comp) -> Optional[float]:
+    """The area (mm^2) a hull macro really occupies (``PNR_MACRO_HULL=1``,
+    :mod:`pnr.place.hull`): its hull cover on its busier side (the cover rectangles of a
+    side are disjoint). None for a part without a hull, or with the flag off."""
+    import os
+
+    hull = getattr(comp, "hull", None)
+    if not hull or os.environ.get("PNR_MACRO_HULL") != "1":
+        return None
+    return max(
+        sum((r[2] - r[0]) * (r[3] - r[1]) for r in (hull.get(side) or []))
+        for side in ("top", "bottom")
+    )
+
+
 def part_area(comp) -> float:
-    """The body box area (mm^2) of ``comp``."""
+    """The body box area (mm^2) of ``comp``; a hull macro's hull area (:func:`hull_area`)
+    instead, so the cluster box of ``GP`` and the utilisation count the notches as free."""
+    area = hull_area(comp)
+    if area is not None:
+        return area
     x0, y0, x1, y1 = body_box(comp)
     return (x1 - x0) * (y1 - y0)
 
@@ -132,7 +151,8 @@ def metrics(graph, width: float, height: float) -> Dict[str, object]:
     body boxes (:func:`body_rect`) of every part, fixed ones included, whatever the flags
     (so every A/B arm is measured alike).
 
-    ``bbox_mm2`` is the bounding box of the bodies, ``area_mm2`` their summed area,
+    ``bbox_mm2`` is the bounding box of the bodies, ``area_mm2`` their summed area (a hull
+    macro's hull area, :func:`hull_area`, so interlocked blocks never read above 100 %),
     ``utilization`` = area / bbox, ``occupancy`` = area / outline area and ``bucket`` =
     floor(:data:`BUCKETS` * bbox / outline area), the bbox in 5 % steps of the outline.
     Floats are rounded to 1e-3 so rankings are reproducible.
@@ -166,7 +186,10 @@ def metrics(graph, width: float, height: float) -> Dict[str, object]:
     top = max(r[3] for r in rects)
     bw, bh = right - left, top - bottom
     bbox = bw * bh
-    area = sum((r[2] - r[0]) * (r[3] - r[1]) for r in rects)
+    area = sum(
+        (r[2] - r[0]) * (r[3] - r[1]) if hull_area(c) is None else hull_area(c)
+        for c, r in zip(graph.components, rects)
+    )
     return dict(
         bbox_mm2=round(bbox, 3),
         bbox_mm=[round(bw, 3), round(bh, 3)],

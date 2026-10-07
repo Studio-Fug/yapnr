@@ -437,6 +437,102 @@ is illustrative of the <em>field</em>, not a claim about the production candidat
 current, width, IPC and budget widths, tree length, reached/unreached counts, area and the
 smallest gap to another rail.</p>
 </section>
+<section id="which-rails-get-the-plane-the-allocation-search">
+<h2>Which rails get the plane: the allocation search<a class="headerlink" href="#which-rails-get-the-plane-the-allocation-search" title="Link to this heading">¶</a></h2>
+<p>A dedicated plane layer’s <code class="docutils literal notranslate"><span class="pre">nets</span></code> are <strong>candidates</strong>. Which of them get a territory, which are
+routed as ordinary traces, and which net takes what is left of the layer is decided by
+<code class="docutils literal notranslate"><span class="pre">pnr.rail_alloc</span></code>, the way the engine decides everything else: by trying alternatives and
+keeping the one that routes best.</p>
+<ol class="arabic simple">
+<li><p><strong>Alternatives.</strong> Every split of the candidates into plane rails (at least one) and traced
+rails, times every leftover option: none (the plane rails compete for it), one of the plane
+rails (it alone grows; the others keep their trunk, their lands and a 1 mm apron for thermal
+reliefs), or a <code class="docutils literal notranslate"><span class="pre">fill_candidates</span></code> net. A spec can force a rail with <code class="docutils literal notranslate"><span class="pre">must_plane</span></code> /
+<code class="docutils literal notranslate"><span class="pre">must_trace</span></code> or the leftover with <code class="docutils literal notranslate"><span class="pre">fill</span></code>; whatever it leaves open is the engine’s.</p></li>
+<li><p><strong>Hard constraints only</strong> prune: a traced rail must carry its current at its class width
+(IPC-2221, external, 10 C) and meet its IR budget along its estimated trace.</p></li>
+<li><p><strong>Screen.</strong> One probe route (the real grid and fanouts, every candidate a plane) supplies
+the partition’s inputs; each alternative is partitioned on them at 0.25 mm and scored in
+millimetres of track: the partition’s quality penalty (below), each traced rail’s spanning
+tree (longer through crowded pads) plus its vias, each plane rail’s drop vias, and the old
+rule of thumb (a declared budget, 10 mA, 6 terminals) as a 5 mm prior per rail it disagrees
+with – a prior only, never the decision.</p></li>
+<li><p><strong>Route the finalists.</strong> The best three (each plane/trace split’s best first) are routed by
+the real router on the same placement; the fewest missing connections and unresolved nets
+win, then the lowest copper length + vias + partition penalty.</p></li>
+</ol>
+<p>The decision is made on a design’s first route in a process (the initial pool’s first
+finalist, or the first P/R round) and held for its later routes. The route’s
+<code class="docutils literal notranslate"><span class="pre">escape_diagnostics.rail_allocation</span></code> names the chosen allocation, every screened and routed
+alternative, and per rail the numbers that decided it, e.g. for the <code class="docutils literal notranslate"><span class="pre">-rails</span></code> rung:
+<code class="docutils literal notranslate"><span class="pre">VDDA:</span> <span class="pre">trace,</span> <span class="pre">routed</span> <span class="pre">986.8</span> <span class="pre">mm-eq</span> <span class="pre">(copper</span> <span class="pre">852.8,</span> <span class="pre">134</span> <span class="pre">vias,</span> <span class="pre">partition</span> <span class="pre">0.0)</span> <span class="pre">vs</span> <span class="pre">plane</span> <span class="pre">998.8</span></code>.
+<code class="docutils literal notranslate"><span class="pre">PNR_RAIL_ALLOC=static</span></code> (<code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--rail-alloc</span> <span class="pre">static</span></code>) restores the rule of thumb as the
+decision, for A/B runs.</p>
+</section>
+<section id="judging-a-partition">
+<h2>Judging a partition<a class="headerlink" href="#judging-a-partition" title="Link to this heading">¶</a></h2>
+<p>Every partition reports <code class="docutils literal notranslate"><span class="pre">quality</span></code> per rail and per layer (<code class="docutils literal notranslate"><span class="pre">pnr.plane_quality</span></code>): area given
+against area its terminals need (the trunk at its width plus the lands), compactness, trunk
+length against the terminals’ minimum spanning tree, terminals that cannot reach the layer
+(no trunk, no free cell in reach, no via site on the router’s grid), dead area serving no
+terminal, the narrowest neck, the estimated IR margin, how much a region fragments its
+neighbours, the split length it cuts into the plane, and a redundant fill (a fill net with a
+dedicated plane elsewhere in the stack). The same numbers become quantified ERC-style
+warnings (<code class="docutils literal notranslate"><span class="pre">code</span></code>, <code class="docutils literal notranslate"><span class="pre">net</span></code>, <code class="docutils literal notranslate"><span class="pre">value</span></code>, <code class="docutils literal notranslate"><span class="pre">limit</span></code>, <code class="docutils literal notranslate"><span class="pre">message</span></code>) and the allocation search’s penalty.</p>
+<p>The ladder judges the routed board’s filled zones with the same measure (<code class="docutils literal notranslate"><span class="pre">plane_quality</span></code>
+check, <code class="docutils literal notranslate"><span class="pre">pnr.plane_quality.judge</span></code>, plain Python under KiCad): a partition fails when a region
+serves fewer than two terminals (one for an outer pour’s pieces), a region other than the
+owner’s (the candidate with the most current) holds more than 6x the copper its terminals
+need, a region’s geodesic tree runs more than 1.6x its terminals’ spanning tree, or a fill net
+already has a dedicated plane elsewhere. The limits come from measured layouts:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>layouts (boards)</p></th>
+<th class="head"><p>regions</p></th>
+<th class="head"><p>area / need, non-owner</p></th>
+<th class="head"><p>tree / MST</p></th>
+<th class="head"><p>fewest terminals</p></th>
+<th class="head"><p>redundant fill</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-pour</span></code>, every seed of the 2026-10-06 R6 campaigns (32)</p></td>
+<td><p>VIN, SW, GND</p></td>
+<td><p>at most 3.24</p></td>
+<td><p>at most 1.34</p></td>
+<td><p>1 (a land’s own piece)</p></td>
+<td><p>none</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-rails</span></code>, the allocation search (seeds 0, 1)</p></td>
+<td><p>VDD</p></td>
+<td><p>(owner only)</p></td>
+<td><p>at most 1.03</p></td>
+<td><p>19</p></td>
+<td><p>none</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-rails</span></code>, the rule of thumb (seed 0)</p></td>
+<td><p>VDD, VDDA</p></td>
+<td><p>VDDA 14.5</p></td>
+<td><p>VDDA 2.20</p></td>
+<td><p>3</p></td>
+<td><p>none</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-rails</span></code> before candidates, VDD + VDDA + VBAT + GND fill (32)</p></td>
+<td><p>four</p></td>
+<td><p>VDDA 8.3 to 2165, VBAT 3.6 to 18</p></td>
+<td><p>up to 3.97</p></td>
+<td><p>1 (six boards)</p></td>
+<td><p>GND, every board</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The area limit sits at about twice the worst good layout (3.24) and the detour limit about 1.2x
+its worst (1.34); every good board passes and every board of the last row fails at least two
+ways (the owner’s 2026-10-06 review found the last row’s In4 split nonsense: VBAT’s ball had no
+way onto its region, and GND already had In1 and In3).</p>
+</section>
 <section id="limits">
 <h2>Limits<a class="headerlink" href="#limits" title="Link to this heading">¶</a></h2>
 <ul class="simple">
@@ -623,6 +719,8 @@ tools’ documentation sits behind logins) sit in the review this section summar
 </ul>
 </li>
 <li><a class="reference internal" href="#checks-and-reports">Checks and reports</a></li>
+<li><a class="reference internal" href="#which-rails-get-the-plane-the-allocation-search">Which rails get the plane: the allocation search</a></li>
+<li><a class="reference internal" href="#judging-a-partition">Judging a partition</a></li>
 <li><a class="reference internal" href="#limits">Limits</a></li>
 <li><a class="reference internal" href="#the-trace-hooks-and-this-page-s-tooling">The trace hooks and this page’s tooling</a></li>
 <li><a class="reference internal" href="#prior-art">Prior art</a><ul>

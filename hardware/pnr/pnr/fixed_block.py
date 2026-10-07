@@ -225,6 +225,40 @@ def keepout_class_mode(spec: dict) -> bool:
 # -------------------------------------------------------------------- polygons
 
 
+def footprint_keepouts(graph) -> List[dict]:
+    """The rule areas built into the footprints (``Component.rule_areas``, pnr.ingest)
+    as v1 ``copper_keepout`` specs at the parts' current poses: ``polygon`` in the
+    board frame (:func:`pnr.graph.footprint_point`), the copper ``layers`` of the
+    part's current side, the ``items`` they bar, every net barred (no allow list).
+    ``owner`` names the part; there is no ``ref``, so placement does not treat the
+    part as tied to a declared keep-out. Pads of the owner itself are KiCad's
+    business (a footprint's rule area never bars its own pads)."""
+    from pnr.graph import SIDE_BOTTOM, footprint_point
+
+    out = []
+    for comp in graph.components:
+        for k, area in enumerate(getattr(comp, "rule_areas", None) or ()):
+            layers = area.get("layers_bottom" if comp.side == SIDE_BOTTOM else "layers")
+            out.append(
+                dict(
+                    name="%s:%d" % (comp.ref, k),
+                    owner=comp.ref,
+                    source="footprint",
+                    polygon=[footprint_point(comp, float(x), float(y)) for x, y in area["outline"]],
+                    layers=list(layers or ()),
+                    items=list(area.get("items") or ()),
+                )
+            )
+    return out
+
+
+def copper_keepouts(graph, rules) -> List[dict]:
+    """Every copper keep-out a copper producer must respect: the declared ones
+    (``rules["copper_keepouts"]``) and the footprints' own rule areas
+    (:func:`footprint_keepouts`)."""
+    return list((rules or {}).get("copper_keepouts") or []) + footprint_keepouts(graph)
+
+
 def keepout_polygon(graph, spec: dict) -> List[Point]:
     """A v1 ``copper_keepout``'s polygon in the board frame: its ``polygon``, or
     ``rect_mm`` in its part's frame (mirrored with the pads, as writeback's rule

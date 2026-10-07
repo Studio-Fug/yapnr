@@ -764,6 +764,12 @@ def parser():
     ap.add_argument("--initial-starts", type=int, default=8)
     ap.add_argument("--initial-finalists", type=int, default=3)
     ap.add_argument(
+        "--profile",
+        action="store_true",
+        help="Profile each case's place-route stage (pnr.profile: CASE/profile/*.json, its "
+        "cProfile functions and pnr.profile.span stages); observational only",
+    )
+    ap.add_argument(
         "--trace",
         action="store_true",
         help="Record a pnr-trace-v1 trace per case (CASE/trace) for pnr.animate; observational only",
@@ -1213,11 +1219,12 @@ def main():
                     # A hard rung's outline is part of its contract: never shrunk.
                     extra["PNR_SHRINK"] = "0"
                     result["shrink_exempt"] = True
-                run(
-                    "place-route",
-                    [args.python, frozen_here / driver, root, seed, args.rounds],
-                    extra or None,
-                )
+                place_route = [args.python, frozen_here / driver, root, seed, args.rounds]
+                if args.profile:
+                    # pnr.profile runs the driver under cProfile with its spans recorded.
+                    place_route[1:1] = ["-m", "pnr.profile", "--label", "place-route"]
+                    extra["PNR_PROFILE_DIR"] = str(root / "profile")
+                run("place-route", place_route, extra or None)
                 board = root / "routed.kicad_pcb"
                 run(
                     "writeback",

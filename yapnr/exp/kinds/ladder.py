@@ -55,6 +55,7 @@ OPTIONS = {
     "dense_maze_cost": bool,
     "detail_pitch_mm": (int, float),
     "trace": bool,
+    "profile": bool,
     "trace_placement_every": int,
     "showcases": bool,
     "hard": bool,
@@ -81,6 +82,8 @@ FLAGS = {
     "batched_wirelength": "--batched-wirelength",
     "dense_maze_cost": "--dense-maze-cost",
     "trace": "--trace",
+    # pnr.profile around each cell's place-route stage (CASE/profile/*.json).
+    "profile": "--profile",
     "showcases": "--showcases",
     # The hard rungs (hardware/pnr/regression/hard_rungs.py) become selectable cases.
     "hard": "--hard",
@@ -124,6 +127,7 @@ SUMMARY = [
     "run/*/result.json",
     "run/*/drc.json",
     "run/*/design.json",
+    "run/*/profile/*.json",
 ]
 
 

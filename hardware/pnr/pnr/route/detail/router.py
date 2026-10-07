@@ -391,18 +391,20 @@ def _exact_edge(grid: RouteGrid, rules: Optional[dict], width: float, height: fl
 
 
 def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict]) -> None:
-    """Apply the same physical copper exclusions as KiCad writeback.
+    """Apply the same physical copper exclusions as KiCad writeback, and the rule
+    areas built into the footprints (judged by KiCad's DRC as they are).
 
     Reserve a conservative bounding box for rotated rule areas and round screw
     clearances. Grow by via radius so both tracks and through-vias stay clear.
     """
-    if not rules:
-        return
-    for spec in rules.get("mounting_holes", []):
+    from pnr.fixed_block import copper_keepouts
+
+    for spec in (rules or {}).get("mounting_holes", []):
         x, y = spec["at"]
         diameter = spec["clearance_diameter_mm"]
         grid.block_region(Rect(x, y, diameter, diameter), grow=grid.via_radius)
-    for spec in rules.get("copper_keepouts", []):
+    # The declared keepouts and the footprints' own rule areas (pnr.ingest).
+    for spec in copper_keepouts(graph, rules):
         if "items" in spec:  # v1: per layer, per item, optional allow lists
             _mark_keepout_v1(grid, graph, spec)
             continue
@@ -1106,6 +1108,13 @@ def _route_board(
         grid.npth_hole_gap = float(
             extra.get("filled_via_hole_to_hole_mm", extra["pth_hole_to_hole_mm"])
         )
+    elif extra.get("hole_to_hole_mm") is not None:
+        # One drill gap for every hole kind (no per-kind profile values), but never
+        # under the board's hole-to-hole minimum: KiCad judges a via's drill against a
+        # PTH or NPTH drill (a connector's shield hole) by it, whatever the nets. The
+        # hole clearance alone (hole to copper) let a via sit 0.19 mm from one.
+        gap = max(grid.hole_clearance, float(extra["hole_to_hole_mm"]))
+        grid.pth_hole_gap = grid.npth_hole_gap = gap
     if extra.get("pth_hole_clearance_mm") is not None:
         grid.mark_pth_hole_keepouts(float(extra["pth_hole_clearance_mm"]), grid.hole_clearance)
     if extra.get("via_to_smd_pad_mm") is not None:

@@ -53,6 +53,7 @@ from .geometry import (
     courtyard_rect,
     occupied_sides,
     pad_rects,
+    placed_body,
     placement_rects,
     set_component_side,
 )
@@ -158,32 +159,24 @@ def pad_edge_box(comp, pad_edge, width: float, height: float):
     return (x_lo, x_hi, y_lo, y_hi)
 
 
-def _band_box(box, rect, band, width, height, shift=None):
-    """Narrow a centre box (x_lo, x_hi, y_lo, y_hi) so a courtyard ``rect`` (at the
-    tried rotation) stays within ``band`` = (edge, tolerance) of its board edge.
-    ``shift`` (PNR_COMPACT offset courtyard): the box bounds ``pos``, the rect's centre
-    less that shift."""
+def _band_box(box, body, band, width, height):
+    """Narrow a centre box (x_lo, x_hi, y_lo, y_hi) of ``pos`` so the part's body box
+    ``body`` (``(x0, y0, x1, y1)`` about ``pos`` at the tried rotation,
+    :func:`pnr.place.geometry.placed_body`) stays within ``band`` = (edge, tolerance)
+    of its board edge. The real off-centre body, never the symmetric envelope: that
+    reads an off-centre part (a card socket at 270 degrees) nearer its edge than its
+    courtyard is."""
     x_lo, x_hi, y_lo, y_hi = box
     edge, tolerance = band
-    if shift is not None:
-        sx, sy = shift
-        if edge == "south":
-            y_hi = min(y_hi, rect.h / 2 + tolerance - sy)
-        elif edge == "north":
-            y_lo = max(y_lo, height - rect.h / 2 - tolerance - sy)
-        elif edge == "west":
-            x_hi = min(x_hi, rect.w / 2 + tolerance - sx)
-        else:
-            x_lo = max(x_lo, width - rect.w / 2 - tolerance - sx)
-        return (x_lo, x_hi, y_lo, y_hi)
+    x0, y0, x1, y1 = body
     if edge == "south":
-        y_hi = min(y_hi, rect.h / 2 + tolerance)
+        y_hi = min(y_hi, tolerance - y0)
     elif edge == "north":
-        y_lo = max(y_lo, height - rect.h / 2 - tolerance)
+        y_lo = max(y_lo, height - tolerance - y1)
     elif edge == "west":
-        x_hi = min(x_hi, rect.w / 2 + tolerance)
+        x_hi = min(x_hi, tolerance - x0)
     else:
-        x_lo = max(x_lo, width - rect.w / 2 - tolerance)
+        x_lo = max(x_lo, width - tolerance - x1)
     return (x_lo, x_hi, y_lo, y_hi)
 
 
@@ -789,9 +782,7 @@ def legalize(
             else:
                 hit = pad_edge_box(comp, pad_edge, width, height)
             if band is not None:
-                hit = _band_box(
-                    hit, courtyard_rect(comp), band, width, height, shift=body_shift(comp)
-                )
+                hit = _band_box(hit, placed_body(comp), band, width, height)
             if constrained(comp):
                 region = rules.static_box(comp)
                 if region is not None:
@@ -917,7 +908,15 @@ def legalize(
         if band is not None:
             cr = courtyard_rect(comp)
             normal = cr.h if band[0] in ("south", "north") else cr.w
-            infl = min(infl, max(1.0, 1.0 + (2 * band[1] - clearance - m2 - g) / normal))
+            # The band holds the real body (_band_box): where the body reaches less far
+            # toward its edge than the slot's rectangle does (an off-centre body read
+            # as its symmetric envelope), the slot has that much less room to grow.
+            x0, y0, x1, y1 = placed_body(comp)
+            sx, sy = body_shift(comp) or (0.0, 0.0)
+            reach = {"east": x1 - sx, "west": sx - x0, "north": y1 - sy, "south": sy - y0}
+            short = max(0.0, normal / 2 - reach[band[0]])
+            room = 2 * (band[1] - short)
+            infl = min(infl, max(1.0, 1.0 + (room - clearance - m2 - g) / normal))
         if aligned and constrained(comp):
             bound = rules.align_box(comp, {c.ref: c for c in neighbors}, by_ref)
             if bound is not None:

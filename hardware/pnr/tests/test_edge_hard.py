@@ -201,5 +201,80 @@ class PlaceTest(unittest.TestCase):
         self.assertTrue(legal(sw1))
 
 
+def socket_board(rot):
+    """A microSD-like socket (an off-centre body: 0.06 mm more to one side than the
+    other) beside a few parts on a 70 x 50 mm board; the socket on the east edge."""
+    body = (-7.865, -8.925, 7.925, 8.865)
+    sd = Component(
+        "J3",
+        "microSD",
+        (0.0, 0.0),
+        float(rot),
+        "top",
+        (15.85, 17.85),
+        (15.85, 17.85),
+        pads=[Pad(str(i + 1), "D%d" % i, (-3.0 + i * 1.1, -6.0), (0.7, 1.5)) for i in range(6)],
+        smd_body=True,
+        body=body,
+    )
+    parts = [sd] + [two_pin("R%d" % i, "D%d" % i, "GND") for i in range(6)]
+    nets = {}
+    for comp in parts:
+        for pad in comp.pads:
+            nets.setdefault(pad.net, []).append((comp.ref, pad.name))
+    return BoardGraph(
+        "socket",
+        sorted(parts, key=lambda c: c.ref),
+        [Net(n, i + 1, pins) for i, (n, pins) in enumerate(sorted(nets.items()))],
+        BoardOutline(70.0, 50.0),
+    )
+
+
+class OffCentreBodyTest(unittest.TestCase):
+    """The checker measures a part's real courtyard. An off-centre body read as its
+    symmetric envelope sat 1.01 mm from its edge (tolerance 1 mm) on 12-soc-bga-113
+    seed 0: the band must hold the body box at every rotation."""
+
+    def test_distance_is_the_bodys(self):
+        graph = socket_board(270)
+        comp = graph.component("J3")
+        comp.pos = (60.125, 25.0)
+        # The turned body reaches 8.865 east (y1 at 270), not the envelope's 8.925.
+        self.assertAlmostEqual(edge_distance(comp, "east", 70.0, 50.0), 1.01, places=9)
+        comp.rot = 90.0
+        self.assertAlmostEqual(edge_distance(comp, "east", 70.0, 50.0), 0.95, places=9)
+
+    def test_band_box_holds_the_body(self):
+        from pnr.place.geometry import placed_body
+        from pnr.place.legalize import _band_box
+
+        comp = socket_board(270).component("J3")
+        box = _band_box((0.0, 70.0, 0.0, 50.0), placed_body(comp), ("east", 1.0), 70.0, 50.0)
+        self.assertAlmostEqual(box[0], 70.0 - 1.0 - 8.865, places=9)
+        box = _band_box((0.0, 70.0, 0.0, 50.0), placed_body(comp, 90.0), ("east", 1.0), 70, 50)
+        self.assertAlmostEqual(box[0], 70.0 - 1.0 - 8.925, places=9)
+
+    def test_placed_socket_is_within_tolerance_at_every_rotation(self):
+        for rot in (90, 270):
+            graph = socket_board(rot)
+            doc = dict(
+                schema="v0",
+                board=dict(outline=dict(w=70, h=50), layers=2),
+                fab=FAB,
+                edge_align={"J3": dict(edge="east", hard=True, tolerance_mm=1.0)},
+                orientation={"J3": rot},
+            )
+            cc = compile_constraints(doc, graph.refs)
+            for seed in range(3):
+                with self.subTest(rot=rot, seed=seed):
+                    placed, report = placer.place(graph, cc, seed=seed, iters=120, spread=1.3)
+                    self.assertTrue(report.legal, report.summary())
+                    comp = placed.component("J3")
+                    x0, y0, x1, y1 = comp.body
+                    east = {90: -y0, 270: y1}[rot]  # the turned body's east reach
+                    self.assertLessEqual(70.0 - (comp.pos[0] + east), 1.0 + 1e-6)
+                    self.assertGreaterEqual(70.0 - (comp.pos[0] + east), -1e-6)
+
+
 if __name__ == "__main__":
     unittest.main()

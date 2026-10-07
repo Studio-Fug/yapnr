@@ -434,6 +434,22 @@ def make_cloud(config: Config, dry_run: bool = False) -> Gcloud:
     )
 
 
+def list_tasks(record: Dict[str, Any], config: Config, cloud: Optional[Gcloud] = None) -> List[Any]:
+    """The raw ``batch tasks list`` response for one submission's job -- every task's own status
+    history (``status.statusEvents``), the shape :mod:`yapnr.exp.timing`'s task_timing mirror
+    reads. ``[]`` for a dry run, a submission with no job yet, or an API call that fails
+    (``check=False``, same tolerance ``state()`` already gives this call)."""
+    cloud = cloud or make_cloud(config)
+    job = record.get("job", {})
+    if record.get("dry_run") or not job.get("id"):
+        return []
+    tasks = cloud.json(
+        ["batch", "tasks", "list", "--job=%s" % job["id"], "--location=%s" % job["region"]],
+        check=False,
+    )
+    return tasks if isinstance(tasks, list) else []
+
+
 class GcpBatch(Backend):
     name = "gcp-batch"
 
@@ -542,10 +558,7 @@ class GcpBatch(Backend):
                 counts[key] = counts.get(key, 0) + int(value)
         # Exit codes are on task-level status events only (StatusEvent.taskExecution: "only
         # defined for task-level status events where the task fails"), so count them per task.
-        tasks = cloud.json(
-            ["batch", "tasks", "list", "--job=%s" % job["id"], "--location=%s" % job["region"]],
-            check=False,
-        )
+        tasks = list_tasks(record, config, cloud)
         preemptions = sum(
             1
             for task in (tasks if isinstance(tasks, list) else [])

@@ -2646,7 +2646,9 @@ py_test(
 
 py_test(
     name = "stage_timing_test",
-    size = "medium",  # RouteFeedbackStageEventsTests runs the placement loop (route_feedback_test)
+    size = "large",  # RouteFeedbackStageEventsTests + ByteIdenticalResultTests run the placement
+    # loop three times over (route_feedback_test): ~240s observed locally, too close to
+    # "medium"'s 300s budget to risk on a slower CI runner.
     srcs = ["tests/test_stage_timing.py"],
     data = glob(["testdata/splanc_dev/*"]),
     imports = ["."],

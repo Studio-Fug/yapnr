@@ -166,6 +166,11 @@ class TimingPanelTest(unittest.TestCase):
 
     def test_renders_estimated_and_observed_stages(self):
         self.goto(width=1440, height=900)
+        # app.js auto-selects some lane for the main PCB view the moment data loads
+        # (updateControls()) -- not a deliberate choice for the Timing panel's own scope, so this
+        # checks the whole-campaign view: clear it the same way test_touch_and_panels.py seeds a
+        # lane directly, rather than through the (single-lane-only) selectLane() API.
+        self.page.eval("laneId='';1")
         self.open_timing_tab()
         mode_text = self.page.eval("document.querySelector('.timing-panel .tm-mode').textContent")
         self.assertIn("Mixed", mode_text)  # one lane estimated, one lane observed
@@ -188,6 +193,25 @@ class TimingPanelTest(unittest.TestCase):
         wait_for(lambda: self.page.eval("window.YapnrView.lane()") or None, 10)
         lane = self.page.eval("window.YapnrView.lane()")
         self.assertTrue(lane.startswith("ladder/"))
+
+    def test_scope_follows_the_full_selected_lane_path_not_just_its_top_segment(self):
+        # Pre-fix, currentScope() took only the selected lane's first path segment ("ladder"),
+        # so selecting any one lane scoped the panel to the *whole* campaign regardless -- never
+        # down to just that lane.
+        self.goto(width=1440, height=900)
+        self.page.eval("window.YapnrView.selectLane('ladder/02-cell/s0');1")
+        self.open_timing_tab()
+        wait_for(
+            lambda: self.page.eval("document.querySelector('.tm-scope').textContent").startswith(
+                "Scope:"
+            )
+            or None,
+            10,
+        )
+        scope_text = self.page.eval("document.querySelector('.tm-scope').textContent")
+        self.assertIn("ladder/02-cell/s0", scope_text)
+        mode_text = self.page.eval("document.querySelector('.timing-panel .tm-mode').textContent")
+        self.assertIn("1 lane(s)", mode_text)  # scoped down, not the whole 2-lane campaign
 
     def test_phone_width_no_horizontal_page_scroll(self):
         self.goto(width=360, height=740, mobile=True)

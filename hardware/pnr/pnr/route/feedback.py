@@ -382,13 +382,9 @@ def _place_route_rounds(
         from pnr.place.legalize import LegalizationError
         from pnr.stage_timing import stage
 
-        started = time.monotonic()
-        from pnr.live import emit as _emit_stage
-
-        # One round's placement/legalize search (initial pool or placement attempts, through the
-        # legalizer); closed just below, right before source_round_start -- the routing portion
-        # of this same round is its own "route" stage further down. No-op without PNR_LIVE_DIR.
-        _emit_stage("stage_start", data=dict(stage="global-placement", label="source-round-place"))
+        started = time.monotonic()  # this round's own wall time (round diagnostics/log below);
+        # independent of the "source-round-place" live stage span further down, which excludes
+        # the initial-pool screening this round time still includes.
         requested_inflation = dict(inflation)
         last_error = LegalizationError("global search exhausted") if local_only else None
         local_move = None
@@ -429,137 +425,142 @@ def _place_route_rounds(
                 c["seed"] for c in pool_report["candidates"] if c["id"] == pool_report["selected"]
             )
             last_error = None
-        if relocate_mode and r:
-            from pnr.place.relocate import propose
+        # One round's placement/legalize search (placement attempts through the legalizer,
+        # plus relocation/elastic deformation when active). The initial-pool screening above
+        # runs its own child lanes (initial-pool-screening) and is deliberately excluded from
+        # this span -- nesting it here would double count that wall-clock time into the
+        # campaign total (it is already counted once, under initial-pool-screening). stage()'s
+        # finally always closes this span, including through the raises/breaks below
+        # (relocation with no previous route, placement search exhaustion) -- the old manual
+        # emit() pair left a dangling stage_start open on any of those paths.
+        with stage("source-round-place", source_round=r + 1):
+            if relocate_mode and r:
+                from pnr.place.relocate import propose
 
-            if previous_route is None:
-                raise ValueError("relocation requires detailed routing feedback")
-            proposal = propose(
-                placed,
-                constraints,
-                detail_rules or {},
-                previous_route.tracks,
-                previous_route.vias,
-                pressure=inflation,
-                tried=local_tried,
-                temperature=relocation_plateau.temperature,
-                rng=relocation_rng,
-            )
-            if proposal is None:
-                report.termination = "relocation_candidate_pool_exhausted"
-                break
-            placed, prep, local_move = proposal
-            damping = 0.0
-            trial_seed = None
-            last_error = None
-            print("PnR global relocation: " + json.dumps(local_move["moves"]), flush=True)
-        if elastic_mode and r:
-            from pnr.place.elastic import deform
-
-            # Fixed reference scale retains the magnitude of accumulated pressure.
-            pressure = {}
-            if accum is not None:
-                for c in placed.components:
-                    i = min(accum.shape[0] - 1, max(0, int(c.pos[0] / gcell_mm)))
-                    j = min(accum.shape[1] - 1, max(0, int(c.pos[1] / gcell_mm)))
-                    pressure[c.ref] = float(
-                        accum[max(0, i - 1) : i + 2, max(0, j - 1) : j + 2].max()
-                    ) / (mesh_reference_scale or 1.0)
-            attempts = {}
-            proposal = deform(
-                placed,
-                constraints,
-                detail_rules or {},
-                pressure,
-                strength=min(8.0, 1.5**stale),
-                diagnostics=attempts,
-            )
-            if proposal is None:
-                report.termination = "elastic_no_legal_proposal"
-                diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
-                if diagnostic:
-                    Path(diagnostic, "elastic-rejection.json").write_text(
-                        json.dumps(attempts, indent=2)
-                    )
-                break
-            placed, prep, local_move = proposal
-            damping = 0.0
-            trial_seed = None
-            last_error = None
-            print(
-                "PnR elastic mesh: moved %d parts, channel %.2f -> %.2f, strength %.2f"
-                % (
-                    len(local_move["moves"]),
-                    local_move["channel_before"],
-                    local_move["channel_after"],
-                    local_move["strength"],
-                ),
-                flush=True,
-            )
-        for trial_seed in (
-            []
-            if initial_route is not None or local_only or ((elastic_mode or relocate_mode) and r)
-            else range(seed + r, seed + r + 4)
-        ):
-            for damping in (1.0, 0.5, 0.25, 0.0) if inflation else (1.0,):
-                try:
-                    with _trace.scope(
-                        "attempt-%d" % len(placement_attempt_log),
-                        "attempt",
-                        seed=trial_seed,
-                        damping=damping,
-                    ):
-                        placed, prep = place(
-                            graph,
-                            constraints,
-                            seed=trial_seed,
-                            iters=iters,
-                            orient=orient,
-                            inflation={k: 1 + (v - 1) * damping for k, v in inflation.items()},
-                            spread=relax_spread if relaxing else spread,
-                            channel_rules=detail_rules,
-                        )
-                    placement_attempt_log.append(dict(seed=trial_seed, damping=damping, legal=True))
-                    last_error = None
+                if previous_route is None:
+                    raise ValueError("relocation requires detailed routing feedback")
+                proposal = propose(
+                    placed,
+                    constraints,
+                    detail_rules or {},
+                    previous_route.tracks,
+                    previous_route.vias,
+                    pressure=inflation,
+                    tried=local_tried,
+                    temperature=relocation_plateau.temperature,
+                    rng=relocation_rng,
+                )
+                if proposal is None:
+                    report.termination = "relocation_candidate_pool_exhausted"
                     break
-                except LegalizationError as error:
-                    last_error = error
-                    placement_attempt_log.append(
-                        dict(seed=trial_seed, damping=damping, legal=False, error=str(error))
-                    )
-            if last_error is None:
-                break
-        if last_error is not None:
-            if best_overflow == float("inf"):
-                raise last_error
-            fallback = local_feedback_placement(
-                best_placed, constraints, detail_rules, inflation, local_tried
-            )
-            if fallback is None:
-                report.termination = "placement_search_exhausted"
-                break
-            placed, prep, local_move = fallback
-            damping = 0.0
-            trial_seed = None
-            local_only = True
-            print("PnR local placement feedback: " + json.dumps(local_move), flush=True)
-        if tracer is not None:
-            tracer.poses("round", placed, local_move=local_move is not None)
-        diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
-        folder = Path(diagnostic) / ("round-%02d" % (r + 1)) if diagnostic else None
-        if folder:
-            folder.mkdir(parents=True, exist_ok=True)
-            (folder / "placed.json").write_text(placed.to_json())
+                placed, prep, local_move = proposal
+                damping = 0.0
+                trial_seed = None
+                last_error = None
+                print("PnR global relocation: " + json.dumps(local_move["moves"]), flush=True)
+            if elastic_mode and r:
+                from pnr.place.elastic import deform
+
+                # Fixed reference scale retains the magnitude of accumulated pressure.
+                pressure = {}
+                if accum is not None:
+                    for c in placed.components:
+                        i = min(accum.shape[0] - 1, max(0, int(c.pos[0] / gcell_mm)))
+                        j = min(accum.shape[1] - 1, max(0, int(c.pos[1] / gcell_mm)))
+                        pressure[c.ref] = float(
+                            accum[max(0, i - 1) : i + 2, max(0, j - 1) : j + 2].max()
+                        ) / (mesh_reference_scale or 1.0)
+                attempts = {}
+                proposal = deform(
+                    placed,
+                    constraints,
+                    detail_rules or {},
+                    pressure,
+                    strength=min(8.0, 1.5**stale),
+                    diagnostics=attempts,
+                )
+                if proposal is None:
+                    report.termination = "elastic_no_legal_proposal"
+                    diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
+                    if diagnostic:
+                        Path(diagnostic, "elastic-rejection.json").write_text(
+                            json.dumps(attempts, indent=2)
+                        )
+                    break
+                placed, prep, local_move = proposal
+                damping = 0.0
+                trial_seed = None
+                last_error = None
+                print(
+                    "PnR elastic mesh: moved %d parts, channel %.2f -> %.2f, strength %.2f"
+                    % (
+                        len(local_move["moves"]),
+                        local_move["channel_before"],
+                        local_move["channel_after"],
+                        local_move["strength"],
+                    ),
+                    flush=True,
+                )
+            for trial_seed in (
+                []
+                if initial_route is not None
+                or local_only
+                or ((elastic_mode or relocate_mode) and r)
+                else range(seed + r, seed + r + 4)
+            ):
+                for damping in (1.0, 0.5, 0.25, 0.0) if inflation else (1.0,):
+                    try:
+                        with _trace.scope(
+                            "attempt-%d" % len(placement_attempt_log),
+                            "attempt",
+                            seed=trial_seed,
+                            damping=damping,
+                        ):
+                            placed, prep = place(
+                                graph,
+                                constraints,
+                                seed=trial_seed,
+                                iters=iters,
+                                orient=orient,
+                                inflation={k: 1 + (v - 1) * damping for k, v in inflation.items()},
+                                spread=relax_spread if relaxing else spread,
+                                channel_rules=detail_rules,
+                            )
+                        placement_attempt_log.append(
+                            dict(seed=trial_seed, damping=damping, legal=True)
+                        )
+                        last_error = None
+                        break
+                    except LegalizationError as error:
+                        last_error = error
+                        placement_attempt_log.append(
+                            dict(seed=trial_seed, damping=damping, legal=False, error=str(error))
+                        )
+                if last_error is None:
+                    break
+            if last_error is not None:
+                if best_overflow == float("inf"):
+                    raise last_error
+                fallback = local_feedback_placement(
+                    best_placed, constraints, detail_rules, inflation, local_tried
+                )
+                if fallback is None:
+                    report.termination = "placement_search_exhausted"
+                    break
+                placed, prep, local_move = fallback
+                damping = 0.0
+                trial_seed = None
+                local_only = True
+                print("PnR local placement feedback: " + json.dumps(local_move), flush=True)
+            if tracer is not None:
+                tracer.poses("round", placed, local_move=local_move is not None)
+            diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
+            folder = Path(diagnostic) / ("round-%02d" % (r + 1)) if diagnostic else None
+            if folder:
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / "placed.json").write_text(placed.to_json())
         from pnr.live import emit
 
-        emit(
-            "stage_end",
-            data=dict(
-                stage="global-placement",
-                label="source-round-place",
-                seconds=time.monotonic() - started,
-            ),
-        )
         emit(
             "source_round_start",
             layout=__import__("json").loads(placed.to_json()),

@@ -330,24 +330,40 @@ body.dk-min #dock .dk-rail{display:flex}
 .tm-refresh:hover{color:#9ee6d1;border-color:#3f7f70}
 .tm-mode{font-size:10.5px;color:#7f97a2;margin:2px 0 8px}
 .tm-empty{padding:16px 4px;color:#8a9ea7;font-size:12px}
-.timing-panel table.tm-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px}
+/* The table's own horizontal scroller: at phone width (or with many stages) the row content is
+   wider than the dock, and must scroll in its own box rather than clip columns or widen the
+   page (same reasoning as .tm-gantt-wrap below). */
+.tm-table-wrap{overflow-x:auto;margin-bottom:4px}
+.timing-panel table.tm-table{width:100%;min-width:560px;border-collapse:collapse;font-size:11px}
 .tm-table th{text-align:left;color:#a7bdc8;font-weight:600;padding:3px 6px;border-bottom:1px solid #2c3d45;white-space:nowrap}
-.tm-table td{padding:3px 6px;border-bottom:1px solid #202b30;color:#dce5e9;white-space:nowrap}
+.tm-table td{padding:3px 6px;border-bottom:1px solid #202b30;color:#dce5e9;white-space:nowrap;vertical-align:middle}
 .tm-table td.tm-stage{display:flex;align-items:center;gap:6px}
 .tm-table td.tm-stage i{width:8px;height:8px;border-radius:50%;background:var(--c);flex:none;display:inline-block}
-.tm-hist{display:block;overflow:visible}
+.tm-hist{display:block;width:140px;height:auto;max-width:140px}
 .tm-hist-bar:hover,.tm-gantt-seg:hover{opacity:.75;cursor:pointer}
+.tm-hist-bar.tm-hl,.tm-gantt-seg.tm-hl{stroke:#9ee6d1;stroke-width:1.5px}
 .tm-groups{display:flex;flex-direction:column;gap:5px;margin-bottom:6px}
 .tm-grouprow{display:flex;align-items:center;gap:8px;font-size:11px}
-.tm-groupname{width:120px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#a7bdc8}
-.tm-groupbar{flex:1;display:flex;height:10px;border-radius:3px;overflow:hidden;background:#202b30}
+/* RTL + plaintext: text-overflow:ellipsis then truncates from the START of the string, keeping
+   the end visible -- sibling groups under a long shared prefix (ladder/<case>/<seed>) differ
+   near the end, not the start, so truncating there is what actually tells them apart. */
+.tm-groupname{width:150px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+ color:#a7bdc8;direction:rtl;unicode-bidi:plaintext;text-align:left}
+.tm-groupbar{flex:1;display:flex;height:10px;border-radius:3px;overflow:hidden;background:#202b30;min-width:60px}
 .tm-seg{display:inline-block;height:100%;width:var(--w);background:var(--c)}
 .tm-grouptotal{width:48px;flex:none;text-align:right;color:#8fa4ad;font-size:10.5px}
 .tm-gantt-wrap{overflow-x:auto;overflow-y:hidden;border:1px solid #202b30;border-radius:5px;margin-bottom:8px}
 .tm-gantt{display:block}
 .tm-slowest{list-style:none;margin:0;padding:0;font-size:11px;display:flex;flex-direction:column;gap:3px}
-.tm-slowest-row{display:flex;gap:8px;cursor:pointer;padding:2px 4px;border-radius:4px}
+.tm-slowest-row{display:flex;gap:8px;cursor:pointer;padding:2px 4px;border-radius:4px;min-width:0}
 .tm-slowest-row:hover{background:#172329}
+.tm-slowest-row>span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .tm-slowest-time{width:52px;flex:none;color:#9ee6d1;font-variant-numeric:tabular-nums}
-.tm-slowest-row em{color:#ffd166;font-style:normal;margin-left:4px}
+.tm-slowest-row em{color:#ffd166;font-style:normal;margin-left:4px;flex:none}
+@media(max-width:1360px){.tm-groupname{width:110px}}
+@media(max-width:600px){
+ .tm-groupname{width:84px}
+ .tm-hist{width:100px}
+ .timing-panel table.tm-table{min-width:460px}
+}
 @media(max-width:1360px){.tm-groupname{width:84px}}

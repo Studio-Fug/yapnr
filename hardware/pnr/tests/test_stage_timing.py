@@ -119,5 +119,38 @@ class RouteFeedbackStageEventsTests(unittest.TestCase):
         self.assertTrue(all(e["data"]["seconds"] >= 0 for e in ends + routes))
 
 
+class ByteIdenticalResultTests(unittest.TestCase):
+    """Turning on PNR_LIVE_DIR (stage_start/stage_end emission) must change nothing about the
+    PnR result itself -- only that events get written somewhere. A test asserting merely "no
+    file was written" without PNR_LIVE_DIR would pass even if emitting corrupted the search
+    (e.g. a stray exception swallowed by a bad try/except, or a live-dir branch that nudges
+    floating point); this instead runs the real loop both ways and compares the result."""
+
+    def test_route_and_place_result_is_identical_with_and_without_live_dir(self):
+        with open(os.path.join(FIXTURE, "graph.json"), encoding="utf-8") as fh:
+            graph_json = fh.read()
+        with open(os.path.join(FIXTURE, "constraints.yaml"), encoding="utf-8") as fh:
+            constraints_yaml = yaml.safe_load(fh)
+
+        def run():
+            graph = BoardGraph.from_json(graph_json)
+            constraints = compile_constraints(constraints_yaml, graph.refs)
+            # No detail_rules: the fast global-lookahead path only (no detailed router) -- plenty
+            # to exercise the source-round-place stage() span this test cares about, and far
+            # cheaper than the detailed-router acceptance runs above (RouteFeedbackStageEventsTests,
+            # route_feedback_test): this test's only job is comparing the result with and without
+            # PNR_LIVE_DIR, twice over, so it must stay cheap on its own account.
+            placed, report = route_and_place(graph, constraints, seed=0, iters=10, max_rounds=1)
+            return placed.to_json(), report.summary()
+
+        with patch.dict(os.environ, {}, clear=True):
+            placed_off, summary_off = run()
+        with tempfile.TemporaryDirectory() as live_dir:
+            with patch.dict(os.environ, {"PNR_LIVE_DIR": live_dir}, clear=True):
+                placed_on, summary_on = run()
+        self.assertEqual(placed_off, placed_on)
+        self.assertEqual(summary_off, summary_on)
+
+
 if __name__ == "__main__":
     unittest.main()

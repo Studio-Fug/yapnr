@@ -23,13 +23,13 @@ const panel=DK().el('timing');
 if(!panel)return; // a dock build with no 'timing' tab registered: nothing to mount into
 panel.classList.add('timing-panel');
 
-let state={loading:false,data:null,error:null,scope:''};
+let state={loading:false,data:null,error:null,scope:'',highlight:null};
 
+// The scope is the whole selected tree path, not just its top-level ancestor -- selecting a
+// single case or seed lane in the tree must scope the panel down to exactly that lane, the same
+// way every other dock tab already follows the selection.
 function currentScope(){
- let lane=V()?.lane?.();
- if(!lane)return '';
- let seg=lane.split('/');
- return seg.length>1?seg[0]:'';
+ return V()?.lane?.()||'';
 }
 
 function load(){
@@ -52,16 +52,28 @@ function histogramSvg(stage,stats,order){
  let w=260,hh=56,barW=w/counts.length,maxC=Math.max(1,...counts);
  let bars=counts.map((c,i)=>{
   let bh=hh*(c/maxC);
+  let hl=state.highlight?.stage===stage&&state.highlight.bin===i;
   return svgEl('rect',{x:i*barW+1,y:hh-bh,width:Math.max(1,barW-2),height:bh,fill:colorFor(stage,order),
-   onclick:()=>selectByDuration(stage,edges[i],edges[i+1]),class:'tm-hist-bar'},
+   onclick:()=>selectByDuration(stage,edges[i],edges[i+1],i),class:'tm-hist-bar'+(hl?' tm-hl':'')},
    svgEl('title',{},fmt(edges[i])+'–'+fmt(edges[i+1])+': '+c+' lane(s)'));
  });
  return svgEl('svg',{width:w,height:hh,viewBox:`0 0 ${w} ${hh}`,class:'tm-hist'},...bars);
 }
 
-function selectByDuration(stage,lo,hi){
- let lanes=(state.data?.timeline||[]).filter(l=>l.spans.some(s=>s.stage===stage&&s.seconds>=lo&&s.seconds<hi));
- if(lanes[0])V()?.selectLane?.(lanes[0].candidate);
+// A histogram bin is [lo,hi) for every bin except the last, which is [lo,hi] -- the top edge is
+// the slowest lane's own duration, and dropping it (the pre-fix `<hi` for every bin) silently
+// excluded the single most interesting lane in the whole chart. All matching lanes are
+// highlighted together (in this panel's own Gantt, via state.highlight) and the main view is
+// pointed at the slowest one of them -- the shared selectLane hook only ever takes one lane.
+function selectByDuration(stage,lo,hi,bin){
+ let isLastBin=bin===((state.data?.stages?.[stage]?.histogram?.counts?.length||1)-1);
+ let lanes=(state.data?.timeline||[]).filter(l=>l.spans.some(s=>
+  s.stage===stage&&s.seconds>=lo&&(isLastBin?s.seconds<=hi:s.seconds<hi)));
+ if(!lanes.length)return;
+ state.highlight={stage,bin,candidates:new Set(lanes.map(l=>l.candidate))};
+ lanes.sort((a,b)=>b.seconds-a.seconds);
+ V()?.selectLane?.(lanes[0].candidate);
+ renderAll();
 }
 
 function summaryTable(){
@@ -80,10 +92,30 @@ function summaryTable(){
    h('td',{},(s.share*100).toFixed(0)+'%'),
    h('td',{},histogramSvg(stage,s,d.stage_order)));
  });
- return h('table',{class:'tm-table'},
+ return h('div',{class:'tm-table-wrap'},h('table',{class:'tm-table'},
   h('thead',{},h('tr',{},h('th',{},'stage'),h('th',{},'n'),h('th',{},'total'),h('th',{},'mean'),
    h('th',{},'median'),h('th',{},'p90'),h('th',{},'max'),h('th',{},'share'),h('th',{},'distribution'))),
-  h('tbody',{},...rows));
+  h('tbody',{},...rows)));
+}
+
+function taskOverheadTable(){
+ let d=state.data,overhead=d?.task_overhead||{};
+ let stages=Object.keys(overhead);
+ if(!stages.length)return h('div');
+ let order=['queue-wait','boot-fetch','run'].filter(s=>overhead[s]);
+ let rows=order.map(stage=>{
+  let s=overhead[stage];
+  return h('tr',{},
+   h('td',{},stage),h('td',{},s.count),h('td',{},fmt(s.total)),h('td',{},fmt(s.mean)),
+   h('td',{},fmt(s.median)),h('td',{},fmt(s.p90)),h('td',{},fmt(s.max)));
+ });
+ return h('div',{},
+  h('h3',{},'GCP task overhead'),
+  h('div',{class:'tm-mode'},'Queue wait / boot+fetch / run, from each task’s own Batch status history. Infrastructure, not a pipeline stage -- excluded from the totals above.'),
+  h('div',{class:'tm-table-wrap'},h('table',{class:'tm-table'},
+   h('thead',{},h('tr',{},h('th',{},'stage'),h('th',{},'n'),h('th',{},'total'),h('th',{},'mean'),
+    h('th',{},'median'),h('th',{},'p90'),h('th',{},'max'))),
+   h('tbody',{},...rows))));
 }
 
 function groupBars(){
@@ -111,11 +143,12 @@ function ganttSvg(){
  let segRects=[];
  lanes.forEach((lane,i)=>{
   let segs=lane.spans.length?lane.spans:[{stage:'other',start:lane.start,end:lane.end,seconds:lane.end-lane.start,estimated:true}];
+  let hl=state.highlight?.candidates?.has(lane.candidate);
   for(let s of segs)segRects.push(svgEl('rect',{x:x(s.start),y:i*rowH+1,width:Math.max(0.5,x(s.end)-x(s.start)),height:rowH-2,
    fill:colorFor(s.stage,d.stage_order),opacity:s.estimated?0.55:1,
-   onclick:()=>V()?.selectLane?.(lane.candidate),class:'tm-gantt-seg'},
+   onclick:()=>V()?.selectLane?.(lane.candidate),class:'tm-gantt-seg'+(hl?' tm-hl':'')},
    svgEl('title',{},lane.candidate+' · '+s.stage+' · '+fmt(s.seconds)+(s.estimated?' (estimated)':''))));
-  if(lane.running)segRects.push(svgEl('rect',{x:x(lane.end)-1,y:i*rowH+1,width:2,height:rowH-2,fill:'#fff',class:'tm-running-edge'}));
+  if(lane.running)segRects.push(svgEl('rect',{x:x(lane.end)-1,y:i*rowH+1,width:2,height:rowH-2,fill:'#9ee6d1',class:'tm-running-edge'}));
  });
  let concurrency=d.concurrency||[];
  let maxRun=Math.max(1,...concurrency.map(p=>p.running));
@@ -124,7 +157,7 @@ function ganttSvg(){
  return h('div',{class:'tm-gantt-wrap'},
   svgEl('svg',{width:w,height:concH+4,viewBox:`0 0 ${w} ${concH+4}`,class:'tm-gantt'},
    ...segRects,
-   concurrency.length?svgEl('polyline',{points:line,fill:'none',stroke:'#fff',['stroke-opacity']:0.5,['stroke-width']:1.5,class:'tm-concurrency'}):null));
+   concurrency.length?svgEl('polyline',{points:line,fill:'none',stroke:'#9ee6d1',['stroke-opacity']:0.6,['stroke-width']:1.5,class:'tm-concurrency'}):null));
 }
 
 function render404(){
@@ -139,14 +172,21 @@ function renderAll(){
  let modeNote=d.mode==='estimated'
   ?'Estimated from event timestamps (this campaign has no stage events).'
   :d.mode==='mixed'?'Mixed: some lanes observed, some estimated from event timestamps.':'Observed from stage events.';
+ // total_seconds sums stage time across every lane that ran in parallel -- it is not the
+ // campaign's wall-clock span, which wall_seconds (last event - first, across lanes in scope)
+ // gives directly; showing both side by side is the point (a campaign with wide concurrency has
+ // total_seconds >> wall_seconds, and that gap *is* the parallelism story).
+ let totalsNote='lane-seconds total '+fmt(d.total_seconds)+' · wall-clock '+fmt(d.wall_seconds);
  panel.append(
   h('div',{class:'tm-head'},
    h('span',{class:'tm-status'},state.loading?'Loading…':''),
    h('span',{class:'tm-scope'},state.scope?('Scope: '+state.scope):'Whole campaign'),
    h('button',{class:'tm-refresh',onclick:load,title:'Refresh'},'↻')),
   h('div',{class:'tm-mode'},modeNote+' · '+d.lane_count+' lane(s)'+(d.running_count?(', '+d.running_count+' running'):'')),
+  h('div',{class:'tm-mode'},totalsNote),
   h('h3',{},'Per-stage'),
   summaryTable(),
+  taskOverheadTable(),
   h('h3',{},'Per-group breakdown'),
   groupBars(),
   h('h3',{},'Timeline'),
@@ -162,7 +202,7 @@ let lastScope=null;
 D.addEventListener('yapnr:dock',()=>{
  if(DK().current()!=='timing'||!DK().isOpen())return;
  let scope=currentScope();
- if(scope!==lastScope||!state.data){lastScope=scope;load()}
+ if(scope!==lastScope||!state.data){lastScope=scope;state.highlight=null;load()}
 });
 window.YapnrTiming={reload:load};
 })();

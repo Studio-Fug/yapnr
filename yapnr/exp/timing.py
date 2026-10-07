@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -33,6 +34,14 @@ _STAGE_FOR_STATE = {
     "ASSIGNED": "boot-fetch",
     "RUNNING": "run",
 }
+
+# The Batch states that mean the task is genuinely done -- as opposed to a "run" span merely
+# closing because the task was preempted and went back to QUEUED for a retry. Only a `run` span
+# closed by one of these should ever read as the lane finishing
+# (``yapnr.viewer.timing``'s ``TERMINAL_KINDS``/`_lane_terminal`).
+_TERMINAL_TASK_STATES = frozenset({"SUCCEEDED", "FAILED", "CANCELLED", "DELETED"})
+
+_TASK_INDEX_RE = re.compile(r"/tasks/(\d+)$")
 
 
 def _parse_rfc3339(value: str) -> float:
@@ -73,13 +82,27 @@ def task_state_spans(
             continue
         if i + 1 < len(parsed):
             end = parsed[i + 1][1]
+            closed_by = parsed[i + 1][0]
         elif include_open:
             end = now
+            closed_by = None  # still open: not closed by anything, so never terminal
         else:
             continue
         if end <= start:
             continue
-        spans.append(dict(stage=stage, state=state, start=start, end=end, seconds=end - start))
+        spans.append(
+            dict(
+                stage=stage,
+                state=state,
+                start=start,
+                end=end,
+                seconds=end - start,
+                # Only a span closed by a genuinely terminal Batch state is the task actually
+                # finishing; one closed by QUEUED/SCHEDULED/ASSIGNED/RUNNING again is a
+                # preemption retry, still mid-flight (see _TERMINAL_TASK_STATES above).
+                terminal=closed_by in _TERMINAL_TASK_STATES,
+            )
+        )
     return spans
 
 
@@ -122,7 +145,12 @@ def emit_task_timing(
             kind="task_timing",
             candidate=candidate,
             iteration=None,
-            data=dict(stage=span["stage"], label=span["state"], seconds=span["seconds"]),
+            data=dict(
+                stage=span["stage"],
+                label=span["state"],
+                seconds=span["seconds"],
+                terminal=span["terminal"],
+            ),
         )
         before = (dest / "events" / (event_id + ".json")).exists()
         _write_event_atomic(dest / "events", event)
@@ -154,6 +182,57 @@ def mirror_task_timing(
             continue
         total += emit_task_timing(dest, candidate, status_events, now=now)
     return total
+
+
+def candidate_for_gcp_task(
+    task: Dict[str, Any], indices: Sequence[str], task_ids: Sequence[str]
+) -> Optional[str]:
+    """The campaign's own task id for one GCP Batch task record (``batch tasks list``), via its
+    task-group index.
+
+    Unlike the Slurm backend (``yapnr.exp.backends.slurm``, which packs ``chunk`` consecutive
+    tasks into one array element on purpose), GCP Batch runs exactly one of our tasks per Batch
+    task -- Batch's own ``taskCount``/parallelism already does the fan-out -- so a Batch task's
+    numeric index (the trailing integer in its ``name``,
+    ``.../taskGroups/group0/tasks/<index>``) maps 1:1 through the submission's own ``.indices``
+    file (line numbers into ``tasks.jsonl``, in submission order -- see ``yapnr.exp.task.Campaign``)
+    to exactly one task id. Returns ``None`` for a malformed or out-of-range record rather than
+    raising, the same tolerance :func:`mirror_task_timing` already gives a bad task record.
+    """
+    match = _TASK_INDEX_RE.search(task.get("name") or "")
+    if not match:
+        return None
+    index = int(match.group(1))
+    if not 0 <= index < len(indices):
+        return None
+    try:
+        line_no = int(indices[index])
+    except ValueError:
+        return None
+    if not 0 <= line_no < len(task_ids):
+        return None
+    return task_ids[line_no]
+
+
+def mirror_gcp_batch_task_timing(
+    dest: Path,
+    tasks: Sequence[Dict[str, Any]],
+    indices: Sequence[str],
+    task_ids: Sequence[str],
+    *,
+    now: Optional[float] = None,
+) -> int:
+    """:func:`mirror_task_timing` keyed by the campaign's own task id (not Batch's task name),
+    via :func:`candidate_for_gcp_task`. ``indices``/``task_ids``: one submission's
+    ``submissions/<n>.indices`` content (already split into strings) and ``plan.tasks``' own
+    ``id`` fields, in ``tasks.jsonl`` line order -- both already in hand at every call site
+    (``yapnr exp live``, ``yapnr exp status``) that also has ``tasks`` itself."""
+    return mirror_task_timing(
+        dest,
+        tasks,
+        candidate_for=lambda task: candidate_for_gcp_task(task, indices, task_ids),
+        now=now,
+    )
 
 
 # ------------------------------------------------------------------ CLI (`yapnr exp timing`)

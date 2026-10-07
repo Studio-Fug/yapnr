@@ -310,8 +310,17 @@ def mirror(
     once: bool = False,
     say: Optional[Callable[[str], None]] = None,
     sleep: Callable[[float], None] = time.sleep,
+    extra_poll: Optional[Callable[[], int]] = None,
 ) -> Dict[str, Any]:
-    """Poll ``runs`` for a campaign's live bundles until ``once`` is satisfied or interrupted."""
+    """Poll ``runs`` for a campaign's live bundles until ``once`` is satisfied or interrupted.
+
+    ``extra_poll``, when given, is called once per poll after the bundle fetch and its return
+    value (an event count) folded into ``total["task_timing_events"]`` -- the hook
+    ``yapnr.exp.cli``'s ``live`` command uses to also mirror GCP Batch task timing
+    (:func:`yapnr.exp.timing.mirror_gcp_batch_task_timing`) each round, without this module
+    knowing anything about GCP. Never raises on its own account: a backend with nothing to add
+    here (anything but gcp-batch) simply passes ``None``.
+    """
     say = say or (lambda _msg: None)
     dest = Path(dest)
     state = LiveState.load(dest)
@@ -322,6 +331,7 @@ def mirror(
         "boards": 0,
         "synthetic_events": 0,
         "finished": False,
+        "task_timing_events": 0,
     }
     while True:
         found = mirror_once(runs, cid, dest, state, say=say)
@@ -338,6 +348,11 @@ def mirror(
         if synth["finished"] and not total["finished"]:
             say("live: campaign %s finished (%d task(s))" % (cid, synth["tasks"]))
         total["finished"] = synth["finished"]
+        if extra_poll is not None:
+            added = extra_poll()
+            if added:
+                total["task_timing_events"] += added
+                say("mirrored %d task_timing event(s)" % added)
         if once:
             return total
         sleep(interval_s)

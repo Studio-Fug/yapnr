@@ -298,6 +298,43 @@ def _cmd_fetch(args) -> int:
     return 0
 
 
+def _gcp_task_timing_poll(plan, cfg, cloud, runs, out):
+    """A ``yapnr exp live`` poll's extra step for a gcp-batch campaign: mirror every open
+    submission's Batch task timing (queue wait/boot+fetch/run) as ``task_timing`` events, keyed
+    by the campaign's own task id (:func:`yapnr.exp.timing.mirror_gcp_batch_task_timing`), not
+    Batch's own task name -- see that function's docstring for the index->task id mapping. One
+    submission's ``.indices`` file never changes once written, but it is re-read every poll
+    rather than cached: a live mirror already re-reads everything else every poll too, and a
+    campaign's task list is small enough (one ``read_text`` call) that this is not worth the
+    extra state to avoid."""
+    from yapnr.exp import backends
+    from yapnr.exp.backends.base import campaign_prefix
+    from yapnr.exp.backends.gcp_batch import list_tasks
+    from yapnr.exp.timing import mirror_gcp_batch_task_timing
+
+    task_ids = [t["id"] for t in plan.tasks]
+
+    def poll() -> int:
+        total = 0
+        for record in backends.submissions(runs, plan.id):
+            job = record.get("job") or {}
+            if not job.get("id"):
+                continue
+            tasks = list_tasks(record, cfg, cloud)
+            if not tasks:
+                continue
+            try:
+                indices = runs.read_text(
+                    "%s/submissions/%d.indices" % (campaign_prefix(plan.id), record["submission"])
+                ).split()
+            except (KeyError, OSError, ValueError):
+                continue
+            total += mirror_gcp_batch_task_timing(out, tasks, indices, task_ids)
+        return total
+
+    return poll
+
+
 def _cmd_live(args) -> int:
     from yapnr.exp import backends
     from yapnr.exp import live as livemod
@@ -305,19 +342,27 @@ def _cmd_live(args) -> int:
     cfg = _config(args)
     plan = _find_plan(args.plan, cfg)
     backend = backends.get(plan.backend)
-    runs = backend.stores(plan, cfg, _cloud(cfg, plan)).runs
+    cloud = _cloud(cfg, plan)
+    runs = backend.stores(plan, cfg, cloud).runs
     out = (
         Path(args.out).expanduser()
         if args.out
         else cfg.local.store_path(plan.private) / "live" / plan.id
     )
     interval = args.interval or (plan.meta.get("live") or {}).get("interval_s") or 20
+    extra_poll = (
+        _gcp_task_timing_poll(plan, cfg, cloud, runs, out) if plan.backend == "gcp-batch" else None
+    )
     print("mirroring %s -> %s" % (plan.id, out))
-    report = livemod.mirror(runs, plan.id, out, interval_s=interval, once=args.once, say=print)
+    report = livemod.mirror(
+        runs, plan.id, out, interval_s=interval, once=args.once, say=print, extra_poll=extra_poll
+    )
     print(
         "polled %d time(s): %d bundle(s), %d event(s), %d board(s)"
         % (report["polls"], report["bundles"], report["events"], report["boards"])
     )
+    if report.get("task_timing_events"):
+        print("task timing: %d event(s)" % report["task_timing_events"])
     print("viewer    bazel run //:viewer -- --root %s" % out)
     return 0
 

@@ -8,8 +8,9 @@ timing panel aggregates against, rather than each driver inventing its own event
 ``stage()`` is a context manager around one stage's span: it emits ``stage_start`` on entry and
 ``stage_end`` (with ``seconds``) on exit, success or failure, via ``pnr.live.emit`` -- itself a
 no-op without ``PNR_LIVE_DIR``, so this adds no behavior and no overhead to an unprofiled,
-non-live run (see ``tests/unit/pnr/test_stage_timing.py``: emitting is byte-identical to not
-emitting on the parts of the result that matter, candidate ordering and objective values).
+non-live run (see ``hardware/pnr/tests/test_stage_timing.py``'s ``ByteIdenticalResultTests``:
+``route_and_place``'s own result -- not just that no file gets written -- is identical with and
+without ``PNR_LIVE_DIR`` set).
 
 A driver's own phase name (``"placement"``, ``"coalesce"``, a native_loop phase label, ...) maps
 onto the fixed list below through ``_ALIAS``; a name with no entry passes through unchanged and
@@ -45,6 +46,10 @@ _ALIAS = {
     "placement": "setup",
     "assemble": "setup",
     "board-gen": "setup",
+    # pnr.route.feedback's per-round placement search (deliberately excludes the initial-pool
+    # screening call it wraps, which has its own child lanes under "initial-pool-screening" --
+    # see the comment at its call site for why that time must not be double counted here).
+    "source-round-place": "global-placement",
     "plane-access": "plane-partition-pours",
     "planes": "plane-partition-pours",
     "refill": "plane-partition-pours",

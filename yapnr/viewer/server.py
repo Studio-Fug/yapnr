@@ -1326,7 +1326,7 @@ class Handler(BaseHTTPRequestHandler):
         from yapnr.viewer.timing import aggregate
 
         scope = (self.query().get("scope") or [""])[0]
-        return self.send(aggregate(self.viewer.root, scope=scope))
+        return self.send(aggregate(self.viewer.root, scope=scope, now=time.time()))
 
     def get_geometry(self, path):
         v = self.viewer

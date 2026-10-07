@@ -1,0 +1,49 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791322374426178468-7dad3efc",
+  "time": 1791322374.4261842,
+  "kind": "candidate_start",
+  "candidate": "ladder/01-connector-led-2/s1/initial-start-02",
+  "iteration": null,
+  "data": {
+    "phase": "initial-placement signals",
+    "provisional": true,
+    "finalist": "start-02",
+    "proxy": {
+      "score": 0.1400000000000004,
+      "unreachable_branches": 0,
+      "overflow_units": 0.0,
+      "saturation": 0.01000000000000004,
+      "wire_mm": 4.0,
+      "via_demand": 0,
+      "net_failures": {},
+      "pass_index": 0,
+      "terms": [
+        { "key": "unreachable_branches", "raw": 0, "weight": 10000.0, "weighted": 0.0 },
+        { "key": "capacity_overflow", "raw": 0.0, "weight": 100.0, "weighted": 0.0 },
+        {
+          "key": "near_saturation",
+          "raw": 0.01000000000000004,
+          "weight": 10.0,
+          "weighted": 0.1000000000000004
+        },
+        { "key": "wirelength", "raw": 4.0, "weight": 0.01, "weighted": 0.04 },
+        { "key": "via_demand", "raw": 0, "weight": 0.03, "weighted": 0.0 }
+      ],
+      "seconds": 0.0019241170000015018,
+      "layers": ["F.Cu", "B.Cu"],
+      "pitch_mm": 2.0,
+      "net_count": 2,
+      "model": "capacity-proxy-v1",
+      "scope": "placement-only all-net coarse negotiated demand",
+      "limitations": [
+        "Coarse cut capacity does not prove continuous detailed escapes.",
+        "Plane access assumes declared plane continuity; reference/skew and pad-entry qualification require native routing.",
+        "Existing routed tracks are not counted: all net demand is reconstructed to avoid double counting.",
+        "Whole-net power widths are conservative; terminal-specific necks are not modeled; source power arrays are reserved.",
+        "Same-cell terminals collapse; short portal rays do not certify local pad entry."
+      ]
+    },
+    "budget": { "pitch_mm": 0.25, "max_iters": 8 }
+  }
+}

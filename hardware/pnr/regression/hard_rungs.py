@@ -86,6 +86,8 @@ REPEATED_PADS = {
     HARD_LIB["usb_micro_b"]: {"SH": 8},
     HARD_LIB["u_fl"]: {"2": 2},
     HARD_LIB["jst_sh_12"]: {"MP": 2},
+    # The microSD socket's shell (soc_rung.py, 12-soc-bga).
+    "Connector_Card:microSD_HC_Hirose_DM3AT-SF-PEJM5": {"SH": 4},
 }
 
 
@@ -257,7 +259,8 @@ def with_double_sided(spec):
 def dru_text(spec):
     """KiCad 10 custom rules (``.kicad_dru``) that make the judge enforce the rung's
     via policy, its plane layers (a plane layer carries no tracks), its
-    differential-pair skew and its own rules (``dru_rules``: a ``-classes`` rung's).
+    differential-pair skew, its length-match groups' skew (a budget in mm) and its own
+    rules (``dru_rules``: a ``-classes`` rung's).
     ``None`` for a rung without such dimensions."""
     if "via_policy" not in spec:
         return None
@@ -284,6 +287,14 @@ def dru_text(spec):
         rules.append(
             '(rule "pair %s skew"\n  (condition "A.inDiffPair(\'%s\')")\n'
             "  (constraint skew (max %gmm)))" % (pair["name"], base, pair["skew_mm"])
+        )
+    for group in spec["constraints"].get("length_match") or []:
+        if group.get("tolerance_mm") is None:
+            continue  # a budget in ps: KiCad 10.0.6 reads every delay as 0 ps (issue 23868)
+        names = " || ".join("A.NetName == '%s'" % n for n in group["nets"])
+        rules.append(
+            '(rule "group %s skew"\n  (condition "%s")\n  (constraint skew (max %gmm)))'
+            % (group["name"], names, group["tolerance_mm"])
         )
     rules += list(spec.get("dru_rules") or ())
     return "\n".join(rules) + "\n"
@@ -2107,6 +2118,18 @@ YAPNR_BUDGET = [
 
 # ------------------------------------------------------------------- the list
 
+# The hard rungs promoted to the public ladder (CI lane ``ladder``, rows in
+# docs/regression-ladder.md): one rung per family beyond the eight small cases. The other
+# hard rungs stay CI test rungs (lanes ``nightly`` and ``manual``).
+LADDER_RUNGS = (
+    "09-mcu-usb-31",
+    "10-quad-bank-56",
+    "11-power-switch-31",
+    "11-buck-vqfnhr-4L-SGPS-pour",
+    "11-ufbga201-fanout-6L-SGSGPS-rails",
+    "11-ufbga201-fanout-6L-SGSGPS-pairs",
+)
+
 
 def hard_rungs():
     """Every hard rung, base designs first, then their one-dimension variants."""
@@ -2137,6 +2160,15 @@ def hard_rungs():
         buck,
         buck_pour_rung(buck),
     ]
+    # Ladder v2's own rungs (separate modules): the push-and-shove boards and the top rung.
+    from shove_rungs import rungs as shove_rungs
+    from soc_rung import rungs as soc_rungs
+
+    others += shove_rungs() + soc_rungs()
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST
-    return deepcopy(out + chasers + others)
+    rungs = out + chasers + others
+    for spec in rungs:
+        if spec["name"] in LADDER_RUNGS:
+            spec["ci"] = dict(spec["ci"], lane="ladder")
+    return deepcopy(rungs)

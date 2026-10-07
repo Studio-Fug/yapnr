@@ -592,6 +592,8 @@ py_test(
     srcs = [
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/stackup.py",
         "tests/test_stack.py",
     ],
@@ -633,6 +635,8 @@ py_test(
     srcs = [
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/stackup.py",
         "tests/test_via_policy.py",
     ],
@@ -1838,6 +1842,8 @@ py_test(
         "regression/animate_ladder.py",
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/run.py",
         "regression/test_contract.py",
         "regression/trace_native.py",
@@ -1862,6 +1868,8 @@ py_test(
     srcs = [
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/run.py",
         "regression/test_hard_rungs.py",
     ],
@@ -1880,6 +1888,8 @@ py_test(
         "regression/check_constraints.py",
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/native.py",
         "regression/run.py",
         "regression/stackup.py",
@@ -1937,6 +1947,8 @@ py_binary(
     srcs = [
         "regression/designs.py",
         "regression/hard_rungs.py",
+        "regression/shove_rungs.py",
+        "regression/soc_rung.py",
         "regression/run.py",
     ],
     main = "regression/run.py",
@@ -2666,6 +2678,25 @@ py_test(
     srcs = ["tests/test_profile.py"],
     main = "tests/test_profile.py",
     deps = [":pnr"],
+)
+
+py_test(
+    name = "stage_timing_test",
+    size = "large",  # RouteFeedbackStageEventsTests + ByteIdenticalResultTests run the placement
+    # loop three times over (route_feedback_test): ~240s observed locally, too close to
+    # "medium"'s 300s budget to risk on a slower CI runner.
+    srcs = ["tests/test_stage_timing.py"],
+    data = glob(["testdata/splanc_dev/*"]),
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_stage_timing.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
 )
 
 py_test(

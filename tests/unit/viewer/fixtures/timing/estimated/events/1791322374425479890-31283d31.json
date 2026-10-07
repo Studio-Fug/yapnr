@@ -1,0 +1,18 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791322374425479890-31283d31",
+  "time": 1791322374.4254873,
+  "kind": "candidate_complete",
+  "candidate": "ladder/01-connector-led-2/s1/initial-start-00",
+  "iteration": null,
+  "data": {
+    "phase": "initial-placement screening complete",
+    "provisional": true,
+    "missing_connections": 0,
+    "unresolved_nets": [],
+    "deferred_nets": [],
+    "vias": 0,
+    "copper_length_mm": 6.795840979371067,
+    "objective": [0, 0, 0, 6.795840979371067]
+  }
+}

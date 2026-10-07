@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from yapnr.exp import bundle
-from yapnr.exp.backends.base import campaign_prefix
+from yapnr.exp.backends.base import campaign_prefix, done_markers, task_key
 from yapnr.exp.store import Store
 
 EVENT_SCHEMA = "pnr-live-event-v1"
@@ -39,6 +39,16 @@ STATE_FILE = ".yapnr-live-state.json"
 LIVE_GLOB = "live/*/*/*.tar.gz"
 BUNDLE_RE = re.compile(r"^(?P<task_key>[^/]+)/(?P<attempt>[^/]+)/(?P<seq>[0-9]{6})\.tar\.gz$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+# Written into the local mirror directory, next to events/ and boards/, once every task named by
+# the campaign's tasks.jsonl has a _DONE marker; yapnr.viewer.server's own copy of this name
+# (MIRROR_FINISHED_MARKER) must match -- see synthesize_task_events and that module's
+# Viewer._run_finished.
+FINISHED_MARKER = "campaign-finished.json"
+# The event kind a synthesized terminal event carries; distinct from any real engine kind so a
+# viewer (or a person reading raw telemetry) can tell it was reconstructed from a _DONE marker,
+# not emitted live by the task itself.
+SYNTHETIC_KIND = "task_complete"
 
 
 def event_errors(event: Any) -> List[str]:
@@ -194,6 +204,103 @@ def mirror_once(
     return counts
 
 
+def task_ids(runs: Store, cid: str) -> List[str]:
+    """Every task id the campaign's own plan names (``tasks.jsonl``, uploaded once at submit
+    time -- the same file :func:`yapnr.exp.fetch.load_campaign` reads), or ``[]`` if it has not
+    been uploaded yet (too early to poll, or a campaign this mirror does not actually own)."""
+    try:
+        lines = runs.read_text("%s/tasks.jsonl" % campaign_prefix(cid)).splitlines()
+    except Exception:
+        return []
+    out = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line)["id"])
+        except (ValueError, KeyError, TypeError):
+            continue
+    return out
+
+
+def _record_extra(runs: Store, cid: str, task_id: str, marker: Dict[str, Any]) -> Dict[str, Any]:
+    """Best-effort extra fields (``exit_code``, ``wall_s``, ``timed_out``) from the task's own
+    ``record.json``, read directly from the store at the attempt the ``_DONE`` marker names --
+    never the full ``raw/`` sync :func:`yapnr.exp.fetch.fetch` does, which costs real egress.
+    The marker alone (``verdict``, ``attempt``) is already enough to synthesize a usable event;
+    this is purely extra detail for the status line, so any failure to read it is silent."""
+    attempt = marker.get("attempt")
+    if not attempt:
+        return {}
+    rel = "%s/tasks/%s/%s/record.json" % (campaign_prefix(cid), task_key(task_id), attempt)
+    try:
+        record = json.loads(runs.read_text(rel))
+    except Exception:
+        return {}
+    if not isinstance(record, dict):
+        return {}
+    return {k: record[k] for k in ("exit_code", "wall_s", "timed_out") if k in record}
+
+
+def synthesize_task_events(runs: Store, cid: str, dest: Path) -> Dict[str, Any]:
+    """Give every finished task lane a terminal event, even one the engine itself never emitted.
+
+    The ladder runner's parent "case" lanes (``ladder/<case>/sN``) are the real-world reason this
+    exists: before ``hardware/pnr/regression/run.py`` learned to emit its own ``case_complete``/
+    ``case_failed``, a campaign's task-level verdict (the ``_DONE`` marker the wrapper always
+    writes, independent of what the engine chose to tell ``pnr.live``) was the *only* place that
+    lane's outcome existed at all. One synthetic event per task with a ``_DONE`` marker is written
+    into ``dest/events`` (named deterministically from the task id, so a repeat call never
+    duplicates one -- idempotent and safe to call every poll), with ``kind`` ``SYNTHETIC_KIND``,
+    ``data.verdict``/``data.attempt`` plus whatever :func:`_record_extra` found, and a top-level
+    ``synthetic: true``. Once every task ``task_ids`` names has one, :data:`FINISHED_MARKER` is
+    written into ``dest`` as well, which is how :mod:`yapnr.viewer.server` tells an otherwise-idle
+    lane with no terminal event of its own (and no children to derive one from) "finished"
+    instead of "stalled" forever.
+
+    Resumable the same way :func:`mirror_once` is: nothing here depends on having run before, a
+    task whose marker has not landed yet is simply picked up on the next call, and an interrupted
+    call leaves nothing half-written (``_write_atomic``).
+    """
+    dest = Path(dest)
+    events_dir = dest / "events"
+    events_dir.mkdir(parents=True, exist_ok=True)
+    markers = done_markers(runs, cid)
+    added = 0
+    for task_id, marker in markers.items():
+        path = events_dir / ("synthetic-" + task_key(task_id) + ".json")
+        if path.exists():
+            continue
+        data: Dict[str, Any] = dict(verdict=marker.get("verdict"), attempt=marker.get("attempt"))
+        data.update(_record_extra(runs, cid, task_id, marker))
+        event = dict(
+            schema=EVENT_SCHEMA,
+            id=path.stem,
+            time=time.time(),
+            kind=SYNTHETIC_KIND,
+            candidate=task_id,
+            iteration=None,
+            data=data,
+            synthetic=True,
+        )
+        _write_atomic(path, json.dumps(event, separators=(",", ":"), default=str).encode())
+        added += 1
+    ids = task_ids(runs, cid)
+    finished = bool(ids) and all(tid in markers for tid in ids)
+    if finished:
+        marker_path = dest / FINISHED_MARKER
+        if not marker_path.exists():
+            _write_atomic(
+                marker_path,
+                json.dumps(
+                    {"campaign": cid, "tasks": len(ids), "finished_at": time.time()},
+                    sort_keys=True,
+                ).encode(),
+            )
+    return {"tasks": len(markers), "synthetic_events": added, "finished": finished}
+
+
 def mirror(
     runs: Store,
     cid: str,
@@ -203,12 +310,29 @@ def mirror(
     once: bool = False,
     say: Optional[Callable[[str], None]] = None,
     sleep: Callable[[float], None] = time.sleep,
-) -> Dict[str, int]:
-    """Poll ``runs`` for a campaign's live bundles until ``once`` is satisfied or interrupted."""
+    extra_poll: Optional[Callable[[], int]] = None,
+) -> Dict[str, Any]:
+    """Poll ``runs`` for a campaign's live bundles until ``once`` is satisfied or interrupted.
+
+    ``extra_poll``, when given, is called once per poll after the bundle fetch and its return
+    value (an event count) folded into ``total["task_timing_events"]`` -- the hook
+    ``yapnr.exp.cli``'s ``live`` command uses to also mirror GCP Batch task timing
+    (:func:`yapnr.exp.timing.mirror_gcp_batch_task_timing`) each round, without this module
+    knowing anything about GCP. Never raises on its own account: a backend with nothing to add
+    here (anything but gcp-batch) simply passes ``None``.
+    """
     say = say or (lambda _msg: None)
     dest = Path(dest)
     state = LiveState.load(dest)
-    total = {"polls": 0, "bundles": 0, "events": 0, "boards": 0}
+    total = {
+        "polls": 0,
+        "bundles": 0,
+        "events": 0,
+        "boards": 0,
+        "synthetic_events": 0,
+        "finished": False,
+        "task_timing_events": 0,
+    }
     while True:
         found = mirror_once(runs, cid, dest, state, say=say)
         total["polls"] += 1
@@ -219,6 +343,16 @@ def mirror(
                 "mirrored %d bundle(s): %d event(s), %d board(s)"
                 % (found["bundles"], found["events"], found["boards"])
             )
+        synth = synthesize_task_events(runs, cid, dest)
+        total["synthetic_events"] += synth["synthetic_events"]
+        if synth["finished"] and not total["finished"]:
+            say("live: campaign %s finished (%d task(s))" % (cid, synth["tasks"]))
+        total["finished"] = synth["finished"]
+        if extra_poll is not None:
+            added = extra_poll()
+            if added:
+                total["task_timing_events"] += added
+                say("mirrored %d task_timing event(s)" % added)
         if once:
             return total
         sleep(interval_s)

@@ -1,0 +1,54 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791322374364548984-cdcc96fa",
+  "time": 1791322374.364566,
+  "kind": "candidate_start",
+  "candidate": "ladder/01-connector-led-2/s1/initial-start-00",
+  "iteration": null,
+  "data": {
+    "phase": "initial-placement signals",
+    "provisional": true,
+    "finalist": "start-00",
+    "proxy": {
+      "score": 22.620000000000022,
+      "unreachable_branches": 0,
+      "overflow_units": 0.20000000000000018,
+      "saturation": 0.2500000000000002,
+      "wire_mm": 12.0,
+      "via_demand": 0,
+      "net_failures": {},
+      "pass_index": 0,
+      "terms": [
+        { "key": "unreachable_branches", "raw": 0, "weight": 10000.0, "weighted": 0.0 },
+        {
+          "key": "capacity_overflow",
+          "raw": 0.20000000000000018,
+          "weight": 100.0,
+          "weighted": 20.000000000000018
+        },
+        {
+          "key": "near_saturation",
+          "raw": 0.2500000000000002,
+          "weight": 10.0,
+          "weighted": 2.500000000000002
+        },
+        { "key": "wirelength", "raw": 12.0, "weight": 0.01, "weighted": 0.12 },
+        { "key": "via_demand", "raw": 0, "weight": 0.03, "weighted": 0.0 }
+      ],
+      "seconds": 0.0029246589999942785,
+      "layers": ["F.Cu", "B.Cu"],
+      "pitch_mm": 2.0,
+      "net_count": 2,
+      "model": "capacity-proxy-v1",
+      "scope": "placement-only all-net coarse negotiated demand",
+      "limitations": [
+        "Coarse cut capacity does not prove continuous detailed escapes.",
+        "Plane access assumes declared plane continuity; reference/skew and pad-entry qualification require native routing.",
+        "Existing routed tracks are not counted: all net demand is reconstructed to avoid double counting.",
+        "Whole-net power widths are conservative; terminal-specific necks are not modeled; source power arrays are reserved.",
+        "Same-cell terminals collapse; short portal rays do not certify local pad entry."
+      ]
+    },
+    "budget": { "pitch_mm": 0.25, "max_iters": 8 }
+  }
+}

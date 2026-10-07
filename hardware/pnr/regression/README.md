@@ -181,20 +181,28 @@ chapters (hierarchy) into `docs/animations/`; the page is
 [Constraints and hierarchy](../../../docs/constraints-and-hierarchy.md). The
 showcases never gate: the nightly lane runs them for information.
 
-The detailed router's A\* runs on the packed kernel by default (integer cell
-keys; the same predicates, prices and tie order as the reference search, so the
-same routes). `--reference-maze` routes with the reference kernel instead, and
-`--packed-maze` is accepted as a no-op for recorded configurations.
-`--maze-kernel native` compiles the kernel's search loop in C from the frozen
-sources with the host compiler and routes with it (the same routes again; the
-search itself runs about six times faster than packed on a dense board, while
-on the small ladder boards the whole run is about as fast as packed, since
-little of it is search); each case's `pnr-report.json` records the kernel that
-actually ran (`maze_kernel`), which is packed when the library cannot load or
-no compiler is found (the runner then says so and records it in provenance), and
-under `maze_kernel.reference_fallback` why searches ran on the reference kernel
-instead (a grid the dense fields do not model, such as a board with blind, buried
-or micro vias).
+The detailed router's A\* runs on the native kernel by default: the packed
+search loop (integer cell keys over a dense per-net field; the same predicates,
+prices and tie order as the reference search, so the same routes) in C,
+`pnr/route/detail/native/maze.c`. The default lives in one place,
+`pnr/route/detail/kernels.py` (`DEFAULT_MAZE_KERNEL`): the engine reads it when
+`PNR_MAZE_KERNEL` is unset, `--maze-kernel` defaults to it, and the
+`ladder-cell` kind of `yapnr exp` passes `--maze-kernel` only when a campaign
+names one (`[config] maze_kernel = "packed"`). `--maze-kernel packed` routes with
+the same search in Python, `--reference-maze` with the reference kernel, and
+`--packed-maze` is accepted as a no-op for recorded configurations. For the
+native kernel the runner uses a library that records the frozen `maze.c`'s
+sha256 (the yapnr wheel's in the container image, `yapnr/native/`; Bazel's;
+or one built beside the source with `python -m pnr.route.detail.native_maze
+build`), else compiles one with the host compiler, else routes packed (the
+same routes, slower) and says so; the loader also refuses a library whose
+arithmetic fuses multiply-adds. Each case's `pnr-report.json` records the kernel
+that actually ran (`maze_kernel`) and, under `maze_kernel.reference_fallback`,
+why searches ran on the reference kernel instead (a grid the dense fields do
+not model, such as a board with blind, buried or micro vias). The kernels
+return identical routes on every machine: IEEE doubles in the same operation
+order, no fused multiply-add, no libm, and the same `(f, tie)` heap order, so
+ties break the same way (`tests/test_dense_maze.py`, `TieParityTest`).
 `--exact-separation recover|full|off` sets the detailed router's separation
 model (`PNR_EXACT_SEPARATION`, `pnr/route/detail/exact_route.py`): `full` routes
 with the exact pairwise copper separation instead of the halo model (which

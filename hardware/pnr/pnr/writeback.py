@@ -509,6 +509,8 @@ def draw_plane_regions(board, rows, rules: dict, point, full, net_code=None) -> 
     (a region without an outline covers it). Returns the zones drawn."""
     import pcbnew
 
+    from pnr.stack import RELIEF_GAP_MM
+
     fab = _fab(rules)
     codes = dict(net_code or _net_code_map(board))
     nets_of: Dict[str, set] = {}
@@ -542,6 +544,8 @@ def draw_plane_regions(board, rows, rules: dict, point, full, net_code=None) -> 
         z.SetLocalClearance(_nm(fab["clearance_mm"]))
         z.SetMinThickness(_nm(fab["track_width_mm"]))
         z.SetAssignedPriority(int(r["priority"]))
+        # The relief the partition left room for (pnr.plane_partition's aprons).
+        z.SetThermalReliefGap(_nm(RELIEF_GAP_MM))
         if r.get("connect"):
             # An outer pour owning its lands (plane_partition connect: solid).
             z.SetPadConnection(

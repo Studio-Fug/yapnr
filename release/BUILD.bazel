@@ -9,7 +9,8 @@ never builds it without a version. :wheel_for_test is the same wheel with a
 fixed placeholder version; tests/unit/release/test_wheel.py checks its
 contents and metadata.
 
-The wheel carries yapnr.rf's native FDTD library (//yapnr/rf:libyapnr_fdtd.so,
+The wheel carries the router's native maze kernel (yapnr/native/libpnr_maze.so, from
+//hardware/pnr:libpnr_maze.so) and yapnr.rf's native FDTD library (//yapnr/rf:libyapnr_fdtd.so,
 loaded with ctypes), built for the platform Bazel runs on, so it is one wheel
 per platform, tagged py3-none-<platform> (wheel.bzl): manylinux_2_34_x86_64
 and manylinux_2_34_aarch64 (the image workflow builds each on its own
@@ -28,6 +29,7 @@ py_package(
     packages = ["yapnr"],
     deps = [
         "//yapnr",
+        "//yapnr/native:wheel_files",
         "//yapnr/rf:wheel_files",
     ],
 )

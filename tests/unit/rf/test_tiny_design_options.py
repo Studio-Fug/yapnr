@@ -239,5 +239,58 @@ class ResumeTest(unittest.TestCase):
             self.assertEqual(Spec.from_dict(json.load(fh)).sha256(), spec.sha256())
 
 
+class UntilEpochTest(unittest.TestCase):
+    """`run(until_epoch=)` (design `multistart.md` §2): pauses at an epoch boundary without
+    changing state, so resuming from there is bit-identical to an uninterrupted run."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp(prefix="rf-until-epoch-")
+        cls.cache = os.path.join(cls.tmp, "cache")
+        cls.spec = tiny_spec()  # betas=(8, 16, 32), iterations_per_beta=4: 3 epochs
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def _optimizer(self, out=None):
+        return Optimizer(Problem(self.spec, cache_dir=self.cache), out_dir=out)
+
+    def test_pauses_at_the_epoch_boundary(self):
+        opt = self._optimizer()
+        opt.run(until_epoch=1)
+        self.assertEqual(opt.state.epoch, 1)
+        self.assertFalse(opt.done)  # the schedule has two more epochs
+        # A no-op: already at or past the rung, so no further iterations happen.
+        before = opt.state.iteration
+        opt.run(until_epoch=1)
+        self.assertEqual(opt.state.iteration, before)
+
+    def test_resume_past_a_rung_matches_an_uninterrupted_run(self):
+        full = self._optimizer()
+        full.run()  # the whole schedule, uninterrupted
+        ts_full = [h["t"] for h in full.history]
+
+        out = os.path.join(self.tmp, "paused")
+        a = self._optimizer(out)
+        a.run(until_epoch=1)
+        self.assertEqual(a.state.epoch, 1)
+        b = self._optimizer(out)
+        b.run(until_epoch=2)
+        self.assertEqual(b.state.epoch, 2)
+        c = self._optimizer(out)
+        c.run()  # no until_epoch: runs to completion
+        self.assertTrue(c.done)
+        self.assertEqual([h["t"] for h in c.history], ts_full)
+        np.testing.assert_array_equal(c.state.x, full.state.x)
+        for name in ("xold1", "xold2", "low", "upp"):
+            np.testing.assert_array_equal(getattr(c.state.mma, name), getattr(full.state.mma, name))
+
+    def test_until_epoch_beyond_the_schedule_runs_to_completion(self):
+        opt = self._optimizer()
+        opt.run(until_epoch=100)
+        self.assertTrue(opt.done)
+
+
 if __name__ == "__main__":
     unittest.main()

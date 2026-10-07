@@ -311,7 +311,10 @@ def audit(spec, root, pcb):
         pads=len(actual),
         tracks=sum(t.GetClass() == "PCB_TRACK" for t in b.GetTracks()),
         vias=sum(t.GetClass() == "PCB_VIA" for t in b.GetTracks()),
-        copper_length_mm=sum(
+        # fsum: correctly rounded, so independent of the board's track order (KiCad keeps
+        # tracks in uuid order, random per writeback); a plain sum differed in the last
+        # digits between runs with the same copper.
+        copper_length_mm=math.fsum(
             t.GetLength() / 1e6 for t in b.GetTracks() if t.GetClass() == "PCB_TRACK"
         ),
         subwidth_tracks=thin,

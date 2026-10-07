@@ -66,6 +66,7 @@ class Settings:
     classes: str = None  # PNR_GLOSS_CLASSES: functional groups JSON {tag: [nets] | {nets: [...]}}
     cross_group_mm: float = 10.0  # PNR_GLOSS_CROSS_GROUP_MM: cross-group parallel-run cap (mm)
     classes_from: tuple = ()  # PNR_GLOSS_CLASSES_FROM: groups derived from rules (CLASS_SOURCES)
+    energy: bool = False  # PNR_GLOSS_ENERGY: default-off witness-growth proposal adapter
 
 
 def settings(env=None):
@@ -147,6 +148,7 @@ def settings(env=None):
         str(Path(classes).resolve()) if classes else None,
         cross_group_mm,
         classes_from,
+        boolean("PNR_GLOSS_ENERGY", False),
     )
 
 
@@ -156,6 +158,8 @@ def settings_key(conf):
     (pnr.feedback.signals) and native_loop's progress.json carry it, so evaluations of two gloss
     configurations (or of gloss on and off) never mix in one feedback library."""
     fields = {f.name: getattr(conf, f.name) for f in dataclasses.fields(conf)}
+    if not fields.get("energy"):
+        fields.pop("energy", None)  # preserve pre-feature settings digests exactly when off
     if fields.get("classes"):
         fields["classes"] = "sha256:" + sha256(fields["classes"])
     text = json.dumps(fields, sort_keys=True, default=list)
@@ -1488,7 +1492,7 @@ def chain_signature(net, layer, points):
     ]
 
 
-def plan(model, step, *, deadline=math.inf, skip=(), quiet_skip=(), quiet=None):
+def plan(model, step, *, deadline=math.inf, skip=(), quiet_skip=(), quiet=None, energy=False):
     """Proposals of one step on this board (design 2.0-2.3). Returns (specs, stats).
 
     quiet_skip: signatures of chains planned without a proposal in an earlier round whose
@@ -1574,7 +1578,16 @@ def plan(model, step, *, deadline=math.inf, skip=(), quiet_skip=(), quiet=None):
             stats["chains"] += 1
             try:
                 ctx = model.context(net, la, ch, cs)
-                new = g.dekink(ch.legs, ctx) if step == "dekink" else g.gloss(ch.legs, ctx)
+                energy_meta = None
+                if energy and step == "gloss":
+                    try:
+                        from pnr.energy_track import propose
+
+                        new, energy_meta = propose(model, net, la, ch, cs, ctx, deadline)
+                    except ImportError as error:
+                        return [], dict(status="energy_dependency_unavailable", error=str(error))
+                else:
+                    new = g.dekink(ch.legs, ctx) if step == "dekink" else g.gloss(ch.legs, ctx)
             except TimeoutError:
                 stats["deadline"] += 1
                 break
@@ -1596,6 +1609,8 @@ def plan(model, step, *, deadline=math.inf, skip=(), quiet_skip=(), quiet=None):
             spec = chain_spec(
                 g, step, model, net, la, ch, new, segs_by_id, anchor_legs=ctx.anchor_legs
             )
+            if energy_meta is not None:
+                spec["energy"] = energy_meta
             if spec["id"] in skip:
                 stats["blacklisted"] += 1
                 continue
@@ -1816,7 +1831,7 @@ def anchor_rays(model, net, la, p, exclude):
     return sorted(out)
 
 
-def recheck(model, spec, applied):
+def recheck(model, spec, applied, *, dependent_zones=()):
     """T1 on the applied board: LEGAL for every replacement and the edit rule. None or a reason."""
     g = model.g
     la = model.lid[spec["layer"]]
@@ -1847,7 +1862,7 @@ def recheck(model, spec, applied):
             if contact(a, b):
                 return "L2:contact"
         box = g.bbox(old + new, g.TOL)
-        exclude, extra = set(allowed), []
+        exclude, extra = set(allowed) | set(dependent_zones), []
         if spec["step"] == "corridor":
             # Members move one after another in the planner's order (seq): a member's sweep is
             # judged against the members moved before it at their new place and the ones moved
@@ -2176,6 +2191,11 @@ def worker(args):
     sources = [Path(s) for s in args.annotation_source]
     drc = read(args.drc) if args.drc else None
     gloss_si = bool(args.gloss_si)
+    energy_enabled = bool(getattr(args, "energy", False))
+    if energy_enabled:
+        from pnr.energy_track import configure_worker_dependencies
+
+        configure_worker_dependencies()
     opts = dict(
         guard_open_nets=bool(getattr(args, "guard_open_nets", False)),
         hug=not getattr(args, "no_hug", False),
@@ -2213,6 +2233,7 @@ def worker(args):
             skip=set(skip.get("edits", [])),
             quiet_skip=set(skip.get("quiet", [])),
             quiet=quiet,
+            energy=energy_enabled,
         )
         seconds = time.monotonic() - started
         result = dict(
@@ -2244,6 +2265,13 @@ def worker(args):
                 if s["id"] in dropped:
                     continue
                 why = precheck(model0, s, gloss_si)
+                if s.get("energy"):
+                    if not energy_enabled:
+                        why = "energy:not_enabled"
+                    elif why is None:
+                        from pnr.energy_track import dependencies
+
+                        why = dependencies(model0, s)
                 if why:
                     dropped[s["id"]] = why
                 else:
@@ -2264,14 +2292,41 @@ def worker(args):
                     pre[s["id"]] = corridor_before(model0, s)
                 else:  # report-only: same-class adjacency in the edit's window
                     pre[s["id"]] = board_adjacency(model0, model0.lid[s["layer"]], tuple(s["box"]))
+            energy_fills = None
+            if energy_enabled:
+                from pnr.energy_track import fill_snapshot, track_snapshot
+
+                energy_fills = fill_snapshot(b)
+                energy_owned = (
+                    {
+                        row[0]
+                        for spec in live
+                        for _, _, _, rows, _ in replacements(spec)
+                        for row in rows
+                    }
+                    if all(spec["step"] != "normalize" for spec in live)
+                    else {row[0] for spec in live for row in spec.get("old_segments_nm", [])}
+                )
+                energy_tracks = track_snapshot(b, energy_owned)
             applied = {}
             for s in live:
                 applied[s["id"]], alive = apply_spec(model0, s)
                 keep.extend(alive)
             b.BuildConnectivity()
+            if energy_enabled:
+                # Dependent plane copper is validated only after joint refill.
+                k.ZONE_FILLER(b).Fill(b.Zones())
+                b.BuildConnectivity()
             model1 = Model(b, rules, path=args.board, base=model0)
             keep.append(model1)
             bad = {}
+            if energy_enabled:
+                changed = set(energy_owned)
+                for receipt in applied.values():
+                    changed.update(receipt.get("created", []))
+                    changed.update(receipt.get("modified", []))
+                if track_snapshot(b, changed) != energy_tracks:
+                    bad.update({spec["id"]: "energy:unrelated_copper" for spec in live})
             for s in live:
                 if s["step"] == "normalize":
                     xor = union_xor(model1, pre[s["id"]], s["net"], model1.lid[s["layer"]])
@@ -2279,7 +2334,14 @@ def worker(args):
                     if xor > UNION_TOLERANCE_MM2:
                         bad[s["id"]] = "N:union"
                     continue
-                why = recheck(model1, s, applied[s["id"]])
+                zone_ids = (
+                    (s.get("energy") or {}).get("dependent_zones", ()) if energy_enabled else ()
+                )
+                why = (
+                    recheck(model1, s, applied[s["id"]], dependent_zones=zone_ids)
+                    if zone_ids
+                    else recheck(model1, s, applied[s["id"]])
+                )
                 if why is None and s["step"] == "corridor":
                     if pre[s["id"]] is None:
                         why = "stale:corridor"
@@ -2323,7 +2385,8 @@ def worker(args):
             live = []
         result = dict(dropped=dropped, applied={})
         if live:
-            k.ZONE_FILLER(b).Fill(b.Zones())
+            if not energy_enabled:
+                k.ZONE_FILLER(b).Fill(b.Zones())
             b.BuildConnectivity()
             k.SaveBoard(str(args.out), b)
             result.update(
@@ -2331,6 +2394,24 @@ def worker(args):
                 accepted_specs=[s["id"] for s in live],
                 facts=board_facts(b, rules, Path(args.out).read_text()),
             )
+            if energy_enabled:
+                from pnr.energy_track import dirty_fill
+                from pnr.energy_track import facts as energy_facts
+                from pnr.energy_track import fill_snapshot
+
+                changes = dirty_fill(energy_fills, fill_snapshot(b))
+                changed_ids = {row["zone"] for row in changes}
+                changed_nets = sorted({z.GetNetname() for z in b.Zones() if uid(z) in changed_ids})
+                result["energy_dirty"] = changes
+                result["facts"]["energy"] = energy_facts(
+                    b,
+                    rules,
+                    Path(args.report).with_suffix("").parent / "energy-ir",
+                    args.out,
+                    sources,
+                    project_path=args.board,
+                )
+                result["facts"]["energy"]["plane_changes"] = changed_nets
             if model1.cap_enabled:
                 result["facts"]["cross_group"] = model1.cross_group_rows()
     elif args.worker == "facts":
@@ -2338,6 +2419,17 @@ def worker(args):
         k.ZONE_FILLER(b).Fill(b.Zones())
         b.BuildConnectivity()
         result = board_facts(b, rules, Path(args.board).read_text())
+        if energy_enabled:
+            from pnr.energy_track import facts as energy_facts
+
+            result["energy"] = energy_facts(
+                b,
+                rules,
+                Path(args.report).with_suffix("").parent / "energy-ir",
+                args.board,
+                sources,
+            )
+            result["energy"]["plane_changes"] = []
         keep.append(b)
         if opts["classes"] or opts["classes_from"]:
             model = Model(
@@ -2506,6 +2598,12 @@ def compare(before_drc, before, after_drc, after, *, end=False):
         reasons.append("objective")
     if cross_group_increase(before.get("cross_group"), after.get("cross_group")):
         reasons.append("cross_group_cap")
+    if "energy" in before or "energy" in after:
+        from pnr.energy_track import compare as energy_compare
+
+        reasons.extend(
+            energy_compare(before, after, (after.get("energy") or {}).get("plane_changes", ()))
+        )
     return not reasons, reasons, new_keys
 
 
@@ -2547,6 +2645,7 @@ class GlossPass:
         self.planning = []  # one row per inventory: seconds, safety-deadline margin and hits
         self.base_drc_path = None  # B_0's DRC report (set by run)
         self.step_delta = {}  # summed delta of the accepted transactions of the current round
+        self.energy_quiet = {}  # optional dynamic broadphase over quiet chain influence boxes
 
     # -- processes
     def run_worker(self, mode, board, report, extra=()):
@@ -2571,6 +2670,8 @@ class GlossPass:
         if not getattr(self.conf, "hug", True):
             cmd += ["--no-hug"]
         cmd += group_args(self.conf)
+        if getattr(self.conf, "energy", False):
+            cmd += ["--energy"]
         cmd += [str(x) for x in extra]
         run_kicad(cmd, Path(report).with_suffix(".log"))
         return read(report)
@@ -2637,6 +2738,13 @@ class GlossPass:
             after_drc = self.drc(trial)
         self.seconds["drc"] += time.monotonic() - t1
         facts = result["facts"]
+        if getattr(self.conf, "energy", False) and "energy" in facts:
+            facts["energy"]["project"] = sha256(trial.with_suffix(".kicad_pro"))
+        if getattr(self.conf, "energy", False) and "energy" in facts:
+            facts["energy"]["plane_changes"] = sorted(
+                set(facts["energy"].get("plane_changes", ()))
+                | set((self.current_facts.get("energy") or {}).get("plane_changes", ()))
+            )
         save(folder / "facts.json", facts)
         ok, reasons, new_keys = compare(self.current_drc, self.current_facts, after_drc, facts)
         accepted_specs = [s for s in specs if s["id"] in result["accepted_specs"]]
@@ -2666,6 +2774,14 @@ class GlossPass:
                 )
             )
             self.changed += [(self.counter, s["layer"], s["box"]) for s in accepted_specs]
+            if getattr(self.conf, "energy", False):
+                for row in [
+                    dict(layer=s["layer"], box=s["box"]) for s in accepted_specs
+                ] + result.get("energy_dirty", []):
+                    for step, index in self.energy_quiet.items():
+                        for sig in index.query(tuple(x / NM for x in row["box"]), (row["layer"],)):
+                            self.quiet.get(step, {}).pop(sig, None)
+                            index.remove(sig)
             self.current, self.current_drc, self.current_facts = trial, after_drc, facts
         else:
             record["attribution"] = self.attribute(result, new_keys, after_drc, facts)
@@ -2836,13 +2952,16 @@ class GlossPass:
             else "%s-s%d-%d" % (step, self.sweep + 1, round_)
         )
         skip = folder / (name + ".skip.json")
-        quiet = sorted(
-            sig
-            for sig, (layer, box, at) in self.quiet.get(step, {}).items()
-            if not any(
-                n > at and lay == layer and boxes_overlap(b, box) for n, lay, b in self.changed
+        if getattr(self.conf, "energy", False):
+            quiet = sorted(self.quiet.get(step, {}))
+        else:
+            quiet = sorted(
+                sig
+                for sig, (layer, box, at) in self.quiet.get(step, {}).items()
+                if not any(
+                    n > at and lay == layer and boxes_overlap(b, box) for n, lay, b in self.changed
+                )
             )
-        )
         save(skip, dict(edits=sorted(self.blacklist), quiet=quiet))
         t0 = time.monotonic()
         # The planning result must not depend on wall-clock speed: chain work is bounded by
@@ -2882,6 +3001,12 @@ class GlossPass:
         bucket = self.quiet.setdefault(step, {})
         for sig, layer, box in result.get("quiet", []):
             bucket[sig] = (layer, box, at)
+            if getattr(self.conf, "energy", False):
+                from pnr.energy_track_spatial import LayerGrid
+
+                if step not in self.energy_quiet:
+                    self.energy_quiet[step] = LayerGrid()
+                self.energy_quiet[step].upsert(sig, layer, tuple(x / NM for x in box))
         return result
 
     def run(self):
@@ -2925,7 +3050,12 @@ class GlossPass:
             self.sweep = sweep
             t_step = time.monotonic()
             rows = []
-            for round_ in range(3 if sweep == 0 else 2):
+            rounds = (
+                conf.max_transactions
+                if getattr(conf, "energy", False) and step == "gloss"
+                else (3 if sweep == 0 else 2)
+            )
+            for round_ in range(rounds):
                 if self.left() <= 0 or self.counter >= conf.max_transactions:
                     break
                 try:
@@ -2934,6 +3064,10 @@ class GlossPass:
                     rows.append(
                         dict(round=round_, status="inventory_error", returncode=error.returncode)
                     )
+                    break
+                if inv.get("stats", {}).get("status") == "energy_dependency_unavailable":
+                    status = "energy_dependency_unavailable"
+                    rows.append(dict(round=round_, status=status, error=inv["stats"].get("error")))
                     break
                 if inv.get("stats", {}).get("status", "").startswith("si_unresolved") or str(
                     inv.get("si_status", "")
@@ -3321,6 +3455,9 @@ def main(argv=None):
     ap.add_argument("--skip", type=Path)
     ap.add_argument("--deadline", type=float, default=INVENTORY_SAFETY_SECONDS)
     ap.add_argument("--gloss-si", action="store_true")
+    ap.add_argument(
+        "--energy", action="store_true", help="worker: default-off PNR_GLOSS_ENERGY adapter"
+    )
     ap.add_argument(
         "--guard-open-nets",
         action="store_true",

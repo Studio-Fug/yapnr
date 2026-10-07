@@ -345,7 +345,7 @@ def screen(choice, captured, estimates, prior) -> dict:
     """``choice`` scored on the probe's inputs (see the module doc): its partition at
     :data:`SCREEN_H_MM`, its quality penalty, its traced rails' estimated cost, its
     plane rails' drop vias and the prior. Lower is better."""
-    from pnr.plane_partition import finish_quality, partition
+    from pnr.plane_partition import block_terminal, finish_quality, partition
 
     cap = captured[choice.layer]
     entry = dict(
@@ -355,15 +355,17 @@ def screen(choice, captured, estimates, prior) -> dict:
         h_mm=max(float(cap["entry"].get("h_mm", 0.1)), SCREEN_H_MM),
     )
     blocked = list(cap["blocked"])
+    hard = list(cap.get("hard_polygons") or ())
     for n in choice.trace:
         for t in cap["terminals"].get(n, ()):
-            blocked.append((t.at, t.radius + cap["gaps"][n]))
+            block_terminal(t, cap["gaps"][n], blocked, hard)
     part = partition(
         entry,
         width=cap["width"],
         height=cap["height"],
         terminals={n: cap["terminals"][n] for n in choice.plane},
         blocked=blocked,
+        hard_polygons=hard,
         blocked_polygons=cap["blocked_polygons"],
         currents={n: c for n, c in cap["currents"].items() if n in choice.plane},
         budgets_mohm={n: b for n, b in cap["budgets_mohm"].items() if n in choice.plane},

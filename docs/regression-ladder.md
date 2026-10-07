@@ -23,18 +23,20 @@ two opt-in stages, both off by default: [compact placement](#compact-placement-o
 > default JLCPCB profile (`--fab-profile jlc-pofv`), where the router keeps vias 0.127 mm off SMD
 > pads, every case passes too (other boards; for the hard rungs see the gate below).
 >
-> **Default-flip gate (2026-10-06, campaign `20261007-ladder-7fe33f`,
-> [decisions.md](decisions.md)):** the runner's default stays `legacy`. Of the 21 cells
-> `20261006-ladder-b0ec34` found failing under `jlc-pofv`, 20 now pass (the fab-profile-territory
-> ones; rail allocation search is the default separately, PR #81) but
-> `11-ufbga201-fanout-6L-SGSGPS-rails` seed 0 still fails its `rails-In4` plane-partition check
-> under `jlc-pofv` (`legacy` fails that cell on _both_ seeds, so the flip is not a regression
-> there, but the gate text is "all 21 pass" and this is 20 of 21). Across all 45 cells (90 seed
-> runs), `jlc-pofv` passes 89 to `legacy`'s 86 (`legacy` also fails `09-mcu-usb-31-header` seed 0
-> and `09-mcu-usb-31-mc` seed 1 on a skew finding), has the same or fewer opens and DRC findings
-> everywhere, and uses fewer vias (3627 vs 3894; fewer on 37 cases, more on 4) and less copper
-> (29.5 m vs 31.9 m; less on 30 cases, more on 14, e.g. `05-timer-led-10`: 93.1/113.9 mm vs
-> 80.8/101.1 mm). The `-rails` cell is the only thing holding the flip.
+> **Default-flip gate (2026-10-07, campaigns `20261007-ladder-4f191e`, `-0abe44` and `-a98686`,
+> [decisions.md](decisions.md)):** the runner's default stays `legacy`, for the owner to decide.
+> All 21 cells `20261006-ladder-b0ec34` found failing under `jlc-pofv` now pass: the last one,
+> `11-ufbga201-fanout-6L-SGSGPS-rails`, was a plane-partition bug (a plated through-hole pad was
+> modelled as the disc inside it, so VBAT's In4 fill round J7.1's 1.7 mm square pad fell into
+> three pieces whenever the allocation gave VBAT a plane; fixed, `-rails` passes 16 of 16 on seeds
+> 0 to 7 under both profiles). Across the 45 gated cells (90 seed runs) `jlc-pofv` passes 90 to
+> `legacy`'s 88 (`legacy` fails `09-mcu-usb-31-header` seed 0 and `09-mcu-usb-31-mc` seed 1 on
+> skew findings), with the same opens and fewer vias (3627 vs 3894) and less copper (29.5 m vs
+> 31.9 m). But the three manual target rungs, which fail under both profiles, leave more open
+> under `jlc-pofv`: `11-shove-channel-lm-14` 3 nets vs 2 (both seeds), `12-soc-bga-113` (under
+> its declared `jlc-6l-hdi`) 51 unrouted nets on seed 1 vs 33 and 35, and seed 0 past its
+> 3600 s place-and-route budget; `11-shove-channel-14` is equal (2). The gate's "no rung is
+> worse than `legacy`" therefore does not hold for those rungs, and the flip waits for the owner.
 
 ## The cases
 

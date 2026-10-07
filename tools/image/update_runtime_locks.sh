@@ -5,7 +5,10 @@
 #   docker/yapnr/runtime-amd64.lock  linux/amd64: torch 2.3.1+cpu from the PyTorch CPU index
 #                                    (PyPI's x86_64 wheel pulls in the CUDA stack)
 #
-# Both are constrained to requirements.lock, so the image installs exactly the
+# The opt-in energy KiCad worker has its own Python 3.12 dependency directory:
+#   docker/yapnr/energy-kicad-{arm64,amd64}.lock (NumPy and Shapely only).
+#
+# All locks are constrained to requirements.lock, so the image installs exactly the
 # versions `bazel test` runs, and are fully hashed. uv resolves both from any
 # host (--python-platform). Run this after `bazel run //:requirements.update`
 # changes a runtime pin, and commit the result; tests/unit/repo/test_images.py
@@ -43,3 +46,20 @@ compile() {
 
 compile arm64 aarch64-manylinux_2_28
 compile amd64 x86_64-manylinux_2_28 --torch-backend cpu
+
+compile_energy_kicad() {
+    local arch="$1" platform="$2"
+    uv pip compile docker/yapnr/energy-kicad.in \
+        --constraint requirements.lock \
+        --python-version 3.12 \
+        --python-platform "${platform}" \
+        --generate-hashes \
+        --no-strip-extras \
+        --custom-compile-command "tools/image/update_runtime_locks.sh" \
+        --output-file "docker/yapnr/energy-kicad-${arch}.lock" \
+        --quiet
+    echo "wrote docker/yapnr/energy-kicad-${arch}.lock"
+}
+
+compile_energy_kicad arm64 aarch64-manylinux_2_28
+compile_energy_kicad amd64 x86_64-manylinux_2_28

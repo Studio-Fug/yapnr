@@ -138,6 +138,13 @@ planning totals (`deadline_hits`); the ladder keeps them in `result.json`. For a
 machines, raise `PNR_GLOSS_SECONDS` well above the pass's need and bound the pass by
 `PNR_GLOSS_MAX_TRANSACTIONS`, so both arms stop for the same reason.
 
+## Energy proposal integration
+
+`PNR_GLOSS_ENERGY=1` selects the optional witness-growth energy proposer for the
+`gloss` step, with stricter joint-refill electrical evidence gates. It is off by
+default. See [energy-track integration](energy-track.md) for exact eligibility,
+refusal reasons, dependency ABI handling and the recorded native animation.
+
 ## 6. Flags
 
 None is read unless `PNR_GLOSS=1`.

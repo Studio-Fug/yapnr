@@ -35,6 +35,7 @@ REPO = HERE.parents[2]
 # `hard_rungs` from its own directory instead).
 sys.path.insert(0, str(HERE.parent))
 from pnr.live import emit as live_emit  # noqa: E402
+from pnr.route.detail.kernels import DEFAULT_MAZE_KERNEL  # noqa: E402
 
 # Same no-op-without-PNR_LIVE_DIR reasoning as live_emit above: `stage()` emits a
 # stage_start/stage_end pair around the wrapped block and otherwise costs nothing. Used by the
@@ -47,6 +48,22 @@ from pnr.live import emit as live_emit  # noqa: E402
 from pnr.stage_timing import stage as live_stage  # noqa: E402
 
 KI = "/Applications/KiCad/KiCad.app/Contents"
+
+# Run with the frozen engine on PYTHONPATH: prints "prebuilt PATH" or "built PATH" (a library
+# that loads and matches the frozen maze.c), or fails with the reason on its last stderr line.
+NATIVE_MAZE_SETUP = """
+import os, sys
+from pnr.route.detail import native_maze as m
+path, reason = m.prebuilt()
+how = "prebuilt"
+if path is None:
+    how, built = "built", m.build_library(sys.argv[1])
+    os.environ["PNR_MAZE_LIB"] = str(built)
+    path, reason = m.prebuilt()
+    if path is None:
+        sys.exit("built library does not load: " + reason)
+print(how, path)
+"""
 
 
 def kicad_footprints():
@@ -412,6 +429,9 @@ def source_inputs(repo):
     return (
         sorted((repo / "hardware/pnr/pnr").rglob("*.py"))
         + sorted((repo / "hardware/pnr/pnr").rglob("*.c"))
+        # A prebuilt native maze kernel beside its source (native_maze.build_library, git-
+        # ignored): the frozen engine loads it only if it records the frozen maze.c's sha256.
+        + sorted((repo / "hardware/pnr/pnr/route/detail/native").glob("libpnr_maze.*"))
         + sorted((repo / "hardware/pnr/regression").glob("*.py"))
         + [scanner]
         + [p for p in fab_data_inputs(repo) if p.is_file()]
@@ -774,15 +794,18 @@ def parser():
     ap.add_argument(
         "--packed-maze",
         action="store_true",
-        help="The packed CPU maze kernel (the default; kept so recorded configurations still parse)",
+        help="No-op, kept so recorded configurations still parse (the kernel is --maze-kernel)",
     )
     ap.add_argument(
         "--maze-kernel",
         choices=("packed", "native"),
-        default="packed",
+        default=None,
         help=(
-            "native: build the C search loop from the frozen sources with the host compiler and "
-            "route with it (identical routes; the packed kernel runs if it cannot load)"
+            "The detailed router's A* kernel (default: %s, pnr/route/detail/kernels.py). "
+            "native: the C search loop, from a prebuilt library that matches the frozen maze.c "
+            "(the yapnr wheel's in the image, a Bazel or local build) or else built with the "
+            "host compiler; identical routes, and the packed kernel runs if none loads. "
+            "packed: the same search in Python" % DEFAULT_MAZE_KERNEL
         ),
     )
     ap.add_argument(
@@ -1126,36 +1149,37 @@ def main():
     if args.exact_separation:
         env["PNR_EXACT_SEPARATION"] = args.exact_separation
     native = None
-    if args.maze_kernel == "native":
-        if args.reference_maze:
-            raise SystemExit("--maze-kernel native and --reference-maze are exclusive")
-        # The frozen C source, compiled once for the run (pnr.route.detail.native_maze).
-        # Without a working compiler the run keeps the packed kernel (identical routes)
-        # and says so here and in provenance.
+    if args.reference_maze and args.maze_kernel:
+        raise SystemExit("--maze-kernel and --reference-maze are exclusive")
+    maze_kernel = None if args.reference_maze else (args.maze_kernel or DEFAULT_MAZE_KERNEL)
+    args.maze_kernel = maze_kernel  # the resolved choice, for provenance and traces
+    if maze_kernel == "packed":
+        env["PNR_MAZE_KERNEL"] = "packed"
+    if maze_kernel == "native":
+        # A library that matches the frozen maze.c (pnr.route.detail.native_maze: the wheel's,
+        # a Bazel or local build), else one compiled once for the run with the host compiler.
+        # Without either the run keeps the packed kernel (identical routes) and says so here
+        # and in provenance.
         with live_stage("maze-kernel-build"):
             try:
-                library = subprocess.run(
-                    [
-                        args.python,
-                        "-c",
-                        "import sys; from pnr.route.detail.native_maze import build_library; "
-                        "print(build_library(sys.argv[1]))",
-                        str(out / "native"),
-                    ],
+                found = subprocess.run(
+                    [args.python, "-c", NATIVE_MAZE_SETUP, str(out / "native")],
                     env=dict(env, PYTHONPATH=str(freeze / "hardware/pnr")),
                     capture_output=True,
                     text=True,
                     timeout=600,
                     check=True,
-                ).stdout.strip()
+                ).stdout.split()
+                how, library = found[-2], found[-1]
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
                 detail = (getattr(error, "stderr", None) or str(error)).strip().splitlines()
                 reason = detail[-1] if detail else type(error).__name__
-                print("native maze kernel not built (%s); the packed kernel routes" % reason)
+                print("native maze kernel unavailable (%s); the packed kernel routes" % reason)
                 native = dict(library=None, error=reason)
+                env["PNR_MAZE_KERNEL"] = "packed"
             else:
                 env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
-                native = dict(library=Path(library).name, sha256=sha(Path(library)))
+                native = dict(library=Path(library).name, source=how, sha256=sha(Path(library)))
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.power_first:

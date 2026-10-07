@@ -1,0 +1,9 @@
+engine/
+results/
+deliverables/
+library-helpers/
+.tool-cache/
+__pycache__/
+*.pyc
+fixtures/input/
+fixtures/rules.json

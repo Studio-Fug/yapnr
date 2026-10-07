@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import platform
 import re
+import subprocess
 import unittest
 from typing import Dict, List, Tuple
 
@@ -146,6 +147,59 @@ class RuntimeLockTest(unittest.TestCase):
                     continue
                 self.assertEqual(version, bazel_version, f"{arch}: {name}")
                 self.assertEqual(hashes, bazel_hashes, f"{arch}: {name} hashes")
+
+
+class KicadEnergyLockTest(unittest.TestCase):
+    """KiCad's separate Python has the same geometry pins without controller packages."""
+
+    def test_geometry_requirements_are_in_main_requirements(self):
+        wanted = _requirement_lines("docker/yapnr/energy-kicad.in")
+        self.assertEqual(wanted, ["numpy>=1.26,<2", "shapely==2.1.2"])
+        self.assertEqual(sorted(set(wanted) - set(_requirement_lines("requirements.in"))), [])
+
+    def test_worker_locks_match_bazel_geometry_pins_and_hashes(self):
+        bazel = parse_lock(_read("requirements.lock"))
+        expected = {name: bazel[name] for name in ("numpy", "shapely")}
+        for arch in ("arm64", "amd64"):
+            with self.subTest(arch=arch):
+                lock = parse_lock(_read(f"docker/yapnr/energy-kicad-{arch}.lock"))
+                self.assertEqual(lock, expected)
+                self.assertTrue(all(hashes for _, hashes in lock.values()))
+
+    def test_generator_uses_separate_python_312_resolution(self):
+        script = _read("tools/image/update_runtime_locks.sh")
+        self.assertIn("uv pip compile docker/yapnr/energy-kicad.in", script)
+        self.assertIn("--python-version 3.12", script)
+        self.assertIn("compile_energy_kicad arm64 aarch64-manylinux_2_28", script)
+        self.assertIn("compile_energy_kicad amd64 x86_64-manylinux_2_28", script)
+
+    def test_dependency_install_uses_root_build_cache(self):
+        instructions = _read("docker/yapnr/Dockerfile").replace("\\\n", "").splitlines()
+        installs = [
+            line
+            for line in instructions
+            if line.startswith("RUN ") and "--target /opt/energy-kicad" in line
+        ]
+        self.assertEqual(len(installs), 1)
+        self.assertIn("--mount=type=cache,target=/root/.cache/uv", installs[0])
+        # Run only the install's environment setup, with the inherited runtime HOME.
+        # No uv invocation or container build is needed to detect cache pollution.
+        setup = installs[0].split("uv pip install", 1)[0]
+        setup = setup[setup.index("set -eux;") :]
+        result = subprocess.run(
+            ["sh", "-c", setup + 'printf "%s\\n" "$HOME" "$UV_CACHE_DIR" "$UV_LINK_MODE"'],
+            env={
+                **os.environ,
+                "HOME": "/var/lib/yapnr",
+                "UV_CACHE_DIR": "/var/lib/yapnr/.cache/uv",
+                "UV_LINK_MODE": "hardlink",
+            },
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        self.assertEqual(result.stdout.splitlines(), ["/root", "/root/.cache/uv", "copy"])
 
 
 class KicadBaseTest(unittest.TestCase):

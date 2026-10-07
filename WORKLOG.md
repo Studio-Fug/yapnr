@@ -3,7 +3,8 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
+Last updated: 2026-10-07 (energy-track macOS ABI-path assertion, #90). Previous status:
+2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 `claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
 on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
 engine's fixes for them on `claude/gap-fixes`, with `claude/gap-constraints` merged; the gloss
@@ -14,6 +15,11 @@ board edges, the hierarchical ladder driver and their animations on
 `claude/animations-groups-hier`.
 
 ## In progress
+
+- **PR integration review (2026-10-07).** PR #91 integrates main through #90. Nesting stays
+  default-off. Completed ladder and flat-hard A/B arms agree; twin-bank passes all arms. Dovetail
+  and quad-bank campaigns remain queued on a missing GCP template. See [validation
+  status](docs/design/hull-nest-validation.md).
 
 - **Route-then-compact and hull packing** (PR #86, branch `claude/route-compact`; design
   [docs/design/route-compact.md](docs/design/route-compact.md)). `PNR_ROUTE_COMPACT`
@@ -35,6 +41,20 @@ board edges, the hierarchical ladder driver and their animations on
   rebase on #64/#70 and A/B again on top of detailed placement; hull support in `compact.py`
   and the keep legalizer (gp_polish still turns off over hull bodies); the push-and-shove
   router as the reroute.
+
+- **Energy track optimization (#90, default off).** The witness-growth/reverse-cost proposer is
+  wired into the native gloss transaction controller with exact native checks, joint-refill IR
+  and reference evidence gates, protected metadata/copper guards, spatial quiet-chain invalidation,
+  and phase-end rollback. Shapely/GEOS dependencies are hash-locked separately for controller and
+  KiCad Python ABIs. Focused tests and actual clean-fixture native acceptance/refusal/byte-identity
+  checks pass; a four-state recorded native animation documents the change. The KiCad dependency
+  install now uses root's build cache and copy links, preserving runtime-home ownership; a focused
+  regression checks its environment. Image build/smoke and Linux aggregate CI pass. The macOS
+  ABI-path test now checks only the canonical path is added; all 16 integration tests and eight
+  hard-edge tests pass locally, the latter within its unchanged 60-second limit. Next: fresh macOS
+  CI, then review before merge.
+  RF/SI-dependent plane edits without complete external evidence remain refused; no radar-board
+  completion or joint pair solver claim.
 
 - **Routing engine for radar60 Rev A, stage 3b** (#49, branch `claude/radar-routing-engine-2`;
   all opt-in, byte-identical where undeclared). Router: pad-local clearance and mask margin (data),
@@ -119,8 +139,10 @@ board edges, the hierarchical ladder driver and their animations on
     side of free parts; writeback mirrors bottom parts on `B.*`;
   - length matching (`pnr/route/detail/tune.py`, `pnr/length_model.py`, `pnr/place/matched.py`):
     declared pairs and groups are tuned with meanders against KiCad's own length measure;
-  - router speed: the packed kernel with dense per-net fields is the default (identical routes),
-    an optional C search loop (`PNR_MAZE_KERNEL=native`), and an exact-separation recovery
+  - router speed: the native kernel (the packed search over dense per-net fields, in C; identical
+    routes; the packed Python kernel where no library loads, `PNR_MAZE_KERNEL=packed` on request)
+    is the default (2026-10-07: a 192-cell GCP A/B, every route identical, -54% task time), and an
+    exact-separation recovery
     (`PNR_EXACT_SEPARATION=recover`, the default) for routes the halo model leaves open.
 
   Results (two seeds each): ladder and showcases 24 of 24, CPU 2,281 s to 442 s; hard rungs clean
@@ -326,12 +348,12 @@ board edges, the hierarchical ladder driver and their animations on
 14. Owner, fab and ordering (design §12): decisions D1 to D5. For the first OSH Park order, route
     the board under an OSH Park profile, run `yapnr order stage BOARD --vendor oshpark`, drop the
     zip on oshpark.com, check the preview and pay there; RF boards also pin `--stackup` (D4).
-15. Owner decision (2026-10-06, `docs/decisions.md`): not yet. The gate was "flip to
-    `--fab-profile jlc-pofv` only when all 21 of `20261006-ladder-b0ec34`'s jlc-pofv failures
-    pass on `claude/defaults-rails-fab`"; campaign `20261007-ladder-7fe33f` got 20 of 21 (the
-    remaining one, `11-ufbga201-fanout-6L-SGSGPS-rails` seed 0, is rail-allocation territory,
-    not fab-profile, and `legacy` fails it on both seeds). Stays `legacy` default until that
-    cell passes or the gate is revisited; see `docs/regression-ladder.md`.
+15. Owner decision (2026-10-07, `docs/decisions.md`): the `jlc-pofv` default flip. All 21 of
+    `20261006-ladder-b0ec34`'s jlc-pofv failures pass on `claude/rails-settle` (the `-rails`
+    cell was a plane-partition bug, fixed there), and the 45 gated cells pass 90 of 90 under
+    `jlc-pofv` (88 under `legacy`), but the manual target rungs leave more open under it
+    (`11-shove-channel-lm-14` 3 vs 2, `12-soc-bga-113` 51 vs 33 and 35 and one 3600 s
+    timeout). Stays `legacy` until the owner says whether those count for "no rung worse".
 16. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
 17. Showcases (`claude/animations-groups-hier`): the first nightly showcase step on the arm64
@@ -344,9 +366,9 @@ board edges, the hierarchical ladder driver and their animations on
     an origin-to-courtyard offset (the THT header's origin is pin 1, so its courtyard is placed
     off by half its length and never legalizes); carry the three Ladder fixes (plane check, side
     check, HDI microvia) to `claude/ladder-hard-rungs`, or land the rungs and the fixes together.
-19. Owner: whether the optional C maze kernel becomes "use it when present". Recommended once CI
-    runs `dense_maze_native_test` and `exact_route_native_test` on both Linux architectures; until
-    then the packed Python kernel stays the default and no C toolchain is needed.
+19. Done (2026-10-07, owner: flip to native if no rung is worse and routes are equivalent): the C
+    maze kernel is the default where its library loads (Bazel, the wheel and so the image, or a
+    host compiler); CI runs `dense_maze_native_test` and `exact_route_native_test` in `//...`.
 20. Boards with blind, buried or micro vias: the packed and native kernels hand them to the
     reference kernel (so no exact-separation recovery there), the length tuner only adds
     meanders, and the native KiCad repair loop and the hierarchical driver add through vias only.

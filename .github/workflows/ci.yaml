@@ -127,23 +127,18 @@ jobs:
       - name: Point Bazelisk at the cached directory
         run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
 
-      - name: Cache Bazelisk and the Bazel repository cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cache/bazelisk
-            ~/.cache/bazel-repo
-          key: bazel-repo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'requirements.lock') }}
-          restore-keys: bazel-repo-${{ runner.os }}-${{ runner.arch }}-
+      - name: Restore Bazel caches
+        id: cache
+        uses: ./.github/actions/bazel-cache-restore
 
-      - name: Cache Bazel disk cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/bazel-disk
-          key: bazel-disk-test-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('MODULE.bazel.lock', 'requirements.lock') }}
-          restore-keys: bazel-disk-test-${{ runner.os }}-${{ runner.arch }}-
+      - name: Check RF lane inventory
+        timeout-minutes: 3
+        run: |
+          bazel query 'kind(".*_test rule", //tests/unit/rf/... + //tests/unit/rf_coupons/... + //tests/e2e/rf/...)' --output=xml > "$RUNNER_TEMP/rf-targets.xml"
+          python3 tools/ci/check_rf_lanes.py "$RUNNER_TEMP/rf-targets.xml"
 
       - name: Test
+        id: test
         run: >-
           bazel test //... --config=ci
           --disk_cache="$HOME/.cache/bazel-disk"
@@ -157,6 +152,15 @@ jobs:
           bazel test //:requirements.test --config=ci
           --disk_cache="$HOME/.cache/bazel-disk"
           --repository_cache="$HOME/.cache/bazel-repo"
+
+      # Explicit saves still run after a completed failed test. They cannot turn it green.
+      - name: Save Bazel caches
+        if: ${{ !cancelled() && (steps.test.outcome == 'success' || steps.test.outcome == 'failure') }}
+        uses: ./.github/actions/bazel-cache-save
+        with:
+          disk-key: ${{ steps.cache.outputs.disk-key }}
+          repo-key: ${{ steps.cache.outputs.repo-key }}
+          repo-hit: ${{ steps.cache.outputs.repo-hit }}
 
   # Build the Sphinx site and hand it to the deploy jobs as an artifact.
   docs:

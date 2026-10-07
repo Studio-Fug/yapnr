@@ -1,0 +1,38 @@
+name: Restore Bazel caches
+description: Stable downloads and the newest compatible content-addressed build snapshot.
+outputs:
+  disk-key:
+    description: Unique snapshot key for this run and attempt.
+    value: ${{ steps.keys.outputs.disk-key }}
+  repo-key:
+    description: Stable download cache key.
+    value: ${{ steps.keys.outputs.repo-key }}
+  repo-hit:
+    description: Whether the exact download key was restored.
+    value: ${{ steps.repo.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Compute cache compatibility
+      id: keys
+      shell: bash
+      env:
+        BAZEL_INPUTS_HASH: ${{ hashFiles('.bazelversion', '.bazelrc', 'MODULE.bazel', 'MODULE.bazel.lock', 'requirements.lock') }}
+      run: python3 tools/ci/bazel_cache_key.py >> "$GITHUB_OUTPUT"
+    - name: Restore Bazelisk and repository downloads
+      id: repo
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          ~/.cache/bazelisk
+          ~/.cache/bazel-repo
+        key: ${{ steps.keys.outputs.repo-key }}
+        restore-keys: |
+          bazel-repo-v2-${{ runner.os }}-${{ runner.arch }}-
+          bazel-repo-${{ runner.os }}-${{ runner.arch }}-
+    - name: Restore newest compatible build snapshot
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.cache/bazel-disk
+        key: ${{ steps.keys.outputs.disk-key }}
+        restore-keys: ${{ steps.keys.outputs.disk-prefix }}

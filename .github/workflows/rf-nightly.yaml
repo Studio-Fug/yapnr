@@ -1,42 +1,32 @@
-name: macOS
+name: RF nightly
 
-# Keeps yapnr building and testing on Apple silicon, the main development
-# platform (darwin wheels; later the .dylib search backend). Informational:
-# this workflow is NOT a required check. A nightly macOS KiCad lane joins it in
-# PR6b (docs/migration-plan.md, section 5.2).
+# Expensive solver, inverse-design and coupon fitting tests are opt-in on branches.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# macOS runner minutes cost about ten times Linux minutes: cancel superseded
-# runs on the same ref.
 concurrency:
-  group: macos-${{ github.ref }}
-  cancel-in-progress: true
+  group: rf-nightly-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  test-macos:
-    runs-on: macos-latest
+  rf:
+    name: RF (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
       - name: Setup repository
         uses: actions/checkout@v7
-
-      # setup-bazel's own caches are not used: their keys carry neither the CPU
-      # architecture nor the lock files, and its Bazelisk cache is not where
-      # .bazeliskrc sends Bazelisk. Both download caches are keyed below.
       - name: Setup Bazel
         uses: bazel-contrib/setup-bazel@0.19.0
-
-      # The environment overrides .bazeliskrc (./.bazelisk), so the Bazel
-      # binary lands in the cached directory.
       - name: Point Bazelisk at the cached directory
         run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
 
@@ -50,10 +40,11 @@ jobs:
           bazel query 'kind(".*_test rule", //tests/unit/rf/... + //tests/unit/rf_coupons/... + //tests/e2e/rf/...)' --output=xml > "$RUNNER_TEMP/rf-targets.xml"
           python3 tools/ci/check_rf_lanes.py "$RUNNER_TEMP/rf-targets.xml"
 
-      - name: Test
+      - name: Test RF nightly lane
         id: test
         run: >-
-          bazel test //... --config=ci
+          bazel test //tests/unit/rf/... //tests/unit/rf_coupons/... //tests/e2e/rf/...
+          --config=ci --config=rf-nightly
           --disk_cache="$HOME/.cache/bazel-disk"
           --repository_cache="$HOME/.cache/bazel-repo"
 

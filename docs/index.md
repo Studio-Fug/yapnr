@@ -52,6 +52,7 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
 - [Architecture](architecture.md): the planned layout of the package, the test tiers and the
   pipeline.
 - [Migration plan](migration-plan.md): how the engine moves out of Splanc, PR by PR.
+- [CI lanes and caches](ci-lanes.md): ordinary RF smoke, nightly solver checks and cache policy.
 - [Decisions](decisions.md): the owner's decisions and the pinned tool versions.
 - [History import manifest](history/import-manifest.md): what PR1 and PR2 imported from Splanc,
   and how it was rewritten and checked.
@@ -98,6 +99,7 @@ regression-ladder
 constraints-and-hierarchy
 plane-partition
 migration-plan
+ci-lanes
 decisions
 design/animations
 design/constraint-and-hier-animations

@@ -1,0 +1,40 @@
+name: Save Bazel caches
+description: Save completed outputs after passed or failed tests, from trusted writers only.
+inputs:
+  disk-key:
+    description: Unique snapshot key from the restore action.
+    required: true
+  repo-key:
+    description: Stable download key from the restore action.
+    required: true
+  repo-hit:
+    description: Exact download key hit from the restore action.
+    required: true
+runs:
+  using: composite
+  steps:
+    # GitHub scopes PR caches to the merge ref. Fork PRs remain restore-only;
+    # only main's push/scheduled/manual runs warm caches shared with future PRs.
+    - name: Save repository downloads when the stable key is absent
+      if: >-
+        !cancelled() && inputs.repo-hit != 'true' &&
+        (github.event_name == 'push' || github.event_name == 'schedule' ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
+      uses: actions/cache/save@v6
+      continue-on-error: true
+      with:
+        path: |
+          ~/.cache/bazelisk
+          ~/.cache/bazel-repo
+        key: ${{ inputs.repo-key }}
+    - name: Save completed build outputs to a fresh snapshot
+      if: >-
+        !cancelled() && (github.event_name == 'push' || github.event_name == 'schedule' ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
+      uses: actions/cache/save@v6
+      continue-on-error: true
+      with:
+        path: ~/.cache/bazel-disk
+        key: ${{ inputs.disk-key }}

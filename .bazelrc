@@ -33,10 +33,11 @@ common --color=yes
 common --show_timestamps
 
 # --- Test lanes --------------------------------------------------------------
-# The default lane needs no KiCad. `kicad` and `slow` are the tier tags from
-# docs/migration-plan.md section 1.2; the KiCad lane itself arrives in PR6a.
-test --test_tag_filters=-kicad
-test:quick --test_tag_filters=-kicad,-slow
+# Ordinary CI keeps inexpensive RF coverage; expensive RF has a nightly/manual lane.
+# `kicad` retains its dedicated lane. Inventory and commands: docs/ci-lanes.md.
+test --test_tag_filters=-kicad,-rf-nightly
+test:quick --test_tag_filters=-kicad,-rf-nightly,-slow
+test:rf-nightly --test_tag_filters=rf-nightly,-kicad
 test:all --test_tag_filters=
 
 # --- Shared, busy machines ---------------------------------------------------

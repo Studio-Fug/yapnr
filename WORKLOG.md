@@ -16,6 +16,14 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
+- **RF CI lanes and Bazel cache snapshots** (branch `codex/rf-nightly-ci-cache`): expensive RF
+  solver/gradient/design and coupon fitting coverage moves to nightly/manual Linux and macOS;
+  ordinary CI keeps inexpensive RF units and a deterministic native optimizer smoke. Expanded
+  Bazel targets are checked against an exhaustive lane inventory. Explicit cache saves retain
+  completed outputs after test failures with fork PRs restore-only. Native smoke, 13 focused
+  policy regressions, changed-file hooks and actionlint pass; expanded Bazel selection and fresh
+  hosted lane/cache validation are pending. [Lane inventory and policy](docs/ci-lanes.md).
+
 - **Route-then-compact and hull packing** (PR #86, branch `claude/route-compact`; design
   [docs/design/route-compact.md](docs/design/route-compact.md)). `PNR_ROUTE_COMPACT`
   (`TOP`, `BLOCK`, `FLAT`; default off): after routing, order-preserving 1D compaction (x then

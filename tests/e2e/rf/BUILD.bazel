@@ -1,4 +1,5 @@
 load("@rules_python//python:defs.bzl", "py_test")
+load("//tools/bazel:rf_lanes.bzl", "rf_tags")
 
 # End-to-end RF inverse design cases (docs/design/rf-topology-optimization.md §11,
 # docs/rf-inverse-design.md): optimize, export the footprint, re-simulate it on the
@@ -11,7 +12,7 @@ load("@rules_python//python:defs.bzl", "py_test")
 #   nice -n 10 bazel test --config=lowmem --local_test_jobs=1 //tests/e2e/rf:test_divider \
 #     --test_env=YAPNR_RF_RUN_DIR=/path/to/runs
 #
-# The smoke variants run the same topologies on tiny grids for four iterations (CI, about a
+# The smoke variants run the same topologies on tiny grids for four iterations (nightly/manual CI, about a
 # minute each on one thread).
 
 # The full cases: torch steps the fields on 4 threads; numpy's OpenBLAS (the adjoint sources'
@@ -23,7 +24,7 @@ _ENV = {
     "OPENBLAS_NUM_THREADS": "1",
 }
 
-# The smoke variants (CI): one thread each, so that the tests Bazel runs side by side do not
+# The smoke variants (nightly/manual CI): one thread each, so that the tests Bazel runs side by side do not
 # oversubscribe the runner (`YAPNR_RF_THREADS` caps torch's threads; design §24), and the long
 # timeout (900 s; about a minute each on one thread of the development Mac).
 _SMOKE_ENV = {
@@ -115,7 +116,7 @@ py_test(
     srcs = ["test_divider.py"],
     env = _SMOKE_ENV,
     main = "test_divider.py",
-    tags = ["rf-smoke"],
+    tags = ["rf-smoke"] + rf_tags("test_divider_smoke"),
     deps = _DEPS,
 )
 
@@ -126,7 +127,7 @@ py_test(
     srcs = ["test_wilkinson.py"],
     env = _SMOKE_ENV,
     main = "test_wilkinson.py",
-    tags = ["rf-smoke"],
+    tags = ["rf-smoke"] + rf_tags("test_wilkinson_smoke"),
     deps = _DEPS,
 )
 
@@ -137,7 +138,7 @@ py_test(
     srcs = ["test_antenna.py"],
     env = _SMOKE_ENV,
     main = "test_antenna.py",
-    tags = ["rf-smoke"],
+    tags = ["rf-smoke"] + rf_tags("test_antenna_smoke"),
     deps = _DEPS,
 )
 
@@ -148,6 +149,6 @@ py_test(
     srcs = ["test_diplexer.py"],
     env = _SMOKE_ENV,
     main = "test_diplexer.py",
-    tags = ["rf-smoke"],
+    tags = ["rf-smoke"] + rf_tags("test_diplexer_smoke"),
     deps = _DEPS,
 )

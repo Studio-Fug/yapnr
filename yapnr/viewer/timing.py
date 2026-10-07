@@ -86,14 +86,16 @@ really running at once.
 
 **Unattributed time and coverage.** Per unit (below), a ``coverage_wall`` figure minus the union of
 its pipeline spans is that unit's ``unattributed`` time: wall-clock the lane genuinely spent *doing
-something real*, with no stage event to say where. ``coverage_wall`` is, in order: the task's own
-``run`` task_timing span (real Batch RUNNING-state transitions, GCP only) when one exists; else,
-for a finished lane, the larger of ``last_real - start`` and the runner's own measured task wall
-(``data.wall_s`` on the mirror's ``task_complete`` -- a measurement, unlike that event's timestamp,
-and it includes the work before the task's first live event); ``now - start`` while running. Never
-the raw first-to-last-*recorded*-event range: queue-wait/boot is already its own ``task_overhead``
-row, and a trailing mirror-synthesized terminal event's detection lag is not pipeline activity at
-all. A lane with a known task wall is a *unit* that absorbs every descendant lane in scope
+something real*, with no stage event to say where. ``coverage_wall`` is, in order: the task
+command's own measured wall (``data.wall_s`` on the mirror's ``task_complete`` -- the in-task
+wrapper times the engine process; a measurement, unlike that event's timestamp, and it includes the
+engine's work before its first live event), once the lane is finished; else the task's ``run``
+task_timing span (Batch RUNNING-state transitions, GCP only; it also holds the wrapper's input
+staging and result upload, which is infrastructure, already shown by the task_overhead ``run``
+row); else ``now - start`` while running; else ``last_real - start``. Never the raw
+first-to-last-*recorded*-event range: queue-wait/boot is already its own ``task_overhead`` row, and
+a trailing mirror-synthesized terminal event's detection lag is not pipeline activity at all. A
+lane with a known task wall is a *unit* that absorbs every descendant lane in scope
 (``initial-start-NN`` screening children run inside the same task): their spans count toward its
 attributed time and their windows are not counted again. Attributed time is the *union* of a unit's
 pipeline spans (overlaps counted once), capped at ``coverage_wall``, so coverage never exceeds 1.
@@ -544,14 +546,20 @@ def aggregate(root: Path, scope: str = "", now: Optional[float] = None) -> dict:
             if e["kind"] in MIRROR_TERMINAL_KINDS
             and isinstance((e.get("data") or {}).get("wall_s"), (int, float))
         ]
-        if run_spans:
+        if task_walls and not running:
+            # The task command's own measured wall (the in-task wrapper times the engine
+            # process): the most direct figure for what pipeline instrumentation can reach. The
+            # wrapper's own input staging and result upload around it fall inside Batch's "run"
+            # span but are infrastructure, already visible as the task_overhead "run" row.
+            coverage_wall = float(task_walls[-1])
+        elif run_spans:
             coverage_wall = max(
                 0.0, max(s["end"] for s in run_spans) - min(s["start"] for s in run_spans)
             )
         elif running:
             coverage_wall = now - start
         else:
-            coverage_wall = max([last_real - start] + [float(w) for w in task_walls[-1:]])
+            coverage_wall = last_real - start
         lanes_out.append(
             dict(
                 candidate=candidate,

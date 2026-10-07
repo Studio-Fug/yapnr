@@ -686,3 +686,25 @@ class UnionCoverageTests(unittest.TestCase):
         self.assertAlmostEqual(result["unattributed"]["total"], 4.0, places=6)
         self.assertAlmostEqual(result["coverage"], 0.6, places=6)
         self.assertAlmostEqual(result["wall_seconds"], 6.0, places=6)
+
+    def test_the_commands_measured_wall_is_preferred_over_the_batch_run_span(self):
+        # Batch's run span also holds the in-task wrapper's staging and upload (infrastructure);
+        # the engine command's own wall_s is what pipeline stages can cover.
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        events = tmp / "events"
+        events.mkdir()
+        task = "ladder/w/s0"
+        rows = [
+            (1000.0, "task_timing", dict(stage="run", seconds=0.0)),
+            (1017.0, "stage_start", dict(stage="route", label="route")),
+            (1022.0, "stage_end", dict(stage="route", label="route", seconds=5.0)),
+            (1022.0, "case_complete", {}),
+            (1027.0, "task_timing", dict(stage="run", seconds=27.0, terminal=True)),
+            (1080.0, "task_complete", dict(wall_s=6.0)),
+        ]
+        for i, (t, kind, data) in enumerate(rows):
+            _write_event(events, i, time=t, kind=kind, candidate=task, data=data)
+        result = timing.aggregate(tmp)
+        self.assertAlmostEqual(result["unattributed"]["total"], 1.0, places=6)
+        self.assertAlmostEqual(result["coverage"], 5.0 / 6.0, places=6)

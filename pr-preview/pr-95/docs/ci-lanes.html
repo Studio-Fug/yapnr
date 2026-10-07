@@ -302,7 +302,10 @@
 <p>Ordinary Linux and macOS CI retain inexpensive RF unit coverage and one native inverse-design
 smoke. Solver sweeps, gradient checks, multi-iteration optimizations and coupon fitting run in
 <code class="docutils literal notranslate"><span class="pre">RF</span> <span class="pre">nightly</span></code>, at 03:17 UTC daily on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code> and <code class="docutils literal notranslate"><span class="pre">macos-latest</span></code>, or through <strong>Run workflow</strong>.
-Scheduled runs use <code class="docutils literal notranslate"><span class="pre">main</span></code>; manual dispatch can select a branch. This workflow does not trigger
+Scheduled runs use <code class="docutils literal notranslate"><span class="pre">main</span></code>; manual dispatch can select a branch. Before the new workflow is
+registered on the default branch, use <strong>CI → Run workflow → rf_nightly</strong> (or
+<code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">workflow</span> <span class="pre">run</span> <span class="pre">ci.yaml</span> <span class="pre">--ref</span> <span class="pre">BRANCH</span> <span class="pre">-f</span> <span class="pre">rf_nightly=true</span></code>); the existing CI workflow calls the
+same RF lane only for that explicit manual input. This workflow does not trigger
 on pull requests or pushes. Both matrix jobs report failures independently.</p>
 <pre  class="mermaid">
         flowchart LR
@@ -431,7 +434,7 @@ also does not eliminate Bazel analysis or runfiles reconstruction.</p>
 key is saved after a completed test invocation, including a failure. Download restore also
 accepts the previous per-platform namespace. Build snapshots include
 OS, architecture, hosted image version, compiler/SDK fingerprint and hashes of Bazel/configuration/lock
-inputs. Each save adds the run ID and attempt, avoiding an immutable key freezing the first
+inputs. Each save adds the run ID, attempt and job, avoiding an immutable key freezing the first
 snapshot. Restore selects the newest matching compatibility prefix. Bazel still checks each
 action digest; no full output base, sandbox or runfiles tree is cached. Hosted image updates
 start a new build-cache partition while keeping repository downloads reusable.</p>

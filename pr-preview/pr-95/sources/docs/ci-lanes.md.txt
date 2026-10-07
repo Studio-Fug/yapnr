@@ -3,7 +3,10 @@
 Ordinary Linux and macOS CI retain inexpensive RF unit coverage and one native inverse-design
 smoke. Solver sweeps, gradient checks, multi-iteration optimizations and coupon fitting run in
 `RF nightly`, at 03:17 UTC daily on `ubuntu-24.04-arm` and `macos-latest`, or through **Run workflow**.
-Scheduled runs use `main`; manual dispatch can select a branch. This workflow does not trigger
+Scheduled runs use `main`; manual dispatch can select a branch. Before the new workflow is
+registered on the default branch, use **CI → Run workflow → rf_nightly** (or
+`gh workflow run ci.yaml --ref BRANCH -f rf_nightly=true`); the existing CI workflow calls the
+same RF lane only for that explicit manual input. This workflow does not trigger
 on pull requests or pushes. Both matrix jobs report failures independently.
 
 ```mermaid
@@ -92,7 +95,7 @@ The ordinary test jobs and RF lane use explicit `actions/cache/restore@v6` and
 key is saved after a completed test invocation, including a failure. Download restore also
 accepts the previous per-platform namespace. Build snapshots include
 OS, architecture, hosted image version, compiler/SDK fingerprint and hashes of Bazel/configuration/lock
-inputs. Each save adds the run ID and attempt, avoiding an immutable key freezing the first
+inputs. Each save adds the run ID, attempt and job, avoiding an immutable key freezing the first
 snapshot. Restore selects the newest matching compatibility prefix. Bazel still checks each
 action digest; no full output base, sandbox or runfiles tree is cached. Hosted image updates
 start a new build-cache partition while keeping repository downloads reusable.

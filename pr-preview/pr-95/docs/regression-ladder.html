@@ -239,10 +239,12 @@
 <li class="toctree-l1"><a class="reference internal" href="design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/clearance-index-validation.html">Clearance index: integration validation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -1558,6 +1560,12 @@ whose outline then shrinks) and <code class="docutils literal notranslate"><span
 hulls) and slide into each other’s notches; <code class="docutils literal notranslate"><span class="pre">--hull-dovetail</span> <span class="pre">W</span></code> (<code class="docutils literal notranslate"><span class="pre">PNR_HULL_DOVETAIL</span></code>) adds a
 packing term to global placement over the hull bodies. <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code> records the pass as
 <code class="docutils literal notranslate"><span class="pre">route_compact</span></code> (gutters, steps, bounding box and the outline shrink it frees, seconds).</p>
+<p>The hierarchical runner’s default bundle includes hull nesting. Legalized hull macros
+search nearby legal poses; incomplete knits retain the un-nested and rectangle fallbacks.
+Use <code class="docutils literal notranslate"><span class="pre">--hull-nest</span> <span class="pre">0</span></code> to disable nesting while keeping the rest of the default bundle, or
+<code class="docutils literal notranslate"><span class="pre">hull_nest</span> <span class="pre">=</span> <span class="pre">false</span></code> in a ladder campaign. The direct engine equivalent is
+<code class="docutils literal notranslate"><span class="pre">PNR_HULL_NEST=0</span></code>; nesting is otherwise enabled whenever hull macros are enabled.
+See the <a class="reference internal" href="design/hull-nest-validation.html"><span class="std std-doc">nesting validation and limitations</span></a>.</p>
 <p>Results (2026-10-07, GCP C4D, flags off against each arm, KiCad’s DRC judging every board):</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">

@@ -239,10 +239,12 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/clearance-index-validation.html">Clearance index: integration validation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
@@ -301,7 +303,7 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-07 (energy-track macOS ABI-path assertion, #90). Previous status:
+<p>Last updated: 2026-10-07 (RF CI lanes and cache verification, #95). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>). Earlier the same day: RF round 2 with the native FDTD kernel
 on <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>, merged with <code class="docutils literal notranslate"><span class="pre">main</span></code>; the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the
@@ -321,8 +323,14 @@ Bazel targets are checked against an exhaustive lane inventory. Explicit cache s
 completed outputs after test failures with fork PRs restore-only. The existing CI dispatch can
 explicitly invoke the RF lane before merge. Native smoke, 14 focused policy regressions,
 changed-file hooks and actionlint pass; both hosted platforms verify the expanded 65-target
-inventory. Hosted RF execution and repeated-cache measurements are tracked in PR #95.
+inventory. Both RF lanes and same-head cache replays pass; detailed measurements and
+combined-head CI status after #91/#92 are tracked in PR #95.
 <a class="reference internal" href="docs/ci-lanes.html"><span class="std std-doc">Lane inventory and policy</span></a>.</p></li>
+<li><p><strong>Hull nesting default (2026-10-07, PR #91).</strong> Owner requested default-on nesting for hull
+macros with explicit opt-out. Legality/native gates and both routing fallbacks are unchanged.
+The integrated native dovetail example is clean with nonzero interlock; vias increase in
+that one pair. Final-head versus main dovetail and quad-bank campaigns remain pending under
+the approved total budget. See <a class="reference internal" href="docs/design/hull-nest-validation.html"><span class="std std-doc">validation status</span></a>.</p></li>
 <li><p><strong>Route-then-compact and hull packing</strong> (PR #86, branch <code class="docutils literal notranslate"><span class="pre">claude/route-compact</span></code>; design
 <a class="reference internal" href="docs/design/route-compact.html"><span class="std std-doc">docs/design/route-compact.md</span></a>). <code class="docutils literal notranslate"><span class="pre">PNR_ROUTE_COMPACT</span></code>
 (<code class="docutils literal notranslate"><span class="pre">TOP</span></code>, <code class="docutils literal notranslate"><span class="pre">BLOCK</span></code>, <code class="docutils literal notranslate"><span class="pre">FLAT</span></code>; default off): after routing, order-preserving 1D compaction (x then
@@ -588,6 +596,15 @@ feed; two reviews’ fixes in. Open: Palace issues to report upstream, a rank-sc
 the bank model, the image’s ParMETIS licence (owner).</p></li>
 </ul>
 </section>
+<section id="integration-checks">
+<h2>Integration checks<a class="headerlink" href="#integration-checks" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>PR integration review (2026-10-07).</strong> PR #92 is rebased onto main after #88 and #90, retaining
+only its two new optimization commits. The existing 96-cell A/B receipts were rechecked: 96
+matching verdicts and 94 matching copper hashes, 85 passes per arm. See <a class="reference internal" href="docs/design/clearance-index-validation.html"><span class="std std-doc">validation
+evidence</span></a>.</p></li>
+</ul>
+</section>
 <section id="next">
 <h2>Next<a class="headerlink" href="#next" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
@@ -785,6 +802,7 @@ nothing, and Adam’s <code class="docutils literal notranslate"><span class="pr
             <ul>
 <li><a class="reference internal" href="#">Worklog</a><ul>
 <li><a class="reference internal" href="#in-progress">In progress</a></li>
+<li><a class="reference internal" href="#integration-checks">Integration checks</a></li>
 <li><a class="reference internal" href="#next">Next</a></li>
 <li><a class="reference internal" href="#blockers">Blockers</a></li>
 <li><a class="reference internal" href="#known-issues">Known issues</a></li>

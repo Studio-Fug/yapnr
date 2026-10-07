@@ -2747,6 +2747,26 @@ py_test(
 
 # The native kernel's parity cases on the Bazel-built library (needs a C toolchain, like
 # `bazel build //...`): searches with ties, whole routes, the default switch.
+# The obstacle bucket indexes of the exact clearance checks (pnr.route.detail.obstacle_index)
+# and the written-out segment distance: the same answers as the full scans, on the
+# splanc_dev grid.
+py_test(
+    name = "obstacle_index_test",
+    size = "medium",
+    srcs = [
+        "tests/test_dense_maze.py",
+        "tests/test_obstacle_index.py",
+    ],
+    data = glob(["testdata/splanc_dev/*"]),
+    main = "tests/test_obstacle_index.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
 py_test(
     name = "dense_maze_native_test",
     size = "medium",
@@ -2757,6 +2777,7 @@ py_test(
         "KernelParityTest.test_missing_library_falls_back_to_packed",
         "RouteParityTest.test_packed_and_native_routes_equal_reference",
         "TieParityTest",
+        "NativeFieldCacheTest",
         "DefaultKernelTest",
     ],
     data = [":libpnr_maze.so"],

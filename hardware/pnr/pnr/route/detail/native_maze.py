@@ -123,6 +123,15 @@ def _pointer(array, ctype):
     return array.ctypes.data_as(ctypes.POINTER(ctype))
 
 
+def _bytes(mask):
+    """A flat uint8 array of a boolean mask's values: its own bytes when it is
+    contiguous (numpy stores a bool as one 0 or 1 byte), else a converted copy."""
+    flat = mask.reshape(-1)
+    if flat.dtype == np.bool_ and flat.flags.c_contiguous:
+        return flat.view(np.uint8)
+    return np.ascontiguousarray(flat, dtype=np.uint8)
+
+
 class NativeKernel:
     """The loaded library, refused (OSError) unless its arithmetic is Python's
     (:func:`fp_check`) and it records the sha256 of the ``maze.c`` beside this module."""
@@ -164,6 +173,8 @@ class NativeKernel:
         ]
         self.context = None
         self.size = 0
+        self._last = None  # (key, field, spec, its hole pointer, the arrays it points into)
+        self._path = None  # the path buffer, reused
 
     def _context(self, size):
         if self.context is None or self.size < size:
@@ -175,41 +186,83 @@ class NativeKernel:
             self.size = size
         return self.context
 
-    def search(self, field, starts, ends, via_cost, diagonal, drill_sites):
-        from .dense_maze import cell_of_key
-
-        size = field.nlayers * field.nx * field.ny
-        context = self._context(size)
-        hole = np.ascontiguousarray(field.tree_hole(drill_sites).reshape(-1), dtype=np.uint8)
-        radius, mask = field.stencil
-        stencil = np.ascontiguousarray(mask, dtype=np.uint8)
+    def _spec(self, field, diagonal, via_cost):
+        """The ctypes description of ``field`` (its ``hole`` member set per search).
+        Kept for the last field searched, as long as the field holds the same arrays:
+        a net's tree searches its field once per terminal. The cache holds the arrays
+        and their byte views, so the pointers stay theirs; the C loop reads them
+        in place, so a change to an array's values is seen as before."""
+        stencil = field.stencil
+        arrays = (
+            field.price,
+            field.via_price,
+            field.ok,
+            field.col,
+            field.plated,
+            field.corner,
+            field.diag,
+            field.hole,
+            stencil[1],
+        )
+        key = (bool(diagonal), float(via_cost), stencil[0]) + tuple(map(id, arrays))
+        cached = self._last
+        if cached is not None and cached[0] == key and cached[1] is field:
+            return cached[2], cached[3]
+        price = np.ascontiguousarray(field.price, dtype=np.float64)
+        via_price = np.ascontiguousarray(field.via_price, dtype=np.float64)
         ok = field.ok.view(np.uint8)
         col = field.col.view(np.uint8)
         plated = field.plated.view(np.uint8)
         corner = field.corner.view(np.uint8)
         diag = None if field.diag is None else field.diag.view(np.uint8)
+        mask = np.ascontiguousarray(stencil[1], dtype=np.uint8)
+        hole = _bytes(field.hole)
+        # Its own pointer object: one read back from the structure aliases the member,
+        # which later searches set to their tree's mask.
+        hole_pointer = _pointer(hole, ctypes.c_uint8)
         spec = _Field(
             field.nx,
             field.ny,
             field.nlayers,
             1 if diagonal else 0,
-            _pointer(field.price, ctypes.c_double),
-            _pointer(field.via_price, ctypes.c_double),
+            _pointer(price, ctypes.c_double),
+            _pointer(via_price, ctypes.c_double),
             _pointer(ok, ctypes.c_uint8),
             _pointer(col, ctypes.c_uint8),
             _pointer(plated, ctypes.c_uint8),
-            _pointer(hole, ctypes.c_uint8),
-            _pointer(stencil, ctypes.c_uint8),
+            hole_pointer,
+            _pointer(mask, ctypes.c_uint8),
             _pointer(corner, ctypes.c_uint8),
             ctypes.POINTER(ctypes.c_uint8)() if diag is None else _pointer(diag, ctypes.c_uint8),
-            radius,
+            stencil[0],
             float(via_cost),
             _SQRT2,
             2.0 - _SQRT2,
         )
+        keep = (arrays, price, via_price, ok, col, plated, corner, diag, mask, hole)
+        self._last = (key, field, spec, hole_pointer, keep)
+        return spec, hole_pointer
+
+    def _buffer(self, size):
+        if self._path is None or len(self._path) < size:
+            self._path = np.empty(size, dtype=np.int32)
+        return self._path
+
+    def search(self, field, starts, ends, via_cost, diagonal, drill_sites):
+        from .grid import Cell
+
+        size = field.nlayers * field.nx * field.ny
+        context = self._context(size)
+        spec, field_hole = self._spec(field, diagonal, via_cost)
+        if drill_sites:
+            # The tree's new vias: a fresh hole mask for this search only.
+            hole = _bytes(field.tree_hole(drill_sites))
+            spec.hole = _pointer(hole, ctypes.c_uint8)
+        else:
+            spec.hole = field_hole
         start = np.asarray(starts, dtype=np.int32)
         end = np.asarray(sorted(ends), dtype=np.int32)
-        path = np.empty(size, dtype=np.int32)
+        path = self._buffer(size)
         length = self.lib.pnr_maze_search(
             context,
             ctypes.byref(spec),
@@ -224,7 +277,14 @@ class NativeKernel:
             raise RuntimeError("native maze search failed (%d)" % length)
         if length == 0:
             return None
-        return [cell_of_key(field, int(k)) for k in path[:length]]
+        # dense_maze.cell_of_key, per key.
+        plane, nx = field.nx * field.ny, field.nx
+        out = []
+        for key in path[:length].tolist():
+            la, ij = divmod(key, plane)
+            j, i = divmod(ij, nx)
+            out.append(Cell(la, i, j))
+        return out
 
     def __del__(self):
         if self.context is not None:

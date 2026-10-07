@@ -288,6 +288,13 @@ board edges, the hierarchical ladder driver and their animations on
   feed; two reviews' fixes in. Open: Palace issues to report upstream, a rank-scaling run before
   the bank model, the image's ParMETIS licence (owner).
 
+## Integration checks
+
+- **PR integration review (2026-10-07).** PR #92 is rebased onto main after #88 and #90, retaining
+  only its two new optimization commits. The existing 96-cell A/B receipts were rechecked: 96
+  matching verdicts and 94 matching copper hashes, 85 passes per arm. See [validation
+  evidence](docs/design/clearance-index-validation.md).
+
 ## Next
 
 1. Owner (viewer, #12): review after the fact; decide the agent's default model (opus, $2 per

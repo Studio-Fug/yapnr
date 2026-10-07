@@ -49,8 +49,10 @@ from pnr.stage_timing import stage as live_stage  # noqa: E402
 
 KI = "/Applications/KiCad/KiCad.app/Contents"
 
-# Run with the frozen engine on PYTHONPATH: prints "prebuilt PATH" or "built PATH" (a library
-# that loads and matches the frozen maze.c), or fails with the reason on its last stderr line.
+# Run with the frozen engine on PYTHONPATH: prints "prebuilt ORIGIN PATH" or "built built PATH"
+# (a library that loads and matches the frozen maze.c; ORIGIN: "wheel", the installed yapnr
+# wheel's, as in the container image; "package", beside the frozen package or in Bazel's
+# runfiles; "env", PNR_MAZE_LIB), or fails with the reason on its last stderr line.
 NATIVE_MAZE_SETUP = """
 import os, sys
 from pnr.route.detail import native_maze as m
@@ -62,7 +64,15 @@ if path is None:
     path, reason = m.prebuilt()
     if path is None:
         sys.exit("built library does not load: " + reason)
-print(how, path)
+if how == "built":
+    origin = "built"
+elif str(path) in {str(p) for p in m._installed()}:
+    origin = "wheel"
+elif os.environ.get("PNR_MAZE_LIB") == str(path):
+    origin = "env"
+else:
+    origin = "package"
+print(how, origin, path)
 """
 
 
@@ -1150,7 +1160,7 @@ def main():
                     timeout=600,
                     check=True,
                 ).stdout.split()
-                how, library = found[-2], found[-1]
+                how, origin, library = found[-3], found[-2], found[-1]
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
                 detail = (getattr(error, "stderr", None) or str(error)).strip().splitlines()
                 reason = detail[-1] if detail else type(error).__name__
@@ -1159,7 +1169,12 @@ def main():
                 env["PNR_MAZE_KERNEL"] = "packed"
             else:
                 env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
-                native = dict(library=Path(library).name, source=how, sha256=sha(Path(library)))
+                native = dict(
+                    library=Path(library).name,
+                    source=how,
+                    origin=origin,
+                    sha256=sha(Path(library)),
+                )
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.power_first:

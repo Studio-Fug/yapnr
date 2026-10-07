@@ -590,20 +590,73 @@ def _point_dist_sq(p, u, v):
     """Squared distance from point ``p`` to the closed segment ``uv``."""
     dx, dy = v[0] - u[0], v[1] - u[1]
     den = dx * dx + dy * dy
-    t = max(0.0, min(1.0, ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / den)) if den else 0.0
+    if den:
+        # max(0.0, min(1.0, t)) as the comparisons min and max make: the same value,
+        # NaN and signed zeros included, without two builtin calls.
+        t = ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / den
+        t = t if t < 1.0 else 1.0
+        t = t if t > 0.0 else 0.0
+    else:
+        t = 0.0
     return (p[0] - u[0] - t * dx) ** 2 + (p[1] - u[1] - t * dy) ** 2
 
 
 def _segment_distance_sq(a, b, c, d):
-    """Squared minimum separation of two closed 2D line segments."""
-    if _cross(a, b, c) * _cross(a, b, d) < 0 and _cross(c, d, a) * _cross(c, d, b) < 0:
+    """Squared minimum separation of two closed 2D line segments.
+
+    The route-time clearance checks call this hundreds of millions of times per
+    campaign, so the straddle test (:func:`_cross`) and the least of the four
+    endpoint distances (:func:`_point_dist_sq`, then ``min``) are written out here:
+    the same operations on the same values in the same order, so the same result
+    (tests/test_writeback.py compares the two forms).
+    """
+    a0, a1 = a[0], a[1]
+    b0, b1 = b[0], b[1]
+    c0, c1 = c[0], c[1]
+    d0, d1 = d[0], d[1]
+    ex, ey = b0 - a0, b1 - a1  # a -> b
+    fx, fy = d0 - c0, d1 - c1  # c -> d
+    if (ex * (c1 - a1) - ey * (c0 - a0)) * (ex * (d1 - a1) - ey * (d0 - a0)) < 0 and (
+        fx * (a1 - c1) - fy * (a0 - c0)
+    ) * (fx * (b1 - c1) - fy * (b0 - c0)) < 0:
         return 0.0
-    return min(
-        _point_dist_sq(a, c, d),
-        _point_dist_sq(b, c, d),
-        _point_dist_sq(c, a, b),
-        _point_dist_sq(d, a, b),
-    )
+    # a, then b, to segment c-d.
+    den = fx * fx + fy * fy
+    if den:
+        t = ((a0 - c0) * fx + (a1 - c1) * fy) / den
+        t = t if t < 1.0 else 1.0
+        t = t if t > 0.0 else 0.0
+        best = (a0 - c0 - t * fx) ** 2 + (a1 - c1 - t * fy) ** 2
+        t = ((b0 - c0) * fx + (b1 - c1) * fy) / den
+        t = t if t < 1.0 else 1.0
+        t = t if t > 0.0 else 0.0
+        value = (b0 - c0 - t * fx) ** 2 + (b1 - c1 - t * fy) ** 2
+    else:
+        best = (a0 - c0 - 0.0 * fx) ** 2 + (a1 - c1 - 0.0 * fy) ** 2
+        value = (b0 - c0 - 0.0 * fx) ** 2 + (b1 - c1 - 0.0 * fy) ** 2
+    if value < best:
+        best = value
+    # c, then d, to segment a-b.
+    den = ex * ex + ey * ey
+    if den:
+        t = ((c0 - a0) * ex + (c1 - a1) * ey) / den
+        t = t if t < 1.0 else 1.0
+        t = t if t > 0.0 else 0.0
+        value = (c0 - a0 - t * ex) ** 2 + (c1 - a1 - t * ey) ** 2
+        if value < best:
+            best = value
+        t = ((d0 - a0) * ex + (d1 - a1) * ey) / den
+        t = t if t < 1.0 else 1.0
+        t = t if t > 0.0 else 0.0
+        value = (d0 - a0 - t * ex) ** 2 + (d1 - a1 - t * ey) ** 2
+    else:
+        value = (c0 - a0 - 0.0 * ex) ** 2 + (c1 - a1 - 0.0 * ey) ** 2
+        if value < best:
+            best = value
+        value = (d0 - a0 - 0.0 * ex) ** 2 + (d1 - a1 - 0.0 * ey) ** 2
+    if value < best:
+        best = value
+    return best
 
 
 def _collect_obstacles(board):

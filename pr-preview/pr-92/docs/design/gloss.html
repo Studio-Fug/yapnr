@@ -238,9 +238,11 @@
 <li class="toctree-l1"><a class="reference internal" href="rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clearance-index-validation.html">Clearance index: integration validation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="route-compact.html">Route-then-compact and hull packing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
@@ -479,6 +481,13 @@ reports why it stopped (<code class="docutils literal notranslate"><span class="
 planning totals (<code class="docutils literal notranslate"><span class="pre">deadline_hits</span></code>); the ladder keeps them in <code class="docutils literal notranslate"><span class="pre">result.json</span></code>. For an A/B across
 machines, raise <code class="docutils literal notranslate"><span class="pre">PNR_GLOSS_SECONDS</span></code> well above the pass’s need and bound the pass by
 <code class="docutils literal notranslate"><span class="pre">PNR_GLOSS_MAX_TRANSACTIONS</span></code>, so both arms stop for the same reason.</p>
+</section>
+<section id="energy-proposal-integration">
+<h2>Energy proposal integration<a class="headerlink" href="#energy-proposal-integration" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">PNR_GLOSS_ENERGY=1</span></code> selects the optional witness-growth energy proposer for the
+<code class="docutils literal notranslate"><span class="pre">gloss</span></code> step, with stricter joint-refill electrical evidence gates. It is off by
+default. See <a class="reference internal" href="energy-track.html"><span class="std std-doc">energy-track integration</span></a> for exact eligibility,
+refusal reasons, dependency ABI handling and the recorded native animation.</p>
 </section>
 <section id="flags">
 <h2>6. Flags<a class="headerlink" href="#flags" title="Link to this heading">¶</a></h2>
@@ -770,6 +779,7 @@ constraint would fail the rung rather than be reverted.</p></li>
 <li><a class="reference internal" href="#legality-of-an-edit-l1-l8">3. Legality of an edit (L1-L8)</a></li>
 <li><a class="reference internal" href="#acceptance">4. Acceptance</a></li>
 <li><a class="reference internal" href="#transactions-and-the-legalizer-override">5. Transactions and the legalizer override</a></li>
+<li><a class="reference internal" href="#energy-proposal-integration">Energy proposal integration</a></li>
 <li><a class="reference internal" href="#flags">6. Flags</a></li>
 <li><a class="reference internal" href="#functional-groups-and-the-cross-group-cap">7. Functional groups and the cross-group cap</a></li>
 <li><a class="reference internal" href="#the-ladder-stage">8. The ladder stage</a></li>

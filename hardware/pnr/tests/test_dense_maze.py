@@ -359,6 +359,66 @@ class KernelParityTest(unittest.TestCase):
             )
 
 
+class NativeFieldCacheTest(unittest.TestCase):
+    """The native kernel keeps the ctypes description of the last field it searched
+    (native_maze.NativeKernel._spec) and reuses its path buffer: a net's tree searches
+    one field once per terminal, with new drill sites each time. Searches that reuse
+    a field, alternate between fields and change the via cost, the diagonal moves or
+    the drill sites return what the packed kernel returns on the same field, and what
+    a kernel without the cache returns."""
+
+    SEEDS = 150
+
+    def test_reused_fields_search_as_fresh_ones(self):
+        from pnr.route.detail import packed_maze
+
+        kernel = native_kernel(self)
+        fresh = native_maze.NativeKernel(kernel.lib, kernel.path)
+        for seed in range(self.SEEDS):
+            rng = random.Random(9100 + seed)
+            grid, cells = random_grid(rng)
+            fields = []
+            for _ in range(2):
+                args = random_search(rng, grid, cells)
+                field = build_field(
+                    grid,
+                    "N",
+                    args["occ"],
+                    args["history"],
+                    args["pres_fac"],
+                    args.get("blocked"),
+                    args.get("soft"),
+                )
+                if field is not None:
+                    fields.append(field)
+            if not fields:
+                continue
+            for _ in range(8):
+                field = rng.choice(fields)
+                args = random_search(rng, grid, cells)
+                sources, targets = set(args["sources"]), set(args["targets"])
+                via_cost, diagonal = args["via_cost"], args["diagonal"]
+                drill_sites = args["drill_sites"] if rng.random() < 0.6 else ()
+                with self.subTest(seed=seed):
+                    with patch.dict(os.environ, {"PNR_MAZE_KERNEL": "packed"}):
+                        expected = packed_maze.search(
+                            field, sources, targets, via_cost, diagonal, drill_sites
+                        )
+                    found = packed_maze.endpoints(field, sources, targets)
+                    if found is None:
+                        continue
+                    starts, ends, _ = found
+                    fresh._last = None
+                    self.assertEqual(
+                        kernel.search(field, starts, ends, via_cost, diagonal, drill_sites),
+                        expected,
+                    )
+                    self.assertEqual(
+                        fresh.search(field, starts, ends, via_cost, diagonal, drill_sites),
+                        expected,
+                    )
+
+
 class TieParityTest(unittest.TestCase):
     """Searches full of equal ``f`` values: uniform or coarsely quantised prices, integer via
     costs and symmetric endpoints, so many paths share the optimal cost and the ``(f, tie)``

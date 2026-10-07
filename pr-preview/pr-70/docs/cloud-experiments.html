@@ -460,6 +460,18 @@ on the Mac wants about 16,000 s, above <code class="docutils literal notranslate
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">calibration</span> <span class="pre">ingest</span> <span class="pre">--reference</span> <span class="pre">DIR</span> <span class="pre">--cloud</span> <span class="pre">DIR...</span> <span class="pre">--out</span> <span class="pre">FILE</span></code></p></td>
 <td><p>no</p></td>
 </tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">durations</span> <span class="pre">ingest</span> <span class="pre">[--fetched</span> <span class="pre">DIR...]</span> <span class="pre">[--campaign</span> <span class="pre">ID...]</span> <span class="pre">[--out</span> <span class="pre">FILE]</span></code></p></td>
+<td><p>no (reads task records)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">cost</span> <span class="pre">PLAN</span> <span class="pre">[--json]</span></code></p></td>
+<td><p>no (reads the Compute audit log and Batch)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">spend</span> <span class="pre">[--budget-usd</span> <span class="pre">X]</span> <span class="pre">[--json]</span></code></p></td>
+<td><p>no (reads the audit log and the guard’s logs)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">profile</span> <span class="pre">PLAN</span> <span class="pre">[--fetched</span> <span class="pre">DIR]</span> <span class="pre">[--top</span> <span class="pre">N]</span> <span class="pre">[--json]</span></code></p></td>
+<td><p>no</p></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -708,6 +720,65 @@ submit at the same time, is not counted, and neither is a Spot stockout (a regio
 but no capacity). Cancel and <code class="docutils literal notranslate"><span class="pre">submit</span> <span class="pre">--region</span></code> the other region.</p></li>
 </ul>
 </section>
+<section id="cost-model-vm-time-and-packing">
+<h2>Cost model: VM time and packing<a class="headerlink" href="#cost-model-vm-time-and-packing" title="Link to this heading">¶</a></h2>
+<p>Batch bills <strong>VM time</strong>, not task time. Measured on yapnr’s Spot jobs (October 2026, Compute
+Engine audit log joined to Batch task events over 622 VMs): a VM is billed from its creation,
+about 30 s before its first task starts (median 26 s, p90 33 s), until its deletion, about 45 s
+after its last task ends (median 34 s, p90 48 s); Batch deletes each VM as soon as it runs out
+of tasks, not when the job ends. Each Batch task spends about 10 s starting its container,
+staging its bundle and uploading its result. Every slot of a VM is paid for, busy or not. The
+monthly bill was 1.16 x the VM time at list prices (networking, storage, registry and logging
+make up the rest), and it lagged the VM time by about 8 hours.</p>
+<p>So the estimate (<code class="docutils literal notranslate"><span class="pre">plan</span></code>, and the caps at <code class="docutils literal notranslate"><span class="pre">submit</span></code>) prices the VM time of the class’s
+<strong>packing</strong>, the layout <code class="docutils literal notranslate"><span class="pre">submit</span></code> uses (<a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/yapnr/exp/packing.py"><code class="docutils literal notranslate"><span class="pre">yapnr/exp/packing.py</span></code></a>):</p>
+<ul class="simple">
+<li><p><strong>Durations</strong> are predicted per task: the task’s cell (kind and labels without <code class="docutils literal notranslate"><span class="pre">seed</span></code>) in the
+durations history, else other cells of its case, else the calibration’s <code class="docutils literal notranslate"><span class="pre">reference_seconds</span></code>,
+else the kind’s default. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">fetch</span></code> adds the campaign’s task records to the history
+(<code class="docutils literal notranslate"><span class="pre">[prices]</span> <span class="pre">durations</span></code>, default <code class="docutils literal notranslate"><span class="pre">&lt;store&gt;/durations.json</span></code>; <code class="docutils literal notranslate"><span class="pre">--no-durations</span></code> skips it), and
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">durations</span> <span class="pre">ingest</span> <span class="pre">--campaign</span> <span class="pre">ID...</span></code> (or <code class="docutils literal notranslate"><span class="pre">--fetched</span> <span class="pre">DIR...</span></code>) adds any others;
+each sample is scaled by its machine family’s speed. The plan prints how many predictions came
+from where.</p></li>
+<li><p><strong>Longest first</strong>: the lines of a job’s <code class="docutils literal notranslate"><span class="pre">submissions/&lt;n&gt;.indices</span></code> are in decreasing predicted
+duration. Batch starts a job’s task indices in no particular order (measured), so on a packed
+job each task, when it starts, claims the first line no other task has claimed (an object
+created only if absent in the runs bucket; a retry finds its own claim): LPT scheduling, with
+the longest work on the first slots to come up.</p></li>
+<li><p><strong>VM count</strong>: as few VMs as keep the simulated makespan within 25% of the shortest the quota
+allows (<code class="docutils literal notranslate"><span class="pre">parallelism</span></code> = VMs x tasks per VM, at most <code class="docutils literal notranslate"><span class="pre">max_parallel_vcpus</span></code>), so VMs stay busy
+and the makespan stays near the longest task.</p></li>
+<li><p><strong>Bundles</strong>: cells predicted under 60 s run several to a Batch task (one line of
+<code class="docutils literal notranslate"><span class="pre">submissions/&lt;n&gt;.indices</span></code> names several plan lines; the wrapper runs them one after the other,
+each with its own limits and <code class="docutils literal notranslate"><span class="pre">_DONE</span></code>), up to the longest task’s duration and 20 cells, so one
+container start serves several. Plans made before wrapper version 2 keep one cell per task.</p></li>
+<li><p><strong>Stragglers</strong>: units over 3x what the rest need get a job of their own when that is predicted
+to cost less VM time, on the next smaller shape of the family (when its instance template
+exists); on the same shape a joint job is never dearer.</p></li>
+</ul>
+<p>Nothing about a task changes: the same lines of <code class="docutils literal notranslate"><span class="pre">tasks.jsonl</span></code>, commands, seeds and outputs; only
+which Batch task runs them, in what order and on how many VMs. <code class="docutils literal notranslate"><span class="pre">submit</span></code> writes the packing into
+each submission record (<code class="docutils literal notranslate"><span class="pre">packing</span></code>: Batch tasks, bundled cells, VMs, predicted VM-hours).</p>
+<p>After a campaign, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">cost</span> <span class="pre">PLAN</span></code> measures what it really used: per submission, the VMs
+from the audit log (by the job’s uid), their VM-hours at the table’s price plus the boot disk,
+the Batch task time and the slot utilisation (task time / (VM time x tasks per VM)). It writes
+<code class="docutils literal notranslate"><span class="pre">&lt;plan&gt;/cost.json</span></code> and a line of <code class="docutils literal notranslate"><span class="pre">&lt;store&gt;/spend/campaigns.jsonl</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">spend</span></code> reports the month to date: the budget guard’s billed figure (its logged cost,
+or ratio x <code class="docutils literal notranslate"><span class="pre">[prices]</span> <span class="pre">budget_usd</span></code>), the VM time of every yapnr VM this month from the audit log,
+the fitted factor and lag between the two, the VM time not billed yet (x the factor), and the
+campaigns <code class="docutils literal notranslate"><span class="pre">cost</span></code> recorded. Quote spend from this, not from task-time ledgers.</p>
+<section id="profiling-a-campaign">
+<h3>Profiling a campaign<a class="headerlink" href="#profiling-a-campaign" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">[profile]</span> <span class="pre">enabled</span> <span class="pre">=</span> <span class="pre">true</span></code> in a campaign sets <code class="docutils literal notranslate"><span class="pre">PNR_PROFILE_DIR</span></code> for every task (outside its
+outputs, so results are unchanged; cProfile slows the engine, so wall-clock-budgeted cells may
+do less work). Every <code class="docutils literal notranslate"><span class="pre">pnr.profile</span></code>-instrumented process writes a record (its label, wall and CPU
+time, <code class="docutils literal notranslate"><span class="pre">span()</span></code> totals and 100 hottest functions); the wrapper uploads the JSON records beside the
+result and <code class="docutils literal notranslate"><span class="pre">fetch</span></code> copies them. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">profile</span> <span class="pre">PLAN</span></code> adds them up: time per stage label, per
+span, per function and module (lower bounds: each process lists its top 100), the task time no
+profiled process covers, and with <code class="docutils literal notranslate"><span class="pre">cost.json</span></code> each share in VM-hours and dollars. Use it to pick
+what to port to Rust or move to a GPU.</p>
+</section>
+</section>
 <section id="costs-and-guards">
 <h2>Costs and guards<a class="headerlink" href="#costs-and-guards" title="Link to this heading">¶</a></h2>
 <p>Prices are list prices from the committed table
@@ -765,9 +836,10 @@ jobs’ parallelism), <code class="docutils literal notranslate"><span class="pr
 <code class="docutils literal notranslate"><span class="pre">max_campaign_hours</span></code> (the jobs’ deadline). <code class="docutils literal notranslate"><span class="pre">submit</span></code> refuses tasks that a queued or running job
 of the campaign still holds (no task runs twice), and on-demand placements (<code class="docutils literal notranslate"><span class="pre">spot</span> <span class="pre">=</span> <span class="pre">false</span></code>,
 outside the quota ceiling) unless <code class="docutils literal notranslate"><span class="pre">allow_on_demand</span> <span class="pre">=</span> <span class="pre">true</span></code>.</p></li>
-<li><p><strong>The estimate</strong>: every plan prints the expected cost and a ceiling (every attempt at its
-maximum wall time plus the grace, with every retry, on whole VMs; or the quota’s VMs for
-<code class="docutils literal notranslate"><span class="pre">max_campaign_hours</span></code> plus the reaper’s interval, whichever is lower).
+<li><p><strong>The estimate</strong>: every plan prints the expected cost (the VM time of the packing, above)
+and a ceiling (every attempt at its maximum wall time plus the grace, with every retry, on
+whole VMs; or the quota’s VMs for <code class="docutils literal notranslate"><span class="pre">max_campaign_hours</span></code> plus the reaper’s interval, whichever
+is lower).
 <code class="docutils literal notranslate"><span class="pre">submit</span></code> asks above <code class="docutils literal notranslate"><span class="pre">confirm_usd</span></code> and refuses a ceiling above <code class="docutils literal notranslate"><span class="pre">refuse_usd</span></code> unless <code class="docutils literal notranslate"><span class="pre">--max-usd</span></code>
 raises it, never above <code class="docutils literal notranslate"><span class="pre">hard_refuse_usd</span></code>.</p></li>
 <li><p><strong>The reaper</strong>: every 15 minutes it cancels jobs past their <code class="docutils literal notranslate"><span class="pre">deadline</span></code> label and deletes yapnr VMs
@@ -1251,6 +1323,10 @@ cancel and <code class="docutils literal notranslate"><span class="pre">submit</
 </ul>
 </li>
 <li><a class="reference internal" href="#regions-and-quota-aware-placement">Regions and quota-aware placement</a></li>
+<li><a class="reference internal" href="#cost-model-vm-time-and-packing">Cost model: VM time and packing</a><ul>
+<li><a class="reference internal" href="#profiling-a-campaign">Profiling a campaign</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#costs-and-guards">Costs and guards</a></li>
 <li><a class="reference internal" href="#slurm-and-apptainer-hpc-allocations">Slurm and Apptainer (HPC allocations)</a></li>
 <li><a class="reference internal" href="#id1">Calibration</a></li>

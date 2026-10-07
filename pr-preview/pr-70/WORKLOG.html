@@ -597,13 +597,12 @@ make the <code class="docutils literal notranslate"><span class="pre">image</spa
 <li><p>Owner, fab and ordering (design §12): decisions D1 to D5. For the first OSH Park order, route
 the board under an OSH Park profile, run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">BOARD</span> <span class="pre">--vendor</span> <span class="pre">oshpark</span></code>, drop the
 zip on oshpark.com, check the preview and pay there; RF boards also pin <code class="docutils literal notranslate"><span class="pre">--stackup</span></code> (D4).</p></li>
-<li><p>Owner: decide whether the ladder should default to <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> (the engine’s
-default JLCPCB profile) instead of <code class="docutils literal notranslate"><span class="pre">legacy</span></code> (the fixtures’ own rules; <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>).
-With <code class="docutils literal notranslate"><span class="pre">route_case.py</span></code> applying the profile, <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> passes every case too (2026-09-30:
-pool seed 0, 8 of 8; baseline seeds 0 and 1, 16 of 16; other boards than legacy’s, e.g. case
-07 with 17 vias instead of 19). Flipping it changes the rules the ladder README states and
-needs a refresh of <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code>. The first <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code> run (the pull request of
-<code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code>) is the first run of its container path.</p></li>
+<li><p>Owner decision (2026-10-06, <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>): not yet. The gate was “flip to
+<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> only when all 21 of <code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code>’s jlc-pofv failures
+pass on <code class="docutils literal notranslate"><span class="pre">claude/defaults-rails-fab</span></code>”; campaign <code class="docutils literal notranslate"><span class="pre">20261007-ladder-7fe33f</span></code> got 20 of 21 (the
+remaining one, <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code> seed 0, is rail-allocation territory,
+not fab-profile, and <code class="docutils literal notranslate"><span class="pre">legacy</span></code> fails it on both seeds). Stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code> default until that
+cell passes or the gate is revisited; see <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>.</p></li>
 <li><p>Rebuild the KiCad base monthly (bump <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/TAG</span></code> to the next <code class="docutils literal notranslate"><span class="pre">-N</span></code>), or with the
 Dependabot <code class="docutils literal notranslate"><span class="pre">ubuntu</span></code> digest update (docs/releases.md, “Maintaining the images”).</p></li>
 <li><p>Showcases (<code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>): the first nightly showcase step on the arm64

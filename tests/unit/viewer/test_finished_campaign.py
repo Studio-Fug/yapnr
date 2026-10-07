@@ -126,6 +126,44 @@ class FinishedLadderCampaignTest(unittest.TestCase):
         finally:
             stop(process)
 
+    def test_marker_appearing_after_an_idle_poll_is_still_picked_up(self):
+        """Regression: yapnr.viewer.server.Viewer.state_response caches one JSON response per
+        revision; writing MIRROR_FINISHED_MARKER never bumps the revision (only a new event
+        file under events/ or a restart-status change does -- Viewer.ingest), so a campaign
+        that goes quiet and is only later marked finished (yapnr.exp.live, once run after the
+        fact by something like a hub's catchup pass) must not have its first, already-cached
+        response (with campaign_finished still false) served forever after. This is exactly the
+        real symptom this fix chases: a run idle long enough to read "stalled" on every lane,
+        with no later event ever arriving to force a fresh poll."""
+        process, base = start_viewer(self.root, "--net-summaries", "off", "--agent", "off")
+        try:
+            state = self._poll_until_seen(base, 1 + 3 * len(CASES))
+            self.assertIsNotNone(state)
+            self.assertFalse(state["campaign_finished"])
+            self.assertEqual(state["lanes"]["controller"]["progress"]["state"], "stalled")
+            revision_before = state["revision"]
+            # No new event follows -- the marker is the only thing that changes on disk.
+            (self.root / MIRROR_FINISHED_MARKER).write_text(json.dumps({"campaign": "test"}))
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                state = _get(base, "/api/state")
+                if state["campaign_finished"]:
+                    break
+                time.sleep(0.05)
+            self.assertTrue(state["campaign_finished"])
+            # The flip bumps the revision, so a second client still polling with the old one
+            # gets the new state too, never the "unchanged" shortcut.
+            self.assertGreater(state["revision"], revision_before)
+            other = _get(base, "/api/state?since=%d&run=%s" % (revision_before, state["run"]))
+            self.assertNotIn("unchanged", other)
+            self.assertTrue(other["campaign_finished"])
+            self.assertEqual(state["lanes"]["controller"]["progress"]["state"], "finished")
+            self.assertEqual(
+                state["lanes"]["controller"]["status_text"], "Finished (no final event)"
+            )
+        finally:
+            stop(process)
+
     def test_without_the_marker_the_same_childless_lane_still_reads_stalled(self):
         # The control case: without campaign_finished known, idling past STALE_SECONDS really is
         # indistinguishable from a dead worker, so "stalled" is the right, honest answer.

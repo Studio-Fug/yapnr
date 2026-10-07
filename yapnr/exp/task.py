@@ -13,8 +13,12 @@ that copy, so a campaign does not depend on the yapnr version inside its image.
 system on Slurm, a local directory); ``BUNDLES`` holds the inputs store's ``<sha256>.tar.gz``.
 
 1. Resolve the index (``--index``, else ``BATCH_TASK_INDEX``, else ``SLURM_ARRAY_TASK_ID``) and
-   map it through ``submissions/<n>.indices`` to a line of ``tasks.jsonl``; check that line's
-   spec hash against ``campaign.json``. With ``--chunk K`` the index names K consecutive lines.
+   map it through ``submissions/<n>.indices`` to a line of ``tasks.jsonl`` (a line of the indices
+   file may name several, a bundle run one after the other); check each line's spec hash against
+   ``campaign.json``. With ``--chunk K`` the index names K consecutive lines of the indices file.
+   With ``YAPNR_CLAIM_BUCKET`` set (packed Batch jobs), the task instead claims the first line of
+   the indices file no other task has claimed (``Claims``), so lines run in their order, longest
+   predicted first, whatever order Batch starts its task indices in.
 2. Exit 3 if ``control/frozen`` exists; skip a task whose ``_DONE`` exists.
 3. Make a private work directory; point ``HOME``, ``XDG_*`` and ``TMPDIR`` into it.
 4. Stage the inputs (verify each bundle's sha256, extract); restore a checkpoint for
@@ -49,10 +53,12 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
-WRAPPER_VERSION = 1
+WRAPPER_VERSION = 2  # 2: indices lines may bundle plan lines; claims (YAPNR_CLAIM_BUCKET)
 TASK_SCHEMA = "yapnr-task-v1"
 RECORD_SCHEMA = "yapnr-task-record-v1"
 
@@ -140,6 +146,106 @@ def metadata(path, timeout=2.0):
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.read().decode().strip()
     except Exception:
+        return None
+
+
+CLAIM_ENV = "YAPNR_CLAIM_BUCKET"
+STORAGE_API = "https://storage.googleapis.com/"
+
+
+class Claims:
+    """Longest first on Batch: each Batch task claims the next unclaimed line of the indices file.
+
+    Batch starts a job's task indices in no particular order, so a packed job's order (longest
+    predicted first) holds only if a task picks its work when it starts. A claim is an object
+    ``<prefix><line>`` created only if absent (``ifGenerationMatch=0``), carrying the claiming
+    task index in its metadata: a retry of the same index (preemption, a lost VM) finds and reruns
+    its own line, and two tasks never claim one line. ``http(method, url, body, headers)``
+    returns (status, bytes); the default talks to Cloud Storage with the VM's token.
+    """
+
+    def __init__(self, bucket, prefix, index, http=None):
+        self.bucket = bucket
+        self.prefix = prefix
+        self.index = str(index)
+        self.http = http or self._http
+        self._token = None
+
+    def _http(self, method, url, body=None, headers=None):
+        if self._token is None:
+            data = metadata("instance/service-accounts/default/token", timeout=5.0)
+            if not data:
+                raise TaskFailure(EXIT_TEMPFAIL, "no token from the metadata server")
+            self._token = json.loads(data)["access_token"]
+        request = urllib.request.Request(url, data=body, method=method)
+        request.add_header("Authorization", "Bearer " + self._token)
+        for key, value in (headers or {}).items():
+            request.add_header(key, value)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return response.status, response.read()
+        except urllib.error.HTTPError as err:
+            return err.code, err.read()
+        except (urllib.error.URLError, OSError) as err:
+            # A timeout or connection reset, not an HTTP error response: without this, it
+            # propagates out of main() uncaught (main only catches TaskFailure), the task
+            # exits 1, Batch does not retry exit 1, and the claimed line never runs.
+            raise TaskFailure(EXIT_TEMPFAIL, "claims request: %s" % err) from err
+
+    def claimed(self):
+        """{line of the indices file: the claiming task index}."""
+        out, page = {}, None
+        while True:
+            query = {"prefix": self.prefix, "fields": "items(name,metadata),nextPageToken"}
+            if page:
+                query["pageToken"] = page
+            url = "%sstorage/v1/b/%s/o?%s" % (
+                STORAGE_API,
+                self.bucket,
+                urllib.parse.urlencode(query),
+            )
+            status, body = self.http("GET", url)
+            if status != 200:
+                raise TaskFailure(EXIT_TEMPFAIL, "listing claims: HTTP %d" % status)
+            data = json.loads(body or b"{}")
+            for item in data.get("items", []):
+                name = item["name"][len(self.prefix) :]
+                if name.isdigit():
+                    out[int(name)] = (item.get("metadata") or {}).get("index")
+            page = data.get("nextPageToken")
+            if not page:
+                return out
+
+    def claim(self, line):
+        boundary = "yapnr-claim-%d" % os.getpid()
+        meta = json.dumps({"name": self.prefix + str(line), "metadata": {"index": self.index}})
+        body = (
+            "--%s\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n%s\r\n"
+            "--%s\r\nContent-Type: text/plain\r\n\r\n%s\n\r\n--%s--\r\n"
+            % (boundary, meta, boundary, self.index, boundary)
+        ).encode()
+        url = "%supload/storage/v1/b/%s/o?uploadType=multipart&ifGenerationMatch=0" % (
+            STORAGE_API,
+            self.bucket,
+        )
+        status, _ = self.http(
+            "POST", url, body, {"Content-Type": "multipart/related; boundary=%s" % boundary}
+        )
+        if status == 412:
+            return False  # another task claimed it first
+        if status != 200:
+            raise TaskFailure(EXIT_TEMPFAIL, "claiming line %d: HTTP %d" % (line, status))
+        return True
+
+    def pick(self, count):
+        """The line of the indices file this task runs (its own claim on a retry), or None."""
+        seen = self.claimed()
+        for line, owner in sorted(seen.items()):
+            if owner == self.index:
+                return line
+        for line in range(count):
+            if line not in seen and self.claim(line):
+                return line
         return None
 
 
@@ -238,13 +344,22 @@ class Campaign:
             raise TaskFailure(EXIT_TEMPFAIL, "cannot read the campaign: %s" % err) from err
         if self.meta.get("id") != campaign_id:
             raise TaskFailure(EXIT_USAGE, "campaign.json names another campaign")
-        self.indices = [int(x) for x in indices.split()]
+        # One line per backend task; a line may name several plan lines (a bundle of short
+        # cells, run one after the other). ``indices`` is the flat list, ``groups`` the positions
+        # in it per backend task.
+        self.indices = []
+        self.groups = []
+        for row in indices.splitlines():
+            numbers = [int(x) for x in row.split()]
+            if numbers:
+                self.groups.append(list(range(len(self.indices), len(self.indices) + len(numbers))))
+                self.indices += numbers
 
     def positions(self, index, chunk):
         start = index * chunk
-        if start >= len(self.indices) or index < 0:
+        if start >= len(self.groups) or index < 0:
             raise TaskFailure(EXIT_USAGE, "index %d is outside the submission" % index)
-        return list(range(start, min(start + chunk, len(self.indices))))
+        return [p for group in self.groups[start : start + chunk] for p in group]
 
     def task(self, position):
         line_no = self.indices[position]
@@ -342,6 +457,10 @@ def task_environment(task, toolchain, work, campaign_meta, attempt):
         # up on its own; LiveUploader below packs what it writes into bundles for the mirror.
         env["PNR_LIVE_DIR"] = str(work / ".yapnr" / "live")
         env["PNR_LIVE_CANDIDATE"] = task["id"]
+    if (campaign_meta.get("profile") or {}).get("enabled"):
+        # pnr.profile: each profiled process writes <key>.json (spans, hot functions) here, outside
+        # the outputs, so a profiled run's results are the same files; ``collect`` keeps the JSON.
+        env["PNR_PROFILE_DIR"] = str(work / ".yapnr" / "profiles")
     source = campaign_meta.get("source") or {}
     if source.get("commit"):
         env["YAPNR_ENGINE_REVISION"] = source["commit"]
@@ -789,6 +908,14 @@ def collect(task, work, logs, staging):
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(path, dest)
                 summary_files.append(str(rel))
+    profiles = work / ".yapnr" / "profiles"
+    if profiles.is_dir():
+        # The JSON records only (spans, the top functions); raw .pstats files stay behind.
+        for path in sorted(profiles.glob("*.json")):
+            if not path.name.endswith(".live.json"):
+                dest = staging / "profiles" / path.name
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(path, dest)
     lines = ["== stderr (last lines)"] + tail(logs / "stderr.log", LOG_TAIL_LINES // 2)
     lines += ["== stdout (last lines)"] + tail(logs / "stdout.log", LOG_TAIL_LINES // 2)
     (staging / "log.tail").write_text("\n".join(lines) + "\n")
@@ -1010,7 +1137,20 @@ def main(argv=None):
             runtime = (campaign.meta.get("image") or {}).get("runtime") or {}
             if runtime.get("python"):
                 toolchain["PYTHON"] = runtime["python"]
-        positions = campaign.positions(resolve_index(args.index), args.chunk)
+        index = resolve_index(args.index)
+        bucket = os.environ.get(CLAIM_ENV)
+        if bucket and args.chunk == 1 and args.index is None:
+            prefix = "campaigns/%s/submissions/%d.claims/" % (campaign.id, campaign.submission)
+            line = Claims(bucket, prefix, index).pick(len(campaign.groups))
+            if line is None:
+                print(json.dumps(dict(yapnr_task=None, event="nothing-to-claim")), flush=True)
+                return EXIT_OK
+            print(
+                json.dumps(dict(yapnr_task=None, event="claimed", index=index, line=line)),
+                flush=True,
+            )
+            index = line
+        positions = campaign.positions(index, args.chunk)
     except TaskFailure as failure:
         print(
             json.dumps(dict(yapnr_task=None, event="failure", reason=str(failure)[:300])),

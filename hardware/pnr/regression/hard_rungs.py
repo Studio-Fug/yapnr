@@ -1765,36 +1765,45 @@ def ufbga_partial(spec):
 
 # The rails rung: VCC split by the STM32F207's supply pins (VDD, VDDA with VREF+,
 # VBAT), each from its own header (VDDA from J5 by its balls, VDD from J6, VBAT from
-# J7 by C1), all three CANDIDATES of the supply plane In4 (pnr.plane_partition decides
-# each one plane or trace: owner review 2026-10-06 found VDD and VDDA earn the plane,
-# VBAT a trace, matching the rule's own current and terminal-count test). The layer
-# already has a dedicated ground plane elsewhere in the 6L stack, so the leftover of
-# In4 is left to VDD rather than repeating ``fill: GND`` here (power_spec.py: fill is
-# never a default). Currents and budgets [D]: VDD 0.15 A (the datasheet's run-mode
-# envelope), VDDA 0.02 A, VBAT 0.001 A; each rail's copper may drop 1 % of 3.3 V
-# (33 mV).
+# J7 by C1), all three CANDIDATES of the supply plane In4, with GND offered as the
+# leftover's taker too. Which of them get a territory and who takes the leftover is
+# the engine's decision, by routing the best alternatives (pnr.rail_alloc; owner,
+# 2026-10-06: "PnR feedback should drive the decision"); the rung forces no answer,
+# and its checks judge the partition's quality (plane_quality: no region its terminals
+# cannot use, none far beyond its need, no trunk far round, no fill net that already
+# has its own planes -- GND has In1 and In3 here) rather than which rail is traced.
+# Currents and budgets [D]: VDD 0.15 A (the datasheet's run-mode envelope), VDDA
+# 0.02 A, VBAT 0.001 A; each rail's copper may drop 1 % of 3.3 V (33 mV).
 RAIL_OF = {"VDD": "VDD", "VDDA": "VDDA", "VREF+": "VDDA", "VBAT": "VBAT"}
 RAIL_HEADERS = {"VDDA": ("J5", (2.5, 5.5)), "VDD": ("J6", (33.5, 5.5)), "VBAT": ("J7", (2.5, 33.0))}
 RAIL_CURRENT = {"VDD": 0.15, "VDDA": 0.02, "VBAT": 0.001}
 RAIL_BUDGET_MV = 33.0
 RAIL_CAPS = {"C1": "VDD", "C2": "VDD", "C3": "VDD", "C4": "VDD", "C5": "VDDA", "C6": "VBAT"}
-# VBAT (one ball, 0.001 A) is not given plane access: its ball fans out like an
-# ordinary signal (the "default" via class, a routable layer) rather than toward
-# the supply plane (owner review 2026-10-05, matching pnr.plane_partition's own
-# rule: current_width_floor_A / terminal count would trace it there too). This
-# rung still names it here and keeps it off the "planes" via class and
-# net_class.plane_layer explicitly (so VBAT's via is sized for a signal, not a
-# plane drop) rather than leaning on the general fallback alone -- but the
-# general case is covered now: pnr.route.detail.router.route_board itself calls
-# pnr.plane_partition.decide_rails before any routing and drops a candidate it
-# decides to trace from signal_nets/stack.plane_nets/tie_plane_layers, so a rung
-# that left VBAT in one plane_vcc class and one "planes" via class, like every
-# other candidate, would still route it as an ordinary trace rather than leaving
-# it a dead plane drop (owner review 2026-10-06 found the previous gap: the
-# router read only net_class.plane_layer, never this module's own decision).
-# pnr.plane_partition.for_route takes the same decision as a parameter and fails
-# loudly if a fresh recompute (the real terminal count) disagrees with it.
-TRACED_RAILS = {"VBAT"}
+RAIL_FILL_CANDIDATES = ["GND"]
+
+
+def plane_quality_check(
+    layer, candidates, currents=None, min_width_mm=1.0, lands=False, region=None
+):
+    """The ``plane_quality`` check of a partitioned layer (check_constraints.py,
+    pnr.plane_quality.judge): its regions make sense. ``region`` (an outer pour's
+    ``plane_partition`` entry's own ``region``) scopes reachability to it: a pad or
+    via elsewhere on the board reaches the net by some other path (a different
+    region, a via straight to an inner plane) and is not this zone's to answer for."""
+    out = dict(
+        id="plane-quality-" + layer.split(".")[0],
+        kind="plane_quality",
+        layer=layer,
+        candidates=list(candidates),
+        currents=dict(currents or {}),
+        min_width_mm=min_width_mm,
+        engine="plane_partition",
+    )
+    if lands:
+        out["lands"] = True
+    if region:
+        out["region"] = region
+    return out
 
 
 def ufbga_rails(spec):
@@ -1827,32 +1836,24 @@ def ufbga_rails(spec):
     classes = cons["net_class"]
     vcc = classes.pop("plane_vcc")
     for net in rails:
-        if net in TRACED_RAILS:
-            # No plane_layer: the router's own plane-net bookkeeping (drop-only
-            # treatment, _plane_nets in route/detail/router.py) is keyed off
-            # net_class.plane_layer, not plane_partition's candidate list. A rail
-            # the engine traces must also be an ordinary net here, routed point to
-            # point, or its via drop is planted and never joined further.
-            classes["trace_" + net.lower()] = dict(
-                {k: v for k, v in vcc.items() if k != "plane_layer"}, nets=[net]
-            )
-        else:
-            classes["plane_" + net.lower()] = dict(vcc, nets=[net])
+        # Every candidate keeps the plane class: a rail the engine traces is taken
+        # out of the plane bookkeeping by the allocation itself (route_board).
+        classes["plane_" + net.lower()] = dict(vcc, nets=[net])
     layer = vcc["plane_layer"]
     for x in spec["stackup"]["layers"]:
         if x.get("net") == "VCC":
             x["net"] = "VDD"
     (fanout,) = cons["fanout"]
-    fanout["via_classes"]["planes"]["nets"] = ["GND"] + [n for n in rails if n not in TRACED_RAILS]
+    fanout["via_classes"]["planes"]["nets"] = ["GND"] + rails
     cons["plane_partition"] = [
         dict(
             layer=layer,
             nets=rails,  # candidates: the engine decides each one plane or trace
             split_gap_mm=0.3,
             min_width_mm=1.0,
-            # No fill: a dedicated ground plane already exists elsewhere in this
-            # stack (owner review 2026-10-05), so the layer's leftover goes to
-            # whichever candidate(s) the engine keeps a plane, not repeated GND.
+            # The leftover: none (the plane rails compete), one of them, or GND; the
+            # engine chooses (no forced fill).
+            fill_candidates=list(RAIL_FILL_CANDIDATES),
             currents=dict(RAIL_CURRENT),
             # The fanout's access cells stay open to the caps' drops (seed 1: a VDD
             # cap's drop via closed B12's tail; stage 3c E4).
@@ -1863,9 +1864,11 @@ def ufbga_rails(spec):
     checks = [c for c in spec["checks"] if not (c["kind"] == "plane" and c["net"] == "VCC")]
     for c in checks:
         if c["id"] == "fanout-plane-vias":
-            # VBAT fans out on the "default" via class (above), not "planes": it
-            # keeps its own via-size check instead (fanout-escape covers its pad).
-            c["nets"] = ["GND"] + [n for n in rails if n not in TRACED_RAILS]
+            # Every candidate's plane vias, less a rail the route traced (its vias are
+            # then routing vias, judged as any signal's: the checker reads the routed
+            # rules' traced_rails).
+            c["nets"] = ["GND"] + rails
+            c["allocated"] = True
     for net in rails:
         sink = {"U1": sorted(balls[net])}
         entry = dict(
@@ -1884,16 +1887,15 @@ def ufbga_rails(spec):
             kind="rail_zones",
             layer=layer,
             nets=rails,
-            # The engine's own rule (current, then terminal count): VDD and VDDA
-            # earn the plane; VBAT, a 0.001 A rail off a single BGA ball, does not
-            # and is traced instead (owner review 2026-10-05: "I think a human
-            # would have allocated this entire plane to vdd and routed vbat on one
-            # of the signal layers").
-            trace_nets=["VBAT"],
+            # Candidates: each rail fills one piece or none (traced), at least one
+            # fills the layer; GND may take the leftover (plane_quality judges it).
+            candidates=True,
+            fill_candidates=list(RAIL_FILL_CANDIDATES),
             min_area_mm2=1.0,
             engine="plane_partition",
         )
     )
+    checks.append(plane_quality_check(layer, rails, RAIL_CURRENT, 1.0))
     have = {c["id"] for c in checks}
     for net, (ref, at) in sorted(RAIL_HEADERS.items()):
         if "fixed-" + ref not in have:
@@ -1914,8 +1916,9 @@ def ufbga_rails(spec):
     spec["description"] = (
         spec.get("description", "")
         + " With three supply rails (VDD, VDDA with VREF+, VBAT) from their own headers,"
-        " candidates of the supply plane's partition: the engine keeps VDD and VDDA on"
-        " the plane and traces VBAT, each within 33 mV of IR drop."
+        " candidates of the supply plane's partition (the engine decides each one plane"
+        " or trace, and who takes the leftover, by routing the best alternatives), each"
+        " within 33 mV of IR drop, the partition judged for sense."
     )
     spec["dims"]["parts"] = "rails"
     spec["features"] = sorted(set(spec["features"]) | {"plane-partition", "ir-drop"})
@@ -2011,17 +2014,21 @@ def buck_pour_rung(spec):
     """``spec`` (the four-layer buck stage) with its outer pours."""
     spec = deepcopy(spec)
     cons = spec["constraints"]
+    region = dict(refs=["U1", "L1", "C1"], margin_mm=0.6)
     cons["plane_partition"] = [
         dict(
             layer="F.Cu",
             nets=["VIN", "SW", "GND"],
-            region=dict(refs=["U1", "L1", "C1"], margin_mm=0.6),
+            region=region,
             terminals="pad",
             connect="solid",
             stitch_vias=3,
             split_gap_mm=0.2,
             min_width_mm=0.25,
         )
+    ]
+    spec["checks"] = list(spec.get("checks") or []) + [
+        plane_quality_check("F.Cu", ["VIN", "SW", "GND"], None, 0.25, lands=True, region=region)
     ]
     spec["name"] += "-pour"
     spec["dims"]["parts"] = "pour"

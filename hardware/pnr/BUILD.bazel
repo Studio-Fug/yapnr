@@ -155,6 +155,8 @@ filegroup(
         "pnr/ir_extract.py",
         "pnr/power_spec.py",
         "pnr/plane_partition.py",
+        # The plane_quality check's judge (plain Python; numpy only in the engine's half).
+        "pnr/plane_quality.py",
         "pnr/pour.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
@@ -881,8 +883,9 @@ py_test(
 )
 
 # Plane or trace, per candidate rail of a dedicated-plane plane_partition entry
-# (pnr.plane_partition._rail_decision, for_route): the engine's decision and its
-# reason, an outer pour (region) left untouched.
+# (pnr.plane_partition._rail_decision, for_route): the static rule of thumb (the
+# allocation search's prior and for_route's fallback) and its reason, an outer pour
+# (region) left untouched.
 py_test(
     name = "rail_candidates_test",
     size = "medium",
@@ -890,6 +893,39 @@ py_test(
     imports = ["."],
     legacy_create_init = False,
     main = "tests/test_rail_candidates.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+    ],
+)
+
+# Plane-partition quality (pnr.plane_quality): per-rail and per-layer metrics, the
+# penalty and ERC-style warnings, and the plain-Python judge of the plane_quality check.
+py_test(
+    name = "plane_quality_test",
+    size = "small",
+    srcs = ["tests/test_plane_quality.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_plane_quality.py",
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# The plane allocation search (pnr.rail_alloc): alternatives, hard constraints, the
+# screen, routed finalists, forcing, the static A/B arm and determinism.
+py_test(
+    name = "rail_alloc_test",
+    size = "medium",
+    srcs = ["tests/test_rail_alloc.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_rail_alloc.py",
     deps = [
         ":pnr",
         ":pnr_detail",

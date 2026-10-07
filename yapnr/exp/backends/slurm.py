@@ -280,7 +280,7 @@ class Slurm(Backend):
         store = LocalStore(root)
         return Stores(store, store)
 
-    def render(self, plan, config, cls, submission, indices, deadline) -> Dict[str, str]:
+    def render(self, plan, config, cls, submission, indices, deadline, job=None) -> Dict[str, str]:
         site = self.site(plan, config)
         chunk = int(plan.meta["backend"]["chunk"])
         files = {
@@ -305,7 +305,9 @@ class Slurm(Backend):
             written.append(path)
         return written
 
-    def launch(self, plan, config, cls, submission, files, stores, cloud=None, dry_run=False):
+    def launch(
+        self, plan, config, cls, submission, files, stores, cloud=None, dry_run=False, job=None
+    ):
         site = self.site(plan, config)
         chunk = int(plan.meta["backend"]["chunk"])
         indices = files["%s.indices" % cls.name].read_text().split()

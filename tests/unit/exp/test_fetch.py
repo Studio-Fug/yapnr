@@ -72,6 +72,9 @@ def write_shard(store, task, passed=True, platform="linux-x86_64", attempt="s1r0
     (summary / "provenance.json").write_text(json.dumps(provenance))
     (summary / "python-version.txt").write_text("numpy==1.26.4\n")
     record = {
+        "task": task["id"],
+        "kind": task["kind"],
+        "labels": task["labels"],
         "attempt": attempt,
         "backend": "gcp-batch",
         "wall_s": 20.0,
@@ -138,6 +141,36 @@ class FetchTest(unittest.TestCase):
         self.assertEqual(suite.get("tests"), "4")
         self.assertEqual(suite.get("failures"), "0")
         self.assertEqual(self.summary_check(run), 0)
+
+    def test_the_fetch_command_feeds_the_durations_history(self):
+        from yapnr.exp import cli, packing
+        from yapnr.exp import plan as planning
+
+        for task in self.tasks:
+            write_shard(self.store, task)
+        plan = self.tmp / "plan"
+        plan.mkdir()
+        meta = {
+            "schema": planning.PLAN_SCHEMA,
+            "id": CID,
+            "kind": "ladder-cell",
+            "visibility": "public",
+            "classes": [],
+            "backend": {"name": "gcp-batch"},
+        }
+        (plan / "campaign.json").write_text(json.dumps(meta))
+        (plan / "tasks.jsonl").write_text("".join(json.dumps(t) + "\n" for t in self.tasks))
+        config = testing.write_config(self.tmp)
+        args = ["--config", str(config), "fetch", str(plan), "--from", str(self.store)]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(args + ["--into", str(self.tmp / "f1")]), 0)
+        history = packing.load(str(self.tmp / "store" / "durations.json"))
+        cells = history["cells"]["ladder-cell"]
+        self.assertEqual(len(cells), 2)  # two cases; seeds share a cell
+        self.assertEqual(len(history["seen"]), 4)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(args + ["--into", str(self.tmp / "f2")]), 0)
+        self.assertEqual(len(packing.load(str(self.tmp / "store" / "durations.json"))["seen"]), 4)
 
     def test_a_failed_cell_fails_the_assembled_run(self):
         for n, task in enumerate(self.tasks):

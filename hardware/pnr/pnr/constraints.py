@@ -541,7 +541,15 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
         **(
             {
                 "plane_partition": [
-                    dict(p, nets=list(_expand_nets(p["nets"], net_names)))
+                    dict(
+                        p,
+                        nets=list(_expand_nets(p["nets"], net_names)),
+                        **{
+                            k: list(_expand_nets(p[k], net_names))
+                            for k in ("must_plane", "must_trace")
+                            if p.get(k)
+                        },
+                    )
                     for p in compiled.plane_partitions
                 ]
             }

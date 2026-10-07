@@ -24,17 +24,21 @@ import datetime as _dt
 import json
 import math
 import os
+import re
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from yapnr.exp import bundle, cost, image, kinds, spec
+from yapnr.exp import bundle, cost, image, kinds, packing, spec
 from yapnr.exp.config import Config
 
 PLAN_SCHEMA = "yapnr-campaign-plan-v1"
 BACKENDS = ("local", "gcp-batch", "slurm")
 WRAPPER = Path(__file__).resolve().parent / "task.py"
+# The wrapper version from which a line of ``submissions/<n>.indices`` may name several plan
+# lines (a bundle of short cells); plans with an older wrapper keep one cell per backend task.
+BUNDLE_WRAPPER_VERSION = 2
 DEFAULT_FAMILIES = ("c4d", "c3d", "t2d")
 
 
@@ -299,6 +303,62 @@ def candidate_rows(
     return out
 
 
+def packing_summary(packed: packing.Packing) -> Dict[str, Any]:
+    return {
+        "jobs": [
+            {
+                "tasks": len(job.groups),
+                "cells": len(job.lines),
+                "vms": job.vms,
+                "parallelism": job.parallelism,
+                "straggler": job.straggler,
+                "vm_hours": round(job.vm_hours, 4),
+                "makespan_s": round(job.makespan_s, 1),
+            }
+            for job in packed.jobs
+        ],
+        "utilisation": round(packed.utilisation, 3),
+        "notes": packed.notes,
+    }
+
+
+def wrapper_version(meta: Mapping[str, Any]) -> int:
+    return int((meta.get("wrapper") or {}).get("version", 1))
+
+
+def class_packing(
+    cls: ResourceClass,
+    lines: Sequence[int],
+    placement: cost.Placement,
+    config: Config,
+    table: cost.PriceTable,
+    *,
+    bundle: bool = True,
+    small: Optional[Tuple[int, float]] = None,
+) -> packing.Packing:
+    """How a submit lays ``lines`` of ``cls`` out on Batch jobs and VMs (``packing.pack``).
+
+    Seconds on the shape are the plan's predicted reference seconds / the placement's speed. At
+    most ``limits.max_parallel_vcpus`` of VMs run at once; a bundle's cells together stay within
+    ``limits.max_task_wall_s`` of wall-time limits (the Batch task's timeout covers them all).
+    """
+    seconds = {line: cls.reference_s[cls.lines.index(line)] / placement.speed for line in lines}
+    max_vms = max(1, config.limits.max_parallel_vcpus // max(1, placement.vm_vcpus))
+    members = max(1, int(config.limits.max_task_wall_s // max(1, cls.max_wall_s)))
+    return packing.pack(
+        lines,
+        seconds,
+        per_vm=placement.tasks_per_vm,
+        max_vms=max_vms,
+        overhead_s=table.task_overhead_s,
+        boot_s=table.vm_boot_s,
+        idle_s=table.vm_idle_s,
+        bundle=bundle and members > 1,
+        max_members=members,
+        small=small,
+    )
+
+
 def estimate(
     backend: str,
     classes: Sequence[ResourceClass],
@@ -308,8 +368,14 @@ def estimate(
     *,
     site=None,
     subset: Optional[Mapping[str, Sequence[int]]] = None,
+    packings: Optional[Mapping[str, packing.Packing]] = None,
+    bundle: bool = True,
 ) -> cost.Estimate:
-    """The estimate of ``classes`` (or of the lines in ``subset`` per class)."""
+    """The estimate of ``classes`` (or of the lines in ``subset`` per class).
+
+    On Batch each class is priced by the VM time of its packing (``packings``, else the one
+    ``class_packing`` makes, as a submit would).
+    """
     picked = []
     for cls in classes:
         lines = list(subset.get(cls.name, [])) if subset is not None else cls.lines
@@ -322,10 +388,13 @@ def estimate(
         rows = []
         for cls, lines, reference in picked:
             p = placements[cls.name]
-            parallel = cost.parallel_tasks(len(lines), p, limits.max_parallel_vcpus)
+            packed = (packings or {}).get(cls.name) or class_packing(
+                cls, lines, p, config, table, bundle=bundle
+            )
+            parallel = sum(job.parallelism for job in packed.jobs)
             # The longest one Batch attempt may run is maxRunDuration, not the task's own limit.
             attempt_s = float(cls.max_wall_s + cost.BATCH_ATTEMPT_GRACE_S)
-            rows.append((cls.name, p, reference, [attempt_s] * len(lines), parallel))
+            rows.append((cls.name, p, reference, [attempt_s] * len(lines), parallel, packed))
         return cost.estimate_gcp(
             table,
             rows,
@@ -342,6 +411,19 @@ def estimate(
     return cost.estimate_slurm(
         reference, cpus, site.max_concurrent * max(1, site.slots), speed=site.speed
     )
+
+
+def _family_speed(
+    table: cost.PriceTable, calibration: cost.Calibration, family: str
+) -> Optional[float]:
+    """A machine family's speed relative to the reference core (calibrated, else the table's)."""
+    measured = calibration.speed(family, family)
+    if measured:
+        return measured
+    try:
+        return float(table.family(family)["speed_vs_reference"])
+    except (cost.CostError, KeyError):
+        return None
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -369,6 +451,7 @@ def make_plan(
     opener: Optional[Callable] = None,
     price_table: Optional[cost.PriceTable] = None,
     calibration: Optional[cost.Calibration] = None,
+    durations: Optional[str] = None,
 ) -> "Plan":
     if backend not in BACKENDS:
         raise PlanError("backend is one of %s" % ", ".join(BACKENDS))
@@ -492,11 +575,22 @@ def make_plan(
         shutil.rmtree(out, ignore_errors=True)
         raise PlanError("the campaign expands to no tasks")
 
+    # Predicted reference seconds per task: measured history, the calibration, the kind's default.
+    try:
+        history = packing.load(durations if durations is not None else config.durations_path)
+    except (OSError, ValueError) as err:
+        shutil.rmtree(out, ignore_errors=True)
+        raise PlanError("durations history: %s" % err) from err
+    predictor = packing.Predictor(
+        history, speed=lambda family: _family_speed(table, calibration, family)
+    )
     reference = []
     for task in tasks:
         key = task["labels"].get("case") or task["labels"].get("rung") or ""
-        measured = calibration.reference_seconds(task["kind"], key)
-        reference.append(measured if measured is not None else kind.reference_seconds(task))
+        seconds, _ = predictor.predict(
+            task, kind.reference_seconds(task), calibration.reference_seconds(task["kind"], key)
+        )
+        reference.append(seconds)
     classes = resource_classes(tasks, reference)
 
     placements: Dict[str, cost.Placement] = {}
@@ -515,7 +609,12 @@ def make_plan(
             template=template,
         )
         placements = {name: options[0] for name, options in candidates.items()}
-    est = estimate(backend, classes, placements, config, table, site=site_config)
+    packings = {
+        cls.name: class_packing(cls, cls.lines, placements[cls.name], config, table)
+        for cls in classes
+        if cls.name in placements
+    }
+    est = estimate(backend, classes, placements, config, table, site=site_config, packings=packings)
     caps = None
     if backend == "gcp-batch":
         check = cost.check_caps(
@@ -559,16 +658,28 @@ def make_plan(
             **({"runtime": dict(campaign["runtime"])} if "runtime" in campaign else {}),
         },
         **({"live": live_cfg} if live_cfg is not None else {}),
+        # [profile]: every task's PnR processes write pnr.profile records (yapnr exp profile).
+        **(
+            {"profile": {"enabled": bool(campaign["profile"].get("enabled", False))}}
+            if "profile" in campaign
+            else {}
+        ),
         "bundles": sorted({i["bundle"] for t in tasks for i in t["inputs"]}),
         "task_count": len(tasks),
         "task_hashes": {t["id"]: spec.spec_hash(t) for t in tasks},
-        "wrapper": {"sha256": spec.sha256_hex(wrapper)},
+        "wrapper": {"sha256": spec.sha256_hex(wrapper), "version": _wrapper_version(wrapper)},
+        "prediction": {
+            "durations": durations if durations is not None else config.durations_path,
+            "sources": dict(sorted(predictor.sources.items())),
+        },
         "classes": [c.to_json() for c in classes],
         "backend": {"name": backend},
         "placements": {k: v.to_json() for k, v in placements.items()},
         # Where a submit may place each class instead, in order (one entry: no choice).
         "candidates": candidate_rows(classes, candidates, config, table) if candidates else {},
         "estimate": est.to_json(),
+        # How a submit of every task would lay each class out (submit packs its pending tasks).
+        "packing": {name: packing_summary(p) for name, p in packings.items()},
         "caps": caps,
         "prices": (
             {"table": table.path, "accessed": table.accessed} if backend == "gcp-batch" else None
@@ -602,6 +713,11 @@ def make_plan(
 
     backends.get(backend).preview(plan, config)
     return plan
+
+
+def _wrapper_version(text: bytes) -> int:
+    match = re.search(rb"^WRAPPER_VERSION = (\d+)\b", text, re.M)
+    return int(match.group(1)) if match else 1
 
 
 class Plan:

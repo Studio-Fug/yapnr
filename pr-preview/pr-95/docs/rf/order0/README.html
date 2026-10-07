@@ -1,0 +1,710 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+        <link rel="prefetch" href="../../../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../../../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Order 0: OSH Park 4-layer RF demo and fab-model coupons - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../plane-partition.html">How plane partition works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../ci-lanes.html">CI lanes and Bazel caches</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/rf/order0/README.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/rf/order0/README.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="order-0-osh-park-4-layer-rf-demo-and-fab-model-coupons">
+<h1>Order 0: OSH Park 4-layer RF demo and fab-model coupons<a class="headerlink" href="#order-0-osh-park-4-layer-rf-demo-and-fab-model-coupons" title="Link to this heading">¶</a></h1>
+<p><strong>Status: pre-registration in preparation.</strong> Nothing has been uploaded, ordered or measured.
+The boards, predictions and criteria on these pages are drafts until the pre-registration release
+(below) is published; after that, predictions and criteria are never edited, and results are added
+as new commits next to them, misses included.</p>
+<p>Order 0 is a small OSH Park 4-layer order that carries two things on one lot:</p>
+<ol class="arabic simple">
+<li><p><strong>Fab-model coupons</strong> that measure what OSH Park actually builds (dielectric constant and loss
+of the prepreg and core, heights, copper, etch, solder mask) with a two-port VNA and multiline
+TRL, using yapnr’s coupon extraction (<a class="reference internal" href="../../rf-fab-coupons.html"><span class="std std-doc">user guide</span></a>).</p></li>
+<li><p><strong>Microstrip designs made by yapnr’s RF optimizer</strong> (a 3-port power divider on each of two
+cross-sections), measured against their own pre-registered simulations and against a textbook
+design built the way a designer would, with the same launches and the same pass/fail table.</p></li>
+</ol>
+<p>The QR code on the boards’ tag stick points here.</p>
+<section id="the-three-uploads">
+<h2>The three uploads<a class="headerlink" href="#the-three-uploads" title="Link to this heading">¶</a></h2>
+<p>All three are OSH Park standard 4-layer, FR408HR (the EM528 alternate is covered by the same
+models), 1.6 mm, ENIG, purple mask, 3 copies each, one frameless outline per upload: the sticks
+are separated by 2.54 mm milled slots and held by OSH Park’s suggested mouse-bite tabs, at least
+two per stick, only on edges that carry no connector (a 2-port stick’s long sides, a 3-port
+demo’s fourth edge), so every launch edge is a clean milled edge. Every port is a Cinch
+142-0701-851 edge-launch SMA. Costs are OSH Park’s standard 4-layer price, $10 per square inch of
+the bounding rectangle, for 3 copies.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Upload</p></th>
+<th class="head"><p>Contents</p></th>
+<th class="head"><p>Size</p></th>
+<th class="head"><p>Cost</p></th>
+<th class="head"><p>SMAs per copy</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>O0-M</strong></p></td>
+<td><p>the thin-microstrip (region M) coupons, R1, A16, A04R, the tag</p></td>
+<td><p>120.1 × 144.3 mm, 26.9 sq in</p></td>
+<td><p>$269</p></td>
+<td><p>33</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>O0-W</strong></p></td>
+<td><p>the thick-microstrip (region W) calibration set, R1t, D2 (<code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>), QR B15</p></td>
+<td><p>54.0 × 158.7 mm, 13.3 sq in</p></td>
+<td><p>$133</p></td>
+<td><p>16</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>O0-D</strong></p></td>
+<td><p>the D1 window (<code class="docutils literal notranslate"><span class="pre">d1-star</span></code>, re-optimized under the fixed corner-gap DRC), an R1 copy, a thru, a 9 mm and a 30 mm line, QR stick A15</p></td>
+<td><p>118.2 × 50.0 mm, 9.16 sq in</p></td>
+<td><p>$91.57</p></td>
+<td><p>12</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>O0-W carries D2’s nearest miss, <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code> (label <code class="docutils literal notranslate"><span class="pre">03b7d938</span></code>), as a pre-registered design
+that misses its spec, by the owner default recorded in the
+<a class="reference internal" href="preregistration.html"><span class="std std-doc">pre-registration</span></a> (the owner confirms or overrides it before the release),
+and the small QR stick B15 to <a class="reference internal" href="predictions/D2/README.html"><span class="std std-doc">predictions/D2</span></a>. Its Gerber zip’s sha256
+is in <a class="reference internal" href="#fab/O0-W.sha256"><span class="xref myst">fab/O0-W.sha256</span></a>.</p>
+<p>D1 passed (<code class="docutils literal notranslate"><span class="pre">d1-star</span></code>, label <code class="docutils literal notranslate"><span class="pre">O0</span> <span class="pre">D1</span> <span class="pre">divider-osh-m</span> <span class="pre">7e070ca8</span></code>, superseding part 2’s <code class="docutils literal notranslate"><span class="pre">ad20e643</span></code>):
+the part 2 export reproduced two 0.100 mm corner-gap violations against OSH Park’s 0.127 mm rule
+under PR #53’s fixed exact-corner-gap DRC, so D1 was re-optimized from the same four
+formulations under that fixed checker (<a class="reference internal" href="predictions/D1-d1c/README.html"><span class="std std-doc">predictions/D1-d1c</span></a>);
+<code class="docutils literal notranslate"><span class="pre">d1-star</span></code> is again the only formulation that passes coarse/fine/finer, now with a DRC-clean
+export (134 repaired pixels, 24 floating islands, vs 30/14 under the old checker). O0-D is
+regenerated with <code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_CLI=&lt;headless</span> <span class="pre">kicad-cli&gt;</span> <span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.coupons</span> <span class="pre">generate</span> <span class="pre">--stackup</span> <span class="pre">OSHPARK-4L-FR408HR</span> <span class="pre">--upload</span> <span class="pre">D</span> <span class="pre">--out</span> <span class="pre">examples/rf-coupons/order0/O0-D</span></code>: KiCad DRC 0
+violations, 0 unconnected (10.0.6); <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">build</span></code> 0 errors (2 pre-existing informational
+warnings: merged non-plated drill file, stackup thickness, the same pattern O0-W’s build has).
+Its Gerber zip’s sha256 is in <a class="reference internal" href="#fab/O0-D.sha256"><span class="xref myst">fab/O0-D.sha256</span></a>.</p>
+<p>Two solvers carry a prediction for this D1, compared like for like on nominal FR408HR: yapnr.rf’s
+own FDTD on M-nom puts it at the −20 dB |S11| spec line (−19.70 / −20.02 / −20.05 dB coarse /
+fine / finer; it passes the selection criteria with a 0.282 dB margin, and −20.77 dB on its M-eq
+design substrate), and an independent openEMS 0.37 run (43 µm copper, 0.05 mm mesh) predicts a
+2.9 dB <strong>miss</strong> (−17.10 dB), essentially part 2’s finding on the old export; the two agree on
+|S21| within 0.14 dB. A third, Palace (FEM), was <strong>not run</strong> for D1 or R1 this round: this
+workflow’s separate $8 GCP cap left too little margin after the resubmission and validation
+campaigns, and Palace also needs a new divider-shaped planar adapter; open item for a follow-up.
+Details, campaign ids and the three-solver table are in
+<a class="reference internal" href="predictions/D1-d1c/README.html"><span class="std std-doc">predictions/D1-d1c/README.md</span></a>.</p>
+<p>The KiCad projects, catalogues and DRC results are in
+<a class="reference internal" href="#../../../examples/rf-coupons/order0/README.md"><span class="xref myst">examples/rf-coupons/order0/</span></a>.</p>
+<p><img alt="O0-M, the top copper, mask openings (light) and silkscreen as KiCad renders them: one outline,the sticks held by tabs with three mouse-bite holes each side" src="../../../images/O0-M.png" /></p>
+<p><img alt="O0-W: the W calibration set, R1t, the QR stick B15 and D2 (d2-star-sched) in its window" src="../../../images/O0-W.png" /></p>
+<p><img alt="O0-D: the filled D1 window (, 7e070ca8), R1, the thru and lines, and QR stick A15, turned 90°" src="../../../images/O0-D.png" /></p>
+<section id="cross-sections">
+<h3>Cross-sections<a class="headerlink" href="#cross-sections" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Region</p></th>
+<th class="head"><p>Signal over</p></th>
+<th class="head"><p>Dielectric</p></th>
+<th class="head"><p>50 Ω line</p></th>
+<th class="head"><p>L1 ground kept away</p></th>
+<th class="head"><p>Stick width</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>M</strong></p></td>
+<td><p>L1 over In1.Cu</p></td>
+<td><p>0.200 mm FR408HR prepreg</p></td>
+<td><p>0.40 mm (4 pixels of the optimizer’s 0.10 mm grid)</p></td>
+<td><p>1.0 mm (5 h)</p></td>
+<td><p>12 mm</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>W</strong></p></td>
+<td><p>L1 over B.Cu, In1/In2 removed</p></td>
+<td><p>0.200 + 0.991 + 0.200 mm</p></td>
+<td><p>3.0 mm (6 pixels of 0.50 mm)</p></td>
+<td><p>4.2 mm (3 h)</p></td>
+<td><p>16 mm</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The solder mask is open over all RF copper and its keep-away (the optimizer has no mask model),
+with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.</p>
+</section>
+<section id="o0-m-sticks">
+<h3>O0-M sticks<a class="headerlink" href="#o0-m-sticks" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stick</p></th>
+<th class="head"><p>Structure</p></th>
+<th class="head"><p>Size (mm)</p></th>
+<th class="head"><p>What it determines</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>A01</p></td>
+<td><p>thru: two launch halves (also the launch-only 2x-thru)</p></td>
+<td><p>20 × 12</p></td>
+<td><p>mTRL thru; launch quality and repeatability</p></td>
+</tr>
+<tr class="row-odd"><td><p>A02-A05</p></td>
+<td><p>M lines, ΔL 4.5, 13, 30, 70 mm</p></td>
+<td><p>24.5-90 × 12</p></td>
+<td><p>γ(f): εeff and loss</p></td>
+</tr>
+<tr class="row-even"><td><p>A06</p></td>
+<td><p>reflect: the line open at both reference planes</p></td>
+<td><p>30 × 12</p></td>
+<td><p>mTRL reflect</p></td>
+</tr>
+<tr class="row-odd"><td><p>A07</p></td>
+<td><p>verification line, ΔL 21 mm</p></td>
+<td><p>41 × 12</p></td>
+<td><p>residual calibration error</p></td>
+</tr>
+<tr class="row-even"><td><p>A08, A09</p></td>
+<td><p>width set: 0.28 and 0.56 mm over 30 mm</p></td>
+<td><p>50 × 12</p></td>
+<td><p>Z0(w), α(w): etch, height, εr, the copper-thickness bias</p></td>
+</tr>
+<tr class="row-odd"><td><p>A10</p></td>
+<td><p>the 0.40 mm line under mask over 30 mm</p></td>
+<td><p>50 × 12</p></td>
+<td><p>mask Dk × thickness: OSH Park’s default against mask-open</p></td>
+</tr>
+<tr class="row-even"><td><p>A11</p></td>
+<td><p>ring, fed directly, the feeds a quarter turn apart (notches at n = 1 and 3: 1.92 and 5.79 GHz)</p></td>
+<td><p>56 × 36</p></td>
+<td><p>held out: εeff</p></td>
+</tr>
+<tr class="row-odd"><td><p>A12</p></td>
+<td><p>open λ/4 stub, notch at 5.5 GHz, on a 15 mm line</p></td>
+<td><p>35 × 19</p></td>
+<td><p>held out: the open-end and T-junction models</p></td>
+</tr>
+<tr class="row-even"><td><p>A14</p></td>
+<td><p>30 mm line with a shunt 0402 100 Ω 5 mm from RP1</p></td>
+<td><p>50 × 12</p></td>
+<td><p>switch terms (both orientations)</p></td>
+</tr>
+<tr class="row-odd"><td><p>A15</p></td>
+<td><p>4-wire meanders on L1 (0.20 × 200 mm, 0.50 × 250 mm), microsection lines, QR and tag</p></td>
+<td><p>68 × 24</p></td>
+<td><p>w·t and etch; microsection; this page</p></td>
+</tr>
+<tr class="row-even"><td><p>A16</p></td>
+<td><p>6 mm and 12 mm square pads, each at the reference plane of a launch</p></td>
+<td><p>50 × 16</p></td>
+<td><p>h (and so the absolute Z0) from C at 0.1-1 GHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>A04R</p></td>
+<td><p>A04 turned 90°</p></td>
+<td><p>12 × 50</p></td>
+<td><p>glass-weave direction</p></td>
+</tr>
+<tr class="row-even"><td><p>R1</p></td>
+<td><p>textbook divider: T-junction + λ/4 35.36 Ω transformer [Pozar §7.2, §5.5]</p></td>
+<td><p>30 × 38</p></td>
+<td><p>the reference for D1</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="o0-w-sticks">
+<h3>O0-W sticks<a class="headerlink" href="#o0-w-sticks" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stick</p></th>
+<th class="head"><p>Structure</p></th>
+<th class="head"><p>Size (mm)</p></th>
+<th class="head"><p>What it determines</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>B01-B04</p></td>
+<td><p>W thru and lines, ΔL 5, 14, 34 mm</p></td>
+<td><p>20-54 × 16</p></td>
+<td><p>γ(f) of W: the core’s Dk, which region M cannot see</p></td>
+</tr>
+<tr class="row-odd"><td><p>B05</p></td>
+<td><p>reflect, open at both reference planes</p></td>
+<td><p>30 × 16</p></td>
+<td><p>mTRL reflect</p></td>
+</tr>
+<tr class="row-even"><td><p>R1t</p></td>
+<td><p>the textbook divider on W</p></td>
+<td><p>33 × 50</p></td>
+<td><p>the reference for D2</p></td>
+</tr>
+<tr class="row-odd"><td><p>D2</p></td>
+<td><p>the optimizer’s thick divider <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code> (20 × 24 mm window), feeds, keep-away</p></td>
+<td><p>40 × 52</p></td>
+<td><p>D2: a pre-registered miss of its spec (owner default)</p></td>
+</tr>
+<tr class="row-even"><td><p>B15</p></td>
+<td><p>QR to predictions/D2 and the tag text</p></td>
+<td><p>25 × 25</p></td>
+<td><p>this page</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="o0-d-sticks">
+<h3>O0-D sticks<a class="headerlink" href="#o0-d-sticks" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stick</p></th>
+<th class="head"><p>Structure</p></th>
+<th class="head"><p>Size (mm)</p></th>
+<th class="head"><p>What it determines</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>D1</p></td>
+<td><p>the optimizer’s thin divider (12 × 15 mm, <code class="docutils literal notranslate"><span class="pre">d1-star</span></code>, label <code class="docutils literal notranslate"><span class="pre">7e070ca8</span></code>), feeds and keep-away</p></td>
+<td><p>29 × 41</p></td>
+<td><p>the headline demo (at the spec line on yapnr.rf, misses on openEMS)</p></td>
+</tr>
+<tr class="row-odd"><td><p>A15</p></td>
+<td><p>small QR label stick to <a class="reference internal" href="predictions/D1-d1c/README.html"><span class="std std-doc">predictions/D1-d1c</span></a></p></td>
+<td><p>25 × 25</p></td>
+<td><p>this page</p></td>
+</tr>
+<tr class="row-even"><td><p>R1</p></td>
+<td><p>a copy of O0-M’s R1</p></td>
+<td><p>30 × 38</p></td>
+<td><p>D1 and a reference on one lot</p></td>
+</tr>
+<tr class="row-odd"><td><p>A01, A20, A04</p></td>
+<td><p>thru and lines ΔL 9 and 30 mm</p></td>
+<td><p>20, 29, 50 × 12</p></td>
+<td><p>this lot’s εeff, loss and relative Z0 (the 9 mm line covers 5-6 GHz)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="the-demos-and-their-references">
+<h3>The demos and their references<a class="headerlink" href="#the-demos-and-their-references" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Demo</p></th>
+<th class="head"><p>Specification</p></th>
+<th class="head"><p>Window</p></th>
+<th class="head"><p>Reference</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>D1 (O0-D)</p></td>
+<td><p>4.25-5.75 GHz: |S11| ≤ −20 dB, |S21|, |S31| ≥ −3.4 dB (confirmed by run 0b)</p></td>
+<td><p>region M, 12 × 15 mm, ports W / N / S</p></td>
+<td><p>R1: arm 0.70 × 9.0 mm (9.2 mm to the junction centre)</p></td>
+</tr>
+<tr class="row-odd"><td><p>D2 (O0-W)</p></td>
+<td><p>the same</p></td>
+<td><p>region W, 20 × 24 mm, ports W / N / S</p></td>
+<td><p>R1t: arm 5.0 × 9.25 mm (10.75 mm to the centre)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Each demo port has exactly the coupons’ launch (10 mm from the milled edge to its reference plane)
+and a straight feed (3 mm on M, 4 mm on W) to the window, so the comparison plane is the
+optimizer’s own port plane. No other L1 copper lies within 1.0 mm (M) or 4.2 mm (W) of a window.</p>
+<p>R1 and R1t are drawn as a designer would: the arm is the 2D-solved width nearest the ideal
+transformer impedance, a quarter wave long at 5.0 GHz counted from the T-junction’s reference
+plane, which lies 0.37 mm (M) and 2.18 mm (W) beyond the output line’s centre line (Hammerstad’s
+T-junction model). Counted to the centre line instead, R1 would sit 4 % and R1t 25 % high in
+frequency. Every edge lies on the grid the optimizer’s FDTD predicts them on: 0.05 mm (M) and
+0.25 mm (W), its second refinement (R1’s 0.70 mm arm cannot be centred on the 0.10 mm grid).</p>
+</section>
+</section>
+<section id="pages">
+<h2>Pages<a class="headerlink" href="#pages" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="preregistration.html"><span class="std std-doc">Pre-registration</span></a>: what is frozen before upload, the draft criteria and
+the analysis order.</p></li>
+<li><p><a class="reference internal" href="measurement.html"><span class="std std-doc">Measurement procedure</span></a>: the LibreVNA set-up, the two-tier calibration and the
+sequence per copy.</p></li>
+<li><p><a class="reference internal" href="predictions/README.html"><span class="std std-doc">Predictions</span></a>: the coupons’ expected S-parameters on FR408HR and EM528,
+and the places for D1 and D2.</p></li>
+<li><p><a class="reference internal" href="demos.html"><span class="std std-doc">Demos</span></a>: D1’s and D2’s specs, substrates (thickness-equivalent) and formulations,
+the references’ forward runs, and run 0b (the solver’s loss correction and the |S21|
+criterion).</p></li>
+</ul>
+</section>
+<section id="regenerating">
+<h2>Regenerating<a class="headerlink" href="#regenerating" title="Link to this heading">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="nv">YAPNR_KICAD_CLI</span><span class="o">=</span>&lt;headless<span class="w"> </span>kicad-cli&gt;<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons<span class="w"> </span>generate<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--stackup<span class="w"> </span>OSHPARK-4L-FR408HR<span class="w"> </span>--upload<span class="w"> </span>M<span class="w"> </span>--out<span class="w"> </span>examples/rf-coupons/order0/O0-M
+python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons<span class="w"> </span>expected<span class="w"> </span>--stackup<span class="w"> </span>OSHPARK-4L-FR408HR<span class="w"> </span>--upload<span class="w"> </span>M<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--out<span class="w"> </span>docs/rf/order0/predictions/coupons/O0-M
+yapnr<span class="w"> </span>fab<span class="w"> </span>check<span class="w"> </span>examples/rf-coupons/order0/O0-M/O0-M.kicad_pcb<span class="w"> </span>--vendor<span class="w"> </span>oshpark<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--profile<span class="w"> </span>oshpark-4l<span class="w"> </span>--stackup<span class="w"> </span>oshpark-4l-fr408hr
+</pre></div>
+</div>
+<p>(and <code class="docutils literal notranslate"><span class="pre">--upload</span> <span class="pre">W</span></code>, <code class="docutils literal notranslate"><span class="pre">--upload</span> <span class="pre">D</span></code>).</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Order 0: OSH Park 4-layer RF demo and fab-model coupons</a><ul>
+<li><a class="reference internal" href="#the-three-uploads">The three uploads</a><ul>
+<li><a class="reference internal" href="#cross-sections">Cross-sections</a></li>
+<li><a class="reference internal" href="#o0-m-sticks">O0-M sticks</a></li>
+<li><a class="reference internal" href="#o0-w-sticks">O0-W sticks</a></li>
+<li><a class="reference internal" href="#o0-d-sticks">O0-D sticks</a></li>
+<li><a class="reference internal" href="#the-demos-and-their-references">The demos and their references</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#pages">Pages</a></li>
+<li><a class="reference internal" href="#regenerating">Regenerating</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

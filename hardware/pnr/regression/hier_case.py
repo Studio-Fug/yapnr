@@ -934,6 +934,14 @@ def run(root, seed):
             indent=2,
         )
     )
+    if getattr(best["route"], "traced_rails", None):
+        # plane_partition candidates the top-level allocation traced (pnr.rail_alloc):
+        # ordinary nets for writeback, the planes stage and the checks, as they were
+        # for routing (route_case.py's own rewrite; this driver wrote rules.json above).
+        from pnr.rail_alloc import routed_rules
+
+        rules = routed_rules(rules, best["route"].traced_rails)
+        (root / "rules.json").write_text(json.dumps(rules, indent=2))
     legal = not any(hard_violations(placed, constraints).values())
     converged = best["missing"] == 0 and not unrouted
     templates = [

@@ -38,7 +38,7 @@ Layers are referred to by name, for up to KiCad's 32 copper layers. Pure stdlib.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Sequence, Tuple
 
 # KiCad layer types (pcbnew LT_SIGNAL, LT_POWER, LT_MIXED, LT_JUMPER) by value.
@@ -103,6 +103,16 @@ class Stack:
                 for n in x.nets:
                     out.setdefault(n, x.name)
         return out
+
+    def without(self, nets) -> "Stack":
+        """This stack with ``nets`` no longer plane nets of any layer (a plane layer
+        keeps its other nets)."""
+        drop = set(nets)
+        layers = tuple(
+            replace(x, nets=tuple(n for n in x.nets if n not in drop)) if x.nets else x
+            for x in self.layers
+        )
+        return replace(self, layers=layers)
 
     def net_planes(self, net: str) -> List[str]:
         """The dedicated plane layers of ``net``, outer to outer."""
@@ -693,3 +703,8 @@ def _within(r: Region, p, inset) -> bool:
     if not (_inside(r.outline, p) and _edge_distance(r.outline, p) >= inset):
         return False
     return not any(_inside(h, p) or _edge_distance(h, p) < inset for h in r.holes)
+
+
+def without_nets(stack: "Stack", nets) -> "Stack":
+    """:meth:`Stack.without` (writeback's traced plane_partition candidates)."""
+    return stack.without(nets)

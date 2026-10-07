@@ -307,6 +307,7 @@ CAMPAIGN_KEYS = {
     "determinism",
     "inputs",
     "live",
+    "profile",
 }
 LIVE_KEYS = {"enabled", "interval_s", "mode"}
 LIVE_MODES = ("thin", "full")
@@ -425,6 +426,12 @@ def campaign_errors(campaign: Any) -> List[str]:
         errors.append("determinism must be one of %s" % ", ".join(DETERMINISM))
     if "live" in campaign:
         errors += live_errors(campaign["live"])
+    if "profile" in campaign:
+        profile = campaign["profile"]
+        if not isinstance(profile, dict) or set(profile) - {"enabled"}:
+            errors.append("profile is a table {enabled}")
+        elif not isinstance(profile.get("enabled", False), bool):
+            errors.append("profile.enabled is a boolean")
     inputs = campaign.get("inputs", [])
     if not isinstance(inputs, list):
         errors.append("inputs is an array of tables")

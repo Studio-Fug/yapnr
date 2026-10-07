@@ -77,6 +77,7 @@ OPTIONS = {
     "route_compact": (bool, str),
     "macro_hull": bool,
     "hull_dovetail": (int, float),
+    "rail_alloc": str,
 }
 FLAGS = {
     "packed_maze": "--packed-maze",
@@ -176,6 +177,8 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
     if compact_parts:
         # PNR_ROUTE_COMPACT (hardware/pnr/pnr/place/route_compact.py): true for every part.
         args += ["--route-compact", "1" if compact_parts is True else str(compact_parts)]
+    if options.get("rail_alloc"):
+        args += ["--rail-alloc", options["rail_alloc"]]  # PNR_RAIL_ALLOC (pnr.rail_alloc)
     return args
 
 
@@ -234,6 +237,8 @@ class LadderCell(base.Kind):
                     errors.append("%s.%s has the wrong type" % (where, key))
             if options.get("fab_profile", "legacy") not in FAB_PROFILES:
                 errors.append("%s.fab_profile is one of %s" % (where, ", ".join(FAB_PROFILES)))
+            if options.get("rail_alloc", "search") not in ("search", "static"):
+                errors.append("%s.rail_alloc is search or static" % where)
             off = options.get("compact_off")
             if isinstance(off, list) and any(p not in COMPACT_PARTS for p in off):
                 errors.append(

@@ -917,6 +917,12 @@ class SuiteEnvScrubbing(unittest.TestCase):
         self.assertNotIn("PNR_PACKED_MAZE", env)
         self.assertEqual(env["PATH"], "/usr/bin")
 
+    def test_the_profile_dir_passes(self):
+        # Telemetry like PNR_LIVE_*: yapnr exp's [profile] sets it for pnr.profile records.
+        env = scrubbed_suite_env({"PNR_PROFILE_DIR": "/work/profiles", "PNR_SHRINK": "1"})
+        self.assertEqual(env["PNR_PROFILE_DIR"], "/work/profiles")
+        self.assertNotIn("PNR_SHRINK", env)
+
     def test_no_live_vars_is_unaffected(self):
         env = scrubbed_suite_env({"PATH": "/usr/bin", "PNR_SHRINK": "1"}, PNR_LOCAL_PRESSURE="1")
         self.assertNotIn("PNR_SHRINK", env)

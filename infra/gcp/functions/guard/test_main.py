@@ -76,7 +76,10 @@ def budget(cost, amount=50.0, start="2026-10-01T07:00:00Z"):
 class BudgetGuardTest(unittest.TestCase):
     def test_below_the_budget_nothing_happens(self):
         http = FakeHttp([job("a")])
-        self.assertEqual(main.handle_budget(budget(45.0), http, CFG, NOW)["action"], "none")
+        summary = main.handle_budget(budget(45.0), http, CFG, NOW)
+        self.assertEqual(summary["action"], "none")
+        # The amounts are logged with the ratio (yapnr exp spend reads them).
+        self.assertEqual((summary["cost"], summary["budget"]), (45.0, 50.0))
         self.assertEqual(http.calls, [])
 
     def test_at_the_budget_freeze_and_cancel_yapnr_jobs_only(self):

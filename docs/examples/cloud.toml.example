@@ -68,6 +68,8 @@ isolate_home = true
 [prices]
 # table = "~/.cache/yapnr/exp/gcp-spot-prices.json"   # default: the committed snapshot
 # calibration = "~/.config/yapnr/calibration.json"   # default: PassMark estimates
+# durations = "~/yapnr-runs/durations.json"   # task-duration history (`yapnr exp durations ingest`)
+# budget_usd = 100     # the monthly budget the budget guard reports a ratio of (`yapnr exp spend`)
 
 # --- A Slurm site (`--backend slurm --site example-site`). Paths are expanded on the site.
 [slurm.example-site]

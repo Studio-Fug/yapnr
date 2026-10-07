@@ -11,12 +11,16 @@
    with elements pending or running), so a repeated submit never runs and bills a task twice;
 5. choose where each class runs (Batch: the first candidate whose region has Spot quota for one
    more VM, ``choose``);
-6. estimate them, apply the per-submit caps, and ask for confirmation above ``confirm_usd``;
-7. per class: take the next submission number, write ``submissions/<n>.indices``, render the
-   backend's artefacts, launch them and write ``submissions/<n>.json`` (with the choice and why).
+6. lay each class out (``layout``: on Batch the packing of ``yapnr.exp.packing``, one or two
+   jobs, longest tasks first, short cells bundled; elsewhere one submission in plan order);
+7. estimate them (on Batch by the VM time of that layout), apply the per-submit caps, and ask for
+   confirmation above ``confirm_usd``;
+8. per job: take the next submission number, write ``submissions/<n>.indices`` (one line per
+   backend task, the plan lines it runs), render the backend's artefacts, launch them and write
+   ``submissions/<n>.json`` (with the choice, the packing and why).
 
-A submission is one resource class on one backend, region and shape: one Batch job, one Slurm
-array or one local pool entry.
+A submission is one job of one resource class on one backend, region and shape: one Batch job,
+one Slurm array or one local pool entry.
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from yapnr.exp import cost
+from yapnr.exp import cost, packing
 from yapnr.exp import plan as planning
 from yapnr.exp.config import Config
 from yapnr.exp.store import FROZEN, Store
@@ -181,9 +185,31 @@ class Backend:
         submission: int,
         indices: Sequence[int],
         deadline: int,
+        job: Optional[packing.Job] = None,
     ) -> Dict[str, str]:
-        """The artefacts of one submission, by file name."""
+        """The artefacts of one submission, by file name (``job``: its layout, from ``layout``)."""
         raise NotImplementedError
+
+    def layout(
+        self,
+        plan: planning.Plan,
+        config: Config,
+        cls: planning.ResourceClass,
+        lines: Sequence[int],
+        cloud=None,
+    ) -> List[packing.Job]:
+        """The submissions of one class's pending ``lines``: one per job, each backend task a
+        group of plan lines. Only Batch packs; the others run each line as its own task, in
+        plan order, in one submission."""
+        return [
+            packing.Job(
+                groups=[[line] for line in lines],
+                seconds=[],
+                vms=0,
+                per_vm=1,
+                parallelism=len(lines),
+            )
+        ]
 
     def launch(
         self,
@@ -195,6 +221,7 @@ class Backend:
         stores: Stores,
         cloud=None,
         dry_run: bool = False,
+        job: Optional[packing.Job] = None,
     ) -> Dict[str, Any]:
         """Start the rendered submission; returns what identifies it (job name, pid...)."""
         raise NotImplementedError
@@ -229,14 +256,22 @@ class Backend:
         deadline = int(time.time() + config.limits.max_campaign_hours * 3600)
         written = []
         directory = plan.dir / "backend" / self.name
-        for number, cls in enumerate(plan.classes, 1):
-            for name, text in self.render(plan, config, cls, number, cls.lines, deadline).items():
-                path = directory / name
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(text)
-                if name.endswith(".sh"):
-                    path.chmod(0o755)
-                written.append(path)
+        number = 0
+        for cls in plan.classes:
+            jobs = self.layout(plan, config, cls, cls.lines)
+            for index, job in enumerate(jobs):
+                number += 1
+                for name, text in self.render(
+                    plan, config, cls, number, job.lines, deadline, job=job
+                ).items():
+                    if len(jobs) > 1:
+                        name = "%s-job%d%s" % (cls.name, index + 1, name[len(cls.name) :])
+                    path = directory / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(text)
+                    if name.endswith(".sh"):
+                        path.chmod(0o755)
+                    written.append(path)
         return written
 
     def submit(
@@ -286,6 +321,11 @@ class Backend:
             say=say,
             previous=lambda: submissions(stores.runs, plan.id),
         )
+        layouts = {
+            cls.name: self.layout(plan, config, cls, todo[cls.name], cloud)
+            for cls in plan.classes
+            if todo.get(cls.name)
+        }
         self.check_limits(
             plan,
             config,
@@ -295,64 +335,94 @@ class Backend:
             confirm=confirm,
             say=say,
             price_table=price_table,
+            layouts=layouts,
         )
         uploaded = upload_campaign(plan, stores)
         if uploaded:
             say("uploaded %d file(s) to the stores" % len(uploaded))
         deadline = int(now() + config.limits.max_campaign_hours * 3600)
         out = []
-        prefix = campaign_prefix(plan.id)
         for cls in plan.classes:
-            lines = todo.get(cls.name)
-            if not lines:
-                continue
-            number = next_submission(stores.runs, plan.id)
-            stores.runs.write_text(
-                "%s/submissions/%d.indices" % (prefix, number),
-                "".join("%d\n" % i for i in lines),
-            )
-            rendered = self.render(plan, config, cls, number, lines, deadline)
-            directory = plan.dir / "submissions" / str(number)
-            directory.mkdir(parents=True, exist_ok=True)
-            files = {}
-            for name, text in rendered.items():
-                path = directory / name
-                path.write_text(text)
-                if name.endswith(".sh"):
-                    path.chmod(0o755)
-                files[name] = path
-            job = self.launch(plan, config, cls, number, files, stores, cloud, dry_run)
-            record = {
-                "schema": SUBMISSION_SCHEMA,
-                "campaign": plan.id,
-                "submission": number,
-                "backend": self.name,
-                "class": cls.name,
-                "tasks": len(lines),
-                "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now())),
-                "deadline": deadline,
-                "dry_run": dry_run,
-                "job": job,
-            }
-            if plan.backend == "gcp-batch":
-                placement = plan.placement(cls.name)
-                record["placement"] = {
-                    "region": placement.region,
-                    "shape": placement.shape,
-                    "model": placement.model,
-                    "tasks_per_vm": placement.tasks_per_vm,
-                }
-                if cls.name in choices:
-                    record["placement"]["choice"] = choices[cls.name]
-            text = json.dumps(record, indent=2, sort_keys=True) + "\n"
-            (directory / "record.json").write_text(text)  # the plan keeps a copy (dry runs too)
-            stores.runs.write_text("%s/submissions/%d.json" % (prefix, number), text)
-            say(
-                "submission %d: class %s, %d task(s) -> %s"
-                % (number, cls.name, len(lines), job.get("summary", job.get("name", "")))
-            )
-            out.append(Submission(number, cls.name, lines, record))
+            for job_spec in layouts.get(cls.name, []):
+                out.append(
+                    self._submit_job(
+                        plan,
+                        config,
+                        cls,
+                        job_spec,
+                        stores,
+                        cloud,
+                        dry_run,
+                        deadline,
+                        now,
+                        say,
+                        choices,
+                    )
+                )
         return out
+
+    def _submit_job(
+        self, plan, config, cls, job_spec, stores, cloud, dry_run, deadline, now, say, choices
+    ) -> "Submission":
+        """One submission: the indices file, the rendered artefacts, the launch and its record."""
+        prefix = campaign_prefix(plan.id)
+        lines = job_spec.lines
+        number = next_submission(stores.runs, plan.id)
+        stores.runs.write_text(
+            "%s/submissions/%d.indices" % (prefix, number),
+            packing.indices_text(job_spec.groups),
+        )
+        rendered = self.render(plan, config, cls, number, lines, deadline, job=job_spec)
+        directory = plan.dir / "submissions" / str(number)
+        directory.mkdir(parents=True, exist_ok=True)
+        files = {}
+        for name, text in rendered.items():
+            path = directory / name
+            path.write_text(text)
+            if name.endswith(".sh"):
+                path.chmod(0o755)
+            files[name] = path
+        job = self.launch(plan, config, cls, number, files, stores, cloud, dry_run, job=job_spec)
+        record = {
+            "schema": SUBMISSION_SCHEMA,
+            "campaign": plan.id,
+            "submission": number,
+            "backend": self.name,
+            "class": cls.name,
+            "tasks": len(lines),
+            "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now())),
+            "deadline": deadline,
+            "dry_run": dry_run,
+            "job": job,
+        }
+        if plan.backend == "gcp-batch":
+            placement = job_spec.placement or plan.placement(cls.name)
+            record["placement"] = {
+                "region": placement.region,
+                "shape": placement.shape,
+                "model": placement.model,
+                "tasks_per_vm": placement.tasks_per_vm,
+                "vm_hour_usd": round(placement.vm_hour, 5),
+            }
+            if cls.name in choices:
+                record["placement"]["choice"] = choices[cls.name]
+            record["packing"] = {
+                "batch_tasks": len(job_spec.groups),
+                "bundled_cells": sum(len(g) for g in job_spec.groups if len(g) > 1),
+                "vms": job_spec.vms,
+                "parallelism": job_spec.parallelism,
+                "straggler": job_spec.straggler,
+                "predicted_vm_hours": round(job_spec.vm_hours, 4),
+                "predicted_makespan_s": round(job_spec.makespan_s, 1),
+            }
+        text = json.dumps(record, indent=2, sort_keys=True) + "\n"
+        (directory / "record.json").write_text(text)  # the plan keeps a copy (dry runs too)
+        stores.runs.write_text("%s/submissions/%d.json" % (prefix, number), text)
+        say(
+            "submission %d: class %s, %d task(s) -> %s"
+            % (number, cls.name, len(lines), job.get("summary", job.get("name", "")))
+        )
+        return Submission(number, cls.name, lines, record)
 
     def live_overlap(
         self,
@@ -373,7 +443,7 @@ class Backend:
                 continue
             rel = "%s/submissions/%d.indices" % (campaign_prefix(plan.id), record["submission"])
             try:
-                held = {int(x) for x in runs.read_text(rel).split()}
+                held = {int(x) for x in runs.read_text(rel).split()}  # bundled lines too
             except Exception:  # unreadable: assume it holds them all
                 held = set(wanted)
             if held & wanted:
@@ -389,7 +459,9 @@ class Backend:
                 )
         return out
 
-    def check_limits(self, plan, config, todo, *, yes, max_usd, confirm, say, price_table=None):
+    def check_limits(
+        self, plan, config, todo, *, yes, max_usd, confirm, say, price_table=None, layouts=None
+    ):
         """Per-submit caps and confirmation; only the money-spending backend has any."""
         count = sum(len(v) for v in todo.values())
         if count > config.limits.max_tasks:

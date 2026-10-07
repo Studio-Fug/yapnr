@@ -300,6 +300,100 @@ def bga_board(path, vias=(), tracks=()):
     k.SaveBoard(str(path), b)
 
 
+def pour_board(path, *, foreign_pad=True):
+    """A 30 x 20 mm board with an F.Cu GND pour over x in [5, 15] mm (board-local,
+    y 0..20) and U1's one GND pad inside it (a ``plane_partition`` outer pour's land),
+    plus, with ``foreign_pad``, P2's GND pad at x=25 with no copper of any kind near
+    it: a terminal elsewhere on the board (the N-0001 situation generalised) that this
+    particular pour was never asked to reach."""
+    import pcbnew as k
+
+    plane_board(path, [])
+    b = k.LoadBoard(str(path))
+    gnd = b.FindNet("GND")
+    if gnd is None:
+        gnd = k.NETINFO_ITEM(b, "GND")
+        b.Add(gnd)
+
+    def at(x, y):
+        return k.VECTOR2I(30_000_000 + round(x * 1e6), 50_000_000 - round(y * 1e6))
+
+    z = k.ZONE(b)
+    z.SetLayer(k.F_Cu)
+    z.SetNetCode(gnd.GetNetCode())
+    outline = z.Outline()
+    outline.NewOutline()
+    for x, y in ((5, 0), (15, 0), (15, 20), (5, 20)):
+        outline.Append(at(x, y))
+    b.Add(z)
+
+    def pad_footprint(ref, x, y):
+        fp = k.FOOTPRINT(b)
+        fp.SetReference(ref)
+        fp.SetPosition(at(x, y))
+        pad = k.PAD(fp)
+        pad.SetNumber("1")
+        pad.SetAttribute(k.PAD_ATTRIB_SMD)
+        pad.SetShape(k.PAD_SHAPE_RECT)
+        pad.SetSize(k.VECTOR2I(500_000, 500_000))
+        pad.SetLayerSet(pad.SMDMask())
+        pad.SetPosition(at(x, y))
+        pad.SetNet(gnd)
+        fp.Add(pad)
+        b.Add(fp)
+
+    pad_footprint("U1", 10, 10)
+    if foreign_pad:
+        pad_footprint("P2", 25, 10)
+    k.ZONE_FILLER(b).Fill(b.Zones())
+    k.SaveBoard(str(path), b)
+
+
+@unittest.skipUnless(NATIVE, "requires KiCad Python")
+class PlaneQualityCheck(unittest.TestCase):
+    """check_plane_quality / plane_layer_geometry's terminal reachability (the
+    outer-pour regression: a GND pad outside the pour's region, reached by some other
+    path, was judged unreached and failed every outer-pour board; #81 review-fix
+    271d8434 added the reachability check, found by the GCP rerun's comment on #81)."""
+
+    BASE = dict(
+        kind="plane_quality", layer="F.Cu", candidates=["GND"], currents={}, min_width_mm=0.2
+    )
+
+    def check(self, c, **board):
+        import check_constraints
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "b.kicad_pcb"
+            pour_board(path, **board)
+            return check_constraints.check_plane_quality(check_constraints.Board(path), c)
+
+    def test_a_pad_in_the_pour_is_reached(self):
+        # U1 alone: its one GND pad sits inside the pour and is reached.
+        ok, measured, _ = self.check(dict(self.BASE, lands=True), foreign_pad=False)
+        self.assertTrue(ok, measured)
+        self.assertNotIn("unreached", measured["nets"]["GND"])
+
+    def test_a_terminal_outside_the_region_with_no_path_is_unreached(self):
+        # Without a region, P2's GND pad (10 mm from the pour, no copper near it at
+        # all) is judged against this zone and correctly found unreachable: the
+        # reachability check itself must still catch a genuinely stranded terminal.
+        ok, measured, _ = self.check(dict(self.BASE, lands=True), foreign_pad=True)
+        self.assertFalse(ok)
+        self.assertEqual(measured["nets"]["GND"]["unreached"], 1)
+        self.assertTrue(any("cannot reach" in f for f in measured["failures"]))
+
+    def test_region_excludes_a_pad_this_zone_was_never_asked_to_reach(self):
+        # With the pour's own region (U1 only, margin 2 mm: excludes P2 at x=25), P2's
+        # pad is out of scope entirely -- not judged, not "reached" by accident -- so
+        # the check passes even though P2 still has no copper near it.
+        region = dict(refs=["U1"], margin_mm=2.0)
+        ok, measured, _ = self.check(dict(self.BASE, lands=True, region=region), foreign_pad=True)
+        self.assertTrue(ok, measured)
+        self.assertNotIn("unreached", measured["nets"]["GND"])
+        self.assertEqual(measured["nets"]["GND"]["pieces"][0]["terminals"], 1)
+
+
 @unittest.skipUnless(NATIVE, "requires KiCad Python")
 class CopperDigestCheck(unittest.TestCase):
     def digest(self, **kw):

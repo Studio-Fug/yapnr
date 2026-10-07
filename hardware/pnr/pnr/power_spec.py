@@ -9,22 +9,24 @@ routing rules carry under the same names, only when declared.
       - layer: In3.Cu
         nets: [1V0_RF1, 1V0_RF2, 1V2]   # names or globs: CANDIDATE rails of the layer.
                                         # Without a region (below), the engine decides
-                                        # each one plane or trace (pnr.plane_partition
-                                        # for_route, _rail_decision): a declared IR
-                                        # budget or a worthwhile share of the layer's
-                                        # current earns a territory outright; short of
-                                        # that, enough terminals still does; otherwise
-                                        # the rail is left to route as a plain trace,
-                                        # reported with the reason. A region (an outer
-                                        # pour) is unaffected: every candidate keeps a
-                                        # piece of it.
+                                        # each one plane or trace, and who takes the
+                                        # leftover, by routing the best alternatives
+                                        # (pnr.rail_alloc), reported with the numbers
+                                        # that decided it. A region (an outer pour) is
+                                        # unaffected: every candidate keeps a piece.
+        must_plane: [1V2]               # (no region) a candidate the spec forces onto
+        must_trace: [1V0_RF2]           # the layer, or off it; the rest are the
+                                        # engine's to decide
+        fill_candidates: [GND]          # (no region) nets besides the plane rails that
+                                        # may take the leftover (never a default)
         order: current                  # current (default) or listed
         split_gap_mm: 0.3               # copper gap between two rails
         min_width_mm: 1.0               # a rail's narrowest trunk
-        fill: GND                       # what is left of a plane net's own territory
-                                        # (a net), or none: never a default, so a plane
-                                        # already backed by a dedicated ground layer
-                                        # need not repeat it here
+        fill: GND                       # forces the leftover: a net, or one of the
+                                        # rails (it alone grows, the others keep their
+                                        # trunk and lands); absent, the engine chooses
+                                        # among none (the rails compete), each plane
+                                        # rail and fill_candidates
         core_no_vias: true              # other nets' vias stay out of each trunk core
         terminal_reach_mm: 0.8          # a pad's drop lands within this of it
         neck_mm: 0                      # a trunk may narrow this close to its terminals
@@ -61,6 +63,7 @@ to its ref, as everywhere in the constraints).
 
 from __future__ import annotations
 
+import fnmatch
 import math
 from typing import Dict, List
 
@@ -71,6 +74,9 @@ PARTITION_KEYS = {
     "split_gap_mm",
     "min_width_mm",
     "fill",
+    "fill_candidates",
+    "must_plane",
+    "must_trace",
     "core_no_vias",
     "terminal_reach_mm",
     "currents",
@@ -188,6 +194,21 @@ def parse_partition(raw) -> List[Dict]:
                 h_mm=_num(entry.get("h_mm", 0.1), where + ".h_mm", True),
             )
         )
+        for key in ("fill_candidates", "must_plane", "must_trace"):
+            if entry.get(key) is not None:  # only when declared (rules unchanged else)
+                names = _names(entry[key], where + "." + key)
+                if entry.get("region") is not None:
+                    raise PowerSpecError(where + ": %s goes with a plane layer, not a region" % key)
+                if key != "fill_candidates" and not all(
+                    any(fnmatch.fnmatchcase(n, p) or fnmatch.fnmatchcase(p, n) for p in nets)
+                    for n in names
+                ):
+                    raise PowerSpecError(where + ".%s names candidates of nets" % key)
+                out[-1][key] = names
+        if set(out[-1].get("must_plane") or ()) & set(out[-1].get("must_trace") or ()):
+            raise PowerSpecError(where + ": a rail is both must_plane and must_trace")
+        if fill is not None and entry.get("fill_candidates") is not None:
+            raise PowerSpecError(where + ": fill forces the leftover; fill_candidates offers it")
         if entry.get("neck_mm") is not None:  # only when declared (rules unchanged else)
             out[-1]["neck_mm"] = _num(entry["neck_mm"], where + ".neck_mm", minimum=0.0)
         if entry.get("region") is not None:  # an outer pour (only when declared)

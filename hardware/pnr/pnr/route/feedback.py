@@ -37,6 +37,7 @@ from pnr.graph import BoardGraph
 from pnr.place import place
 from pnr.place.geometry import outline_size, pad_rects, resolve_fixed_poses
 from pnr.place.placer import PlacementReport
+from pnr.profile import span
 
 from .global_route import GlobalRouteResult, global_route
 
@@ -398,7 +399,7 @@ def _place_route_rounds(
 
             diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
             try:
-                with _trace.scope("initial-pool", "pool"):
+                with _trace.scope("initial-pool", "pool"), span("feedback.initial_pool"):
                     placed, prep, initial_route, pool_report = select_initial_placement(
                         graph,
                         constraints,
@@ -517,7 +518,7 @@ def _place_route_rounds(
                             "attempt",
                             seed=trial_seed,
                             damping=damping,
-                        ):
+                        ), span("feedback.place"):
                             placed, prep = place(
                                 graph,
                                 constraints,
@@ -586,7 +587,7 @@ def _place_route_rounds(
             # budget; retain its result instead of giving the winner a second run.
             with _trace.scope("route", "route", reused=initial_route is not None), stage(
                 "route", source_round=r + 1
-            ):
+            ), span("feedback.route_board"):
                 broute = (
                     initial_route
                     if initial_route is not None
@@ -699,16 +700,17 @@ def _place_route_rounds(
             from pnr.stack import resolve as resolve_stack
 
             stack = resolve_stack(detail_rules, getattr(placed, "stack", None))
-            gr = global_route(
-                placed,
-                width,
-                height,
-                gcell_mm=gcell_mm,
-                layers=layers,
-                track_pitch_mm=track_pitch_mm,
-                max_passes=route_passes,
-                signal_layers=None if stack is None else len(stack.grid_layers),
-            )
+            with span("feedback.global_route"):
+                gr = global_route(
+                    placed,
+                    width,
+                    height,
+                    gcell_mm=gcell_mm,
+                    layers=layers,
+                    track_pitch_mm=track_pitch_mm,
+                    max_passes=route_passes,
+                    signal_layers=None if stack is None else len(stack.grid_layers),
+                )
             report.overflow_history.append(gr.overflow)
             report.route = gr
             if gr.overflow <= 0.0:

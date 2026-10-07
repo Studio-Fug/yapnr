@@ -54,6 +54,9 @@
     "boot_disk_gib": 30,
     "external_ip_hour": 0.0025,
     "preemption_rework": 0.08,
+    "task_overhead_s": 10,
+    "vm_boot_billed_s": 30,
+    "vm_idle_tail_s": 45,
     "vm_start_s": 120
   },
   "egress_gib": 0.12,

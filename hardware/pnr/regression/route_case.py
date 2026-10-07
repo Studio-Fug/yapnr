@@ -16,6 +16,7 @@ from pnr.place.route_compact import arm_deadline
 from pnr.place.sides import plan as side_plan
 from pnr.place.sides import report as sides_report
 from pnr.place.sides import with_policy
+from pnr.profile import run as profiled
 from pnr.route.detail.exact_route import exact_mode
 from pnr.route.detail.native_maze import status as maze_status
 from pnr.route.feedback import route_and_place
@@ -69,16 +70,21 @@ attach_dru(rules, dru_path.read_text() if dru_path.exists() else None, [n.name f
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 os.environ["PNR_ROUND_DIAGNOSTICS"] = str(root / "rounds")
 t = time.monotonic()
-g, report = route_and_place(
-    g,
-    c,
-    seed=seed,
-    iters=350,
-    max_rounds=rounds,
-    detail_rules=rules,
-    detail_pitch_mm=0.25,
-    detail_iters=8,
-    spread=1.3,
+# PNR_PROFILE_DIR (yapnr exp [profile]): the place-route loop under pnr.profile, the ladder's
+# largest stage; without it this is a plain call.
+g, report = profiled(
+    "route-case",
+    lambda: route_and_place(
+        g,
+        c,
+        seed=seed,
+        iters=350,
+        max_rounds=rounds,
+        detail_rules=rules,
+        detail_pitch_mm=0.25,
+        detail_iters=8,
+        spread=1.3,
+    ),
 )
 (root / "placed.json").write_text(g.to_json())
 plan = side_plan(BoardGraph.from_json((root / "source-graph.json").read_text()), c, rules)
@@ -92,6 +98,13 @@ routes.update(
     getattr(r, "extras", dict)()
 )  # a declared fanout's via sizes and locked copper (pnr.fanout)
 (root / "routes.json").write_text(json.dumps(routes, indent=2))
+if getattr(r, "traced_rails", None):
+    # plane_partition candidates the allocation traced (pnr.rail_alloc): ordinary
+    # nets for writeback, the planes stage and the checks, as they were for routing.
+    from pnr.rail_alloc import routed_rules
+
+    rules = routed_rules(rules, r.traced_rails)
+    (root / "rules.json").write_text(json.dumps(rules, indent=2))
 (root / "pnr-report.json").write_text(
     json.dumps(
         dict(

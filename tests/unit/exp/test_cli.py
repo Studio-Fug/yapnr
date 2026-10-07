@@ -7,10 +7,15 @@ import contextlib
 import io
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from yapnr import cli as yapnr_cli
+from yapnr.exp import config as config_mod
+from yapnr.exp import plan as planning
 from yapnr.exp import testing
+from yapnr.exp.backends import gcp_batch
+from yapnr.exp.cloud import FakeCloud
 
 
 class CliTest(unittest.TestCase):
@@ -102,6 +107,51 @@ class CliTest(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertTrue(err.startswith("yapnr exp: no plan directory"), err)
             self.assertNotIn("Traceback", err)
+
+    def test_logs_follows_a_claim_to_the_task_that_actually_ran_the_line(self):
+        # With claims on, Batch starts task indices in no particular order and each task
+        # claims whichever line of the indices file it runs: the line's own position is no
+        # longer that task's Batch index. `logs` must follow the claim, not use the position.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            cfg_path = testing.write_config(tmp)
+            cfg = config_mod.load(str(cfg_path))
+            repo = testing.fixture_repo(tmp)
+            campaign = testing.write_campaign(tmp / "smoke.toml", testing.SMOKE_CAMPAIGN)
+            plan = planning.make_plan(
+                campaign,
+                "gcp-batch",
+                cfg,
+                repo=repo,
+                offline=True,
+                image_digest=testing.DIGEST,
+                today=testing.TODAY,
+                out=tmp / "plan",
+            )
+            cloud = FakeCloud()
+            cloud.impersonate = cfg.gcp.submit_email
+            gcp_batch.GcpBatch().submit(plan, cfg, cloud=cloud, say=lambda s: None)
+            # Line 0 (plan.tasks[0]) was actually run by Batch task index 1, not task index 0.
+            claim_key = "gs://%s/campaigns/%s/submissions/1.claims/0" % (
+                cfg.gcp.runs_bucket,
+                plan.id,
+            )
+            cloud.objects[claim_key] = b"1"
+            with unittest.mock.patch.object(gcp_batch, "make_cloud", return_value=cloud):
+                code, out, err = self.run_cli(
+                    "exp",
+                    "--config",
+                    str(cfg_path),
+                    "logs",
+                    str(tmp / "plan"),
+                    plan.tasks[0]["id"],
+                )
+            self.assertEqual(code, 0, err)
+            self.assertIn("Cloud Logging", out)
+            queries = [" ".join(call) for call in cloud.calls if call[1:3] == ["logging", "read"]]
+            self.assertEqual(len(queries), 1)
+            self.assertIn('"-group0-1/"', queries[0])  # the claiming task's index
+            self.assertNotIn('"-group0-0/"', queries[0])  # not the line's own position
 
     def test_local_doctor_reports_the_toolchain(self):
         with tempfile.TemporaryDirectory() as tmp:

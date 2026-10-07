@@ -23,6 +23,7 @@ import numpy as np
 from pnr.graph import SIDE_BOTTOM, BoardGraph
 
 from ...place.geometry import Rect, pad_rects
+from .obstacle_index import TrackedList
 
 # Default signal layers (outer copper); inner layers carry the power/ground planes.
 DEFAULT_SIGNAL_LAYERS = ("F.Cu", "B.Cu")
@@ -163,14 +164,16 @@ class RouteGrid:
         self.pad_via_halo: Dict[Tuple[int, int, int], str] = {}
         # Access cell per (net, pad_key) recorded during build.
         self.access: Dict[Tuple[str, str], Cell] = {}
-        self.pad_rectangles = []
+        # The obstacle lists the exact clearance checks scan are indexed
+        # (.obstacle_index.TrackedList: a list that records its changes).
+        self.pad_rectangles = TrackedList()
         # (layer, net, Rect) of ``pad_rectangles`` -> the clearance (mm) that pad
         # asks of foreign copper when it sets its own (add_pad ``keepaway``: a local
         # clearance or mask margin above the fab clearance); empty on boards whose
         # footprints set none.
         self.pad_keepaways: Dict[tuple, float] = {}
-        self.escape_segments = []
-        self.escape_vias = []
+        self.escape_segments = TrackedList()
+        self.escape_vias = TrackedList()
         self.net_widths = {}
         # net -> its net class's copper clearance (mm), from the rules
         # (route_board); the fab ``clearance`` holds where larger or absent.
@@ -212,7 +215,7 @@ class RouteGrid:
         # exact land's corner radius (graph Pad.land_corner), None when the Rect
         # only bounds the copper (no in-pad via there). None rule: the pre-profile
         # grid, where a via may enter or graze its own net's pads.
-        self.smd_pads = []
+        self.smd_pads = TrackedList()
         self.in_pad = None
         self.via_to_smd_pad = None
         self.smd_via_blocked = None  # (ny, nx) bool, cell-centre verdicts

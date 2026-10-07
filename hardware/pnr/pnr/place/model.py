@@ -480,8 +480,9 @@ def global_place(
     from pnr.trace import placement_tracer
 
     # PNR_GP_POLISH (pnr.place.gp_polish): extra iterations after the main ones (none with
-    # the switch off, or with hull macros, whose bodies the slot model does not know).
-    extra = 0 if polish is None or bodies is not None else polish.steps
+    # the switch off). With hull macros the polish overlap is taken between hull bodies and
+    # legalizer slots (pnr.place.hull.polish_bodies), so interlocked macros stay interlocked.
+    extra = 0 if polish is None else polish.steps
     if extra:
         from .gp_polish import channel_shortage, slot_bound, slot_keepout, slot_overlap
     # None unless PNR_TRACE_DIR is set (pnr.trace); the polish iterations are traced too.
@@ -495,6 +496,12 @@ def global_place(
                 frozen = _freeze(
                     graph, polish, rot_probs(0.2), sided, comps, width, height, side_overlap
                 )
+                if bodies is not None:
+                    from .hull import polish_bodies
+
+                    frozen["bodies"] = polish_bodies(
+                        bodies, comps, frozen, polish.grid, polish.clearance
+                    )
                 opt = pm.Adam([move], lr=polish.lr(0.0))
             frac = (step - iters) / max(1, extra - 1)
             for group in opt.param_groups:
@@ -551,7 +558,11 @@ def global_place(
         # Pairwise smooth overlap (spreading), upper triangle only.
         if frozen is not None:
             # Polish: the legalizer's slots, the weight ramped (pnr.place.gp_polish).
-            overlap = polish.ramp(frac) * slot_overlap(pos, frozen, frozen["mask"])
+            if bodies is not None:
+                # Hull macros: their per-side boxes against the other parts' slots.
+                overlap = polish.ramp(frac) * gp_overlap(frozen["bodies"], pos, p, 0.0)
+            else:
+                overlap = polish.ramp(frac) * slot_overlap(pos, frozen, frozen["mask"])
         elif bodies is None:
             dx = (body[:, 0].unsqueeze(1) - body[:, 0].unsqueeze(0)).abs()
             dy = (body[:, 1].unsqueeze(1) - body[:, 1].unsqueeze(0)).abs()

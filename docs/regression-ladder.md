@@ -497,6 +497,13 @@ hulls) and slide into each other's notches; `--hull-dovetail W` (`PNR_HULL_DOVET
 packing term to global placement over the hull bodies. `pnr-report.json` records the pass as
 `route_compact` (gutters, steps, bounding box and the outline shrink it frees, seconds).
 
+The hierarchical runner's default bundle includes hull nesting. Legalized hull macros
+search nearby legal poses; incomplete knits retain the un-nested and rectangle fallbacks.
+Use `--hull-nest 0` to disable nesting while keeping the rest of the default bundle, or
+`hull_nest = false` in a ladder campaign. The direct engine equivalent is
+`PNR_HULL_NEST=0`; nesting is otherwise enabled whenever hull macros are enabled.
+See the [nesting validation and limitations](design/hull-nest-validation.md).
+
 Results (2026-10-07, GCP C4D, flags off against each arm, KiCad's DRC judging every board):
 
 | Rungs (cells)                                             | Arm                                              | Pass  | Bounding box | Copper   | Vias   | Place-route time |

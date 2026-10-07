@@ -3,7 +3,7 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-07 (energy-track macOS ABI-path assertion, #90). Previous status:
+Last updated: 2026-10-07 (RF CI lanes and cache verification, #95). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 `claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
 on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
@@ -23,8 +23,15 @@ board edges, the hierarchical ladder driver and their animations on
   completed outputs after test failures with fork PRs restore-only. The existing CI dispatch can
   explicitly invoke the RF lane before merge. Native smoke, 14 focused policy regressions,
   changed-file hooks and actionlint pass; both hosted platforms verify the expanded 65-target
-  inventory. Hosted RF execution and repeated-cache measurements are tracked in PR #95.
+  inventory. Both RF lanes and same-head cache replays pass; detailed measurements and
+  combined-head CI status after #91/#92 are tracked in PR #95.
   [Lane inventory and policy](docs/ci-lanes.md).
+
+- **Hull nesting default (2026-10-07, PR #91).** Owner requested default-on nesting for hull
+  macros with explicit opt-out. Legality/native gates and both routing fallbacks are unchanged.
+  The integrated native dovetail example is clean with nonzero interlock; vias increase in
+  that one pair. Final-head versus main dovetail and quad-bank campaigns remain pending under
+  the approved total budget. See [validation status](docs/design/hull-nest-validation.md).
 
 - **Route-then-compact and hull packing** (PR #86, branch `claude/route-compact`; design
   [docs/design/route-compact.md](docs/design/route-compact.md)). `PNR_ROUTE_COMPACT`
@@ -297,6 +304,13 @@ board edges, the hierarchical ladder driver and their animations on
   against openEMS and the 2D cross-section solver on the radar60 lines, single patch and TX1
   feed; two reviews' fixes in. Open: Palace issues to report upstream, a rank-scaling run before
   the bank model, the image's ParMETIS licence (owner).
+
+## Integration checks
+
+- **PR integration review (2026-10-07).** PR #92 is rebased onto main after #88 and #90, retaining
+  only its two new optimization commits. The existing 96-cell A/B receipts were rechecked: 96
+  matching verdicts and 94 matching copper hashes, 85 passes per arm. See [validation
+  evidence](docs/design/clearance-index-validation.md).
 
 ## Next
 

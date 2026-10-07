@@ -49,8 +49,10 @@ from pnr.stage_timing import stage as live_stage  # noqa: E402
 
 KI = "/Applications/KiCad/KiCad.app/Contents"
 
-# Run with the frozen engine on PYTHONPATH: prints "prebuilt PATH" or "built PATH" (a library
-# that loads and matches the frozen maze.c), or fails with the reason on its last stderr line.
+# Run with the frozen engine on PYTHONPATH: prints "prebuilt ORIGIN PATH" or "built built PATH"
+# (a library that loads and matches the frozen maze.c; ORIGIN: "wheel", the installed yapnr
+# wheel's, as in the container image; "package", beside the frozen package or in Bazel's
+# runfiles; "env", PNR_MAZE_LIB), or fails with the reason on its last stderr line.
 NATIVE_MAZE_SETUP = """
 import os, sys
 from pnr.route.detail import native_maze as m
@@ -62,7 +64,15 @@ if path is None:
     path, reason = m.prebuilt()
     if path is None:
         sys.exit("built library does not load: " + reason)
-print(how, path)
+if how == "built":
+    origin = "built"
+elif str(path) in {str(p) for p in m._installed()}:
+    origin = "wheel"
+elif os.environ.get("PNR_MAZE_LIB") == str(path):
+    origin = "env"
+else:
+    origin = "package"
+print(how, origin, path)
 """
 
 
@@ -299,12 +309,20 @@ ROUTE_COMPACT_PARTS = ("TOP", "BLOCK", "FLAT")
 
 # The hierarchical driver's default bundle (2026-10 A/B, campaign 20261007-ladder-01bca2 at
 # head: 12/12 pass in every arm, bbox -13.1 %, copper -5.7 %, no rung worse): TOP,BLOCK
-# compaction plus hull packing, applied by hier_compact_extra() below. FLAT is never in it.
+# compaction plus hull packing, applied by hier_compact_extra() below. Hull nesting joins
+# the bundle by owner decision (2026-10-07, PR #91); --hull-nest 0 opts out. FLAT is never in it.
 HIER_COMPACT_DEFAULT_ENV = {
     "PNR_ROUTE_COMPACT": "TOP,BLOCK",
     "PNR_MACRO_HULL": "1",
     "PNR_HULL_DOVETAIL": repr(1.0),
+    "PNR_HULL_NEST": "1",
 }
+
+
+def hull_nest_environment(args) -> dict:
+    """Preserve either explicit nest setting, including opt-out outside the default bundle."""
+    nest = getattr(args, "hull_nest", None)
+    return {"PNR_HULL_NEST": nest} if nest is not None else {}
 
 
 def hier_compact_explicit(args) -> bool:
@@ -316,10 +334,15 @@ def hier_compact_explicit(args) -> bool:
 
 def hier_compact_extra(args, driver: str, timeout: float) -> dict:
     """The per-case env overrides for the hierarchical driver's default bundle (``driver ==
-    "hier_case.py"`` and nothing in :func:`hier_compact_explicit` was given), else ``{}``."""
+    "hier_case.py"`` and nothing in :func:`hier_compact_explicit` was given), else ``{}``.
+
+    ``--hull-nest`` (PNR_HULL_NEST, pnr.place.hull.nest) rides on top: ``0`` explicitly
+    disables nesting, ``1`` enables it, and unset keeps the bundle's default-on setting."""
     if driver != "hier_case.py" or hier_compact_explicit(args):
         return {}
-    return dict(HIER_COMPACT_DEFAULT_ENV, PNR_ROUTE_COMPACT_TIMEOUT_S=repr(float(timeout)))
+    env = dict(HIER_COMPACT_DEFAULT_ENV, PNR_ROUTE_COMPACT_TIMEOUT_S=repr(float(timeout)))
+    env.update(hull_nest_environment(args))
+    return env
 
 
 # Ambient PNR_* switches an operator happens to have set must not silently change the suite's
@@ -1012,6 +1035,17 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--hull-nest",
+        choices=("0", "1"),
+        default=None,
+        help=(
+            "PNR_HULL_NEST=1: with --macro-hull, the legalized block macros slide into each "
+            "other's notches by their hulls, and a hierarchical seed whose hull placement does "
+            "not knit (route-then-compact off) falls back to its rectangle placement "
+            "(pnr.place.hull.nest); enabled by default for hull macros, 0 explicitly opts out"
+        ),
+    )
+    ap.add_argument(
         "--power-first",
         action="store_true",
         help="PNR_POWER_FIRST=1: lexicographic power-first placement (pnr.place.power_first)",
@@ -1150,7 +1184,7 @@ def main():
                     timeout=600,
                     check=True,
                 ).stdout.split()
-                how, library = found[-2], found[-1]
+                how, origin, library = found[-3], found[-2], found[-1]
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
                 detail = (getattr(error, "stderr", None) or str(error)).strip().splitlines()
                 reason = detail[-1] if detail else type(error).__name__
@@ -1159,7 +1193,12 @@ def main():
                 env["PNR_MAZE_KERNEL"] = "packed"
             else:
                 env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
-                native = dict(library=Path(library).name, source=how, sha256=sha(Path(library)))
+                native = dict(
+                    library=Path(library).name,
+                    source=how,
+                    origin=origin,
+                    sha256=sha(Path(library)),
+                )
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.power_first:
@@ -1182,6 +1221,7 @@ def main():
         if not (isfinite(args.hull_dovetail) and args.hull_dovetail >= 0):
             raise SystemExit("--hull-dovetail takes a non-negative weight")
         env["PNR_HULL_DOVETAIL"] = repr(float(args.hull_dovetail))
+    env.update(hull_nest_environment(args))
     if args.route_pairs_diff_pairs:
         env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
     if args.rail_alloc:

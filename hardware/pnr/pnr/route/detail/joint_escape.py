@@ -16,6 +16,7 @@ from pnr.writeback import _segment_distance_sq
 from .grid import Cell, far_twins, pad_layer
 from .joint_access import select_joint
 from .keyhole import elbows, length
+from .obstacle_index import near
 
 
 @dataclass
@@ -79,7 +80,19 @@ def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True, o
                     return False
     # A pad that sets its own clearance or mask margin (RouteGrid.pad_keepaways).
     keepaways = getattr(grid, "pad_keepaways", None) or {}
-    for la, owner, r in grid.pad_rectangles:
+    # Only the obstacles that can come within reach of a-b (.obstacle_index): the
+    # largest clearance any owner could be judged at, past the widest copper.
+    widest = max(grid.clearance, max(classes.values(), default=0.0))
+    pad_reach = width / 2 + max(widest, max(keepaways.values(), default=0.0))
+    copper_reach = (
+        width / 2
+        + widest
+        + max(grid.via_radius, max(grid.net_widths.values(), default=0.0) / 2, grid.track_width / 2)
+    )
+    pads = grid.pad_rectangles
+    hits = near(pads, "rect", layer, a, b, pad_reach)
+    for k in range(len(pads)) if hits is None else hits:
+        la, owner, r = pads[k]
         if la != layer or owner == net:
             continue
         grow = reach(owner) if classes else radius
@@ -102,7 +115,10 @@ def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True, o
             for k in range(4)
         ):
             return False
-    for la, owner, c, d in grid.escape_segments:
+    segments = grid.escape_segments
+    hits = near(segments, "segment", layer, a, b, copper_reach)
+    for k in range(len(segments)) if hits is None else hits:
+        la, owner, c, d = segments[k]
         if la != layer or owner == net:
             continue
         other = grid.net_widths.get(owner, grid.track_width)
@@ -113,7 +129,10 @@ def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True, o
             limit = (other / 2 + grow) ** 2 - 1e-10
         if _segment_distance_sq(a, b, c, d) < limit:
             return False
-    for owner, p in grid.escape_vias:
+    vias = grid.escape_vias
+    hits = near(vias, "via", layer, a, b, copper_reach)
+    for k in range(len(vias)) if hits is None else hits:
+        owner, p = vias[k]
         if (
             owner != net
             and _segment_distance_sq(a, b, p, p)
@@ -648,13 +667,26 @@ def _segment_rect_gap(a, b, r):
 def _grazes_own_lands(grid, net, layer, segments, rect):
     """A stub of ``segments`` on ``layer`` overlaps a surface land of ``net`` other
     than its own (``rect``) with its copper."""
-    lands = [r for la, owner, r, _ in grid.smd_pads if owner == net and la == layer and r != rect]
+    pads = grid.smd_pads
+    lands = [r for la, owner, r, _ in pads if owner == net and la == layer and r != rect]
     if not lands:
         return False
     for la, a, b, width in segments:
         if la != layer:
             continue
-        for r in lands:
+        # Only the lands that can come within half the stub's width (.obstacle_index):
+        # _segment_rect_gap is never below the gap between the boxes.
+        hits = near(pads, "rect", layer, a, b, width / 2)
+        candidates = (
+            lands
+            if hits is None
+            else [
+                pads[k][2]
+                for k in hits
+                if pads[k][1] == net and pads[k][0] == layer and pads[k][2] != rect
+            ]
+        )
+        for r in candidates:
             if _segment_rect_gap(a, b, r) < width / 2 - 1e-9:
                 return True
     return False

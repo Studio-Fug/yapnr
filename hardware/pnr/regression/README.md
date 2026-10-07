@@ -196,7 +196,10 @@ sha256 (the yapnr wheel's in the container image, `yapnr/native/`; Bazel's;
 or one built beside the source with `python -m pnr.route.detail.native_maze
 build`), else compiles one with the host compiler, else routes packed (the
 same routes, slower) and says so; the loader also refuses a library whose
-arithmetic fuses multiply-adds. Each case's `pnr-report.json` records the kernel
+arithmetic fuses multiply-adds. The run's `provenance.json` names the library
+under `native_maze`, with its `origin`: `wheel` (the installed yapnr wheel's),
+`package` (beside the frozen source, or Bazel's), `env` (`PNR_MAZE_LIB`) or
+`built`. Each case's `pnr-report.json` records the kernel
 that actually ran (`maze_kernel`) and, under `maze_kernel.reference_fallback`,
 why searches ran on the reference kernel instead (a grid the dense fields do
 not model, such as a board with blind, buried or micro vias). The kernels

@@ -596,3 +596,426 @@ def gp_pack(bodies, pos, p, gamma):
     lo, hi = xy - half, xy + half
     ext = pm.logsumexp(torch.stack((hi[..., 0], -lo[..., 0], hi[..., 1], -lo[..., 1])) / gamma, -1)
     return gamma * ext.sum()
+
+
+# ------------------------------------------------------------------ nesting (PNR_HULL_NEST)
+
+NEST_ROUNDS = 4  # passes over the movable hull macros
+NEST_RADIUS_MM = 6.0  # how far one nest move may take a macro from its pose
+
+
+def nest_enabled() -> bool:
+    """On for hull macros unless ``PNR_HULL_NEST=0``: :func:`nest` slides them into
+    each other's notches, and the hierarchical driver keeps a rectangle-placement fallback
+    when a hull placement does not route (``regression/hier_case.py``). Inert without
+    ``PNR_MACRO_HULL=1``. (The global-placement polish, ``PNR_GP_POLISH``, measures overlap
+    between hull bodies whenever hull macros are present: :func:`polish_bodies`.)"""
+    return enabled() and os.environ.get("PNR_HULL_NEST", "1") == "1"
+
+
+def _area(a, b) -> float:
+    """Intersection area of two (x0, y0, x1, y1) boxes."""
+    dx = min(a[2], b[2]) - max(a[0], b[0])
+    dy = min(a[3], b[3]) - max(a[1], b[1])
+    return dx * dy if dx > 0.0 and dy > 0.0 else 0.0
+
+
+def _box(rects):
+    return (
+        min(r[0] for r in rects),
+        min(r[1] for r in rects),
+        max(r[2] for r in rects),
+        max(r[3] for r in rects),
+    )
+
+
+def nesting_metrics(outlines, shapes) -> dict:
+    """How far placed block macros nest into each other, from the board-frame geometry.
+
+    ``outlines`` {name: (x0, y0, x1, y1)}: each block's plain rectangle; ``shapes``
+    {name: [(plane, x0, y0, x1, y1)]}: its hull cover rectangles per plane.
+
+    ``macro_overlap_mm2``  summed pairwise overlap of the plain rectangles (what a block
+                           without a hull could never do);
+    ``hull_interlock_mm2`` summed pairwise overlap of the boxes around each hull: one
+                           block's routed extent reaching into another's, the dovetail
+                           proper (an overlap of empty margins only does not count);
+    ``hull_collision_mm2`` summed same-plane overlap of the hull rectangles themselves
+                           (legal placements keep it 0).
+    """
+    names = sorted(outlines)
+    over = inter = clash = 0.0
+    for i, a in enumerate(names):
+        for b in names[i + 1 :]:
+            over += _area(outlines[a], outlines[b])
+            sa, sb = shapes.get(a) or [], shapes.get(b) or []
+            if not sa or not sb:
+                continue
+            inter += _area(_box([s[1:] for s in sa]), _box([s[1:] for s in sb]))
+            for pa, *ra in sa:
+                for pb, *rb in sb:
+                    if pa == pb or "all" in (pa, pb):
+                        clash += _area(ra, rb)
+    return dict(
+        macro_overlap_mm2=round(over, 4),
+        hull_interlock_mm2=round(inter, 4),
+        hull_collision_mm2=round(clash, 4),
+    )
+
+
+def component_nesting(components) -> dict:
+    """:func:`nesting_metrics` of the hull macros among placed ``components``."""
+    from .geometry import courtyard_rect
+
+    outlines, shapes = {}, {}
+    for c in components:
+        if not getattr(c, "hull", None):
+            continue
+        r = courtyard_rect(c)
+        outlines[c.ref] = (r.left, r.bottom, r.right, r.top)
+        shapes[c.ref] = [
+            (plane, q.left, q.bottom, q.right, q.top) for plane, q in hull_placement_rects(c)
+        ]
+    return nesting_metrics(outlines, shapes)
+
+
+def _grown(comp, grow):
+    """[(plane, (x0, y0, x1, y1))] of ``comp``'s placement rectangles grown by ``grow``."""
+    from .geometry import placement_rects
+
+    return [
+        (plane, (r.left - grow, r.bottom - grow, r.right + grow, r.top + grow))
+        for plane, r in placement_rects(comp)
+    ]
+
+
+def keep_overlap(a, b, clearance: float) -> Optional[float]:
+    """The overlap a displacement-keeping legalizer should see between components ``a`` and
+    ``b`` at their poses: None when neither carries a hull (the caller's rectangle test
+    stands), else the summed same-plane intersection of their placement rectangles (hull
+    cover rectangles for a hull macro, the courtyard per occupied side otherwise), each
+    grown by half the clearance. Two blocks whose plain rectangles overlap but whose hulls
+    keep the clearance give 0: an interlocked pose is legal where it is."""
+    if not (getattr(a, "hull", None) or getattr(b, "hull", None)):
+        return None
+    total = 0.0
+    for pa, ra in _grown(a, clearance / 2.0):
+        for pb, rb in _grown(b, clearance / 2.0):
+            if pa == pb:
+                total += _area(ra, rb)
+    return total
+
+
+def polish_bodies(bodies, comps, frozen, grid: float, clearance: float):
+    """The overlap bodies of the global-placement polish phase with hull macros
+    (``PNR_GP_POLISH`` / ``PNR_HULL_NEST``, :mod:`pnr.place.gp_polish`).
+
+    An ordinary part becomes its legalizer slot at the frozen turn (``frozen["centre"]`` /
+    ``frozen["half"]``: courtyard plus clearance rounded up to whole cells); a hull macro
+    keeps its per-side cover boxes, grown by half the clearance and half a cell (the
+    legalizer's snap). The pairwise overlap of these bodies is then taken with no further
+    clearance (:func:`gp_overlap` with ``clearance=0``), so two macros' rectangles may
+    overlap wherever their hull boxes miss each other."""
+    import torch
+
+    own = bodies["owner"]
+    hull_body = torch.tensor([bool(getattr(comps[int(i)], "hull", None)) for i in own])
+    grow = clearance / 2.0 + grid / 2.0
+    off4 = bodies["off4"].clone()
+    half4 = bodies["half4"].clone()
+    slot_off = frozen["centre"][own].unsqueeze(1).expand(-1, 4, -1)
+    slot_half = frozen["half"][own].unsqueeze(1).expand(-1, 4, -1)
+    mask = hull_body.view(-1, 1, 1)
+    off4 = torch.where(mask, off4, slot_off)
+    half4 = torch.where(mask, half4 + grow, slot_half)
+    return dict(bodies, off4=off4, half4=half4)
+
+
+def _slot_of(comp, g, clearance):
+    """(r, c, bw, bh) of ``comp``'s legalizer slot at its pose, None when it is off the
+    lattice (pnr.place.legalize: the slot is courtyard plus clearance in whole cells,
+    centred on the pose)."""
+    from .geometry import body_shift, courtyard_rect
+
+    cr = courtyard_rect(comp)
+    bw = int(math.ceil((cr.w + clearance) / g - 1e-9))
+    bh = int(math.ceil((cr.h + clearance) / g - 1e-9))
+    shift = body_shift(comp) or (0.0, 0.0)
+    cx, cy = comp.pos[0] + shift[0], comp.pos[1] + shift[1]
+    c = cx / g - bw / 2.0
+    r = cy / g - bh / 2.0
+    if abs(c - round(c)) > 1e-6 or abs(r - round(r)) > 1e-6:
+        return None
+    return int(round(r)), int(round(c)), bw, bh
+
+
+def _planes_of(comp):
+    from .geometry import occupied_sides
+
+    sides = ("top", "bottom") if any(p.through_hole for p in comp.pads) else occupied_sides(comp)
+    if drilled(comp) or str(comp.footprint).startswith("block:"):
+        sides = tuple(sides) + ("inner",)
+    return tuple(sides)
+
+
+def nest(
+    graph, constraints, width, height, *, clearance, grid, keepouts=(), fixed=(), pad_edge=None
+):
+    """Slide the legalized hull macros of ``graph`` (in place) into each other's notches.
+
+    The legalizer's own occupancy (:func:`slot_masks` of every other macro, the slots of
+    the other parts on their planes, the keep-outs) gives every hull-legal top-left of a
+    macro at each quarter turn (:func:`free_map`); among those within
+    :data:`NEST_RADIUS_MM` the one with the least cost -- the half-perimeter wirelength of
+    the macro's nets plus the half-perimeter of the layout's bounding box, weighted by
+    :func:`dovetail_weight` (1 when unset) -- replaces the pose when it is cheaper. Rounds
+    repeat (:data:`NEST_ROUNDS`) while some macro moves. A result with a hard violation the
+    input did not have is undone; with the pad-edge rule (``pad_edge``,
+    :func:`pnr.place.legalize.pad_edge_rule`) a pose must also keep the macro's pads inside
+    :func:`pnr.place.legalize.pad_edge_box`. Returns a report dict: ``moved``, ``turned``,
+    ``rounds``, the ``nesting`` (:func:`component_nesting`) after the moves, ``skipped`` (why
+    nothing was tried) or ``undone``, and with moves the ``before`` poses ({ref: [x, y,
+    rot]}) they started from and ``nesting_before``."""
+    from .geometry import courtyard_rect, pin_positions
+    from .metrics import hard_violations
+
+    comps = list(graph.components)
+    g = float(grid)
+    macros = [c for c in comps if getattr(c, "hull", None) and c.ref not in fixed]
+    report = dict(moved=0, turned=0, rounds=0)
+    if not macros:
+        report["skipped"] = "no movable hull macro"
+        return report
+    slots = {c.ref: _slot_of(c, g, clearance) for c in comps if c.ref not in fixed}
+    off = sorted(ref for ref, s in slots.items() if s is None)
+    if off:
+        report["skipped"] = "off the placement lattice: %s" % ", ".join(off[:4])
+        return report
+    nx, ny = int(math.ceil(width / g)), int(math.ceil(height / g))
+    keep_occ = np.zeros((ny, nx), dtype=bool)
+    for k in keepouts:
+        c0, c1 = int(math.floor(k.left / g)), int(math.ceil(k.right / g))
+        r0, r1 = int(math.floor(k.bottom / g)), int(math.ceil(k.top / g))
+        keep_occ[max(0, r0) : max(0, r1), max(0, c0) : max(0, c1)] = True
+    weight = dovetail_weight() or 1.0
+    nets = {}
+    for net in graph.nets:
+        for ref, _pad in net.pins:
+            nets.setdefault(ref, set()).add(net.name)
+    by_net = {n.name: n for n in graph.nets}
+    pins = {c.ref: dict(pin_positions(c)) for c in comps}
+
+    def occupancy(skip):
+        occ = {p: np.zeros((ny, nx), dtype=bool) for p in PLANES}
+        for c in comps:
+            if c.ref == skip:
+                continue
+            if c.ref in fixed:
+                # A fixed part's placement rectangles grown by the clearance (as the
+                # legalizer marks them).
+                from .geometry import placement_rects
+
+                for p, q in placement_rects(c):
+                    if p not in occ:
+                        continue
+                    a0 = max(0, int(math.floor((q.left - clearance / 2) / g)))
+                    a1 = min(nx, int(math.ceil((q.right + clearance / 2) / g)))
+                    b0 = max(0, int(math.floor((q.bottom - clearance / 2) / g)))
+                    b1 = min(ny, int(math.ceil((q.top + clearance / 2) / g)))
+                    if a1 > a0 and b1 > b0:
+                        occ[p][b0:b1, a0:a1] = True
+                continue
+            r, cc, bw, bh = slots[c.ref]
+            r0, c0 = max(0, r), max(0, cc)
+            r1, c1 = min(ny, r + bh), min(nx, cc + bw)
+            if r1 <= r0 or c1 <= c0:
+                continue
+            if getattr(c, "hull", None):
+                masks = slot_masks(c, g, clearance, bw, bh)
+                for p in PLANES:
+                    occ[p][r0:r1, c0:c1] |= masks[p][r0 - r : r1 - r, c0 - cc : c1 - cc]
+            else:
+                for p in _planes_of(c):
+                    occ[p][r0:r1, c0:c1] = True
+        return occ
+
+    def boxes_except(skip):
+        rs = [courtyard_rect(c) for c in comps if c.ref != skip]
+        if not rs:
+            return None
+        return (
+            min(r.left for r in rs),
+            min(r.bottom for r in rs),
+            max(r.right for r in rs),
+            max(r.top for r in rs),
+        )
+
+    def net_points(ref):
+        """{net: (xs, ys) of its pins on other components} for ``ref``'s nets."""
+        out = {}
+        for name in nets.get(ref, ()):
+            xs, ys = [], []
+            for r2, pad in by_net[name].pins:
+                if r2 != ref and (pad in pins.get(r2, {})):
+                    x, y = pins[r2][pad]
+                    xs.append(x)
+                    ys.append(y)
+            out[name] = (xs, ys)
+        return out
+
+    def cost_grid(m, rot, cand_xy, others_box):
+        """Cost of macro ``m`` at turn ``rot`` with its slot centre at each of ``cand_xy`` (K, 2)."""
+        saved = (m.pos, m.rot)
+        m.pos, m.rot = (0.0, 0.0), rot
+        local = dict(pin_positions(m))
+        cr = courtyard_rect(m)
+        m.pos, m.rot = saved
+        K = len(cand_xy)
+        wl = np.zeros(K)
+        for name, (xs, ys) in net_points(m.ref).items():
+            mine = [local[p] for r2, p in by_net[name].pins if r2 == m.ref and p in local]
+            if not mine:
+                continue
+            mx = np.array([q[0] for q in mine])[None, :] + cand_xy[:, :1]
+            my = np.array([q[1] for q in mine])[None, :] + cand_xy[:, 1:]
+            lox, hix = mx.min(1), mx.max(1)
+            loy, hiy = my.min(1), my.max(1)
+            if xs:
+                lox = np.minimum(lox, min(xs))
+                hix = np.maximum(hix, max(xs))
+                loy = np.minimum(loy, min(ys))
+                hiy = np.maximum(hiy, max(ys))
+            wl += (hix - lox) + (hiy - loy)
+        x0 = cand_xy[:, 0] + cr.left
+        x1 = cand_xy[:, 0] + cr.right
+        y0 = cand_xy[:, 1] + cr.bottom
+        y1 = cand_xy[:, 1] + cr.top
+        if others_box is not None:
+            x0 = np.minimum(x0, others_box[0])
+            y0 = np.minimum(y0, others_box[1])
+            x1 = np.maximum(x1, others_box[2])
+            y1 = np.maximum(y1, others_box[3])
+        return wl + weight * ((x1 - x0) + (y1 - y0))
+
+    before_bad = {k: v for k, v in hard_violations(graph, constraints).items() if v}
+    saved = {c.ref: (c.pos, c.rot) for c in macros}
+    nesting_before = component_nesting(comps)
+    total_before = None
+    radius = max(1, int(round(NEST_RADIUS_MM / g)))
+    for rnd in range(NEST_ROUNDS):
+        report["rounds"] = rnd + 1
+        moved = False
+        for m in macros:
+            occ = occupancy(m.ref)
+            others = boxes_except(m.ref)
+            current = cost_grid(m, m.rot, np.array([m.pos], dtype=float), others)[0]
+            if total_before is None:
+                total_before = current
+            best = (current - 1e-6, None)
+            r_now, c_now, _, _ = slots[m.ref]
+            for k in range(4):
+                rot = (m.rot + 90.0 * k) % 360.0
+                saved_rot = m.rot
+                m.rot = rot
+                slot = _slot_of(m, g, clearance)
+                m.rot = saved_rot
+                if slot is None:
+                    continue
+                _, _, bw, bh = slot
+                if bw > nx or bh > ny:
+                    continue
+                masks = slot_masks(_turned(m, rot), g, clearance, bw, bh)
+                free = free_map(occ, keep_occ, masks, bw, bh)
+                if free is None:
+                    continue
+                # The window around the current slot centre (same centre, new slot size).
+                rc = r_now + slots[m.ref][3] / 2.0 - bh / 2.0
+                cc = c_now + slots[m.ref][2] / 2.0 - bw / 2.0
+                r0 = max(0, int(math.floor(rc)) - radius)
+                c0 = max(0, int(math.floor(cc)) - radius)
+                win = free[
+                    r0 : int(math.ceil(rc)) + radius + 1, c0 : int(math.ceil(cc)) + radius + 1
+                ]
+                rr, cc_ = np.nonzero(win)
+                if not len(rr):
+                    continue
+                rr = rr + r0
+                cc_ = cc_ + c0
+                xy = np.stack(((cc_ + bw / 2.0) * g, (rr + bh / 2.0) * g), axis=1)
+                shift = _shift_of(m, rot)
+                xy = xy - np.array(shift)[None, :]
+                if pad_edge is not None:
+                    from .legalize import pad_edge_box
+
+                    bx0, bx1, by0, by1 = pad_edge_box(_turned(m, rot), pad_edge, width, height)
+                    keep = (
+                        (xy[:, 0] >= bx0 - 1e-9)
+                        & (xy[:, 0] <= bx1 + 1e-9)
+                        & (xy[:, 1] >= by0 - 1e-9)
+                        & (xy[:, 1] <= by1 + 1e-9)
+                    )
+                    xy, rr, cc_ = xy[keep], rr[keep], cc_[keep]
+                    if not len(xy):
+                        continue
+                costs = cost_grid(m, rot, xy, others)
+                j = int(np.argmin(costs))
+                if costs[j] < best[0]:
+                    best = (
+                        float(costs[j]),
+                        (rot, (float(xy[j, 0]), float(xy[j, 1])), int(rr[j]), int(cc_[j]), bw, bh),
+                    )
+            if best[1] is not None:
+                rot, pos, r, c, bw, bh = best[1]
+                report["turned"] += int(abs(((rot - m.rot + 180) % 360) - 180) > 1e-6)
+                m.rot, m.pos = rot, pos
+                slots[m.ref] = (r, c, bw, bh)
+                pins[m.ref] = dict(pin_positions(m))
+                report["moved"] += 1
+                moved = True
+                trace_move(graph, report["moved"])
+        if not moved:
+            break
+    after_bad = {k: v for k, v in hard_violations(graph, constraints).items() if v}
+    new = {k: v for k, v in after_bad.items() if len(v) > len(before_bad.get(k, ()))}
+    if new:
+        for c in macros:
+            c.pos, c.rot = saved[c.ref]
+        report.update(moved=0, turned=0, undone=sorted(new))
+    if new:
+        trace_move(graph, report.get("moved", 0) + 1)  # the undo, for the animation
+    report["nesting"] = component_nesting(comps)
+    if report["moved"]:
+        # The legalized poses the moves started from (the driver's fallback, pnr.hier.top).
+        report["before"] = {
+            ref: [pos[0], pos[1], rot]
+            for ref, (pos, rot) in sorted(saved.items())
+            if (pos, rot) != (graph.component(ref).pos, graph.component(ref).rot)
+        }
+        report["nesting_before"] = nesting_before
+    return report
+
+
+def trace_move(graph, step):
+    """A ``poses`` event (stage ``hull-nest``) of ``graph`` when tracing (``PNR_TRACE_DIR``):
+    the animation slides the blocks into their notches (:mod:`pnr.animate.hier`)."""
+    from pnr import trace
+
+    recorder = trace.current()
+    if recorder is not None:
+        recorder.poses("hull-nest", graph, iter=step, phase="placement")
+
+
+def _turned(comp, rot):
+    """A shallow stand-in of ``comp`` at turn ``rot`` (for :func:`slot_masks`)."""
+    import copy
+
+    t = copy.copy(comp)
+    t.rot = rot
+    return t
+
+
+def _shift_of(comp, rot):
+    from .geometry import body_shift
+
+    t = _turned(comp, rot)
+    return body_shift(t) or (0.0, 0.0)

@@ -635,6 +635,7 @@ class HardRungContract(unittest.TestCase):
         extra = hier_compact_extra(bare, "hier_case.py", 600.0)
         self.assertEqual(extra["PNR_ROUTE_COMPACT"], "TOP,BLOCK")
         self.assertEqual(extra["PNR_MACRO_HULL"], "1")
+        self.assertEqual(extra["PNR_HULL_NEST"], "1")
         self.assertEqual(extra["PNR_HULL_DOVETAIL"], HIER_COMPACT_DEFAULT_ENV["PNR_HULL_DOVETAIL"])
         self.assertEqual(extra["PNR_ROUTE_COMPACT_TIMEOUT_S"], repr(600.0))
         # Never for the flat driver.
@@ -650,6 +651,35 @@ class HardRungContract(unittest.TestCase):
             args = parser().parse_args(["--out", "x"] + flags)
             self.assertTrue(hier_compact_explicit(args), flags)
             self.assertEqual(hier_compact_extra(args, "hier_case.py", 600.0), {}, flags)
+
+    def test_hull_nest_rides_on_the_hierarchical_bundle(self):
+        """Nesting defaults on for the hierarchical bundle; 0 preserves an explicit opt-out
+        without counting as an explicit bundle flag; never defaulted for the flat driver."""
+        from run import HIER_COMPACT_DEFAULT_ENV, hier_compact_explicit, hier_compact_extra
+
+        on = parser().parse_args(["--out", "x", "--hull-nest", "1"])
+        self.assertFalse(hier_compact_explicit(on))
+        self.assertEqual(hier_compact_extra(on, "hier_case.py", 600.0)["PNR_HULL_NEST"], "1")
+        self.assertEqual(hier_compact_extra(on, "route_case.py", 600.0), {})
+        off = parser().parse_args(["--out", "x", "--hull-nest", "0"])
+        self.assertEqual(hier_compact_extra(off, "hier_case.py", 600.0)["PNR_HULL_NEST"], "0")
+        bare = parser().parse_args(["--out", "x"])
+        self.assertEqual(
+            hier_compact_extra(bare, "hier_case.py", 600.0).get("PNR_HULL_NEST"),
+            HIER_COMPACT_DEFAULT_ENV.get("PNR_HULL_NEST"),
+        )
+
+    def test_explicit_hull_bundle_preserves_nesting_opt_out(self):
+        from run import hier_compact_extra, hull_nest_environment, scrubbed_suite_env
+
+        for value in ("0", "1"):
+            args = parser().parse_args(["--out", "x", "--macro-hull", "--hull-nest", value])
+            env = scrubbed_suite_env({"PNR_HULL_NEST": "1"})
+            env.update(hull_nest_environment(args))
+            env.update(hier_compact_extra(args, "hier_case.py", 600.0))
+            self.assertEqual(env["PNR_HULL_NEST"], value)
+        bare = parser().parse_args(["--out", "x"])
+        self.assertEqual(hull_nest_environment(bare), {})
 
 
 if __name__ == "__main__":

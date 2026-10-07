@@ -138,6 +138,11 @@ def build(trace, title=None, subtitle=None):
     if top is not None:
         scenes.append(dict(type="lift", scope=top.scope))
         scenes.append(dict(type="placement", scope=top.scope, label=top.scope))
+        if any(e.get("stage") == "hull-nest" for e in trace.kind(top.scope, "poses")):
+            # PNR_HULL_NEST: the legalized blocks slide into each other's notches.
+            scenes.append(
+                dict(type="move", scope=top.scope, label="blocks nest into each other's notches")
+            )
     scenes.append(_chapter(3))
     if route is not None:
         scenes.append(dict(type="route", scope=route.scope, label=route.scope))
@@ -505,8 +510,7 @@ class HierTimeline(Timeline):
             return super()._tile_view(tile)
         start = scope.meta.get("start")
         poses = self._final_poses(start)
-        legal = self.trace.kind(start, "legal")
-        bodies = event_bodies(legal[-1]) if legal else {}
+        bodies = self._final_bodies(start)
         ends = [e for e in scope.events if e["kind"] == "route_end"]
         committed, groups = {}, {}
         if ends:

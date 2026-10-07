@@ -3,7 +3,8 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
+Last updated: 2026-10-07 (opt-in energy-track integration, #90). Previous status:
+2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 `claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
 on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
 engine's fixes for them on `claude/gap-fixes`, with `claude/gap-constraints` merged; the gloss
@@ -35,6 +36,15 @@ board edges, the hierarchical ladder driver and their animations on
   rebase on #64/#70 and A/B again on top of detailed placement; hull support in `compact.py`
   and the keep legalizer (gp_polish still turns off over hull bodies); the push-and-shove
   router as the reroute.
+
+- **Energy track optimization (#90, default off).** The witness-growth/reverse-cost proposer is
+  wired into the native gloss transaction controller with exact native checks, joint-refill IR
+  and reference evidence gates, protected metadata/copper guards, spatial quiet-chain invalidation,
+  and phase-end rollback. Shapely/GEOS dependencies are hash-locked separately for controller and
+  KiCad Python ABIs. Focused tests and actual clean-fixture native acceptance/refusal/byte-identity
+  checks pass; a four-state recorded native animation documents the change. Next: final aggregate
+  checks, review and supported-platform CI before merge. RF/SI-dependent plane edits without
+  complete external evidence remain refused; no radar-board completion or joint pair solver claim.
 
 - **Routing engine for radar60 Rev A, stage 3b** (#49, branch `claude/radar-routing-engine-2`;
   all opt-in, byte-identical where undeclared). Router: pad-local clearance and mask margin (data),

@@ -148,6 +148,31 @@ class RuntimeLockTest(unittest.TestCase):
                 self.assertEqual(hashes, bazel_hashes, f"{arch}: {name} hashes")
 
 
+class KicadEnergyLockTest(unittest.TestCase):
+    """KiCad's separate Python has the same geometry pins without controller packages."""
+
+    def test_geometry_requirements_are_in_main_requirements(self):
+        wanted = _requirement_lines("docker/yapnr/energy-kicad.in")
+        self.assertEqual(wanted, ["numpy>=1.26,<2", "shapely==2.1.2"])
+        self.assertEqual(sorted(set(wanted) - set(_requirement_lines("requirements.in"))), [])
+
+    def test_worker_locks_match_bazel_geometry_pins_and_hashes(self):
+        bazel = parse_lock(_read("requirements.lock"))
+        expected = {name: bazel[name] for name in ("numpy", "shapely")}
+        for arch in ("arm64", "amd64"):
+            with self.subTest(arch=arch):
+                lock = parse_lock(_read(f"docker/yapnr/energy-kicad-{arch}.lock"))
+                self.assertEqual(lock, expected)
+                self.assertTrue(all(hashes for _, hashes in lock.values()))
+
+    def test_generator_uses_separate_python_312_resolution(self):
+        script = _read("tools/image/update_runtime_locks.sh")
+        self.assertIn("uv pip compile docker/yapnr/energy-kicad.in", script)
+        self.assertIn("--python-version 3.12", script)
+        self.assertIn("compile_energy_kicad arm64 aarch64-manylinux_2_28", script)
+        self.assertIn("compile_energy_kicad amd64 x86_64-manylinux_2_28", script)
+
+
 class KicadBaseTest(unittest.TestCase):
     def test_kicad_pins_are_declared_once(self):
         # _dockerfile_arg insists on exactly one declaration with a value: every stage

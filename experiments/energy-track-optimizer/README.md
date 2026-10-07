@@ -1,10 +1,13 @@
 # Energy track optimizer: isolated prototype v0.2
 
-A reviewable candidate generator and transactional controller.
+Historical standalone candidate generator and transactional controller.
+The engine integration now lives in `hardware/pnr/pnr/energy_track*.py` and is
+documented in `docs/design/energy-track.md`; these prototype files preserve the
+earlier experiments and their more limited validation scope.
 The optional spatial follow-on is documented in [SPATIAL.md](SPATIAL.md); it is
 default-off and preserves the separately delivered v0.1 baseline. The production
-router and active board are unchanged. No remote push, merge, paid compute or
-production integration took place. `prototype/hook.py` is a lazy, default-off
+historical experiment did not alter the production engine or active board.
+`prototype/hook.py` is a lazy, default-off
 hook; no existing engine code imports it.
 
 ## Measured results
@@ -145,7 +148,8 @@ Do not substitute an active board or suppress any failing gate.
 
 ## Verification status
 
-43 prototype unit tests passed (28 baseline plus 15 spatial follow-on tests). The pinned upstream glosser's 65 pure-geometry
+43 prototype unit tests passed (28 baseline plus 15 spatial follow-on tests).
+The pinned upstream glosser's 65 pure-geometry
 tests passed. Source privacy scan passed. Full Bazel and presubmit results are
 recorded separately in `results/check-status.json`; focused passes do not imply
 those aggregate gates passed. No engine source was edited.

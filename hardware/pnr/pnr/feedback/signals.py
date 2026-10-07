@@ -230,6 +230,7 @@ PNR_ROOT = Path(__file__).resolve().parents[2]  # .../hardware/pnr of this tree
 EVAL_ENTRIES = ("pnr.full_iteration", "pnr.hier.native_block", "pnr.hier.synth", "pnr.hier.blocks")
 DRIVER_MODULES = ("pnr.feedback", "pnr.mc", "pnr.hier.synth_native", "pnr.hier.top")
 GLOSS_MODULES = ("pnr.gloss", "pnr.gloss_geometry")  # evaluation code with PNR_GLOSS=1 only
+ENERGY_MODULES = ("pnr.energy_track", "pnr.energy_track_geometry", "pnr.energy_track_spatial")
 GLOSS_SHOVE_MODULES = ("pnr.shove", "pnr.shove.gates")  # what pnr.gloss runs of pnr.shove
 _MODULE_RE = None
 
@@ -253,7 +254,9 @@ def _gloss():
     return os.environ.get("PNR_GLOSS") == "1"
 
 
-def _excluded(module, router, gloss=False):
+def _excluded(module, router, gloss=False, energy=False):
+    if module in ENERGY_MODULES and not (gloss and energy):
+        return True
     if gloss and module in GLOSS_SHOVE_MODULES:
         return False
     prefixes = DRIVER_MODULES + (("pnr.shove",) if router == "plain" else ())
@@ -272,7 +275,7 @@ def _parse(path):
         return None
 
 
-def eval_code_modules(pnr_root, router, gloss=None):
+def eval_code_modules(pnr_root, router, gloss=None, energy=None):
     """{module: source file} of the modules an evaluation under ``router`` can run (``gloss``:
     with PNR_GLOSS=1; None: this process's flag)."""
     import ast
@@ -289,10 +292,11 @@ def eval_code_modules(pnr_root, router, gloss=None):
         return p.with_suffix(".py") if p.with_suffix(".py").exists() else None
 
     gloss = _gloss() if gloss is None else bool(gloss)
+    energy = os.environ.get("PNR_GLOSS_ENERGY") == "1" if energy is None else bool(energy)
     todo, seen = list(EVAL_ENTRIES), {}
     while todo:
         m = todo.pop()
-        if m in seen or _excluded(m, router, gloss):
+        if m in seen or _excluded(m, router, gloss, energy):
             continue
         f = path_of(m)
         if f is None:
@@ -450,10 +454,10 @@ def code_files(modules, pnr_root, scheme=CODE_KEY_SCHEME):
     return {k: out[k] for k in sorted(out)}
 
 
-def eval_code_files(pnr_root, router, scheme=CODE_KEY_SCHEME, gloss=None):
+def eval_code_files(pnr_root, router, scheme=CODE_KEY_SCHEME, gloss=None, energy=None):
     """{module (scheme 2) or relative path (scheme 1): digest} of the modules an
     evaluation under ``router`` (and ``gloss``) can run."""
-    return code_files(eval_code_modules(pnr_root, router, gloss), pnr_root, scheme)
+    return code_files(eval_code_modules(pnr_root, router, gloss, energy), pnr_root, scheme)
 
 
 def code_sha(files, scheme=CODE_KEY_SCHEME):
@@ -463,18 +467,20 @@ def code_sha(files, scheme=CODE_KEY_SCHEME):
     return hashlib.sha1(json.dumps([scheme, sorted(files.items())]).encode()).hexdigest()[:10]
 
 
-def code_key(pnr_root=None, router=None, scheme=CODE_KEY_SCHEME, gloss=None):
+def code_key(pnr_root=None, router=None, scheme=CODE_KEY_SCHEME, gloss=None, energy=None):
     """Code key of the evaluation code of a tree (default: this tree, this process's router
     and PNR_GLOSS)."""
     return code_sha(
-        eval_code_files(pnr_root or PNR_ROOT, router or _router(), scheme, gloss), scheme
+        eval_code_files(pnr_root or PNR_ROOT, router or _router(), scheme, gloss, energy), scheme
     )
 
 
-def code_stamp(pnr_root=None, router=None, gloss=None):
+def code_stamp(pnr_root=None, router=None, gloss=None, energy=None):
     """The fields a record stamps for the code that evaluates it: ``code`` and its
     ``code_key_scheme``. Stamp both, always together."""
-    return dict(code=code_key(pnr_root, router, gloss=gloss), code_key_scheme=CODE_KEY_SCHEME)
+    return dict(
+        code=code_key(pnr_root, router, gloss=gloss, energy=energy), code_key_scheme=CODE_KEY_SCHEME
+    )
 
 
 class TreeCode:

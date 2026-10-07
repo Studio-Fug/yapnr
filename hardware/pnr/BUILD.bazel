@@ -143,6 +143,10 @@ filegroup(
         # PNR_GLOSS=1 gloss/dekink/corridor pass (imported only with the flag set).
         "pnr/gloss.py",
         "pnr/gloss_geometry.py",
+        # PNR_GLOSS_ENERGY=1: lazily imported; KiCad Python must provide Shapely.
+        "pnr/energy_track.py",
+        "pnr/energy_track_geometry.py",
+        "pnr/energy_track_spatial.py",
         "pnr/track_graph.py",
         "pnr/quality.py",
         # pnr.quality measures routed length as KiCad's DRC does (pnr.length_model).
@@ -176,21 +180,40 @@ filegroup(
     ] + glob(["si_models/*.json"]),
 )
 
-# Core: graph + constraints + ingest. No torch/numpy — the light path that the
+# Exact copper geometry and the dynamic obstacle grid. No KiCad imports; Shapely
+# is declared here and imported only when the default-off energy pass is selected.
+py_library(
+    name = "pnr_energy_track_geometry",
+    srcs = [
+        "pnr/energy_track_geometry.py",
+        "pnr/energy_track_spatial.py",
+    ],
+    imports = ["."],
+    deps = [requirement("shapely")],
+)
+
+# Core: graph + constraints + ingest. No eager numerical imports: the light path that the
 # KiCad pcbnew flow and the schema tests use.
 py_library(
     name = "pnr",
-    srcs = glob([
-        "pnr/*.py",
-        "pnr/drc_warm/*.py",
-        "pnr/fanout/*.py",
-        "pnr/shove/*.py",
-        "pnr/si/*.py",
-    ]),  # no torch/native imports at package load
+    srcs = glob(
+        [
+            "pnr/*.py",
+            "pnr/drc_warm/*.py",
+            "pnr/fanout/*.py",
+            "pnr/shove/*.py",
+            "pnr/si/*.py",
+        ],
+        exclude = [
+            "pnr/energy_track_geometry.py",
+            "pnr/energy_track_spatial.py",
+        ],
+    ),  # no torch/native imports at package load
     # SI v1 model library (pnr.si.models reads hardware/pnr/si_models next to the package).
     data = glob(["si_models/*.json"]),
     imports = ["."],
     deps = [
+        ":pnr_energy_track_geometry",
         # pnr.fab_profile: vendor data profiles (oshpark-4l, jlc-4l, ...) beside the built-in ones.
         "//yapnr/fab:capability",
         requirement("pyyaml"),  # constraints.py parses the sidecar YAML
@@ -1162,6 +1185,51 @@ py_test(
     srcs = ["tests/test_keyhole.py"],
     main = "tests/test_keyhole.py",
     deps = [":pnr_detail"],
+)
+
+# Default-off energy-track optimizer: pure geometry, dynamic-grid correctness,
+# and the adapter's dependency-free gate/controller contract.
+py_test(
+    name = "energy_track_geometry_test",
+    size = "small",
+    srcs = ["tests/test_energy_track_geometry.py"],
+    main = "tests/test_energy_track_geometry.py",
+    deps = [":pnr", ":pnr_energy_track_geometry"],
+)
+
+py_test(
+    name = "energy_track_spatial_test",
+    size = "small",
+    srcs = ["tests/test_energy_track_spatial.py"],
+    main = "tests/test_energy_track_spatial.py",
+    deps = [":pnr", ":pnr_energy_track_geometry"],
+)
+
+py_test(
+    name = "energy_track_integration_test",
+    size = "small",
+    srcs = ["tests/test_energy_track_integration.py"],
+    data = glob(["pnr/**/*.py"]),  # code-key closure scans the engine source tree
+    main = "tests/test_energy_track_integration.py",
+    deps = [":pnr"],
+)
+
+# Real engine-through-GlossPass native acceptance and fail-closed refusals.
+py_test(
+    name = "energy_track_native_test",
+    size = "large",
+    srcs = [
+        "tests/gloss_fixture.py",
+        "tests/test_energy_track_native.py",
+    ],
+    imports = ["tests"],
+    main = "tests/test_energy_track_native.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr", ":pnr_detail"],
 )
 
 # PNR_GLOSS geometry core (pnr.gloss_geometry): pure Python, no KiCad; the router's keyhole

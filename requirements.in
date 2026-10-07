@@ -27,6 +27,10 @@ numpy>=1.26,<2
 # Sidecar constraints and rules files (constraints.yaml, annotations.yaml).
 pyyaml>=6
 
+# Exact buffered-copper geometry for the default-off energy track optimizer.
+# Pinned to the validated GEOS-backed experiment before widening compatibility.
+shapely==2.1.2
+
 # --- Tooling ------------------------------------------------------------------
 # Contributor and documentation tools, not runtime dependencies (they stay out of
 # requirements-runtime.in and the container image).

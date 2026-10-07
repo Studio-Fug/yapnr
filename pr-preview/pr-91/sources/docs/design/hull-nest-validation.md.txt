@@ -1,13 +1,45 @@
 # Hull nesting: validation status
 
-`PNR_HULL_NEST` remains off by default. The integration of PR #91 with main
-`c57077df` changes no nesting algorithm or flag default.
+Nesting is enabled by default for hull macros, by the owner's explicit decision on
+2026-10-07. `PNR_HULL_NEST=0`, `run.py --hull-nest 0`, or a ladder campaign's
+`hull_nest = false` opts out. Plain placements without hull macros are unaffected.
+The legality checks, native DRC gates, un-nested knit and rectangle fallback are unchanged.
+This default choice does not imply that nesting improves every routing metric.
+
+## Matched native example before the default change
+
+The integrated head `e5332b11625a7158ceb3333bc6ca521452370163` with
+`--hull-nest 1` was compared with main `c57077df3eb59bef496230558f330add15f3d7b0`
+using case `13-dovetail-blocks-23`, seed 0 chosen before either run, the standard full
+search budget and automatic seed selection. Both used identical generated inputs and
+the same native maze runtime and headless KiCad 10.0.6. Both selected `top-03-route`.
+
+| Final metric                  | Main default | Nesting enabled |
+| ----------------------------- | -----------: | --------------: |
+| Hull interlock (mm²)          |         21.5 |         35.3125 |
+| Hull collision (mm²)          |            0 |               0 |
+| Macro rectangle overlap (mm²) |        82.25 |             126 |
+| Vias                          |           30 |              37 |
+| Copper length (mm)            |   524.764992 |      526.062197 |
+
+Both passed native DRC with zero violations and unconnected items, preserved the
+netlist, completed knitting and satisfied all three constraints. Metrics were recomputed
+from recorded final macro poses and hull geometry. Main already interlocks; the nesting
+arm uses seven more vias and slightly more copper. This supplies an actual native-clean
+interlock example, not a global quality claim or validation of the later default-on head.
+The final-head versus main campaigns remain pending.
+
+![Two recorded native final boards](../feature-animations/hull-nest-native-comparison.gif)
+
+This comparison contains exactly the two recorded native final boards with a fixed
+viewport and no interpolation. Full logs, boards, traces, DRC results and provenance
+are preserved separately with the proof.
 
 ## Campaign receipts
 
 The following existing GCP summaries were fetched and checked on 2026-10-07.
 They ran source `f990b165`, before the integration with #88, #90 and #93.
-No new campaign was submitted for this integration.
+These historical receipts do not validate the default-on head.
 
 | Campaign                 | Coverage                                  | Verified result                                                                                  |
 | ------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -28,7 +60,7 @@ Twin-bank totals over four seeds:
 
 The missing dovetail and quad-bank comparisons remain an acceptance gap. The
 completed cells do not establish that every hierarchical rung is no worse.
-The queued jobs were inspected only; they were not changed or resubmitted.
+Replacement jobs require the final tested source and the approved total spending cap.
 
 ## Animation evidence
 

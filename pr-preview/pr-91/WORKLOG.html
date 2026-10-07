@@ -314,10 +314,11 @@ board edges, the hierarchical ladder driver and their animations on
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul>
-<li><p><strong>PR integration review (2026-10-07).</strong> PR #91 integrates main through #90. Nesting stays
-default-off. Completed ladder and flat-hard A/B arms agree; twin-bank passes all arms. Dovetail
-and quad-bank campaigns remain queued on a missing GCP template. See <a class="reference internal" href="docs/design/hull-nest-validation.html"><span class="std std-doc">validation
-status</span></a>.</p></li>
+<li><p><strong>Hull nesting default (2026-10-07, PR #91).</strong> Owner requested default-on nesting for hull
+macros with explicit opt-out. Legality/native gates and both routing fallbacks are unchanged.
+The integrated native dovetail example is clean with nonzero interlock; vias increase in
+that one pair. Final-head versus main dovetail and quad-bank campaigns remain pending under
+the approved total budget. See <a class="reference internal" href="docs/design/hull-nest-validation.html"><span class="std std-doc">validation status</span></a>.</p></li>
 <li><p><strong>Route-then-compact and hull packing</strong> (PR #86, branch <code class="docutils literal notranslate"><span class="pre">claude/route-compact</span></code>; design
 <a class="reference internal" href="docs/design/route-compact.html"><span class="std std-doc">docs/design/route-compact.md</span></a>). <code class="docutils literal notranslate"><span class="pre">PNR_ROUTE_COMPACT</span></code>
 (<code class="docutils literal notranslate"><span class="pre">TOP</span></code>, <code class="docutils literal notranslate"><span class="pre">BLOCK</span></code>, <code class="docutils literal notranslate"><span class="pre">FLAT</span></code>; default off): after routing, order-preserving 1D compaction (x then

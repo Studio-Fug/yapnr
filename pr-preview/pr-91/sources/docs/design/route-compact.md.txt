@@ -7,6 +7,9 @@ copper -5.7 %, no rung worse); `regression/run.py`'s `hier_compact_extra()` appl
 any of `--route-compact` (its `0`/`off` opts out), `--macro-hull` or `--hull-dovetail` is given
 explicitly. Everywhere else — `FLAT`, and the flags read directly (not through the runner) —
 stays behind default-off flags (`PNR_ROUTE_COMPACT`, `PNR_MACRO_HULL`, `PNR_HULL_DOVETAIL`).
+Hull nesting is now included for hull macros by owner decision; `--hull-nest 0` or
+`PNR_HULL_NEST=0` disables it without disabling hulls. See the
+[nesting evidence and pending comparisons](hull-nest-validation.md).
 Code: `hardware/pnr/pnr/place/route_compact.py`, `hardware/pnr/pnr/hier/compact_block.py`,
 `hardware/pnr/pnr/place/hull.py`, hooks in `regression/hier_case.py` and
 `pnr.route.feedback.route_and_place`.

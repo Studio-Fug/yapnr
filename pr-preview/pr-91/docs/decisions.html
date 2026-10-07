@@ -305,6 +305,13 @@ in the same change as the file that holds a pin (<code class="docutils literal n
 PR7 under <code class="docutils literal notranslate"><span class="pre">docs/adr/</span></code>.</p>
 <section id="decision-log">
 <h2>Decision log<a class="headerlink" href="#decision-log" title="Link to this heading">¶</a></h2>
+<p>Owner decision of 2026-10-07 (PR #91): enable hull nesting by default for hull macros.
+Keep explicit opt-out through <code class="docutils literal notranslate"><span class="pre">PNR_HULL_NEST=0</span></code>, <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--hull-nest</span> <span class="pre">0</span></code> and campaign
+<code class="docutils literal notranslate"><span class="pre">hull_nest</span> <span class="pre">=</span> <span class="pre">false</span></code>; keep legality, native validation and routing fallbacks unchanged.
+This is an explicit exception to the usual default-off rollout. The matched local
+native example and the broader pending campaign are documented in
+<a class="reference internal" href="design/hull-nest-validation.html"><span class="std std-doc">hull nesting validation</span></a>; the decision is not a claim
+that every routing metric improves.</p>
 <p>Owner decisions of 2026-09-29, taken while planning the migration (see
 <a class="reference internal" href="migration-plan.html"><span class="std std-doc">the migration plan</span></a>, §0.2):</p>
 <ul class="simple">

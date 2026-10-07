@@ -1,0 +1,582 @@
+{
+  "schema": "pnr-live-event-v1",
+  "id": "1791313608838620734-bcc455c6",
+  "time": 1791313608.83863,
+  "kind": "source_round_start",
+  "candidate": "ladder/11-buck-vqfnhr-4L-SGPS-pour/s1",
+  "iteration": null,
+  "data": {
+    "phase": "source P/R round 1",
+    "provisional": true,
+    "source_round": 1,
+    "cached_initial_finalist": true
+  },
+  "layout": {
+    "components": [
+      {
+        "address": "",
+        "bbox": [3.45, 2.01],
+        "courtyard": [3.49, 2.05],
+        "footprint": "Capacitor_SMD:C_0805_2012Metric",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.25,
+            "name": "1",
+            "net": "VIN",
+            "offset": [-0.95, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.0, 1.45],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.25,
+            "name": "2",
+            "net": "GND",
+            "offset": [0.95, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.0, 1.45],
+            "through_hole": false
+          }
+        ],
+        "pos": [11.0, 11.9],
+        "ref": "C1",
+        "rot": 0.0,
+        "side": "top",
+        "smd_body": true
+      },
+      {
+        "address": "",
+        "bbox": [3.45, 2.01],
+        "courtyard": [3.49, 2.05],
+        "footprint": "Capacitor_SMD:C_0805_2012Metric",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.25,
+            "name": "1",
+            "net": "VOUT",
+            "offset": [-0.95, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.0, 1.45],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.25,
+            "name": "2",
+            "net": "GND",
+            "offset": [0.95, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.0, 1.45],
+            "through_hole": false
+          }
+        ],
+        "pos": [9.875, 5.5],
+        "ref": "C2",
+        "rot": 180.0,
+        "side": "top",
+        "smd_body": true
+      },
+      {
+        "address": "",
+        "bbox": [3.45, 2.01],
+        "courtyard": [3.49, 2.05],
+        "footprint": "Capacitor_SMD:C_0805_2012Metric",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.25,
+            "name": "1",
+            "net": "VOUT",
+            "offset": [-0.95, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.0, 1.45],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.25,
+            "name": "2",
+            "net": "GND",
+            "offset": [0.95, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.0, 1.45],
+            "through_hole": false
+          }
+        ],
+        "pos": [7.25, 9.625],
+        "ref": "C3",
+        "rot": 90.0,
+        "side": "top",
+        "smd_body": true
+      },
+      {
+        "address": "",
+        "bbox": [3.59, 8.69],
+        "body": [-1.815, -4.365, 1.815, 1.815],
+        "courtyard": [3.63, 8.73],
+        "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [1.0, 1.0],
+            "land_corner": null,
+            "name": "1",
+            "net": "VIN",
+            "offset": [0.0, -0.0],
+            "plated": true,
+            "plated_land_radius": 0.85,
+            "size": [1.7, 1.7],
+            "through_hole": true
+          },
+          {
+            "drill_size": [1.0, 1.0],
+            "land_corner": null,
+            "name": "2",
+            "net": "GND",
+            "offset": [0.0, -2.54],
+            "plated": true,
+            "plated_land_radius": 0.85,
+            "size": [1.7, 1.7],
+            "through_hole": true
+          }
+        ],
+        "pos": [2.5, 9.0],
+        "ref": "J1",
+        "rot": 0.0,
+        "side": "top",
+        "smd_body": false
+      },
+      {
+        "address": "",
+        "bbox": [3.59, 13.75],
+        "body": [-1.815, -6.895, 1.815, 1.815],
+        "courtyard": [3.63, 13.79],
+        "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [1.0, 1.0],
+            "land_corner": null,
+            "name": "1",
+            "net": "VOUT",
+            "offset": [0.0, -0.0],
+            "plated": true,
+            "plated_land_radius": 0.85,
+            "size": [1.7, 1.7],
+            "through_hole": true
+          },
+          {
+            "drill_size": [1.0, 1.0],
+            "land_corner": null,
+            "name": "2",
+            "net": "GND",
+            "offset": [0.0, -2.54],
+            "plated": true,
+            "plated_land_radius": 0.85,
+            "size": [1.7, 1.7],
+            "through_hole": true
+          },
+          {
+            "drill_size": [1.0, 1.0],
+            "land_corner": null,
+            "name": "3",
+            "net": "PG",
+            "offset": [0.0, -5.08],
+            "plated": true,
+            "plated_land_radius": 0.85,
+            "size": [1.7, 1.7],
+            "through_hole": true
+          }
+        ],
+        "pos": [23.5, 9.0],
+        "ref": "J2",
+        "rot": 0.0,
+        "side": "top",
+        "smd_body": false
+      },
+      {
+        "address": "",
+        "bbox": [4.61, 3.21],
+        "courtyard": [4.65, 3.25],
+        "footprint": "Inductor_SMD:L_1210_3225Metric",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.25,
+            "name": "1",
+            "net": "SW",
+            "offset": [-1.4, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.25, 2.65],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.25,
+            "name": "2",
+            "net": "VOUT",
+            "offset": [1.4, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.25, 2.65],
+            "through_hole": false
+          }
+        ],
+        "pos": [15.6, 8.25],
+        "ref": "L1",
+        "rot": 0.0,
+        "side": "top",
+        "smd_body": true
+      },
+      {
+        "address": "",
+        "bbox": [1.91, 0.99],
+        "courtyard": [1.95, 1.03],
+        "footprint": "Resistor_SMD:R_0402_1005Metric",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.135,
+            "name": "1",
+            "net": "VOUT",
+            "offset": [-0.51, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.54, 0.64],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.135,
+            "name": "2",
+            "net": "FB",
+            "offset": [0.51, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.54, 0.64],
+            "through_hole": false
+          }
+        ],
+        "pos": [19.375, 7.125],
+        "ref": "R1",
+        "rot": 90.0,
+        "side": "top",
+        "smd_body": true
+      },
+      {
+        "address": "",
+        "bbox": [1.91, 0.99],
+        "courtyard": [1.95, 1.03],
+        "footprint": "Resistor_SMD:R_0402_1005Metric",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.135,
+            "name": "1",
+            "net": "FB",
+            "offset": [-0.51, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.54, 0.64],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.135,
+            "name": "2",
+            "net": "GND",
+            "offset": [0.51, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.54, 0.64],
+            "through_hole": false
+          }
+        ],
+        "pos": [19.625, 9.875],
+        "ref": "R2",
+        "rot": 90.0,
+        "side": "top",
+        "smd_body": true
+      },
+      {
+        "address": "",
+        "bbox": [1.91, 0.99],
+        "courtyard": [1.95, 1.03],
+        "footprint": "Resistor_SMD:R_0402_1005Metric",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.135,
+            "name": "1",
+            "net": "VOUT",
+            "offset": [-0.51, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.54, 0.64],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.135,
+            "name": "2",
+            "net": "PG",
+            "offset": [0.51, -0.0],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.54, 0.64],
+            "through_hole": false
+          }
+        ],
+        "pos": [15.125, 5.125],
+        "ref": "R3",
+        "rot": 0.0,
+        "side": "top",
+        "smd_body": true
+      },
+      {
+        "address": "",
+        "bbox": [3.1, 2.95],
+        "body": [-1.55, -1.295, 1.495, 1.495],
+        "courtyard": [3.1, 2.99],
+        "footprint": "Package_DFN_QFN:Texas_RPU0010A_VQFN-HR-10_2x2mm_P0.5mm",
+        "locked": false,
+        "pads": [
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.05,
+            "name": "1",
+            "net": "VIN",
+            "offset": [-0.875, 0.25],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.65, 0.2],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.05,
+            "name": "2",
+            "net": "VIN",
+            "offset": [-0.7, -0.25],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.0, 0.2],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.05,
+            "name": "3",
+            "net": "PG",
+            "offset": [-0.875, -0.75],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.65, 0.2],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.05,
+            "name": "4",
+            "net": "SW",
+            "offset": [0.7, -0.75],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.0, 0.2],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.05,
+            "name": "5",
+            "net": "FB",
+            "offset": [0.875, -0.25],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.65, 0.2],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.05,
+            "name": "6",
+            "net": "GND",
+            "offset": [0.7, 0.25],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [1.0, 0.2],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.0625,
+            "name": "7",
+            "net": "GND",
+            "offset": [0.75, 0.925],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.25, 0.55],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.0625,
+            "name": "8",
+            "net": "GND",
+            "offset": [0.25, 0.925],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.25, 0.55],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.0625,
+            "name": "9",
+            "net": "VIN",
+            "offset": [-0.25, 0.925],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.25, 0.55],
+            "through_hole": false
+          },
+          {
+            "drill_size": [0.0, 0.0],
+            "land_corner": 0.0625,
+            "name": "10",
+            "net": "VIN",
+            "offset": [-0.75, 0.925],
+            "plated": false,
+            "plated_land_radius": 0.0,
+            "size": [0.25, 0.55],
+            "through_hole": false
+          }
+        ],
+        "pos": [11.0, 9.0],
+        "ref": "U1",
+        "rot": 0.0,
+        "side": "top",
+        "smd_body": true
+      }
+    ],
+    "name": "source",
+    "nets": [
+      {
+        "code": 3,
+        "name": "FB",
+        "pins": [
+          ["R2", "1"],
+          ["R1", "2"],
+          ["U1", "5"]
+        ]
+      },
+      {
+        "code": 2,
+        "name": "GND",
+        "pins": [
+          ["C1", "2"],
+          ["R2", "2"],
+          ["J1", "2"],
+          ["C2", "2"],
+          ["C3", "2"],
+          ["J2", "2"],
+          ["U1", "6"],
+          ["U1", "7"],
+          ["U1", "8"]
+        ]
+      },
+      {
+        "code": 5,
+        "name": "PG",
+        "pins": [
+          ["R3", "2"],
+          ["J2", "3"],
+          ["U1", "3"]
+        ]
+      },
+      {
+        "code": 6,
+        "name": "SW",
+        "pins": [
+          ["L1", "1"],
+          ["U1", "4"]
+        ]
+      },
+      {
+        "code": 1,
+        "name": "VIN",
+        "pins": [
+          ["C1", "1"],
+          ["J1", "1"],
+          ["U1", "1"],
+          ["U1", "2"],
+          ["U1", "9"],
+          ["U1", "10"]
+        ]
+      },
+      {
+        "code": 4,
+        "name": "VOUT",
+        "pins": [
+          ["R3", "1"],
+          ["R1", "1"],
+          ["C2", "1"],
+          ["L1", "2"],
+          ["C3", "1"],
+          ["J2", "1"]
+        ]
+      }
+    ],
+    "outline": {
+      "height": 18.0,
+      "polygon": [],
+      "width": 26.0
+    },
+    "schema": "v0",
+    "stack": {
+      "layers": [
+        {
+          "copper_mm": 0.035,
+          "name": "F.Cu",
+          "type": "signal",
+          "zones": []
+        },
+        {
+          "copper_mm": 0.0152,
+          "name": "In1.Cu",
+          "type": "power",
+          "zones": []
+        },
+        {
+          "copper_mm": 0.0152,
+          "name": "In2.Cu",
+          "type": "power",
+          "zones": []
+        },
+        {
+          "copper_mm": 0.035,
+          "name": "B.Cu",
+          "type": "signal",
+          "zones": []
+        }
+      ]
+    }
+  }
+}

@@ -932,6 +932,16 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--hull-dovetail",
+        type=float,
+        default=None,
+        metavar="W",
+        help=(
+            "PNR_HULL_DOVETAIL=W: with --macro-hull, global placement packs the hull bodies "
+            "(their smooth bounding box, weight W), so blocks interlock"
+        ),
+    )
+    ap.add_argument(
         "--power-first",
         action="store_true",
         help="PNR_POWER_FIRST=1: lexicographic power-first placement (pnr.place.power_first)",
@@ -1066,6 +1076,12 @@ def main():
         env["PNR_ROUTE_COMPACT"] = args.route_compact
     if args.macro_hull:
         env["PNR_MACRO_HULL"] = "1"
+    if args.hull_dovetail is not None:
+        from math import isfinite
+
+        if not (isfinite(args.hull_dovetail) and args.hull_dovetail >= 0):
+            raise SystemExit("--hull-dovetail takes a non-negative weight")
+        env["PNR_HULL_DOVETAIL"] = repr(float(args.hull_dovetail))
     if args.route_pairs_diff_pairs:
         env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
     if args.detail_pitch_mm is not None:

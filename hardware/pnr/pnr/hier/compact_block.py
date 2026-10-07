@@ -155,20 +155,26 @@ def compact_block(graph, constraints, rules, blocks, names, rec, *, iters, route
             copper_mm=round(float(r.get("copper_mm", 0.0)), 3),
         )
 
-    placed, out, report = rc.compact_loop(
-        BoardGraph.from_json(rec["placed"]),
-        rec,
-        constraints=board_constraints(rec["width"], rec["height"]),
-        items_of=items_of,
-        copper_of=copper_of,
-        reroute=reroute,
-        metrics_of=metrics_of,
-        min_gap=float(board_constraints(rec["width"], rec["height"]).board.default_clearance_mm),
-        outline=lambda r: (r["width"], r["height"]),
-        label="block:" + names[0],
-        observe=accepted,
-        check=lambda a, b: rc.new_violations(
-            a, b, board_constraints(state["rec"]["width"], state["rec"]["height"])
+    placed, out, report = rc.guarded(
+        "block:" + names[0],
+        (None, rec),
+        lambda: rc.compact_loop(
+            BoardGraph.from_json(rec["placed"]),
+            rec,
+            constraints=board_constraints(rec["width"], rec["height"]),
+            items_of=items_of,
+            copper_of=copper_of,
+            reroute=reroute,
+            metrics_of=metrics_of,
+            min_gap=float(
+                board_constraints(rec["width"], rec["height"]).board.default_clearance_mm
+            ),
+            outline=lambda r: (r["width"], r["height"]),
+            label="block:" + names[0],
+            observe=accepted,
+            check=lambda a, b: rc.new_violations(
+                a, b, board_constraints(state["rec"]["width"], state["rec"]["height"])
+            ),
         ),
     )
     report["block_mm"] = dict(

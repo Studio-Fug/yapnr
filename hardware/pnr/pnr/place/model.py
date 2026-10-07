@@ -276,7 +276,9 @@ def global_place(
     half4 = torch.stack([half, swapped, half, swapped], dim=1)  # (n, 4, 2)
     # Block macros with per-side hulls (PNR_MACRO_HULL=1): overlap over per-side
     # bodies instead of whole courtyards; None (the unchanged path) otherwise.
-    from .hull import gp_bodies, gp_overlap
+    from .hull import dovetail_weight, gp_bodies, gp_overlap, gp_pack
+
+    dovetail = dovetail_weight()
 
     bodies = gp_bodies(
         comps,
@@ -575,6 +577,9 @@ def global_place(
             bound = slot_bound(pos, frozen, width, height, movable_f)
 
         loss = wl + w_spread * overlap + w_bound * bound
+        if bodies is not None and dovetail > 0.0 and frozen is None:
+            # PNR_HULL_DOVETAIL: pack the hull bodies, so a notch takes a neighbour.
+            loss = loss + dovetail * gp_pack(bodies, pos, p, gamma)
         if frozen is not None and frozen["need"] is not None:
             # PNR_GP_CHANNELS: the legalizer's channel cost, smooth (each pair from both ends).
             loss = loss + polish.channel_weight * 0.5 * channel_shortage(

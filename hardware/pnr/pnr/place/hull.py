@@ -540,3 +540,35 @@ def gp_overlap(bodies, pos, p, clearance):
     ox = torch.clamp(half[..., :, None, 0] + half[..., None, :, 0] + clearance - dx, min=0.0)
     oy = torch.clamp(half[..., :, None, 1] + half[..., None, :, 1] + clearance - dy, min=0.0)
     return (ox * oy * bodies["pair"]).sum((-1, -2))
+
+
+def dovetail_weight() -> float:
+    """``PNR_HULL_DOVETAIL`` (default 0: off): the weight, in wirelength millimetres per
+    millimetre, of :func:`gp_pack` in global placement with hull macros."""
+    raw = os.environ.get("PNR_HULL_DOVETAIL")
+    if not raw:
+        return 0.0
+    value = float(raw)
+    if not math.isfinite(value) or value < 0:
+        raise ValueError("PNR_HULL_DOVETAIL takes a finite non-negative weight, got %r" % raw)
+    return value
+
+
+def gp_pack(bodies, pos, p, gamma):
+    """Smooth half-perimeter of the box around every overlap body (log-sum-exp extremes).
+
+    With the hull-shaped overlap of :func:`gp_overlap` this is a packing pressure: the
+    cluster shrinks where the bodies can interlock, so a block slides into a notch of
+    another (``PNR_HULL_DOVETAIL``), not only where wires pull it."""
+    import torch
+
+    from . import portable_math as pm
+
+    own = bodies["owner"]
+    pb = p[..., own, :]
+    off = (pb.unsqueeze(-1) * bodies["off4"]).sum(-2)
+    half = (pb.unsqueeze(-1) * bodies["half4"]).sum(-2)
+    xy = pos[..., own, :] + off
+    lo, hi = xy - half, xy + half
+    ext = pm.logsumexp(torch.stack((hi[..., 0], -lo[..., 0], hi[..., 1], -lo[..., 1])) / gamma, -1)
+    return gamma * ext.sum()

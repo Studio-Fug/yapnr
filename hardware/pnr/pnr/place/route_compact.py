@@ -60,6 +60,7 @@ push-and-shove router can later move the copper instead.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import time
@@ -728,6 +729,56 @@ def route_summary(route) -> dict:
 # ------------------------------------------------------------------------ the loop
 
 
+PIN_RETRIES = 3  # re-plans per axis that hold the parts a hard violation named
+
+
+def _violation_refs(bad) -> set:
+    """Component refs named in a violations dict (refs, or pairs/tuples of refs)."""
+    out = set()
+
+    def walk(x):
+        if isinstance(x, str):
+            out.add(x)
+        elif isinstance(x, (list, tuple, set)):
+            for y in x:
+                walk(y)
+
+    for found in bad.values():
+        walk(found)
+    return out
+
+
+def _related(refs, constraints) -> set:
+    """``refs`` plus the anchors and members of the hard groups they belong to (a group
+    member out of its radius is fixed by holding both ends)."""
+    out = set(refs)
+    for con in getattr(constraints, "constraints", None) or []:
+        if con.kind == "group" and out & (set(con.refs) | {con.params.get("anchor")}):
+            out |= {con.params.get("anchor")} - {None}
+    return out
+
+
+def guarded(label, fallback, run):
+    """``run()``, or ``fallback`` with the error recorded when it raises: route-then-compact
+    is a post-pass on a finished route, which it may only improve, never lose."""
+    import traceback
+
+    try:
+        return run()
+    except Exception as error:  # noqa: BLE001 - the routed result stands
+        placed, route = fallback
+        return (
+            placed,
+            route,
+            dict(
+                label=label,
+                error="%s: %s" % (type(error).__name__, error),
+                traceback=traceback.format_exc()[-2000:],
+                accepted=0,
+            ),
+        )
+
+
 def compact_loop(
     placed,
     route,
@@ -743,6 +794,7 @@ def compact_loop(
     settings: Optional[Settings] = None,
     observe: Optional[Callable] = None,
     check: Optional[Callable] = None,
+    announce: Optional[Callable] = None,
 ):
     """Route-then-compact on one routed placement.
 
@@ -752,7 +804,8 @@ def compact_loop(
     route refuses the step, with ``placed`` the reason when it is a string),
     ``metrics_of(route)`` -> the dict :func:`not_worse` compares. ``outline`` is the
     (width, height) or a callable ``outline(route)``. ``observe(stage, placed, route,
-    record)`` sees each accepted step (tracing, live view). ``check(before, after)`` ->
+    record)`` sees each accepted step, ``announce(candidate, axis, record)`` each
+    candidate about to be routed (tracing, live view). ``check(before, after)`` ->
     violations dict (default :func:`new_violations`). Returns ``(placed, route, report)``."""
     from pnr.profile import span
 
@@ -775,10 +828,18 @@ def compact_loop(
     for rnd in range(max(0, settings.rounds)):
         progressed = False
         for axis in (0, 1):
-            for attempt in range(settings.attempts):
+            pinned = set()  # refs a hard violation named: held in the next attempt
+            back_off = 0
+            for _ in range(settings.attempts + PIN_RETRIES):
+                if back_off >= settings.attempts:
+                    break
+                attempt = back_off
                 t0 = time.monotonic()
                 with span("route_compact.measure"):
                     items = items_of(placed)
+                    for it in items:
+                        if pinned & set(it.refs):
+                            it.fixed = True
                     plan = plan_axis(
                         items,
                         axis,
@@ -813,7 +874,17 @@ def compact_loop(
                 if bad:
                     rec["result"] = "hard violation"
                     rec["violations"] = {k: [str(x) for x in v][:8] for k, v in bad.items()}
+                    named = _related(_violation_refs(bad), constraints)
+                    named &= {r for it in items for r in it.refs}
+                    if named - pinned and len(pinned) < 64:
+                        # Hold the parts it names (their items) and plan the axis again.
+                        pinned |= named
+                        rec["pinned"] = sorted(named)
+                    else:
+                        back_off += 1
                     continue
+                if announce is not None:
+                    announce(candidate, axis, rec)
                 with span("route_compact.reroute"):
                     new_placed, new_route = reroute(candidate, axis)
                 t3 = time.monotonic()
@@ -821,12 +892,14 @@ def compact_loop(
                 rec["reroute_seconds"] = round(t3 - t2, 3)
                 if new_route is None:
                     rec["result"] = new_placed if isinstance(new_placed, str) else "reroute failed"
+                    back_off += 1
                     continue
                 metrics = metrics_of(new_route)
                 rec["metrics"] = metrics
                 ok, why = not_worse(base, metrics, settings)
                 if not ok:
                     rec["result"] = "back off: " + why
+                    back_off += 1
                     continue
                 rec["result"] = "accepted"
                 rec.update(area_metrics(new_placed, *size(new_route)))
@@ -856,23 +929,39 @@ def flat_pass(placed, route, constraints, rules, *, pitch, iters, outline):
     via_d = float(fab.get("via_diameter_mm", 0.6))
     clearance = copper_clearance(rules)
 
-    def reroute(candidate, axis):
+    from pnr import trace
+
+    def announce(candidate, axis, record):
+        stats = {k: record.get(k) for k in ("moved", "gutter_mean_mm", "gutter_after_mean_mm")}
+        recorder = trace.current()
+        if recorder is not None:
+            recorder.poses("compaction-" + "xy"[axis], candidate, phase="placement", **stats)
         emit(
             "route_compact",
-            layout=__import__("json").loads(candidate.to_json()),
-            data=dict(phase="route-compact %s (flat)" % "xy"[axis]),
+            layout=json.loads(candidate.to_json()),
+            data=dict(phase="route-compact %s (flat)" % "xy"[axis], **stats),
         )
-        return candidate, route_board(candidate, constraints, rules, pitch=pitch, max_iters=iters)
 
-    return compact_loop(
-        placed,
-        route,
-        constraints=constraints,
-        items_of=lambda p: graph_items(p, constraints),
-        copper_of=lambda r: Copper.from_routes(r.tracks, r.vias, via_d, clearance),
-        reroute=reroute,
-        metrics_of=route_summary,
-        min_gap=float(constraints.board.default_clearance_mm),
-        outline=outline,
-        label="flat",
+    def reroute(candidate, axis):
+        with trace.suspended():  # the flat trace's rounds stay as they were
+            return candidate, route_board(
+                candidate, constraints, rules, pitch=pitch, max_iters=iters
+            )
+
+    return guarded(
+        "flat",
+        (placed, route),
+        lambda: compact_loop(
+            placed,
+            route,
+            constraints=constraints,
+            items_of=lambda p: graph_items(p, constraints),
+            copper_of=lambda r: Copper.from_routes(r.tracks, r.vias, via_d, clearance),
+            reroute=reroute,
+            metrics_of=route_summary,
+            min_gap=float(constraints.board.default_clearance_mm),
+            outline=outline,
+            label="flat",
+            announce=announce,
+        ),
     )

@@ -76,6 +76,7 @@ OPTIONS = {
     "route_pairs_diff_pairs": bool,
     "route_compact": (bool, str),
     "macro_hull": bool,
+    "hull_dovetail": (int, float),
 }
 FLAGS = {
     "packed_maze": "--packed-maze",
@@ -103,7 +104,11 @@ FLAGS = {
     "macro_hull": "--macro-hull",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
-WEIGHTS = {"gp_channels": "--gp-channels", "legalize_hpwl": "--legalize-hpwl"}
+WEIGHTS = {
+    "gp_channels": "--gp-channels",
+    "legalize_hpwl": "--legalize-hpwl",
+    "hull_dovetail": "--hull-dovetail",
+}
 # The PNR_COMPACT parts ``compact_off`` may name (run.py --compact-off; equal to
 # hardware/pnr/pnr/compact_flags.py PARTS, which test_kinds checks).
 COMPACT_PARTS = (

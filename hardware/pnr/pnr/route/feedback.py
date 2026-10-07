@@ -930,7 +930,7 @@ def route_and_place(
 
     if route_compact.enabled("FLAT") and detail_rules is not None and report.detail_result:
         # PNR_ROUTE_COMPACT FLAT: squeeze the parts by the copper routed, then route again.
-        with _trace.scope("route-compact", "compact"):
+        with _trace.scope("route-compact", "stage", kind="route-compact"):
             placed, report.detail_result, report.route_compact = route_compact.flat_pass(
                 placed,
                 report.detail_result,

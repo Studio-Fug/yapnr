@@ -234,25 +234,26 @@ def synthesize(source, constraints, rules, budget, seed, trace_root=None):
             # PNR_ROUTE_COMPACT BLOCK: the chosen layout squeezed by its own copper.
             from pnr.hier.compact_block import compact_block
 
-            chosen, compacted = compact_block(
-                source,
-                constraints,
-                rules,
-                by_name,
-                names,
-                chosen,
-                iters=budget["block_iters"],
-                route_iters=budget["route_iters"],
-                pitch=budget["route_pitch_mm"],
-            )
+            with trace.suspended():  # the block traces keep their trials only
+                chosen, compacted = compact_block(
+                    source,
+                    constraints,
+                    rules,
+                    by_name,
+                    names,
+                    chosen,
+                    iters=budget["block_iters"],
+                    route_iters=budget["route_iters"],
+                    pitch=budget["route_pitch_mm"],
+                )
             print(
-                "Block %s route-compact: %s -> %s mm, %d step(s) accepted, %.1fs"
+                "Block %s route-compact: %s -> %s mm, %d step(s) accepted%s"
                 % (
                     names[0],
-                    compacted["block_mm"]["before"],
-                    compacted["block_mm"]["after"],
+                    compacted.get("block_mm", {}).get("before"),
+                    compacted.get("block_mm", {}).get("after"),
                     compacted["accepted"],
-                    compacted["seconds"]["total"],
+                    (", " + compacted["error"]) if "error" in compacted else "",
                 ),
                 flush=True,
             )
@@ -632,7 +633,7 @@ def top_compact(case, best, graph, constraints, reps):
     via_d = float(fab["via_diameter_mm"])
     clearance = copper_clearance(rules)
     k = int(best["seed_index"])
-    steps, routed = [], []
+    steps, routed, kept = [], [], []
 
     def items_of(flat):
         rigid, shapes = [], {}
@@ -645,18 +646,33 @@ def top_compact(case, best, graph, constraints, reps):
     def copper_of(rec):
         return rc.Copper.from_routes(rec["top_tracks"], rec["top_vias"], via_d, clearance)
 
-    def reroute(candidate, axis):
+    def announce(candidate, axis, record):
         steps.append(axis)
         label = "compact-%02d-%s" % (len(steps), "xy"[axis])
-        with trace.scope(label, "compact", axis="xy"[axis], seed=best["id"]):
+        stats = {
+            key: record.get(key)
+            for key in (
+                "moved",
+                "gutter_mean_mm",
+                "gutter_need_mean_mm",
+                "gutter_after_mean_mm",
+                "span_before_mm",
+                "span_after_mm",
+                "anchor",
+            )
+        }
+        with trace.scope(label, "stage", kind="route-compact", axis="xy"[axis], **stats):
             recorder = trace.current()
             if recorder is not None:
                 recorder.poses("compaction", candidate, phase="placement")
         emit(
             "route_compact",
             layout=json.loads(candidate.to_json()),
-            data=dict(phase="route-compact %s (top level)" % "xy"[axis], step=len(steps)),
+            data=dict(phase="route-compact %s (top level)" % "xy"[axis], step=len(steps), **stats),
         )
+
+    def reroute(candidate, axis):
+        label = "compact-%02d-%s" % (len(steps), "xy"[axis])
         rec = knit(
             case, k, candidate, reps, best.get("choice"), label=label + "-route", start=label
         )
@@ -678,22 +694,29 @@ def top_compact(case, best, graph, constraints, reps):
             copper_ref_mm=round(float(rec["objective"][3]) + block_mm, 3),
         )
 
-    placed, rec, report = rc.compact_loop(
-        best["placed"],
-        best,
-        constraints=constraints,
-        items_of=items_of,
-        copper_of=copper_of,
-        reroute=reroute,
-        metrics_of=metrics_of,
-        min_gap=float(constraints.board.default_clearance_mm),
-        outline=outline_size(graph, constraints),
-        label="top",
+    placed, rec, report = rc.guarded(
+        "top",
+        (best["placed"], best),
+        lambda: rc.compact_loop(
+            best["placed"],
+            best,
+            constraints=constraints,
+            items_of=items_of,
+            copper_of=copper_of,
+            reroute=reroute,
+            metrics_of=metrics_of,
+            min_gap=float(constraints.board.default_clearance_mm),
+            outline=outline_size(graph, constraints),
+            label="top",
+            announce=announce,
+            observe=lambda stage, placed, route, record: kept.append(route["id"]),
+        ),
     )
+    # The knits kept, in order (the hierarchical animation replays them as chapter 4).
     trace.select(
         "route-compact",
         [best["id"]] + [r["id"] for r in routed],
-        rec["id"],
+        kept or [best["id"]],
         "not-worse-knit",
         {r["id"]: r["objective"] for r in [best] + routed},
     )
@@ -853,16 +876,19 @@ def run(root, seed):
         # PNR_ROUTE_COMPACT TOP: gutters shrink to the knitted copper, then knit again.
         best, compaction["top"] = top_compact(case, best, graph, constraints, reps)
         top = compaction["top"]
-        print(
-            "Hierarchical route-compact: bbox %.0f -> %.0f mm2, %d step(s) accepted, %.1fs"
-            % (
-                top["before"]["bbox_mm2"],
-                top["after"]["bbox_mm2"],
-                top["accepted"],
-                top["seconds"]["total"],
-            ),
-            flush=True,
-        )
+        if "error" in top:
+            print("Hierarchical route-compact failed (kept the knit): %s" % top["error"])
+        else:
+            print(
+                "Hierarchical route-compact: bbox %.0f -> %.0f mm2, %d step(s) accepted, %.1fs"
+                % (
+                    top["before"]["bbox_mm2"],
+                    top["after"]["bbox_mm2"],
+                    top["accepted"],
+                    top["seconds"]["total"],
+                ),
+                flush=True,
+            )
     blocks_compacted = {t["template"]: t["compacted"] for t in synth if t.get("compacted")}
     if blocks_compacted:
         compaction["blocks"] = blocks_compacted

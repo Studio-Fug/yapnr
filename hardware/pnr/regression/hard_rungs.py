@@ -2162,10 +2162,11 @@ def hard_rungs():
         buck_pour_rung(buck),
     ]
     # Ladder v2's own rungs (separate modules): the push-and-shove boards and the top rung.
+    from dovetail_rung import rungs as dovetail_rungs
     from shove_rungs import rungs as shove_rungs
     from soc_rung import rungs as soc_rungs
 
-    others += shove_rungs() + soc_rungs()
+    others += shove_rungs() + soc_rungs() + dovetail_rungs()
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST
     rungs = out + chasers + others

@@ -315,6 +315,16 @@ def _record_extra(runs: Store, cid: str, task_id: str, marker: Dict[str, Any]) -
     return {k: record[k] for k in ("exit_code", "wall_s", "timed_out") if k in record}
 
 
+def _marker_submissions(path: Path) -> Optional[List[int]]:
+    """The ``submissions`` an existing :data:`FINISHED_MARKER` names, or ``None`` when there is
+    no marker (or it cannot be read, so it gets rewritten)."""
+    try:
+        value = json.loads(path.read_text()).get("submissions")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return value if isinstance(value, list) else None
+
+
 def synthesize_task_events(runs: Store, cid: str, dest: Path) -> Dict[str, Any]:
     """Give every finished task lane a terminal event, even one the engine itself never emitted.
 
@@ -372,7 +382,9 @@ def synthesize_task_events(runs: Store, cid: str, dest: Path) -> Dict[str, Any]:
     if complete:
         finished = bool(ids) and all(tid in markers for tid in ids)
         if finished:
-            if not marker_path.exists():
+            # Idempotent: only (re)written when absent or when it names a different set of
+            # submissions than the ones it now covers, so its "submissions" never goes stale.
+            if _marker_submissions(marker_path) != sorted(submission_numbers):
                 _write_atomic(
                     marker_path,
                     json.dumps(

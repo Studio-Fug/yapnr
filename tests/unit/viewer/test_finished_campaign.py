@@ -151,7 +151,12 @@ class FinishedLadderCampaignTest(unittest.TestCase):
                     break
                 time.sleep(0.05)
             self.assertTrue(state["campaign_finished"])
-            self.assertEqual(state["revision"], revision_before)  # no new event; same revision
+            # The flip bumps the revision, so a second client still polling with the old one
+            # gets the new state too, never the "unchanged" shortcut.
+            self.assertGreater(state["revision"], revision_before)
+            other = _get(base, "/api/state?since=%d&run=%s" % (revision_before, state["run"]))
+            self.assertNotIn("unchanged", other)
+            self.assertTrue(other["campaign_finished"])
             self.assertEqual(state["lanes"]["controller"]["progress"]["state"], "finished")
             self.assertEqual(
                 state["lanes"]["controller"]["status_text"], "Finished (no final event)"

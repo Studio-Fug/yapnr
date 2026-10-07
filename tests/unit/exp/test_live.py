@@ -668,6 +668,33 @@ class SynthesizeTaskEventsTest(unittest.TestCase):
         self.assertFalse(found["finished"])
         self.assertFalse((dest / livemod.FINISHED_MARKER).exists())
 
+    def test_marker_is_idempotent_and_refreshes_a_stale_submission_list(self):
+        self.write_tasks_jsonl(["t/0"])
+        self.write_submission(1, [0])
+        self.write_done("t/0")
+        dest = self.tmp / "mirror"
+        marker_path = dest / livemod.FINISHED_MARKER
+        dest.mkdir(parents=True)
+        # A marker from before submissions were recorded (no "submissions" key) is rewritten.
+        marker_path.write_text(json.dumps({"campaign": self.cid, "tasks": 1, "finished_at": 1}))
+        livemod.synthesize_task_events(self.store, self.cid, dest)
+        first = json.loads(marker_path.read_text())
+        self.assertEqual(first["submissions"], [1])
+        # A repeat poll with nothing new leaves it byte-for-byte alone.
+        livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertEqual(json.loads(marker_path.read_text()), first)
+
+    def test_unreadable_indices_keeps_an_existing_marker_rather_than_flapping(self):
+        self.write_tasks_jsonl(["t/0"])
+        self.write_submission(1, [0])
+        self.write_done("t/0")
+        dest = self.tmp / "mirror"
+        self.assertTrue(livemod.synthesize_task_events(self.store, self.cid, dest)["finished"])
+        (self.prefix / "submissions" / "1.indices").unlink()
+        found = livemod.synthesize_task_events(self.store, self.cid, dest)
+        self.assertTrue(found["finished"])
+        self.assertTrue((dest / livemod.FINISHED_MARKER).exists())
+
     def test_mirror_calls_synthesize_and_reports_it(self):
         self.write_tasks_jsonl(["t/a"])
         self.write_done("t/a")

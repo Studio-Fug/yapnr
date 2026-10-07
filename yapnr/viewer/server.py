@@ -968,26 +968,28 @@ class Viewer:
             selected = selected or next(
                 (k for k in self.state["lanes"] if not k.endswith("/search")), None
             )
+            # _run_finished() is cheap (a file-existence check, occasionally a tiny read) and
+            # changes outside ingest: a quiescent campaign's MIRROR_FINISHED_MARKER can appear (or
+            # be withdrawn -- yapnr.exp.live.synthesize_task_events) with no new event ever
+            # following it. A flip bumps "revision" here, the same way a restart-status change
+            # does in the poll loop, so the per-revision response cache is rebuilt *and* every
+            # client polling with ?since=<old revision> -- not just whichever one asked first --
+            # gets the new state instead of the "unchanged" shortcut, so its lanes stop reading
+            # "stalled" once the campaign is actually over.
+            finished = self._run_finished()
+            # Compared with its own last-served value, not state["campaign_finished"]: that one
+            # is refreshed by every current() call (_annotate_lanes), so another caller could
+            # update it first and hide the flip from this check.
+            if finished != getattr(self, "_served_finished", False):
+                self._served_finished = finished
+                self.state["revision"] += 1
             rev = self.state["revision"]
             run = self.state["run"]
-            # _run_finished() is cheap (a file-existence check, occasionally a tiny read) and
-            # tracked outside "revision": a quiescent campaign's MIRROR_FINISHED_MARKER can
-            # appear (yapnr.exp.live.synthesize_task_events) with no new event ever following
-            # it to bump revision. Folding it in here -- rather than only inside _annotate_lanes,
-            # which a cache hit below would skip calling at all -- is what lets a lane stop
-            # reading "stalled" once the campaign is actually over, even on an otherwise-idle
-            # poll loop that would otherwise keep serving the same cached, pre-finished response
-            # (or the "unchanged" shortcut) forever.
-            finished = self._run_finished()
-            if (
-                query.get("since", [None])[0] == str(rev)
-                and query.get("run", [None])[0] == run
-                and finished == self.state.get("campaign_finished", False)
-            ):
+            if query.get("since", [None])[0] == str(rev) and query.get("run", [None])[0] == run:
                 return json.dumps(
                     dict(unchanged=True, revision=rev, run=run), separators=(",", ":")
                 ).encode()
-            key = (rev, selected, finished)
+            key = (rev, selected)
             if key not in self.response_cache:
                 # Cache only the current revision; no retained historical geometry copies.
                 for old in list(self.response_cache):

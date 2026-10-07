@@ -16,11 +16,6 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
-- **PR integration review (2026-10-07).** PR #92 is rebased onto main after #88 and #90, retaining
-  only its two new optimization commits. The existing 96-cell A/B receipts were rechecked: 96
-  matching verdicts and 94 matching copper hashes, 85 passes per arm. See [validation
-  evidence](docs/design/clearance-index-validation.md).
-
 - **Route-then-compact and hull packing** (PR #86, branch `claude/route-compact`; design
   [docs/design/route-compact.md](docs/design/route-compact.md)). `PNR_ROUTE_COMPACT`
   (`TOP`, `BLOCK`, `FLAT`; default off): after routing, order-preserving 1D compaction (x then
@@ -292,6 +287,13 @@ board edges, the hierarchical ladder driver and their animations on
   against openEMS and the 2D cross-section solver on the radar60 lines, single patch and TX1
   feed; two reviews' fixes in. Open: Palace issues to report upstream, a rank-scaling run before
   the bank model, the image's ParMETIS licence (owner).
+
+## Integration checks
+
+- **PR integration review (2026-10-07).** PR #92 is rebased onto main after #88 and #90, retaining
+  only its two new optimization commits. The existing 96-cell A/B receipts were rechecked: 96
+  matching verdicts and 94 matching copper hashes, 85 passes per arm. See [validation
+  evidence](docs/design/clearance-index-validation.md).
 
 ## Next
 

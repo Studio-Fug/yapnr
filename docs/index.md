@@ -105,11 +105,11 @@ design/fea-integration
 design/rf-topology-optimization
 design/rf-fab-coupons
 design/cloud-experiments
+design/clearance-index-validation
 design/fab-and-ordering
 design/gloss
 design/compact-placement
 design/route-compact
-design/clearance-index-validation
 history/import-manifest
 about-the-name
 references

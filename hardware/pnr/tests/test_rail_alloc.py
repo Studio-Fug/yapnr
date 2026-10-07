@@ -458,14 +458,14 @@ class RankingTest(unittest.TestCase):
 
 
 class ModeTest(unittest.TestCase):
-    def test_default_off(self):
+    def test_default_on(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("PNR_RAIL_ALLOC", None)
-            self.assertEqual(rail_alloc.mode(), "static")
-
-    def test_search_opts_in(self):
-        with mock.patch.dict(os.environ, {"PNR_RAIL_ALLOC": "search"}):
             self.assertEqual(rail_alloc.mode(), "search")
+
+    def test_static_opts_out(self):
+        with mock.patch.dict(os.environ, {"PNR_RAIL_ALLOC": "static"}):
+            self.assertEqual(rail_alloc.mode(), "static")
 
 
 class EnumerationCapTest(unittest.TestCase):

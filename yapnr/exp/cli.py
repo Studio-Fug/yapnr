@@ -12,6 +12,10 @@
     yapnr exp prices [--refresh] [--rerank] [--family F ...]
     yapnr exp unfreeze --backend gcp-batch|local
     yapnr exp calibration ingest --reference DIR --cloud DIR ... --out FILE
+    yapnr exp durations ingest [--fetched DIR ...] [--campaign CID ...] [--out FILE]
+    yapnr exp cost PLAN [--json]
+    yapnr exp spend [--budget-usd X] [--json]
+    yapnr exp profile PLAN [--fetched DIR] [--top N] [--json]
 
 ``PLAN`` is a plan directory (``plan`` prints it) or a campaign id planned on this machine. Only
 ``submit`` (without ``--dry-run``), ``cancel`` and ``unfreeze`` change anything in a cloud; the
@@ -79,6 +83,7 @@ def _cmd_plan(args) -> int:
         families=args.family,
         template=False if args.no_template else None,
         replace=args.replace,
+        durations=args.durations,
     )
     meta = result.meta
     est = meta["estimate"]
@@ -123,11 +128,40 @@ def _cmd_plan(args) -> int:
                         option["price_source"],
                     )
                 )
+    sources = (meta.get("prediction") or {}).get("sources") or {}
+    if sources:
+        print(
+            "durations %s"
+            % ", ".join("%d from %s" % (n, source) for source, n in sorted(sources.items()))
+        )
     if args.backend == "gcp-batch":
         print(
-            "estimate  expected %s, ceiling %s, about %.1f h"
-            % (_money(est["expected_usd"]), _money(est["ceiling_usd"]), est["makespan_h"])
+            "estimate  expected %s (VM time %.2f VM-h), ceiling %s, about %.1f h"
+            % (
+                _money(est["expected_usd"]),
+                sum(c.get("vm_hours", 0) for c in est.get("classes", [])),
+                _money(est["ceiling_usd"]),
+                est["makespan_h"],
+            )
         )
+        for name, packed in sorted((meta.get("packing") or {}).items()):
+            for job in packed["jobs"]:
+                print(
+                    "packing   %-12s %s%d Batch task(s) for %d cell(s) on %d VM(s), parallelism %d, "
+                    "%.2f VM-h, %.0f min"
+                    % (
+                        name,
+                        "stragglers: " if job["straggler"] else "",
+                        job["tasks"],
+                        job["cells"],
+                        job["vms"],
+                        job["parallelism"],
+                        job["vm_hours"],
+                        job["makespan_s"] / 60.0,
+                    )
+                )
+            for note in packed.get("notes", []):
+                print("          %s" % note)
         candidates = meta.get("candidates") or {}
         if any(len(options) > 1 for options in candidates.values()):
             worst = sum(max(o["ceiling_usd"] for o in opts) for opts in candidates.values() if opts)
@@ -255,18 +289,21 @@ def _cmd_logs(args) -> int:
             print("== %s (%s)" % (task["id"], marker.get("verdict")))
             print(stores.runs.read_text(rel) if stores.runs.exists(rel) else "(no log tail)")
         elif plan.backend == "gcp-batch" and args.task:
+            from yapnr.exp.packing import parse_indices
+
             for record in backends.submissions(stores.runs, plan.id):
-                indices = stores.runs.read_text(
-                    "campaigns/%s/submissions/%d.indices" % (plan.id, record["submission"])
-                ).split()
+                groups = parse_indices(
+                    stores.runs.read_text(
+                        "campaigns/%s/submissions/%d.indices" % (plan.id, record["submission"])
+                    )
+                )
                 line = plan.tasks.index(task)
-                if str(line) in indices:
+                hits = [n for n, group in enumerate(groups) if line in group]
+                if hits:
                     print(
                         "== %s (Cloud Logging, submission %d)" % (task["id"], record["submission"])
                     )
-                    for text in backend.logs(
-                        record, cfg, cloud, indices.index(str(line)), args.limit
-                    ):
+                    for text in backend.logs(record, cfg, cloud, hits[0], args.limit):
                         print(text)
     return 0
 
@@ -538,6 +575,216 @@ def _cmd_calibration(args) -> int:
     return 0
 
 
+def _cmd_durations(args) -> int:
+    from yapnr.exp import fetch, packing
+
+    cfg = _config(args)
+    target = Path(args.out or cfg.durations_path).expanduser()
+    records: List[Any] = []
+    for path in args.fetched or []:
+        records += fetch.records(Path(path).expanduser())
+    if args.campaign:
+        from yapnr.exp.backends.gcp_batch import make_cloud
+        from yapnr.exp.store import GcsStore
+
+        runs = GcsStore(cfg.require_gcp().runs_bucket, make_cloud(cfg))
+        for cid in args.campaign:
+            text = "\n".join(runs.read_lines("campaigns/%s/tasks/*/*/record.json" % cid))
+            found = packing.records_from_text(text)
+            print("%s: %d record(s)" % (cid, len(found)))
+            records += found
+    previous = packing.load(str(target)) if target.is_file() else None
+    data = packing.ingest(records, previous)
+    packing.write(data, target)
+    cells = sum(len(v) for v in data["cells"].values())
+    print("wrote %s: %d cell(s) of %d kind(s)" % (target, cells, len(data["cells"])))
+    return 0
+
+
+def _ledger_path(cfg) -> Path:
+    return cfg.local.store_path() / "spend" / "campaigns.jsonl"
+
+
+def _cmd_cost(args) -> int:
+    from yapnr.exp import backends, cost, spend
+
+    cfg = _config(args)
+    plan = _find_plan(args.plan, cfg)
+    if plan.backend != "gcp-batch":
+        print("campaign %s runs on %s: no cloud bill" % (plan.id, plan.backend))
+        return 0
+    cloud = _cloud(cfg, plan)
+    records = backends.submissions(
+        backends.get(plan.backend).stores(plan, cfg, cloud).runs, plan.id
+    )
+    table = cost.PriceTable.load(cfg.price_table)
+    report = spend.campaign_cost(cloud, plan.meta, records, table)
+    (plan.dir / "cost.json").write_text(spend.dumps(report))
+    ledger = _ledger_path(cfg)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    kept = []
+    if ledger.is_file():
+        for line in ledger.read_text().splitlines():
+            try:
+                item = json.loads(line)
+            except ValueError:
+                continue
+            if item.get("campaign") != report["campaign"]:
+                kept.append(item)
+    summary = {
+        k: report[k]
+        for k in (
+            "campaign",
+            "measured",
+            "vms",
+            "vm_hours",
+            "task_hours",
+            "usd",
+            "makespan_h",
+            "estimate_usd",
+        )
+    }
+    kept.append(summary)
+    ledger.write_text("".join(json.dumps(item, sort_keys=True) + "\n" for item in kept))
+    if args.json:
+        print(spend.dumps(report), end="")
+        return 0
+    print(
+        "campaign %s: VM time %.3f VM-h on %d VM(s) = %s (estimate was %s)%s"
+        % (
+            report["campaign"],
+            report["vm_hours"],
+            report["vms"],
+            _money(report["usd"]),
+            _money(report["estimate_usd"] or 0),
+            "; %d VM(s) still running" % report["running"] if report["running"] else "",
+        )
+    )
+    for row in report["submissions"]:
+        print(
+            "  submission %s  %-16s %3d task(s) %2d VM(s)  %.3f VM-h  task %.3f h  slots %s busy  "
+            "%s  makespan %s"
+            % (
+                row["submission"],
+                row["shape"],
+                row["tasks"] or 0,
+                row["vms"],
+                row["vm_hours"],
+                row["task_hours"],
+                "%.0f%%" % (row["slot_utilisation"] * 100) if row["slot_utilisation"] else "-",
+                _money(row["usd"]),
+                "%.0f min" % (row["makespan_h"] * 60) if row["makespan_h"] else "-",
+            )
+        )
+    print("wrote %s; ledger %s" % (plan.dir / "cost.json", ledger))
+    print("note: %s" % report["note"])
+    return 0
+
+
+def _cmd_spend(args) -> int:
+    from yapnr.exp import cost, spend
+    from yapnr.exp.backends.gcp_batch import make_cloud
+
+    cfg = _config(args)
+    gcp = cfg.require_gcp()
+    cloud = make_cloud(cfg)
+    table = cost.PriceTable.load(cfg.price_table)
+    budget = args.budget_usd if args.budget_usd is not None else cfg.budget_usd
+    report = spend.month_spend(cloud, table, spend.job_shapes(cloud, gcp.regions), budget)
+    ledger = _ledger_path(cfg)
+    items = []
+    if ledger.is_file():
+        for line in ledger.read_text().splitlines():
+            try:
+                items.append(json.loads(line))
+            except ValueError:
+                continue
+    since = spend.parse_time(report["month"] + "-01T00:00:00Z")
+    report["campaigns"] = spend.ledger_rows(items, since)
+    if args.json:
+        print(spend.dumps(report), end="")
+        return 0
+    print("month %s, %d guard reading(s)" % (report["month"], report["readings"]))
+    if report.get("warning"):
+        print("warning   %s" % report["warning"])
+    print(
+        "billed    %s at %s (budget guard%s)"
+        % (
+            _money(report["billed_usd"]),
+            report["billed_at"][:16],
+            (
+                ", ratio %.3f x %s" % (report["ratio"], _money(budget))
+                if report["ratio"] is not None and budget
+                else ""
+            ),
+        )
+    )
+    print(
+        "VM time   %.1f VM-h this month on %d VM(s) (%d running) = %s at list prices"
+        % (report["vm_hours"], report["vms"], report["running_vms"], _money(report["vm_usd_now"]))
+    )
+    print(
+        "reconcile billed = %.2f x VM time, lagging %.1f h%s; VM time to the billed reading "
+        "less the lag: %s"
+        % (
+            report["factor"],
+            report["lag_h"],
+            (
+                " (rms %s)" % _money(report["rms_usd"])
+                if report["rms_usd"] is not None
+                else " (default, too few readings)"
+            ),
+            _money(report["vm_usd_to_billed_cut"]),
+        )
+    )
+    print(
+        "unbilled  about %s (VM time since then x %.2f); projected month to date %s"
+        % (_money(report["unbilled_usd"]), report["factor"], _money(report["projected_usd"]))
+    )
+    if report["unknown_jobs"]:
+        print(
+            "          %d VM job(s) without a description priced at the dearest rate"
+            % len(report["unknown_jobs"])
+        )
+    for row in report["campaigns"][:20]:
+        print(
+            "  %-28s %s  %6.2f VM-h  %s (estimate %s)"
+            % (
+                row.get("campaign"),
+                str(row.get("measured", ""))[:16],
+                row.get("vm_hours") or 0,
+                _money(row.get("usd") or 0),
+                _money(row.get("estimate_usd") or 0),
+            )
+        )
+    return 0
+
+
+def _cmd_profile(args) -> int:
+    from yapnr.exp import profiles
+
+    cfg = _config(args)
+    plan = _find_plan(args.plan, cfg)
+    fetched = (
+        Path(args.fetched).expanduser()
+        if args.fetched
+        else cfg.local.store_path(plan.private) / "fetched" / plan.id
+    )
+    if not (fetched / "tasks").is_dir():
+        print("no fetched results in %s: run `yapnr exp fetch` first" % fetched)
+        return 1
+    cost_path = plan.dir / "cost.json"
+    cost = json.loads(cost_path.read_text()) if cost_path.is_file() else None
+    report = profiles.aggregate(profiles.load_task_profiles(fetched), cost, top=args.top)
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print(profiles.table(report), end="")
+    if not report["processes"]:
+        print("no profile records: plan the campaign with [profile] enabled = true")
+    return 0
+
+
 def _run(func):
     def run(args) -> int:
         from yapnr.exp import errors
@@ -579,6 +826,9 @@ def register(commands: argparse._SubParsersAction) -> None:
         help="gcp-batch: an instance policy even for Hyperdisk families (the smoke job's check)",
     )
     p.add_argument("--replace", action="store_true", help="replace an existing plan directory")
+    p.add_argument(
+        "--durations", help="the task-duration history (default: [prices] durations or the store's)"
+    )
     p.set_defaults(func=_run(_cmd_plan))
 
     p = sub.add_parser("submit", help="submit a plan's pending tasks")
@@ -667,6 +917,32 @@ def register(commands: argparse._SubParsersAction) -> None:
     q.add_argument("--cloud", nargs="+", required=True, help="fetched campaign dirs (cloud shapes)")
     q.add_argument("--out", required=True)
     q.set_defaults(func=_run(_cmd_calibration))
+
+    p = sub.add_parser("durations", help="the task-duration history the planner predicts from")
+    dur = p.add_subparsers(dest="durations_command", metavar="<command>")
+    dur.required = True
+    q = dur.add_parser("ingest", help="add task records to the durations history")
+    q.add_argument("--fetched", nargs="+", help="fetched campaign directories (<dest>/<cid>)")
+    q.add_argument("--campaign", nargs="+", help="campaign ids, read from the runs bucket")
+    q.add_argument("--out", help="the history file (default: [prices] durations or the store's)")
+    q.set_defaults(func=_run(_cmd_durations))
+
+    p = sub.add_parser("cost", help="a campaign's VM-time cost, from the Compute audit log")
+    p.add_argument("plan", help=PLAN_HELP)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_run(_cmd_cost))
+
+    p = sub.add_parser("profile", help="where a profiled campaign's time went, by stage/function")
+    p.add_argument("plan", help=PLAN_HELP)
+    p.add_argument("--fetched", help="the fetched campaign (default: <store>/fetched/<id>)")
+    p.add_argument("--top", type=int, default=25)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_run(_cmd_profile))
+
+    p = sub.add_parser("spend", help="month-to-date billed spend, VM time and the unbilled part")
+    p.add_argument("--budget-usd", type=float, help="the budget the guard's ratio is of")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_run(_cmd_spend))
 
 
 def main(argv: Optional[List[str]] = None) -> int:

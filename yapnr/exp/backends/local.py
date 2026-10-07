@@ -75,7 +75,7 @@ class Local(Backend):
         store = LocalStore(self.root(plan, config))
         return Stores(store, store)
 
-    def render(self, plan, config, cls, submission, indices, deadline) -> Dict[str, str]:
+    def render(self, plan, config, cls, submission, indices, deadline, job=None) -> Dict[str, str]:
         items = [[submission, n, cls.cpus, int(cls.max_wall_s)] for n in range(len(indices))]
         return {"%s.items.json" % cls.name: json.dumps(items) + "\n"}
 
@@ -85,7 +85,9 @@ class Local(Backend):
         path.write_text(json.dumps(toolchain_profile(config), indent=2, sort_keys=True) + "\n")
         return written + [path]
 
-    def launch(self, plan, config, cls, submission, files, stores, cloud=None, dry_run=False):
+    def launch(
+        self, plan, config, cls, submission, files, stores, cloud=None, dry_run=False, job=None
+    ):
         profile = toolchain_profile(config)
         missing = [
             k for k in ("PYTHON", "KICAD_CLI", "KICAD_PYTHON", "FOOTPRINTS") if not profile[k]

@@ -34,7 +34,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from yapnr.exp import batch_schema, cost, image
+from yapnr.exp import batch_schema, cost, image, packing
 from yapnr.exp import plan as planning
 from yapnr.exp.backends.base import Backend, Stores, SubmitError
 from yapnr.exp.cloud import CloudError, FakeCloud, Gcloud
@@ -124,6 +124,98 @@ def vms_at_once(placement: cost.Placement, tasks: int, max_parallel_vcpus: int) 
     """The VMs a job of ``tasks`` tasks runs at once (``parallelism`` in whole VMs)."""
     parallel = cost.parallel_tasks(tasks, placement, max_parallel_vcpus)
     return max(1, math.ceil(parallel / max(1, placement.tasks_per_vm)))
+
+
+def bundles_allowed(plan) -> bool:
+    """Whether the plan's wrapper runs several plan lines per Batch task."""
+    return planning.wrapper_version(plan.meta) >= planning.BUNDLE_WRAPPER_VERSION
+
+
+def smaller_placement(
+    table: cost.PriceTable,
+    cls: planning.ResourceClass,
+    placement: cost.Placement,
+    disk_free_gb: Optional[float] = None,
+) -> Optional[cost.Placement]:
+    """The next smaller shape of the placement's family that holds a task, for a straggler job."""
+    try:
+        sizes = sorted(v for v in table.family(placement.family)["vcpus"] if v < placement.vm_vcpus)
+    except (cost.CostError, KeyError):
+        return None
+    task_vcpus = max(1, placement.cpu_milli // 1000)
+    mode = "core" if task_vcpus == cls.cpus * placement.threads_per_core else "vcpu"
+    for size in reversed(sizes):
+        if size < task_vcpus:
+            break
+        try:
+            shape, vcpus, memory, milli, per_vm = cost.choose_shape(
+                table,
+                placement.family,
+                cls.cpus,
+                cls.memory_gb,
+                size,
+                mode,
+                cls.disk_gb,
+                disk_free_gb,
+            )
+        except cost.CostError:
+            continue
+        if vcpus >= placement.vm_vcpus or milli != placement.cpu_milli:
+            continue
+        small = cost.Placement.from_json(placement.to_json())
+        small.shape, small.vm_vcpus, small.vm_memory_gb, small.tasks_per_vm = (
+            shape,
+            vcpus,
+            memory,
+            per_vm,
+        )
+        return small
+    return None
+
+
+def layout(
+    plan,
+    config: Config,
+    cls: planning.ResourceClass,
+    lines: Sequence[int],
+    table: cost.PriceTable,
+    cloud: Optional[Gcloud] = None,
+) -> List[packing.Job]:
+    """The Batch jobs of one class's pending ``lines`` (``packing.pack``).
+
+    A straggler job may use the next smaller shape of the family, when ``cloud`` shows its
+    instance template exists (or the placement needs none); without ``cloud`` it does not.
+    """
+    gcp = config.require_gcp()
+    placement = plan.placement(cls.name)
+    small = None
+    if cloud is not None:
+        small = smaller_placement(
+            table, cls, placement, gcp.boot_disk_gb - cost.BOOT_DISK_RESERVE_GB
+        )
+    if (
+        small is not None
+        and small.template
+        and template_exists(cloud, template_name(gcp, small)) is not True
+    ):
+        small = None
+    ratio = None
+    if small is not None:
+        disk = table.disk_hour(placement.boot_disk, table.data["overheads"]["boot_disk_gib"])
+        ratio = (small.vm_hour + disk) / (placement.vm_hour + disk)
+    packed = planning.class_packing(
+        cls,
+        lines,
+        placement,
+        config,
+        table,
+        bundle=bundles_allowed(plan),
+        small=(small.tasks_per_vm, ratio) if small is not None else None,
+    )
+    for job in packed.jobs:
+        if job.straggler and small is not None:
+            job.placement = small
+    return packed.jobs
 
 
 def choose(
@@ -258,9 +350,17 @@ def choose(
         if one_type:
             shape = chosen.shape
         rank = [p.pair for p in plan.candidates(cls.name)].index(chosen.pair) + 1
-        vcpus = vms_at_once(chosen, len(lines), config.limits.max_parallel_vcpus) * chosen.vm_vcpus
-        claimed[chosen.region] = claimed.get(chosen.region, 0) + vcpus
         plan.choose(cls.name, chosen)
+        packed = planning.class_packing(
+            cls,
+            lines,
+            chosen,
+            config,
+            cost.PriceTable.load(config.price_table),
+            bundle=bundles_allowed(plan),
+        )
+        vcpus = sum(job.vms for job in packed.jobs) * chosen.vm_vcpus
+        claimed[chosen.region] = claimed.get(chosen.region, 0) + vcpus
         out[cls.name] = {
             "pair": chosen.pair,
             "region": chosen.region,
@@ -285,8 +385,18 @@ def render_job(
     submission: int,
     task_count: int,
     deadline: int,
+    parallelism: Optional[int] = None,
+    cells_per_task: int = 1,
+    claims: bool = False,
 ) -> Dict[str, Any]:
-    """The Batch job (REST ``Job``) for one submission of one resource class."""
+    """The Batch job (REST ``Job``) for one submission of one resource class.
+
+    ``parallelism`` (the packing's VM count in tasks) replaces the quota-bound default;
+    ``cells_per_task`` (the largest bundle) scales the runnable's timeout, since the wrapper runs a
+    bundle's cells one after the other, each within its own limit. ``claims``: each task claims
+    the next line of the indices file in order (the wrapper's ``Claims``), since Batch does not
+    start task indices in order.
+    """
     gcp = config.require_gcp()
     limits = config.limits
     cid = plan_meta["id"]
@@ -295,8 +405,10 @@ def render_job(
         raise SubmitError("the image %s is not pinned to a digest" % cls.image)
     registry = gcp.registry.format(region=placement.region, project=gcp.project)
     image_uri = image.mirror(ref, registry) if ref.registry == "ghcr.io" else ref.pinned
-    parallelism = cost.parallel_tasks(task_count, placement, limits.max_parallel_vcpus)
-    wall = int(cls.max_wall_s)
+    if parallelism is None:
+        parallelism = cost.parallel_tasks(task_count, placement, limits.max_parallel_vcpus)
+    parallelism = max(1, min(int(parallelism), task_count))
+    wall = int(cls.max_wall_s) * max(1, int(cells_per_task))
     options = "--init --shm-size 1g"
     if gcp.container_user:
         options += " --user %s" % gcp.container_user
@@ -382,7 +494,12 @@ def render_job(
             "lifecyclePolicies": [
                 {"action": "RETRY_TASK", "actionCondition": {"exitCodes": RETRY_EXIT_CODES}}
             ],
-            "environment": {"variables": {"YAPNR_BACKEND": "gcp-batch"}},
+            "environment": {
+                "variables": dict(
+                    {"YAPNR_BACKEND": "gcp-batch"},
+                    **({"YAPNR_CLAIM_BUCKET": gcp.runs_bucket} if claims else {}),
+                )
+            },
             "volumes": [
                 {
                     "gcs": {"remotePath": gcp.runs_bucket},
@@ -458,11 +575,26 @@ class GcpBatch(Backend):
         cloud = cloud or make_cloud(config)
         return Stores(GcsStore(gcp.runs_bucket, cloud), GcsStore(gcp.inputs_bucket, cloud))
 
-    def render(self, plan, config, cls, submission, indices, deadline) -> Dict[str, str]:
-        placement = plan.placement(cls.name)
-        job = render_job(plan.meta, config, cls, placement, submission, len(indices), deadline)
-        check_job(job)
-        return {"%s.job.json" % cls.name: json.dumps(job, indent=2, sort_keys=True) + "\n"}
+    def render(self, plan, config, cls, submission, indices, deadline, job=None) -> Dict[str, str]:
+        placement = (job.placement if job else None) or plan.placement(cls.name)
+        rendered = render_job(
+            plan.meta,
+            config,
+            cls,
+            placement,
+            submission,
+            len(job.groups) if job else len(indices),
+            deadline,
+            parallelism=job.parallelism if job else None,
+            cells_per_task=max((len(g) for g in job.groups), default=1) if job else 1,
+            claims=bool(job) and len(job.groups) > 1 and bundles_allowed(plan),
+        )
+        check_job(rendered)
+        return {"%s.job.json" % cls.name: json.dumps(rendered, indent=2, sort_keys=True) + "\n"}
+
+    def layout(self, plan, config, cls, lines, cloud=None):
+        table = cost.PriceTable.load(config.price_table)
+        return layout(plan, config, cls, lines, table, cloud)
 
     live_states = LIVE_STATES
 
@@ -479,7 +611,9 @@ class GcpBatch(Backend):
             previous=previous,
         )
 
-    def check_limits(self, plan, config, todo, *, yes, max_usd, confirm, say, price_table=None):
+    def check_limits(
+        self, plan, config, todo, *, yes, max_usd, confirm, say, price_table=None, layouts=None
+    ):
         # The kill switch's quota cut and the quota ceiling cover Spot (preemptible) CPUs only.
         on_demand = sorted(name for name in todo if plan.placement(name).model != "spot")
         if on_demand and not config.limits.allow_on_demand:
@@ -489,8 +623,18 @@ class GcpBatch(Backend):
                 "config to allow it" % ", ".join(on_demand)
             )
         table = price_table or cost.PriceTable.load(config.price_table)
+        packings = None
+        if layouts:
+            packings = {name: packing.Packing(jobs=list(jobs)) for name, jobs in layouts.items()}
         est = planning.estimate(
-            self.name, plan.classes, plan.placements(), config, table, subset=todo
+            self.name,
+            plan.classes,
+            plan.placements(),
+            config,
+            table,
+            subset=todo,
+            packings=packings,
+            bundle=bundles_allowed(plan),
         )
         count = sum(len(v) for v in todo.values())
         check = cost.check_caps(
@@ -501,8 +645,16 @@ class GcpBatch(Backend):
             max_usd=max_usd,
         )
         say(
-            "estimate: expected $%.2f, ceiling $%.2f, about %.1f h (prices %s)"
-            % (est.expected_usd, est.ceiling_usd, est.makespan_h, table.accessed)
+            "estimate: expected $%.2f (VM time %.2f VM-h on %d VM(s)), ceiling $%.2f, about %.1f h "
+            "(prices %s)"
+            % (
+                est.expected_usd,
+                sum(c.vm_hours for c in est.classes),
+                sum(c.vms for c in est.classes),
+                est.ceiling_usd,
+                est.makespan_h,
+                table.accessed,
+            )
         )
         if check.refusals:
             raise SubmitError("refused: " + "; ".join(check.refusals))
@@ -514,9 +666,11 @@ class GcpBatch(Backend):
             if not confirm(prompt):
                 raise SubmitError("not confirmed (pass --yes after reading the estimate)")
 
-    def launch(self, plan, config, cls, submission, files, stores, cloud=None, dry_run=False):
+    def launch(
+        self, plan, config, cls, submission, files, stores, cloud=None, dry_run=False, job=None
+    ):
         gcp = config.require_gcp()
-        placement = plan.placement(cls.name)
+        placement = (job.placement if job else None) or plan.placement(cls.name)
         cloud = cloud or make_cloud(config, dry_run)
         name = job_id(plan.id, submission)
         path = files["%s.job.json" % cls.name]

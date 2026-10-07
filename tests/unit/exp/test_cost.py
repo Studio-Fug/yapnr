@@ -179,15 +179,17 @@ class CostTest(unittest.TestCase):
             max_campaign_hours=12,
         )
         vm_hour = 16 * 0.01 + 30 * 0.001 + 0.08 * 30 / 730.0
-        task_hours = 8 * 1.0 / 0.8 * 1.08
-        expected = (task_hours / 8 + 1 * 120 / 3600.0) * vm_hour
-        self.assertAlmostEqual(est.expected_usd, expected, places=6)
-        worst = (8 * 2.0 * 4 / 8 + 120 / 3600.0) * vm_hour
+        # VM time: one VM of 8 slots, 30 s before its tasks, 3600 / 0.8 s plus 10 s of start-up
+        # per task, 45 s after them; 8% preemption rework.
+        vm_seconds = 30 + 3600 / 0.8 + 10 + 45
+        self.assertAlmostEqual(est.expected_usd, vm_seconds / 3600 * 1.08 * vm_hour, places=6)
+        self.assertEqual((est.classes[0].vms, est.classes[0].jobs), (1, 1))
+        worst = (8 * 2.0 * 4 / 8 + 75 / 3600.0) * vm_hour
         quota = 64 // 16 * (12 + 0.25) * vm_hour  # whole VMs, the reaper's 15 minutes
         self.assertAlmostEqual(est.ceiling_usd, min(worst, quota), places=6)
 
     def test_a_partly_filled_vm_is_billed_whole(self):
-        # 4 tasks on an 8-slot VM: one VM runs for the 4 tasks' time, with 4 slots idle.
+        # 4 tasks on an 8-slot VM: one VM runs for the tasks' time, with 4 slots idle.
         p = cost.place(self.table, self.none, cpus=1, memory_gb=2, families=["c4d"], regions=["r1"])
         self.assertEqual(p.tasks_per_vm, 8)
         est = cost.estimate_gcp(
@@ -198,12 +200,18 @@ class CostTest(unittest.TestCase):
             max_campaign_hours=12,
         )
         vm_hour = 16 * 0.01 + 30 * 0.001 + 0.08 * 30 / 730.0
-        task_hours = 4 * 1.0 / 0.8 * 1.08
+        task_s = 3600 / 0.8 + 10
         self.assertAlmostEqual(
-            est.expected_usd, (task_hours / 4 + 120 / 3600.0) * vm_hour, places=6
+            est.expected_usd, (30 + task_s + 45) / 3600 * 1.08 * vm_hour, places=6
         )
-        self.assertAlmostEqual(est.ceiling_usd, (4 * 2.0 / 4 + 120 / 3600.0) * vm_hour, places=6)
-        # 10 tasks at once on 8-slot VMs: two VMs of 5 each.
+        self.assertAlmostEqual(est.classes[0].slot_utilisation, 4 * task_s / ((75 + task_s) * 8), 3)
+        self.assertAlmostEqual(est.ceiling_usd, (4 * 2.0 / 4 + 75 / 3600.0) * vm_hour, places=6)
+
+    def test_the_vm_count_follows_the_work_and_the_longest_task(self):
+        p = cost.place(self.table, self.none, cpus=1, memory_gb=2, families=["c4d"], regions=["r1"])
+        vm_hour = 16 * 0.01 + 30 * 0.001 + 0.08 * 30 / 730.0
+        task_s = 3600 / 0.8 + 10
+        # 10 equal tasks: one VM would take two rounds, so two VMs, the makespan one task.
         est = cost.estimate_gcp(
             self.table,
             [("c1m2", p, [3600.0] * 10, [7200.0] * 10, 10)],
@@ -211,10 +219,20 @@ class CostTest(unittest.TestCase):
             max_parallel_vcpus=64,
             max_campaign_hours=12,
         )
-        task_hours = 10 * 1.0 / 0.8 * 1.08
+        self.assertEqual(est.classes[0].vms, 2)
         self.assertAlmostEqual(
-            est.expected_usd, (task_hours / 5 + 2 * 120 / 3600.0) * vm_hour, places=6
+            est.expected_usd, 2 * (30 + task_s + 45) / 3600 * 1.08 * vm_hour, places=6
         )
+        self.assertAlmostEqual(est.makespan_h, (30 + task_s + 120) / 3600, places=4)
+        # One long task and 30 short ones: the short ones fill one VM beside the long one.
+        est = cost.estimate_gcp(
+            self.table,
+            [("c1m2", p, [3600.0] + [360.0] * 30, [7200.0] * 31, 31)],
+            max_retries=0,
+            max_parallel_vcpus=64,
+            max_campaign_hours=12,
+        )
+        self.assertEqual(est.classes[0].vms, 1)
 
     def test_parallelism_counts_whole_vms(self):
         p = cost.place(self.table, self.none, cpus=1, memory_gb=2, families=["c4d"], regions=["r1"])

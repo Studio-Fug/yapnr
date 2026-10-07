@@ -114,6 +114,10 @@ on the Mac wants about 16,000 s, above `ladder-sweep.toml`'s 7,200 s and the exa
 | `yapnr exp prices [--refresh] [--family F]`                                         | no (Billing Catalog read)                              |
 | `yapnr exp unfreeze --backend gcp-batch`                                            | yes (deletes the freeze marker)                        |
 | `yapnr exp calibration ingest --reference DIR --cloud DIR... --out FILE`            | no                                                     |
+| `yapnr exp durations ingest [--fetched DIR...] [--campaign ID...] [--out FILE]`     | no (reads task records)                                |
+| `yapnr exp cost PLAN [--json]`                                                      | no (reads the Compute audit log and Batch)             |
+| `yapnr exp spend [--budget-usd X] [--json]`                                         | no (reads the audit log and the guard's logs)          |
+| `yapnr exp profile PLAN [--fetched DIR] [--top N] [--json]`                         | no                                                     |
 
 `PLAN` is the plan directory `plan` printed, or the campaign id. `submit --dry-run` on `gcp-batch`
 prints every `gcloud` call it would make (all with `--impersonate-service-account=yapnr-submit@...`)
@@ -378,6 +382,65 @@ quota.
   submit at the same time, is not counted, and neither is a Spot stockout (a region with quota
   but no capacity). Cancel and `submit --region` the other region.
 
+## Cost model: VM time and packing
+
+Batch bills **VM time**, not task time. Measured on yapnr's Spot jobs (October 2026, Compute
+Engine audit log joined to Batch task events over 622 VMs): a VM is billed from its creation,
+about 30 s before its first task starts (median 26 s, p90 33 s), until its deletion, about 45 s
+after its last task ends (median 34 s, p90 48 s); Batch deletes each VM as soon as it runs out
+of tasks, not when the job ends. Each Batch task spends about 10 s starting its container,
+staging its bundle and uploading its result. Every slot of a VM is paid for, busy or not. The
+monthly bill was 1.16 x the VM time at list prices (networking, storage, registry and logging
+make up the rest), and it lagged the VM time by about 8 hours.
+
+So the estimate (`plan`, and the caps at `submit`) prices the VM time of the class's
+**packing**, the layout `submit` uses ([`yapnr/exp/packing.py`](https://github.com/Studio-Fug/yapnr/blob/main/yapnr/exp/packing.py)):
+
+- **Durations** are predicted per task: the task's cell (kind and labels without `seed`) in the
+  durations history, else other cells of its case, else the calibration's `reference_seconds`,
+  else the kind's default. `yapnr exp durations ingest --campaign ID...` (or `--fetched DIR...`)
+  adds task records to the history (`[prices] durations`, default `<store>/durations.json`);
+  each sample is scaled by its machine family's speed. The plan prints how many predictions came
+  from where.
+- **Longest first**: a job's tasks are submitted in decreasing predicted duration (Batch hands
+  out task indices in order, so this is LPT scheduling, and the longest tasks gather on the first
+  VM that comes up).
+- **VM count**: as few VMs as keep the simulated makespan within 25% of the shortest the quota
+  allows (`parallelism` = VMs x tasks per VM, at most `max_parallel_vcpus`), so VMs stay busy
+  and the makespan stays near the longest task.
+- **Bundles**: cells predicted under 60 s run several to a Batch task (one line of
+  `submissions/<n>.indices` names several plan lines; the wrapper runs them one after the other,
+  each with its own limits and `_DONE`), up to the longest task's duration and 20 cells, so one
+  container start serves several. Plans made before wrapper version 2 keep one cell per task.
+- **Stragglers**: units over 3x what the rest need get a job of their own when that is predicted
+  to cost less VM time, on the next smaller shape of the family (when its instance template
+  exists); on the same shape a joint job is never dearer.
+
+Nothing about a task changes: the same lines of `tasks.jsonl`, commands, seeds and outputs; only
+which Batch task runs them, in what order and on how many VMs. `submit` writes the packing into
+each submission record (`packing`: Batch tasks, bundled cells, VMs, predicted VM-hours).
+
+After a campaign, `yapnr exp cost PLAN` measures what it really used: per submission, the VMs
+from the audit log (by the job's uid), their VM-hours at the table's price plus the boot disk,
+the Batch task time and the slot utilisation (task time / (VM time x tasks per VM)). It writes
+`<plan>/cost.json` and a line of `<store>/spend/campaigns.jsonl`.
+
+`yapnr exp spend` reports the month to date: the budget guard's billed figure (its logged cost,
+or ratio x `[prices] budget_usd`), the VM time of every yapnr VM this month from the audit log,
+the fitted factor and lag between the two, the VM time not billed yet (x the factor), and the
+campaigns `cost` recorded. Quote spend from this, not from task-time ledgers.
+
+### Profiling a campaign
+
+`[profile] enabled = true` in a campaign sets `PNR_PROFILE_DIR` for every task (outside its
+outputs, so results are unchanged; cProfile slows the engine, so wall-clock-budgeted cells may
+do less work). Every `pnr.profile`-instrumented process writes a record (its label, wall and CPU
+time, `span()` totals and 100 hottest functions); the wrapper uploads the JSON records beside the
+result and `fetch` copies them. `yapnr exp profile PLAN` adds them up: time per stage label, per
+span, per function and module (lower bounds: each process lists its top 100), the task time no
+profiled process covers, and with `cost.json` each share in VM-hours and dollars. Use it to pick
+what to port to Rust or move to a GPU.
+
 ## Costs and guards
 
 Prices are list prices from the committed table
@@ -411,9 +474,10 @@ The layers, each of which holds when the one above fails:
    `max_campaign_hours` (the jobs' deadline). `submit` refuses tasks that a queued or running job
    of the campaign still holds (no task runs twice), and on-demand placements (`spot = false`,
    outside the quota ceiling) unless `allow_on_demand = true`.
-3. **The estimate**: every plan prints the expected cost and a ceiling (every attempt at its
-   maximum wall time plus the grace, with every retry, on whole VMs; or the quota's VMs for
-   `max_campaign_hours` plus the reaper's interval, whichever is lower).
+3. **The estimate**: every plan prints the expected cost (the VM time of the packing, above)
+   and a ceiling (every attempt at its maximum wall time plus the grace, with every retry, on
+   whole VMs; or the quota's VMs for `max_campaign_hours` plus the reaper's interval, whichever
+   is lower).
    `submit` asks above `confirm_usd` and refuses a ceiling above `refuse_usd` unless `--max-usd`
    raises it, never above `hard_refuse_usd`.
 4. **The reaper**: every 15 minutes it cancels jobs past their `deadline` label and deletes yapnr VMs

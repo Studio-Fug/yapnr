@@ -5,8 +5,10 @@ from ``yapnr exp prices``); speeds come from the table's PassMark ratios until a
 (``yapnr exp calibration ingest``) replaces them with measurements. Every plan prints two numbers
 (docs/design/cloud-experiments.md, section 10):
 
-- expected: the sum over tasks of (reference wall time / speed) on the chosen shape, plus 8% for
-  preemption rework and VM start-up, plus boot disks;
+- expected: the VM time Batch bills for the class's packing (``packing.pack``: VM count, task
+  order and bundles as a submit lays them out; each VM from its boot to its deletion, every slot
+  paid busy or not), from the predicted task durations on the chosen shape, plus 8% for
+  preemption rework, at the VM's price plus its boot disk;
 - ceiling: the smaller of every task at its maximum wall time with every retry, and the quota
   ceiling ``max_parallel_vcpus x max_campaign_hours``, at the same prices.
 
@@ -21,6 +23,8 @@ import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+
+from yapnr.exp import packing
 
 DATA = Path(__file__).resolve().parent / "data"
 DEFAULT_TABLE = DATA / "gcp-spot-prices.json"
@@ -114,6 +118,24 @@ class PriceTable:
     @property
     def vm_start_s(self) -> float:
         return float(self.data["overheads"]["vm_start_s"])
+
+    def _overhead(self, key: str, default: float) -> float:
+        return float(self.data["overheads"].get(key, default))
+
+    @property
+    def vm_boot_s(self) -> float:
+        """Billed VM time before a VM's first task (measured: median 26 s, p90 33 s)."""
+        return self._overhead("vm_boot_billed_s", packing.VM_BOOT_S)
+
+    @property
+    def vm_idle_s(self) -> float:
+        """Billed VM time after a VM's last task (measured: median 34 s, p90 48 s)."""
+        return self._overhead("vm_idle_tail_s", packing.VM_IDLE_S)
+
+    @property
+    def task_overhead_s(self) -> float:
+        """Per Batch task: container start, bundle staging and upload (measured: about 10 s)."""
+        return self._overhead("task_overhead_s", packing.TASK_OVERHEAD_S)
 
 
 class Calibration:
@@ -366,6 +388,9 @@ class ClassEstimate:
     ceiling_usd: float
     vm_hour_usd: float
     disk_hour_usd: float
+    vms: int = 0
+    jobs: int = 1
+    slot_utilisation: float = 0.0
 
 
 @dataclass
@@ -389,40 +414,56 @@ class Estimate:
 
 def estimate_gcp(
     table: PriceTable,
-    classes: Sequence[Tuple[str, Placement, List[float], List[float], int]],
+    classes: Sequence[Tuple[Any, ...]],
     *,
     max_retries: int,
     max_parallel_vcpus: int,
     max_campaign_hours: float,
 ) -> Estimate:
     """``classes``: (name, placement, reference seconds per task, the longest one attempt of each
-    task may run, parallel). On Batch an attempt may run its max wall time plus
+    task may run, parallel[, packing]). On Batch an attempt may run its max wall time plus
     ``BATCH_ATTEMPT_GRACE_S`` (maxRunDuration), which is what the caller passes.
 
-    VMs are billed whole: when fewer tasks run at once than ``tasks_per_vm`` (a small submission,
-    or a low ``parallel``), each VM holds only ``occupancy`` tasks and pays for the idle slots.
-    The quota bound counts whole VMs within ``max_parallel_vcpus`` (as ``parallel_tasks`` does)
-    for the campaign's hours plus the reaper's interval, after which it cancels the job.
+    Batch bills VM time: each VM from its start (``vm_boot_s`` before its first task) to its
+    deletion (``vm_idle_s`` after its last), every slot paid whether busy or not. The expected
+    cost is the VM time of the class's packing (``packing.pack``: the jobs, their VM counts and
+    task order a submit uses; made here with one cell per task when not given), each task with
+    ``task_overhead_s`` of start-up, plus ``preemption_rework``, at the VM's price plus its boot
+    disk. The ceiling: every task at its longest attempt with every retry, on VMs as full as the
+    packing keeps them, or the quota bound (``max_parallel_vcpus`` of whole VMs for the
+    campaign's hours plus the reaper's interval), whichever is smaller.
     """
     est = Estimate(backend="gcp-batch")
     rework = table.rework
-    for name, p, reference, max_wall, parallel in classes:
+    for row in classes:
+        name, p, reference, max_wall, parallel = row[:5]
+        packed = row[5] if len(row) > 5 else None
         disk_hour = table.disk_hour(p.boot_disk, table.data["overheads"]["boot_disk_gib"])
         per_vm_hour = p.vm_hour + disk_hour
+        quota_vms = max(1, max_parallel_vcpus // max(1, p.vm_vcpus))
+        if packed is None:
+            lines = list(range(len(reference)))
+            packed = packing.pack(
+                lines,
+                {i: s / p.speed for i, s in zip(lines, reference)},
+                per_vm=p.tasks_per_vm,
+                max_vms=max(1, min(quota_vms, math.ceil(max(1, parallel) / p.tasks_per_vm))),
+                overhead_s=table.task_overhead_s,
+                boot_s=table.vm_boot_s,
+                idle_s=table.vm_idle_s,
+                bundle=False,
+            )
         task_hours = sum(s / p.speed for s in reference) / 3600.0 * (1 + rework)
-        at_once = max(1, min(len(reference), parallel))
-        vms = max(1, math.ceil(at_once / p.tasks_per_vm))
-        occupancy = max(1, min(p.tasks_per_vm, math.ceil(at_once / vms)))
-        start_hours = vms * table.vm_start_s / 3600.0
-        vm_hours = task_hours / occupancy + start_hours
+        vm_hours = packed.priced_vm_hours * (1 + rework)
         expected = vm_hours * per_vm_hour
+        vms = max(1, sum(job.vms for job in packed.jobs))
+        at_once = max(1, sum(job.parallelism for job in packed.jobs))
+        occupancy = max(1, min(p.tasks_per_vm, math.ceil(at_once / vms)))
+        start_hours = vms * (table.vm_boot_s + table.vm_idle_s) / 3600.0
         worst_task_hours = sum(max_wall) / 3600.0 * (1 + max_retries)
         worst = (worst_task_hours / occupancy + start_hours) * per_vm_hour
-        quota_vms = max(1, max_parallel_vcpus // max(1, p.vm_vcpus))
         quota = quota_vms * (max_campaign_hours + REAPER_INTERVAL_H) * per_vm_hour
-        slots = max(1, parallel)
-        longest = max(reference) / p.speed / 3600.0 if reference else 0.0
-        makespan = max(longest, task_hours / slots) + table.vm_start_s / 3600.0
+        makespan = (packed.makespan_s + table.vm_start_s) / 3600.0
         est.classes.append(
             ClassEstimate(
                 name=name,
@@ -430,12 +471,15 @@ def estimate_gcp(
                 expected_task_hours=round(task_hours, 4),
                 max_task_hours=round(worst_task_hours, 4),
                 vm_hours=round(vm_hours, 4),
-                parallel_tasks=parallel,
+                parallel_tasks=at_once,
                 makespan_h=round(makespan, 4),
                 expected_usd=round(expected, 4),
                 ceiling_usd=round(min(worst, quota), 4),
                 vm_hour_usd=round(p.vm_hour, 5),
                 disk_hour_usd=round(disk_hour, 5),
+                vms=vms,
+                jobs=len(packed.jobs),
+                slot_utilisation=round(packed.utilisation, 3),
             )
         )
         est.expected_usd += expected
@@ -443,7 +487,8 @@ def estimate_gcp(
         est.makespan_h = max(est.makespan_h, makespan)
         est.core_hours += task_hours * p.cpu_milli / 1000.0 / max(1, p.threads_per_core)
         est.assumptions.append(
-            "%s: %s in %s, %d tasks per VM, %s; prices: %s; speed %.2f (%s)"
+            "%s: %s in %s, %d tasks per VM, %s; prices: %s; speed %.2f (%s); %d job(s) on %d "
+            "VM(s), slots %.0f%% busy%s"
             % (
                 name,
                 p.shape,
@@ -453,11 +498,17 @@ def estimate_gcp(
                 p.price_source,
                 p.speed,
                 p.speed_source,
+                len(packed.jobs),
+                vms,
+                packed.utilisation * 100,
+                "; " + "; ".join(packed.notes) if packed.notes else "",
             )
         )
     est.assumptions.append(
-        "expected = reference wall time / speed x (1 + %.0f%% preemption rework and start-up), "
-        "boot disks included; egress and storage excluded" % (rework * 100)
+        "expected = VM time (%.0f s billed before a VM's first task, %.0f s after its last, %.0f s "
+        "per task to start) x (1 + %.0f%% preemption rework) x (VM + boot disk price); egress, "
+        "storage and network (about 15%% more on the bill) excluded"
+        % (table.vm_boot_s, table.vm_idle_s, table.task_overhead_s, rework * 100)
     )
     return est
 

@@ -332,6 +332,18 @@ def _cmd_fetch(args) -> int:
         print("warning   %s" % warning)
     if report["missing"]:
         print("pending   %d task(s) without a result" % len(report["missing"]))
+    if report["done"] and not args.no_durations:
+        # Every fetch feeds the durations history the planner predicts from (packing.py).
+        from yapnr.exp import packing
+
+        target = Path(cfg.durations_path).expanduser()
+        try:
+            previous = packing.load(str(target))
+            data = packing.ingest(fetch.records(dest / plan.id), previous)
+            packing.write(data, target)
+            print("durations %s (%d record(s) so far)" % (target, len(data["seen"])))
+        except (OSError, ValueError) as err:
+            print("warning   durations history not updated: %s" % err)
     return 0
 
 
@@ -863,6 +875,9 @@ def register(commands: argparse._SubParsersAction) -> None:
     p.add_argument("--into", help="destination (default: <store>/fetched)")
     p.add_argument("--from", dest="source", help="a local copy of the store (Slurm sites)")
     p.add_argument("--allow-mixed", action="store_true", help="assemble mixed platforms")
+    p.add_argument(
+        "--no-durations", action="store_true", help="leave the durations history as it is"
+    )
     p.set_defaults(func=_run(_cmd_fetch))
 
     p = sub.add_parser(

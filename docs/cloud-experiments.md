@@ -398,8 +398,9 @@ So the estimate (`plan`, and the caps at `submit`) prices the VM time of the cla
 
 - **Durations** are predicted per task: the task's cell (kind and labels without `seed`) in the
   durations history, else other cells of its case, else the calibration's `reference_seconds`,
-  else the kind's default. `yapnr exp durations ingest --campaign ID...` (or `--fetched DIR...`)
-  adds task records to the history (`[prices] durations`, default `<store>/durations.json`);
+  else the kind's default. `yapnr exp fetch` adds the campaign's task records to the history
+  (`[prices] durations`, default `<store>/durations.json`; `--no-durations` skips it), and
+  `yapnr exp durations ingest --campaign ID...` (or `--fetched DIR...`) adds any others;
   each sample is scaled by its machine family's speed. The plan prints how many predictions came
   from where.
 - **Longest first**: the lines of a job's `submissions/<n>.indices` are in decreasing predicted

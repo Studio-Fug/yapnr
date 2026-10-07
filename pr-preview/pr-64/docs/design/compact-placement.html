@@ -1220,7 +1220,10 @@ legalizer moved. If the result leaves a part without a slot, the board is legali
 the plain packer (<code class="docutils literal notranslate"><span class="pre">keep_fallback</span></code>).</p></li>
 <li><p><em>Metric.</em> Every legalization records its motion: parts moved (beyond 0.4 mm or turned),
 displacement sum and maximum, turns, topology kept (the fraction of pairwise left/right and
-above/below relations of the global poses that the legal poses keep), the triage counts and,
+above/below relations of the global poses that the legal poses keep), the neighbour order kept
+(<code class="docutils literal notranslate"><span class="pre">neighbour_order</span></code>: the same over each part’s four nearest parts only, counting an axis when it
+carries at least a quarter of the pair’s distance; <code class="docutils literal notranslate"><span class="pre">neighbour_relations</span></code> is its count), the
+triage counts and,
 per part that left its pose, the reason (<code class="docutils literal notranslate"><span class="pre">relocations</span></code>; <code class="docutils literal notranslate"><span class="pre">relocated_severe</span></code>,
 <code class="docutils literal notranslate"><span class="pre">relocated_push_infeasible</span></code>, <code class="docutils literal notranslate"><span class="pre">relocated_slot_taken</span></code>, <code class="docutils literal notranslate"><span class="pre">nudged</span></code>, <code class="docutils literal notranslate"><span class="pre">channel_unopened</span></code>). It
 is in the placement report, <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code> (<code class="docutils literal notranslate"><span class="pre">legal_motion</span></code>; <code class="docutils literal notranslate"><span class="pre">block</span></code> and <code class="docutils literal notranslate"><span class="pre">top</span></code> for the
@@ -1477,7 +1480,11 @@ random draws; a golden hash).</p></li>
 and an end-card line, and the record <code class="docutils literal notranslate"><span class="pre">detail_motion</span></code> (moves by kind, parts moved, sum, maximum
 and median distance, wirelength and crossing before and after, channel delta, topology, time) in
 the placement report, <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code>, the hierarchical report and <code class="docutils literal notranslate"><span class="pre">ladder-results.json</span></code>.
-<code class="docutils literal notranslate"><span class="pre">legal_motion</span></code> stays the legalizer’s own.</p>
+<code class="docutils literal notranslate"><span class="pre">legal_motion</span></code> stays the legalizer’s own. The record carries the neighbour order kept from the
+legal poses (<code class="docutils literal notranslate"><span class="pre">neighbour_order</span></code>) and from the global poses (<code class="docutils literal notranslate"><span class="pre">neighbour_order_global</span></code>), and
+<code class="docutils literal notranslate"><span class="pre">ladder-results.json</span></code> gives each case <code class="docutils literal notranslate"><span class="pre">order</span></code> (<code class="docutils literal notranslate"><span class="pre">gp_legal</span></code>, <code class="docutils literal notranslate"><span class="pre">legal_dp</span></code>, <code class="docutils literal notranslate"><span class="pre">gp_dp</span></code>; end to end is
+the legal poses’ when the pass did not run) and the document <code class="docutils literal notranslate"><span class="pre">order</span></code> (<code class="docutils literal notranslate"><span class="pre">showcases_order</span></code> for the
+showcases): each stage’s order kept over every case, weighted by relation count.</p>
 <p><strong>KEEP push.</strong> A cluster whose push is infeasible now moves the conflicting pair needing the
 least shift to its other axis and solves again (up to four times; channel pushes keep their
 axis), and a failing push is retried with a size-scaled reach (0.75, then 1.0 of the larger side,
@@ -1557,6 +1564,13 @@ fail the LVDS pair’s gap rule by one or two findings with KEEP alone too (deta
 nothing in their chosen placements), and on seed 1 every finalist the initial pool routed had the
 pair uncoupled or a connection missing, so it took one with the pair as legs. Parts within 3 mm
 of the ball array no longer move, so the BGA rungs gain little copper.
+The confirming round fixed both causes, which are the pool’s and the pair router’s, not the
+placement’s. The router now prefers pad fanouts without a stretch parallel to the other leg off
+the gap for a pair whose coupling the design judges (<code class="docutils literal notranslate"><span class="pre">max_uncoupled_mm</span></code>; <code class="docutils literal notranslate"><span class="pre">coupled.gap_breaks</span></code>,
+KiCad’s nearest-parallel model). The pool counts such a pair off its gap or as legs against a
+finalist (<code class="docutils literal notranslate"><span class="pre">pairs_gap</span></code>, <code class="docutils literal notranslate"><span class="pre">judged_pair_flaws</span></code>) and routes up to two more candidates by the proxy
+screen when every finalist leaves a connection open or such a pair flawed (<code class="docutils literal notranslate"><span class="pre">EXTRA_FINALISTS</span></code>).
+On the Mac, seeds 1, 9 and 12 pass.
 Detailed placement moved 1174 parts by 2243 mm in the final placements (the median of the cells’
 medians 1.2 mm, mostly compaction; the largest 14 mm), 79 s in all. The
 legalization motion (the legalizer’s own, <code class="docutils literal notranslate"><span class="pre">legal_motion</span></code>) is 179 of 1496 parts and 999 mm with 43

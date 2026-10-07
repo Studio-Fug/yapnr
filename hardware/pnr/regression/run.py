@@ -1038,6 +1038,15 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--in-pad-scan",
+        action="store_true",
+        help=(
+            "PNR_IN_PAD_SCAN=1: a plane pad's filled in-pad via (a via-in-pad profile, no "
+            "legal dog-bone) tries the whole land, not only its centre "
+            "(pnr.writeback.in_pad_scan_points)"
+        ),
+    )
+    ap.add_argument(
         "--fanout-band-mm",
         type=float,
         metavar="MM",
@@ -1194,6 +1203,8 @@ def main():
         env["PNR_EXACT_SETTLE"] = "1"
     if args.fanout_best_round:
         env["PNR_FANOUT_BEST_ROUND"] = "1"
+    if args.in_pad_scan:
+        env["PNR_IN_PAD_SCAN"] = "1"
     if args.fanout_band_mm:
         env["PNR_FANOUT_BAND_MM"] = repr(args.fanout_band_mm)
     if args.detail_pitch_mm is not None:

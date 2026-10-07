@@ -82,6 +82,7 @@ OPTIONS = {
     "exact_late_room": bool,
     "exact_settle": bool,
     "fanout_best_round": bool,
+    "in_pad_scan": bool,
     "fanout_band_mm": (int, float),
     "maze_kernel": str,
 }
@@ -116,6 +117,7 @@ FLAGS = {
     # Settled contested space and the fanout's best-round legalization (top-rung).
     "exact_settle": "--exact-settle",
     "fanout_best_round": "--fanout-best-round",
+    "in_pad_scan": "--in-pad-scan",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
 WEIGHTS = {

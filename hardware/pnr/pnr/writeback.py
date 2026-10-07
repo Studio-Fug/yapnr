@@ -1134,6 +1134,36 @@ def _dogbone_fanout_net(
     return added
 
 
+# PNR_IN_PAD_SCAN: the step (mm) of the in-pad sites a plane pad's filled via tries
+# after the land centre.
+IN_PAD_SCAN_STEP_MM = 0.1
+
+
+def in_pad_scan_points(frame):
+    """The points (board mm) a plane pad's filled in-pad via tries, in order: the
+    land centre; with ``PNR_IN_PAD_SCAN=1`` (off by default) then every point of a
+    :data:`IN_PAD_SCAN_STEP_MM` lattice over the land, nearest the centre first
+    (ties by angle), so a via the copper routed across the land's centre on another
+    layer still finds the room beside it. ``frame``: :func:`pnr.via_in_pad.pad_frame`."""
+    import math
+    import os
+
+    (cx, cy), (w, h), angle, _corner = frame
+    points = [(cx, cy)]
+    if os.environ.get("PNR_IN_PAD_SCAN") != "1":
+        return points
+    c, s = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+    step = IN_PAD_SCAN_STEP_MM
+    nx, ny = int(w / 2 / step), int(h / 2 / step)
+    offsets = sorted(
+        ((a * step, b * step) for a in range(-nx, nx + 1) for b in range(-ny, ny + 1) if a or b),
+        key=lambda o: (round(math.hypot(*o), 9), round(math.atan2(o[1], o[0]), 9)),
+    )
+    # The inverse of pnr.via_in_pad.local: the pad's local x turns to board (cos, -sin).
+    points += [(cx + u * c + v * s, cy - u * s + v * c) for u, v in offsets]
+    return points
+
+
 def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
     """A filled 5B in-pad via at the land centre of an SMD plane pad.
 
@@ -1157,14 +1187,14 @@ def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
     frame = pad_frame(pad)
     if frame is None:
         return False
-    point = frame[0]
-    size = in_pad_size(g, [pad], pad.GetNetname(), point)
-    if size is None:
-        return False
     policy = pad_policy(pad, rules)
     if policy is not None and array_requirement(policy, rules, g)["count"] > 1:
         return False
-    if not oracle.via(pad.GetNetname(), point, *size):
+    for point in in_pad_scan_points(frame):
+        size = in_pad_size(g, [pad], pad.GetNetname(), point)
+        if size is not None and oracle.via(pad.GetNetname(), point, *size):
+            break
+    else:
         return False
     via = pcbnew.PCB_VIA(board)
     via.SetPosition(pcbnew.VECTOR2I(round(point[0] * 1e6), round(point[1] * 1e6)))

@@ -846,6 +846,17 @@ py_test(
     ],
 )
 
+# PNR_IN_PAD_SCAN: the in-pad sites a plane pad's filled via tries (pure geometry).
+py_test(
+    name = "in_pad_scan_test",
+    size = "small",
+    srcs = ["tests/test_in_pad_scan.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_in_pad_scan.py",
+    deps = [":pnr"],
+)
+
 # The rail IR-drop solver (pnr.ir_drop) against analytic resistances (numpy only).
 py_test(
     name = "ir_drop_test",

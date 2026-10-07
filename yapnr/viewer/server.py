@@ -48,9 +48,13 @@ EXTRACT_SCRIPT = PACKAGE / "kicad_scripts" / "extract.py"
 EXTRACT_TIMEOUT = 40
 LICENSE = "AGPL-3.0-or-later"
 # Written by ``yapnr exp live`` (yapnr.exp.live.FINISHED_MARKER) directly under the live root
-# once every task in the mirrored campaign has a ``_DONE`` marker; see Viewer._run_finished. Kept
-# as a matching literal in both files rather than a cross-package import -- yapnr.viewer and
-# yapnr.exp are independent Bazel targets.
+# once every task the mirrored campaign actually submitted has a ``_DONE`` marker (not
+# necessarily every task its plan names: a campaign that only submitted part of its plan is
+# "finished" once that part is done -- yapnr.exp.live.required_task_ids); see
+# Viewer._run_finished. Withdrawn by the same mirror if a later submission turns up more,
+# unfinished work, so its mere existence is always safe to trust. Kept as a matching literal in
+# both files rather than a cross-package import -- yapnr.viewer and yapnr.exp are independent
+# Bazel targets.
 MIRROR_FINISHED_MARKER = "campaign-finished.json"
 # Third-party files served unmodified from the assembled dist; the browser may cache them.
 PINNED_PREFIXES = ("elk.bundled.js", "vendor/", "third_party/")
@@ -891,11 +895,13 @@ class Viewer:
         "stalled" forever -- a mirrored campaign that is simply done looks identical to a dead
         worker otherwise. Two sources, cheap enough to re-check every poll:
 
-        - :data:`MIRROR_FINISHED_MARKER` directly under ``self.root``, written once by
-          ``yapnr exp live`` (:mod:`yapnr.exp.live`'s own ``FINISHED_MARKER``, same name -- kept
-          as a plain string in both rather than a cross-package import so the viewer and the exp
-          CLI stay independently buildable) when every task in the campaign's ``tasks.jsonl`` has
-          a ``_DONE`` marker.
+        - :data:`MIRROR_FINISHED_MARKER` directly under ``self.root``, written by ``yapnr exp
+          live`` (:mod:`yapnr.exp.live`'s own ``FINISHED_MARKER``, same name -- kept as a plain
+          string in both rather than a cross-package import so the viewer and the exp CLI stay
+          independently buildable) once every task the campaign actually *submitted* has a
+          ``_DONE`` marker (its ``tasks.jsonl`` plan only when nothing was submitted yet), and
+          withdrawn by the same mirror the moment that stops being true, so its presence alone is
+          enough -- this method never has to reason about partial submissions itself.
         - for a local (non-mirrored) run, a ``summary.json`` with ``"complete": true`` in ``root``
           or one of its first few parents -- ``hardware/pnr/regression/run.py --out`` always
           writes one there when it exits, campaign machinery or not (``PNR_LIVE_DIR`` is commonly
@@ -962,6 +968,21 @@ class Viewer:
             selected = selected or next(
                 (k for k in self.state["lanes"] if not k.endswith("/search")), None
             )
+            # _run_finished() is cheap (a file-existence check, occasionally a tiny read) and
+            # changes outside ingest: a quiescent campaign's MIRROR_FINISHED_MARKER can appear (or
+            # be withdrawn -- yapnr.exp.live.synthesize_task_events) with no new event ever
+            # following it. A flip bumps "revision" here, the same way a restart-status change
+            # does in the poll loop, so the per-revision response cache is rebuilt *and* every
+            # client polling with ?since=<old revision> -- not just whichever one asked first --
+            # gets the new state instead of the "unchanged" shortcut, so its lanes stop reading
+            # "stalled" once the campaign is actually over.
+            finished = self._run_finished()
+            # Compared with its own last-served value, not state["campaign_finished"]: that one
+            # is refreshed by every current() call (_annotate_lanes), so another caller could
+            # update it first and hide the flip from this check.
+            if finished != getattr(self, "_served_finished", False):
+                self._served_finished = finished
+                self.state["revision"] += 1
             rev = self.state["revision"]
             run = self.state["run"]
             if query.get("since", [None])[0] == str(rev) and query.get("run", [None])[0] == run:

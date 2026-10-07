@@ -15,6 +15,14 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
+- **Route-then-compact and hull packing** (branch `claude/route-compact`; design
+  [docs/design/route-compact.md](docs/design/route-compact.md)). `PNR_ROUTE_COMPACT`
+  (`TOP`, `BLOCK`, `FLAT`; default off): after routing, order-preserving 1D compaction (x then
+  y) by the copper each gutter holds, rip-up and reroute, back-off on a worse route; the
+  hierarchical driver measures block hulls from its in-memory routes (`PNR_MACRO_HULL`), GP
+  packs hull bodies (`PNR_HULL_DOVETAIL`), new rung `13-dovetail-blocks-23`. Next: rebase on
+  #64/#70 and A/B again on top of detailed placement; the push-and-shove router as the reroute.
+
 - **Routing engine for radar60 Rev A, stage 3b** (#49, branch `claude/radar-routing-engine-2`;
   all opt-in, byte-identical where undeclared). Router: pad-local clearance and mask margin (data),
   `board.class_clearance: maze | repair`, `board.dru_routing` (a board's `.kicad_dru` where it

@@ -1,0 +1,33 @@
+{
+  "dense_ghz": [
+    [1.0, 6.5, 1101]
+  ],
+  "coarse": [
+    {
+      "name": "|S11| max dB",
+      "kind": "s_max",
+      "ports": [1, 1],
+      "limit": 0.0,
+      "ghz": [1.0, 6.5]
+    },
+    {
+      "name": "passivity",
+      "kind": "passivity",
+      "limit": -0.001
+    }
+  ],
+  "fine": [
+    {
+      "name": "|S11| max dB",
+      "kind": "s_max",
+      "ports": [1, 1],
+      "limit": 0.0,
+      "ghz": [1.0, 6.5]
+    },
+    {
+      "name": "passivity",
+      "kind": "passivity",
+      "limit": -0.001
+    }
+  ]
+}

@@ -47,6 +47,11 @@ MAX_COPPER_LAYERS = 32
 
 SIGNAL, SPLIT, PLANE, UNUSED = "signal", "split", "plane", "unused"
 
+# The thermal relief gap a partitioned plane's zones are drawn with (writeback's
+# draw_plane_regions; KiCad's default): a plated pad's relief clears this much about
+# its outline, and pnr.plane_partition leaves room for it round a rail's lands.
+RELIEF_GAP_MM = 0.5
+
 # The legacy heuristic's copper stack on a board with 4+ layers and plane classes.
 LEGACY_FOUR = ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")
 LEGACY_TWO = ("F.Cu", "B.Cu")

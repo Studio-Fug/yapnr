@@ -603,6 +603,71 @@ class RouteTest(unittest.TestCase):
         self.assertTrue(r.result.nets["V3"].cells, "V3 must have routed signal copper")
 
 
+def relief_ring(rect, d, step=0.05):
+    """Points ``d`` beyond the rectangle ``rect`` (its outline offset outward, the
+    corners round): where KiCad's fill runs round a pad relieved by a gap below ``d``."""
+    out = []
+    corners = [
+        (rect.right, rect.top, 0.0),
+        (rect.left, rect.top, 90.0),
+        (rect.left, rect.bottom, 180.0),
+        (rect.right, rect.bottom, 270.0),
+    ]
+    for k, (x, y, a0) in enumerate(corners):
+        n = max(2, int(math.pi / 2 * d / step))
+        for i in range(n + 1):
+            a = math.radians(a0 + 90.0 * i / n)
+            out.append((x + d * math.cos(a), y + d * math.sin(a)))
+        nx, ny, _ = corners[(k + 1) % 4]
+        a = math.radians(a0 + 90.0)
+        ox, oy = d * math.cos(a), d * math.sin(a)
+        n = max(1, int(math.hypot(nx - x, ny - y) / step))
+        for i in range(1, n):
+            out.append((x + ox + (nx - x) * i / n, y + oy + (ny - y) * i / n))
+    return out
+
+
+class ThroughLandTest(unittest.TestCase):
+    """A plated through-hole terminal of a rail that does not own the leftover keeps
+    its whole thermal relief inside its territory, with the rail's minimum width of
+    copper round it. KiCad relieves the pad about its outline; the inscribed disc the
+    partition used to model it by left a square pad's relief corners outside the
+    territory, and the fill fell into slivers, each held by one spoke (the ``-rails``
+    rung's VBAT on J7.1, 1.7 mm square, three pieces: 2026-10-07)."""
+
+    FILL_MIN = 0.1
+
+    @classmethod
+    def setUpClass(cls):
+        from pnr.place.geometry import Rect
+        from pnr.plane_partition import through_land
+
+        cls.rect = Rect(3.5, 3.5, 1.7, 1.7)
+        terms = {
+            "A": [via("A1", (16.0, 9.0)), via("A2", (17.0, 3.0))],
+            "B": [through_land("J7.1", cls.rect), via("B2", (9.0, 4.0))],
+        }
+        cls.terminal = terms["B"][0]
+        cls.part = run(dict(ENTRY, fill="A"), terms, [], fill_min_mm=cls.FILL_MIN)
+
+    def test_a_through_hole_terminal_is_its_whole_land(self):
+        t = self.terminal
+        self.assertEqual(t.kind, "land")
+        self.assertEqual(t.size, (1.7, 1.7))
+        self.assertAlmostEqual(t.radius, math.hypot(1.7, 1.7) / 2)
+
+    def test_the_relief_of_a_square_pad_stays_inside_its_territory(self):
+        from pnr.stack import RELIEF_GAP_MM
+
+        self.assertEqual(self.part.report["leftover"], "A")
+        mine = [r for r in self.part.regions if r.net == "B"]
+        width = ENTRY["min_width_mm"]
+        for d in (RELIEF_GAP_MM + 0.02, RELIEF_GAP_MM + width / 2, RELIEF_GAP_MM + width):
+            ring = relief_ring(self.rect, d)
+            outside = [p for p in ring if not any(inside(r, p) for r in mine)]
+            self.assertEqual(outside, [], d)
+
+
 class FixedTerminalsTest(unittest.TestCase):
     """E3: a fixed block's through vias of a rail are partition terminals (a blind via
     whose span misses the layer neither joins nor blocks it), and with fixed_lands

@@ -14,14 +14,17 @@ terminals:
    entry does not name; the router then routes it as an ordinary trace, as it
    already does for every other net). A ``fill`` naming one of the rails makes it
    the leftover's owner: it alone grows in step 5, the others keep their claimed
-   copper and an apron (``APRON_MM``). An entry with a ``region`` (an outer pour) is
+   copper and an apron (``APRON_MM``; round a pad's land, past its thermal relief by
+   the rail's minimum width). An entry with a ``region`` (an outer pour) is
    unaffected: every one of its candidates keeps a piece of the pour;
 1. the layer is rasterized at ``h_mm`` (0.1 mm) inside the outline less the edge
    clearance; foreign through copper is blocked with its clearance (other nets'
-   planned vias, fixed vias, plated holes, mounting holes), and so are keepouts
+   planned vias, fixed vias, plated pads by their rectangles, mounting holes), and so
+   are keepouts
    that bar pours on the layer (except for the nets they allow);
 2. a rail's terminals are its planned drop vias (the fanout's, fixed ones: their
-   lands) and, for a surface pad without one yet, the disc within
+   lands), its plated pads (their whole lands, :func:`through_land`) and, for a
+   surface pad without one yet, the disc within
    ``terminal_reach_mm`` of the pad where the drop planner puts its via;
 3. rails are taken in order (peak current, then terminal count, then name; or as
    listed); each gets a Steiner tree over its terminals (shortest-path heuristic:
@@ -520,10 +523,13 @@ def partition(
     corridor_keep_mm: float = 0.0,
     bodies: Sequence[list] = (),
     trace: Optional["PlaneTrace"] = None,
+    hard_polygons: Sequence[list] = (),
 ) -> Partition:
     """Partition ``entry["layer"]`` (see the module doc). ``terminals``: net ->
     :class:`Terminal` list (in the nets' order of ``entry["nets"]``); ``blocked``:
-    foreign copper discs ``(centre, radius incl. clearance)``; ``blocked_polygons``:
+    foreign copper discs ``(centre, radius incl. clearance)``; ``hard_polygons``: foreign
+    copper given by its outline instead (rings, the clearance included: a plated pad's
+    rectangle, :func:`block_terminal`); ``blocked_polygons``:
     ``(rings, allowed nets)`` keepouts barring pours on the layer; ``fill_min_mm``:
     the zones' minimum width (a tree passes only where a zone that wide fills); ``trace``:
     an optional :class:`PlaneTrace` to record the stages into (off by default; a traced call
@@ -546,6 +552,8 @@ def partition(
     )
     if fill_min_mm:
         payload["fill_min"] = fill_min_mm
+    if hard_polygons:  # only then (an older input's digest is unchanged)
+        payload["hard"] = [[list(map(list, ring)) for ring in rings] for rings in hard_polygons]
     if foreign_lands:  # an outer pour's other nets' lands (only then)
         payload["foreign_lands"] = [list(map(list, r)) for r in foreign_lands]
         payload["corridor"] = [corridor_mm, corridor_keep_mm]
@@ -573,6 +581,7 @@ def partition(
         corridor_keep_mm,
         bodies,
         trace,
+        hard_polygons,
     )
     result.report["inputs_sha256"] = key
     if trace is None:
@@ -602,10 +611,11 @@ def _partition(
     corridor_keep_mm=0.0,
     bodies=(),
     trace=None,
+    hard_polygons=(),
 ):
     from pnr.electrical import current_width
     from pnr.ir_drop import barrel_ohm, resistivity
-    from pnr.stack import Region
+    from pnr.stack import RELIEF_GAP_MM, Region
 
     layer = entry["layer"]
     h = float(entry.get("h_mm", 0.1))
@@ -624,6 +634,8 @@ def _partition(
     hard = g.zeros()
     for c, r in blocked:
         hard |= g.disc(c, r)
+    for rings in hard_polygons:
+        hard |= g.polygon(rings, grow=h / 2)
     per_net_block = {n: g.zeros() for n in nets}
     for rings, allowed in blocked_polygons:
         cells = g.polygon(rings, grow=h / 2)
@@ -816,10 +828,25 @@ def _partition(
         # round the trunk, not a share of the layer.
         report["leftover"] = owner
         apron = float(entry.get("apron_mm", APRON_MM)) / h
-        grow_block = {
-            n: (m if n == owner else m | ~dilate(label == nets.index(n), apron))
-            for n, m in per_net_block.items()
-        }
+        # Round a pad's land (a plated pad, through_land) the zone's relief clears
+        # RELIEF_GAP_MM about the pad's outline: the rail grows past it by its minimum
+        # width (and the carve's gap, and the raster's), so its fill round the relief
+        # is one piece as wide as the rail, not a ring of slivers each held by a spoke.
+        ring = (RELIEF_GAP_MM + max(min_w, fill_min_mm) + gap + 2 * h) / h
+        grow_block = {}
+        for k, n in enumerate(nets):
+            m = per_net_block[n]
+            if n == owner:
+                grow_block[n] = m
+                continue
+            reach = dilate(label == k, apron)
+            lands = g.zeros()
+            for t, disc in zip(terminals[n], cells_of[n]):
+                if t.kind == "land":
+                    lands |= disc
+            if lands.any():
+                reach |= dilate(lands, ring)
+            grow_block[n] = m | ~reach
     grown = _grow(label, free, grow_block, nets, order, trace=trace)
     # A grown cell keeps gap + h (centre to centre) from another rail's claimed copper
     # and gap / 2 + h from another rail's grown copper (which carves the other half).
@@ -1321,6 +1348,49 @@ def _land(g, t):
     return out
 
 
+def _Rect(t):
+    """A size-given land terminal's rectangle (:class:`pnr.place.geometry.Rect`)."""
+    from pnr.place.geometry import Rect
+
+    return Rect(t.at[0], t.at[1], t.size[0], t.size[1])
+
+
+def _rect_ring(r, grow=0.0):
+    """A pad rectangle ``r`` (:func:`pnr.place.geometry.pad_rects`) grown by ``grow``
+    on every side, as a ring."""
+    return [
+        (r.left - grow, r.bottom - grow),
+        (r.right + grow, r.bottom - grow),
+        (r.right + grow, r.top + grow),
+        (r.left - grow, r.top + grow),
+    ]
+
+
+def block_terminal(t, gap, blocked, hard_polygons):
+    """Another net's terminal ``t`` as foreign copper at ``gap``: a plated pad's
+    rectangle (a size-given land, :func:`through_land`) into ``hard_polygons``, else
+    its disc into ``blocked``."""
+    if t.kind == "land" and t.outline is None and t.size is not None:
+        hard_polygons.append([_rect_ring(_Rect(t), gap)])
+    else:
+        blocked.append((t.at, t.radius + gap))
+
+
+def through_land(name, r):
+    """A plated through-hole pad's terminal: its whole land (``kind="land"``, the
+    pad's rectangle ``r``), not the disc inside it.
+
+    KiCad relieves the pad with the zone's thermal gap about the pad's *outline*, so
+    at a square pad's corners the relief reaches half the diagonal plus the gap. A
+    territory drawn round the inscribed disc (the old ``max(w, h) / 2``) can be
+    thinner than the relief there and fill as separate slivers, each held to the pad
+    by one spoke: the ``-rails`` rung's VBAT on J7.1 (1.7 mm square) filled as three
+    pieces under the allocation search's VDD+VBAT answer (2026-10-07). The land is
+    claimed as copper (as a via's is) and a rail's apron grows from it; the radius is
+    the circumscribed one (a traced rail's terminal blocks the others by it)."""
+    return Terminal(name, "land", (r.cx, r.cy), math.hypot(r.w, r.h) / 2, (r.w, r.h))
+
+
 def _cells(g, flat):
     out = g.zeros()
     out.ravel()[np.asarray(flat, dtype=np.int64)] = True
@@ -1682,16 +1752,14 @@ def for_route(
                 terms[net].append(t)
         skip = getattr(fanouts, "skip_pads", set()) if fanouts is not None else set()
         reach = float(entry.get("terminal_reach_mm", 0.8))
+        hard = []  # other nets' plated pads: their rectangles at the clearance
         for comp in graph.components:
             for (name, net, r), pad in zip(pad_rects(comp), comp.pads):
-                half = max(r.w, r.h) / 2
                 if pad.through_hole:
                     if net in terms:
-                        terms[net].append(
-                            Terminal("%s.%s" % (comp.ref, name), "via", (r.cx, r.cy), half)
-                        )
+                        terms[net].append(through_land("%s.%s" % (comp.ref, name), r))
                     else:
-                        blocked.append(((r.cx, r.cy), half + gap_to(net)))
+                        hard.append([_rect_ring(r, gap_to(net))])
                     continue
                 if net in terms and (comp.ref, name) not in skip:
                     terms[net].append(
@@ -1772,6 +1840,7 @@ def for_route(
                 height=height,
                 terminals={n: list(ts) for n, ts in terms.items()},
                 blocked=list(blocked),
+                hard_polygons=list(hard),
                 gaps={n: gap_to(n) for n in nets},
                 blocked_polygons=list(keepouts),
                 currents={n: c for n, c in currents.items() if c},
@@ -1789,7 +1858,7 @@ def for_route(
             )
         for n in traced:
             for t in terms.pop(n):
-                blocked.append((t.at, t.radius + gap_to(n)))
+                block_terminal(t, gap_to(n), blocked, hard)
         part = partition(
             entry,
             width=width,
@@ -1804,6 +1873,7 @@ def for_route(
             edge_mm=edge,
             via_drill_mm=via_h,
             fill_min_mm=fill_min,
+            hard_polygons=hard,
         )
         part.report["candidates"] = {
             n: dict(decision=d, reason=r) for n, (d, r) in sorted(net_decisions.items())
@@ -1984,6 +2054,7 @@ def _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanout
     h = float(entry.get("h_mm", 0.1))
     terms: Dict[str, List[Terminal]] = {n: [] for n in nets}
     blocked = []
+    hard = []  # other nets' plated pads: their rectangles at the clearance
     keepouts = []
     sizes = getattr(fanouts, "via_sizes", {}) if fanouts is not None else {}
     for net, p in grid.escape_vias:
@@ -2036,11 +2107,9 @@ def _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanout
             if pad.through_hole:
                 if net in terms:
                     if inside((r.cx, r.cy)):
-                        terms[net].append(
-                            Terminal("%s.%s" % (comp.ref, name), "via", (r.cx, r.cy), half)
-                        )
+                        terms[net].append(through_land("%s.%s" % (comp.ref, name), r))
                 else:
-                    blocked.append(((r.cx, r.cy), half + gap_to(net)))
+                    hard.append([_rect_ring(r, gap_to(net))])
                 continue
             if grid.layers[pad_layer(grid, comp, pad)] != layer:
                 continue
@@ -2081,6 +2150,7 @@ def _outer(grid, graph, rules, stack, width, height, entry, fixed_copper, fanout
         edge_mm=edge,
         via_drill_mm=via_h,
         fill_min_mm=fill_min,
+        hard_polygons=hard,
         foreign_lands=foreign,
         # A lane holds one free grid column between the pours' halos (their claims
         # reach clearance + half a track + half a cell's diagonal), with a cell spare.

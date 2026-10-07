@@ -1,0 +1,70 @@
+# Gate for the ladder runner's --fab-profile default flip, rerun on the plane-partition fix
+# for plated through-hole terminals (pnr.plane_partition.through_land: a THT pad's whole
+# rectangle, its relief ringed by the rail's minimum width). The same 45 cells as
+# defaults-rails-fab.toml (the ladder, the showcases and the 33 hard rungs), both fab
+# profiles, seeds 0 and 1, in the configuration that campaign gated with (compact, gloss,
+# initial pool; rail allocation search is the default). Flip only if the 21 cells
+# 20261006-ladder-b0ec34 found failing under jlc-pofv all pass and no rung is worse than
+# legacy (owner decision, 2026-10-06). rails-settle-rails.toml runs the -rails rung on
+# seeds 0 to 7; rails-settle-new.toml the three manual rungs.
+schema = "yapnr-campaign-v1"
+kind = "ladder-cell"
+name = "rails-settle"
+source = "HEAD"
+image = "edge"
+determinism = "wall_clock_budgeted"
+
+[matrix]
+case = [
+  "01-connector-led-2", "02-resistor-led-3", "03-branched-leds-5", "04-inverter-leds-8",
+  "05-timer-led-10", "06-chaser-14", "07-chaser-20", "07-chaser-20-4L-SGGS",
+  "07-chaser-20-4L-SGPS", "07-chaser-20-4L-SGPS-arcblock", "07-chaser-20-4L-SGPS-double",
+  "07-chaser-20-4L-SSGS", "07-chaser-20-6L-SGSGPS", "07-chaser-20-6L-SGSGPS-BB",
+  "07-chaser-20-6L-SGSGPS-HDI", "07-chaser-20-6L-SGSSPS", "07-chaser-20-8L-SGSGPSGS",
+  "07-chaser-20-abs", "07-chaser-20-double", "07-chaser-20-rel", "07-chaser-20-sidelock",
+  "08-chaser-20-plane", "09-mcu-usb-31", "09-mcu-usb-31-4L-SGPS", "09-mcu-usb-31-4L-SSGS",
+  "09-mcu-usb-31-6L-SGSGPS", "09-mcu-usb-31-abs", "09-mcu-usb-31-header", "09-mcu-usb-31-mc",
+  "09-mcu-usb-31-rel", "09-mcu-usb-31-sidelock", "10-quad-bank-56", "11-buck-vqfnhr-4L-SGPS",
+  "11-buck-vqfnhr-4L-SGPS-pour", "11-power-switch-31", "11-ufbga201-fanout-6L-SGSGPS",
+  "11-ufbga201-fanout-6L-SGSGPS-block", "11-ufbga201-fanout-6L-SGSGPS-classes",
+  "11-ufbga201-fanout-6L-SGSGPS-pairs", "11-ufbga201-fanout-6L-SGSGPS-partial",
+  "11-ufbga201-fanout-6L-SGSGPS-rails", "edge-io-12", "edge-io-12-free", "hier-twin-bank-32",
+  "line-chaser-20",
+]
+seed = [0, 1]
+config = ["jlc-pofv", "legacy"]
+
+[config]
+rounds = 4
+timeout = 1200
+initial_pool = true
+initial_starts = 8
+initial_finalists = 3
+showcases = true
+hard = true
+gloss = true
+compact = true
+route_pairs_diff_pairs = true
+
+[configs.jlc-pofv]
+fab_profile = "jlc-pofv"
+
+[configs.legacy]
+fab_profile = "legacy"
+
+[resources]
+cpus = 1
+memory_gb = 3
+disk_gb = 2
+max_wall_s = 2400
+
+# Both ranked families, so a submit can spill to the fallback region when the first one's
+# Spot quota is in use by other campaigns.
+[placement]
+families = ["c4d", "c4"]
+spot = true
+
+[live]
+enabled = true
+interval_s = 45
+mode = "thin"

@@ -11,6 +11,8 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
+import urllib.error
 from pathlib import Path
 
 from yapnr.exp import task as wrapper
@@ -286,6 +288,58 @@ class WrapperTest(unittest.TestCase):
         result = self.run_index(1, extra=["--chunk", "2"])
         self.assertEqual(result.returncode, 0)
         self.assertEqual([t["id"] for t in tasks if self.marker(t["id"])], ["t/2", "t/3"])
+
+    def test_a_bundled_index_runs_its_lines_in_order(self):
+        # A line of the indices file may name several plan lines (yapnr.exp.packing bundles).
+        tasks = [testing.python_task("t/%d" % i, WRITE_DONE % "True") for i in range(5)]
+        base = self.campaign(*tasks)
+        (base / "submissions" / "1.indices").write_text("4\n0 3 1\n2\n")
+        result = self.run_index(1)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([t["id"] for t in tasks if self.marker(t["id"])], ["t/0", "t/1", "t/3"])
+        started = [
+            json.loads(line)["yapnr_task"]
+            for line in result.stdout.splitlines()
+            if line.startswith("{") and json.loads(line).get("event") == "start"
+        ]
+        self.assertEqual(started, ["t/0", "t/3", "t/1"])
+        # Past the last line of the indices file: a usage error, not a silent success.
+        self.assertEqual(self.run_index(3).returncode, wrapper.EXIT_USAGE)
+
+    def test_claims_take_lines_in_order_once_and_a_retry_keeps_its_own(self):
+        objects = {}
+
+        def http(method, url, body=None, headers=None):
+            if method == "GET":
+                items = [{"name": k, "metadata": v} for k, v in sorted(objects.items())]
+                return 200, json.dumps({"items": items}).encode()
+            meta = json.loads(body.decode().split("\r\n\r\n", 1)[1].split("\r\n", 1)[0])
+            if meta["name"] in objects:  # ifGenerationMatch=0 on an existing object
+                return 412, b""
+            objects[meta["name"]] = meta["metadata"]
+            return 200, b"{}"
+
+        prefix = "campaigns/c/submissions/1.claims/"
+        picks = [wrapper.Claims("bucket", prefix, i, http).pick(3) for i in (7, 2, 9)]
+        self.assertEqual(picks, [0, 1, 2])  # in the order tasks start, not by their index
+        self.assertEqual(wrapper.Claims("bucket", prefix, 2, http).pick(3), 1)  # a retry
+        self.assertIsNone(wrapper.Claims("bucket", prefix, 4, http).pick(3))
+        self.assertEqual(objects[prefix + "0"], {"index": "7"})
+
+    def test_claims_http_turns_a_timeout_into_a_retry_not_a_crash(self):
+        # A URLError (timeout, connection reset) is not an HTTPError: Claims._http must still
+        # turn it into TaskFailure(EXIT_TEMPFAIL), or it escapes main() uncaught, the task
+        # exits 1, and Batch does not retry exit 1 -- the claimed line never runs.
+        claims = wrapper.Claims("bucket", "campaigns/c/submissions/1.claims/", 7)
+        claims._token = "t"  # skip the metadata-server token fetch
+
+        def raises(*a, **kw):
+            raise urllib.error.URLError("timed out")
+
+        with unittest.mock.patch("urllib.request.urlopen", raises):
+            with self.assertRaises(wrapper.TaskFailure) as ctx:
+                claims.claimed()
+        self.assertEqual(ctx.exception.code, wrapper.EXIT_TEMPFAIL)
 
     def test_environment_is_scrubbed_and_home_isolated(self):
         script = (

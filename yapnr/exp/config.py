@@ -139,6 +139,16 @@ class Config:
     slurm: Dict[str, SlurmSite] = field(default_factory=dict)
     price_table: Optional[str] = None
     calibration: Optional[str] = None
+    # The task-duration history (``yapnr exp durations ingest``); default <local store>/durations.json.
+    durations: Optional[str] = None
+    # The monthly budget the budget guard's ratio is of, for ``yapnr exp spend``.
+    budget_usd: Optional[float] = None
+
+    @property
+    def durations_path(self) -> str:
+        if self.durations:
+            return self.durations
+        return str(self.local.store_path() / "durations.json")
 
     def require_gcp(self) -> Gcp:
         if self.gcp is None:
@@ -291,10 +301,18 @@ def parse(data: Mapping[str, Any], path: str = "<config>") -> Config:
                 config.slurm[name] = site
     prices = data.get("prices", {})
     if isinstance(prices, dict):
-        for key in sorted(set(prices) - {"table", "calibration"}):
+        for key in sorted(set(prices) - {"table", "calibration", "durations", "budget_usd"}):
             errors.append("unknown key prices.%s" % key)
         config.price_table = prices.get("table")
         config.calibration = prices.get("calibration")
+        config.durations = prices.get("durations")
+        budget = prices.get("budget_usd")
+        if budget is not None and (
+            isinstance(budget, bool) or not isinstance(budget, (int, float)) or budget <= 0
+        ):
+            errors.append("prices.budget_usd is a positive number")
+        else:
+            config.budget_usd = float(budget) if budget is not None else None
     if errors:
         raise ConfigError(path, errors)
     return config

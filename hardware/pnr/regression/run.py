@@ -267,21 +267,23 @@ COMPACT_PARTS = (
 
 
 # Ambient PNR_* switches an operator happens to have set must not silently change the suite's
-# configuration; PNR_LIVE_* is the one exception, since it is telemetry only (hardware/pnr/pnr/
-# live.py: no routing/placement decision reads it) and letting it through is what lets a task run
-# under `yapnr exp` with [live] on actually emit live-viewer events.
+# configuration; telemetry is the exception: PNR_LIVE_* (hardware/pnr/pnr/live.py) and
+# PNR_PROFILE_DIR (pnr/profile.py) feed no routing/placement decision, and letting them through
+# is what lets a task under `yapnr exp` with [live] or [profile] on emit events and profiles.
 LIVE_ENV_PREFIX = "PNR_LIVE_"
+TELEMETRY_ENV = ("PNR_PROFILE_DIR",)
 AMBIENT_ENV_KEEP = ("PNR_LOCAL_PRESSURE", "PNR_JOINT_ACCESS")
 
 
 def scrubbed_suite_env(base_env, **overrides):
     """``base_env`` plus ``overrides``, with ambient ``PNR_*`` switches stripped except
-    ``AMBIENT_ENV_KEEP`` and anything under ``LIVE_ENV_PREFIX``."""
+    ``AMBIENT_ENV_KEEP``, ``TELEMETRY_ENV`` and anything under ``LIVE_ENV_PREFIX``."""
     env = dict(base_env, **overrides)
     for key in list(env):
         if (
             key.startswith("PNR_")
             and key not in AMBIENT_ENV_KEEP
+            and key not in TELEMETRY_ENV
             and not key.startswith(LIVE_ENV_PREFIX)
         ):
             del env[key]
@@ -1096,7 +1098,7 @@ def main():
         pnr_environment={
             k: v
             for k, v in env.items()
-            if k.startswith("PNR_") and k not in ("PNR_MAZE_LIB", "PNR_PYTHON")
+            if k.startswith("PNR_") and k not in ("PNR_MAZE_LIB", "PNR_PYTHON") + TELEMETRY_ENV
         },
         native_maze=native,
     )

@@ -247,8 +247,13 @@ def handle_budget(budget, http, cfg, now=None):
     ratio = spend_ratio(budget, now)
     if ratio is None:
         return {"action": "ignored"}
+    # The amounts too, so `yapnr exp spend` reads dollars even after the budget changes.
+    amounts = {
+        "cost": round(float(budget["costAmount"]), 2),
+        "budget": round(float(budget["budgetAmount"]), 2),
+    }
     if ratio < 1.0:
-        return {"action": "none", "ratio": round(ratio, 3)}
+        return {"action": "none", "ratio": round(ratio, 3), **amounts}
     reason = "budget %s at %.0f%% (%s of %s %s)\n" % (
         budget.get("budgetDisplayName", "?"),
         ratio * 100,
@@ -257,7 +262,7 @@ def handle_budget(budget, http, cfg, now=None):
         budget.get("currencyCode", ""),
     )
     # Block new submits first, so nothing started after the job listing below survives it.
-    summary = {"action": "freeze", "ratio": round(ratio, 3)}
+    summary = {"action": "freeze", "ratio": round(ratio, 3), **amounts}
     summary["submit_disabled"] = disable_submit(http, cfg)
     summary["frozen"] = freeze(http, cfg, reason)
     summary["cancelled"] = [

@@ -3389,4 +3389,7 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    from pnr.profile import run
+
+    # PNR_PROFILE_DIR: the gloss stage under pnr.profile; without it a plain main().
+    run("gloss", main)

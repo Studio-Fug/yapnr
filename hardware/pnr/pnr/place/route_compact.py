@@ -26,8 +26,9 @@ One pass is an order-preserving 1D compaction along x, a reroute, then the same 
   clearance, never more than the gap the item pair already has;
 * consecutive items in coordinate order keep their order (no topological upsets: every
   left/right relation of the x pass and every above/below one of the y pass survives);
-* fixed parts (fixed poses, locked, hard edge bands and regions, parts carrying a keep-out)
-  do not move, keep-outs are fixed obstacles, line groups, rows and aligns move rigidly;
+* fixed parts (fixed poses, locked, every edge band and region, hard or soft, parts
+  carrying a keep-out) do not move, keep-outs are fixed obstacles, line groups, rows
+  and aligns move rigidly;
 * items stay inside the bounding box they already span: the outline is not touched
   (``PNR_SHRINK`` stays off); the outline shrink this frees is reported.
 
@@ -175,17 +176,19 @@ RIGID_KINDS = ("line_group", "row", "align")
 
 
 def fixed_refs(graph, constraints) -> set:
-    """Refs compaction may not move: fixed poses, locked parts, hard edge bands and
-    regions, and the refs keep-outs are measured from."""
-    from pnr.constraints import Enforcement
+    """Refs compaction may not move: fixed poses, locked parts, every edge-align and
+    region (hard or soft), and the refs keep-outs are measured from.
+
+    A soft ``edge_align``/``region`` is a placement-quality target, not a legality
+    rule (:func:`pnr.place.metrics.hard_violations` never names it), so compaction's own
+    hard-violation check cannot see a soft-aligned part get pulled off its edge toward
+    the gutter-closing anchor line; held here instead, the same as a hard one."""
     from pnr.place.geometry import resolve_fixed_poses
 
     out = set(resolve_fixed_poses(graph, constraints)) | set(constraints.locked_refs)
     out |= {c.ref for c in graph.components if c.locked}
     for con in constraints.constraints:
-        if con.kind in ("fixed", "keepout"):
-            out.update(con.refs)
-        elif con.kind in ("edge_align", "region") and con.enforcement == Enforcement.HARD:
+        if con.kind in ("fixed", "keepout", "edge_align", "region"):
             out.update(con.refs)
     return out
 
@@ -679,11 +682,18 @@ def new_violations(before, after, constraints) -> Dict[str, list]:
 
 
 def area_metrics(graph, width, height, items=None) -> dict:
-    """Bounding box of the placed bodies, the outline and the outline shrink it allows."""
+    """Bounding box of the placed bodies, the outline and the outline shrink it allows.
+
+    ``macro_overlap_mm2`` (present only when the graph carries a hull macro) is the
+    summed overlap of hull macros' plain courtyard rectangles
+    (:func:`pnr.place.hull.macro_overlap_area_mm2`): a smaller bounding box without this
+    rising is the gutters closing, not the blocks actually nesting into each other."""
     from pnr.place import compact
+    from pnr.place.hull import macro_overlap_area_mm2
 
     m = compact.metrics(graph, width, height)
     bw, bh = m["bbox_mm"]
+    overlap = macro_overlap_area_mm2(graph.components)
     return dict(
         bbox_mm=[round(bw, 3), round(bh, 3)],
         bbox_mm2=round(bw * bh, 3),
@@ -691,6 +701,7 @@ def area_metrics(graph, width, height, items=None) -> dict:
         outline_shrink_possible=(
             round(1.0 - (bw * bh) / (float(width) * float(height)), 4) if width and height else 0.0
         ),
+        **({"macro_overlap_mm2": round(overlap, 4)} if overlap > 0.0 else {}),
     )
 
 
@@ -891,32 +902,56 @@ def plane_blocked(graph, tracks, vias, rules, outline=None) -> int:
     return blocked
 
 
-def not_worse(base: dict, new: dict, settings: Settings) -> Tuple[bool, str]:
-    """``new`` route metrics against ``base``: completion first, then vias and copper."""
+def not_worse(
+    base: dict, new: dict, settings: Settings, tol_base: Optional[dict] = None
+) -> Tuple[bool, str]:
+    """``new`` route metrics against ``base``: completion first, then vias and copper.
+
+    Completion (missing connections, unresolved and deferred nets, unmatched pairs,
+    uncoupled pairs and plane opens) must never exceed ``base`` -- the metrics of the
+    routed state the candidate is replacing, which ratchets down step by step, so this
+    stays a hard floor. Vias and copper instead compare against ``tol_base`` (default
+    ``base``): the pass's *first* caller should pass the loop's original, pre-compaction
+    metrics here, so a step's percentage allowance (``copper_tol``, the 5 % via floor)
+    is always a share of the untouched route, not of the previous accepted step -- a
+    chain of individually-tolerable steps may not add up to more drift than one step
+    would allow on its own."""
     for key in (
         "missing",
         "unresolved",
+        "deferred",
         "unmatched",
         "uncoupled_pairs",
         "pairs_moved",
         "plane_blocked",
+        "port_debt_mm",
     ):
-        if new.get(key, 0) > base.get(key, 0):
+        if new.get(key, 0) > base.get(key, 0) + 1e-9:
             return False, "%s %s > %s" % (key, new.get(key, 0), base.get(key, 0))
-    via_tol = max(settings.via_tol, int(0.05 * base.get("vias", 0)))
-    if new.get("vias", 0) > base.get("vias", 0) + via_tol:
-        return False, "vias %s > %s + %d" % (new["vias"], base["vias"], via_tol)
+    tol_base = base if tol_base is None else tol_base
+    via_tol = max(settings.via_tol, int(0.05 * tol_base.get("vias", 0)))
+    if new.get("vias", 0) > tol_base.get("vias", 0) + via_tol:
+        return False, "vias %s > %s + %d" % (new["vias"], tol_base["vias"], via_tol)
     # The tolerance is a share of the board's copper (``copper_ref_mm``: a hierarchical
     # top level's knit is only part of it), else of the routed copper compared.
-    ref = base.get("copper_ref_mm", base.get("copper_mm", 0.0))
-    limit = base.get("copper_mm", 0.0) + settings.copper_tol * ref + 1e-6
+    ref = tol_base.get("copper_ref_mm", tol_base.get("copper_mm", 0.0))
+    limit = tol_base.get("copper_mm", 0.0) + settings.copper_tol * ref + 1e-6
     if new.get("copper_mm", 0.0) > limit:
         return False, "copper %.1f > %.1f" % (new["copper_mm"], limit)
     return True, ""
 
 
+def incomplete(base: dict) -> bool:
+    """``base`` (a :func:`not_worse`-shaped metrics dict) names a route that is not
+    itself fully resolved: compaction has nothing sound to measure gutters against
+    (a missing or unresolved connection may route through what looks like empty
+    space) and no real step could out-run the time the broken route already cost."""
+    return bool(base.get("missing", 0) or base.get("unresolved", 0))
+
+
 def route_summary(route) -> dict:
-    """missing / unresolved / unmatched / vias / copper of a detail route result."""
+    """missing / unresolved / deferred / unmatched / vias / copper of a detail route
+    result."""
     from pnr.place.initial_pool import _route_metrics
 
     m = _route_metrics(route)
@@ -926,12 +961,33 @@ def route_summary(route) -> dict:
     return dict(
         missing=m["missing_connections"],
         unresolved=len(m["unresolved_nets"]),
+        deferred=len(m["deferred_nets"]),
         unmatched=m.get("length_unmatched", 0),
         # declared pairs the coupled router left as two legs (route_pairs: coupled)
         uncoupled_pairs=sum(1 for row in pairs.values() if row.get("status") != "coupled"),
         vias=m["vias"],
         copper_mm=round(m["copper_length_mm"], 3),
     )
+
+
+def pair_nets_of(rules) -> set:
+    """Nets of a declared diff pair the board routes coupled (``board.route_pairs:
+    coupled``): a reroute may not move their copper (KiCad judges their gap and
+    coupling, no route metric does), shared by every ``PNR_ROUTE_COMPACT`` part."""
+    if rules.get("route_pairs") != "coupled":
+        return set()
+    return {n for d in rules.get("diff_pairs") or [] for n in (d.get("p"), d.get("n")) if n}
+
+
+def legacy_plane_path(rules, graph=None) -> bool:
+    """True when ``rules`` leaves plane-net pads for writeback to drop after routing
+    (the legacy plane path, :func:`plane_blocked`'s target) rather than a declared
+    dedicated stack the router itself plans -- the one case compaction may starve a
+    pad of its dog-bone site, shared by every ``PNR_ROUTE_COMPACT`` part."""
+    from pnr.stack import resolve as resolve_stack
+
+    stack = resolve_stack(rules, getattr(graph, "stack", None))
+    return not (stack is not None and stack.dedicated)
 
 
 # ------------------------------------------------------------------------ the loop
@@ -1048,6 +1104,8 @@ def compact_loop(
         return outline(r) if callable(outline) else outline
 
     base = metrics_of(route)
+    original_base = base  # vias/copper tolerance stays a share of this, never of a
+    # ratcheting intermediate step (see not_worse)
     reroutes = []  # seconds per reroute: the estimate the deadline check uses
     report = dict(
         label=label,
@@ -1057,6 +1115,15 @@ def compact_loop(
         accepted=0,
         seconds=dict(measure=0.0, reroute=0.0, check=0.0),
     )
+    if incomplete(base):
+        # A base route with its own missing or unresolved connections has nothing
+        # sound to measure gutters against, and every reroute is certain to fail
+        # not_worse's completion check; running the pass only spends the stage's
+        # time budget on a result that was going to be refused anyway.
+        report["stopped"] = "incomplete base route"
+        report["after"] = dict(metrics=base, **area_metrics(placed, *size(route)))
+        report["seconds"]["total"] = round(time.monotonic() - started, 3)
+        return placed, route, report
     check = check or (lambda a, b: new_violations(a, b, constraints))
     for rnd in range(max(0, settings.rounds)):
         progressed = False
@@ -1118,8 +1185,13 @@ def compact_loop(
                     else:
                         back_off += 1
                     continue
-                left, ran = time_left()
-                expect = max(reroutes) if reroutes else (0.5 * ran if ran else 0.0)
+                left, _ran = time_left()
+                # The cost estimate is this call's own measured reroutes only, never a
+                # share of wall time already spent (``ran`` mixes in whatever ran before
+                # route-compact started, which tracks machine load, not this pass): the
+                # first reroute of a call always gets to try, later ones are bounded by
+                # what this call has actually seen.
+                expect = max(reroutes) if reroutes else 0.0
                 if expect > left:
                     rec["result"] = "out of time (%.0f s left, a reroute takes ~%.0f s)" % (
                         left,
@@ -1129,7 +1201,9 @@ def compact_loop(
                     break
                 if announce is not None:
                     announce(candidate, axis, rec)
-                with span("route_compact.reroute"):
+                from pnr.stage_timing import stage as _stage_timing
+
+                with span("route_compact.reroute"), _stage_timing("route-compact"):
                     new_placed, new_route = reroute(candidate, axis)
                 t3 = time.monotonic()
                 report["seconds"]["reroute"] += t3 - t2
@@ -1141,7 +1215,7 @@ def compact_loop(
                     continue
                 metrics = metrics_of(new_route)
                 rec["metrics"] = metrics
-                ok, why = not_worse(base, metrics, settings)
+                ok, why = not_worse(base, metrics, settings, tol_base=original_base)
                 if not ok:
                     rec["result"] = "back off: " + why
                     back_off += 1
@@ -1188,17 +1262,10 @@ def flat_pass(placed, route, constraints, rules, *, pitch, iters, outline):
         )
 
     graphs = {id(route): placed}  # id(route) -> its placed graph (the plane-pad check)
-    from pnr.stack import resolve as resolve_stack
-
-    stack = resolve_stack(rules, getattr(placed, "stack", None))
     # The legacy plane path drops plane pads at writeback, after routing; a declared stack
     # has the router plan them (and writeback only falls back), so only the former is guarded.
-    legacy_planes = not (stack is not None and stack.dedicated)
-    pair_nets = (
-        {n for d in rules.get("diff_pairs") or [] for n in (d.get("p"), d.get("n")) if n}
-        if rules.get("route_pairs") == "coupled"
-        else set()
-    )
+    legacy_planes = legacy_plane_path(rules, placed)
+    pair_nets = pair_nets_of(rules)
 
     def pair_copper(r):
         """The coupled pairs' copper (KiCad judges their gap and coupling, the route's own

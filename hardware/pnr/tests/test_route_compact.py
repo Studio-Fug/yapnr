@@ -82,6 +82,33 @@ class FlagTest(unittest.TestCase):
                 rc.enabled()
 
 
+class FixedRefsTest(unittest.TestCase):
+    """fixed_refs: a soft edge_align/region holds its refs the same as a hard one (the
+    gutter-closing anchor line has no idea it would be pulling a part off a placement-
+    quality target no :func:`pnr.place.metrics.hard_violations` check can see)."""
+
+    def test_soft_edge_align_is_held(self):
+        g = board([part("R1", 10, 20), part("R2", 40, 20)])
+        c = compiled(g, edge_align={"R1": {"edge": "west"}})
+        self.assertEqual(
+            [con.enforcement.name for con in c.constraints if con.kind == "edge_align"], ["SOFT"]
+        )
+        self.assertIn("R1", rc.fixed_refs(g, c))
+
+    def test_soft_region_is_held(self):
+        g = board([part("R1", 10, 20), part("R2", 40, 20)])
+        c = compiled(
+            g,
+            region=[
+                {"name": "z1", "refs": ["R1"], "rect": [0, 0, 20, H], "hard": False},
+            ],
+        )
+        self.assertEqual(
+            [con.enforcement.name for con in c.constraints if con.kind == "region"], ["SOFT"]
+        )
+        self.assertIn("R1", rc.fixed_refs(g, c))
+
+
 class AxisTest(unittest.TestCase):
     def test_two_parts_close_on_the_centre(self):
         g = board([part("R1", 10, 20), part("R2", 40, 20)])
@@ -237,6 +264,29 @@ class HullTest(unittest.TestCase):
         rects = hull_placement_rects(comp)
         self.assertEqual(len(rects), 2)
 
+    def test_macro_overlap_area(self):
+        from pnr.place.hull import macro_overlap_area_mm2
+
+        def macro(ref, x, y):
+            return Component(
+                ref=ref,
+                footprint="block:x",
+                pos=(x, y),
+                rot=0.0,
+                side="top",
+                courtyard=(10, 10),
+                bbox=(10, 10),
+                hull=dict(top=[[-5, -5, 5, 5]], bottom=[], inner=[]),
+            )
+
+        # 10 x 10 boxes 8 mm apart (centres): a 2 x 10 mm overlap strip.
+        self.assertAlmostEqual(macro_overlap_area_mm2([macro("A", 0, 0), macro("B", 8, 0)]), 20.0)
+        # Far enough apart: no overlap.
+        self.assertEqual(macro_overlap_area_mm2([macro("A", 0, 0), macro("B", 20, 0)]), 0.0)
+        # A non-macro part (no hull) never contributes.
+        plain = part("R1", 8, 0)
+        self.assertEqual(macro_overlap_area_mm2([macro("A", 0, 0), plain]), 0.0)
+
 
 class DovetailTermTest(unittest.TestCase):
     """PNR_HULL_DOVETAIL: the smooth packing term of global placement over hull bodies."""
@@ -278,15 +328,27 @@ class DovetailTermTest(unittest.TestCase):
                 dovetail_weight()
 
     def test_parts_match_the_runner(self):
-        import sys
+        """``regression/run.py``'s own ``ROUTE_COMPACT_PARTS`` names the same parts as
+        the engine's :data:`pnr.place.route_compact.PARTS`, read from the source text
+        directly (not ``import run``): the runner pulls in ``designs``/``hard_rungs``
+        and KiCad-adjacent modules the Bazel sandbox may not hand it a working path to,
+        so an import-based check can silently skip under Bazel and this one never runs
+        there -- the opposite of "may skip"."""
+        import ast
         from pathlib import Path
 
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "regression"))
-        try:
-            import run
-        except ImportError:  # the runner needs its own imports; the kinds check covers it
-            self.skipTest("run.py not importable here")
-        self.assertEqual(tuple(run.ROUTE_COMPACT_PARTS), rc.PARTS)
+        run_py = Path(__file__).resolve().parents[1] / "regression" / "run.py"
+        self.assertTrue(run_py.is_file(), "regression/run.py missing at %s" % run_py)
+        tree = ast.parse(run_py.read_text(), filename=str(run_py))
+        found = None
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "ROUTE_COMPACT_PARTS" for t in node.targets
+            ):
+                found = tuple(ast.literal_eval(node.value))
+                break
+        self.assertIsNotNone(found, "ROUTE_COMPACT_PARTS not found in regression/run.py")
+        self.assertEqual(found, rc.PARTS)
 
 
 class PlaneGuardTest(unittest.TestCase):
@@ -457,6 +519,59 @@ class LoopTest(unittest.TestCase):
         self.assertFalse(rc.not_worse(base, dict(base, unresolved=1), s)[0])
         self.assertFalse(rc.not_worse(base, dict(base, uncoupled_pairs=1), s)[0])
         self.assertFalse(rc.not_worse(base, dict(base, plane_blocked=1), s)[0])
+        self.assertFalse(rc.not_worse(base, dict(base, deferred=1), s)[0])
+        self.assertFalse(rc.not_worse(base, dict(base, port_debt_mm=0.1), s)[0])
+
+    def test_not_worse_tolerance_against_tol_base(self):
+        """A step's own percentage allowance is a share of ``tol_base`` (the loop's
+        original, pre-compaction metrics), never of the immediately preceding accepted
+        step: two individually-tolerable steps may not add up to more drift than one
+        step alone would allow."""
+        s = rc.Settings(copper_tol=0.01, via_tol=2)
+        original = dict(missing=0, unresolved=0, vias=10, copper_mm=100.0)
+        ratcheted = dict(
+            missing=0, unresolved=0, vias=10, copper_mm=100.9
+        )  # within tol of original
+        # Another +0.9 on top of the ratcheted base is +1.8 over the original -- almost
+        # double its 1 % allowance. Without tol_base (the old, buggy default: a step's
+        # tolerance taken from the *previous accepted step*) this wrongly passes.
+        grown = dict(ratcheted, copper_mm=101.8)
+        self.assertTrue(rc.not_worse(ratcheted, grown, s)[0])
+        # Pinned to the original base (the fix), the same step is correctly refused.
+        ok, _why = rc.not_worse(ratcheted, grown, s, tol_base=original)
+        self.assertFalse(ok)
+        close = dict(ratcheted, copper_mm=100.95)
+        self.assertTrue(rc.not_worse(ratcheted, close, s, tol_base=original)[0])
+
+    def test_incomplete(self):
+        self.assertFalse(rc.incomplete(dict(missing=0, unresolved=0)))
+        self.assertTrue(rc.incomplete(dict(missing=1, unresolved=0)))
+        self.assertTrue(rc.incomplete(dict(missing=0, unresolved=1)))
+
+    def test_incomplete_base_is_skipped(self):
+        calls = []
+
+        def reroute(candidate, axis):
+            calls.append(axis)
+            return candidate, dict(missing=0, unresolved=0, vias=4, copper_mm=90.0)
+
+        placed, route, report = rc.compact_loop(
+            self.g,
+            dict(missing=1, unresolved=0, vias=4, copper_mm=100.0),
+            constraints=self.c,
+            items_of=lambda p: rc.graph_items(p, self.c),
+            copper_of=lambda r: None,
+            reroute=reroute,
+            metrics_of=lambda r: r,
+            min_gap=CL,
+            outline=(W, H),
+            label="t",
+            settings=rc.Settings(rounds=1, attempts=2),
+        )
+        self.assertEqual(calls, [])
+        self.assertEqual(report["stopped"], "incomplete base route")
+        self.assertEqual(report["accepted"], 0)
+        self.assertEqual(xs(placed), xs(self.g))
 
 
 if __name__ == "__main__":

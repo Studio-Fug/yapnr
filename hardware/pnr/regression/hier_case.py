@@ -539,6 +539,7 @@ def knit(case, k, flat, reps, choice=None, attempt=0, label=None, start=None):
         seed_index=k,
         split_nets=sorted(split),
         unresolved=metrics["unresolved_nets"],
+        deferred_nets=metrics["deferred_nets"],
         objective=[
             missing(final),
             len(metrics["unresolved_nets"]),
@@ -682,17 +683,45 @@ def top_compact(case, best, graph, constraints, reps):
     import math as _math
 
     block_mm = sum(_math.dist(a, b) for _n, _la, a, b, _w in best["block_tracks"])
+    # The flat board's pair and plane guards apply at the top level too: the knit may
+    # leave a coupled pair's legs uncoupled or starve a legacy plane pad of its
+    # dog-bone site, the same KiCad failures a flat board's reroute guards against.
+    # ``rec["placed"]`` is the fully flattened graph (every block's own parts at their
+    # placed pose), so the whole board's pads and copper are available here, not just
+    # the inter-block nets ``copper_of`` measures gutters from.
+    legacy_planes = rc.legacy_plane_path(rules, best["placed"])
+    pair_nets = rc.pair_nets_of(rules)
+
+    def pair_copper(rec):
+        return sorted(
+            (t[0], t[1], round(t[2][0], 4), round(t[2][1], 4), round(t[3][0], 4), round(t[3][1], 4))
+            for t in rec["block_tracks"] + rec["top_tracks"]
+            if t[0] in pair_nets
+        )
+
+    base_pairs = pair_copper(best) if pair_nets else None
 
     def metrics_of(rec):
-        return dict(
+        out = dict(
             missing=rec["missing"],
             unresolved=len(rec["unresolved"]),
+            deferred=len(rec.get("deferred_nets") or []),
             unmatched=rec.get("length_unmatched", 0),
             vias=len(rec["top_vias"]),
             copper_mm=round(float(rec["objective"][3]), 3),
             # the copper tolerance is a share of the whole board's copper (blocks included)
             copper_ref_mm=round(float(rec["objective"][3]) + block_mm, 3),
         )
+        if legacy_planes:
+            out["plane_blocked"] = rc.plane_blocked(
+                rec["placed"],
+                rec["block_tracks"] + rec["top_tracks"],
+                rec["block_vias"] + rec["top_vias"],
+                rules,
+            )
+        if base_pairs is not None:
+            out["pairs_moved"] = int(pair_copper(rec) != base_pairs)
+        return out
 
     placed, rec, report = rc.guarded(
         "top",

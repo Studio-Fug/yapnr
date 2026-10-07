@@ -296,7 +296,7 @@ class RouteCompactTest(unittest.TestCase):
                 recorder.close()
         return root, report, case
 
-    def check(self, root, report):
+    def check(self, root, report, require_accepted=True):
         self.assertTrue(report["legal"])
         self.assertTrue(report["converged"], report["summary"])
         placed = BoardGraph.from_json((root / "placed.json").read_text())
@@ -308,6 +308,12 @@ class RouteCompactTest(unittest.TestCase):
         self.assertNotIn("error", top)
         self.assertLessEqual(top["after"]["bbox_mm2"], top["before"]["bbox_mm2"] + 1e-6)
         self.assertEqual(top["after"]["metrics"]["missing"], 0)
+        if require_accepted:
+            # A run that accepted nothing would still satisfy every check above (the
+            # "no worse" bar), so this design's own gutters must actually have room to
+            # close: otherwise the test exercises route-compact wiring, never its real
+            # behavior.
+            self.assertGreaterEqual(top["accepted"], 1, top["attempts"])
         case = provenance.Trace(root / "trace")
         (select,) = [s for s in case.selects if s["id"] == "route-compact"]
         stages = [s for s in case.of_type("stage") if s.meta.get("kind") == "route-compact"]
@@ -329,6 +335,7 @@ class RouteCompactTest(unittest.TestCase):
         blocks = report["route_compact"]["blocks"]
         self.assertEqual(len(blocks), 2)  # one per template
         for template in blocks.values():
+            self.assertNotIn("error", template)
             before, after = template["block_mm"]["before"], template["block_mm"]["after"]
             self.assertLessEqual(after[0] * after[1], before[0] * before[1] + 1e-9)
         sizes = {m["template"]: m["size_mm"] for m in report["hier"]["macros"].values()}
@@ -337,7 +344,11 @@ class RouteCompactTest(unittest.TestCase):
 
     def test_with_hulls(self):
         root, report, _case = self.run_case(PNR_ROUTE_COMPACT="TOP", PNR_MACRO_HULL="1")
-        self.check(root, report)
+        # This fixture's hull outlines already sit snug against their neighbours (the
+        # hulls themselves, not this pass, close the gap -- see the dovetail rung for
+        # that), so top-level compaction accepting nothing here is expected, not a
+        # silently-broken pass.
+        self.check(root, report, require_accepted=False)
         self.assertEqual(set(report["hier"]["hulls"]), {"top.ch_a", "top.ch_b", "top.drv"})
         self.assertNotIn("blocks", report["route_compact"])
 

@@ -940,6 +940,24 @@ def route_and_place(
                 iters=detail_iters,
                 outline=outline_size(graph, constraints),
             )
+        # FLAT may replace the route with a different one (a reroute that is accepted,
+        # or the original when every step backed off); either way report.deferred_nets,
+        # report.converged and the last connection_history entry were stamped from the
+        # route *before* this pass and must be refreshed from what detail_result now is,
+        # or route_case.py / run.py's incomplete_pnr check (deferred, unrouted, converged)
+        # reads a route that no longer exists.
+        broute = report.detail_result
+        report.deferred_nets = sorted(getattr(broute, "deferred_nets", ()) or ())
+        n_unrouted = len(set(broute.result.unrouted) - set(report.deferred_nets))
+        missing = sum(
+            max(1, broute.result.nets[n].remaining_connections)
+            for n in set(broute.result.unrouted) - set(report.deferred_nets)
+        )
+        if report.connection_history:
+            report.connection_history[-1] = missing
+        else:
+            report.connection_history.append(missing)
+        report.converged = bool(n_unrouted <= 0)
     return placed, report
 
 

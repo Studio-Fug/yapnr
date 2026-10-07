@@ -554,6 +554,30 @@ def dovetail_weight() -> float:
     return value
 
 
+def macro_overlap_area_mm2(components) -> float:
+    """Summed overlap area of hull-bearing macros' *plain* courtyard rectangles (the
+    simple box every stage but the hull-aware ones still sees) at their placed poses.
+
+    Two macros' simple boxes overlapping is illegal for an ordinary part -- it is only
+    legal here because their real, hull-shaped copper does not actually collide in that
+    shared square millimetre. A placement where this is 0 may still look "closer
+    together" (smaller gutters, a smaller bounding box) without a single block having
+    moved into a neighbour's notch; this is the number that tells the two apart."""
+    from .geometry import courtyard_rect
+
+    macros = [c for c in components if getattr(c, "hull", None)]
+    total = 0.0
+    for i, a in enumerate(macros):
+        ra = courtyard_rect(a)
+        for b in macros[i + 1 :]:
+            rb = courtyard_rect(b)
+            dx = min(ra.right, rb.right) - max(ra.left, rb.left)
+            dy = min(ra.top, rb.top) - max(ra.bottom, rb.bottom)
+            if dx > 0.0 and dy > 0.0:
+                total += dx * dy
+    return total
+
+
 def gp_pack(bodies, pos, p, gamma):
     """Smooth half-perimeter of the box around every overlap body (log-sum-exp extremes).
 

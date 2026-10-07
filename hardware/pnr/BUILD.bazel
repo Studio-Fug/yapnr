@@ -2155,6 +2155,18 @@ py_test(
     ],
 )
 
+# pnr.hier.compact_block's own violation-counting helper (not routed, no KiCad/torch
+# needed; the hierarchical driver's end-to-end behavior is hier_case_test's job).
+py_test(
+    name = "compact_block_test",
+    size = "small",
+    srcs = ["tests/test_compact_block.py"],
+    main = "tests/test_compact_block.py",
+    deps = [
+        ":pnr_hier",
+    ],
+)
+
 # Block macro hulls (PNR_MACRO_HULL=1, pnr.place.hull / pnr.hier.extent), shrink and the
 # used-area library ranking (N-0001). The real-board cases skip without their fixtures.
 py_test(

@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Design: the regression ladder in CI, PnR traces and critical-path animations" href="design/animations.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Design: the regression ladder in CI, PnR traces and critical-path animations" href="design/animations.html"><link rel="prev" title="CI lanes and Bazel caches" href="ci-lanes.html">
         <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
         <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -243,6 +244,7 @@
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -305,6 +307,13 @@ in the same change as the file that holds a pin (<code class="docutils literal n
 PR7 under <code class="docutils literal notranslate"><span class="pre">docs/adr/</span></code>.</p>
 <section id="decision-log">
 <h2>Decision log<a class="headerlink" href="#decision-log" title="Link to this heading">¶</a></h2>
+<p>Owner decision of 2026-10-07 (PR #91): enable hull nesting by default for hull macros.
+Keep explicit opt-out through <code class="docutils literal notranslate"><span class="pre">PNR_HULL_NEST=0</span></code>, <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--hull-nest</span> <span class="pre">0</span></code> and campaign
+<code class="docutils literal notranslate"><span class="pre">hull_nest</span> <span class="pre">=</span> <span class="pre">false</span></code>; keep legality, native validation and routing fallbacks unchanged.
+This is an explicit exception to the usual default-off rollout. The matched local
+native example and the broader pending campaign are documented in
+<a class="reference internal" href="design/hull-nest-validation.html"><span class="std std-doc">hull nesting validation</span></a>; the decision is not a claim
+that every routing metric improves.</p>
 <p>Owner decisions of 2026-09-29, taken while planning the migration (see
 <a class="reference internal" href="migration-plan.html"><span class="std std-doc">the migration plan</span></a>, §0.2):</p>
 <ul class="simple">
@@ -1677,14 +1686,14 @@ change the default worker interpreter, system packages or off-path imports.</p>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="migration-plan.html">
+          <a class="prev-page" href="ci-lanes.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">yapnr migration plan</div>
+                <div class="title">CI lanes and Bazel caches</div>
                 
               </div>
             </a>

@@ -1,20 +1,20 @@
 <!doctype html>
-<html class="no-js" lang="en" data-content_root="./">
-  <head>
-<meta charset="utf-8">
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="#">
-        <link rel="prefetch" href="static/yapnr-logo-256.png" as="image">
-        <link rel="prefetch" href="static/yapnr-logo-light.png" as="image">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Decisions" href="decisions.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
+        <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
-    <link rel="shortcut icon" href="static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
-<meta name="robots" content="noindex" />
-<title>Search - yapnr documentation</title><link rel="stylesheet" type="text/css" href="static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="static/styles/furo.css?v=7bdb33bb" />
-    <link rel="stylesheet" type="text/css" href="static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="static/sphinx-design.min.css?v=95c83b7e" />
-    <link rel="stylesheet" type="text/css" href="static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="static/custom.css?v=ad564152" />
+    <link rel="shortcut icon" href="../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>CI lanes and Bazel caches - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=ad564152" />
     
     
 
@@ -178,7 +178,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="docs/index.html"><div class="brand">yapnr documentation</div></a>
+      <a href="index.html"><div class="brand">yapnr documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -189,7 +189,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
       </label>
     </div>
@@ -197,14 +197,14 @@
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
       
-      <div class="sidebar-sticky"><a class="sidebar-brand" href="docs/index.html">
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="static/yapnr-logo-256.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="static/yapnr-logo-light.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-light.png" alt="Dark Logo"/>
   </div>
   
   
-</a><form class="sidebar-search-container" method="get" action="#" role="search">
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
   <input type="hidden" name="area" value="default">
@@ -212,51 +212,51 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/frontends/atopile.html">The atopile toolchain</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/rf-inverse-design.html">RF inverse design</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/rf-solver-backends.html">RF solver backends</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/fab-and-ordering.html">Fab bundles and staged orders</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/rf-fab-coupons.html">RF fab-model test coupons</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/regression-ladder.html">Regression ladder</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/plane-partition.html">How plane partition works</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/ci-lanes.html">CI lanes and Bazel caches</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/clearance-index-validation.html">Clearance index: integration validation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/route-compact.html">Route-then-compact and hull packing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/design/hull-nest-validation.html">Hull nesting: validation status</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">CI lanes and Bazel caches</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/clearance-index-validation.html">Clearance index: integration validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="DEVELOPERS.html">Developing yapnr</a></li>
-<li class="toctree-l1"><a class="reference internal" href="CONTRIBUTING.html">Contributing to yapnr</a></li>
-<li class="toctree-l1"><a class="reference internal" href="AGENTS.html">Rules for agents</a></li>
-<li class="toctree-l1"><a class="reference internal" href="WORKLOG.html">Worklog</a></li>
-<li class="toctree-l1"><a class="reference internal" href="THIRD_PARTY.html">Third-party material</a></li>
-<li class="toctree-l1"><a class="reference internal" href="README.html">yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">yapnr</a></li>
 </ul>
 
 </div>
@@ -276,7 +276,17 @@
           <span>Back to top</span>
         </a>
         <div class="content-icon-container">
-          <div class="theme-toggle-container theme-toggle-content">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/ci-lanes.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/ci-lanes.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
             <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
               <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
               <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
@@ -284,30 +294,190 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          
-<noscript>
-<div class="admonition error">
-  <p class="admonition-title">Error</p>
-  <p>
-    Please activate JavaScript to enable the search functionality.
-  </p>
+          <section id="ci-lanes-and-bazel-caches">
+<h1>CI lanes and Bazel caches<a class="headerlink" href="#ci-lanes-and-bazel-caches" title="Link to this heading">¶</a></h1>
+<p>Ordinary Linux and macOS CI retain inexpensive RF unit coverage and one native inverse-design
+smoke. Solver sweeps, gradient checks, multi-iteration optimizations and coupon fitting run in
+<code class="docutils literal notranslate"><span class="pre">RF</span> <span class="pre">nightly</span></code>, at 03:17 UTC daily on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code> and <code class="docutils literal notranslate"><span class="pre">macos-latest</span></code>, or through <strong>Run workflow</strong>.
+Scheduled runs use <code class="docutils literal notranslate"><span class="pre">main</span></code>; manual dispatch can select a branch. Before the new workflow is
+registered on the default branch, use <strong>CI → Run workflow → rf_nightly</strong> (or
+<code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">workflow</span> <span class="pre">run</span> <span class="pre">ci.yaml</span> <span class="pre">--ref</span> <span class="pre">BRANCH</span> <span class="pre">-f</span> <span class="pre">rf_nightly=true</span></code>); the existing CI workflow calls the
+same RF lane only for that explicit manual input. This workflow does not trigger
+on pull requests or pushes. Both matrix jobs report failures independently.</p>
+<pre  class="mermaid">
+        flowchart LR
+  PR[Pull request / main push] --&gt; Ordinary[Linux + macOS ordinary tests]
+  Ordinary --&gt; Smoke[One native forward / adjoint / MMA smoke]
+  Timer[Nightly / manual dispatch] --&gt; RF[Linux + macOS expensive RF lane]
+  Restore[Newest compatible cache snapshot] --&gt; Ordinary
+  Restore --&gt; RF
+  Ordinary --&gt; Save[Save completed outputs, even after test failure]
+  RF --&gt; Save
+    </pre><section id="running-the-lanes">
+<h2>Running the lanes<a class="headerlink" href="#running-the-lanes" title="Link to this heading">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span><span class="nb">test</span><span class="w"> </span>//...<span class="w"> </span>--config<span class="o">=</span>ci
+bazel<span class="w"> </span><span class="nb">test</span><span class="w"> </span>//tests/unit/rf/...<span class="w"> </span>//tests/unit/rf_coupons/...<span class="w"> </span>//tests/e2e/rf/...<span class="w"> </span>--config<span class="o">=</span>ci<span class="w"> </span>--config<span class="o">=</span>rf-nightly
+</pre></div>
 </div>
-</noscript>
-
-<div id="search-results"></div>
+<p>On a shared workstation, use <code class="docutils literal notranslate"><span class="pre">nice</span> <span class="pre">-n</span> <span class="pre">10</span></code> and <code class="docutils literal notranslate"><span class="pre">--config=lowmem</span></code> as described in
+<a class="reference internal" href="../DEVELOPERS.html#bazel"><span class="std std-ref">DEVELOPERS.md</span></a>. Default and quick configurations exclude <code class="docutils literal notranslate"><span class="pre">rf-nightly</span></code>;
+<code class="docutils literal notranslate"><span class="pre">--config=all</span></code> includes it, while Bazel’s existing <code class="docutils literal notranslate"><span class="pre">manual</span></code> gate still applies. Explicit manual
+labels remain runnable. Native requirements, CPU reservations, sharding and per-test timeouts
+are preserved. No solver or production behavior changes.</p>
+<p>The ordinary <code class="docutils literal notranslate"><span class="pre">test_inverse_smoke</span></code> makes a real native forward/adjoint evaluation and an accepted
+MMA update on the tiny two-port problem. It asserts finite results, a changed design and exact
+repeatability across two fresh calibrations. Missing native code fails the Bazel target.
+Longer convergence, resume, export, gradient and multi-backend checks remain in nightly coverage.</p>
+</section>
+<section id="complete-inventory-of-affected-packages">
+<h2>Complete inventory of affected packages<a class="headerlink" href="#complete-inventory-of-affected-packages" title="Link to this heading">¶</a></h2>
+<p>The source of truth is <code class="docutils literal notranslate"><span class="pre">tools/bazel/rf_lanes.bzl</span></code>. Each new globbed RF test must be classified;
+each CI test job also compares Bazel’s expanded rules with this inventory, including manual
+variants. A missing target, an unclassified addition or an incorrect gate fails that check.
+Cheap RF order-0 and Palace unit packages outside this inventory retain their existing selection.</p>
+<section id="tests-unit-rf">
+<h3><code class="docutils literal notranslate"><span class="pre">//tests/unit/rf</span></code><a class="headerlink" href="#tests-unit-rf" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Lane</p></th>
+<th class="head"><p>Targets</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>ordinary</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_adjoint_sources</span></code>, <code class="docutils literal notranslate"><span class="pre">test_animate</span></code>, <code class="docutils literal notranslate"><span class="pre">test_cpml</span></code>, <code class="docutils literal notranslate"><span class="pre">test_edges</span></code>, <code class="docutils literal notranslate"><span class="pre">test_export</span></code>, <code class="docutils literal notranslate"><span class="pre">test_farfield</span></code>, <code class="docutils literal notranslate"><span class="pre">test_filters</span></code>, <code class="docutils literal notranslate"><span class="pre">test_inverse_smoke</span></code>, <code class="docutils literal notranslate"><span class="pre">test_lengthscale</span></code>, <code class="docutils literal notranslate"><span class="pre">test_lumped_ports</span></code>, <code class="docutils literal notranslate"><span class="pre">test_material_grid</span></code>, <code class="docutils literal notranslate"><span class="pre">test_mesh</span></code>, <code class="docutils literal notranslate"><span class="pre">test_mma</span></code>, <code class="docutils literal notranslate"><span class="pre">test_multistart</span></code>, <code class="docutils literal notranslate"><span class="pre">test_pattern_spec</span></code>, <code class="docutils literal notranslate"><span class="pre">test_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">test_seeds</span></code>, <code class="docutils literal notranslate"><span class="pre">test_sheet</span></code>, <code class="docutils literal notranslate"><span class="pre">test_spec</span></code>, <code class="docutils literal notranslate"><span class="pre">test_stability</span></code>, <code class="docutils literal notranslate"><span class="pre">test_torch_convention</span></code>, <code class="docutils literal notranslate"><span class="pre">test_validate</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>nightly</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_adjoint_gradients</span></code>, <code class="docutils literal notranslate"><span class="pre">test_backends</span></code>, <code class="docutils literal notranslate"><span class="pre">test_balance</span></code>, <code class="docutils literal notranslate"><span class="pre">test_board</span></code>, <code class="docutils literal notranslate"><span class="pre">test_dtft</span></code>, <code class="docutils literal notranslate"><span class="pre">test_microstrip</span></code>, <code class="docutils literal notranslate"><span class="pre">test_modal_ports</span></code>, <code class="docutils literal notranslate"><span class="pre">test_modes</span></code>, <code class="docutils literal notranslate"><span class="pre">test_native_identity</span></code>, <code class="docutils literal notranslate"><span class="pre">test_native_kernel</span></code>, <code class="docutils literal notranslate"><span class="pre">test_pattern_gradients</span></code>, <code class="docutils literal notranslate"><span class="pre">test_pipeline_gradient</span></code>, <code class="docutils literal notranslate"><span class="pre">test_pipeline_gradient_options</span></code>, <code class="docutils literal notranslate"><span class="pre">test_ports</span></code>, <code class="docutils literal notranslate"><span class="pre">test_power_balance</span></code>, <code class="docutils literal notranslate"><span class="pre">test_tiny_design</span></code>, <code class="docutils literal notranslate"><span class="pre">test_tiny_design_options</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>manual</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_adjoint_gradients_numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">test_microstrip_slow</span></code>, <code class="docutils literal notranslate"><span class="pre">test_pattern_gradients_numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">test_pipeline_gradient_numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">test_pipeline_gradient_options_numpy</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>kicad</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_kicad_cli</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="tests-unit-rf-coupons">
+<h3><code class="docutils literal notranslate"><span class="pre">//tests/unit/rf_coupons</span></code><a class="headerlink" href="#tests-unit-rf-coupons" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Lane</p></th>
+<th class="head"><p>Targets</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>ordinary</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_calibrate</span></code>, <code class="docutils literal notranslate"><span class="pre">test_catalog</span></code>, <code class="docutils literal notranslate"><span class="pre">test_equivalent</span></code>, <code class="docutils literal notranslate"><span class="pre">test_launch</span></code>, <code class="docutils literal notranslate"><span class="pre">test_models</span></code>, <code class="docutils literal notranslate"><span class="pre">test_session</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>nightly</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_cli</span></code>, <code class="docutils literal notranslate"><span class="pre">test_fit</span></code>, <code class="docutils literal notranslate"><span class="pre">test_order0</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>manual</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_xsec</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>kicad</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_kicad</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="tests-e2e-rf">
+<h3><code class="docutils literal notranslate"><span class="pre">//tests/e2e/rf</span></code><a class="headerlink" href="#tests-e2e-rf" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Lane</p></th>
+<th class="head"><p>Targets</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>nightly</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_antenna_smoke</span></code>, <code class="docutils literal notranslate"><span class="pre">test_diplexer_smoke</span></code>, <code class="docutils literal notranslate"><span class="pre">test_divider_smoke</span></code>, <code class="docutils literal notranslate"><span class="pre">test_wilkinson_smoke</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>manual</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_antenna</span></code>, <code class="docutils literal notranslate"><span class="pre">test_diplexer</span></code>, <code class="docutils literal notranslate"><span class="pre">test_divider</span></code>, <code class="docutils literal notranslate"><span class="pre">test_filterbank3</span></code>, <code class="docutils literal notranslate"><span class="pre">test_wilkinson</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The five full RF e2e cases, four NumPy gradient references, double-resolution microstrip and
+coupon cross-section test were already manual; they stay explicitly manual because they need
+larger budgets or additional tooling. KiCad tests keep their dedicated gate. Nothing is removed.</p>
+</section>
+</section>
+<section id="evidence-and-limits">
+<h2>Evidence and limits<a class="headerlink" href="#evidence-and-limits" title="Link to this heading">¶</a></h2>
+<p>The observed pre-split macOS run at commit <code class="docutils literal notranslate"><span class="pre">84b459979fbf6d7804f5db03b1aedd34b4e6743a</span></code>
+reported 44m17s in its ordinary Test step, versus 8m48s on Linux. Mac executed 291 tests and
+reused two cached test results; Linux executed six and reused 287. Several RF targets reported
+one to three minutes; coupon <code class="docutils literal notranslate"><span class="pre">test_fit</span></code> reported 340.9s and coupon <code class="docutils literal notranslate"><span class="pre">test_order0</span></code> 176.0s.
+These are individual durations from a shared CI run, not additive wall-time savings or a
+controlled benchmark. Fresh hosted runs must establish the new lane’s runtime and cache hits.</p>
+<p>The old macOS fallback cache came from September 30. Compiler/image drift was not established:
+the old producer and observed consumer reported the same hosted image version and Bazel 7.7.1.
+Source, BUILD and dependency changes can legitimately invalidate actions. Cache restoration
+also does not eliminate Bazel analysis or runfiles reconstruction.</p>
+</section>
+<section id="cache-lifecycle-and-trust">
+<h2>Cache lifecycle and trust<a class="headerlink" href="#cache-lifecycle-and-trust" title="Link to this heading">¶</a></h2>
+<p>The ordinary test jobs and RF lane use explicit <code class="docutils literal notranslate"><span class="pre">actions/cache/restore&#64;v6</span></code> and
+<code class="docutils literal notranslate"><span class="pre">actions/cache/save&#64;v6</span></code> composite actions. Download caches keep a stable key; a missing exact
+key is saved after a completed test invocation, including a failure. Download restore also
+accepts the previous per-platform namespace. Build snapshots include
+OS, architecture, hosted image version, compiler/SDK fingerprint and hashes of Bazel/configuration/lock
+inputs. Each save adds the run ID, attempt and job, avoiding an immutable key freezing the first
+snapshot. Restore selects the newest matching compatibility prefix. Bazel still checks each
+action digest; no full output base, sandbox or runfiles tree is cached. Hosted image updates
+start a new build-cache partition while keeping repository downloads reusable.</p>
+<p>A completed failed test still fails its job. Only cache uploads tolerate upload errors, and
+cancelled jobs or tests that never started do not save. Bazel’s default <code class="docutils literal notranslate"><span class="pre">--cache_test_results=auto</span></code>
+reruns failed tests. No timeout is raised and no test uses <code class="docutils literal notranslate"><span class="pre">continue-on-error</span></code>.</p>
+<p>Fork pull requests restore only. Same-repository pull requests may save under GitHub’s isolated
+PR merge-ref scope; trusted <code class="docutils literal notranslate"><span class="pre">main</span></code> push, scheduled and manual runs populate caches available to
+future PRs. No <code class="docutils literal notranslate"><span class="pre">pull_request_target</span></code>, credentials or wider permissions are introduced. Unique
+build snapshots use normal GitHub cache retention/eviction; concurrent producers may save
+partial snapshots, and no cache hit or runtime improvement is guaranteed.</p>
+<p>See <a class="reference external" href="https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching">GitHub cache scope</a>
+and <a class="reference external" href="https://bazel.build/versions/7.7.0/docs/user-manual#cache-test-results">Bazel test cache behavior</a>.</p>
+</section>
+</section>
 
         </article>
       </div>
       <footer>
         
         <div class="related-pages">
-          
-          
+          <a class="next-page" href="decisions.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Decisions</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="migration-plan.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">yapnr migration plan</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">
@@ -326,19 +496,46 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">CI lanes and Bazel caches</a><ul>
+<li><a class="reference internal" href="#running-the-lanes">Running the lanes</a></li>
+<li><a class="reference internal" href="#complete-inventory-of-affected-packages">Complete inventory of affected packages</a><ul>
+<li><a class="reference internal" href="#tests-unit-rf"><code class="docutils literal notranslate"><span class="pre">//tests/unit/rf</span></code></a></li>
+<li><a class="reference internal" href="#tests-unit-rf-coupons"><code class="docutils literal notranslate"><span class="pre">//tests/unit/rf_coupons</span></code></a></li>
+<li><a class="reference internal" href="#tests-e2e-rf"><code class="docutils literal notranslate"><span class="pre">//tests/e2e/rf</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#evidence-and-limits">Evidence and limits</a></li>
+<li><a class="reference internal" href="#cache-lifecycle-and-trust">Cache lifecycle and trust</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
   </div>
-</div><script src="static/documentation_options.js?v=8a448e45"></script>
-    <script src="static/doctools.js?v=fd6eb6e6"></script>
-    <script src="static/sphinx_highlight.js?v=6ffebe34"></script>
-    <script src="static/scripts/furo.js?v=46bd48cc"></script>
-    <script src="static/clipboard.min.js?v=a7894cd8"></script>
-    <script src="static/copybutton.js?v=fd10adb8"></script>
-    <script src="static/design-tabs.js?v=f930bc37"></script>
+</div><script src="../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../static/design-tabs.js?v=f930bc37"></script>
     <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
 
 
@@ -695,8 +892,5 @@ mermaid.initialize(
 
 window.addEventListener("load", load);
 window.runMermaid = runMermaid;</script>
-    
-<script src="static/searchtools.js"></script>
-<script src="static/language_data.js"></script>
-<script src="searchindex.js"></script></body>
+    </body>
 </html>

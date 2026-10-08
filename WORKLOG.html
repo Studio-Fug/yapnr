@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -243,6 +244,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
@@ -301,7 +303,7 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-07 (energy-track macOS ABI-path assertion, #90). Previous status:
+<p>Last updated: 2026-10-07 (RF CI lanes and cache verification, #95). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>). Earlier the same day: RF round 2 with the native FDTD kernel
 on <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>, merged with <code class="docutils literal notranslate"><span class="pre">main</span></code>; the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the
@@ -314,6 +316,21 @@ board edges, the hierarchical ladder driver and their animations on
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul>
+<li><p><strong>RF CI lanes and Bazel cache snapshots</strong> (branch <code class="docutils literal notranslate"><span class="pre">codex/rf-nightly-ci-cache</span></code>): expensive RF
+solver/gradient/design and coupon fitting coverage moves to nightly/manual Linux and macOS;
+ordinary CI keeps inexpensive RF units and a deterministic native optimizer smoke. Expanded
+Bazel targets are checked against an exhaustive lane inventory. Explicit cache saves retain
+completed outputs after test failures with fork PRs restore-only. The existing CI dispatch can
+explicitly invoke the RF lane before merge. Native smoke, 14 focused policy regressions,
+changed-file hooks and actionlint pass; both hosted platforms verify the expanded 65-target
+inventory. Both RF lanes and same-head cache replays pass; detailed measurements and
+combined-head CI status after #91/#92 are tracked in PR #95.
+<a class="reference internal" href="docs/ci-lanes.html"><span class="std std-doc">Lane inventory and policy</span></a>.</p></li>
+<li><p><strong>Hull nesting default (2026-10-07, PR #91).</strong> Owner requested default-on nesting for hull
+macros with explicit opt-out. Legality/native gates and both routing fallbacks are unchanged.
+The integrated native dovetail example is clean with nonzero interlock; vias increase in
+that one pair. Final-head versus main dovetail and quad-bank campaigns remain pending under
+the approved total budget. See <a class="reference internal" href="docs/design/hull-nest-validation.html"><span class="std std-doc">validation status</span></a>.</p></li>
 <li><p><strong>Route-then-compact and hull packing</strong> (PR #86, branch <code class="docutils literal notranslate"><span class="pre">claude/route-compact</span></code>; design
 <a class="reference internal" href="docs/design/route-compact.html"><span class="std std-doc">docs/design/route-compact.md</span></a>). <code class="docutils literal notranslate"><span class="pre">PNR_ROUTE_COMPACT</span></code>
 (<code class="docutils literal notranslate"><span class="pre">TOP</span></code>, <code class="docutils literal notranslate"><span class="pre">BLOCK</span></code>, <code class="docutils literal notranslate"><span class="pre">FLAT</span></code>; default off): after routing, order-preserving 1D compaction (x then

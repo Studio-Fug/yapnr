@@ -89,12 +89,14 @@ def reorient(
     pad_edge: Optional[Tuple[float, float]] = None,
     channel_model=None,
     channel_guard: bool = True,
+    refs=None,
 ) -> Tuple[BoardGraph, Dict[str, float]]:
     """``(board, {ref: new turn})``: a copy of the legal ``graph`` with the greedy in-place
     turns applied (the module docstring). ``clearance``, ``spread``, ``inflation``, ``margins``
     and ``pad_edge`` are the legalizer's; ``channel_model`` supplies the channel penalty (with
-    ``channel_guard``) and the plane nets (None: neither). A board that is not legal to begin
-    with is returned unchanged (the pose checker needs a legal baseline)."""
+    ``channel_guard``) and the plane nets (None: neither). ``refs`` (None: every part) limits the
+    turns to those parts (PNR_LEGALIZE_KEEP: the parts the legalizer moved). A board that is not
+    legal to begin with is returned unchanged (the pose checker needs a legal baseline)."""
     from .metrics import pose_checker
 
     out = BoardGraph.from_json(graph.to_json())
@@ -116,7 +118,9 @@ def reorient(
     candidates = sorted(
         c.ref
         for c in out.components
-        if c.ref not in frozen and any(p.net and p.net not in skip for p in c.pads)
+        if c.ref not in frozen
+        and (refs is None or c.ref in refs)
+        and any(p.net and p.net not in skip for p in c.pads)
     )
     others = {ref: [c for c in out.components if c.ref != ref] for ref in candidates}
 

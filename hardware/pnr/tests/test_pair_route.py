@@ -361,6 +361,21 @@ class PadsToPads(unittest.TestCase):
         total = sum(math.dist(a, b) for _l, a, b, _w in both["DP"])
         self.assertGreater(parallel / total, 0.8)
 
+    def test_a_judged_pair_keeps_its_gap_on_every_parallel_stretch(self):
+        # KiCad's diff_pair_gap model over the solved legs (coupled.gap_breaks): this pair's
+        # pad-to-lane fanouts run beside the mate's lane off the gap, which the design does
+        # not judge (no max_uncoupled_mm); declaring the uncoupled budget makes the router
+        # prefer fanouts without such a stretch.
+        row = self.route.escape_diagnostics["coupled_pairs"]["pairs"]["usb"]
+        self.assertGreater(row["gap_breaks"], 0)
+        self.assertFalse(row["coupling_judged"])
+        c, rules = plain_rules(self.g, pair=dict(max_uncoupled_mm=2.0))
+        judged = route_board(self.g, c, rules, pitch=0.25, max_iters=6)
+        row = judged.escape_diagnostics["coupled_pairs"]["pairs"]["usb"]
+        self.assertEqual((row["status"], row["coupling_judged"]), ("coupled", True), row)
+        self.assertEqual(row["gap_breaks"], 0)
+        self.assertEqual(judged.result.unrouted, [])
+
     def test_uncoupled_and_skew_within_budget(self):
         both = legs(self.route, "DP", "DN")
         u1, j1 = self.g.component("U1"), self.g.component("J1")
@@ -399,6 +414,24 @@ class PadsToPads(unittest.TestCase):
                 if o[1] == t[1]:
                     gap = segment_distance(t[2], t[3], o[2], o[3]) - (t[4] + o[4]) / 2
                     self.assertGreaterEqual(gap, FAB["clearance_mm"] - 1e-6)
+
+
+class GapBreaks(unittest.TestCase):
+    def test_kicads_nearest_parallel_model(self):
+        # Lanes 0.25 apart centre to centre (width 0.1, gap 0.15): no break.
+        lanes = {"P": [(0, 0), (10, 0)], "N": [(0, 0.25), (10, 0.25)]}
+        self.assertEqual(coupled.gap_breaks(lanes, 0.1, 0.15), [])
+        # A stub of N parallel to P's lane 0.6 away, overlapping it: N's stub breaks the gap
+        # (its nearest parallel P segment is off), P's lane does not (its nearest is the lane).
+        stub = {"P": [(0, 0), (10, 0)], "N": [(1, 0.6), (2, 0.6), (2.35, 0.25), (10, 0.25)]}
+        breaks = coupled.gap_breaks(stub, 0.1, 0.15)
+        self.assertEqual([(b[0], b[1], b[2]) for b in breaks], [("N", (1, 0.6), (2, 0.6))])
+        self.assertAlmostEqual(breaks[0][3], 0.5)
+        # Parallel but not overlapping in projection, or not parallel: not judged.
+        apart = {"P": [(0, 0), (1, 0)], "N": [(2, 0.6), (3, 0.6)]}
+        self.assertEqual(coupled.gap_breaks(apart, 0.1, 0.15), [])
+        skew = {"P": [(0, 0), (1, 0)], "N": [(0, 0.6), (1, 0.9)]}
+        self.assertEqual(coupled.gap_breaks(skew, 0.1, 0.15), [])
 
 
 class Fallback(unittest.TestCase):

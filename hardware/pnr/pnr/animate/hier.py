@@ -34,7 +34,7 @@ from PIL import Image, ImageDraw
 
 from pnr.provenance import critical_path, from_hier, hier_blocks, hier_traces
 
-from . import theme
+from . import storyboard, theme
 from .render import Renderer, _fit, font, mix, rgb, safe_text
 from .storyboard import SCHEMA, _montage, set_aside, subject
 from .timeline import (
@@ -82,6 +82,36 @@ def templates_of(instances):
 def short(block):
     """A block's display name: the last part of its address (``top.bank_a`` -> ``bank_a``)."""
     return str(block).rsplit(".", 1)[-1]
+
+
+def _legal_motion(trace, top, tiles, detail=False):
+    """``{"block": ..., "top": ...}``: the legalizer's motion (:mod:`pnr.place.motion`) of each
+    template's chosen trial (in its block trace) and of the chosen top-level placement; a stage
+    without a recorded ``motion`` is left out. ``detail``: the detailed-placement pass's records
+    instead (:func:`pnr.animate.storyboard.detail_motion`)."""
+    if detail:
+        motion_of, combine = storyboard.detail_motion, storyboard.combine_detail
+    else:
+        motion_of, combine = storyboard.legal_motion, storyboard.combine
+    out = {}
+    try:
+        traces = hier_traces(trace)
+    except ValueError:
+        traces = {}
+    blocks = []
+    for tile in tiles:
+        sub = traces.get(tile["template"])
+        if sub is not None:
+            got = motion_of(sub, [tile["trial"]])
+            if got is not None:
+                blocks.append(got)
+    if blocks:
+        out["block"] = combine(blocks)
+    if top is not None:
+        got = motion_of(trace, [top.scope])
+        if got is not None:
+            out["top"] = got
+    return out
 
 
 def build(trace, title=None, subtitle=None):
@@ -163,16 +193,17 @@ def build(trace, title=None, subtitle=None):
         if node.id.startswith("native:"):
             scenes.append(dict(type="native", stage=node.label, seq=node.meta.get("event")))
     result = trace.results[-1] if trace.results else {}
-    scenes.append(
-        dict(
-            type="end",
-            rejected=set_aside(order, index),
-            result={
-                k: result.get(k)
-                for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
-            },
-        )
-    )
+    end = {
+        k: result.get(k)
+        for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
+    }
+    motion = _legal_motion(trace, top, tiles)
+    if motion:
+        end["legal_motion"] = motion
+    motion = _legal_motion(trace, top, tiles, detail=True)
+    if motion:
+        end["detail_motion"] = motion
+    scenes.append(dict(type="end", rejected=set_aside(order, index), result=end))
     return dict(
         schema=SCHEMA,
         kind="hier",
@@ -362,6 +393,9 @@ class HierTimeline(Timeline):
             poses = {r[0]: (r[1], r[2], r[3], r[4]) for r in rows}
         elif sub.kind(trial, "poses"):
             poses = event_poses(sub, sub.kind(trial, "poses")[-1])
+        detailed = sub.kind(trial, "detail")
+        if detailed and detailed[-1].get("moves"):  # detailed placement (pnr.place.detail)
+            poses = dict(poses, **event_poses(sub, detailed[-1]))
         route = "%s-%s" % (trial, block)
         committed, groups = {}, {}
         ends = sub.kind(route, "route_end")

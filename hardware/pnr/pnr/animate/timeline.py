@@ -43,6 +43,7 @@ GLOBAL_S = (2.0, 3.0)
 FLY_IN_S = 0.4
 LEGAL_PART_S, LEGAL_MAX_S = 0.08, 1.6
 MOVE_S = 0.6
+DETAIL_S = 0.8  # legal -> detailed placement (pnr.place.detail), when the pass moved a part
 ROUTE_S = (3.0, 8.0)
 ROUTE_NEGOTIATION_SHARE = 0.4
 ROUTE_HOLD_S = 0.5
@@ -378,7 +379,8 @@ class Timeline:
             parts = len(self._legal_units(scene["scope"]))
             zoom = ZOOM_S if self._widened(scene["scope"]) else 0.0
             seconds = self._global_seconds(scene["scope"]) + FLY_IN_S + zoom
-            return seconds + self._legal_seconds(parts)
+            detail = DETAIL_S if self._detail_poses(scene["scope"]) else 0.0
+            return seconds + self._legal_seconds(parts) + detail
         if kind == "move":
             return MOVE_S
         if kind == "route":
@@ -665,6 +667,14 @@ class Timeline:
                 units.append((name, [r for r in members[name] if r in placed]))
         return units
 
+    def _detail_poses(self, scope):
+        """The poses of the last ``detail`` event (pnr.place.detail) of ``scope`` when the pass
+        moved a part, else None."""
+        events = self.trace.kind(scope, "detail")
+        if not events or not events[-1].get("moves"):
+            return None
+        return event_poses(self.trace, events[-1])
+
     def _nest_event(self, scope):
         """The last ``hull-nest`` poses event of ``scope`` (PNR_HULL_NEST moved the legalized
         blocks, :func:`pnr.place.hull.nest`), None without one."""
@@ -683,6 +693,11 @@ class Timeline:
         nest = self._nest_event(scope)
         if nest is not None:
             return event_poses(self.trace, nest)
+        detailed = self._detail_poses(scope)
+        if detailed:
+            order, legal = self._legal_order(scope)
+            return dict(legal or {}, **detailed)
+
         order, legal = self._legal_order(scope)
         if legal:
             return legal
@@ -767,6 +782,22 @@ class Timeline:
                     )
                     self.emit(ms=per)
             self.view = self.view.copy(poses=dict(legal), marked=(), step=None, phase="placement")
+            detailed = self._detail_poses(scope)
+            if detailed:
+                # Detailed placement (pnr.place.detail): its own segment from the legal poses.
+                start = dict(self.view.poses)
+                target = dict(start, **detailed)
+                moving = tuple(sorted(r for r in detailed if start.get(r) != detailed[r]))
+                steps = self.frames_for(DETAIL_S)
+                for k in range(steps):
+                    t = ease((k + 1) / steps)
+                    self.view = self.view.copy(
+                        poses=lerp_poses(start, target, t, self.flip),
+                        marked=moving,
+                        phase="detailed-placement",
+                    )
+                    self.emit()
+                self.view = self.view.copy(poses=target, marked=(), phase="placement")
         if self.view.camera != outline and camera != outline:
             steps = self.frames_for(ZOOM_S)
             start = self.view.camera

@@ -2431,6 +2431,52 @@ py_test(
     ],
 )
 
+# PNR_LEGALIZE_KEEP (on by default): displacement-minimizing legalization, the triage and the
+# order-preserving push (pnr.place.keep), and the motion record (pnr.place.motion).
+py_test(
+    name = "legalize_keep_test",
+    size = "small",
+    srcs = ["tests/test_legalize_keep.py"],
+    data = [
+        "testdata/legalize_keep/hier-twin-bank-32-start-13.json",
+        "testdata/legalize_keep/hier-twin-bank-32-start-14.json",
+    ],
+    imports = ["."],
+    main = "tests/test_legalize_keep.py",
+    deps = [
+        ":pnr",
+        ":pnr_hier",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+# PNR_DETAIL_PLACE: detailed placement after legalization (pnr.place.detail).
+py_test(
+    name = "detail_place_test",
+    size = "medium",
+    srcs = [
+        "tests/compact_fixture.py",
+        "tests/test_detail_place.py",
+    ],
+    data = [
+        "testdata/compact/04-inverter-leds-8.json",
+        "testdata/detail_place/buck-pour-s5.json",
+    ],
+    imports = [
+        ".",
+        "tests",
+    ],
+    main = "tests/test_detail_place.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
 # PNR_LEGALIZE_REORIENT: in-place turns after legalization (pnr.place.reorient).
 py_test(
     name = "reorient_test",

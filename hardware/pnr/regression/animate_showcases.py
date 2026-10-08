@@ -36,6 +36,7 @@ sys.path.insert(0, str(HERE.parent))
 from animate_ladder import (  # noqa: E402
     case_result,
     ladder_provenance,
+    order_summary,
     platform_name,
     runner_options,
 )
@@ -291,6 +292,9 @@ def write_documents(out, run, cases, entries, image=None):
         )
         rows.append(row)
     results["showcases"] = rows
+    if order_summary(rows):
+        # Over every showcase: the neighbour order kept, weighted by relation count.
+        results["showcases_order"] = order_summary(rows)
     results["showcases_generated"] = generated
     results_path.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
 

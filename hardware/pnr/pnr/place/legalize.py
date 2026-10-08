@@ -44,6 +44,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from pnr import legalize_flags
 from pnr.graph import BoardGraph, Component
 
 from .geometry import (
@@ -536,6 +537,167 @@ def wire_cost(comp, neighbors, movable, xs, ys, skip=frozenset()):
     return total
 
 
+# PNR_LEGALIZE_KEEP: an anchored part takes the free slot nearest its (pushed) global pose
+# within this many grid cells (the nearest slot centre is at most half a cell away per axis).
+KEEP_SNAP_CELLS = 1.5
+
+
+def _keep_obstacles(fixed_parts, keepouts, margins, clearance, occupancy):
+    """:class:`pnr.place.keep.Box` obstacles of the PNR_LEGALIZE_KEEP triage and push: the
+    fixed parts' reservations as the legalizer marks them (grown by the clearance and their
+    copper margin) and the keep-outs, on the planes they are marked on."""
+    from .keep import Box
+
+    out = []
+    for comp in fixed_parts:
+        grow = clearance + 2 * margins[comp.ref] if comp.ref in margins else clearance
+        for side, rect in placement_rects(comp):
+            if isinstance(rect, ReserveRect) or side not in occupancy:
+                continue
+            out.append(Box(comp.ref, rect.cx, rect.cy, rect.w + grow, rect.h + grow, (side,)))
+    for k in keepouts:
+        out.append(Box(None, k.cx, k.cy, k.w, k.h, ("top", "bottom")))
+    return out
+
+
+def _channel_need(channel_model, by_ref, shift_of):
+    """PNR_LEGALIZE_KEEP: ``need(front, back, axis)`` for :func:`pnr.place.keep.spread`, the slot
+    centre distance at which the escape channel the ``channel_model`` asks between the facing
+    pad rows of ``front`` and ``back`` (east or north of it) is open, from their present poses
+    (None: no facing rows), and ``short(comp, others)``: the part is short of a channel there."""
+    cache = {}
+
+    def need(front, back, axis):
+        key = (front, back, axis)
+        if key not in cache:
+            a, b = by_ref.get(front), by_ref.get(back)
+            got = None
+            if a is not None and b is not None:
+                label = "east" if axis == 0 else "north"
+                for direction, gap, overlap, required, _nets in channel_model.interactions(a, b):
+                    if direction == label and float(overlap) > 0 and float(required) > 0:
+                        sa, sb = shift_of(a), shift_of(b)
+                        centre = (b.pos[axis] + sb[axis]) - (a.pos[axis] + sa[axis])
+                        got = centre + float(required) - float(gap)
+            cache[key] = got
+        return cache[key]
+
+    def short(comp, others):
+        return float(channel_model.penalty(comp, others, comp.pos[0], comp.pos[1])) > 1e-9
+
+    return need, short
+
+
+def _keep_plan(
+    movable,
+    *,
+    obstacles,
+    grid,
+    extent,
+    outline,
+    slot,
+    planes,
+    box,
+    pushable,
+    free=None,
+    channels=None,
+    fixed_parts=(),
+):
+    """PNR_LEGALIZE_KEEP before the packer (:mod:`pnr.place.keep`): triage the ``movable``
+    parts at their global poses, push the mild overlaps apart, move every pushed part's
+    ``pos`` to its new pose, and return ``(refs to anchor, triage counts, {ref: reason} of the
+    parts that leave their pose)``: the severe ones (``severe``, relocated wholesale) and those
+    the push gave up (``push_infeasible``, placed nearest-first around their pose).
+
+    ``slot(comp)`` is the part's slot ``(bw, bh)`` in ``grid`` cells, ``planes(comp)`` its
+    occupancy planes and ``box(comp)`` its static centre bounds in ``pos`` space (None: none);
+    ``extent`` is the raster's size and ``outline`` the board's. A part not ``pushable`` (held by
+    a region, an align, an edge band or a hard group disc, a hull macro, a part with landing
+    reserves) is an obstacle to the push where it is; it is still triaged and anchored. ``free``
+    ({ref: 1} for a part that may take either side) breaks triage ties toward relocating it.
+    ``channels`` (the packer's :class:`pnr.place.channels.ChannelModel`; None: none) widens each
+    pair's distance in a push by the escape channel it asks (:func:`_channel_need`; the
+    ``fixed_parts`` count as neighbours), and a part short of one at its pose (``channel_short``)
+    is pushed like a mild overlap. The physical overlap is cleared first; the channels are a soft
+    goal the push opens when they fit within every part's reach (:func:`pnr.place.keep.resolve`)."""
+    from .keep import PUSH_REASON, SEVERE_REASON, Box, resolve, triage
+
+    slots, shifts, rigid = [], {}, []
+    for comp in movable:
+        bw, bh = slot(comp)
+        shift = body_shift(comp) or (0.0, 0.0)
+        shifts[comp.ref] = shift
+        w, h = bw * grid, bh * grid
+        cx, cy = comp.pos[0] + shift[0], comp.pos[1] + shift[1]
+        bounds = [w / 2.0, extent[0] - w / 2.0, h / 2.0, extent[1] - h / 2.0]
+        static = box(comp)
+        if static is not None:
+            bounds = [
+                max(bounds[0], static[0] + shift[0]),
+                min(bounds[1], static[1] + shift[0]),
+                max(bounds[2], static[2] + shift[1]),
+                min(bounds[3], static[3] + shift[1]),
+            ]
+        b = Box(comp.ref, cx, cy, w, h, planes(comp), weight=max(w * h, 1e-6), bounds=bounds)
+        slots.append(b)
+        if not pushable(comp):
+            rigid.append(comp.ref)
+    severe, occlusion = triage(slots, obstacles, outline[0], outline[1], free)
+    severe_set = set(severe)
+    held = [s for s in slots if s.ref not in severe_set and s.ref in rigid]
+    push = [s for s in slots if s.ref not in severe_set and s.ref not in rigid]
+    need, short = None, set()
+    if channels is not None:
+        everyone = list(movable) + list(fixed_parts)
+        need, is_short = _channel_need(
+            channels, {c.ref: c for c in everyone}, lambda c: shifts.get(c.ref, (0.0, 0.0))
+        )
+        live = [c for c in everyone if c.ref not in severe_set]
+        short = {
+            c.ref
+            for c in movable
+            if c.ref not in severe_set and is_short(c, [o for o in live if o is not c])
+        }
+    opened = {}
+    stats = {}
+    centres, dropped = resolve(
+        push,
+        list(obstacles) + held,
+        outline[0],
+        outline[1],
+        occlusion,
+        need=need,
+        short=short,
+        opened=opened,
+        stats=stats,
+    )
+    by_ref = {c.ref: c for c in movable}
+    pushed = 0
+    for ref, (x, y) in centres.items():
+        comp = by_ref[ref]
+        shift = shifts[ref]
+        pose = (x - shift[0], y - shift[1])
+        if math.dist(pose, comp.pos) > 1e-9:
+            pushed += 1
+            comp.pos = pose
+    reasons = {ref: SEVERE_REASON for ref in severe}
+    reasons.update({ref: PUSH_REASON for ref in dropped})
+    clean = sum(1 for s in slots if occlusion.get(s.ref, 0.0) <= 0.0)
+    counts = dict(
+        channel_short=len(short),
+        # Parts of a spread cluster whose channels did not fit the push (a soft goal).
+        channel_unopened=sum(1 for v in opened.values() if not v),
+        clean=clean,
+        mild=len(slots) - clean - len(severe),
+        severe=len(severe),
+        pushed=pushed,
+        # Parts a size-scaled (escalated) push moved beyond their first reach, which spared a
+        # relocation (pnr.place.keep.ESCALATE).
+        pushed_far=stats.get("pushed_far", 0),
+    )
+    return {c.ref for c in movable if c.ref not in reasons}, counts, reasons
+
+
 def legalize(
     graph: BoardGraph,
     width: float,
@@ -572,6 +734,8 @@ def legalize(
     margins: Optional[Dict[str, float]] = None,
     wire_weight: Optional[float] = None,
     wire_exempt=frozenset(),
+    keep: Optional[bool] = None,
+    _attempt: int = 0,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -665,7 +829,34 @@ def legalize(
     slot's half turn as well. ``wire_exempt`` (refs) keeps the plain search for those parts
     (the placer passes the parts on a diff-pair or length-match net:
     :func:`pnr.place.reorient.matched_refs`).
+
+    ``keep`` (``PNR_LEGALIZE_KEEP``, :func:`pnr.legalize_flags.legalize_keep` when None; on by
+    default, off under power-first placement): displacement-minimizing legalization
+    (:mod:`pnr.place.keep`). Before the packer runs, the movable parts are triaged at their
+    global poses: a part whose slot is half or more occluded (by other slots, fixed parts,
+    keep-outs or the outside of the outline) is *severe*, the rest clean or mild; the mild
+    overlaps are resolved by an order-preserving push of the parts around them (a bounded
+    cascade), and a cluster the push cannot resolve gives up its most occluded part to the severe
+    ones. Every part that is not severe is then placed first, biggest first, in the free slot
+    nearest its (pushed) pose within :data:`KEEP_SNAP_CELLS` grid cells, at its global turn and
+    without the channel or wirelength terms; only when no such slot is free does it take the
+    packer's full search like the severe parts, which come last. The held parts (hard groups,
+    aligns, regions, edge bands, hard discs) are placed before any free part is held, each at its
+    global pose when that slot is free. Should that leave a part without a slot, the whole board
+    is legalized again with ``keep`` off (``keep_fallback`` in the record). The returned graph
+    carries the motion record as ``legal_motion`` (:func:`pnr.place.motion.motion` from the
+    global poses, plus the triage counts).
     """
+    if keep is None:
+        keep = legalize_flags.legalize_keep()
+    if keep and roles is None and not _attempt:
+        params = {k: v for k, v in locals().items() if k not in ("graph", "width", "height")}
+        try:
+            return legalize(graph, width, height, **dict(params, _attempt=1))
+        except LegalizationError:
+            out = legalize(graph, width, height, **dict(params, keep=False, _attempt=1))
+            out.legal_motion["keep_fallback"] = True
+            return out
     wire_weight = float(wire_weight or 0.0)
     wire_exempt = frozenset(wire_exempt or ())
 
@@ -1379,6 +1570,62 @@ def legalize(
     if order == "scarcity":
         blocks = _scarcity_blocks(blocks, movable, rules, bands)
 
+    # PNR_LEGALIZE_KEEP (pnr.place.keep): triage, the order-preserving push, then the anchors.
+    keeping = bool(keep) and aid is None
+    anchoring = set()
+    triage_record = {}
+    # {ref: reason} of the parts that leave their (pushed) global pose (pnr.place.keep.REASONS);
+    # those that are not severe take the nearest free slot in rings around it (``nudging``).
+    reasons = {}
+    nudging = set()
+    nudged = set()
+    if keeping and movable:
+
+        def keep_slot(comp):
+            infl = (
+                spreading(comp)
+                if bands or rules is not None
+                else max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+            )
+            return slot_dims(comp, infl)
+
+        anchoring, triage_record, reasons = _keep_plan(
+            movable,
+            obstacles=_keep_obstacles(
+                [by_ref[r] for r in fixed if r in by_ref], keepouts, margins, clearance, occupancy
+            ),
+            grid=g,
+            extent=(nx * g, ny * g),
+            outline=(width, height),
+            slot=keep_slot,
+            planes=part_sides,
+            box=static_edge_box,
+            pushable=lambda comp: not (
+                constrained(comp)
+                or comp.ref in bands
+                or comp.ref in group_limits
+                or is_hull(comp)
+                or (landing and comp.reserves)
+            ),
+            free={ref: 1 for ref, opts in (side_options or {}).items() if len(opts) > 1},
+            channels=channel_model,
+            fixed_parts=[by_ref[r] for r in fixed if r in by_ref],
+        )
+        from .keep import SEVERE_REASON
+
+        nudging = {ref for ref, why in reasons.items() if why != SEVERE_REASON}
+    snap_radius = KEEP_SNAP_CELLS * g
+    ring_limit = math.hypot(nx * g, ny * g)
+
+    def scarce(comp):
+        """PNR_LEGALIZE_KEEP: a part held by a hard group, an align, a region, an edge band or
+        a hard disc, placed before the free parts are held at their poses."""
+        return (
+            comp.ref in blocks or constrained(comp) or comp.ref in bands or comp.ref in group_limits
+        )
+
+    anchors = {}  # PNR_LEGALIZE_KEEP: {ref: pose} of the parts held at their (pushed) pose
+
     def scarce_first(active, eligible):
         """``order: scarcity``: a part in a block of its own (held by a region or an edge
         band) with fewer free slots left than every eligible part of the active block goes
@@ -1404,8 +1651,23 @@ def legalize(
         ready = [c for c in movable if parents.get(c.ref, set()) <= placed_refs]
         # A cycle is still checked symmetrically as its vertices become placed.
         eligible = ready or movable
-        active = [c for c in eligible if c.ref in active_block]
-        if not active:
+        # PNR_LEGALIZE_KEEP: the held parts (hard groups, aligns, regions, edge bands, hard
+        # discs) first, in the packer's order, each at its global pose when that slot is free
+        # and by the full search otherwise; then every other part that is not severe, biggest
+        # first, at its (pushed) global pose; then the rest (the severe ones and those whose
+        # pose was taken) by the packer's order and full search.
+        anchor_now = (
+            [c for c in eligible if c.ref in anchoring]
+            if keeping and not any(scarce(c) for c in eligible)
+            else []
+        )
+        # Then the parts that keep no slot at their pose, nearest-first around it.
+        if keeping and not anchor_now and not any(scarce(c) for c in eligible):
+            anchor_now = [c for c in eligible if c.ref in nudging]
+        active = [] if anchor_now else [c for c in eligible if c.ref in active_block]
+        if anchor_now:
+            pass
+        elif not active:
             grouped = [c for c in eligible if c.ref in blocks]
             if grouped:
 
@@ -1422,7 +1684,11 @@ def legalize(
                 active = [c for c in eligible if c.ref in active_block]
         elif order == "scarcity":
             active = scarce_first(active, eligible)
-        if aid is None:
+        if anchor_now:
+            comp = min(
+                anchor_now, key=lambda c: (-courtyard_rect(c).w * courtyard_rect(c).h, c.ref)
+            )
+        elif aid is None:
             comp = min(
                 active or eligible,
                 key=lambda c: (available(c), -courtyard_rect(c).w * courtyard_rect(c).h, c.ref),
@@ -1461,10 +1727,12 @@ def legalize(
         # search_scored (PNR_LEGALIZE_HPWL): set when search() fell back to a stranding slot.
         strand_note = [False]
 
-        def search(only=None):
+        def search(only=None, snap=False):
             """The nearest legal slot for ``comp`` on its current side, trying its turns:
             ``(error, r, c, bw, bh, sides, attached, captured_fields)``. ``only`` (a turn,
-            :func:`search_scored`): try that turn alone."""
+            :func:`search_scored`): try that turn alone. ``snap`` (PNR_LEGALIZE_KEEP anchors):
+            only slots within ``snap_radius`` (or ``snap`` mm, a number) of the target, nearest
+            first, no channel, soft-rule or wirelength cost."""
             r = c = None
             bw = bh = 0
             infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
@@ -1504,6 +1772,10 @@ def legalize(
                     else ()
                 )
                 target = target_of(comp)
+                lim = limits_for(comp.ref)
+                if snap:
+                    radius = snap_radius if snap is True else float(snap)
+                    lim = lim + [(target[0], target[1], radius)]
                 try:
                     candidate_cost = (
                         None
@@ -1562,6 +1834,18 @@ def legalize(
                                 )
                             return value + wire_weight * wire
 
+                    if snap:
+                        # PNR_LEGALIZE_KEEP anchor: the nearest slot; a cost capture still
+                        # records the candidates' fields (the scores are not used).
+                        bound = None
+                        if capturing:
+
+                            def candidate_cost(xs, ys, _record=candidate_cost):
+                                _record(xs, ys)
+                                return 0.0
+
+                        else:
+                            candidate_cost = None
                     slot_free = hull_free(comp, bw, bh) if is_hull(comp) else None
                     slot_mask = region_mask(comp, bw, bh)
                     r, c = _place_part(
@@ -1570,7 +1854,7 @@ def legalize(
                         bw,
                         bh,
                         target,
-                        limits_for(comp.ref),
+                        lim,
                         candidate_cost=candidate_cost,
                         forbidden=banned_cells(
                             banned.get(comp.ref, ()), rotation, comp.side, half_turns
@@ -1601,7 +1885,7 @@ def legalize(
                                 bw,
                                 bh,
                                 target,
-                                limits_for(comp.ref),
+                                lim,
                                 candidate_cost=candidate_cost,
                                 forbidden=tried,
                                 attached=attached,
@@ -1626,7 +1910,7 @@ def legalize(
                                 bw,
                                 bh,
                                 target,
-                                limits_for(comp.ref),
+                                lim,
                                 candidate_cost=candidate_cost,
                                 forbidden=tried,
                                 attached=attached,
@@ -1680,11 +1964,67 @@ def legalize(
             comp.rot = rotation
             return outcome[:7] + (fields,)
 
+        def ring_search():
+            """PNR_LEGALIZE_KEEP, a part that is not severe but keeps no slot at its pose: the
+            nearest free slot within rings of radius ``snap_radius * RING_GROWTH ** k`` around
+            it, the global turn first at each ring and then the part's other turns
+            (:func:`wire_turns`), up to the whole board; :func:`search`'s tuple."""
+            from .keep import RING_GROWTH
+
+            turns = wire_turns(original_rotation, allow_rotation and comp.ref not in rotations)
+            if is_hull(comp) and allow_rotation and comp.ref not in rotations:
+                turns = hull_turns(comp, original_rotation)
+            radius = snap_radius * RING_GROWTH
+            first = None
+            while True:
+                for rotation in turns:
+                    outcome = search(only=rotation, snap=radius)
+                    if outcome[0] is None:
+                        return outcome
+                    first = first or outcome
+                comp.rot = original_rotation
+                if radius > ring_limit:
+                    return first
+                radius *= RING_GROWTH
+
         # PNR_LEGALIZE_HPWL chooses the turn with the slot; otherwise the first turn that fits.
         run_search = search_scored if wired(comp) else search
-        error, r, c, bw, bh, sides, attached, captured_fields = run_search()
+        anchored = False
+        if comp.ref in anchoring:
+            # PNR_LEGALIZE_KEEP: the slot at the (pushed) global pose, at the global turn; else
+            # back to the queue, after the anchors, for the nearest-first rings around the pose
+            # (a free part), or the packer's full search now (a held part).
+            anchoring.discard(comp.ref)
+            outcome = search(only=original_rotation, snap=True)
+            if outcome[0] is None:
+                anchored = True
+                error, r, c, bw, bh, sides, attached, captured_fields = outcome
+                anchors[comp.ref] = slot_pose(comp, r, c, bw, bh)
+            else:
+                from .keep import SLOT_REASON
+
+                comp.rot = original_rotation
+                reasons[comp.ref] = SLOT_REASON
+                if anchor_now:
+                    nudging.add(comp.ref)
+                    movable.append(comp)
+                    continue
+                # A held part (an align, a region, an edge band, a hard group) keeps the
+                # packer's own search, which carries its constraints' costs.
+        if not anchored and comp.ref in nudging and not scarce(comp):
+            # PNR_LEGALIZE_KEEP: never the full search for a free part that is not severe; it
+            # only falls back to it when no ring has a slot at any turn.
+            nudging.discard(comp.ref)
+            outcome = ring_search()
+            if outcome[0] is None:
+                anchored = True
+                nudged.add(comp.ref)
+                error, r, c, bw, bh, sides, attached, captured_fields = outcome
+        if not anchored:
+            error, r, c, bw, bh, sides, attached, captured_fields = run_search()
         if (
-            side_options
+            not anchored
+            and side_options
             and len(side_options.get(comp.ref, ())) > 1
             and (error is not None or displaced(comp, r, c, bw, bh) > side_retry_mm)
         ):
@@ -1827,8 +2167,33 @@ def legalize(
 
     from pnr import trace as _trace
 
+    from .motion import motion as motion_of
+    from .motion import summary as motion_summary
+
+    # The motion from the global poses (the input graph), and the triage (PNR_LEGALIZE_KEEP).
+    record = motion_of(graph, placed, [c.ref for c in placed.components if c.ref not in fixed])
+    held = sorted(ref for ref, pose in anchors.items() if tuple(by_ref[ref].pos) == tuple(pose))
+    record["keep"] = keeping
+    if keeping:
+        from .keep import REASONS
+
+        record.update(
+            triage_record,
+            anchored=len(held),
+            relocated=len(reasons),
+            nudged=len(nudged),
+            **{"relocated_" + why: sum(1 for v in reasons.values() if v == why) for why in REASONS},
+            # Each part that left its (pushed) global pose, and why (pnr.place.keep.REASONS).
+            relocations=dict(sorted(reasons.items())),
+        )
+    placed.legal_motion = record
     if _trace.current() is not None:  # PNR_TRACE_DIR only
-        _trace.legal([ref for _state, ref, _pose in trail], placed, backtracks)
+        _trace.legal(
+            [ref for _state, ref, _pose in trail],
+            placed,
+            backtracks,
+            motion=motion_summary(record),
+        )
     if cost_records:
         import hashlib
         import json

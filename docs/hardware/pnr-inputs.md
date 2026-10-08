@@ -1000,7 +1000,14 @@ length_match:
   coupled (above). Two optional keys, written to the rules only when given:
   `layers` (copper layer names, e.g. `[F.Cu]`) keeps both legs on those layers,
   coupled or not; `max_uncoupled_mm` bounds each leg's uncoupled copper (escape
-  leads, pad fanouts and skew trombones) when the pair is routed coupled.
+  leads, pad fanouts and skew trombones) when the pair is routed coupled. Declaring it
+  also marks the pair's coupling as judged (the design's KiCad `diff_pair_uncoupled` and
+  `diff_pair_gap` rules): the coupled router prefers pad fanouts with no stretch parallel
+  to the other leg off the gap (KiCad pairs each segment with the nearest parallel
+  segment of the other leg and judges that gap), and the initial pool ranks a finalist
+  that leaves such a pair as legs or off the gap after one that does not, and routes up
+  to two more candidates when every finalist leaves a connection open or such a pair
+  flawed.
 - **`length_match`** — a group of nets whose routed lengths must agree within
   `tolerance_mm` or `tolerance_ps` (not both); the quality pass reports the group
   **spread** and flags it if it exceeds the tolerance.

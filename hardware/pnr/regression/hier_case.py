@@ -921,6 +921,10 @@ def run(root, seed):
                 raise RuntimeError("macro naming differs from the block event: %r" % got)
             bad = {k2: v for k2, v in hard_violations(flat, constraints).items() if v}
             record.update(legal=bool(report.legal and not bad), hpwl_mm=round(hpwl(flat), 3))
+            if report.legal_motion is not None:
+                record["legal_motion"] = report.legal_motion
+            if report.detail_motion is not None:
+                record["detail_motion"] = report.detail_motion
             if bad:
                 record["violations"] = bad
             trace.note(status="ok" if record["legal"] else "illegal", hpwl_mm=record["hpwl_mm"])
@@ -1058,6 +1062,7 @@ def run(root, seed):
                         "n_vias",
                         "copper_mm",
                         "seconds",
+                        "legal_motion",
                     )
                 }
                 for r in t["trials"]
@@ -1124,6 +1129,12 @@ def run(root, seed):
             **({"safety_net": net} if net is not None else {}),
         ),
     )
+    motion = legal_motion(synth, seeds, best["id"])
+    if motion:
+        report["legal_motion"] = motion
+    motion = legal_motion(synth, seeds, best["id"], key="detail_motion")
+    if motion:
+        report["detail_motion"] = motion
     from pnr.place import compact
 
     if compact.shrink_enabled():  # PNR_SHRINK is the flat driver's: recorded as skipped
@@ -1132,6 +1143,28 @@ def run(root, seed):
         report["route_compact"] = compaction
     (root / "pnr-report.json").write_text(json.dumps(report, indent=2))
     return report, case
+
+
+def legal_motion(synth, seeds, chosen, key="legal_motion"):
+    """The legalizer's motion (:mod:`pnr.place.motion`) of the chosen layouts: ``block`` (the
+    chosen trial of every template, combined), ``top`` (the chosen top seed's macro placement);
+    a stage without a record is left out. ``key="detail_motion"``: the detailed-placement pass's
+    records instead (:func:`pnr.place.detail.combine`)."""
+    if key == "detail_motion":
+        from pnr.place.detail import combine
+    else:
+        from pnr.place.motion import combine
+
+    out = {}
+    blocks = [t["chosen"][key] for t in synth if t["chosen"].get(key) is not None]
+    if blocks:
+        out["block"] = combine(blocks)
+    for record in seeds:
+        # The chosen route's id is its seed's (``top-NN``) plus ``-route`` (and a retry suffix).
+        ours = chosen == record["id"] or str(chosen).startswith(record["id"] + "-")
+        if ours and record.get(key) is not None:
+            out["top"] = record[key]
+    return out
 
 
 def main(argv=None):

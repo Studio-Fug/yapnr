@@ -50,14 +50,21 @@ time on the development Mac (darwin-arm64), niced, next to other work, gloss sta
 
 | Case                                                                | Parts | Nets | Layers | Added difficulty                                       | Routed | Opens | Findings | Vias | Copper (mm) | Placed on board (mm)   | Time (s) | Gate |
 | ------------------------------------------------------------------- | ----: | ---: | -----: | ------------------------------------------------------ | :----: | ----: | -------: | ---: | ----------: | ---------------------- | -------: | ---- |
-| [01 Connector + LED](#01-connector--led)                            |     2 |    2 |      2 | Basic connection; externally current-limited supply    | 100 %  |     0 |        0 |    0 |        6.33 | 5.8 × 6.2 on 18 × 14   |     20.0 | pass |
-| [02 Resistor + LED](#02-resistor--led)                              |     3 |    3 |      2 | Movable series current limiter                         | 100 %  |     0 |        0 |    0 |       13.09 | 5.7 × 9.0 on 20 × 16   |     19.1 | pass |
-| [03 Two LEDs](#03-two-leds)                                         |     5 |    4 |      2 | Shared, branched supply and return                     | 100 %  |     0 |        0 |    0 |       24.13 | 8.3 × 8.7 on 24 × 18   |     20.3 | pass |
-| [04 Inverter indicators](#04-inverter-indicators)                   |     8 |    6 |      2 | SOT-23-5 pin escapes, an unused pad, 3-pin connector   | 100 %  |     0 |        0 |    2 |       56.08 | 12.6 × 13.6 on 26 × 20 |     25.1 | pass |
-| [05 TLC555 blinker](#05-tlc555-blinker)                             |    10 |    7 |      2 | 8-pin IC, RC timing and control, bypass and bulk caps  | 100 %  |     0 |        0 |    4 |       75.14 | 14.1 × 15.0 on 30 × 24 |     24.5 | pass |
-| [06 Two-stage chaser](#06-two-stage-chaser)                         |    14 |   11 |      2 | TLC555 + CD4017B, cross-IC clock and reset, fanout     | 100 %  |     0 |        0 |    6 |      165.58 | 20.9 × 19.6 on 36 × 28 |     33.4 | pass |
-| [07 Five-stage chaser](#07-five-stage-chaser)                       |    20 |   17 |      2 | Five LED/resistor outputs, shared rails, dense routes  | 100 %  |     0 |        0 |   13 |      220.85 | 21.2 × 23.6 on 42 × 32 |     44.1 | pass |
-| [08 Five-stage chaser with plane](#08-five-stage-chaser-with-plane) |    20 |   17 |      4 | Four copper layers, ground plane attachment and refill | 100 %  |     0 |        0 |   27 |      172.61 | 23.1 × 20.6 on 42 × 32 |     42.8 | pass |
+| [01 Connector + LED](#01-connector--led)                            |     2 |    2 |      2 | Basic connection; externally current-limited supply    | 100 %  |     0 |        0 |    0 |        6.30 | 5.7 × 6.2 on 18 × 14   |     48.9 | pass |
+| [02 Resistor + LED](#02-resistor--led)                              |     3 |    3 |      2 | Movable series current limiter                         | 100 %  |     0 |        0 |    0 |       13.16 | 7.7 × 6.9 on 20 × 16   |     47.7 | pass |
+| [03 Two LEDs](#03-two-leds)                                         |     5 |    4 |      2 | Shared, branched supply and return                     | 100 %  |     0 |        0 |    0 |       21.35 | 8.4 × 8.9 on 24 × 18   |     51.1 | pass |
+| [04 Inverter indicators](#04-inverter-indicators)                   |     8 |    6 |      2 | SOT-23-5 pin escapes, an unused pad, 3-pin connector   | 100 %  |     0 |        0 |    2 |       55.42 | 12.7 × 12.6 on 26 × 20 |     68.1 | pass |
+| [05 TLC555 blinker](#05-tlc555-blinker)                             |    10 |    7 |      2 | 8-pin IC, RC timing and control, bypass and bulk caps  | 100 %  |     0 |        0 |    7 |      114.42 | 14.3 × 14.8 on 30 × 24 |     39.7 | pass |
+| [06 Two-stage chaser](#06-two-stage-chaser)                         |    14 |   11 |      2 | TLC555 + CD4017B, cross-IC clock and reset, fanout     | 100 %  |     0 |        0 |   11 |      183.12 | 22.8 × 18.4 on 36 × 28 |     53.8 | pass |
+| [07 Five-stage chaser](#07-five-stage-chaser)                       |    20 |   17 |      2 | Five LED/resistor outputs, shared rails, dense routes  | 100 %  |     0 |        0 |   16 |      262.99 | 21.8 × 22.8 on 42 × 32 |     67.7 | pass |
+| [08 Five-stage chaser with plane](#08-five-stage-chaser-with-plane) |    20 |   17 |      4 | Four copper layers, ground plane attachment and refill | 100 %  |     0 |        0 |   31 |      211.01 | 19.2 × 23.1 on 42 × 32 |     51.6 | pass |
+
+The table and the animations are rendered with displacement-minimizing legalization and
+detailed placement after it (2026-10-06, both on by default; [compact placement, section
+13.H](design/compact-placement.md)). On this one seed on the Mac the copper is 867.8 mm over the
+eight cases against 733.8 mm in the wirelength packer's run they replace (engine `cfb7cb3`, below);
+the A/B over two seeds on GCP, both arms on one machine family, measures the ladder's copper with
+both switches 0.8 % shorter than with the packer. The times include other jobs' load.
 
 Against the animations they replace (2026-10-03: the same configuration without the legalizer parts,
 engine `cfb7cb3`, on the same Mac), the legalizer now picks each part's slot and turn with its

@@ -44,9 +44,19 @@ def copper(net_y):
     )
 
 
-def make_trace(root, result=None, starts=("start-00", "start-01"), shortlist=None, gloss=None):
+def make_trace(
+    root,
+    result=None,
+    starts=("start-00", "start-01"),
+    shortlist=None,
+    gloss=None,
+    motion=None,
+    detail=None,
+):
     """The tiny traced case; ``gloss`` (a copper blob) adds a saved board after the gloss stage
-    between ``planes`` and ``refill``, and becomes the refill's copper."""
+    between ``planes`` and ``refill``, and becomes the refill's copper; ``motion`` joins every
+    ``legal`` event (the legalizer's motion record); ``detail`` (a detailed-placement record)
+    adds a ``detail`` event after it that slides R1 and turns R2."""
     root = Path(root)
     shortlist = list(shortlist or starts)
     trace.write_run(
@@ -77,7 +87,16 @@ def make_trace(root, result=None, starts=("start-00", "start-01"), shortlist=Non
             "legal",
             order=[["R1", 4000, 4000, 0.0, "top"], ["R2", 8000, 4000, 0.0, "top"]],
             backtracks=0,
+            **({} if motion is None else dict(motion=motion)),
         )
+        if detail is not None:
+            rec.event(
+                "detail",
+                poses=[["R1", 4500, 4000, 0.0, "top"], ["R2", 8000, 4000, 90.0, "top"]],
+                moves=[["R1", "slide", [4.0, 4.0, 0.0], [4.5, 4.0, 0.0], 0.5]],
+                motion=detail,
+                phase="detailed-placement",
+            )
         rec.leave()
     rec.select(
         "shortlist",
@@ -480,6 +499,51 @@ class AnimateTest(unittest.TestCase):
         )
         self.assertEqual(render_mod._rule_names({"b": 1, "a": 4, "c": 1}), "a 4, b 1, 1 more")
         self.assertEqual(render_mod._rule_names({"bad/name": 2}), "")
+
+    def test_end_card_shows_the_legalization_motion(self):
+        """The legal events' motion records (pnr.place.motion) reach the end card."""
+        passed = dict(passed=True, opens=0, violations=0, vias=2, copper_length_mm=8.0)
+        motion = dict(moved=1, count=2, sum_mm=0.75, max_mm=0.5, topology=1.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            make_trace(Path(tmp) / "t", passed, motion=motion)
+            loaded = Trace(Path(tmp) / "t")
+            board = storyboard.build(loaded)
+            end = board["scenes"][-1]["result"]["legal_motion"]
+            self.assertEqual((end["moved"], end["count"]), (1, 2))
+            frames = Timeline(loaded, board, max_seconds=4).frames
+            renderer = Renderer(loaded.header, board["subject"], width=480)
+            renderer.frame(frames[-1][0])
+        self.assertTrue(
+            any("legalization moved 1 of 2 parts (0.8 mm)" in s for s in renderer.strings),
+            renderer.strings,
+        )
+        self.assertEqual(
+            render_mod.motion_text(
+                dict(block=dict(moved=2, count=16, sum_mm=1.25), top=dict(moved=0, count=5))
+            ),
+            "legalization moved in blocks 2 of 16 (1.2 mm), at top level 0 of 5 (0.0 mm)",
+        )
+        self.assertEqual(render_mod.motion_text(None), "")
+
+    def test_detailed_placement_is_its_own_segment_and_end_card_line(self):
+        passed = dict(passed=True, opens=0, violations=0, vias=2, copper_length_mm=8.0)
+        record = dict(moves=dict(turn=1, slide=1, compact=2), moved=2, wire_saved=1.25)
+        with tempfile.TemporaryDirectory() as tmp:
+            make_trace(Path(tmp) / "t", passed, detail=record)
+            loaded = Trace(Path(tmp) / "t")
+            board = storyboard.build(loaded)
+            end = board["scenes"][-1]["result"]["detail_motion"]
+            self.assertEqual((end["moved"], end["moves"]["slide"]), (2, 1))
+            timeline = Timeline(loaded, board, max_seconds=6)
+            phases = [view.phase for view, _ms in timeline.frames]
+            self.assertIn("detailed-placement", phases)
+            self.assertLess(phases.index("legalization"), phases.index("detailed-placement"))
+            renderer = Renderer(loaded.header, board["subject"], width=480)
+            renderer.frame(timeline.frames[-1][0])
+        line = "detailed placement moved 2 parts: 2 compacted, 1 turn, 1 slide, wire -1.2 mm"
+        self.assertIn(line, renderer.strings)
+        self.assertEqual(render_mod.detail_text(None), "")
+        self.assertEqual(render_mod.detail_text(dict(moves=dict(turn=0), moved=0)), "")
 
     def test_gif_keeps_the_signal_colours(self):
         board = storyboard.build(self.trace)

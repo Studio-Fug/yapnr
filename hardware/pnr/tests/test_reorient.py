@@ -176,6 +176,27 @@ class ExclusionTest(unittest.TestCase):
 
 
 class PlacerTest(unittest.TestCase):
+    """The pass in the placer, with detailed placement (on with KEEP by default, whose turns take
+    its place: pnr.place.detail) off."""
+
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ, {"PNR_DETAIL_PLACE": "0"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_detailed_placement_takes_its_place(self):
+        from pnr.place import placer
+        from pnr.place import reorient as module
+
+        graph, constraints, rules = fixture.load("04-inverter-leds-8")
+        with mock.patch.dict(
+            os.environ, {"PNR_DETAIL_PLACE": "1", "PNR_LEGALIZE_REORIENT": "1"}
+        ), mock.patch.object(module, "reorient", side_effect=AssertionError("called")):
+            _placed, report = placer.place(
+                graph, constraints, seed=0, iters=60, spread=1.3, channel_rules=rules
+            )
+        self.assertIsNotNone(report.detail_motion)
+
     def test_placer_runs_the_pass_only_with_the_flag(self):
         from pnr.place import placer
         from pnr.place import reorient as module

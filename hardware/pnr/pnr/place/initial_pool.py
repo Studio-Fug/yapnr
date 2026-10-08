@@ -52,6 +52,46 @@ from .sides import apply_held, opposite
 from .sides import plan as side_plan
 from .sides import policy_of, same_footprint, stack_refs, under_body_sides
 
+# PNR_POOL_RELOCATION_SCREEN (legalize_flags.pool_relocation_screen): a start whose own
+# legalization relocates more than one part and more than this share of the movable parts is
+# kept out of the proxy shortlist, its diversity fill and the routed finalists, unless no other
+# legal start exists (wholesale_relocation). PNR_LEGALIZE_KEEP relocates only an occluded part
+# (docs/design/compact-placement.md 13.G); a start that forces it to relocate much of the board
+# is a pool defect, not a part property. The share is the upper edge of KEEP's own relocation
+# mode (compact-placement.md 13.J): over 42 logged KEEP pools (373 distinct starts), 321 starts
+# relocate nothing, 14 relocate at most 20 % (one or two occluded parts), 38 relocate 28 % to
+# 100 % (in 33 pools one or two such starts, the source start among them) and none lies
+# between 20 % and 28 %; no pool had every start above it. One part is always allowed: a
+# single fully occluded part is the owner's own relocation case, even on a five-part board.
+POOL_RELOCATION_FRACTION_THRESHOLD = 0.2
+# When every routed finalist leaves a connection open or a pair whose coupling the design
+# judges flawed (``unfinished``), the next candidates by the proxy screen are routed too, at
+# most this many: the screen does not see pair coupling, and a pool that commits to a flawed
+# finalist fails the gate (11-ufbga201-fanout-6L-SGSGPS-pairs seed 1: all three finalists had
+# the LVDS pair as legs or GND open; the next by the screen routed it coupled).
+EXTRA_FINALISTS = 2
+
+
+def unfinished(metrics) -> bool:
+    """Whether a routed finalist's screening metrics leave a connection open or a judged
+    pair flawed (``judged_pair_flaws``)."""
+    objective = list(metrics.get("objective") or [math.inf])
+    return objective[0] > 0 or metrics.get("judged_pair_flaws", 0) > 0
+
+
+def wholesale_relocation(prep, total_movable: int) -> bool:
+    """Whether a start's own legalization (``prep.legal_motion``) relocated more than one part
+    and more than :data:`POOL_RELOCATION_FRACTION_THRESHOLD` of the ``total_movable`` parts.
+    False without a ``relocated`` count (PNR_LEGALIZE_KEEP off, or a source incumbent / basin
+    fallback that recorded no motion) and with PNR_POOL_RELOCATION_SCREEN off."""
+    if not legalize_flags.pool_relocation_screen():
+        return False
+    motion = getattr(prep, "legal_motion", None) or {}
+    relocated = motion.get("relocated")
+    if relocated is None or total_movable <= 0:
+        return False
+    return relocated > 1 and relocated / total_movable > POOL_RELOCATION_FRACTION_THRESHOLD
+
 
 @dataclass(frozen=True)
 class InitialPoolConfig:
@@ -680,13 +720,40 @@ def _route_metrics(board):
         out["length_unmatched"] = sum(
             1 for r in report if r.get("status") in ("length_unmatched", "tuning_error")
         )
+    coupled = (getattr(board, "escape_diagnostics", None) or {}).get("coupled_pairs")
+    if coupled:
+        # Declared pairs the coupled router (board.route_pairs: coupled) left as two legs: the
+        # board's gap and uncoupled-length rules will not hold (route_rank).
+        out["pairs_uncoupled"] = sum(
+            1 for row in (coupled.get("pairs") or {}).values() if row.get("status") == "legs"
+        )
+        # Coupled pairs whose coupling the design judges with a stretch parallel to the mate
+        # off the gap (pair_route's gap_breaks): KiCad's diff_pair_gap rule fails them too
+        # (route_rank).
+        # Pairs the design judges (pair_route.judged) left as legs or off the gap: the
+        # gate fails them (unfinished).
+        out["judged_pair_flaws"] = sum(
+            1
+            for row in (coupled.get("pairs") or {}).values()
+            if row.get("coupling_judged") and (row.get("status") == "legs" or row.get("gap_breaks"))
+        )
+        out["pairs_gap"] = sum(
+            1
+            for row in (coupled.get("pairs") or {}).values()
+            if row.get("status") == "coupled"
+            and row.get("coupling_judged")
+            and row.get("gap_breaks")
+        )
     return out
 
 
 def route_rank(metrics) -> tuple:
     """Sort key of routed candidates: missing connections, unresolved nets, then
     declared pairs / groups outside their budgets (``length_unmatched``, only when
-    the design declares any), then vias and copper length (the ``objective``).
+    the design declares any) together with the declared pairs the coupled router left as
+    two legs (``pairs_uncoupled``, only under ``board.route_pairs: coupled``: their gap and
+    uncoupled-length rules fail) and the coupled ones with a stretch off the gap
+    (``pairs_gap``), then vias and copper length (the ``objective``).
 
     PNR_COMPACT ``RANK``: a record carrying the compactness ``bucket``
     (:func:`pnr.place.compact.rank_bucket`) ranks it after every completion key and the
@@ -694,7 +761,11 @@ def route_rank(metrics) -> tuple:
     but a via is not. Under PNR_SHRINK (the outline follows the bounding box) the
     bucket ranks before the vias. A record without one is keyed as before."""
     objective = list(metrics.get("objective") or [math.inf])
-    head = tuple(objective[:2]) + (metrics.get("length_unmatched", 0),)
+    head = tuple(objective[:2]) + (
+        metrics.get("length_unmatched", 0)
+        + metrics.get("pairs_uncoupled", 0)
+        + metrics.get("pairs_gap", 0),
+    )
     if "bucket" not in metrics:
         return head + tuple(objective[2:])
     if compact.shrink_enabled():
@@ -878,6 +949,12 @@ def select_initial_placement(
                     hpwl_mm=hpwl(placed),
                     cheap_score=cheap_score(placed, rules),
                 )
+                relocated = (getattr(prep, "legal_motion", None) or {}).get("relocated")
+                if relocated is not None:
+                    record["relocated"] = relocated
+                if wholesale_relocation(prep, len(movable_refs)):
+                    # Kept out of the shortlists below unless no other legal start exists.
+                    record["wholesale_relocation"] = True
                 if plan.active:
                     record["other_side"] = sorted(
                         c.ref for c in placed.components if c.side != plan.source.get(c.ref)
@@ -926,10 +1003,17 @@ def select_initial_placement(
         if root:
             (root / "report.json").write_text(json.dumps(report, indent=2))
         raise LegalizationError("Initial placement pool exhausted without a legal candidate")
+    # PNR_POOL_RELOCATION_SCREEN: a start whose own legalization relocated much of the board
+    # (wholesale_relocation) enters no shortlist, diversity fill or finalist routing while
+    # another legal start exists.
+    screened = [c for c in legal if not c["record"].get("wholesale_relocation")]
+    pool = screened or legal
+    if len(pool) < len(legal):
+        report["relocation_screened"] = sorted(c["id"] for c in legal if c not in pool)
     # Always keep the conventional initial result if legal; if it fails, retain
     # the first legal source/global result as the reference candidate.
-    baseline = next((c for c in legal if c["id"] == "start-00"), legal[0])
-    incumbent = next((c for c in legal if c["record"]["kind"] == "source-incumbent"), None)
+    baseline = next((c for c in pool if c["id"] == "start-00"), pool[0])
+    incumbent = next((c for c in pool if c["record"]["kind"] == "source-incumbent"), None)
     mandatory = [baseline["id"]]
     if incumbent and incumbent["id"] not in mandatory and config.route_finalists > 1:
         mandatory.append(incumbent["id"])
@@ -944,10 +1028,10 @@ def select_initial_placement(
         return keep_other_side(pool, required, key, plan)
 
     proxy_candidates = diverse_shortlist(
-        legal,
+        pool,
         config.proxy_budget,
         "cheap_score",
-        mandatory=with_other_side(legal, mandatory, "cheap_score"),
+        mandatory=with_other_side(pool, mandatory, "cheap_score"),
         refs=movable_refs,
     )
     for candidate in proxy_candidates:
@@ -1032,12 +1116,18 @@ def select_initial_placement(
             (root / "report.json").write_text(json.dumps(report, indent=2))
         return recommendation["graph"], recommendation["prep"], None, report
     evaluated = []
-    for candidate in finalists:
+    # The finalists, then (unfinished) the next by the proxy screen, EXTRA_FINALISTS at most.
+    queue = list(finalists)
+    spare = sorted(
+        (c for c in proxy_candidates if c not in finalists and math.isfinite(c["proxy_score"])),
+        key=lambda c: (c["proxy_score"], c["id"]),
+    )
+    for candidate in queue:
         name = candidate["id"]
         record = candidate["record"]
         print(
             "Initial placement %s: detailed route finalist (%d/%d)"
-            % (name, len(evaluated) + 1, len(finalists)),
+            % (name, len(evaluated) + 1, len(queue)),
             flush=True,
         )
         t = time.monotonic()
@@ -1117,6 +1207,15 @@ def select_initial_placement(
                     indent=2,
                 )
             )
+        if (
+            candidate is queue[-1]
+            and spare
+            and len(queue) - len(finalists) < EXTRA_FINALISTS
+            and all(unfinished(c["metrics"]) for c in evaluated)
+        ):
+            extra = spare.pop(0)
+            queue.append(extra)
+            report.setdefault("extra_finalists", []).append(extra["id"])
     chosen = min(evaluated, key=lambda c: (route_rank(c["metrics"]), c["id"]))
     if _trace.current() is not None:  # PNR_TRACE_DIR only
         _trace.select(

@@ -122,6 +122,10 @@ def run_trial(
                     sg, sc, seed=seed, iters=iters, orient=True, channel_rules=sr
                 )
                 legal = report.legal
+                if report.legal_motion is not None:
+                    rec["legal_motion"] = report.legal_motion
+                if report.detail_motion is not None:
+                    rec["detail_motion"] = report.detail_motion
             if trace_id and not legal:
                 _trace.note(status="illegal")
         rec["legal"] = legal

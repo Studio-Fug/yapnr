@@ -694,7 +694,8 @@ class Renderer:
     def _end_card(self, image, card):
         result = card.get("result") or {}
         x, y, w, h = self.board_box
-        panel_h = 64
+        detailed = detail_text(result.get("detail_motion"))
+        panel_h = 82 if detailed else 64
         top = y + h - panel_h
         overlay = Image.new("RGBA", (w, panel_h), rgb(theme.BACKGROUND) + (215,))
         region = image.crop((x, top, x + w, top + panel_h)).convert("RGBA")
@@ -721,6 +722,9 @@ class Renderer:
             metrics.append("%.1f mm copper" % result["copper_length_mm"])
         if self.subject.get("seed") is not None:
             metrics.append("seed %s" % self.subject["seed"])
+        moved = motion_text(result.get("legal_motion"))
+        if moved:
+            metrics.append(moved)
         rejected = card.get("rejected") or {}
         if rejected:
             parts = []
@@ -733,6 +737,79 @@ class Renderer:
         self.strings.update((verdict, line))
         draw.text((x + 14, top + 20), verdict, fill=rgb(color), font=font(size), anchor="lm")
         draw.text((x + 14, top + 44), line, fill=rgb(theme.MUTED), font=font(12), anchor="lm")
+        if detailed:
+            detailed = safe_text(detailed)
+            self.strings.add(detailed)
+            draw.text(
+                (x + 14, top + 62), detailed, fill=rgb(theme.MUTED), font=font(12), anchor="lm"
+            )
+
+
+def motion_text(motion):
+    """The end card's legalization line: how many parts the legalizer moved from their global
+    poses and how far in all (``legal_motion`` of the storyboard's end scene: one record, or the
+    ``block`` and ``top`` records of a hierarchical case); "" without one."""
+    if not isinstance(motion, dict):
+        return ""
+
+    def one(m, label):
+        if not isinstance(m, dict) or "count" not in m:
+            return None
+        return "%s%d of %d (%.1f mm)" % (
+            label,
+            int(m.get("moved") or 0),
+            int(m["count"]),
+            float(m.get("sum_mm") or 0.0),
+        )
+
+    if "count" in motion:
+        return "legalization moved %d of %d parts (%.1f mm)" % (
+            int(motion.get("moved") or 0),
+            int(motion["count"]),
+            float(motion.get("sum_mm") or 0.0),
+        )
+    parts = [
+        t
+        for t in (one(motion.get("block"), "in blocks "), one(motion.get("top"), "at top level "))
+        if t
+    ]
+    return ("legalization moved " + ", ".join(parts)) if parts else ""
+
+
+def detail_text(motion):
+    """The end card's detailed-placement line: the parts the pass moved, its moves by kind and
+    the wiring it saved (``detail_motion`` of the end scene: one record, or the ``block`` and
+    ``top`` records of a hierarchical case); "" without one or when it moved nothing."""
+    if not isinstance(motion, dict):
+        return ""
+    records = [motion] if "moves" in motion else [motion.get(k) for k in ("block", "top")]
+    records = [r for r in records if isinstance(r, dict) and isinstance(r.get("moves"), dict)]
+    if not records:
+        return ""
+    moves = {}
+    for r in records:
+        for k, v in r["moves"].items():
+            moves[k] = moves.get(k, 0) + int(v or 0)
+    moved = sum(int(r.get("moved") or 0) for r in records)
+    if not moved:
+        return ""
+    saved = sum(float(r.get("wire_saved") or 0.0) for r in records)
+    kinds = [
+        "%d %s" % (moves[k], one if moves[k] == 1 else many)
+        for k, one, many in (
+            ("compact", "compacted", "compacted"),
+            ("turn", "turn", "turns"),
+            ("slide", "slide", "slides"),
+            ("swap", "swap", "swaps"),
+            ("wrong_side", "wrong-side move", "wrong-side moves"),
+        )
+        if moves.get(k)
+    ]
+    return "detailed placement moved %d parts: %s, wire -%.1f mm" % (
+        moved,
+        ", ".join(kinds),
+        saved,
+    )
 
 
 def _rule_names(rules, most=2):

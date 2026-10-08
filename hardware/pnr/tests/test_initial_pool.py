@@ -12,12 +12,18 @@ from unittest.mock import patch
 from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.place.initial_pool import (
+    EXTRA_FINALISTS,
+    POOL_RELOCATION_FRACTION_THRESHOLD,
     InitialPoolConfig,
+    _route_metrics,
     diverse_shortlist,
     initial_starts,
     pose_distance,
     preserve_source_locks,
+    route_rank,
     select_initial_placement,
+    unfinished,
+    wholesale_relocation,
 )
 from pnr.place.model import global_place
 from pnr.place.placer import PlacementReport
@@ -304,6 +310,54 @@ class InitialStartsTest(unittest.TestCase):
                 InitialPoolConfig(**kwargs)
 
 
+class PairCouplingRankTest(unittest.TestCase):
+    def test_a_pair_left_as_legs_ranks_after_a_coupled_one(self):
+        # board.route_pairs: coupled: a finalist whose declared pair fell back to two legs
+        # (KiCad's gap and uncoupled-length rules fail) ranks after one routed coupled, ahead
+        # of the vias and copper (11-ufbga201-fanout-6L-SGSGPS-pairs seed 1 under
+        # PNR_LEGALIZE_KEEP picked the fewer-vias finalist with its LVDS pair as legs).
+        def board(status, vias):
+            return NS(
+                result=RouteResult({}, [], 1),
+                deferred_nets=set(),
+                tracks=[],
+                vias=[None] * vias,
+                escape_diagnostics=dict(
+                    coupled_pairs=dict(pairs=dict(lvds=dict(status=status)), groups=[])
+                ),
+            )
+
+        legs, coupled = _route_metrics(board("legs", 134)), _route_metrics(board("coupled", 139))
+        self.assertEqual((legs["pairs_uncoupled"], coupled["pairs_uncoupled"]), (1, 0))
+        self.assertLess(route_rank(coupled), route_rank(legs))
+        # Without the coupled router's report the key is the previous one.
+        plain = _route_metrics(
+            NS(result=RouteResult({}, [], 1), deferred_nets=set(), tracks=[], vias=[])
+        )
+        self.assertNotIn("pairs_uncoupled", plain)
+
+    def test_a_coupled_pair_off_its_gap_ranks_after_a_clean_one(self):
+        # A coupled pair whose fanout runs parallel to the mate's lane off the gap (pair_route's
+        # gap_breaks) fails KiCad's diff_pair_gap rule as a pair left as legs does (seed 9).
+        def board(breaks, vias):
+            row = dict(status="coupled", gap_breaks=breaks, coupling_judged=True)
+            return NS(
+                result=RouteResult({}, [], 1),
+                deferred_nets=set(),
+                tracks=[],
+                vias=[None] * vias,
+                escape_diagnostics=dict(coupled_pairs=dict(pairs=dict(lvds=row), groups=[])),
+            )
+
+        broken, clean = _route_metrics(board(2, 137)), _route_metrics(board(0, 140))
+        self.assertEqual((broken["pairs_gap"], clean["pairs_gap"]), (1, 0))
+        self.assertLess(route_rank(clean), route_rank(broken))
+        # A pair whose coupling the design does not judge keeps the previous key.
+        free = board(2, 137)
+        free.escape_diagnostics["coupled_pairs"]["pairs"]["lvds"]["coupling_judged"] = False
+        self.assertEqual(_route_metrics(free)["pairs_gap"], 0)
+
+
 class InitialSelectionTest(unittest.TestCase):
     def test_routed_evidence_outvotes_proxy_and_baseline_has_same_budget(self):
         graph, constraints = fixture()
@@ -362,6 +416,56 @@ class InitialSelectionTest(unittest.TestCase):
             self.assertFalse(report["plateau_observed"])
             self.assertEqual(graph.to_json(), before)
             self.assertEqual(chosen.component("LOCKED").pos, (15, 12))
+
+    def test_unfinished_finalists_route_the_next_by_the_screen(self):
+        # Every finalist leaves a connection open: the next candidates by the proxy screen are
+        # routed too (EXTRA_FINALISTS at most), and the first complete one is chosen.
+        graph, constraints = fixture()
+        routed_at = []
+
+        def placement(g, c, **kw):
+            out = copy.deepcopy(g)
+            index = (kw["seed"] // 104729) % 8
+            out.component("A").pos = (5 + index, 4)
+            out.component("B").pos = (12 - index * 0.5, 8)
+            return out, PlacementReport(20, 16, 10, 10)
+
+        def routed(g, c, r, **kw):
+            routed_at.append(g.component("A").pos[0])
+            # Only the fifth-best placement by the screen routes completely.
+            missing = 0 if len(routed_at) == 5 else 1
+            net = RoutedNet("N", remaining_connections=missing)
+            return NS(
+                result=RouteResult({"N": net}, ["N"] if missing else [], 1),
+                deferred_nets=set(),
+                tracks=[],
+                vias=[],
+                escape_diagnostics={},
+            )
+
+        with patch("pnr.place.initial_pool.place", side_effect=placement), patch(
+            "pnr.place.capacity_proxy.cheap_score", side_effect=lambda g, r: g.component("A").pos[0]
+        ), patch(
+            "pnr.place.capacity_proxy.score",
+            side_effect=lambda g, r, **kw: {"score": g.component("A").pos[0]},
+        ), patch(
+            "pnr.route.detail.router.route_board", side_effect=routed
+        ):
+            _chosen, _prep, _route, report = select_initial_placement(
+                graph,
+                constraints,
+                {"layers": 2},
+                config=InitialPoolConfig(starts=8, route_finalists=3, proxy_budget=8),
+                iters=5,
+                route_iters=7,
+                pitch=0.25,
+            )
+        self.assertEqual(report["detailed_evaluations"], 3 + EXTRA_FINALISTS)
+        self.assertEqual(len(report["extra_finalists"]), EXTRA_FINALISTS)
+        self.assertEqual(report["selected"], report["route_finalists"][4])
+        self.assertTrue(unfinished(dict(objective=[1, 1, 0, 0.0])))
+        self.assertTrue(unfinished(dict(objective=[0, 0, 0, 0.0], judged_pair_flaws=1)))
+        self.assertFalse(unfinished(dict(objective=[0, 0, 0, 0.0], pairs_uncoupled=1)))
 
     def test_candidates_changing_pad_net_are_rejected_before_route(self):
         graph, constraints = fixture()
@@ -436,6 +540,97 @@ class InitialSelectionTest(unittest.TestCase):
         route_again.assert_not_called()
         self.assertIs(report.detail_result, route)
         self.assertIs(report.initial_pool, pool_report)
+
+
+class PoolRelocationScreenTest(unittest.TestCase):
+    """PNR_POOL_RELOCATION_SCREEN (review of #64/#70: the pool picked a start whose
+    PNR_LEGALIZE_KEEP legalization relocated the whole board, not only the occluded part the
+    owner's principle expects -- 11-ufbga201-fanout-6L-SGSGPS-rails s0, 07-chaser-20-4L-SGPS
+    s0; the earlier cheap_score penalty never kept it out of the diversity fill)."""
+
+    def test_wholesale_needs_more_than_one_part_and_more_than_the_share(self):
+        prep = PlacementReport(20, 16, 10, 10)
+        self.assertFalse(wholesale_relocation(prep, total_movable=10))  # no motion recorded
+        prep.legal_motion = {"relocated": 0}
+        self.assertFalse(wholesale_relocation(prep, total_movable=10))
+        prep.legal_motion = {"relocated": 2}  # 20 %: exactly the threshold
+        self.assertAlmostEqual(POOL_RELOCATION_FRACTION_THRESHOLD, 0.2)
+        self.assertFalse(wholesale_relocation(prep, total_movable=10))
+        prep.legal_motion = {"relocated": 3}
+        self.assertTrue(wholesale_relocation(prep, total_movable=10))
+        prep.legal_motion = {"relocated": 1}  # one occluded part, even on a two-part board
+        self.assertFalse(wholesale_relocation(prep, total_movable=2))
+        prep.legal_motion = {"relocated": 10}
+        with patch.dict(os.environ, {"PNR_POOL_RELOCATION_SCREEN": "0"}):
+            self.assertFalse(wholesale_relocation(prep, total_movable=10))
+        with patch.dict(os.environ, {"PNR_LEGALIZE_KEEP": "0"}):
+            self.assertFalse(wholesale_relocation(prep, total_movable=10))
+
+    def run_pool(self, wholesale_calls):
+        """select_initial_placement on the fixture; place() call numbers in
+        ``wholesale_calls`` relocate every movable part and screen best (cheap and proxy)."""
+        graph, constraints = fixture()
+        calls = []
+
+        def placement(g, c, **kw):
+            calls.append(None)
+            wholesale = len(calls) in wholesale_calls
+            out = copy.deepcopy(g)
+            out.component("A").pos = (6, 4) if wholesale else (5 - 0.1 * len(calls), 4)
+            prep = PlacementReport(20, 16, 10, 10)
+            prep.legal_motion = {"relocated": 2 if wholesale else 0}
+            return out, prep
+
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True), patch(
+            "pnr.place.initial_pool.place", side_effect=placement
+        ), patch(
+            "pnr.place.capacity_proxy.cheap_score",
+            side_effect=lambda g, r: 1.0 if g.component("A").pos[0] == 6 else 10.0,
+        ), patch(
+            "pnr.place.capacity_proxy.score",
+            side_effect=lambda g, r, **kw: {"score": 1.0 if g.component("A").pos[0] == 6 else 5.0},
+        ), patch(
+            "pnr.route.detail.router.route_board",
+            side_effect=lambda g, c, r, **kw: NS(
+                result=RouteResult({"N": RoutedNet("N", remaining_connections=0)}, [], 1),
+                deferred_nets=set(),
+                tracks=[],
+                vias=[],
+                escape_diagnostics={},
+            ),
+        ):
+            select_initial_placement(
+                graph,
+                constraints,
+                {"layers": 2},
+                config=InitialPoolConfig(starts=5, route_finalists=2, proxy_budget=3),
+                iters=5,
+                route_iters=7,
+                pitch=0.25,
+                output=tmp,
+            )
+            return json.loads((Path(tmp) / "report.json").read_text())
+
+    def test_a_wholesale_start_enters_no_shortlist_while_another_legal_start_exists(self):
+        """It screens best on both the cheap and the proxy screen, and would take the best
+        screen's finalist slot; the screen keeps it out of the proxy shortlist, the diversity
+        fill and the routed finalists."""
+        report = self.run_pool({2})
+        flagged = [c for c in report["candidates"] if c.get("wholesale_relocation")]
+        self.assertEqual(len(flagged), 1)
+        self.assertEqual(flagged[0]["relocated"], 2)
+        self.assertEqual(report["relocation_screened"], [flagged[0]["id"]])
+        self.assertNotIn("proxy_evaluated", flagged[0])
+        self.assertNotIn(flagged[0]["id"], report["route_finalists"])
+        self.assertEqual(len(report["route_finalists"]), 2)
+
+    def test_every_start_wholesale_still_selects_one(self):
+        # The source incumbent records no motion; flag it too, so no other legal start exists.
+        with patch("pnr.place.initial_pool.wholesale_relocation", lambda prep, n: True):
+            report = self.run_pool(set(range(1, 20)))
+        self.assertTrue(all(c.get("wholesale_relocation") for c in report["candidates"]))
+        self.assertNotIn("relocation_screened", report)
+        self.assertTrue(report["route_finalists"])
 
 
 if __name__ == "__main__":

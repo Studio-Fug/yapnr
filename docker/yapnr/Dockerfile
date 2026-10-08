@@ -155,6 +155,7 @@ RUN --mount=type=bind,source=docker/yapnr,target=/tmp/yapnr-agent \
     ln -s /opt/codex/codex-path/rg /usr/local/bin/rg; \
     codex --version; \
     opencode --version; \
+    rm -rf /tmp/opencode; \
     mkdir -p /usr/share/doc/yapnr/licenses/codex; \
     cp /tmp/yapnr-agent/codex.lock.json /usr/share/doc/yapnr/codex.lock.json; \
     cp /tmp/yapnr-agent/opencode.lock.json /usr/share/doc/yapnr/opencode.lock.json; \

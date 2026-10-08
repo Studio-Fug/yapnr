@@ -30,18 +30,22 @@ FAB_PROFILES = ("legacy", "jlc-pofv")
 MAZE_KERNELS = ("native", "packed")
 
 # Seconds per case on the development Mac (Apple M4 performance core) with the initial pool of
-# 8 starts and 3 finalists, from docs/animations/ladder-results.json (2026-10). Without the pool a
-# cell takes about 0.6 of this. Unknown cases (hard rungs, showcases) assume 900 s until
-# ``[config] reference_seconds`` or a calibration says otherwise.
+# 8 starts and 3 finalists, from docs/animations/ladder-results.json (2026-10-06, under the
+# ladder-v2 defaults: compact, gloss, legacy fab profile). These replace an earlier set measured
+# without compact and gloss (finding 3, ladder-v2 review): gloss's ~20 s fixed overhead makes the
+# small cases slower, while compact's legalizer speedups make the dense ones much faster. Without
+# the pool a cell takes about 0.6 of this (unverified against the current engine). Unknown cases
+# (hard rungs, showcases) assume 900 s until ``[config] reference_seconds`` or a calibration says
+# otherwise.
 MAC_SECONDS_WITH_POOL = {
-    "01-connector-led-2": 8.7,
-    "02-resistor-led-3": 8.0,
-    "03-branched-leds-5": 8.7,
-    "04-inverter-leds-8": 17.1,
-    "05-timer-led-10": 30.5,
-    "06-chaser-14": 67.5,
-    "07-chaser-20": 125.8,
-    "08-chaser-20-plane": 202.4,
+    "01-connector-led-2": 18.3,
+    "02-resistor-led-3": 18.4,
+    "03-branched-leds-5": 21.0,
+    "04-inverter-leds-8": 26.6,
+    "05-timer-led-10": 29.0,
+    "06-chaser-14": 34.1,
+    "07-chaser-20": 62.7,
+    "08-chaser-20-plane": 40.1,
 }
 UNKNOWN_CASE_SECONDS = 900.0
 NO_POOL_FACTOR = 0.6
@@ -76,6 +80,8 @@ OPTIONS = {
     "legalize_reorient_wire": bool,
     "legalize_channel_clearance_fab": bool,
     "line_satellites": bool,
+    "legalize_keep": bool,
+    "detail_place": bool,
     "channel_layers": bool,
     "power_first": bool,
     "route_pairs_diff_pairs": bool,
@@ -97,10 +103,7 @@ FLAGS = {
     "showcases": "--showcases",
     # The hard rungs (hardware/pnr/regression/hard_rungs.py) become selectable cases.
     "hard": "--hard",
-    # PNR_COMPACT / PNR_SHRINK (docs/design/compact-placement.md) and PNR_GLOSS.
-    "compact": "--compact",
     "shrink": "--shrink",
-    "gloss": "--gloss",
     "gloss_measure": "--gloss-measure",
     # The legalizer and global-placement switches (hardware/pnr/pnr/legalize_flags.py).
     "gp_polish": "--gp-polish",
@@ -110,11 +113,26 @@ FLAGS = {
     "channel_layers": "--channel-layers",
     # ladder-v2 ab-pairs-pool A/B.
     "power_first": "--power-first",
-    "route_pairs_diff_pairs": "--route-pairs-diff-pairs",
     # PNR_MACRO_HULL (hardware/pnr/pnr/place/hull.py).
     "macro_hull": "--macro-hull",
     # The exact-separation recovery beside late plane drops (router-keepouts).
     "exact_late_room": "--exact-late-room",
+}
+# Ladder v2 (docs/decisions.md): these default on in the runner itself, so omitting the key
+# takes run.py's own default (on); a campaign must set the key to ``false`` explicitly to get
+# the old/off behaviour, which this emits as the runner's --no-<flag>.
+DEFAULT_ON_FLAGS = {
+    "compact": "--compact",
+    "gloss": "--gloss",
+    "route_pairs_diff_pairs": "--route-pairs-diff-pairs",
+    # On by default in the engine itself (pnr.legalize_flags), with or without --compact; a
+    # campaign must set this to false explicitly to A/B it, since an ambient PNR_LEGALIZE_KEEP=0
+    # would otherwise be stripped by the runner's own scrubbed_suite_env (finding 2, ladder-v2
+    # review).
+    "legalize_keep": "--legalize-keep",
+    # PNR_DETAIL_PLACE (pnr.place.detail): true/false emit --detail-place/--no-detail-place;
+    # omitted, the engine's default (on with legalize_keep, itself on by default).
+    "detail_place": "--detail-place",
 }
 # Weighted legalizer switches: option -> runner flag taking the weight.
 WEIGHTS = {
@@ -159,20 +177,34 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
         str(options.get("rounds", 4)),
         "--timeout",
         str(options.get("timeout", 600)),
-        "--fab-profile",
-        options.get("fab_profile", "legacy"),
     ]
+    # Omit --fab-profile entirely unless the campaign names one, so the runner's own default
+    # (legacy; docs/decisions.md, "New blocker") is the single source of truth instead of a
+    # second copy here.
+    if options.get("fab_profile") is not None:
+        args += ["--fab-profile", options["fab_profile"]]
     for key, flag in FLAGS.items():
         if options.get(key):
             args.append(flag)
-    if options.get("initial_pool"):
-        args += [
-            "--initial-pool",
-            "--initial-starts",
-            str(options.get("initial_starts", 8)),
-            "--initial-finalists",
-            str(options.get("initial_finalists", 3)),
-        ]
+    for key, flag in DEFAULT_ON_FLAGS.items():
+        value = options.get(key)
+        if value is False:
+            args.append(flag.replace("--", "--no-", 1))
+        elif value:
+            args.append(flag)
+    if options.get("initial_pool") is False:
+        args.append("--no-initial-pool")
+    else:
+        if (
+            options.get("initial_pool")
+            or options.get("initial_starts") is not None
+            or (options.get("initial_finalists") is not None)
+        ):
+            args.append("--initial-pool")
+        if options.get("initial_starts") is not None:
+            args += ["--initial-starts", str(options["initial_starts"])]
+        if options.get("initial_finalists") is not None:
+            args += ["--initial-finalists", str(options["initial_finalists"])]
     if options.get("maze_kernel"):
         args += ["--maze-kernel", str(options["maze_kernel"])]  # packed or native
     if options.get("detail_pitch_mm") is not None:

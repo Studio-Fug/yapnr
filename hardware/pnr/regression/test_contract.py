@@ -28,6 +28,7 @@ from run import (
     gloss_gate,
     gloss_stage,
     gloss_summary,
+    legalize_environment,
     live_emit,
     measure_summary,
     new_result,
@@ -341,13 +342,35 @@ class RunnerContract(unittest.TestCase):
         lines = out.stdout.splitlines()
         self.assertTrue(all(re.match(r"^[^=\s]+==\S+$", line) for line in lines), lines[:3])
 
-    def test_the_ladder_is_judged_under_the_fixtures_own_rules_by_default(self):
+    def test_the_ladder_is_judged_under_the_fixtures_profile_by_default(self):
+        # ladder-v2 (docs/decisions.md, "New blocker"): jlc-pofv was tried as the runner's own
+        # default, but the phase-1 regression found it breaks 11 manual-lane hard rungs that pass
+        # under legacy, so the default stays the fixtures' own block until the engine is fixed;
+        # --fab-profile jlc-pofv opts in.
         self.assertEqual(parser().parse_args(["--out", "x"]).fab_profile, "legacy")
         self.assertEqual(
-            parser().parse_args(["--out", "x", "--fab-profile", "jlc-pofv"]).fab_profile, "jlc-pofv"
+            parser().parse_args(["--out", "x", "--fab-profile", "jlc-pofv"]).fab_profile,
+            "jlc-pofv",
         )
         with self.assertRaises(SystemExit):
             parser().parse_args(["--out", "x", "--fab-profile", "other"])
+
+    def test_legalize_keep_defaults_on_and_can_be_turned_off(self):
+        # Finding 2 (ladder-v2 review): there was no way to turn PNR_LEGALIZE_KEEP off through
+        # this runner or yapnr exp (an ambient PNR_LEGALIZE_KEEP=0 is stripped by
+        # scrubbed_suite_env); --no-legalize-keep is the fix.
+        self.assertTrue(parser().parse_args(["--out", "x"]).legalize_keep)
+        self.assertFalse(parser().parse_args(["--out", "x", "--no-legalize-keep"]).legalize_keep)
+        self.assertNotIn("PNR_LEGALIZE_KEEP", legalize_environment())
+        self.assertEqual(legalize_environment(legalize_keep=False)["PNR_LEGALIZE_KEEP"], "0")
+
+    def test_detail_place_is_the_engines_default_unless_a_flag_says(self):
+        self.assertIsNone(parser().parse_args(["--out", "x"]).detail_place)
+        self.assertTrue(parser().parse_args(["--out", "x", "--detail-place"]).detail_place)
+        self.assertFalse(parser().parse_args(["--out", "x", "--no-detail-place"]).detail_place)
+        self.assertNotIn("PNR_DETAIL_PLACE", legalize_environment())
+        self.assertEqual(legalize_environment(detail_place=True)["PNR_DETAIL_PLACE"], "1")
+        self.assertEqual(legalize_environment(detail_place=False)["PNR_DETAIL_PLACE"], "0")
 
     def test_a_case_that_declares_a_fab_profile_is_held_to_it(self):
         bga = dict(name="bga", fab_profile="jlc-6l-hdi")
@@ -423,8 +446,9 @@ class NativeTraceContract(unittest.TestCase):
             dense_run = json.loads((Path(tmp) / "dense" / "trace" / "run.json").read_text())
             self.assertEqual(dense_run["config"]["trace_placement_every"], 5)
             run = json.loads((root / "trace" / "run.json").read_text())
+            # ladder-v2: --initial-pool is on by default (docs/decisions.md).
             self.assertEqual(
-                (run["subject"]["case"], run["config"]["initial_pool"]), (spec["name"], False)
+                (run["subject"]["case"], run["config"]["initial_pool"]), (spec["name"], True)
             )
             self.assertNotIn("trace_placement_every", run["config"])  # recorded only when set
             recorder = trace.Recorder(root / "trace")
@@ -559,10 +583,13 @@ GLOSS_BOARD = (
 
 
 class GlossStageContract(unittest.TestCase):
-    """run.py --gloss (PNR_GLOSS, opt-in): one gated stage after refill, stubbed here."""
+    """run.py --gloss (PNR_GLOSS): one gated stage after refill, stubbed here. On by default
+    since ladder-v2 (docs/decisions.md); --no-gloss restores the plain runner path."""
 
-    def test_options_are_opt_in(self):
+    def test_on_by_default_no_gloss_turns_it_off(self):
         args = parser().parse_args(["--out", "x"])
+        self.assertEqual((args.gloss, args.gloss_flag, args.gloss_measure), (True, [], False))
+        args = parser().parse_args(["--out", "x", "--no-gloss"])
         self.assertEqual((args.gloss, args.gloss_flag, args.gloss_measure), (False, [], False))
         args = parser().parse_args(
             ["--out", "x", "--gloss", "--gloss-flag", "PNR_GLOSS_STEPS=dekink", "--gloss-measure"]

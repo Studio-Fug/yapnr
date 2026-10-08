@@ -1,9 +1,0 @@
-{
-  "schema": "yapnr-rf-forward/1",
-  "spec": "line-osh-w-w3p00-l20-w-nom",
-  "spec_sha256": "6a97b554cf3e21df03ab181912cb1d440353526eea82e4028a0b8e568b2a5cda",
-  "copper_mm": [[0.0, 20.0, -1.5, 1.5]],
-  "pixels": 960,
-  "what": "straight 3.0 mm line, 20 mm, loss line",
-  "substrate": "W-nom"
-}

@@ -1,0 +1,2815 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="Design: cloud and HPC experiment backends (GCP Batch, Slurm)" href="cloud-experiments.html"><link rel="prev" title="Design: RF microstrip inverse design by topology optimization" href="rf-topology-optimization.html">
+        <link rel="prefetch" href="../../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Design: fab-model test coupons - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../plane-partition.html">How plane partition works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ci-lanes.html">CI lanes and Bazel caches</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clearance-index-validation.html">Clearance index: integration validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hull-nest-validation.html">Hull nesting: validation status</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/design/rf-fab-coupons.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/design/rf-fab-coupons.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="design-fab-model-test-coupons">
+<h1>Design: fab-model test coupons<a class="headerlink" href="#design-fab-model-test-coupons" title="Link to this heading">¶</a></h1>
+<p>Status: <strong>implemented in part</strong> (2026-10-02) for the fab-model coupon item of
+<a class="reference external" href="https://github.com/Studio-Fug/yapnr/issues/32">issue #32</a>: the generator, boards A and B, the
+expected S-parameters, the extraction and the synthetic recovery are in <code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons</span></code>; the
+user guide <a class="reference internal" href="../rf-fab-coupons.html"><span class="std std-doc">docs/rf-fab-coupons.md</span></a> lists what differs from this design.
+Nothing is ordered. The numbers come from 2D quasi-static cross-section solves (scikit-fem P2, the
+FEA spike’s solver, <a class="reference internal" href="fea-integration.html#q2-capacitance-and-inductance"><span class="std std-ref">FEA design §5.3</span></a>) and
+from closed forms, as stated at each table; “est.” marks planning estimates and “unverified” marks
+vendor data that could not be checked against a datasheet. The implementation’s tests reproduce
+the line table of §4.3 and the conditioning table of §5.1 (§11.3).</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading">¶</a></h2>
+<p>The owner plans to fabricate a 5.8 GHz ISM transceiver (a separate design study under #32) and to
+validate it with a vector network analyzer (VNA). The models that yapnr’s RF design uses (the
+inverse-design solver of #29, the line formulas of PnR and SI) start from the fab’s nominal
+stackup, which is not accurate enough for 5.8 GHz: §3 shows that the solder mask alone moves a
+surface resonator by more than the width of the ISM band. This design adds <strong>test coupons</strong>: boards
+of stripline, microstrip and coplanar structures that are ordered from the same fab and stackup as
+the product, measured with a VNA, and fitted to give the as-built fab parameters with their
+uncertainties. The product design then starts from measured values, and its margins come from
+measured spreads.</p>
+<section id="what-the-coupons-determine">
+<h3>1.1 What the coupons determine<a class="headerlink" href="#what-the-coupons-determine" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Why it matters at 5.8 GHz</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>εr(f) of each dielectric (prepreg, core)</p></td>
+<td><p>resonator and filter centre frequencies, line delay</p></td>
+</tr>
+<tr class="row-odd"><td><p>tan δ(f) of each dielectric</p></td>
+<td><p>insertion loss, resonator Q, filter passband loss</p></td>
+</tr>
+<tr class="row-even"><td><p>dielectric thicknesses</p></td>
+<td><p>line impedance, coupling, the size of every distributed element</p></td>
+</tr>
+<tr class="row-odd"><td><p>copper thickness per layer</p></td>
+<td><p>impedance, conductor loss, DC resistance</p></td>
+</tr>
+<tr class="row-even"><td><p>etch (trace width lost per edge)</p></td>
+<td><p>impedance (the largest single term, §3), coupler gaps</p></td>
+</tr>
+<tr class="row-odd"><td><p>copper roughness</p></td>
+<td><p>conductor loss and, through internal inductance, apparent εr</p></td>
+</tr>
+<tr class="row-even"><td><p>solder mask (thickness × εr, loss)</p></td>
+<td><p>the largest phase unknown on outer layers (§3)</p></td>
+</tr>
+<tr class="row-odd"><td><p>connector, launch and via transitions</p></td>
+<td><p>de-embedding of product measurements, launch design</p></td>
+</tr>
+<tr class="row-even"><td><p>switch connector and u.FL test points</p></td>
+<td><p>de-embedding of the VNA access points on the product</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="requirements">
+<h3>1.2 Requirements<a class="headerlink" href="#requirements" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Frequency.</strong> The coupons are designed for 0.1–18 GHz and specified for 1–12 GHz: the 5.8 GHz
+band (5.725–5.875 GHz) with margin, and its second harmonic (11.6 GHz) when a lab VNA is
+available. A 6 GHz hobby VNA must still be able to use every structure up to 6 GHz.</p></li>
+<li><p><strong>Stackups.</strong> JLCPCB JLC04161H-7628 (4-layer, the typical yapnr target) and one 6-layer JLCPCB
+stackup that gives true stripline between two planes (§4.2). The generator is parametric in the
+stackup, so a later product stackup gets its own coupon board from the same code.</p></li>
+<li><p><strong>Same process as the product.</strong> Coupons are ordered with the product’s options (stackup id,
+impedance control, copper weights, finish, mask). Otherwise they measure a different process.</p></li>
+<li><p><strong>Hobby-lab measurable.</strong> A 2-port VNA, an SMA calibration kit, a torque wrench, a multimeter
+and a current source, optionally a microscope. No 4-port VNA, probe station or material fixture.</p></li>
+<li><p><strong>Open tools.</strong> scikit-rf (BSD-3) for calibration, scikit-fem (BSD-3) for the 2D model, the
+headless KiCad for the boards. AGPL-3.0-or-later code in yapnr; no vendor data beyond published
+facts.</p></li>
+<li><p><strong>Quantified.</strong> Every fitted value carries a standard uncertainty and its correlations, and the
+fit is shown to recover known parameters from synthetic data before anything is ordered (§10).</p></li>
+<li><p><strong>Feeds yapnr.</strong> The result updates the stackup model that PnR, SI, the FEA tables and the RF
+solver read (§8.9).</p></li>
+</ul>
+</section>
+<section id="non-goals">
+<h3>1.3 Non-goals<a class="headerlink" href="#non-goals" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Material-only test methods: clamped stripline (IPC-TM-650 2.5.5.5C), split cylinder (2.5.5.13)
+and SPDR (2.5.5.15) need laminate samples and resonator fixtures, not finished boards.</p></li>
+<li><p>Calibration-lab metrology. The aim is a fab model good enough for a first-pass product, with
+honest uncertainties, not traceable permittivity values.</p></li>
+<li><p>Through-thickness versus in-plane anisotropy beyond one weave check (§5.2), and EMC.</p></li>
+<li><p>Ordering. Agents never order boards or parts or contact vendors; the owner orders.</p></li>
+</ul>
+</section>
+</section>
+<section id="summary">
+<h2>2. Summary<a class="headerlink" href="#summary" title="Link to this heading">¶</a></h2>
+<pre  class="mermaid">
+        flowchart LR
+    nom[&quot;Nominal stackup&lt;br/&gt;JLC tables + priors&quot;] --&gt; gen[&quot;Coupon generator&lt;br/&gt;families, sticks, launches&quot;]
+    gen --&gt; exp[&quot;Expected S-parameters&lt;br/&gt;2D model, closed forms, FDTD&quot;]
+    gen --&gt; syn[&quot;Synthetic recovery&lt;br/&gt;perturb, simulate, noise, fit&quot;]
+    syn -- &quot;identifiable?&quot; --&gt; gen
+    gen --&gt; kicad[&quot;KiCad boards A and B&lt;br/&gt;DRC, gerbers, order notes&quot;]
+    kicad -- &quot;owner orders&quot; --&gt; fab[&quot;Fabricated coupons&quot;]
+    fab --&gt; meas[&quot;Measure&lt;br/&gt;SOLT, sticks, DC, microsection&quot;]
+    meas --&gt; cal[&quot;Two-tier multiline TRL&lt;br/&gt;γ(f), error boxes, Z0&quot;]
+    cal --&gt; fit[&quot;Joint fit&lt;br/&gt;εr, tanδ, h, t, etch, roughness, mask&quot;]
+    fit --&gt; held[&quot;Held-out checks&lt;br/&gt;rings, stubs, couplers&quot;]
+    fit --&gt; out[&quot;yapnr-stackup-fit/1&lt;br/&gt;values + covariance&quot;]
+    out --&gt; rules[&quot;rules['stackup']&lt;br/&gt;PnR, SI, FEA tables&quot;]
+    out --&gt; rf[&quot;yapnr.rf materials&lt;br/&gt;robust variants&quot;]
+    </pre><div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Topic</p></th>
+<th class="head"><p>Choice</p></th>
+<th class="head"><p>Reason</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Boards</p></td>
+<td><p>A: 4L JLC04161H-7628; B: 6L JLC06161H-2116C, the product stackup (JLC06161H-7628 as the alternative)</p></td>
+<td><p>the 4L target, and a 6L with the product’s stripline; B ties its own L1 with a mask-off line (§4.2)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Format</p></td>
+<td><p>“sticks”: every structure on its own break-out strip with an edge SMA at each end</p></td>
+<td><p>every port needs a board edge with room for the connector and wrench; sticks are measured independently</p></td>
+</tr>
+<tr class="row-even"><td><p>Calibration</p></td>
+<td><p>two tiers: SOLT at the cable ends, then multiline TRL on the board</p></td>
+<td><p>Jargon and Marks’ two-tier scheme for low-cost VNAs; removes connectors and launches from every structure</p></td>
+</tr>
+<tr class="row-odd"><td><p>Line lengths</p></td>
+<td><p>thru 20 mm (2 × 10 mm) plus lines ΔL = 2.5, 6.5, 16, 40 and 100 mm</p></td>
+<td><p>conditioning ≥ 0.95 over 1–12 GHz for every family; the 100 mm line doubles as the loss line (§5.1)</p></td>
+</tr>
+<tr class="row-even"><td><p>Separation</p></td>
+<td><p>width set, mask-off copies, a second line type, DC meanders, microsection</p></td>
+<td><p>each breaks one degeneracy of the line data (§8.8)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Forward model</p></td>
+<td><p>2D quasi-static RLGC per family; Djordjevic–Sarkar dielectric; causal roughness; closed-form discontinuities</p></td>
+<td><p>fast, accurate for uniform lines; held-out resonators test the model form</p></td>
+</tr>
+<tr class="row-even"><td><p>Connector</p></td>
+<td><p>Cinch 142-0701-851 edge SMA (18 GHz) by default; optionally one reusable clamp-on pair for the TRL sets</p></td>
+<td><p>soldered connectors differ between sticks, which TRL assumes away (§6.1)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Output</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr-stackup-fit/1</span></code>: values, covariance, provenance</p></td>
+<td><p>one record that <code class="docutils literal notranslate"><span class="pre">rules['stackup']</span></code> and the RF solver both read</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="why-the-fab-model-needs-measuring">
+<h2>3. Why the fab model needs measuring<a class="headerlink" href="#why-the-fab-model-needs-measuring" title="Link to this heading">¶</a></h2>
+<p>At 5.8 GHz a guided wavelength on the L1 lines is about 29 mm, the ISM band is 2.6 % wide, and a
+resonator’s frequency moves by half the relative change of its εeff. A 1 % error in εeff moves a
+5.8 GHz resonator by 29 MHz. The table gives the effect of each fab parameter on the 50 Ω lines
+of §4.3 (2D quasi-static, from the 50 Ω design point; the mask is conformal, 30 µm over substrate
+and 15 µm over copper, εr 3.8, JLC’s calculator values).</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Change</p></th>
+<th class="head"><p>P (L1 GCPW, masked): ΔZ0, Δεeff</p></th>
+<th class="head"><p>S (L3 stripline): ΔZ0, Δεeff</p></th>
+<th class="head"><p>Shift of a P resonator at 5.8 GHz</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>εr +0.2 (JLC gives no frequency for its εr)</p></td>
+<td><p>−0.85 Ω, +0.111</p></td>
+<td><p>−1.1 Ω, +0.200</p></td>
+<td><p>−99 MHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>etch 0.025 mm per edge (trace narrower, gaps wider)</p></td>
+<td><p>+6.1 Ω, ±0.000</p></td>
+<td><p>+6.2 Ω, ±0.001</p></td>
+<td><p>0</p></td>
+</tr>
+<tr class="row-even"><td><p>dielectric height +10 %</p></td>
+<td><p>+1.9 Ω, −0.037</p></td>
+<td><p>+1.7 Ω (prepreg), +0.7 Ω (core)</p></td>
+<td><p>+34 MHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>copper 35 → 50 µm (L1), 15 → 30 µm (L3)</p></td>
+<td><p>−1.3 Ω, −0.071</p></td>
+<td><p>−1.9 Ω, −0.003</p></td>
+<td><p>+66 MHz</p></td>
+</tr>
+<tr class="row-even"><td><p>mask removed</p></td>
+<td><p>+2.6 Ω, −0.312</p></td>
+<td><p>n/a</p></td>
+<td><p>+307 MHz</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Three conclusions follow:</p>
+<ol class="arabic simple">
+<li><p><strong>The mask is the largest unknown on outer layers.</strong> It moves L1 resonators by about 5 %,
+twice the width of the 150 MHz ISM band, and from phase alone it looks the same as a higher
+εr. Masked and unmasked copies of the same line separate the two.</p></li>
+<li><p><strong>Stripline phase depends only on εr.</strong> Width, etch and copper thickness move εeff by less than
+0.003, so the stripline’s delay measures the inner dielectrics directly, and its impedance
+then pins width and heights. On masked GCPW the etch does not move the phase either (the
+narrower trace and the wider, mask-filled gaps cancel).</p></li>
+<li><p><strong>Impedance is dominated by etch and height</strong>, which only a set of widths, a second line type
+and the DC resistance can separate (§8.8).</p></li>
+</ol>
+<p>JLCPCB’s published data leave most of this open [JLC impedance and capabilities pages]: εr values
+without a frequency (7628 prepreg 4.4, 3313 4.1, 2116 4.16, 1080 3.91, core 4.6), no loss
+tangent, no etch or trapezoid model, no roughness, impedance tolerance ±10 % (±5 % on request),
+track width ±20 %, board thickness ±10 %, and laminates from several suppliers (Nan Ya, KB,
+Shengyi and others), so the material can change between orders.</p>
+</section>
+<section id="stackups-boards-and-line-families">
+<h2>4. Stackups, boards and line families<a class="headerlink" href="#stackups-boards-and-line-families" title="Link to this heading">¶</a></h2>
+<section id="board-a-jlc04161h-7628-4-layers-1-6-mm">
+<h3>4.1 Board A: JLC04161H-7628 (4 layers, 1.6 mm)<a class="headerlink" href="#board-a-jlc04161h-7628-4-layers-1-6-mm" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Layer</p></th>
+<th class="head"><p>Material, thickness (mm)</p></th>
+<th class="head"><p>Use on the coupon</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>L1</p></td>
+<td><p>copper 0.035 (1 oz finished)</p></td>
+<td><p>every RF structure; launches</p></td>
+</tr>
+<tr class="row-odd"><td><p>–</p></td>
+<td><p>7628 prepreg 0.2104, εr 4.4</p></td>
+<td><p>the L1 dielectric</p></td>
+</tr>
+<tr class="row-even"><td><p>L2</p></td>
+<td><p>copper 0.0152 (0.5 oz)</p></td>
+<td><p>solid ground; cut out under the SMA pin pads (§6.2)</p></td>
+</tr>
+<tr class="row-odd"><td><p>–</p></td>
+<td><p>core 1.065, εr 4.6</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>L3</p></td>
+<td><p>copper 0.0152</p></td>
+<td><p>solid ground; the reference under the launch cut-outs</p></td>
+</tr>
+<tr class="row-odd"><td><p>–</p></td>
+<td><p>7628 prepreg 0.2104, εr 4.4</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>L4</p></td>
+<td><p>copper 0.035</p></td>
+<td><p>solid ground; connector ground tabs</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The inner planes are only removed on the DC stick, where L2 and L3 carry meanders (§5.2).</p>
+</section>
+<section id="board-b-jlc06161h-2116c-6-layers-1-6-mm">
+<h3>4.2 Board B: JLC06161H-2116C (6 layers, 1.6 mm)<a class="headerlink" href="#board-b-jlc06161h-2116c-6-layers-1-6-mm" title="Link to this heading">¶</a></h3>
+<p>Board B is built on the product’s stackup, JLC06161H-2116C (owner decision, below; 1.589 mm of
+published layers):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Layer</p></th>
+<th class="head"><p>Material, thickness (mm)</p></th>
+<th class="head"><p>Use on the coupon</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>L1</p></td>
+<td><p>copper 0.035</p></td>
+<td><p>launches; the L1 tie set (§5.3)</p></td>
+</tr>
+<tr class="row-odd"><td><p>–</p></td>
+<td><p>2 × 2116 prepreg 0.2464, εr 4.16</p></td>
+<td><p>the L1 dielectric (not board A’s 7628)</p></td>
+</tr>
+<tr class="row-even"><td><p>L2</p></td>
+<td><p>copper 0.0152</p></td>
+<td><p>ground (upper stripline plane)</p></td>
+</tr>
+<tr class="row-odd"><td><p>–</p></td>
+<td><p>core 0.30, εr 4.6</p></td>
+<td><p>above the stripline</p></td>
+</tr>
+<tr class="row-even"><td><p>L3</p></td>
+<td><p>copper 0.0152</p></td>
+<td><p><strong>stripline</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>–</p></td>
+<td><p>3 × 2116 prepreg 0.3658, εr 4.16</p></td>
+<td><p>below the stripline</p></td>
+</tr>
+<tr class="row-even"><td><p>L4</p></td>
+<td><p>copper 0.0152</p></td>
+<td><p>ground (lower stripline plane)</p></td>
+</tr>
+<tr class="row-odd"><td><p>–</p></td>
+<td><p>core 0.30, εr 4.6</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>L5</p></td>
+<td><p>copper 0.0152</p></td>
+<td><p>ground; meanders on the DC stick</p></td>
+</tr>
+<tr class="row-odd"><td><p>–</p></td>
+<td><p>2 × 2116 prepreg 0.2464, εr 4.16</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>L6</p></td>
+<td><p>copper 0.035</p></td>
+<td><p>ground; meanders on the DC stick</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The 7628 alternative (JLC06161H-7628: 7628 0.2104 mm, core 0.40 mm, 7628 0.2028 mm below the
+stripline) stays defined in the generator, with the synthetic-study results of §10.</p>
+<p>JLCPCB lists 16 six-layer stackups. In several the L3 layer sits close to one plane only (a thin
+core with a 0.55–0.7 mm dielectric on the other side), which is not a balanced stripline. Two give
+a true stripline on L3:</p>
+<ul class="simple">
+<li><p><strong>JLC06161H-7628 (default):</strong> 0.40 mm core above, 0.2028 mm 7628 below (2:1). Its L1–L2
+dielectric is the same 7628 0.2104 mm as board A, so board B’s L1 sticks are geometrically
+identical to board A’s and measure the same prepreg type on a second lamination. They also tie
+the 7628 εr, which the stripline alone cannot separate from the core’s (§8.8; in practice
+together with board A’s fit, see there).</p></li>
+<li><p><strong>JLC06161H-2116C (alternative):</strong> 0.30 mm core above, 3 × 2116 (0.366 mm, εr 4.16) below, the
+most symmetric stripline. Its L1 dielectric is 2116 (0.2464 mm), so nothing is shared with
+board A. Choose it if the product will use it; the generator then builds a board B’ from it.</p></li>
+</ul>
+<p><em>Decision (owner, 2026-10-02):</em> the product stackup is JLC06161H-2116C, so <strong>board B is built on
+JLC06161H-2116C</strong> (S 0.279 mm, P 0.350 / 0.200 mm at 50 Ω; the launch’s coplanar gap re-solved
+to 0.435 mm with L2 and L3 cut). Because its L1 no longer shares board A’s prepreg, board A’s fit
+cannot serve as board B’s prior: board B gets a mask-off copy of its L1 tie line (B24, P-MO) so
+that its own L1 sticks separate the mask from the 2116’s εr. The 7628 board B stays defined as an
+alternative (and keeps the synthetic-study results of §10).</p>
+<p>The 6-layer service fills and caps vias and has no HASL finish (ENIG only).</p>
+</section>
+<section id="line-families-and-their-dimensions">
+<h3>4.3 Line families and their dimensions<a class="headerlink" href="#line-families-and-their-dimensions" title="Link to this heading">¶</a></h3>
+<p>A <strong>family</strong> is one cross-section: layer, type, drawn width, gap, mask. The <strong>primary family P</strong>
+is the product’s RF line, by default L1 grounded coplanar waveguide (GCPW) under mask with 0.20 mm
+gaps; if the transceiver study picks microstrip or mask-free RF lines, P becomes that family and
+the others shift roles. Values are 2D quasi-static (rectangular copper, ideal side-ground vias,
+conformal mask 30/15 µm, εr 3.8); εeff at 5.8 GHz adds Kirschning–Jansen dispersion [KJ82] (for
+GCPW only as an estimate).</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Id</p></th>
+<th class="head"><p>Board</p></th>
+<th class="head"><p>Layer, type</p></th>
+<th class="head"><p>w (mm)</p></th>
+<th class="head"><p>gap (mm)</p></th>
+<th class="head"><p>Mask</p></th>
+<th class="head"><p>Z0 (Ω)</p></th>
+<th class="head"><p>εeff</p></th>
+<th class="head"><p>εeff, 5.8 GHz</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>P</p></td>
+<td><p>A, B</p></td>
+<td><p>L1 GCPW</p></td>
+<td><p>0.291</p></td>
+<td><p>0.200</p></td>
+<td><p>yes</p></td>
+<td><p>50.0</p></td>
+<td><p>3.180</p></td>
+<td><p>3.188</p></td>
+</tr>
+<tr class="row-odd"><td><p>P-MO</p></td>
+<td><p>A</p></td>
+<td><p>P with the mask opened</p></td>
+<td><p>0.291</p></td>
+<td><p>0.200</p></td>
+<td><p>no</p></td>
+<td><p>52.6</p></td>
+<td><p>2.868</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>P0.7</p></td>
+<td><p>A</p></td>
+<td><p>P at 0.7 w</p></td>
+<td><p>0.204</p></td>
+<td><p>0.200</p></td>
+<td><p>yes</p></td>
+<td><p>58.2</p></td>
+<td><p>3.124</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>P1.4</p></td>
+<td><p>A</p></td>
+<td><p>P at 1.4 w</p></td>
+<td><p>0.407</p></td>
+<td><p>0.200</p></td>
+<td><p>yes</p></td>
+<td><p>42.4</p></td>
+<td><p>3.251</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>P65</p></td>
+<td><p>A</p></td>
+<td><p>P, staircase high step</p></td>
+<td><p>0.150</p></td>
+<td><p>0.200</p></td>
+<td><p>yes</p></td>
+<td><p>65.0</p></td>
+<td><p>3.091</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>P35</p></td>
+<td><p>A</p></td>
+<td><p>P, staircase low step</p></td>
+<td><p>0.574</p></td>
+<td><p>0.200</p></td>
+<td><p>yes</p></td>
+<td><p>35.0</p></td>
+<td><p>3.343</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>M</p></td>
+<td><p>A</p></td>
+<td><p>L1 microstrip</p></td>
+<td><p>0.348</p></td>
+<td><p>–</p></td>
+<td><p>yes</p></td>
+<td><p>50.0</p></td>
+<td><p>3.403</p></td>
+<td><p>3.413</p></td>
+</tr>
+<tr class="row-odd"><td><p>M-MO</p></td>
+<td><p>A</p></td>
+<td><p>M with the mask opened</p></td>
+<td><p>0.348</p></td>
+<td><p>–</p></td>
+<td><p>no</p></td>
+<td><p>51.8</p></td>
+<td><p>3.165</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>S</p></td>
+<td><p>B</p></td>
+<td><p>L3 stripline</p></td>
+<td><p>0.214</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+<td><p>50.0</p></td>
+<td><p>4.479</p></td>
+<td><p>4.479</p></td>
+</tr>
+<tr class="row-odd"><td><p>S0.7</p></td>
+<td><p>B</p></td>
+<td><p>S at 0.7 w</p></td>
+<td><p>0.150</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+<td><p>58.4</p></td>
+<td><p>4.480</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>S1.4</p></td>
+<td><p>B</p></td>
+<td><p>S at 1.4 w</p></td>
+<td><p>0.300</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+<td><p>42.2</p></td>
+<td><p>4.478</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>(ref)</p></td>
+<td><p>–</p></td>
+<td><p>50 Ω L1 GCPW without mask</p></td>
+<td><p>0.323</p></td>
+<td><p>0.200</p></td>
+<td><p>no</p></td>
+<td><p>50.0</p></td>
+<td><p>2.903</p></td>
+<td><p>2.911</p></td>
+</tr>
+<tr class="row-even"><td><p>(ref)</p></td>
+<td><p>–</p></td>
+<td><p>50 Ω L1 microstrip, no mask</p></td>
+<td><p>0.371</p></td>
+<td><p>–</p></td>
+<td><p>no</p></td>
+<td><p>50.0</p></td>
+<td><p>3.187</p></td>
+<td><p>3.196</p></td>
+</tr>
+<tr class="row-odd"><td><p>(2116C)</p></td>
+<td><p>B’</p></td>
+<td><p>L3 stripline</p></td>
+<td><p>0.279</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+<td><p>50.0</p></td>
+<td><p>4.383</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>(2116C)</p></td>
+<td><p>B’</p></td>
+<td><p>L1 GCPW</p></td>
+<td><p>0.350</p></td>
+<td><p>0.200</p></td>
+<td><p>yes</p></td>
+<td><p>50.0</p></td>
+<td><p>3.019</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Coupled lines (2D quasi-static, modal values):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Id</p></th>
+<th class="head"><p>Board</p></th>
+<th class="head"><p>Geometry</p></th>
+<th class="head"><p>Zeven / Zodd (Ω)</p></th>
+<th class="head"><p>εeven / εodd</p></th>
+<th class="head"><p>Zdiff (Ω)</p></th>
+<th class="head"><p>Coupling</p></th>
+<th class="head"><p>λ/4 at 5.8 GHz</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CPL-0.15</p></td>
+<td><p>A</p></td>
+<td><p>two M lines (0.348, masked), gap 0.15</p></td>
+<td><p>59.1 / 38.5</p></td>
+<td><p>3.617 / 3.077</p></td>
+<td><p>77.0</p></td>
+<td><p>−13.5 dB</p></td>
+<td><p>7.07 mm</p></td>
+</tr>
+<tr class="row-odd"><td><p>CPL-0.20</p></td>
+<td><p>A</p></td>
+<td><p>gap 0.20</p></td>
+<td><p>57.6 / 41.0</p></td>
+<td><p>3.621 / 3.093</p></td>
+<td><p>82.0</p></td>
+<td><p>−15.5 dB</p></td>
+<td><p>7.06 mm</p></td>
+</tr>
+<tr class="row-even"><td><p>CPL-0.30</p></td>
+<td><p>A</p></td>
+<td><p>gap 0.30</p></td>
+<td><p>55.3 / 44.1</p></td>
+<td><p>3.616 / 3.134</p></td>
+<td><p>88.1</p></td>
+<td><p>−18.9 dB</p></td>
+<td><p>7.04 mm</p></td>
+</tr>
+<tr class="row-odd"><td><p>DIFF100-M</p></td>
+<td><p>A</p></td>
+<td><p>L1 microstrip pair, masked, w 0.216, g 0.20</p></td>
+<td><p>73.7 / 50.0</p></td>
+<td><p>3.521 / 3.026</p></td>
+<td><p>100.0</p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>DIFF90-M</p></td>
+<td><p>A</p></td>
+<td><p>w 0.281, g 0.20</p></td>
+<td><p>64.6 / 45.0</p></td>
+<td><p>3.574 / 3.058</p></td>
+<td><p>90.0</p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>DIFF100-S</p></td>
+<td><p>B</p></td>
+<td><p>L3 stripline pair, w 0.176, g 0.30</p></td>
+<td><p>59.2 / 50.0</p></td>
+<td><p>4.476 / 4.484</p></td>
+<td><p>100.0</p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>DIFF90-S</p></td>
+<td><p>B</p></td>
+<td><p>w 0.190, g 0.20</p></td>
+<td><p>59.9 / 45.0</p></td>
+<td><p>4.475 / 4.485</p></td>
+<td><p>90.0</p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A 100 Ω stripline pair at a 0.20 mm gap would need 0.144 mm traces, close to the fab minimum; the
+0.30 mm gap keeps the width at 0.176 mm. The coupled sections are quasi-static; the generator adds
+the modal dispersion of coupled microstrip [KJ84] when it sets their lengths.</p>
+</section>
+</section>
+<section id="coupon-structures">
+<h2>5. Coupon structures<a class="headerlink" href="#coupon-structures" title="Link to this heading">¶</a></h2>
+<section id="the-stick-format">
+<h3>5.1 The stick format<a class="headerlink" href="#the-stick-format" title="Link to this heading">¶</a></h3>
+<p>Every structure is a <strong>stick</strong>: a strip of board, 15 mm wide (est.: the connector flange width plus
+about 2.5 mm a side, to be checked against the 142-0701-851 drawing), with an edge-launch SMA at
+each end. Sticks sit in a frame, held by mouse-bite tabs on their long sides only, and are broken
+out before connectors are fitted. The connector ends are milled edges. Each port therefore has a
+clean edge, room for the wrench, and no neighbour; sticks can be measured, repaired or
+microsectioned one at a time, and connectors are fitted only to sticks that will be measured.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span> milled edge                                                               milled edge
+ |&lt;-- 10 mm: launch --&gt;|&lt;--------------- ΔL ---------------&gt;|&lt;-- 10 mm: launch --&gt;|
+ [SMA]=pad=taper=======|================ line ================|=======taper=pad=[SMA]
+                      RP1                                     RP2
+</pre></div>
+</div>
+<p>The launch section (edge to reference plane, 10 mm) is identical on every stick of a board, and
+the reference planes RP1 and RP2 are where multiline TRL puts them. A <strong>thru</strong> is a 20 mm stick
+(RP1 = RP2), a <strong>line</strong> is 20 mm + ΔL, and a <strong>reflect</strong> stick ends each 10 mm launch in a short
+(three vias across the line end into the side grounds), with 10 mm of grounded copper between the
+two shorts. <strong>Variant</strong> sticks (other widths, mask-off, other families) are 60 mm long: the P
+launch, a 40 mm test section, the P launch; the multiline calibration of their board removes the
+launches, and the fit models the two junctions (§8.5).</p>
+<p>Line lengths. Multiline TRL needs, at every frequency, a line pair whose phase difference is far
+from 0° and 180°; the usual figure of merit is the best pair’s |sin(βΔL)| [Marks91, DeGroot02,
+Hatab26]. For the set ΔL = {0, 2.5, 6.5, 16, 40, 100} mm:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>εeff (family)</p></th>
+<th class="head"><p>worst, 1–6 GHz</p></th>
+<th class="head"><p>worst, 1–12 GHz</p></th>
+<th class="head"><p>worst, 1–18 GHz</p></th>
+<th class="head"><p>above sin 20° from</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>2.90 (P-MO class)</p></td>
+<td><p>0.975</p></td>
+<td><p>0.951</p></td>
+<td><p>0.951</p></td>
+<td><p>0.10 GHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>3.19 (P)</p></td>
+<td><p>0.975</p></td>
+<td><p>0.951</p></td>
+<td><p>0.951</p></td>
+<td><p>0.10 GHz</p></td>
+</tr>
+<tr class="row-even"><td><p>3.41 (M)</p></td>
+<td><p>0.975</p></td>
+<td><p>0.951</p></td>
+<td><p>0.951</p></td>
+<td><p>0.10 GHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>4.48 (S)</p></td>
+<td><p>0.975</p></td>
+<td><p>0.951</p></td>
+<td><p>0.924</p></td>
+<td><p>0.10 GHz</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The 100 mm line also serves as the loss line (§8.8). A three-standard set such as {0, 6.5, 26} mm
+falls to zero near 10.9 GHz on stripline and is not used.</p>
+</section>
+<section id="board-a-catalogue-jlc04161h-7628">
+<h3>5.2 Board A catalogue (JLC04161H-7628)<a class="headerlink" href="#board-a-catalogue-jlc04161h-7628" title="Link to this heading">¶</a></h3>
+<p>“Core” sticks are needed for the fit; “extended” sticks add checks and are dropped first if the
+panel is too large. Lengths are edge to edge.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stick</p></th>
+<th class="head"><p>Structure</p></th>
+<th class="head"><p>Size (mm)</p></th>
+<th class="head"><p>Tier</p></th>
+<th class="head"><p>Determines</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>A01–A06</p></td>
+<td><p>P thru and lines ΔL = 2.5, 6.5, 16, 40, 100</p></td>
+<td><p>20–120</p></td>
+<td><p>core</p></td>
+<td><p>calibration; γ(f) of P: εeff(f), α(f)</p></td>
+</tr>
+<tr class="row-odd"><td><p>A07</p></td>
+<td><p>P reflect (via shorts at both reference planes)</p></td>
+<td><p>30</p></td>
+<td><p>core</p></td>
+<td><p>calibration</p></td>
+</tr>
+<tr class="row-even"><td><p>A08</p></td>
+<td><p>P verification line, ΔL = 28</p></td>
+<td><p>48</p></td>
+<td><p>core</p></td>
+<td><p>residual calibration error, connector repeatability</p></td>
+</tr>
+<tr class="row-odd"><td><p>A09</p></td>
+<td><p>P-MO: the mask opened over the 40 mm test section</p></td>
+<td><p>60</p></td>
+<td><p>core</p></td>
+<td><p>mask Dk × thickness; ENIG loss on exposed copper</p></td>
+</tr>
+<tr class="row-even"><td><p>A10, A11</p></td>
+<td><p>P0.7, P1.4 over 40 mm</p></td>
+<td><p>60</p></td>
+<td><p>core</p></td>
+<td><p>Z0(w) and α(w): etch versus height; tan δ versus roughness</p></td>
+</tr>
+<tr class="row-odd"><td><p>A12, A13</p></td>
+<td><p>M and M-MO over 40 mm (side grounds tapered away over 2 mm)</p></td>
+<td><p>60</p></td>
+<td><p>core</p></td>
+<td><p>a second L1 field shape: εr versus height</p></td>
+</tr>
+<tr class="row-even"><td><p>A14</p></td>
+<td><p>ring, M, mean radius 8.906 mm, coupling gaps 0.20, M feeds</p></td>
+<td><p>60 × 30</p></td>
+<td><p>core</p></td>
+<td><p>held out: εeff at 2.90, 5.80, 8.69, 11.57 GHz; Q</p></td>
+</tr>
+<tr class="row-odd"><td><p>A15</p></td>
+<td><p>P through line with a shunt open λ/4 stub (7.24 mm less the end correction)</p></td>
+<td><p>60 × 25</p></td>
+<td><p>core</p></td>
+<td><p>held out: open-end model; notch at 5.80 GHz</p></td>
+</tr>
+<tr class="row-even"><td><p>A16</p></td>
+<td><p>P through line with a shunt shorted λ/2 stub (14.47 mm less the via correction)</p></td>
+<td><p>60 × 32</p></td>
+<td><p>core</p></td>
+<td><p>held out: via inductance; notches at 5.80, 11.58 GHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>A17</p></td>
+<td><p>CPL-0.20: λ/4 coupled section, ports at opposite ends, other ends open</p></td>
+<td><p>40</p></td>
+<td><p>core</p></td>
+<td><p>Zeven, Zodd, εodd: gap etch, mask in the gap</p></td>
+</tr>
+<tr class="row-even"><td><p>A18</p></td>
+<td><p>switch connector (SWF) in its through state between two P lines</p></td>
+<td><p>40</p></td>
+<td><p>core</p></td>
+<td><p>the switch connector’s insertion in the product path</p></td>
+</tr>
+<tr class="row-odd"><td><p>A19</p></td>
+<td><p>two SWF connectors 10 mm apart, measured through the probe (2x-thru)</p></td>
+<td><p>30</p></td>
+<td><p>core</p></td>
+<td><p>probe and pad model for de-embedding</p></td>
+</tr>
+<tr class="row-even"><td><p>A20</p></td>
+<td><p>two u.FL receptacles 10 mm apart (2x-thru), measured through u.FL cables</p></td>
+<td><p>30</p></td>
+<td><p>core</p></td>
+<td><p>u.FL test-point model; mating repeatability</p></td>
+</tr>
+<tr class="row-odd"><td><p>A21</p></td>
+<td><p>DC: 4-wire meanders on L1–L4 at 0.2 mm × 200 mm and 0.5 mm × 250 mm; 50-via chain</p></td>
+<td><p>60 × 30</p></td>
+<td><p>core</p></td>
+<td><p>w·t per layer; etch from the width ratio; plating</p></td>
+</tr>
+<tr class="row-even"><td><p>A22</p></td>
+<td><p>microsection stick: P, P0.7, P1.4, M, P-MO and a via side by side, cut line</p></td>
+<td><p>30</p></td>
+<td><p>core</p></td>
+<td><p>h, t, trapezoid, mask thickness (ground truth)</p></td>
+</tr>
+<tr class="row-odd"><td><p>A23</p></td>
+<td><p>staircase: P, 20 mm P65, 20 mm P, 20 mm P35, P</p></td>
+<td><p>80</p></td>
+<td><p>extended</p></td>
+<td><p>TDR check of Z0(w) over a wider range</p></td>
+</tr>
+<tr class="row-even"><td><p>A24, A25</p></td>
+<td><p>P ΔL = 40 rotated 10°, and along the other panel axis</p></td>
+<td><p>60</p></td>
+<td><p>extended</p></td>
+<td><p>glass-weave and warp/fill differences [Loyer07]</p></td>
+</tr>
+<tr class="row-odd"><td><p>A26, A27</p></td>
+<td><p>CPL-0.15, CPL-0.30</p></td>
+<td><p>40</p></td>
+<td><p>extended</p></td>
+<td><p>gap-etch trend</p></td>
+</tr>
+<tr class="row-even"><td><p>A28</p></td>
+<td><p>DIFF100-M as a λ/4 coupled section</p></td>
+<td><p>40</p></td>
+<td><p>extended</p></td>
+<td><p>the 100 Ω pair’s modes</p></td>
+</tr>
+<tr class="row-odd"><td><p>A29</p></td>
+<td><p>3-pole edge-coupled band-pass filter at 5.8 GHz, M, synthesized at generation</p></td>
+<td><p>60 × 20</p></td>
+<td><p>extended</p></td>
+<td><p>held out: a product-like filter [MYJ64, Pozar12]</p></td>
+</tr>
+<tr class="row-even"><td><p>A30</p></td>
+<td><p>via transition L1 → L4 → L1 (GCPW), 2x-thru</p></td>
+<td><p>40</p></td>
+<td><p>extended</p></td>
+<td><p>4-layer via model</p></td>
+</tr>
+<tr class="row-odd"><td><p>A31</p></td>
+<td><p>an inverse-designed 5.8 GHz component (#29, #32) re-optimized on this stackup</p></td>
+<td><p>per design</p></td>
+<td><p>extended</p></td>
+<td><p>end-to-end check of the inverse-design flow</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The meander pair per layer (0.2 mm and 0.5 mm wide) gives the etch directly: R ∝ ρL/((w − 2e)·t),
+so the ratio of the two resistances depends on e alone, and either one then gives t. At 100 mA the
+L1 0.2 mm meander reads about 49 mV (0.49 Ω) and dissipates 5 mW.</p>
+<p>Multi-port structures (A29, A31) carry an SMA on every port; unused ports are terminated with SMA
+loads and the full S-matrix is assembled from 2-port measurements.</p>
+</section>
+<section id="board-b-catalogue-jlc06161h-2116c">
+<h3>5.3 Board B catalogue (JLC06161H-2116C)<a class="headerlink" href="#board-b-catalogue-jlc06161h-2116c" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stick</p></th>
+<th class="head"><p>Structure</p></th>
+<th class="head"><p>Size (mm)</p></th>
+<th class="head"><p>Tier</p></th>
+<th class="head"><p>Determines</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>B01–B06</p></td>
+<td><p>S thru and lines ΔL = 2.5, 6.5, 16, 40, 100, launched L1 → L3 by via</p></td>
+<td><p>20–120</p></td>
+<td><p>core</p></td>
+<td><p>calibration; γ(f) of S: the inner εr mix, α(f)</p></td>
+</tr>
+<tr class="row-odd"><td><p>B07</p></td>
+<td><p>S reflect (L3 shorted to L2 and L4 by vias at the reference planes)</p></td>
+<td><p>30</p></td>
+<td><p>core</p></td>
+<td><p>calibration</p></td>
+</tr>
+<tr class="row-even"><td><p>B08</p></td>
+<td><p>S verification line, ΔL = 28</p></td>
+<td><p>48</p></td>
+<td><p>core</p></td>
+<td><p>residual calibration error</p></td>
+</tr>
+<tr class="row-odd"><td><p>B09, B10</p></td>
+<td><p>S0.7, S1.4 over 40 mm</p></td>
+<td><p>60</p></td>
+<td><p>core</p></td>
+<td><p>etch and heights on L3; tan δ versus roughness</p></td>
+</tr>
+<tr class="row-even"><td><p>B11</p></td>
+<td><p>stripline ring, S, mean radius 7.774 mm, coupling gaps 0.15</p></td>
+<td><p>60 × 30</p></td>
+<td><p>core</p></td>
+<td><p>held out: εeff at 2.9, 5.8, 8.7, 11.6 GHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>B12–B15</p></td>
+<td><p>L1 tie set: P thru and lines ΔL = 6.5, 16, 40</p></td>
+<td><p>20–60</p></td>
+<td><p>core</p></td>
+<td><p>2116 εr (ties εr of the core and the prepreg); lot comparison with board A</p></td>
+</tr>
+<tr class="row-even"><td><p>B16</p></td>
+<td><p>P reflect</p></td>
+<td><p>30</p></td>
+<td><p>core</p></td>
+<td><p>calibration of the tie set</p></td>
+</tr>
+<tr class="row-odd"><td><p>B17</p></td>
+<td><p>via transition L1 → L3 → L1, 2x-thru</p></td>
+<td><p>40</p></td>
+<td><p>core</p></td>
+<td><p>held out: the via model</p></td>
+</tr>
+<tr class="row-even"><td><p>B18</p></td>
+<td><p>DC meanders on L1–L6 (two widths each), via chain</p></td>
+<td><p>60 × 30</p></td>
+<td><p>core</p></td>
+<td><p>w·t and etch per layer</p></td>
+</tr>
+<tr class="row-odd"><td><p>B19</p></td>
+<td><p>microsection stick</p></td>
+<td><p>30</p></td>
+<td><p>core</p></td>
+<td><p>ground truth for h_core, h_pp, t_L3</p></td>
+</tr>
+<tr class="row-even"><td><p>B20, B21</p></td>
+<td><p>DIFF100-S, DIFF90-S as λ/4 coupled sections</p></td>
+<td><p>40</p></td>
+<td><p>extended</p></td>
+<td><p>inner-layer pair modes</p></td>
+</tr>
+<tr class="row-odd"><td><p>B22</p></td>
+<td><p>S through line with a shunt open λ/4 stub</p></td>
+<td><p>60 × 25</p></td>
+<td><p>extended</p></td>
+<td><p>held out: stripline open end</p></td>
+</tr>
+<tr class="row-even"><td><p>B23</p></td>
+<td><p>S ΔL = 40 rotated 10°</p></td>
+<td><p>60</p></td>
+<td><p>extended</p></td>
+<td><p>weave on the inner layer</p></td>
+</tr>
+<tr class="row-odd"><td><p>B24</p></td>
+<td><p>P-MO: the tie line with the mask opened over 40 mm</p></td>
+<td><p>60</p></td>
+<td><p>core</p></td>
+<td><p>mask Dk × thickness on L1, so board B’s fit needs no board A prior</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The tie set uses ΔL = {0, 6.5, 16, 40} mm: worst-case conditioning 0.93 over 1–6 GHz and 0.56 over
+1–12 GHz, enough for a cross-check.</p>
+</section>
+<section id="product-rail-coupon">
+<h3>5.4 Product rail coupon<a class="headerlink" href="#product-rail-coupon" title="Link to this heading">¶</a></h3>
+<p>Every product order carries a break-away rail, 15 mm wide, from the same panel: the product’s P
+family as a thru and lines ΔL = 6.5 mm and 36.2 mm (five quarter wavelengths at 5.8 GHz, so the
+pair is in quadrature in the band: conditioning ≥ 0.97 over 5.5–6.1 GHz), plus DC meanders on L1
+and the RF inner layer. Measured with the two-line method (no reflect needed for γ), the rail
+tracks lot-to-lot drift of εeff, loss and w·t at the product’s frequency, and a fit with board A’s
+or B’s posterior as the prior updates the model for that lot.</p>
+</section>
+<section id="panel-outline-and-labels">
+<h3>5.5 Panel, outline and labels<a class="headerlink" href="#panel-outline-and-labels" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Panel.</strong> Sticks are packed in rows into a frame with 5 mm rails, 2 mm milled slots and
+mouse-bite tabs on the long sides: 5 mm wide (JLC’s minimum for a tab with mouse bites), six
+0.5 mm holes at 0.8 mm pitch. Estimated outlines: board A core about 175 × 160 mm, with the
+extended set about 175 × 215 mm; board B core about 175 × 130 mm (est.; the generator packs
+automatically and reports the size).</p></li>
+<li><p><strong>Orientation.</strong> All sticks run along one panel axis except A24, A25 and B23, so every line
+sees the same glass-weave direction.</p></li>
+<li><p><strong>Copper at the edge.</strong> The launch copper stops 0.25 mm from the milled edge (est.; checked
+against JLC’s routed-edge clearance at generation). Ground pours and stitching cover every
+stick; no copper crosses a slot.</p></li>
+<li><p><strong>Labels (silkscreen).</strong> On the frame: “yapnr RF coupon”, board letter and revision, stackup id,
+a blank lot box and a serial box for a marker. On each stick, at one end and at least 1.5 mm from
+any RF copper: the stick id, family and ΔL (for example <code class="docutils literal notranslate"><span class="pre">A05</span> <span class="pre">P</span> <span class="pre">L40</span></code>), and edge ticks marking the
+reference planes. The microsection stick carries a cut line. Silkscreen never covers lines, gaps
+or ground edges next to gaps, since ink changes εeff.</p></li>
+<li><p><strong>Order number.</strong> JLC’s order number is placed on the frame (the “specify a location” option).</p></li>
+</ul>
+</section>
+<section id="fab-notes">
+<h3>5.6 Fab notes<a class="headerlink" href="#fab-notes" title="Link to this heading">¶</a></h3>
+<p>The coupons are ordered exactly as the product will be:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Option</p></th>
+<th class="head"><p>Board A</p></th>
+<th class="head"><p>Board B</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Layers, thickness</p></td>
+<td><p>4, 1.6 mm</p></td>
+<td><p>6, 1.6 mm</p></td>
+</tr>
+<tr class="row-odd"><td><p>Impedance control</p></td>
+<td><p>yes, JLC04161H-7628</p></td>
+<td><p>yes, JLC06161H-2116C</p></td>
+</tr>
+<tr class="row-even"><td><p>Impedance tolerance</p></td>
+<td><p>the product’s (±10 % standard)</p></td>
+<td><p>the product’s</p></td>
+</tr>
+<tr class="row-odd"><td><p>Copper</p></td>
+<td><p>1 oz outer, 0.5 oz inner</p></td>
+<td><p>1 oz outer, 0.5 oz inner</p></td>
+</tr>
+<tr class="row-even"><td><p>Finish</p></td>
+<td><p>ENIG (recommended for the product too)</p></td>
+<td><p>ENIG (the only option)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mask, silkscreen</p></td>
+<td><p>the product’s colours</p></td>
+<td><p>the product’s colours</p></td>
+</tr>
+<tr class="row-even"><td><p>Vias</p></td>
+<td><p>0.3 mm drill, 0.5 mm pad; tented</p></td>
+<td><p>0.3/0.5 mm; filled and capped (default)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Panel</p></td>
+<td><p>customer panel, milled slots, mouse bites</p></td>
+<td><p>as board A</p></td>
+</tr>
+<tr class="row-even"><td><p>Quantity</p></td>
+<td><p>5 (measure at least 3)</p></td>
+<td><p>5 (measure at least 3)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The fab drawing (a text file in the order) lists the controlled-impedance traces (P: 0.291 mm with
+0.20 mm gaps on L1, 50 Ω; S: 0.214 mm on L3, 50 Ω) and asks that widths not be changed; any
+engineering query that changes a width is recorded, since it is an input of the fit. HASL is
+avoided on RF boards because its tin thickness varies over exposed copper; whether JLC charges
+extra for a panel of break-out sticks is unverified and checked at order time.</p>
+</section>
+</section>
+<section id="launches-and-connectors">
+<h2>6. Launches and connectors<a class="headerlink" href="#launches-and-connectors" title="Link to this heading">¶</a></h2>
+<section id="connectors">
+<h3>6.1 Connectors<a class="headerlink" href="#connectors" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Part</p></th>
+<th class="head"><p>Rating</p></th>
+<th class="head"><p>Use</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Cinch/Johnson 142-0701-851, edge SMA jack</p></td>
+<td><p>18 GHz, 500 cycles, 50 Ω [Bel/Cinch product page]</p></td>
+<td><p><strong>default</strong> on every measured stick; board-thickness variant and pin size unverified</p></td>
+</tr>
+<tr class="row-odd"><td><p>Southwest Microwave SuperSMA end launch (292-04A-x)</p></td>
+<td><p>27 GHz, clamp-on, reusable [SWM product page]</p></td>
+<td><p>optional: one pair moved between the TRL sticks, so the error boxes are nearly identical</p></td>
+</tr>
+<tr class="row-even"><td><p>Hirose U.FL receptacle and plug cable</p></td>
+<td><p>about 6 GHz, about 30 mating cycles [Wikipedia]</p></td>
+<td><p>product test point only; A20 characterizes it</p></td>
+</tr>
+<tr class="row-odd"><td><p>Murata SWF switch connector (MM8130-2600) and probe</p></td>
+<td><p>about 6 GHz per Murata; unverified</p></td>
+<td><p>product test access in the RF path; A18 and A19 characterize it</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Multiline TRL assumes the same error box at every port of every standard. Soldered connectors
+break that assumption a little on every stick, and the error goes straight into γ. The plan
+quantifies it rather than ignoring it: the verification line (A08, B08) shows the residual, the
+synthetic recovery (§10) includes a connector spread, and the fit’s noise model takes the
+measured repeatability. A clamp-on pair removes most of it; the owner decides whether to buy one
+(§14).</p>
+</section>
+<section id="edge-launch">
+<h3>6.2 Edge launch<a class="headerlink" href="#edge-launch" title="Link to this heading">¶</a></h3>
+<p>The launch is GCPW at the board edge with ground-via rows on both sides, a pin pad, and a taper to
+the family’s line [Rosas07, Simons01]:</p>
+<ul class="simple">
+<li><p><strong>Pin pad.</strong> Width wp = pin diameter + about 0.1 mm (0.8–1.2 mm, from the connector drawing),
+length per the drawing, then a 1.0 mm linear taper to P (0.291 mm, 0.20 mm gaps).</p></li>
+<li><p><strong>Cut-out under the pad.</strong> With L2 only 0.21 mm below, a 0.8–1.2 mm pad with 0.2 mm gaps is
+29–22 Ω (2D). Board A removes L2 under the pad, its gaps and the taper, so the pad references L3
+1.29 mm below; the coplanar gap that makes the pad 50 Ω is then 0.211, 0.268 and 0.335 mm for
+wp = 0.8, 1.0 and 1.2 mm (2D, εeff 2.73–2.82). On board B, L3 (0.63 mm below L1) is poured
+with ground under the launch and becomes the reference: the 50 Ω gap is 0.298 mm for
+wp = 0.8 mm and 0.570 mm for wp = 1.0 mm (a wider pad would cut L3 too and reference L4). The
+two boards’ launches therefore differ, which is fine: TRL needs identical launches within a
+board, not across boards.</p></li>
+<li><p><strong>Via fence.</strong> 0.3 mm drill, 0.5 mm pad, centres 0.5 mm from the gap edge, pitch 0.8 mm (a tenth
+of the wavelength in the 7628 at 18 GHz), first pair as close to the edge as the fab allows.
+The L1 grounds, L2, L3 and L4 are all stitched.</p></li>
+<li><p><strong>Tuning.</strong> The geometry is tuned once per board by 3D simulation (§9) to |S11| ≤ −20 dB up to
+6 GHz and ≤ −15 dB up to 12 GHz (est. targets), then frozen and copied to every stick.</p></li>
+</ul>
+</section>
+<section id="via-transition-board-b">
+<h3>6.3 Via transition (board B)<a class="headerlink" href="#via-transition-board-b" title="Link to this heading">¶</a></h3>
+<p>The L3 sticks are launched L1 GCPW → signal via → L3 stripline inside the 10 mm launch section, so
+the calibration removes the transition and the L3 lines are measured alone. Starting geometry
+(tuned in 3D like the launch): a 0.3 mm signal via with pads on L1 and L3 only (unused pads
+removed), antipads of 1.0 mm diameter on L2, L4, L5 and L6, and four to six ground vias on a
+0.9 mm radius, which makes the via a coaxial line of about 50 Ω in εr 4.5. The via runs through
+the board, leaving a stub from L3 to L6 of about 0.9 mm whose quarter-wave resonance is near
+40 GHz, so no back-drilling is needed. B17 measures the transition itself as a 2x-thru.</p>
+</section>
+<section id="u-fl-and-switch-connectors">
+<h3>6.4 u.FL and switch connectors<a class="headerlink" href="#u-fl-and-switch-connectors" title="Link to this heading">¶</a></h3>
+<p>The product’s VNA access points are u.FL receptacles or switch connectors (a coaxial switch that
+passes the RF path until a probe is inserted). Three sticks characterize them:</p>
+<ul class="simple">
+<li><p><strong>A18:</strong> the switch connector in its through state, between two P lines, measured with the
+board’s TRL calibration. This is the connector as it sits in the product’s RF path.</p></li>
+<li><p><strong>A19:</strong> two switch connectors with 10 mm of P between, measured through the probes after SOLT
+at the probe cables’ SMA ends. IEEE 370 2x-thru de-embedding (scikit-rf
+<code class="docutils literal notranslate"><span class="pre">IEEEP370_SE_ZC_2xThru</span></code>) splits it into two halves, each the model of probe + mating + pad that
+is later removed from product measurements.</p></li>
+<li><p><strong>A20:</strong> the same for u.FL receptacles and their cables, re-mated five times to measure the
+spread.</p></li>
+</ul>
+</section>
+</section>
+<section id="measurement-procedure">
+<h2>7. Measurement procedure<a class="headerlink" href="#measurement-procedure" title="Link to this heading">¶</a></h2>
+<section id="equipment">
+<h3>7.1 Equipment<a class="headerlink" href="#equipment" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>A 2-port VNA. A 6 GHz instrument (for example LibreVNA, 100 kHz–6 GHz) covers the band; the
+harmonic and the 12–18 GHz checks need a lab VNA.</p></li>
+<li><p>An SMA calibration kit with its definitions (open, short, load, thru), phase-stable cables, an
+SMA torque wrench at the connector’s rated torque (5 in-lb for 142-0701-851 per the product
+page), and two SMA 50 Ω loads.</p></li>
+<li><p>A current source (or a bench supply in constant-current mode), two multimeters (current and
+millivolts) or a 4-wire ohmmeter, a thermometer and a hygrometer.</p></li>
+<li><p>For the microsection: epoxy, abrasive paper to P2000, a polishing cloth, and a microscope with
+a stage micrometer.</p></li>
+</ul>
+</section>
+<section id="preparation">
+<h3>7.2 Preparation<a class="headerlink" href="#preparation" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Break out the sticks of three boards per stackup; deburr the long edges (not the milled ends).</p></li>
+<li><p>Fit connectors with a jig so that every pin sits the same way on its pad; one operator, one
+solder alloy, flux removed (flux residue on a mask-free line changes its εeff).</p></li>
+<li><p>Inspect every joint and record anomalies in the session manifest.</p></li>
+<li><p>Condition the boards at lab ambient for at least 24 h and record temperature and humidity,
+since FR-4 absorbs water and its loss rises with it.</p></li>
+</ol>
+</section>
+<section id="vna-settings-and-calibration">
+<h3>7.3 VNA settings and calibration<a class="headerlink" href="#vna-settings-and-calibration" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Grid:</strong> linear, starting at the step so that time-domain transforms work: 10 MHz to 6.000 GHz
+in 10 MHz steps (600 points) on a 6 GHz VNA, 10 MHz to 18.000 GHz (1800 points) on a lab VNA.</p></li>
+<li><p><strong>IF bandwidth</strong> 1 kHz (100 Hz for the 100 mm lines above 10 GHz); source power −10 dBm; 30 min
+warm-up; cables taped down so they bend the same way for every stick.</p></li>
+<li><p><strong>Tier 1:</strong> SOLT at the cable ends with the kit’s definitions; check it on a load and a short
+re-measured as devices. If the VNA can save uncorrected data, save it too.</p></li>
+<li><p><strong>Tier 2:</strong> multiline TRL computed afterwards from the TRL sticks (§8.3); nothing is done on the
+instrument [Jargon95].</p></li>
+</ul>
+</section>
+<section id="sequence-per-board">
+<h3>7.4 Sequence per board<a class="headerlink" href="#sequence-per-board" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Thru, then the lines in increasing length, then the reflect, then the verification line.</p></li>
+<li><p>Every other stick of the board.</p></li>
+<li><p>Thru again (drift), and the thru and the 40 mm line re-mated twice more (repeatability).</p></li>
+<li><p>Recheck the SOLT on the load; repeat the whole sequence if it moved by more than 0.1 dB or 1°.</p></li>
+<li><p>DC: 4-wire resistance of every meander at 100 mA, with the board temperature (copper changes by
+0.39 %/K, so the temperature is needed to ±0.25 K for 0.1 %).</p></li>
+</ol>
+</section>
+<section id="microsection">
+<h3>7.5 Microsection<a class="headerlink" href="#microsection" title="Link to this heading">¶</a></h3>
+<p>After all RF measurements, cut one microsection stick per board across its marked line, pot it in
+epoxy, grind and polish to 1 µm, and photograph it with the stage micrometer in the same frame.
+Measure the dielectric heights, copper thicknesses, top and bottom trace widths and the mask
+thickness over copper, over substrate and in a gap. Microsections are a strong but imperfect prior
+(polish rounding, measurement by eye), entered with the uncertainties of §8.8.</p>
+</section>
+<section id="files-and-manifest">
+<h3>7.6 Files and manifest<a class="headerlink" href="#files-and-manifest" title="Link to this heading">¶</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;session&gt;/
+  session.yaml                      # yapnr-coupon-session/1
+  A-03_A05-P-L40_r1.s2p             # &lt;board&gt;-&lt;serial&gt;_&lt;stick&gt;-&lt;family&gt;-&lt;what&gt;_r&lt;repeat&gt;
+  A-03_A05-P-L40_r2.s2p
+  raw/A-03_A05-P-L40_r1.s2p         # uncorrected, when the VNA can save it
+  dc.csv                            # stick, layer, width, current, voltage, temperature
+  microsection/A-03_A22_1.jpg       # with the micrometer scale in frame
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">session.yaml</span></code> (schema <code class="docutils literal notranslate"><span class="pre">yapnr-coupon-session/1</span></code>) records: the coupon revision and the generator’s
+git revision, the stackup id, a lot alias (not the vendor’s order number), board serials, the
+date, the VNA model and firmware, the calibration kit and its definitions file, calibration type,
+grid, IF bandwidth and power, temperature and humidity at start and end, connector type and
+torque, and per-file notes (re-mate count, suspect joints). The tools check that every stick of
+the catalogue has a file and that file names parse.</p>
+</section>
+</section>
+<section id="extraction-pipeline">
+<h2>8. Extraction pipeline<a class="headerlink" href="#extraction-pipeline" title="Link to this heading">¶</a></h2>
+<section id="parameters-and-priors">
+<h3>8.1 Parameters and priors<a class="headerlink" href="#parameters-and-priors" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Board</p></th>
+<th class="head"><p>Nominal (source)</p></th>
+<th class="head"><p>Prior σ</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Dk at 1 GHz, 7628 prepreg</p></td>
+<td><p>A, B</p></td>
+<td><p>4.4 (JLC, frequency unstated)</p></td>
+<td><p>0.3</p></td>
+</tr>
+<tr class="row-odd"><td><p>Dk at 1 GHz, core</p></td>
+<td><p>B</p></td>
+<td><p>4.6 (JLC)</p></td>
+<td><p>0.3</p></td>
+</tr>
+<tr class="row-even"><td><p>Df at 1 GHz, per dielectric</p></td>
+<td><p>A, B</p></td>
+<td><p>0.018 (est.; JLC publishes none)</p></td>
+<td><p>0.008</p></td>
+</tr>
+<tr class="row-odd"><td><p>L1–L2 height</p></td>
+<td><p>A, B</p></td>
+<td><p>0.2104 mm</p></td>
+<td><p>0.021 mm (10 %)</p></td>
+</tr>
+<tr class="row-even"><td><p>L2–L3 core, L3–L4 prepreg heights</p></td>
+<td><p>B</p></td>
+<td><p>0.40, 0.2028 mm</p></td>
+<td><p>10 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>etch per edge at the trace foot, per layer</p></td>
+<td><p>A, B</p></td>
+<td><p>0</p></td>
+<td><p>0.025 mm</p></td>
+</tr>
+<tr class="row-even"><td><p>copper thickness per layer</p></td>
+<td><p>A, B</p></td>
+<td><p>0.035 (outer), 0.0152 (inner) mm</p></td>
+<td><p>20 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>roughness per layer (Huray ratio or Rq)</p></td>
+<td><p>A, B</p></td>
+<td><p>est. for standard ED foil</p></td>
+<td><p>wide</p></td>
+</tr>
+<tr class="row-even"><td><p>mask thickness scale (30/15 µm nominal)</p></td>
+<td><p>A, B</p></td>
+<td><p>1.0 (JLC calculator)</p></td>
+<td><p>0.5</p></td>
+</tr>
+<tr class="row-odd"><td><p>mask Dk, Df</p></td>
+<td><p>A, B</p></td>
+<td><p>3.8 (JLC calculator), 0.025 (est.)</p></td>
+<td><p>0.3, 0.015</p></td>
+</tr>
+<tr class="row-even"><td><p>surface-resistance factor of exposed ENIG</p></td>
+<td><p>A, B</p></td>
+<td><p>Shlepnev and McMorrow’s nickel model</p></td>
+<td><p>wide</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The dielectric model is the causal wideband Debye model of Djordjevic and Sarkar [Djordjevic01,
+Svensson01]: two parameters per dielectric (Dk and Df at 1 GHz) with the corner frequencies fixed
+(10³ and 10¹² Hz). The trace is a trapezoid whose foot loses e per edge and whose side angle comes
+from the microsection (one etch parameter is identifiable from RF data, not two). The copper
+resistivity is fixed at 1.72 × 10⁻⁸ Ω·m, so DC data fit w·t, not ρ.</p>
+</section>
+<section id="stage-1-quality-checks">
+<h3>8.2 Stage 1: quality checks<a class="headerlink" href="#stage-1-quality-checks" title="Link to this heading">¶</a></h3>
+<p>Every file is checked for passivity, reciprocity and causality with the IEEE 370 quality metrics
+(scikit-rf <code class="docutils literal notranslate"><span class="pre">IEEEP370_FD_QM</span></code>, <code class="docutils literal notranslate"><span class="pre">IEEEP370_TD_QM</span></code>) [IEEE370]; repeats are compared, and a stick whose
+repeats differ by more than the session’s repeatability is flagged rather than averaged.</p>
+</section>
+<section id="stage-2-multiline-trl">
+<h3>8.3 Stage 2: multiline TRL<a class="headerlink" href="#stage-2-multiline-trl" title="Link to this heading">¶</a></h3>
+<p>The SOLT-corrected thru, line and reflect sticks of each family go through multiline TRL (scikit-rf
+<code class="docutils literal notranslate"><span class="pre">TUGMultilineTRL</span></code>, Hatab’s eigenvalue formulation [Hatab22], with <code class="docutils literal notranslate"><span class="pre">NISTMultilineTRL</span></code> [Marks91] as a
+cross-check). The outputs are the propagation constant γ(f) = α + jβ of the family with the
+launches removed, hence εeff(f) and α(f); the two error boxes; and the conditioning metric per
+frequency. Linear uncertainty propagation through the calibration [Hatab23] gives γ’s
+uncertainty from the measured repeatability. Every other stick of the board is then corrected with
+the calibration, so its S-parameters start and end at the reference planes.</p>
+</section>
+<section id="stage-3-reference-impedance">
+<h3>8.4 Stage 3: reference impedance<a class="headerlink" href="#stage-3-reference-impedance" title="Link to this heading">¶</a></h3>
+<p>Multiline TRL references the corrected data to the line’s own Z0, which is not measured by the
+calibration itself. Z0 of P (and S) comes from two independent routes:</p>
+<ul class="simple">
+<li><p><strong>TDR plateau:</strong> the time-domain reflection of the 100 mm line against the SOLT’s 50 Ω, gated to
+the middle of the line (IPC-TM-650 2.5.5.7A). A 6 GHz VNA resolves about 5 mm, and the line has
+a 100 mm plateau.</p></li>
+<li><p><strong>Capacitance route</strong> [MarksWilliams91, WilliamsMarks91]: Z0 = γ/(G + jωC) with C from the
+2D model at the fitted geometry and εr.</p></li>
+</ul>
+<p>Their difference is a check of the model. The corrected data are renormalized to 50 Ω for
+reports.</p>
+</section>
+<section id="stage-4-joint-fit">
+<h3>8.5 Stage 4: joint fit<a class="headerlink" href="#stage-4-joint-fit" title="Link to this heading">¶</a></h3>
+<p>All corrected sticks, the DC resistances and the microsection readings are fitted together by
+weighted least squares over the parameter vector of §8.1, with the priors as extra residuals and a
+soft-L1 loss so that one bad joint does not pull the fit. Weights come from the measured
+repeatability. The forward model per structure:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Structure</p></th>
+<th class="head"><p>Forward model</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>uniform line section</p></td>
+<td><p>RLGC from the 2D model: C and the vacuum C give L and the dielectric filling factors; G(f), C(f) from the per-region Djordjevic–Sarkar εr(f); R(f) by Wheeler’s incremental inductance [Wheeler42] times the roughness factor</p></td>
+</tr>
+<tr class="row-odd"><td><p>roughness</p></td>
+<td><p>Huray’s sphere model [Huray07] in Simonovich’s cannonball form [Simonovich16], or Groiss [Groiss96], applied to the complex surface impedance so that roughness adds internal inductance as well as resistance [Shlepnev11, Gold17]; the choice of model is a systematic uncertainty (fit both)</p></td>
+</tr>
+<tr class="row-even"><td><p>exposed copper (mask-off, pads)</p></td>
+<td><p>the same with a nickel surface layer [ShlepnevMcMorrow11]</p></td>
+</tr>
+<tr class="row-odd"><td><p>junction of two families (width step, mask edge, P → M taper)</p></td>
+<td><p>ideal junction plus a step capacitance [Gupta96]; tapers as a cascade of 2D sections</p></td>
+</tr>
+<tr class="row-even"><td><p>open end, via short</p></td>
+<td><p>Kirschning–Jansen–Koster open end [KJK81] for M, a 3D-calibrated end correction for P; Goldfarb–Pucel via inductance [Goldfarb91]</p></td>
+</tr>
+<tr class="row-odd"><td><p>coupled section</p></td>
+<td><p>4-port from the 2D 2 × 2 C and L matrices (modal decomposition), with the end corrections</p></td>
+</tr>
+<tr class="row-even"><td><p>ring</p></td>
+<td><p>two line paths, gap coupling capacitances calibrated in 3D, curvature correction [Wolff71, Chang04]</p></td>
+</tr>
+<tr class="row-odd"><td><p>switch connector, u.FL</p></td>
+<td><p>black-box 2-ports from §6.4; not fitted</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The 2D solves cost 1–3 s each. The fit uses a local quadratic surrogate of each family’s C, vacuum
+C and conductor-loss factor around the current estimate, built from 2·n + 1 solves and rebuilt at
+the solution (two or three rebuilds), cached by the hash of the cross-section.</p>
+</section>
+<section id="stage-5-uncertainty">
+<h3>8.6 Stage 5: uncertainty<a class="headerlink" href="#stage-5-uncertainty" title="Link to this heading">¶</a></h3>
+<p>The reported covariance is the inverse of the Gauss–Newton information at the solution, scaled by
+the reduced χ² when it exceeds 1, plus:</p>
+<ul class="simple">
+<li><p>a bootstrap over boards and repeats (lot spread versus measurement noise);</p></li>
+<li><p>systematic terms, each evaluated by refitting: the SOLT load (±0.5 Ω), the roughness model (Huray
+versus Groiss), the mask conformality (conformal versus slab), the end-correction model.</p></li>
+</ul>
+</section>
+<section id="stage-6-held-out-checks">
+<h3>8.7 Stage 6: held-out checks<a class="headerlink" href="#stage-6-held-out-checks" title="Link to this heading">¶</a></h3>
+<p>Structures that the fit never sees are predicted from the fitted model and then compared: the
+rings (f1–f4 and Q), the stubs (notch frequency and depth), the coupled section, and the extended
+filter and inverse-designed part. Proposed acceptance: resonances within 0.5 %, notches within
+0.5 %, coupled-section peak within 1 % and its level within 0.3 dB. A failure means the model form
+is wrong somewhere, and the report says which structure failed.</p>
+</section>
+<section id="identifiability-before-ordering">
+<h3>8.8 Identifiability before ordering<a class="headerlink" href="#identifiability-before-ordering" title="Link to this heading">¶</a></h3>
+<p>A linearized (Fisher) check with the 2D model shows which structures pin which parameters. The
+observables are Z0 (σ 0.75 Ω) and εeff (σ 0.005) per family, one meander’s DC resistance
+(σ 1 %), and microsection readings (h ±5 µm, t ±3 µm, mask thickness ±20 %). Posterior σ per
+parameter as structures are added:</p>
+<p>Board A (prior σ: εr 0.3, h 0.021 mm, etch 0.025 mm, t 7 µm, mask scale 0.5, mask εr 0.3):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Data</p></th>
+<th class="head"><p>εr</p></th>
+<th class="head"><p>h (µm)</p></th>
+<th class="head"><p>etch (µm)</p></th>
+<th class="head"><p>t (µm)</p></th>
+<th class="head"><p>mask scale</p></th>
+<th class="head"><p>mask εr</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>P only (the TRL set)</p></td>
+<td><p>0.19</p></td>
+<td><p>20</p></td>
+<td><p>8.2</p></td>
+<td><p>6.8</p></td>
+<td><p>0.42</p></td>
+<td><p>0.30</p></td>
+</tr>
+<tr class="row-odd"><td><p>+ width set (P0.7, P1.4)</p></td>
+<td><p>0.074</p></td>
+<td><p>14</p></td>
+<td><p>5.6</p></td>
+<td><p>6.7</p></td>
+<td><p>0.18</p></td>
+<td><p>0.29</p></td>
+</tr>
+<tr class="row-even"><td><p>+ mask-off (P-MO)</p></td>
+<td><p>0.070</p></td>
+<td><p>13</p></td>
+<td><p>4.1</p></td>
+<td><p>3.8</p></td>
+<td><p>0.12</p></td>
+<td><p>0.29</p></td>
+</tr>
+<tr class="row-odd"><td><p>+ microstrip pair (M, M-MO)</p></td>
+<td><p>0.015</p></td>
+<td><p>3.5</p></td>
+<td><p>2.6</p></td>
+<td><p>2.6</p></td>
+<td><p>0.12</p></td>
+<td><p>0.29</p></td>
+</tr>
+<tr class="row-even"><td><p>+ DC meander</p></td>
+<td><p>0.0096</p></td>
+<td><p>3.3</p></td>
+<td><p>2.0</p></td>
+<td><p>0.9</p></td>
+<td><p>0.12</p></td>
+<td><p>0.29</p></td>
+</tr>
+<tr class="row-odd"><td><p>+ microsection</p></td>
+<td><p>0.0092</p></td>
+<td><p>2.7</p></td>
+<td><p>1.8</p></td>
+<td><p>0.8</p></td>
+<td><p>0.10</p></td>
+<td><p>0.25</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Board B (prior σ: εr 0.3 each, h_core 0.04 mm, h_pp 0.02 mm, etch 0.025 mm, t 4 µm):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Data</p></th>
+<th class="head"><p>εr core</p></th>
+<th class="head"><p>εr prepreg</p></th>
+<th class="head"><p>h_core (µm)</p></th>
+<th class="head"><p>h_pp (µm)</p></th>
+<th class="head"><p>etch (µm)</p></th>
+<th class="head"><p>t (µm)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>S only (the TRL set)</p></td>
+<td><p>0.25</p></td>
+<td><p>0.16</p></td>
+<td><p>40</p></td>
+<td><p>19</p></td>
+<td><p>8.9</p></td>
+<td><p>4.0</p></td>
+</tr>
+<tr class="row-odd"><td><p>+ width set (S0.7, S1.4)</p></td>
+<td><p>0.21</p></td>
+<td><p>0.13</p></td>
+<td><p>38</p></td>
+<td><p>14</p></td>
+<td><p>5.7</p></td>
+<td><p>4.0</p></td>
+</tr>
+<tr class="row-even"><td><p>+ L1 tie (same 7628 type)</p></td>
+<td><p>0.016</p></td>
+<td><p>0.008</p></td>
+<td><p>38</p></td>
+<td><p>14</p></td>
+<td><p>5.7</p></td>
+<td><p>4.0</p></td>
+</tr>
+<tr class="row-odd"><td><p>+ DC meander</p></td>
+<td><p>0.016</p></td>
+<td><p>0.008</p></td>
+<td><p>38</p></td>
+<td><p>14</p></td>
+<td><p>5.7</p></td>
+<td><p>1.0</p></td>
+</tr>
+<tr class="row-even"><td><p>+ microsection</p></td>
+<td><p>0.016</p></td>
+<td><p>0.008</p></td>
+<td><p>15</p></td>
+<td><p>14</p></td>
+<td><p>4.6</p></td>
+<td><p>0.8</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>What this shows:</p>
+<ul class="simple">
+<li><p>Every core structure earns its place. The microstrip pair matters most on board A: a field
+shape without side grounds weighs height and εr differently from GCPW and cuts the εr and h
+uncertainty by four. The mask-off copy separates the mask, and the DC meander pins t.</p></li>
+<li><p><strong>Only the mask’s Dk × thickness is identifiable</strong> from RF data (their correlation stays near
+0.98); the microsection gives the thickness. The fit reports the product and flags the split as
+prior-dominated.</p></li>
+<li><p><strong>The stripline alone cannot separate the core’s εr from the prepreg’s</strong> (correlation 0.998).
+The L1 tie does, assuming the L1–L2 and L3–L4 7628 plies have the same εr (same glass style,
+possibly different resin content: an assumption the report states). The individual heights
+stay loose without the microsection, but the product quantities (Z0, εeff) are measured
+directly and do not need them. <em>Implementation (2026-10-02):</em> the full fit of board B alone
+does not reproduce the tie (correlation −0.97 to −1.00), because board B’s L1 sticks are all
+masked and the mask is free there; with board A’s fit as the prior (CLI <code class="docutils literal notranslate"><span class="pre">--prior</span></code>) it does
+(user guide §1). A mask-off P stick on board B would make board B self-sufficient.</p></li>
+<li><p><strong>What the product sees.</strong> With all core structures, the predicted σ of the primary family is
+0.3 Ω in Z0 and 0.0027 in εeff on board A (0.4 Ω and 0.003 for S on board B): about ±2.5 MHz
+(1σ) on a 5.8 GHz resonator from the fab model, before lot-to-lot drift.</p></li>
+</ul>
+<p>The check is linear at the nominal point. Board B’s L1 tie holds the L1 line’s own geometry at
+nominal (optimistic), its microsection reading was the total height only (pessimistic), and it used
+one meander width, which leaves etch and t correlated at 0.98; the second meander width of §5.2
+separates them.</p>
+<p>Loss: tan δ against roughness. The same check on attenuation (scikit-rf <code class="docutils literal notranslate"><span class="pre">MLine</span></code> with
+Hammerstad–Bekkadal roughness as a proxy, tan δ 0.018 and Rq 1 µm nominal; σ is the repeatability
+of a line pair’s insertion loss):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Data</p></th>
+<th class="head"><p>≤ 6 GHz, σ 0.05 dB</p></th>
+<th class="head"><p>≤ 6 GHz, σ 0.1 dB</p></th>
+<th class="head"><p>≤ 12 GHz, σ 0.05 dB</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>P, ΔL 40 mm only</p></td>
+<td><p>tan δ ±15 %, Rq ±0.51 µm</p></td>
+<td><p>±26 %, ±0.86 µm</p></td>
+<td><p>±4.4 %, ±0.27 µm</p></td>
+</tr>
+<tr class="row-odd"><td><p>P, ΔL 100 mm</p></td>
+<td><p>±6.5 %, ±0.22 µm</p></td>
+<td><p>±13 %, ±0.42 µm</p></td>
+<td><p>±1.8 %, ±0.11 µm</p></td>
+</tr>
+<tr class="row-even"><td><p>+ P0.7 and P1.4 (ΔL 40 mm)</p></td>
+<td><p>±5.4 %, ±0.18 µm</p></td>
+<td><p>±11 %, ±0.35 µm</p></td>
+<td><p>±1.5 %, ±0.09 µm</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The two stay strongly anti-correlated (−0.9 to −0.97). The frequency shape separates them only as
+far as the roughness model is right; the width set separates them without that assumption, since
+conductor loss scales with width at a fixed frequency and dielectric loss does not. A 6 GHz VNA
+gets tan δ to about ±6–13 %, a 12 GHz VNA to about ±2–4 %.</p>
+</section>
+<section id="outputs-and-how-they-update-yapnr">
+<h3>8.9 Outputs and how they update yapnr<a class="headerlink" href="#outputs-and-how-they-update-yapnr" title="Link to this heading">¶</a></h3>
+<p><strong><code class="docutils literal notranslate"><span class="pre">yapnr-stackup-fit/1</span></code></strong>, one per stackup and lot:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;yapnr-stackup-fit/1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;stackup&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;JLC04161H-7628&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;nominal_sha256&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;lot&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;alias&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-11-a&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;boards&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;A-01&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;A-02&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;A-03&quot;</span><span class="p">],</span><span class="w"> </span><span class="nt">&quot;measured&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-11-20&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;models&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;dielectric&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;djordjevic-sarkar(f1=1e3,f2=1e12,fref=1e9)&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;roughness&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;huray-cannonball&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;etch&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;trapezoid(foot offset, side angle from microsection)&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;mask&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;conformal(30/15 um nominal)&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;parameters&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;dielectric.L1-L2.dk&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">4.31</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;sigma&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.01</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;prior&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">4.4</span><span class="p">,</span><span class="w"> </span><span class="mf">0.3</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;dielectric.L1-L2.df&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.017</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;sigma&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.001</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;copper.L1.etch_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.012</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;sigma&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.002</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;...&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;covariance&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;order&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">],</span><span class="w"> </span><span class="nt">&quot;matrix&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[[</span><span class="s2">&quot;...&quot;</span><span class="p">]]</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;derived&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;P.z0_ohm&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">50.8</span><span class="p">,</span><span class="w"> </span><span class="mf">0.6</span><span class="p">],</span><span class="w"> </span><span class="nt">&quot;P.eps_eff_5g8&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">3.12</span><span class="p">,</span><span class="w"> </span><span class="mf">0.004</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;checks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;chi2_reduced&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1.1</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;held_out&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;ring_f2_rel_err&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.002</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;provenance&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;yapnr&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;scikit-rf&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;data_sha256&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;...&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>(The values are illustrative.) The record updates yapnr in four places:</p>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">rules['stackup']</span></code></strong>, the single stackup source of the FEA design (§7.4 there), gets a
+<code class="docutils literal notranslate"><span class="pre">measured</span></code> overlay with <code class="docutils literal notranslate"><span class="pre">source:</span> <span class="pre">coupon-fit</span></code> and the covariance. The nominal stackup stays what
+the fab is asked for; the overlay changes what yapnr’s models assume, never the order.</p></li>
+<li><p><strong>PnR and SI</strong> read widths for impedance targets (pair rules, controlled-impedance nets) and the
+2D tables of FEA Tier A from the overlay, so a 50 Ω rule produces the width that is 50 Ω on
+this fab.</p></li>
+<li><p><strong>The RF solver.</strong> Today’s <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> stackup is one uniform substrate with air above
+(<code class="docutils literal notranslate"><span class="pre">Stackup(er,</span> <span class="pre">tan_delta,</span> <span class="pre">h,</span> <span class="pre">f_ref,</span> <span class="pre">sigma_cu)</span></code>). An adapter gives it Dk and Df at the design
+frequency, the fitted height, and an effective conductivity σ/K(f_ref)² that carries the
+roughness factor K into the sheet resistance. Until the solver has a mask layer (§12), a masked
+board is represented by an equivalent substrate εr that reproduces the measured εeff of P; that
+is adequate for lines and resonators but not for coupled structures, whose odd mode the mask
+moves more, so the adapter warns.</p></li>
+<li><p><strong>Robust design.</strong> The posterior spread becomes the robust variants of the inverse design: the
+etch σ sets the erosion and dilation of <code class="docutils literal notranslate"><span class="pre">eta_variants</span></code>, and the εr σ a proposed pair of
+material variants (±2σ), so an optimized part keeps its mask over the fab’s measured spread. A
+Monte Carlo over the posterior gives the predicted spread of product metrics (filter centre,
+coupler balance, match at 5.8 GHz) and a first-pass yield estimate in the report.</p></li>
+</ol>
+</section>
+</section>
+<section id="expected-s-parameters">
+<h2>9. Expected S-parameters<a class="headerlink" href="#expected-s-parameters" title="Link to this heading">¶</a></h2>
+<p>Every stick gets a predicted Touchstone file before ordering, published with the board (§11.2), so
+a measurement can be compared at once. Solver per structure:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Structure</p></th>
+<th class="head"><p>Solver</p></th>
+<th class="head"><p>Cost</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>TRL lines, variants, staircase</p></td>
+<td><p>the fit’s own forward model at nominal values (2D RLGC cascade)</p></td>
+<td><p>seconds</p></td>
+</tr>
+<tr class="row-odd"><td><p>coupled sections, filter</p></td>
+<td><p>2D coupled-line 4-ports, closed-form ends</p></td>
+<td><p>seconds</p></td>
+</tr>
+<tr class="row-even"><td><p>ring, stubs (unmasked variants)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> FDTD where it already fits: one copper layer over a ground at h = 0.2104 mm, no vias</p></td>
+<td><p>minutes</p></td>
+</tr>
+<tr class="row-odd"><td><p>launch, via transition, masked ring</p></td>
+<td><p>openEMS run as an external program (GPL, FEA design §6.3), or <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> after §12</p></td>
+<td><p>tens of minutes</p></td>
+</tr>
+<tr class="row-even"><td><p>switch connector, u.FL</p></td>
+<td><p>not predicted (vendor data unverified)</p></td>
+<td><p>–</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Predicted values at nominal parameters:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Quantity</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>P loss, smooth copper, tan δ 0.018 (est.)</p></td>
+<td><p>0.96 / 2.05 / 3.34 / 3.82 dB per 100 mm at 2.4 / 5.8 / 10 / 11.6 GHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>of which conductor loss at 5.8 GHz</p></td>
+<td><p>0.48 dB per 100 mm (×1.3–2 with roughness, est.)</p></td>
+</tr>
+<tr class="row-even"><td><p>M loss</p></td>
+<td><p>0.90 / 1.99 / 3.28 / 3.77 dB per 100 mm</p></td>
+</tr>
+<tr class="row-odd"><td><p>S loss</p></td>
+<td><p>1.23 / 2.63 / 4.28 / 4.89 dB per 100 mm</p></td>
+</tr>
+<tr class="row-even"><td><p>A06 (120 mm of P) insertion loss at 5.8 GHz</p></td>
+<td><p>about 2.5–3.0 dB with roughness, plus the connectors</p></td>
+</tr>
+<tr class="row-odd"><td><p>P0.7, P1.4 sticks: worst-case reflection</p></td>
+<td><p>−16.5 dB and −15.7 dB, ripple period 2.1 GHz</p></td>
+</tr>
+<tr class="row-even"><td><p>S0.7, S1.4</p></td>
+<td><p>−16.2 dB and −15.5 dB</p></td>
+</tr>
+<tr class="row-odd"><td><p>ring A14 resonances (before gap and curvature)</p></td>
+<td><p>2.903, 5.800, 8.690, 11.573 GHz</p></td>
+</tr>
+<tr class="row-even"><td><p>ring B11 resonances</p></td>
+<td><p>2.90, 5.80, 8.70, 11.60 GHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>stub A15 notches</p></td>
+<td><p>5.80 GHz (and 17.3 GHz)</p></td>
+</tr>
+<tr class="row-even"><td><p>stub A16 notches</p></td>
+<td><p>5.80 and 11.58 GHz</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Loss is Wheeler’s incremental inductance on the 2D model (conductor) plus the tan δ weighted by
+the filling factors (dielectric, mask tan δ 0.025 est.). scikit-rf’s <code class="docutils literal notranslate"><span class="pre">MLine</span></code> gives 2.0–3.0 dB per
+100 mm at 6 GHz for tan δ 0.015–0.02 and Rq 0.15–1.5 µm on the unmasked microstrip, consistent
+with these.</p>
+</section>
+<section id="synthetic-recovery-validation">
+<h2>10. Synthetic-recovery validation<a class="headerlink" href="#synthetic-recovery-validation" title="Link to this heading">¶</a></h2>
+<p>Before ordering, the whole pipeline must recover known parameters from data that look like a real
+session:</p>
+<ol class="arabic simple">
+<li><p><strong>Truth.</strong> Draw a parameter vector from the priors of §8.1 (and a set of ±2σ corner cases).</p></li>
+<li><p><strong>Simulate</strong> every stick at the truth: the forward model of §8.5 on a finer 2D mesh than the fit
+uses (so mesh error is not shared), and for the held-out ring and stubs the FDTD where it
+applies, so that physics the fit omits (radiation, discontinuity detail) is present.</p></li>
+<li><p><strong>Embed</strong> each stick between random connector error boxes: a series inductance, shunt
+capacitance and short coaxial delay per connector, varied between sticks by the spread of
+soldered SMAs (est. ±10 % in L and C, ±0.05 mm in delay), or nearly fixed for a clamp-on pair.
+Add a residual SOLT error (directivity −40 dB, source match −35 dB, est.).</p></li>
+<li><p><strong>Add noise:</strong> complex trace noise at −60 dB, a cable-flex term of 0.02 dB and 0.2° per
+connection, and a linear phase drift of 0.5° at 10 GHz over the session.</p></li>
+<li><p><strong>Run</strong> the pipeline unchanged: quality checks, two-tier multiline TRL, reference impedance,
+joint fit, held-out checks.</p></li>
+<li><p><strong>Pass</strong> when, over 50 draws: the 2σ intervals contain the truth for at least 90 % of
+parameters and draws; the mean bias is below 0.5σ; the reported σ is within a factor 1.5 of the
+empirical spread over noise realizations; and the held-out predictions pass §8.7.</p></li>
+</ol>
+<p>Two negative tests check that the pipeline fails loudly: without the mask-off stick the mask and
+εr must come out with a correlation above 0.9 and a warning; with the connector spread doubled the
+verification line must exceed its threshold. The identifiability results of §8.8 are the linear
+version of this test and set its expectations.</p>
+</section>
+<section id="layout-of-the-code-data-and-docs">
+<h2>11. Layout of the code, data and docs<a class="headerlink" href="#layout-of-the-code-data-and-docs" title="Link to this heading">¶</a></h2>
+<p>The package sits under <code class="docutils literal notranslate"><span class="pre">yapnr/rf/</span></code> and lands after the #29 branch (which creates <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code>)
+merges.</p>
+<section id="modules">
+<h3>11.1 Modules<a class="headerlink" href="#modules" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>Contents</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/stackups.py</span></code></p></td>
+<td><p>layered stackups (JLC04161H-7628, JLC06161H-7628, JLC06161H-2116C) with sources, tolerances and priors</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/families.py</span></code></p></td>
+<td><p>line families: cross-sections, 2D results, local surrogates, cache</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/xsec.py</span></code></p></td>
+<td><p>adapter to the 2D cross-section solver (the FEA worker’s <code class="docutils literal notranslate"><span class="pre">xsec</span></code>, FEA design §7.2), or shipped tables</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/catalog.py</span></code></p></td>
+<td><p>sticks per board: structures, dimensions, tiers, line-length conditioning</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/launch.py</span></code></p></td>
+<td><p>edge launch and via transition geometry</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/layout.py</span></code></p></td>
+<td><p>the KiCad board writer (headless pcbnew in a time-bounded worker), panel packing, labels, fab notes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/models.py</span></code></p></td>
+<td><p>forward models: RLGC lines, Djordjevic–Sarkar, roughness, discontinuities, cascades, coupled 4-ports</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/expected.py</span></code></p></td>
+<td><p>expected S-parameters → Touchstone</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/session.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr-coupon-session/1</span></code>, file names, quality checks</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/calibrate.py</span></code></p></td>
+<td><p>two-tier multiline TRL, TDR Z0, error-box export</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/fit.py</span></code></p></td>
+<td><p>joint fit, priors, uncertainty, systematic refits, held-out checks</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/export.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr-stackup-fit/1</span></code>, the <code class="docutils literal notranslate"><span class="pre">rules['stackup']</span></code> overlay, the <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> stackup adapter</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/synthetic.py</span></code></p></td>
+<td><p>synthetic sessions for §10</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons/data/</span></code></p></td>
+<td><p>per-stackup 2D surrogate tables (JSON), regenerated by a tool, not by hand</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="examples-and-docs">
+<h3>11.2 Examples and docs<a class="headerlink" href="#examples-and-docs" title="Link to this heading">¶</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>examples/rf-coupons/
+  JLC04161H-7628/            board-A.kicad_pro, board-A.kicad_pcb, catalog.json, expected/*.s2p,
+                             fab/ (gerbers via kicad-cli, drill, fab notes, order options)
+  JLC06161H-2116C/           board-B.* (same layout; the product&#39;s stackup)
+  measurements/README.md     the session layout of §7.6
+docs/rf-fab-coupons.md       user guide: order, assemble, measure, run the fit, read the report
+docs/design/rf-fab-coupons.md  this design
+</pre></div>
+</div>
+<p>The boards are generated, never hand-edited, and checked with <code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">pcb</span> <span class="pre">drc</span></code> from the
+headless KiCad. Whether measured sessions are published under <code class="docutils literal notranslate"><span class="pre">examples/rf-coupons/measurements/</span></code>
+is the owner’s call (§14); they contain no private data if lot aliases are used.</p>
+</section>
+<section id="tests">
+<h3>11.3 Tests<a class="headerlink" href="#tests" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Unit (CI, no FEA environment):</strong> stackup data (layer sums, sources); catalogue geometry
+(lengths, the conditioning table of §5.1, sticks inside the panel, no overlaps); Djordjevic–Sarkar
+causality (Kramers–Kronig) and agreement with scikit-rf’s implementation; roughness factor
+limits; the cascade model of a uniform line against scikit-rf; multiline TRL recovering γ exactly
+from noise-free synthetic data; a small fit with a linear surrogate; manifest and file-name
+parsing.</p></li>
+<li><p><strong>Tier 1 (FEA environment):</strong> the 2D tables of §4.3 and §8.8 reproduced within 0.1 Ω and 0.002
+in εeff.</p></li>
+<li><p><strong>Slow (manual):</strong> the full synthetic recovery of §10; FDTD of the unmasked ring and stubs; board
+generation with DRC and gerber export.</p></li>
+</ul>
+</section>
+<section id="command-line">
+<h3>11.4 Command line<a class="headerlink" href="#command-line" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">rf</span> <span class="pre">coupons</span> <span class="pre">generate</span> <span class="pre">|</span> <span class="pre">expected</span> <span class="pre">|</span> <span class="pre">check-session</span> <span class="pre">|</span> <span class="pre">calibrate</span> <span class="pre">|</span> <span class="pre">fit</span> <span class="pre">|</span> <span class="pre">report</span></code>, each a
+time-bounded step writing files, as in the rest of <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code>.</p>
+</section>
+<section id="dependencies">
+<h3>11.5 Dependencies<a class="headerlink" href="#dependencies" title="Link to this heading">¶</a></h3>
+<p>The calibration needs scikit-rf (BSD-3), which brings scipy and pandas. None of the three is in the
+lock today. They go into an optional <code class="docutils literal notranslate"><span class="pre">rf-lab</span></code> extra with its own lock, which the calibration and
+the fit (scipy’s <code class="docutils literal notranslate"><span class="pre">least_squares</span></code>) run with, so the core install keeps numpy and torch only. The
+generator and the expected S-parameters need only numpy. The 2D solver (scikit-fem, BSD-3; gmsh,
+GPL-2.0-or-later) stays in the FEA worker environment, and measurement-side users only need the
+shipped surrogate tables. Hatab’s multiline TRL code (BSD-3) is a reference and a cross-check, not
+a dependency.</p>
+</section>
+</section>
+<section id="prerequisites-in-yapnr-rf-and-the-fea-work">
+<h2>12. Prerequisites in <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> and the FEA work<a class="headerlink" href="#prerequisites-in-yapnr-rf-and-the-fea-work" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p><strong>Layered stackups.</strong> <code class="docutils literal notranslate"><span class="pre">yapnr.rf.stackup</span></code> covers one substrate; the coupons need several
+dielectrics, inner copper layers and a mask (<code class="docutils literal notranslate"><span class="pre">stackups.py</span></code> above, shared with the FEA
+<code class="docutils literal notranslate"><span class="pre">rules['stackup']</span></code> view).</p></li>
+<li><p><strong>A 2D cross-section solver in yapnr.</strong> The FEA design’s Tier A solver
+(<code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/xsec.py</span></code>) with conformal mask regions, trapezoidal traces and the Wheeler
+loss factor; whichever lands first serves both.</p></li>
+<li><p><strong>FDTD extensions</strong> for the launch and via work: εr per z-cell (the mask slab), more than one
+copper layer, and vias as PEC edges in z (the solver already has PEC edges). Until then the 3D
+launch and via checks run in openEMS as an external program.</p></li>
+<li><p><strong>Frequency-dependent materials</strong> in the RF solver (Djordjevic–Sarkar, roughness), or at least
+the adapter of §8.9 at the design frequency.</p></li>
+</ol>
+</section>
+<section id="risks">
+<h2>13. Risks<a class="headerlink" href="#risks" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Risk</p></th>
+<th class="head"><p>Mitigation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Soldered connectors differ, breaking TRL’s identical error boxes</p></td>
+<td><p>verification lines, repeat connections, connector spread in the synthetic test, optional clamp-on pair</p></td>
+</tr>
+<tr class="row-odd"><td><p>A 6 GHz VNA cannot reach 11.6 GHz or check the launch above 6 GHz</p></td>
+<td><p>design to 18 GHz; borrow a lab VNA for one session; loss separation degrades as in §8.8</p></td>
+</tr>
+<tr class="row-even"><td><p>Laminate supplier and lot vary</p></td>
+<td><p>rail coupons on every product order; per-lot refits with the board fit as prior</p></td>
+</tr>
+<tr class="row-odd"><td><p>The fab changes widths during impedance-control review</p></td>
+<td><p>the fab notes ask it not to; any change is recorded and modelled</p></td>
+</tr>
+<tr class="row-even"><td><p>Model-form error (roughness model, 2D quasi-static, GCPW dispersion)</p></td>
+<td><p>held-out structures; systematic refits; FDTD spot checks</p></td>
+</tr>
+<tr class="row-odd"><td><p>7628 glass weave and anisotropy</p></td>
+<td><p>all lines on one axis; the rotated and cross-axis sticks bound the effect</p></td>
+</tr>
+<tr class="row-even"><td><p>Mask varies in narrow gaps</p></td>
+<td><p>the coupled sections and the microsection; the fit reports Dk × thickness, not each</p></td>
+</tr>
+<tr class="row-odd"><td><p>ENIG nickel adds loss on exposed copper</p></td>
+<td><p>a separate surface-resistance factor, fitted on the mask-off stick</p></td>
+</tr>
+<tr class="row-even"><td><p>Moisture changes loss</p></td>
+<td><p>conditioning and logged humidity; a repeat after baking bounds it</p></td>
+</tr>
+<tr class="row-odd"><td><p>Vendor ratings unverified (switch connector, u.FL, SMA variant)</p></td>
+<td><p>checked against datasheets before layout; their sticks measure them anyway</p></td>
+</tr>
+<tr class="row-even"><td><p>DIY microsection is imprecise</p></td>
+<td><p>entered as a prior with stated σ; the fit does not depend on it for Z0 and εeff</p></td>
+</tr>
+<tr class="row-odd"><td><p>Panel fee or rejection of break-out sticks</p></td>
+<td><p>fallback: one board per family set with a stepped outline</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="open-questions-for-the-owner">
+<h2>14. Open questions for the owner<a class="headerlink" href="#open-questions-for-the-owner" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p><strong>Product line type:</strong> L1 GCPW under mask (the default P), microstrip, or mask-free RF lines?
+It sets the primary family.</p></li>
+<li><p><s><strong>Board B stackup:</strong> JLC06161H-7628 (default, shares L1 with board A) or JLC06161H-2116C?</s>
+Decided 2026-10-02: JLC06161H-2116C, the product stackup (§4.2).</p></li>
+<li><p><strong>Connectors:</strong> soldered 142-0701-851 on every measured stick, or one reusable clamp-on pair for
+the TRL sets as well?</p></li>
+<li><p><strong>VNA:</strong> which instrument, and is a lab VNA to at least 13.5 GHz available for one session?</p></li>
+<li><p><strong>Finish</strong> for the 4-layer product: ENIG (recommended) or HASL?</p></li>
+<li><p><strong>Scope:</strong> core sticks only, or the extended set too (panel area, §5.5)?</p></li>
+<li><p><strong>Data:</strong> publish measured sessions in the repository?</p></li>
+<li><p><strong>Dependencies:</strong> scikit-rf as an optional <code class="docutils literal notranslate"><span class="pre">rf-lab</span></code> extra?</p></li>
+</ol>
+</section>
+<section id="implementation-order">
+<h2>15. Implementation order<a class="headerlink" href="#implementation-order" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Stackups, families and the 2D adapter; reproduce §4.3 and §5.1 in tests.</p></li>
+<li><p>Forward models, expected S-parameters, and the synthetic recovery of §10 (must pass before any
+order).</p></li>
+<li><p>Launch and via tuning in 3D; freeze the geometry.</p></li>
+<li><p>The KiCad generator, DRC, gerbers and fab notes for boards A and B; owner review. <strong>The owner
+orders.</strong></p></li>
+<li><p>Session tooling, quality checks and two-tier multiline TRL.</p></li>
+<li><p>Joint fit, uncertainty, held-out checks, export and the adapters of §8.9.</p></li>
+<li><p>Measurement campaign (at least three boards per stackup), report, the product design update,
+and the rail coupon added to the product panel.</p></li>
+</ol>
+<p>The decisions of §14 go into <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code> once taken.</p>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
+<p>Standards and vendor pages (read on 2026-10-02 unless marked):</p>
+<ul class="simple">
+<li><p>IPC-TM-650 test methods 2.5.5.7A (characteristic impedance by TDR), 2.5.5.11 (propagation delay
+by TDR), 2.5.5.14 (high-frequency loss and propagation by frequency-domain methods), 2.5.5.5C,
+2.5.5.13, 2.5.5.15 (material methods, out of scope), from the IPC test-method index; 2.1.1
+(microsectioning, not re-checked). IPC-2141A, <em>Design Guide for High-Speed Controlled Impedance
+Circuit Boards</em> (2004, not re-checked).</p></li>
+<li><p>[IEEE370] IEEE Std 370-2020, <em>IEEE Standard for Electrical Characterization of Printed Circuit
+Board and Related Interconnects at Frequencies up to 50 GHz</em>, doi:10.1109/IEEESTD.2021.9316329;
+open code at gitlab.com/IEEE-SA/ElecChar/P370.</p></li>
+<li><p>JLCPCB impedance-control stackups (jlcpcb.com/impedance) and PCB capabilities.</p></li>
+<li><p>[Rosas07] B. Rosas, “Optimizing Test Boards for 50 GHz End Launch Connectors”, Southwest
+Microwave application note, 2007; Southwest Microwave end-launch product page.</p></li>
+<li><p>Bel/Cinch product page for 142-0701-851; Hirose U.FL (via Wikipedia; the vendor page refused);
+LibreVNA (github.com/jankae/LibreVNA).</p></li>
+</ul>
+<p>Calibration and measurement:</p>
+<ul class="simple">
+<li><p>[Engen79] G. F. Engen, C. A. Hoer, “Thru-Reflect-Line: an improved technique for calibrating the
+dual six-port automatic network analyzer”, IEEE T-MTT 27(12), 987–993, 1979.</p></li>
+<li><p>[Marks91] R. B. Marks, “A multiline method of network analyzer calibration”, IEEE T-MTT 39(7),
+1205–1215, 1991.</p></li>
+<li><p>[MarksWilliams91] R. B. Marks, D. F. Williams, “Characteristic impedance determination using
+propagation constant measurement”, IEEE MGWL 1(6), 141–143, 1991.</p></li>
+<li><p>[WilliamsMarks91] D. F. Williams, R. B. Marks, “Transmission line capacitance measurement”, IEEE
+MGWL 1(9), 243–245, 1991.</p></li>
+<li><p>[Jargon95] J. A. Jargon, R. B. Marks, “Two-tier multiline TRL for calibration of low-cost
+network analyzers”, 46th ARFTG Conference Digest, 1–8, 1995.</p></li>
+<li><p>[Janezic99] M. D. Janezic, J. A. Jargon, “Complex permittivity determination from propagation
+constant measurements”, IEEE MGWL 9(2), 76–78, 1999.</p></li>
+<li><p>[DeGroot02] D. C. DeGroot, J. A. Jargon, R. B. Marks, “Multiline TRL revealed”, 60th ARFTG
+Conference Digest, 131–155, 2002.</p></li>
+<li><p>[Hatab22] Z. Hatab, M. Gadringer, W. Bösch, “Improving the reliability of the multiline TRL
+calibration algorithm”, 98th ARFTG Conference, 2022.</p></li>
+<li><p>[Hatab23] Z. Hatab, M. Gadringer, W. Bösch, “Propagation of linear uncertainties through
+multiline thru-reflect-line calibration”, IEEE TIM 72, 2023.</p></li>
+<li><p>[Hatab26] Z. Hatab, M. Gadringer, W. Bösch, “The choice of line lengths in multiline
+thru-reflect-line calibration”, IEEE TIM 75, 8005423, 2026; code at
+github.com/ZiadHatab/multiline-trl-calibration (BSD-3).</p></li>
+<li><p>[Wolff71] I. Wolff, N. Knoppik, “Microstrip ring resonator and dispersion measurement on
+microstrip lines”, Electronics Letters 7(26), 779–781, 1971.</p></li>
+<li><p>[Chang04] K. Chang, L.-H. Hsieh, <em>Microwave Ring Circuits and Related Structures</em>, 2nd ed.,
+Wiley, 2004.</p></li>
+<li><p>[Loyer07] J. Loyer, R. Kunze, X. Ye, “Fiber weave effect: practical impact analysis and
+mitigation strategies”, DesignCon 2007 (not indexed by Crossref; not re-checked).</p></li>
+</ul>
+<p>Materials and conductors:</p>
+<ul class="simple">
+<li><p>[Djordjevic01] A. R. Djordjević, R. M. Biljić, V. D. Likar-Smiljanić, T. K. Sarkar, “Wideband
+frequency-domain characterization of FR-4 and time-domain causality”, IEEE T-EMC 43(4),
+662–667, 2001.</p></li>
+<li><p>[Svensson01] C. Svensson, G. E. Dermer, “Time domain modeling of lossy interconnects”, IEEE
+T-AdvP 24(2), 191–196, 2001.</p></li>
+<li><p>[Wheeler42] H. A. Wheeler, “Formulas for the skin effect”, Proc. IRE 30(9), 412–424, 1942.</p></li>
+<li><p>Hammerstad and Bekkadal, <em>Microstrip Handbook</em>, ELAB report, University of Trondheim, 1975 (the
+roughness correction in scikit-rf’s <code class="docutils literal notranslate"><span class="pre">MLine</span></code>; not re-checked).</p></li>
+<li><p>[Groiss96] S. Groiss, I. Bardi, O. Biro, K. Preis, K. R. Richter, “Parameters of lossy cavity
+resonators calculated by the finite element method”, IEEE T-Magn 32(3), 894–897, 1996.</p></li>
+<li><p>[Huray07] P. G. Huray et al., “Fundamentals of a 3-D ‘snowball’ model for surface roughness
+power losses”, IEEE Workshop on Signal Propagation on Interconnects, 121–124, 2007.</p></li>
+<li><p>[Simonovich16] B. Simonovich, “Practical method for modeling conductor roughness using cubic
+close-packing of equal spheres”, IEEE EMC Symposium, 917–920, 2016.</p></li>
+<li><p>[Shlepnev11] Y. Shlepnev, C. Nwachukwu, “Roughness characterization for interconnect analysis”,
+IEEE EMC Symposium, 518–523, 2011.</p></li>
+<li><p>[ShlepnevMcMorrow11] Y. Shlepnev, S. McMorrow, “Nickel characterization for interconnect
+analysis”, IEEE EMC Symposium, 524–529, 2011.</p></li>
+<li><p>[Koledintseva12] M. Y. Koledintseva et al., “PCB conductor surface roughness as a layer with
+effective material parameters”, IEEE EMC Symposium, 138–143, 2012.</p></li>
+<li><p>[Gold17] G. Gold, K. Helmreich, “A physical surface roughness model and its applications”, IEEE
+T-MTT 65(10), 3720–3732, 2017.</p></li>
+</ul>
+<p>Lines and discontinuities:</p>
+<ul class="simple">
+<li><p>[HJ80] E. Hammerstad, Ø. Jensen, “Accurate models for microstrip computer-aided design”, IEEE
+MTT-S Digest, 407–409, 1980.</p></li>
+<li><p>[KJK81] M. Kirschning, R. H. Jansen, N. H. L. Koster, “Accurate model for open end effect of
+microstrip lines”, Electronics Letters 17(3), 123–125, 1981.</p></li>
+<li><p>[KJ82] M. Kirschning, R. H. Jansen, “Accurate model for effective dielectric constant of
+microstrip with validity up to millimetre-wave frequencies”, Electronics Letters 18(6),
+272–273, 1982.</p></li>
+<li><p>[KJ84] M. Kirschning, R. H. Jansen, “Accurate wide-range design equations for the
+frequency-dependent characteristic of parallel coupled microstrip lines”, IEEE T-MTT 32(1),
+83–90, 1984.</p></li>
+<li><p>[Goldfarb91] M. E. Goldfarb, R. A. Pucel, “Modeling via hole grounds in microstrip”, IEEE MGWL
+1(6), 135–137, 1991.</p></li>
+<li><p>[Gupta96] K. C. Gupta, R. Garg, I. Bahl, P. Bhartia, <em>Microstrip Lines and Slotlines</em>, 2nd ed.,
+Artech House, 1996.</p></li>
+<li><p>[Simons01] R. N. Simons, <em>Coplanar Waveguide Circuits, Components, and Systems</em>, Wiley, 2001.</p></li>
+<li><p>[MYJ64] G. L. Matthaei, L. Young, E. M. T. Jones, <em>Microwave Filters, Impedance-Matching
+Networks, and Coupling Structures</em>, McGraw-Hill, 1964.</p></li>
+<li><p>[Pozar12] D. M. Pozar, <em>Microwave Engineering</em>, 4th ed., Wiley, 2012.</p></li>
+<li><p>E. Bogatin, <em>Signal and Power Integrity — Simplified</em>, 3rd ed., Prentice Hall, 2018 (general
+background on TDR and loss).</p></li>
+</ul>
+<p>Journal and conference entries above were checked against Crossref on 2026-10-02 unless marked.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="cloud-experiments.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="rf-topology-optimization.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Design: RF microstrip inverse design by topology optimization</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Design: fab-model test coupons</a><ul>
+<li><a class="reference internal" href="#goals">1. Goals</a><ul>
+<li><a class="reference internal" href="#what-the-coupons-determine">1.1 What the coupons determine</a></li>
+<li><a class="reference internal" href="#requirements">1.2 Requirements</a></li>
+<li><a class="reference internal" href="#non-goals">1.3 Non-goals</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#summary">2. Summary</a></li>
+<li><a class="reference internal" href="#why-the-fab-model-needs-measuring">3. Why the fab model needs measuring</a></li>
+<li><a class="reference internal" href="#stackups-boards-and-line-families">4. Stackups, boards and line families</a><ul>
+<li><a class="reference internal" href="#board-a-jlc04161h-7628-4-layers-1-6-mm">4.1 Board A: JLC04161H-7628 (4 layers, 1.6 mm)</a></li>
+<li><a class="reference internal" href="#board-b-jlc06161h-2116c-6-layers-1-6-mm">4.2 Board B: JLC06161H-2116C (6 layers, 1.6 mm)</a></li>
+<li><a class="reference internal" href="#line-families-and-their-dimensions">4.3 Line families and their dimensions</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#coupon-structures">5. Coupon structures</a><ul>
+<li><a class="reference internal" href="#the-stick-format">5.1 The stick format</a></li>
+<li><a class="reference internal" href="#board-a-catalogue-jlc04161h-7628">5.2 Board A catalogue (JLC04161H-7628)</a></li>
+<li><a class="reference internal" href="#board-b-catalogue-jlc06161h-2116c">5.3 Board B catalogue (JLC06161H-2116C)</a></li>
+<li><a class="reference internal" href="#product-rail-coupon">5.4 Product rail coupon</a></li>
+<li><a class="reference internal" href="#panel-outline-and-labels">5.5 Panel, outline and labels</a></li>
+<li><a class="reference internal" href="#fab-notes">5.6 Fab notes</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#launches-and-connectors">6. Launches and connectors</a><ul>
+<li><a class="reference internal" href="#connectors">6.1 Connectors</a></li>
+<li><a class="reference internal" href="#edge-launch">6.2 Edge launch</a></li>
+<li><a class="reference internal" href="#via-transition-board-b">6.3 Via transition (board B)</a></li>
+<li><a class="reference internal" href="#u-fl-and-switch-connectors">6.4 u.FL and switch connectors</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#measurement-procedure">7. Measurement procedure</a><ul>
+<li><a class="reference internal" href="#equipment">7.1 Equipment</a></li>
+<li><a class="reference internal" href="#preparation">7.2 Preparation</a></li>
+<li><a class="reference internal" href="#vna-settings-and-calibration">7.3 VNA settings and calibration</a></li>
+<li><a class="reference internal" href="#sequence-per-board">7.4 Sequence per board</a></li>
+<li><a class="reference internal" href="#microsection">7.5 Microsection</a></li>
+<li><a class="reference internal" href="#files-and-manifest">7.6 Files and manifest</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#extraction-pipeline">8. Extraction pipeline</a><ul>
+<li><a class="reference internal" href="#parameters-and-priors">8.1 Parameters and priors</a></li>
+<li><a class="reference internal" href="#stage-1-quality-checks">8.2 Stage 1: quality checks</a></li>
+<li><a class="reference internal" href="#stage-2-multiline-trl">8.3 Stage 2: multiline TRL</a></li>
+<li><a class="reference internal" href="#stage-3-reference-impedance">8.4 Stage 3: reference impedance</a></li>
+<li><a class="reference internal" href="#stage-4-joint-fit">8.5 Stage 4: joint fit</a></li>
+<li><a class="reference internal" href="#stage-5-uncertainty">8.6 Stage 5: uncertainty</a></li>
+<li><a class="reference internal" href="#stage-6-held-out-checks">8.7 Stage 6: held-out checks</a></li>
+<li><a class="reference internal" href="#identifiability-before-ordering">8.8 Identifiability before ordering</a></li>
+<li><a class="reference internal" href="#outputs-and-how-they-update-yapnr">8.9 Outputs and how they update yapnr</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#expected-s-parameters">9. Expected S-parameters</a></li>
+<li><a class="reference internal" href="#synthetic-recovery-validation">10. Synthetic-recovery validation</a></li>
+<li><a class="reference internal" href="#layout-of-the-code-data-and-docs">11. Layout of the code, data and docs</a><ul>
+<li><a class="reference internal" href="#modules">11.1 Modules</a></li>
+<li><a class="reference internal" href="#examples-and-docs">11.2 Examples and docs</a></li>
+<li><a class="reference internal" href="#tests">11.3 Tests</a></li>
+<li><a class="reference internal" href="#command-line">11.4 Command line</a></li>
+<li><a class="reference internal" href="#dependencies">11.5 Dependencies</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#prerequisites-in-yapnr-rf-and-the-fea-work">12. Prerequisites in <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> and the FEA work</a></li>
+<li><a class="reference internal" href="#risks">13. Risks</a></li>
+<li><a class="reference internal" href="#open-questions-for-the-owner">14. Open questions for the owner</a></li>
+<li><a class="reference internal" href="#implementation-order">15. Implementation order</a></li>
+<li><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../static/design-tabs.js?v=f930bc37"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = "pre.mermaid {\n    /* Same as .mermaid-container > pre */\n    display: block;\n    width: 100%;\n}\n\npre.mermaid > svg {\n    /* Same as .mermaid-container > pre > svg */\n    height: auto;\n    width: 100%;\n    max-width: 100% !important;\n}";
+    document.head.appendChild(defaultStyle);
+
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = ".mermaid-container {\n    position: relative;\n    display: flex;\n    flex-direction: row;\n    width: 100%;\n}\n\n.mermaid-container > pre {\n    display: block;\n    width: 100%;\n}\n\n.mermaid-container > pre > svg {\n    height: auto;\n    width: 100%;\n    max-width: 100% !important;\n}\n\n.mermaid-fullscreen-btn {\n    position: absolute;\n    width: 28px;\n    height: 28px;\n    background: rgba(255, 255, 255, 0.95);\n    border: 1px solid rgba(0, 0, 0, 0.3);\n    border-radius: 4px;\n    cursor: pointer;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    transition: all 0.2s;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);\n    font-size: 14px;\n    line-height: 1;\n    padding: 0;\n    color: #333;\n}\n\n.mermaid-fullscreen-btn:hover {\n    opacity: 100% !important;\n    background: rgba(255, 255, 255, 1);\n    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);\n    transform: scale(1.1);\n}\n\n.mermaid-fullscreen-btn.dark-theme {\n    background: rgba(50, 50, 50, 0.95);\n    border: 1px solid rgba(255, 255, 255, 0.3);\n    color: #e0e0e0;\n}\n\n.mermaid-fullscreen-btn.dark-theme:hover {\n    background: rgba(60, 60, 60, 1);\n    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);\n}\n\n.mermaid-fullscreen-modal {\n    display: none;\n    position: fixed !important;\n    top: 0 !important;\n    left: 0 !important;\n    width: 95vw;\n    height: 100vh;\n    background: rgba(255, 255, 255, 0.98);\n    z-index: 9999;\n    padding: 20px;\n    overflow: auto;\n}\n\n.mermaid-fullscreen-modal.dark-theme {\n    background: rgba(0, 0, 0, 0.98);\n}\n\n.mermaid-fullscreen-modal.active {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen {\n    position: relative;\n    width: 95vw;\n    height: 90vh;\n    max-width: 95vw;\n    max-height: 90vh;\n    background: white;\n    border-radius: 8px;\n    padding: 20px;\n    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);\n    overflow: auto;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen.dark-theme {\n    background: #1a1a1a;\n    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);\n}\n\n.mermaid-container-fullscreen pre.mermaid {\n    width: 100%;\n    height: 100%;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen .mermaid svg {\n    height: 100% !important;\n    width: 100% !important;\n    cursor: grab;\n}\n\n.mermaid-fullscreen-close {\n    position: fixed !important;\n    top: 20px !important;\n    right: 20px !important;\n    width: 40px;\n    height: 40px;\n    background: rgba(255, 255, 255, 0.95);\n    border: 1px solid rgba(0, 0, 0, 0.2);\n    border-radius: 50%;\n    cursor: pointer;\n    z-index: 10000;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);\n    transition: all 0.2s;\n    font-size: 24px;\n    line-height: 1;\n    color: #333;\n}\n\n.mermaid-fullscreen-close:hover {\n    background: white;\n    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);\n    transform: scale(1.1);\n}\n\n.mermaid-fullscreen-close.dark-theme {\n    background: rgba(50, 50, 50, 0.95);\n    border: 1px solid rgba(255, 255, 255, 0.2);\n    color: #e0e0e0;\n}\n\n.mermaid-fullscreen-close.dark-theme:hover {\n    background: rgba(60, 60, 60, 1);\n    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);\n}\n\n.mermaid-fullscreen-modal .mermaid-fullscreen-btn {\n    display: none !important;\n}";
+    document.head.appendChild(fullscreenStyle);
+}
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
+        return brightness < 128;
+    }
+    // console.log("No dark or light theme detected, defaulting to light theme");
+    return false;
+};
+
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
+let _lazyObserver = null;
+let _renderQueue = Promise.resolve();
+let closeModal = () => {};
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal?.classList.contains('active')) {
+        closeModal();
+    }
+});
+
+// Apply d3 zoom to each SVG. Idempotent: an SVG already wrapped is skipped,
+// so this is safe to call both for the initial batch and for diagrams that
+// render lazily once they become visible.
+const addZoomToSvgs = (svgs) => {
+    svgs.each(function() {
+        if (this.getAttribute('data-zoom-applied') === 'true') return;
+        var svg = d3.select(this);
+        svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+        var inner = svg.select("g");
+        var zoom = d3.zoom().on("zoom", function(event) {
+            inner.attr("transform", event.transform);
+        });
+        svg.call(zoom);
+        this.setAttribute('data-zoom-applied', 'true');
+    });
+};
+
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        // Disconnect any previous lazy rendering observer
+        if (_lazyObserver) {
+            _lazyObserver.disconnect();
+            _lazyObserver = null;
+        }
+
+        all_mermaids.forEach((el) => {
+            el.removeAttribute('data-mermaid-deferred');
+            el.removeAttribute('data-mermaid-render-failed');
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+
+        // Separate visible and hidden elements. Mermaid's layout engine measures
+        // text dimensions via the DOM, which fails for elements hidden by a parent
+        // (e.g., Reveal.js non-active slides, sphinx-design unopened tabs),
+        // producing broken SVGs. Render visible elements now, defer hidden ones.
+        const visible = [];
+        const hidden = [];
+        all_mermaids.forEach((el) => {
+            // offsetParent is null for display:none ancestors.
+            // getClientRects().length > 0 catches position:fixed elements
+            // (which also have null offsetParent but are still visible).
+            if (el.offsetParent !== null || el.getClientRects().length > 0) {
+                visible.push(el);
+            } else {
+                hidden.push(el);
+                el.setAttribute('data-mermaid-deferred', 'true');
+            }
+        });
+
+        if (visible.length > 0) {
+            try {
+                await mermaid.run({ nodes: visible });
+            } catch (e) {
+                console.error("Mermaid rendering failed:", e);
+            }
+        }
+
+        // Lazily render hidden elements when they become visible.
+        // Uses a promise chain (_renderQueue) to serialize rendering,
+        // since IntersectionObserver may report multiple entries at once
+        // and mermaid.run() is not safe to call concurrently.
+        if (hidden.length > 0) {
+            if (typeof IntersectionObserver === 'undefined') {
+                console.warn("IntersectionObserver not available; hidden mermaid diagrams will not render.");
+            } else {
+                _renderQueue = Promise.resolve();
+                _lazyObserver = new IntersectionObserver((entries) => {
+                    for (const entry of entries) {
+                        if (entry.isIntersecting && entry.target.getAttribute("data-processed") !== "true") {
+                            _lazyObserver.unobserve(entry.target);
+                            const el = entry.target;
+                            _renderQueue = _renderQueue.then(async () => {
+                                try {
+                                    await mermaid.run({ nodes: [el] });
+                                    el.removeAttribute('data-mermaid-deferred');
+                                    // Apply zoom to the now-rendered diagram, matching
+                                    // the decoration visible diagrams receive.
+                                    if (false) {
+                                        addZoomToSvgs(d3.selectAll("").select(function() {
+                                            return this.querySelector("svg");
+                                        }));
+                                    }
+                                } catch (e) {
+                                    console.error("Mermaid deferred rendering failed:", e);
+                                    el.removeAttribute('data-mermaid-deferred');
+                                    el.setAttribute('data-mermaid-render-failed', 'true');
+                                }
+                            });
+                        }
+                    }
+                });
+                hidden.forEach((el) => _lazyObserver.observe(el));
+            }
+        }
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
+    // Exclude deferred (hidden) and render-failed elements from completion checks
+    const mermaids_active = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])");
+    const mermaids_processed = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])[data-processed='true']");
+
+    if (false) {
+        const mermaids_to_add_zoom = 0 === -1 ? mermaids_active.length : 0;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("").select(function() {
+                return this.querySelector("svg");
+            });
+            // Wait until every active (visible) diagram has rendered. Deferred
+            // diagrams are excluded, so a fixed d3_node_count that counts a
+            // hidden diagram no longer loops forever waiting for its SVG.
+            if(mermaids_active.length !== mermaids_processed.length) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            }
+            addZoomToSvgs(svgs);
+        }
+    } else if(mermaids_active.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(() => runMermaid(false), 200);
+        return;
+    }
+
+    // Stop here if not adding fullscreen capability
+    if (!true) return;
+
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = "\u26f6";
+        fullscreenBtn.style.opacity = "50%";
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scrollX, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.display = 'block';
+
+                if (false) {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+        container.appendChild(fullscreenBtn);
+    });
+};
+
+
+
+const load = async () => {
+    initStyles();
+
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...{"startOnLoad": false},
+                ...{ darkMode: darkTheme, theme: darkTheme ? "dark" : "default" },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...{"startOnLoad": false},
+    ...{ darkMode: darkTheme, theme: darkTheme ? "dark" : "default" },
+    }
+);
+
+window.addEventListener("load", load);
+window.runMermaid = runMermaid;</script>
+    </body>
+</html>

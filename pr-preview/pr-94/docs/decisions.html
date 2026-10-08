@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Design: the regression ladder in CI, PnR traces and critical-path animations" href="design/animations.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Design: the regression ladder in CI, PnR traces and critical-path animations" href="design/animations.html"><link rel="prev" title="CI lanes and Bazel caches" href="ci-lanes.html">
         <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
         <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -243,6 +244,7 @@
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -305,6 +307,13 @@ in the same change as the file that holds a pin (<code class="docutils literal n
 PR7 under <code class="docutils literal notranslate"><span class="pre">docs/adr/</span></code>.</p>
 <section id="decision-log">
 <h2>Decision log<a class="headerlink" href="#decision-log" title="Link to this heading">¶</a></h2>
+<p>Owner decision of 2026-10-07 (PR #91): enable hull nesting by default for hull macros.
+Keep explicit opt-out through <code class="docutils literal notranslate"><span class="pre">PNR_HULL_NEST=0</span></code>, <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--hull-nest</span> <span class="pre">0</span></code> and campaign
+<code class="docutils literal notranslate"><span class="pre">hull_nest</span> <span class="pre">=</span> <span class="pre">false</span></code>; keep legality, native validation and routing fallbacks unchanged.
+This is an explicit exception to the usual default-off rollout. The matched local
+native example and the broader pending campaign are documented in
+<a class="reference internal" href="design/hull-nest-validation.html"><span class="std std-doc">hull nesting validation</span></a>; the decision is not a claim
+that every routing metric improves.</p>
 <p>Owner decisions of 2026-09-29, taken while planning the migration (see
 <a class="reference internal" href="migration-plan.html"><span class="std std-doc">the migration plan</span></a>, §0.2):</p>
 <ul class="simple">
@@ -1356,6 +1365,34 @@ in the manifest says so, the pages and the README caption name both opt-in switc
 CI traced runs take the same options so their trace hashes stay comparable. The renderer
 (version 3) plays the gloss stage’s saved board as a before/after: the copper the stage
 replaced in red, its new copper in green, marked by geometry, not by track rows.</p></li>
+<li><p><strong>Legalization keeps what global placement got right</strong> (2026-10-05, the owner’s report on the
+hierarchical demo animation and the request for a severity-aware legalizer; the ladder v2 plan’s
+one-default-configuration rule). <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> is on by default, with or without compact
+placement, and <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP=0</span></code> restores the plain packer for A/B runs: a part or block legal
+at its global pose keeps it and its turn, a slight overlap (or a missing routing channel) is
+resolved by an order-preserving push of the parts around it (the overlap first, routing
+channels only where they fit), a part the push cannot clear or whose slot is taken takes the
+nearest free slot around its pose (2026-10-06, the owner’s R6 report), and only a mostly
+occluded part is relocated by the packer’s cost. The push has a bounded reach (1.5 mm); a part
+whose own overlap was slight but whose clearing would need a push past that reach (through a
+crowded neighbour, say) is one of the nudged ones, so the motion record names each relocated
+part’s reason (severe, push infeasible, slot taken). <code class="docutils literal notranslate"><span class="pre">TURN</span></code> turns only the parts the
+legalizer moved (and gives way to detailed placement, below). Every legalization records its
+motion (moved parts, displacement, topology kept) in the reports, the trace and the
+animation’s end card. Measurements:
+<a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">compact placement, section 13</span></a>.</p></li>
+<li><p><strong>Detailed placement wins back the copper KEEP gave up</strong> (2026-10-06, the owner’s decision: an
+order-preserving detailed-placement pass after legalization, on by default with KEEP once an
+A/B shows copper restored and no rung worse).
+<code class="docutils literal notranslate"><span class="pre">PNR_DETAIL_PLACE</span></code> follows <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> (on by default; <code class="docutils literal notranslate"><span class="pre">0</span></code> turns it off for an A/B): an
+order-preserving compaction toward each part’s nets, then turns, slides, swaps and wrong-side
+moves under a movement budget, each legal by the legalizer’s own checker, as their own stage
+after legalization. KEEP’s legalization motion is reported as before and the detailed
+placement’s moves separately (<code class="docutils literal notranslate"><span class="pre">detail_motion</span></code>). Over the ladder, showcases and hard rungs at
+two seeds the copper is within 0.2 % of the packer’s (KEEP alone: +7.8 %) and 0.8 % shorter on
+the ladder; one rung is still behind (<code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-pairs</span></code>, 13 of 16 seeds
+against 15 of 16 with the packer and 14 of 16 with KEEP alone). Measurements:
+<a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">compact placement, section 13.H</span></a>.</p></li>
 </ul>
 <p>Compact placement before ladder v2 makes it the default (2026-10-06,
 <a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">design, section 12</span></a>):</p>
@@ -1374,6 +1411,82 @@ and lengthening the short leg through free space were tried and rejected (sectio
 switches; absent with everything off, so earlier keys are unchanged), and power-first
 placement runs with compact instead of refusing it.</p></li>
 </ul>
+<p>Ladder v2 phase 1: one default configuration (2026-10-06, an internal plan not part of this
+repository, owner questionnaire answer “Go ahead with ladder v2 as planned”):</p>
+<ul class="simple">
+<li><p><strong>Block-level motion fixed at the GP source first</strong>, as the plan required before flipping
+compact’s default: <code class="docutils literal notranslate"><span class="pre">pnr.place.compact.gp_channel_inflation</span></code> builds a <code class="docutils literal notranslate"><span class="pre">ChannelModel</span></code> on the
+pre-placement graph and floors global placement’s existing route-feedback <code class="docutils literal notranslate"><span class="pre">inflation</span></code> with
+each part’s own escape-channel demand, so the density term reserves (part of) the room the
+legalizer’s push otherwise has to open at legalization time. Measured (seed 0, Mac):
+<code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> block 70 %/16.3 mm -&gt; 14 %/3.2 mm (<code class="docutils literal notranslate"><span class="pre">main</span></code> without compact: 65 %/15.0 mm);
+<code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> top 19 %/1.2 mm -&gt; 0 %/0.2 mm (<code class="docutils literal notranslate"><span class="pre">main</span></code>: 19 %/13.0 mm) – every ladder,
+showcase and hierarchical case now moves less than the non-compact baseline, not merely no
+worse. See <a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">compact placement, section 12 appendix F</span></a>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">--compact</span></code> (with <code class="docutils literal notranslate"><span class="pre">WIRE</span></code>/<code class="docutils literal notranslate"><span class="pre">TURN</span></code>/<code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code>/<code class="docutils literal notranslate"><span class="pre">PAIRS</span></code>/<code class="docutils literal notranslate"><span class="pre">RELAX</span></code>), <code class="docutils literal notranslate"><span class="pre">--gloss</span></code>, <code class="docutils literal notranslate"><span class="pre">--initial-pool</span></code>,
+<code class="docutils literal notranslate"><span class="pre">--route-pairs-diff-pairs</span></code> (for any design declaring a <code class="docutils literal notranslate"><span class="pre">diff_pair</span></code>) and <code class="docutils literal notranslate"><span class="pre">--legalize-keep</span></code>
+become the runner’s own defaults</strong> in <code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression/run.py</span></code>, each a
+<code class="docutils literal notranslate"><span class="pre">BooleanOptionalAction</span></code> so <code class="docutils literal notranslate"><span class="pre">--no-&lt;flag&gt;</span></code> still turns it off for an A/B (<code class="docutils literal notranslate"><span class="pre">--legalize-keep</span></code> was
+already on by default inside the engine itself, with or without <code class="docutils literal notranslate"><span class="pre">--compact</span></code>, but had no runner
+flag at all – see “PNR<em>LEGALIZE_KEEP has no off switch” below).
+<code class="docutils literal notranslate"><span class="pre">yapnr/exp/kinds/ladder.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">runner_arguments</span></code> only emits a flag when a campaign config says
+something explicitly (<code class="docutils literal notranslate"><span class="pre">true</span></code> -&gt; the flag, <code class="docutils literal notranslate"><span class="pre">false</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">--no-&lt;flag&gt;</span></code>, absent -&gt; the runner’s own
+default). This means the opposite of what an earlier draft of this page said: an existing A/B
+campaign that _omitted</em> one of these keys to mean “off” now gets the runner’s new on-default
+instead, silently running both arms with compact/gloss/pool/route-pairs/legalize-keep on; only a
+campaign that already said <code class="docutils literal notranslate"><span class="pre">false</span></code> explicitly keeps its old “off” behaviour. Each flag had
+already passed its own A/B gate (compact: <code class="docutils literal notranslate"><span class="pre">claude/lv2-compact</span></code>, the <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane fix;
+gloss: the native-loop GCP A/B above; <code class="docutils literal notranslate"><span class="pre">--route-pairs-diff-pairs</span></code>: <code class="docutils literal notranslate"><span class="pre">claude/lv2-ab</span></code>, 11/18 vs 9/18
+pass, 0 regressions; <code class="docutils literal notranslate"><span class="pre">--initial-pool</span></code>: <code class="docutils literal notranslate"><span class="pre">claude/lv2-ab</span></code>, 54/54 both arms, -5.1 % copper) except
+<code class="docutils literal notranslate"><span class="pre">--legalize-keep</span></code>, whose only A/B ran before the GP-channel-inflation fix above, mixed two GCP
+machine types, and came out slightly negative (84/92 vs 86/92 with compact, 61/64 vs 62/64
+without); it ships as a default on the strength of the block-motion fix and the full phase-1
+regression below, not a dedicated A/B, and redoing that A/B cleanly is tracked as follow-up
+work.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code> stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code></strong> (the fixtures’ own fab block), not <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> (the engine’s
+own fab-capability profile) as this phase first planned (an owner decision from an internal
+inventory note, not part of this repository). The phase-1 full regression below found
+that flipping it breaks real hard rungs, and per “never weaken rungs … a default flip that
+makes a rung fail is fixed in the engine, not by relaxing the rung” the default does not move
+until that is fixed; <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> remains available for an explicit run, and every
+ladder and showcase case passes under either profile (<code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code> and the A/B-rejected <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_CHANNEL_CLEARANCE=fab</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_GP_POLISH</span></code> and
+<code class="docutils literal notranslate"><span class="pre">PNR_GP_CHANNELS</span></code> stay off</strong> (unchanged owner decisions).</p></li>
+<li><p><strong>One nightly CI configuration:</strong> <code class="docutils literal notranslate"><span class="pre">.github/workflows/ladder.yaml</span></code> runs the runner’s own
+defaults, traced, once, instead of four separate arms (baseline, traced pool+compact+gloss,
+the opt-in gloss stage, the showcases’ own flags); the same run decides the job and feeds the
+animations job, so docs numbers and CI numbers come from the same run. The docs
+(<code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code>, <code class="docutils literal notranslate"><span class="pre">regression-ladder.md</span></code>, <code class="docutils literal notranslate"><span class="pre">constraints-and-hierarchy.md</span></code>) were regenerated
+from a traced run with no explicit <code class="docutils literal notranslate"><span class="pre">--compact</span></code>/<code class="docutils literal notranslate"><span class="pre">--gloss</span></code>/<code class="docutils literal notranslate"><span class="pre">--initial-pool</span></code>/<code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code>
+flags, letting the runner’s new defaults decide; every ladder, showcase and hard-rung case
+passed.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">--no-compact</span></code> and <code class="docutils literal notranslate"><span class="pre">--no-gloss</span></code> are narrower than their old help text claimed.</strong> Both used to
+say they “restore the pre-ladder-v2 runner path” / “the plain runner path”; neither does, since
+<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> and the platform-independent global placement fix (<code class="docutils literal notranslate"><span class="pre">claude/lv2-plane</span></code>) are
+not part of either switch and apply on the non-compact, non-gloss path too. The help text in
+<code class="docutils literal notranslate"><span class="pre">run.py</span></code> now says so and names <code class="docutils literal notranslate"><span class="pre">--no-legalize-keep</span></code> as the only way to fully restore the old
+path.</p></li>
+</ul>
+<p><strong>New blocker found by the phase-1 full regression</strong> (2026-10-06, GCP, 90 cells: ladder +
+showcases + all 33 hard rungs, seeds 0-1, campaign <code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code>, run with
+<code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> to test the flip this phase first planned): every rung the nightly CI
+lane runs passed (the ladder, the showcases and all 15 nightly-lane hard rungs), but 11 of the 18
+manual-lane-only hard rungs failed where they pass under <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">legacy</span></code> (every other new
+default unchanged, confirmed on the Mac): the six UFBGA-201 rungs (<code class="docutils literal notranslate"><span class="pre">pnr.fanout.spec.FanoutError</span></code>:
+their 0.65 mm BGA escape’s via spec, 0.150 mm drill, is under jlc-pofv’s capability data,
+<code class="docutils literal notranslate"><span class="pre">min_through_drill</span></code> 0.200 mm), three <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> stackup variants (<code class="docutils literal notranslate"><span class="pre">skew_out_of_range</span></code>:
+jlc-pofv’s wider via/pad clearance pushes a USB pair’s meander out of budget) and both
+<code class="docutils literal notranslate"><span class="pre">11-buck-vqfnhr</span></code> rungs (<code class="docutils literal notranslate"><span class="pre">native_drc_violations</span></code>, 93-151 <code class="docutils literal notranslate"><span class="pre">track_width</span></code> findings, cause not yet
+isolated). These are real profile/manufacturability conflicts, not test bugs, and the manual lane
+is never run in CI – but it is still part of the regression suite, including rungs phase 2 plans
+to promote into the public, CI-gated ladder. Per “never weaken rungs … a default flip that
+makes a rung fail is fixed in the engine, not by relaxing the rung”: <strong>the <code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code>
+default stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code></strong> (reverted above) rather than shipping jlc-pofv with this known blocker.
+The fix needs its own investigation (likely different per mechanism: a BGA-capable vendor profile
+or a fanout fallback for the UFBGA-201 family; whether <code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code> should respect a design’s
+own declared fab block over the runner’s; the buck track-width count once its cause is found), and
+jlc-pofv becomes the default once it is resolved. Full per-rung breakdown and root-cause
+tracebacks are in the workflow’s own tracking notes (not part of this public repo).</p>
 <p>Ladder fab-profile default (2026-10-06, <code class="docutils literal notranslate"><span class="pre">claude/defaults-rails-fab</span></code>, campaign
 <code class="docutils literal notranslate"><span class="pre">20261007-ladder-7fe33f</span></code>, <a class="reference internal" href="regression-ladder.html"><span class="std std-doc">regression-ladder.md</span></a>):</p>
 <ul class="simple">
@@ -1677,14 +1790,14 @@ change the default worker interpreter, system packages or off-path imports.</p>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="migration-plan.html">
+          <a class="prev-page" href="ci-lanes.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">yapnr migration plan</div>
+                <div class="title">CI lanes and Bazel caches</div>
                 
               </div>
             </a>

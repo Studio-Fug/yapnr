@@ -1,8 +1,13 @@
 # Design: compact placement (`PNR_COMPACT`) and shrink-to-fit (`PNR_SHRINK`)
 
-Status: implemented on branch `claude/compact`, off by default; section 11 (legalizer spacing
-and turns) on branch `claude/legalize`, off by default; section 12 (the `09-mcu-usb-31` lane:
-`PAIRS`, `RELAX`, power-first placement, the router key) on branch `claude/lv2-compact`. Code: `hardware/pnr/pnr/compact_flags.py`
+Status: `PNR_COMPACT` is the runner's own default since ladder-v2 (2026-10-06,
+`docs/decisions.md`; `--no-compact` restores the pre-ladder-v2 path). Implemented on branch
+`claude/compact`; section 11 (legalizer spacing and turns) on branch `claude/legalize`; section 12
+(the `09-mcu-usb-31` lane: `PAIRS`, `RELAX`, power-first placement, the router key) on branch
+`claude/lv2-compact`, which is what let the default flip; section 13 (displacement-minimizing
+legalization) on branch `claude/lv2-legal`, on by default with or without compact; appendix F
+(block-level motion, GP reserves escape-channel room) also on `claude/lv2-legal`. Code:
+`hardware/pnr/pnr/compact_flags.py`
 (the switches, stdlib only) and `hardware/pnr/pnr/place/compact.py` (metrics, cluster box,
 legalizer settings, shrink search); the call sites guard on the switches. Tests:
 `hardware/pnr/tests/test_compact.py`.
@@ -224,7 +229,7 @@ A/B. Shrink passes 23 of 24: on `line-chaser-20` seed 1 a 0.4 mm GND track runs 
 the shrunk edge, through pad cells the router's edge inset leaves open.
 
 The full tables are in the workflow's A/B notes; the ladder documentation
-([compact placement](../regression-ladder.md#compact-placement-opt-in)) summarises them.
+([compact placement](../regression-ladder.md#compact-placement)) summarises them.
 
 Still open: the 0.01 mm courtyard gap (no DRC finding in any arm). The manual `09-mcu-usb-31`
 lane is resolved in section 12.
@@ -268,7 +273,7 @@ Seven switches, each off by default and usable with or without `PNR_COMPACT`
 | `PNR_LEGALIZE_REORIENT=1`            | C2   | After legalization, greedy in-place turns that shorten a part's wirelength, stay legal and do not raise its channel shortage; `=wire` drops the channel guard.                                                        |
 | `PNR_LEGALIZE_CHANNEL_CLEARANCE=fab` | D    | The legalizer's channel model spaces unclassed nets at the fab clearance (the router's) instead of the board's `default_clearance_mm`.                                                                                |
 | `PNR_LINE_SATELLITES=1`              | E    | A line group carries each member's satellite (a free two-pad part on a two-pin net to one member pad) flush beside the member, in line with it.                                                                       |
-| `PNR_CHANNEL_LAYERS=1`               | 13   | The channel model (global placement, the legalizer and its push alike) credits the board's other signal layers: a net that can drop off the surface asks its share of the channel (section 13).                       |
+| `PNR_CHANNEL_LAYERS=1`               | 14   | The channel model (global placement, the legalizer and its push alike) credits the board's other signal layers: a net that can drop off the surface asks its share of the channel (section 14).                       |
 
 `run.py` takes `--gp-polish`, `--gp-channels L`, `--pool-source-clamp`, `--legalize-hpwl W`,
 `--legalize-reorient [wire]`, `--legalize-channel-clearance fab` and `--line-satellites` (after
@@ -575,7 +580,372 @@ of 72 cells (`placed.json`, `routes.json`, the routed board modulo UUIDs); the o
 
 **Power-first placement** (`PNR_POWER_FIRST=1`) no longer refuses compact (section 2).
 
-## 13. Layer-aware channel model (`PNR_CHANNEL_LAYERS`, 2026-10-06)
+## 13. Displacement-minimizing legalization (`PNR_LEGALIZE_KEEP`, on by default)
+
+> Owner report (2026-10-05): the hierarchical demo animation "shows a lot of component movement at
+> the legalization phase, both at the block level and at the top level ... even though all three
+> blocks find positions with plenty of room around them, all three of them get relocated." And:
+> a part that is fully occluded is a candidate for relocation, but a slight overlap should push
+> the parts around it outwards rather than upset the order global placement found.
+
+**Measured cause** (seed 0, ladder, showcases and `10-quad-bank-56`, every `legalize()` call
+recorded from its global poses; `pnr.place.motion`): before #41 and on `main` without compact, the
+parts that were legal where global placement left them (no overlap, inside the outline, clearance
+met) mostly stayed (0 to 50 % of them moved; 0 % at the hier top level). Under `--compact` every
+one of them moved and about half turned (100 % on 13 of 15 stages; topology kept 0.76 to 0.90),
+at the top level of `hier-twin-bank-32` all four bodies (19.1 mm in all, 56 % turned). Without
+`WIRE` (`--compact-off WIRE`) the top level moves 2.2 mm in all. The causes, in order of weight:
+
+1. `WIRE` (`PNR_LEGALIZE_HPWL` 4 under compact) prices each part's slot by its wirelength there
+   and searches all four turns, so every part, legal or not, is re-sited and re-turned toward a
+   wirelength optimum (the top level's three blocks among them); `TURN` then turns any part.
+2. The routing-channel term of the slot cost moves legal parts whose pads face a neighbour's.
+3. The packer places biggest first into the nearest free slot, so a part that conflicts can take
+   the place of one that did not.
+
+There was no frame or origin mismatch between block and top level, no courtyard inflation and no
+snap offset beyond half a grid cell.
+
+**Change** (`pnr.place.keep`, `pnr.place.legalize`; `PNR_LEGALIZE_KEEP=0` restores the packer):
+
+- _Triage._ Each movable part's slot (as the packer sizes it) is tested at its global pose. A
+  part half or more occluded (by other slots, fixed parts, keep-outs, the outside of the outline)
+  is _severe_ (the worst first, re-measured without it); the rest are _clean_ or _mild_.
+- _Push._ Mild overlaps are resolved by an order-preserving push: horizontal and vertical
+  constraint graphs from the global poses (an overlapping pair separates along its smaller
+  penetration, a side-by-side pair keeps its order), solved as the weighted least-squares
+  projection of the global centres (Dykstra, per axis), with the outline, fixed parts and the
+  parts the push may not move (regions, aligns, edge bands, hard discs, hull macros) as bounds.
+  The physical overlap is cleared first: a cluster whose push goes beyond a part's reach (1.5 mm
+  or half its smaller side) gives up its most occluded mild part (`push_infeasible`) and is pushed
+  again. Then the escape channel the packer's channel model asks between facing pad rows is a soft
+  goal: the cluster is pushed again with each pair's distance including its channel, and that
+  push is kept when it fits within every part's reach; otherwise the overlap-only push stands. A
+  channel never makes the push give up a part; a cluster with no overlap but a part short of a
+  channel is pushed only when the whole channel fits.
+- _Anchors._ Held parts (hard groups, aligns, regions, edge bands, hard discs) are placed first as
+  before; then every part that is not severe takes the free slot nearest its (pushed) pose within
+  1.5 grid cells, at its global turn, without the channel or wirelength terms. A part whose slot
+  is taken (`slot_taken`) or that the push gave up (`push_infeasible`) then takes the nearest free
+  slot in rings expanding from its global pose (radius 3, 6, 12, ... grid cells; its global turn
+  first at each ring, then its other turns), never the full search; a held part whose slot is
+  taken keeps the packer's own search, which carries its constraint's costs (an exact align
+  needs them). Only the severe parts go through the packer's full search (its cost, `WIRE` and
+  turns). `TURN` turns only the parts the
+  legalizer moved. If the result leaves a part without a slot, the board is legalized again with
+  the plain packer (`keep_fallback`).
+- _Metric._ Every legalization records its motion: parts moved (beyond 0.4 mm or turned),
+  displacement sum and maximum, turns, topology kept (the fraction of pairwise left/right and
+  above/below relations of the global poses that the legal poses keep), the neighbour order kept
+  (`neighbour_order`: the same over each part's four nearest parts only, counting an axis when it
+  carries at least a quarter of the pair's distance; `neighbour_relations` is its count), the
+  triage counts and,
+  per part that left its pose, the reason (`relocations`; `relocated_severe`,
+  `relocated_push_infeasible`, `relocated_slot_taken`, `nudged`, `channel_unopened`). It
+  is in the placement report, `pnr-report.json` (`legal_motion`; `block` and `top` for the
+  hierarchical driver), `ladder-results.json`, the trace's `legal` events and the animation's end
+  card ("legalization moved ...").
+
+**Measured after** (the same runs, Mac, seed 0; `legalize-motion` notes): under `--compact` the
+hier top level moves 0 of 4 bodies (0.3 mm) in the docs run, 1.2 mm per top-level seed on average
+(topology 1.00), against 19.1 mm; `10-quad-bank-56` top 7.7 mm against 34.4 mm. On the larger
+flat cases (06 to 08, the edge-io pair, the line chaser) 40 to 74 % of the parts move against 90
+to 100 %, with 40 to 64 % less displacement, and topology kept is 0.80 to 1.00 against 0.76 to
+1.00. Most of what still moves is the push opening routing channels the compact global placement
+left out, and the parts relocated where a push could not open them.
+
+Regression (GCP, `c4d`, seeds 0 and 1, every cell of the ladder, the showcases, the quad bank, the
+MCU lane, the six UFBGA-201 rungs, the 15 nightly hard rungs and the buck rungs under `--compact`,
+and the ladder, showcases, quad bank and nightly rungs without it; control `main` 82ec1a5, the MCU
+lane's from campaign `20261005-mceval-f97cc0`; plus seeds 2 to 9 of `08-chaser-20-plane` and 2 to
+5 of the quad bank): 84 of 92 compact cells pass against 86, and 61 of 64 default-mode cells
+against 62; every flip has a counterpart (the MCU lane 11 of 18 against 12, gaining three cells
+and losing four; `08-chaser-20-plane` 7 of 10 against 8 of 10; the quad bank 5 of 6 against 6
+of 6). Copper is 597 mm shorter over the default-mode cells and 416 mm longer over the compact
+ones; vias −29 and +42 (seeds 0 and 1). The control's seeds 0 and 1 of the core and hard rungs
+ran on `c4` (another region's Spot quota), the branch's on `c4d`; the extra seeds ran both on
+`c4d`. A first version without the channels in the push moved fewer parts still (the core flat
+cases 0 to 43 %) but passed only 40 of 50 compact cells against 44 (the MCU lane 8 of 18), so the
+channels stay.
+
+### F. Block-level motion: reserving channel room in GP, not only in the push
+
+The above still left the block level moving almost as much as before the push's channel term
+(`10-quad-bank-56` block: 70 % of parts, 16.3 mm; `hier-twin-bank-32` block: 65 %, 16.3 mm — both
+close to, not below, `main`'s non-compact 65–67 % / 15.0 mm). Mechanically this is because `GP`'s
+density term (`w_spread * overlap`, §4) only ever reserves each part's own courtyard at the global
+spread floor; it has no notion of the escape-channel room classified nets will need between facing
+pads, so the legalizer's push still has to open that room itself, at legalization time, moving
+parts that were already legal by the courtyard-only measure.
+
+**Fix** (`pnr.place.compact.channel_margin`, `gp_channel_inflation`; `GP` only, additive): before
+`global_place` runs, a `pnr.place.channels.ChannelModel` is built on the incoming (pre-placement)
+graph — a rough proxy, since `GP` may still turn a part, but good enough for a density floor. For
+each part, `channel_margin` takes the largest single-face demand (mm) its own externally-connected
+pads ask for (half of it: the facing neighbour owes the other half), and `gp_channel_inflation`
+turns that into a multiplier on the part's own smaller courtyard half-extent, capped at 1.3 (the
+legalizer's own spread cap). The result merges (`max`) into the existing `inflation` floor
+`global_place` already took from the place-route loop's congestion feedback (§6) — the same
+mechanism, a different reason to ask for room, so GP's density term now reserves (part of) the
+channel room up front instead of leaving it entirely to the legalizer's push.
+
+**Measured** (Mac, seed 0, `--compact`, `pnr.place.motion`, `legalize-motion/table-final.md`):
+
+| Stage                     | `main` (no compact) | §13 push alone |       + this fix |
+| ------------------------- | ------------------: | -------------: | ---------------: |
+| `10-quad-bank-56` block   | 65 % moved, 15.0 mm |  70 %, 16.3 mm | **14 %, 3.2 mm** |
+| `10-quad-bank-56` top     |       33 %, 30.0 mm |   17 %, 7.7 mm |  **0 %, 0.3 mm** |
+| `hier-twin-bank-32` block |       67 %, 14.9 mm |  65 %, 16.3 mm | **18 %, 3.4 mm** |
+| `hier-twin-bank-32` top   |       19 %, 13.0 mm |   19 %, 1.2 mm |  **0 %, 0.2 mm** |
+
+Block-level motion now sits well below the non-compact baseline instead of at parity with it, and
+top-level motion is essentially zero. The same improvement holds across every ladder and showcase
+case (01–08, the edge-io pair, the line chaser): every one moves less, and by a wider margin, than
+`main` without compact (`legalize-motion/gp3-on.out`, `summary-main-off-main-on-v2-on-gp3-on.json`).
+All 13 cases still pass. The trade-off is a smaller compaction win on 11 of the 13 — copper is
+still below `main`'s non-compact figure by 2–27 % on 11 cases (06–08, the line chaser, both edge-io
+cases, both hierarchical cases), but 2 trivial cases (01, 02: two and three parts) end up a few mm
+_longer_ than uncompacted, since reserving channel room up front leaves GP less free to shrink an
+already-tiny board. Frame strips: `legalize-motion/strips/after-gp-*.png`.
+
+Not done: the early `ChannelModel` ignores the rotation `GP` may still pick (the final legalizer's
+own channel push, §13, still uses the correct post-placement one); `_place_line_groups` and
+power-first staged placement do not call this path (compact does not support power-first, and no
+rung currently needs the channel-aware GP floor inside a line group).
+
+### G. A slight overlap is nudged, never re-placed (2026-10-06)
+
+> Owner report (2026-10-05): "In the block step, the global placement puts R6 overlapping with
+> D4, and instead of nudging R6 a bit to the right, it re-places it north of the SOIC." And: "if
+> it's only a very small overlap that caused the placement to be illegal, then it would be much
+> smarter to push all of the other parts around it outwards to make room slightly rather than
+> completely replacing it."
+
+**Cause** (`hier-twin-bank-32` seed 0, block `top.bank_a` trial `start-13`, 19.75 x 13.25 mm,
+reproduced from the legalizer's input alone: `hardware/pnr/testdata/legalize_keep`). Four parts
+overlap slightly (R6 over D4 among them), none severe, and all 12 are short of an escape channel.
+The push asked for the overlap and the full channels at once; with every part channel-short that
+exceeded the 1.5 mm cascade bound, so the cluster gave up its most occluded part (R6), the push
+failed again and the cluster was left as it was (pushed 0). R6, its slot taken by D4, went to
+the packer's full search with `WIRE` and landed 10.7 mm away, north of the SOIC, with a quarter
+turn; R7 also left its slot with a half turn.
+
+**Fix** (`pnr.place.keep.resolve`, `pnr.place.legalize`): the courtyard overlap is cleared first
+and the channels are a soft goal (kept only where they fit; never a reason to give a part up); a
+part the push cannot clear (`push_infeasible`) or whose slot is taken (`slot_taken`) takes the
+nearest free slot in rings around its global pose, its global turn first, never the full search;
+only severe parts are relocated wholesale. The motion record names each relocated part's reason.
+On `start-13` R6 now stays put (under 0.4 mm, same turn): D4 moves 0.47 mm, nothing else moves
+more than a snap, and nothing is relocated (was: max 10.7 mm, 2 relocated).
+
+**Measured** (Mac, seed 0, `--compact`, every `legalize()` call; ladder, showcases and both
+hierarchical cases, 1448 part placements; `r6-fix` notes):
+
+| Legalizer                       | Parts moved | Sum (mm) | Max (mm) | Relocated (severe / push / slot) | Moved > 3 mm |
+| ------------------------------- | ----------: | -------: | -------: | -------------------------------- | -----------: |
+| before (`7ab6fbd5`)             |         218 |    463.1 |     14.1 | 86 (by the full search)          |           24 |
+| this fix                        |         132 |    216.5 |     10.1 | 4 (0 / 4 / 0)                    |            2 |
+| channels opened as far as reach |         518 |    580.0 |      8.5 | 4 (0 / 4 / 0)                    |            0 |
+
+Block level: `hier-twin-bank-32` 106 parts moved and 220 mm before, 58 and 103 mm after (40
+relocated before, 2 after); `10-quad-bank-56` 82 and 202 mm before, 50 and 73 mm after (34 and
+2). The two parts still moved far are the same D4 in the `start-14` block trial of
+`hier-twin-bank-32` and of `10-quad-bank-56` (13.25 x 19.75 mm, a mild part, 22 % occluded),
+whose column above the SOIC is full: no push within reach clears it, so it takes the nearest free
+slot (10.1 mm, a quarter turn). Neither trial is the chosen block. All 13 cases pass in every
+arm. The third row opens each cluster's channels by the largest fraction the reach allows: it
+moves 2.4 times as many parts, mostly legal ones, for no routing gain on these cases, so channels
+are all or nothing.
+
+**A/B** (GCP `c4d` us-west4 for both arms, the runner's ladder-v2 defaults, `--legalize-keep`
+against `--no-legalize-keep`; ladder, showcases and all 33 hard rungs, seeds 0 and 1; campaigns
+`20261006-ladder-091262` and, after the fixes below, `20261006-ladder-8a0b4d`):
+
+| Arm      | Pass  | Parts moved by legalization | Copper (both pass) | Vias (both pass) |
+| -------- | ----- | --------------------------: | -----------------: | ---------------: |
+| KEEP on  | 88/90 |        148 of 1496 (285 mm) |           33455 mm |             3828 |
+| KEEP off | 90/90 |      1361 of 1496 (4677 mm) |           31131 mm |             3772 |
+
+The first run found three cells that failed only with KEEP on. Seeds 2 to 7 of those rungs
+decided which were real. `11-ufbga201-fanout-6L-SGSGPS-pairs` (5 of 8 seeds against 7 of 8): the
+initial pool took the finalist with the fewest vias although its LVDS pair had fallen back to
+two legs, which KiCad's gap rule fails; the pool now ranks a pair left as legs with the length
+budgets, before the vias, and the rung passes 8 of 8 in both arms. `-rails` fails 3 of 8 seeds
+in both arms (different seeds): no change. `11-buck-vqfnhr-4L-SGPS-pour` stays at 5 of 8 against
+7 of 8: global placement leaves the feedback resistor on the far side of the 2 x 2 mm regulator
+from its pin, KEEP keeps it there, the feedback net crosses under the part and the ground pin
+next to it loses its pad entry (`unqualified_pad_entry`); the wirelength packer moves the
+resistor beside the pin. Moving such wrong-side parts back is open (a rescue tried here moved
+them but the board then failed on a router short). Copper is 7.5 % longer with KEEP on (13 to
+18 % on the ladder, showcases and `07-chaser-20` variants, 6 % on the MCU lane, none on the BGA
+rungs): the wirelength packer improves every legal pose, KEEP keeps them.
+
+### H. Detailed placement after legalization (`PNR_DETAIL_PLACE`, on with KEEP; 2026-10-06)
+
+> Owner decision (2026-10-06): the displacement-minimizing legalizer ends wholesale relocations
+> but costs copper; add an order-preserving detailed-placement pass after legalization, then turn
+> KEEP and it on by default once the A/B shows no rung worse and copper restored.
+
+**Why KEEP costs copper.** With KEEP off, `WIRE` re-sites every part by displacement, channels and
+four times its wirelength, over all four turns: 1361 of 1496 parts moved, 4677 mm (3.4 mm each),
+and that is the 7.5 % less copper. With KEEP on every legal part keeps its global pose and turn,
+and `TURN` only turns the parts the legalizer moved.
+
+**Change** (`pnr.place.detail`, its own stage after legalization, the align snap and the
+matched-length pass, before the side moves and routing; `PNR_DETAIL_PLACE=0` turns it off,
+unset it follows `PNR_LEGALIZE_KEEP`):
+
+1. _Compaction._ Every movable part is drawn half way toward the point that minimizes its
+   wirelength (per axis the median of its nets' spans), and the layout is projected, weighted
+   least squares (the KEEP push's solver), onto its present order: two parts side by side keep
+   their order, their slots apart and as much of the routing channel between them as they have;
+   every part stays in the outline and within 3 mm of its legal pose; four rounds, and a pair that
+   comes to overlap keeps the order it had. It is kept only when the legalizer's checker accepts
+   every shifted part (a part it refuses is held where it was and the compaction solved again)
+   and the wiring shortens.
+2. _Greedy moves_, best gain first, each legal by the legalizer's checker (its clearance,
+   spreading, margins, pad-edge rule, regions, aligns, bands, group radii): a turn about the slot
+   centre (every movable part, in place of `TURN`), a slide along x or y within a budget of
+   max(1.5 mm, the larger courtyard side) from where compaction left it (blocked, it shifts up to
+   two parts in front along, in order), a swap of two adjacent parts of one size class with
+   nothing between them (each re-picks its turn), and a wrong-side move: a part whose connection
+   crosses the body of the part it connects to goes beside the edge that pin faces, within that
+   part's extent plus its own plus two cells, only where the other part's channel penalty does
+   not rise. Ball arrays route through their vias and have no far side.
+3. _Cost._ Half-perimeter wirelength (plane nets out) plus the crossing detour (a Manhattan
+   spanning tree per net; a segment a same-side courtyard cuts across, the endpoint's own body
+   behind its pin included, costs the shorter way round) plus the channel penalty at the
+   packer's ratio (25 / 4) and the soft terms. A move must shorten the wiring by more than
+   0.05 mm.
+4. Never moved: fixed, locked and hard-rotated parts, macros, row and line-group members, parts
+   with landing reserves, parts on a pair or length-match net, and parts within 3 mm of a ball
+   array (its escape and fanout are the board's tightest routing). Held parts only turn and slide.
+   A part also keeps out of a ball array's 1.5 mm escape field and stays 1 mm clear of the line
+   between consecutive pins of a matched net, moving no deeper into the box between them (or
+   keeps what it has, if less). Deterministic (fixed orders, float64, exact quarter turns, no
+   random draws; a golden hash).
+
+Its moves are a trace event (`detail`, phase `detailed-placement`), their own animation segment
+and an end-card line, and the record `detail_motion` (moves by kind, parts moved, sum, maximum
+and median distance, wirelength and crossing before and after, channel delta, topology, time) in
+the placement report, `pnr-report.json`, the hierarchical report and `ladder-results.json`.
+`legal_motion` stays the legalizer's own. The record carries the neighbour order kept from the
+legal poses (`neighbour_order`) and from the global poses (`neighbour_order_global`), and
+`ladder-results.json` gives each case `order` (`gp_legal`, `legal_dp`, `gp_dp`; end to end is
+the legal poses' when the pass did not run) and the document `order` (`showcases_order` for the
+showcases): each stage's order kept over every case, weighted by relation count.
+
+**KEEP push.** A cluster whose push is infeasible now moves the conflicting pair needing the
+least shift to its other axis and solves again (up to four times; channel pushes keep their
+axis), and a failing push is retried with a size-scaled reach (0.75, then 1.0 of the larger side,
+at most 4 mm), kept only when it displaces less (area-weighted) than relocating the part it would
+give up. `start-14` of the hierarchical block (`testdata/legalize_keep`): the column under D4 was
+0.12 mm too tall for the outline in y, so D4 went 10.1 mm east; D4 is now pushed 0.76 mm and
+nothing is relocated. `04-inverter-leds-8` seed 1's U1 stays relocated: the outline corner and
+the fixed connector box it in, and no push in its global order exists.
+
+**A/B** (GCP `c4d` us-west4 for both arms, the runner's ladder-v2 defaults, `--legalize-keep
+--detail-place` against `--no-legalize-keep --no-detail-place`; ladder, showcases and all 33 hard
+rungs, seeds 0 and 1, then seeds 2 to 7 of the BGA rungs and buck-pour and 2 to 15 of the BGA
+`-pairs` rung; KEEP alone from the R6 A/B above; campaigns `20261006-ladder-e132b3` (both arms),
+`-9c8a75`, `-931103`, `-56306d`, `-6f8fb4` (detailed placement at the final code) and `-67bfc3`,
+`-6f7476`, `-c18ee3` (KEEP off at the extra seeds)):
+
+| Rungs (seeds 0 and 1)         | Cells | Pass: KEEP+DP / KEEP / off | Copper: KEEP+DP vs off | KEEP alone vs off |
+| ----------------------------- | ----: | -------------------------- | ---------------------: | ----------------: |
+| ladder 01-08                  |    16 | 16 / 16 / 16               |                 -0.8 % |           +15.7 % |
+| showcases                     |     8 | 8 / 8 / 8                  |                 +5.8 % |           +13.7 % |
+| `07-chaser-20` variants       |    28 | 28 / 28 / 28               |                 +3.3 % |           +17.5 % |
+| MCU lane                      |    18 | 18 / 18 / 18               |                 -1.3 % |            +5.8 % |
+| BGA                           |    12 | 11 / 11 / 12               |                 -0.2 % |            +0.0 % |
+| quad-bank, power-switch, buck |     8 | 8 / 7 / 8                  |                 -2.2 % |           +11.4 % |
+| all                           |    90 | 89 / 88 / 90               |                +0.12 % |           +7.84 % |
+
+Copper on the 87 cells all three arms pass; over the 140 cells with the extra seeds KEEP+DP is
+0.9 % shorter than KEEP off. Extra seeds: buck-pour 7 of 8 in both arms (seed 5 fails with
+detailed placement on a pad entry, seed 3 without; on the KEEP-only placement of seed 5,
+`testdata/detail_place`, detailed placement takes R1 off U1's far side); BGA base,
+`-block`, `-classes` and `-partial` 8 of 8 in both arms; `-rails` 7 of 8 against 5 of 8; `-pairs`
+13 of 16 against 15 of 16 with KEEP off and 14 of 16 with KEEP alone (`-4cf25e`): seeds 9 and 12
+fail the LVDS pair's gap rule by one or two findings with KEEP alone too (detailed placement moved
+nothing in their chosen placements), and on seed 1 every finalist the initial pool routed had the
+pair uncoupled or a connection missing, so it took one with the pair as legs. Parts within 3 mm
+of the ball array no longer move, so the BGA rungs gain little copper.
+The confirming round fixed both causes, which are the pool's and the pair router's, not the
+placement's. The router now prefers pad fanouts without a stretch parallel to the other leg off
+the gap for a pair whose coupling the design judges (`max_uncoupled_mm`; `coupled.gap_breaks`,
+KiCad's nearest-parallel model). The pool counts such a pair off its gap or as legs against a
+finalist (`pairs_gap`, `judged_pair_flaws`) and routes up to two more candidates by the proxy
+screen when every finalist leaves a connection open or such a pair flawed (`EXTRA_FINALISTS`).
+On the Mac, seeds 1, 9 and 12 pass.
+Detailed placement moved 1174 parts by 2243 mm in the final placements (the median of the cells'
+medians 1.2 mm, mostly compaction; the largest 14 mm), 79 s in all. The
+legalization motion (the legalizer's own, `legal_motion`) is 179 of 1496 parts and 999 mm with 43
+relocated, against 148, 285 mm and 29 with KEEP alone: on four cells the pool now picks the
+source start, whose global placement leaves 4 to 12 parts mostly occluded; without those 155 of
+1455 parts and 283 mm (KEEP alone on the same cells: 131 and 237 mm).
+
+### I. The pool's own screen penalizes wholesale relocation (`PNR_POOL_MOTION_PENALTY`, 2026-10-06)
+
+Superseded by section J: the penalty had no effect on the selection.
+
+Review of the A/B above (section H): "legalization motion stays at the KEEP level" missed its own
+pass mark (999 mm / 43 relocated against 285 mm / 29 with KEEP alone), driven by cells where the
+initial pool picked a start whose global placement left 4 to 12 parts mostly occluded, so
+`PNR_LEGALIZE_KEEP` correctly relocated them (the packer's cost and turn search, per its own
+triage) but the _pool_ had a legal, lower-relocation alternative on the shortlist and never
+screened for that. `11-ufbga201-fanout-6L-SGSGPS-rails` seeds 3, 4, 6 and 7 (11 of 11 parts, 356 mm
+each) and the `07-chaser-20-4L-SGPS` family seed 0 (12 parts, 617 mm) carried most of the overshoot.
+
+**Change** (`pnr.place.initial_pool.pool_motion_penalty_factor`, `legalize_flags.pool_motion_penalty`,
+`PNR_POOL_MOTION_PENALTY`; unset follows `PNR_LEGALIZE_KEEP`, `0` off for an A/B): each start's
+`cheap_score` (the pool's own screen, before the capacity proxy and the routed comparison) is
+multiplied by `1 + 4 * max(0, relocated_fraction - 0.2)`, where `relocated_fraction` is that
+start's `legal_motion.relocated` (parts `PNR_LEGALIZE_KEEP` actually relocated, not pushed) over
+the movable part count. A start under the fifth of the board the owner's principle treats as
+normal (only a mostly occluded part relocates) screens exactly as before; a start that forces
+relocation of most or all of the board, as `-rails`/`07-SGPS` did, loses its shortlist slot to any
+legal alternative at a comparable raw screen, before proxy scoring or routing ever sees it. The
+penalty is diagnostic-visible (`pool_motion_penalty`, `raw_cheap_score` on the candidate record)
+and never improves a start's score, so a design with no low-relocation alternative is unaffected.
+
+**Status.** Unit-level (`initial_pool_test`: `PoolMotionPenaltyTest`) and the full legalizer/pool
+suites (`legalize_flags_test`, `legalize_keep_test`, `legalize_wire_test`, `detail_place_test`)
+pass; CI's ladder is green on both `#64` and `#70`. This has _not_ yet been re-measured on
+`-rails`/`07-SGPS` themselves on GCP (the A/B in section H predates this change) — that re-run,
+plus whether it also narrows the `-pairs` seed-1 gap (a pool-selection problem, not relocation:
+every routed finalist had the LVDS pair uncoupled or a connection missing), is the next step before
+reconsidering the section H merge decision.
+
+### J. A start that relocates much of the board enters no shortlist (`PNR_POOL_RELOCATION_SCREEN`, 2026-10-07)
+
+The confirming A/B of section I (KEEP + detailed placement against KEEP off, every rung at seeds
+0-1) still measured 255 parts, 1522 mm and 73 relocated by legalization against 148, 285 mm and 29
+with KEEP alone. On five cells the pool picked the source start (`start-01`): its global placement
+leaves most parts occluded, so `PNR_LEGALIZE_KEEP` relocated 11 of 11 parts on `-rails` s0 (356 mm)
+and 12 of 19 on `07-chaser-20-4L-SGPS` s0 (617 mm). The cheap_score penalty never acted: the pool's
+proxy budget equals its start count (8), so every legal start reached the capacity proxy whatever
+its cheap score, and the finalists' RMS pose-diversity fill then took the source start because it
+lay far from every other start; the routed comparison picked it for two fewer vias (`-rails` s0: 134
+against 136).
+
+**Change** (`pnr.place.initial_pool.wholesale_relocation`, `legalize_flags.pool_relocation_screen`,
+`PNR_POOL_RELOCATION_SCREEN`; unset follows `PNR_LEGALIZE_KEEP`, `0` off for an A/B). A start whose
+own legalization relocated more than one part and more than 20 % of the movable parts is flagged
+(`wholesale_relocation` and `relocated` on its candidate record) and kept out of the proxy
+shortlist, its diversity fill and the routed finalists while another legal start exists (the report
+lists it under `relocation_screened`); when every legal start is flagged the pool selects among them
+as before. The cheap_score penalty is removed.
+
+**The threshold.** The 20 % is the upper edge of KEEP's own relocation mode. Over the 42 KEEP pools
+logged by the Mac detailed-placement measurement runs (the eight ladder rungs, three flat showcases,
+`09-mcu-usb-31` and buck-pour, mostly seed 0; 373 distinct legalized starts), 321 starts relocate
+nothing, 14 relocate at most 20 % (one or two occluded parts, the case the owner's principle names)
+and 38 relocate 28 % to 100 %, one or two per pool in 33 pools, the source start among them. No
+start lies between 20 % and 28 %, and no pool had every start above 20 %. The one-part floor keeps a
+single fully occluded part legal on a small board (one of five parts is 20 %, one of two is 50 %).
+
+## 14. Layer-aware channel model (`PNR_CHANNEL_LAYERS`, 2026-10-06)
 
 The routing-channel model (`pnr.place.channels.ChannelModel`) prices the gap between two facing
 pad rows as if every externally connected net on both rows ran along it on the surface. Global

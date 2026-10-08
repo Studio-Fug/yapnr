@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -243,6 +244,7 @@
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
@@ -299,8 +301,11 @@
         <article role="main" id="furo-main-content">
           <section id="design-the-gloss-dekink-and-corridor-coalescing-pass-pnr-gloss">
 <h1>Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)<a class="headerlink" href="#design-the-gloss-dekink-and-corridor-coalescing-pass-pnr-gloss" title="Link to this heading">¶</a></h1>
-<p>Status: implemented on branch <code class="docutils literal notranslate"><span class="pre">claude/gloss-port</span></code>, off by default. The pass was designed and
-built in Splanc’s engine (snapshot src18) and is ported here as a copy plus the loop hunks; where
+<p>Status: <code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code> is the runner’s own default since ladder-v2 (2026-10-06,
+<code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>; <code class="docutils literal notranslate"><span class="pre">--no-gloss</span></code> restores the plain runner path), once a native-loop A/B on GCP
+(section 10) showed no regression. Implemented on branch <code class="docutils literal notranslate"><span class="pre">claude/gloss-port</span></code>. The pass was
+designed and built in Splanc’s engine (snapshot src18) and is ported here as a copy plus the
+loop hunks; where
 the port differs from the source, §9 says so. Code: <code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/gloss_geometry.py</span></code> (pure
 geometry, no KiCad) and <code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/gloss.py</span></code> (KiCad adapter, workers, transactional
 controller); the loop hooks are in <code class="docutils literal notranslate"><span class="pre">pnr/native_loop.py</span></code> and <code class="docutils literal notranslate"><span class="pre">pnr/full_iteration.py</span></code>, the ladder
@@ -641,7 +646,7 @@ off-arm twin when its
 <code class="docutils literal notranslate"><span class="pre">pre_gloss_copper_sha256</span></code>, <code class="docutils literal notranslate"><span class="pre">placed.json</span></code> and <code class="docutils literal notranslate"><span class="pre">routes.json</span></code> match the twin’s. The ladder
 measures what the pass does to a finished board; it cannot measure completion, because the pass
 runs after a complete route. Results:
-<a class="reference internal" href="../regression-ladder.html#gloss-opt-in"><span class="std std-ref">Regression ladder</span></a>.</p>
+<a class="reference internal" href="../regression-ladder.html#gloss"><span class="std std-ref">Regression ladder</span></a>.</p>
 </section>
 <section id="the-port">
 <h2>9. The port<a class="headerlink" href="#the-port" title="Link to this heading">¶</a></h2>
@@ -684,13 +689,13 @@ branch and of <code class="docutils literal notranslate"><span class="pre">main<
 <section id="open-points">
 <h2>10. Open points<a class="headerlink" href="#open-points" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>Default-on</strong> needs a paired A/B of the native loop (completion and opens per cycle), larger
-than the source’s inconclusive three-placement run; then the owner decides. For an
-equal-compute comparison, the A/B reports each arm’s wall and CPU per evaluation: the passes’
-own cost is in <code class="docutils literal notranslate"><span class="pre">progress.json</span></code> (<code class="docutils literal notranslate"><span class="pre">gloss.&lt;label&gt;.cost</span></code>), and <code class="docutils literal notranslate"><span class="pre">06g-gloss</span></code> runs before
-<code class="docutils literal notranslate"><span class="pre">begin_refinement</span></code>, so its time is outside the refinement budget. Raise <code class="docutils literal notranslate"><span class="pre">PNR_GLOSS_SECONDS</span></code>
-and bound the passes by <code class="docutils literal notranslate"><span class="pre">PNR_GLOSS_MAX_TRANSACTIONS</span></code> (§5), so a slower machine does not stop
-one arm early.</p></li>
+<li><p><strong>Default-on (resolved, 2026-10-06):</strong> the native-loop A/B this needed ran on GCP (PR #62,
+campaign <code class="docutils literal notranslate"><span class="pre">20261005-ladder-4b88dd</span></code>): ladder + showcases + <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> + the two
+UFBGA-201 rungs, seeds 0 and 1, gloss off vs on. 52 of 60 tasks passed; the 8 failures are a
+pre-existing, unrelated <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> BGA fanout via-drill mismatch, identical in both arms. Over
+the 26 remaining paired cells: 0 regressions (opens and DRC violations stay 0 in every cell,
+both arms); bends -19.6 %, track segments -38.0 %, copper length -1.4 %, vias unchanged, CPU
++393 %. <code class="docutils literal notranslate"><span class="pre">--gloss</span></code> is now the runner’s own default (ladder-v2, <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>).</p></li>
 <li><p><strong>06g routability</strong> on public boards is unmeasured: the ladder runs the pass after a complete
 route. A real native loop with the flag on a public ladder board (no annotation sources, two
 refinement cycles) ran both passes with real workers: <code class="docutils literal notranslate"><span class="pre">06g-gloss</span></code> (open-net guard) kept two
@@ -699,7 +704,7 @@ ended with the same opens as the same run without the flag. One board, one seed:
 not evidence about completion.</p></li>
 <li><p><strong>Cost.</strong> On the ladder the stage costs a roughly fixed 30 to 125 s of CPU per case (KiCad
 worker start-up and three cold DRCs dominate on small boards), so the overhead is largest on
-the smallest cases (see the <a class="reference internal" href="../regression-ladder.html#gloss-opt-in"><span class="std std-ref">ladder A/B</span></a>). In the native
+the smallest cases (see the <a class="reference internal" href="../regression-ladder.html#gloss"><span class="std std-ref">ladder A/B</span></a>). In the native
 loop each pass adds its own inspect, check and DRC workers to the evaluation, and
 <code class="docutils literal notranslate"><span class="pre">full_iteration</span></code> one metrics worker; on the private board each pass took 2 to 4 minutes of
 wall time.</p></li>

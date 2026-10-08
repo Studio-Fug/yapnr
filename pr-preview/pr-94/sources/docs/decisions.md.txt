@@ -7,6 +7,14 @@ PR7 under `docs/adr/`.
 
 ## Decision log
 
+Owner decision of 2026-10-07 (PR #91): enable hull nesting by default for hull macros.
+Keep explicit opt-out through `PNR_HULL_NEST=0`, `run.py --hull-nest 0` and campaign
+`hull_nest = false`; keep legality, native validation and routing fallbacks unchanged.
+This is an explicit exception to the usual default-off rollout. The matched local
+native example and the broader pending campaign are documented in
+[hull nesting validation](design/hull-nest-validation.md); the decision is not a claim
+that every routing metric improves.
+
 Owner decisions of 2026-09-29, taken while planning the migration (see
 [the migration plan](migration-plan.md), §0.2):
 
@@ -1058,6 +1066,34 @@ Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`,
   CI traced runs take the same options so their trace hashes stay comparable. The renderer
   (version 3) plays the gloss stage's saved board as a before/after: the copper the stage
   replaced in red, its new copper in green, marked by geometry, not by track rows.
+- **Legalization keeps what global placement got right** (2026-10-05, the owner's report on the
+  hierarchical demo animation and the request for a severity-aware legalizer; the ladder v2 plan's
+  one-default-configuration rule). `PNR_LEGALIZE_KEEP` is on by default, with or without compact
+  placement, and `PNR_LEGALIZE_KEEP=0` restores the plain packer for A/B runs: a part or block legal
+  at its global pose keeps it and its turn, a slight overlap (or a missing routing channel) is
+  resolved by an order-preserving push of the parts around it (the overlap first, routing
+  channels only where they fit), a part the push cannot clear or whose slot is taken takes the
+  nearest free slot around its pose (2026-10-06, the owner's R6 report), and only a mostly
+  occluded part is relocated by the packer's cost. The push has a bounded reach (1.5 mm); a part
+  whose own overlap was slight but whose clearing would need a push past that reach (through a
+  crowded neighbour, say) is one of the nudged ones, so the motion record names each relocated
+  part's reason (severe, push infeasible, slot taken). `TURN` turns only the parts the
+  legalizer moved (and gives way to detailed placement, below). Every legalization records its
+  motion (moved parts, displacement, topology kept) in the reports, the trace and the
+  animation's end card. Measurements:
+  [compact placement, section 13](design/compact-placement.md).
+- **Detailed placement wins back the copper KEEP gave up** (2026-10-06, the owner's decision: an
+  order-preserving detailed-placement pass after legalization, on by default with KEEP once an
+  A/B shows copper restored and no rung worse).
+  `PNR_DETAIL_PLACE` follows `PNR_LEGALIZE_KEEP` (on by default; `0` turns it off for an A/B): an
+  order-preserving compaction toward each part's nets, then turns, slides, swaps and wrong-side
+  moves under a movement budget, each legal by the legalizer's own checker, as their own stage
+  after legalization. KEEP's legalization motion is reported as before and the detailed
+  placement's moves separately (`detail_motion`). Over the ladder, showcases and hard rungs at
+  two seeds the copper is within 0.2 % of the packer's (KEEP alone: +7.8 %) and 0.8 % shorter on
+  the ladder; one rung is still behind (`11-ufbga201-fanout-6L-SGSGPS-pairs`, 13 of 16 seeds
+  against 15 of 16 with the packer and 14 of 16 with KEEP alone). Measurements:
+  [compact placement, section 13.H](design/compact-placement.md).
 
 Compact placement before ladder v2 makes it the default (2026-10-06,
 [design, section 12](design/compact-placement.md)):
@@ -1075,6 +1111,83 @@ Compact placement before ladder v2 makes it the default (2026-10-06,
 - **Compact is part of the router key** (`compact`, a digest of the parts and the legalizer
   switches; absent with everything off, so earlier keys are unchanged), and power-first
   placement runs with compact instead of refusing it.
+
+Ladder v2 phase 1: one default configuration (2026-10-06, an internal plan not part of this
+repository, owner questionnaire answer "Go ahead with ladder v2 as planned"):
+
+- **Block-level motion fixed at the GP source first**, as the plan required before flipping
+  compact's default: `pnr.place.compact.gp_channel_inflation` builds a `ChannelModel` on the
+  pre-placement graph and floors global placement's existing route-feedback `inflation` with
+  each part's own escape-channel demand, so the density term reserves (part of) the room the
+  legalizer's push otherwise has to open at legalization time. Measured (seed 0, Mac):
+  `10-quad-bank-56` block 70 %/16.3 mm -> 14 %/3.2 mm (`main` without compact: 65 %/15.0 mm);
+  `hier-twin-bank-32` top 19 %/1.2 mm -> 0 %/0.2 mm (`main`: 19 %/13.0 mm) -- every ladder,
+  showcase and hierarchical case now moves less than the non-compact baseline, not merely no
+  worse. See [compact placement, section 12 appendix F](design/compact-placement.md).
+- **`--compact` (with `WIRE`/`TURN`/`SATELLITES`/`PAIRS`/`RELAX`), `--gloss`, `--initial-pool`,
+  `--route-pairs-diff-pairs` (for any design declaring a `diff_pair`) and `--legalize-keep`
+  become the runner's own defaults** in `hardware/pnr/regression/run.py`, each a
+  `BooleanOptionalAction` so `--no-<flag>` still turns it off for an A/B (`--legalize-keep` was
+  already on by default inside the engine itself, with or without `--compact`, but had no runner
+  flag at all -- see "PNR*LEGALIZE_KEEP has no off switch" below).
+  `yapnr/exp/kinds/ladder.py`'s `runner_arguments` only emits a flag when a campaign config says
+  something explicitly (`true` -> the flag, `false` -> `--no-<flag>`, absent -> the runner's own
+  default). This means the opposite of what an earlier draft of this page said: an existing A/B
+  campaign that \_omitted* one of these keys to mean "off" now gets the runner's new on-default
+  instead, silently running both arms with compact/gloss/pool/route-pairs/legalize-keep on; only a
+  campaign that already said `false` explicitly keeps its old "off" behaviour. Each flag had
+  already passed its own A/B gate (compact: `claude/lv2-compact`, the `09-mcu-usb-31` lane fix;
+  gloss: the native-loop GCP A/B above; `--route-pairs-diff-pairs`: `claude/lv2-ab`, 11/18 vs 9/18
+  pass, 0 regressions; `--initial-pool`: `claude/lv2-ab`, 54/54 both arms, -5.1 % copper) except
+  `--legalize-keep`, whose only A/B ran before the GP-channel-inflation fix above, mixed two GCP
+  machine types, and came out slightly negative (84/92 vs 86/92 with compact, 61/64 vs 62/64
+  without); it ships as a default on the strength of the block-motion fix and the full phase-1
+  regression below, not a dedicated A/B, and redoing that A/B cleanly is tracked as follow-up
+  work.
+- **`--fab-profile` stays `legacy`** (the fixtures' own fab block), not `jlc-pofv` (the engine's
+  own fab-capability profile) as this phase first planned (an owner decision from an internal
+  inventory note, not part of this repository). The phase-1 full regression below found
+  that flipping it breaks real hard rungs, and per "never weaken rungs ... a default flip that
+  makes a rung fail is fixed in the engine, not by relaxing the rung" the default does not move
+  until that is fixed; `--fab-profile jlc-pofv` remains available for an explicit run, and every
+  ladder and showcase case passes under either profile (`docs/regression-ladder.md`).
+- **`PNR_SHRINK` and the A/B-rejected `PNR_LEGALIZE_CHANNEL_CLEARANCE=fab`, `PNR_GP_POLISH` and
+  `PNR_GP_CHANNELS` stay off** (unchanged owner decisions).
+- **One nightly CI configuration:** `.github/workflows/ladder.yaml` runs the runner's own
+  defaults, traced, once, instead of four separate arms (baseline, traced pool+compact+gloss,
+  the opt-in gloss stage, the showcases' own flags); the same run decides the job and feeds the
+  animations job, so docs numbers and CI numbers come from the same run. The docs
+  (`docs/animations/`, `regression-ladder.md`, `constraints-and-hierarchy.md`) were regenerated
+  from a traced run with no explicit `--compact`/`--gloss`/`--initial-pool`/`--fab-profile`
+  flags, letting the runner's new defaults decide; every ladder, showcase and hard-rung case
+  passed.
+- **`--no-compact` and `--no-gloss` are narrower than their old help text claimed.** Both used to
+  say they "restore the pre-ladder-v2 runner path" / "the plain runner path"; neither does, since
+  `PNR_LEGALIZE_KEEP` and the platform-independent global placement fix (`claude/lv2-plane`) are
+  not part of either switch and apply on the non-compact, non-gloss path too. The help text in
+  `run.py` now says so and names `--no-legalize-keep` as the only way to fully restore the old
+  path.
+
+**New blocker found by the phase-1 full regression** (2026-10-06, GCP, 90 cells: ladder +
+showcases + all 33 hard rungs, seeds 0-1, campaign `20261006-ladder-b0ec34`, run with
+`--fab-profile jlc-pofv` to test the flip this phase first planned): every rung the nightly CI
+lane runs passed (the ladder, the showcases and all 15 nightly-lane hard rungs), but 11 of the 18
+manual-lane-only hard rungs failed where they pass under `--fab-profile legacy` (every other new
+default unchanged, confirmed on the Mac): the six UFBGA-201 rungs (`pnr.fanout.spec.FanoutError`:
+their 0.65 mm BGA escape's via spec, 0.150 mm drill, is under jlc-pofv's capability data,
+`min_through_drill` 0.200 mm), three `09-mcu-usb-31` stackup variants (`skew_out_of_range`:
+jlc-pofv's wider via/pad clearance pushes a USB pair's meander out of budget) and both
+`11-buck-vqfnhr` rungs (`native_drc_violations`, 93-151 `track_width` findings, cause not yet
+isolated). These are real profile/manufacturability conflicts, not test bugs, and the manual lane
+is never run in CI -- but it is still part of the regression suite, including rungs phase 2 plans
+to promote into the public, CI-gated ladder. Per "never weaken rungs ... a default flip that
+makes a rung fail is fixed in the engine, not by relaxing the rung": **the `--fab-profile`
+default stays `legacy`** (reverted above) rather than shipping jlc-pofv with this known blocker.
+The fix needs its own investigation (likely different per mechanism: a BGA-capable vendor profile
+or a fanout fallback for the UFBGA-201 family; whether `--fab-profile` should respect a design's
+own declared fab block over the runner's; the buck track-width count once its cause is found), and
+jlc-pofv becomes the default once it is resolved. Full per-rung breakdown and root-cause
+tracebacks are in the workflow's own tracking notes (not part of this public repo).
 
 Ladder fab-profile default (2026-10-06, `claude/defaults-rails-fab`, campaign
 `20261007-ladder-7fe33f`, [regression-ladder.md](regression-ladder.md)):

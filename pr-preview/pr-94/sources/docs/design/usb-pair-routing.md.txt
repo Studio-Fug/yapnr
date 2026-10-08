@@ -16,8 +16,11 @@ reports distinguish unsupported topology, electrical limits, geometric rejection
 and search timeout; a failed search does not prove unavoidable congestion.
 
 Reorderable series lines can turn and reverse together, keeping pad-facing and
-line order consistent. `--line-reorder`, `--tune-window-search` and
-`--tune-sequential` remain opt-in. Free-space native matching edits preserve
+line order consistent. The regression runner enables `--line-reorder` and
+`--tune-window-search` alongside paired access by default, as requested by the
+designer after reviewing the combined 4/4 result. Use `--no-line-reorder` and
+`--no-tune-window-search`, or the corresponding campaign options set to false,
+for controls. `--tune-sequential` remains opt-in. Free-space native matching edits preserve
 foreign copper and require a cold DRC improvement.
 
 ## Native before/after evidence
@@ -38,14 +41,14 @@ segments coupled. Maximum uncoupled copper is 1.522 mm. The independent matching
 recovery campaign passed 2/4 baseline, 3/4 window search, 4/4 corrected line search
 and 4/4 sequential recovery.
 
-A separate bare-default A/B on the rebased engine, campaign
+A separate paired-access-only A/B on the rebased engine, campaign
 `20261007-ladder-294792`, leaves line reordering and window search disabled.
-The control passes 2/4 boards; the stricter default passes 0/4. Three default
+The control passes 2/4 boards; the paired-access-only arm passes 0/4. Three paired
 boards have zero native opens/violations but fail the actual-copper coupling gate
 (uncoupled MCU access or an unexpected branch). Header seed 0 also has an open
-and a skew violation. Thus the default enforces coupling but does not yet recover
-these placements without the optional placement/matching changes. The earlier
-4/4 result must not be read as a bare-default result.
+and a skew violation. This is why the runner now enables placement/matching recovery
+together with coupling. The 4/4 evidence covers that combination; it predates
+the CLI default change. Wider ladder coverage remains to be measured.
 
 To reproduce the visualization from the accepted result directories, export
 `routed.kicad_pcb` into `geometry.json` in each directory using the configured

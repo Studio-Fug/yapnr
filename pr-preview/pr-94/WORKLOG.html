@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -243,6 +244,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
@@ -301,7 +303,7 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-07 (energy-track macOS ABI-path assertion, #90). Previous status:
+<p>Last updated: 2026-10-07 (installed RF packaging and PyPI publishing). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>). Earlier the same day: RF round 2 with the native FDTD kernel
 on <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>, merged with <code class="docutils literal notranslate"><span class="pre">main</span></code>; the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the
@@ -314,7 +316,32 @@ board edges, the hierarchical ladder driver and their animations on
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul>
-<li><p><strong>USB matching recovery</strong>: default-off reorderable line slots with joint common
+<li><p><strong>External RF packaging (#96)</strong>: collect every RF Bazel subpackage explicitly
+without numerical dependency closure in the wheel collector. Export/report,
+planar, Palace, coupons and order0 modules now ship, with the authoritative
+Palace schema and registered coupon copper/results. An isolated installed-wheel
+test runs design/export/native revalidation outside the checkout; both image
+architectures run the same external-project smoke. The installed-wheel smoke passes;
+full-suite and two-architecture CI validation are pending.</p></li>
+<li><p><strong>PyPI publishing</strong>: the release workflow publishes the same two tested Bazel
+wheels through OIDC, with version/project/architecture checks and no dry-run uploads.
+First upload requires the owner to register the documented pending trusted publisher.</p></li>
+<li><p><strong>RF CI lanes and Bazel cache snapshots</strong> (branch <code class="docutils literal notranslate"><span class="pre">codex/rf-nightly-ci-cache</span></code>): expensive RF
+solver/gradient/design and coupon fitting coverage moves to nightly/manual Linux and macOS;
+ordinary CI keeps inexpensive RF units and a deterministic native optimizer smoke. Expanded
+Bazel targets are checked against an exhaustive lane inventory. Explicit cache saves retain
+completed outputs after test failures with fork PRs restore-only. The existing CI dispatch can
+explicitly invoke the RF lane before merge. Native smoke, 14 focused policy regressions,
+changed-file hooks and actionlint pass; both hosted platforms verify the expanded 65-target
+inventory. Both RF lanes and same-head cache replays pass; detailed measurements and
+combined-head CI status after #91/#92 are tracked in PR #95.
+<a class="reference internal" href="docs/ci-lanes.html"><span class="std std-doc">Lane inventory and policy</span></a>.</p></li>
+<li><p><strong>Hull nesting default (2026-10-07, PR #91).</strong> Owner requested default-on nesting for hull
+macros with explicit opt-out. Legality/native gates and both routing fallbacks are unchanged.
+The integrated native dovetail example is clean with nonzero interlock; vias increase in
+that one pair. Final-head versus main dovetail and quad-bank campaigns remain pending under
+the approved total budget. See <a class="reference internal" href="docs/design/hull-nest-validation.html"><span class="std std-doc">validation status</span></a>.</p></li>
+<li><p><strong>USB matching recovery</strong>: default-on runner reorderable line slots with joint common
 half-turns, off-center/split meander windows, bounded transactional grid-route
 reconciliation, and a saved-copper free-space adapter gated by cold native DRC.
 Final two-case/two-seed A/B: baseline 2/4, free-space windows 3/4, corrected line
@@ -324,7 +351,7 @@ also passes without moving foreign copper. The reviewed resistor-facing gap was
 reproduced and fixed: a joint half-turn/order reversal keeps both board slots and
 saves 7.30 mm pad HPWL; cloud saved resistors are both at 0 degrees. All 288 Bazel
 tests and all pre-commit hooks pass. Broader ladder validation remains necessary
-before defaults change. General coupled-route pushing remains unfinished.</p></li>
+for wider coverage. General coupled-route pushing remains unfinished.</p></li>
 <li><p><strong>Joint differential-pair access</strong>: required coupled routing enabled by default
 in the regression runner, with <code class="docutils literal notranslate"><span class="pre">--no-pair-access</span></code> for the control,
 joint through-via site/orientation selection, bounded shared-surface/alternate-layer
@@ -339,7 +366,10 @@ the existing live timing vocabulary.
 Rebased bare-default A/B (line/window options off): control 2/4, strict default
 0/4; three default boards are native-clean but fail saved-copper coupling,
 and header seed 0 also fails an open/skew gate. The default remains enabled by
-explicit designer request; PR #94 stays draft pending placement recovery.
+explicit designer request. The designer subsequently requested enabling line
+reordering and window search alongside paired access, matching the 4/4 arm;
+all three runner options now default on with explicit opt-outs. Sequential
+recovery remains opt-in. PR #94 includes both placement and routing changes.
 Linux CI’s whole-tree privacy test hit its 60s small-test timeout without a
 finding; classify that test as medium (bounded 300s), preserving every check.</p></li>
 <li><p><strong>Route-then-compact and hull packing</strong> (PR #86, branch <code class="docutils literal notranslate"><span class="pre">claude/route-compact</span></code>; design

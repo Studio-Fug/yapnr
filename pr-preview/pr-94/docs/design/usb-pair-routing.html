@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -243,6 +244,7 @@
 <li class="toctree-l1"><a class="reference internal" href="gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
@@ -313,8 +315,11 @@ Search is bounded by <code class="docutils literal notranslate"><span class="pre
 reports distinguish unsupported topology, electrical limits, geometric rejection
 and search timeout; a failed search does not prove unavoidable congestion.</p>
 <p>Reorderable series lines can turn and reverse together, keeping pad-facing and
-line order consistent. <code class="docutils literal notranslate"><span class="pre">--line-reorder</span></code>, <code class="docutils literal notranslate"><span class="pre">--tune-window-search</span></code> and
-<code class="docutils literal notranslate"><span class="pre">--tune-sequential</span></code> remain opt-in. Free-space native matching edits preserve
+line order consistent. The regression runner enables <code class="docutils literal notranslate"><span class="pre">--line-reorder</span></code> and
+<code class="docutils literal notranslate"><span class="pre">--tune-window-search</span></code> alongside paired access by default, as requested by the
+designer after reviewing the combined 4/4 result. Use <code class="docutils literal notranslate"><span class="pre">--no-line-reorder</span></code> and
+<code class="docutils literal notranslate"><span class="pre">--no-tune-window-search</span></code>, or the corresponding campaign options set to false,
+for controls. <code class="docutils literal notranslate"><span class="pre">--tune-sequential</span></code> remains opt-in. Free-space native matching edits preserve
 foreign copper and require a cold DRC improvement.</p>
 <section id="native-before-after-evidence">
 <h2>Native before/after evidence<a class="headerlink" href="#native-before-after-evidence" title="Link to this heading">¶</a></h2>
@@ -331,14 +336,14 @@ unchanged 2 mm limit. Placement is selected mechanically in each arm.</p>
 segments coupled. Maximum uncoupled copper is 1.522 mm. The independent matching
 recovery campaign passed 2/4 baseline, 3/4 window search, 4/4 corrected line search
 and 4/4 sequential recovery.</p>
-<p>A separate bare-default A/B on the rebased engine, campaign
+<p>A separate paired-access-only A/B on the rebased engine, campaign
 <code class="docutils literal notranslate"><span class="pre">20261007-ladder-294792</span></code>, leaves line reordering and window search disabled.
-The control passes 2/4 boards; the stricter default passes 0/4. Three default
+The control passes 2/4 boards; the paired-access-only arm passes 0/4. Three paired
 boards have zero native opens/violations but fail the actual-copper coupling gate
 (uncoupled MCU access or an unexpected branch). Header seed 0 also has an open
-and a skew violation. Thus the default enforces coupling but does not yet recover
-these placements without the optional placement/matching changes. The earlier
-4/4 result must not be read as a bare-default result.</p>
+and a skew violation. This is why the runner now enables placement/matching recovery
+together with coupling. The 4/4 evidence covers that combination; it predates
+the CLI default change. Wider ladder coverage remains to be measured.</p>
 <p>To reproduce the visualization from the accepted result directories, export
 <code class="docutils literal notranslate"><span class="pre">routed.kicad_pcb</span></code> into <code class="docutils literal notranslate"><span class="pre">geometry.json</span></code> in each directory using the configured
 headless KiCad Python, then render with the optional matplotlib/Pillow tools:</p>

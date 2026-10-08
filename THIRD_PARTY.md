@@ -187,3 +187,12 @@ Codex is Apache-2.0; its LICENSE/NOTICE and dependency notices are shipped in
 retain their upstream licenses and source links there. Optional voice and bundled
 zsh runtimes are excluded. Claude Code is not redistributed. Credentials and
 provider accounts are supplied by the operator and are never part of the image.
+
+### Provider-neutral interactive terminal
+
+OpenCode 1.18.35 is installed from official Linux release archives, checked against
+SHA-256 pins in `docker/yapnr/opencode.lock.json`. Its source is
+[53d1eabb](https://github.com/anomalyco/opencode/tree/53d1eabb61e21162157817bf677da0a4ad3332e3),
+licensed under MIT; the license is shipped in `licenses/opencode/`. Provider
+credentials are operator-supplied. Official Codex/Claude account authentication
+uses the respective official CLI rather than OpenCode's provider adapters.

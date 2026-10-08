@@ -150,11 +150,15 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
 RUN --mount=type=bind,source=docker/yapnr,target=/tmp/yapnr-agent \
     set -eu; \
     /opt/venv/bin/python /tmp/yapnr-agent/install_codex.py "${TARGETARCH}" /opt/codex; \
+    /opt/venv/bin/python /tmp/yapnr-agent/install_opencode.py "${TARGETARCH}" /usr/local/bin/opencode; \
     ln -s /opt/codex/bin/codex /usr/local/bin/codex; \
     ln -s /opt/codex/codex-path/rg /usr/local/bin/rg; \
     codex --version; \
+    opencode --version; \
     mkdir -p /usr/share/doc/yapnr/licenses/codex; \
     cp /tmp/yapnr-agent/codex.lock.json /usr/share/doc/yapnr/codex.lock.json; \
+    cp /tmp/yapnr-agent/opencode.lock.json /usr/share/doc/yapnr/opencode.lock.json; \
+    echo 'OpenCode 1.18.35: https://github.com/anomalyco/opencode/tree/53d1eabb61e21162157817bf677da0a4ad3332e3; MIT; licenses/opencode/' >> /usr/share/doc/yapnr/SOURCES; \
     echo 'OpenAI Codex 0.161.0: https://github.com/openai/codex/tree/979011409de0a60b52f179721948e65531d26144; Apache-2.0; embedded dependency notices in licenses/codex/' >> /usr/share/doc/yapnr/SOURCES
 
 COPY --chmod=0755 docker/yapnr/yapnr.sh /usr/local/bin/yapnr

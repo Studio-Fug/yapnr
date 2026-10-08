@@ -30,8 +30,13 @@ create permission. An explicitly requested change overrides its default policy.
    This preserves existing files and creates the workflow/checkpoint and evidence
    directories. It does **not** approve the requirements or launch compute.
    `yapnr agent chat --provider codex` opens the interactive agent in that project;
-   the container bundles Codex. An installed, authenticated Claude CLI can instead
-   be selected with `--provider claude`. Authentication belongs to the operator.
+   the container bundles Codex and OpenCode. An installed, authenticated Claude CLI
+   can be selected with `--provider claude`. For provider API keys (OpenAI,
+   Anthropic, Gemini and others), select `--provider opencode` and use `/connect`
+   and `/models`. For an OpenAI-compatible model API, add `--base-url`, `--model`
+   and an environment-variable reference `--api-key-env`; see the execution guide.
+   Account OAuth uses the official Codex/Claude CLI. Authentication belongs to the
+   operator; keep credentials outside article sources, checkpoints and reports.
 4. Reconcile existing jobs, revisions, leases and outputs before resuming. Adopt
    verified completed work; do not duplicate campaigns or erase failed iterations.
 

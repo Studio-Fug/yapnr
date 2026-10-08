@@ -5,10 +5,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 def instructions(guide=False):
@@ -87,7 +89,7 @@ def initialize(project, directive=""):
     }
 
 
-def chat_command(provider, executable, context, directive):
+def chat_command(provider, executable, context, directive, model=""):
     prompt = (
         "Read the project's AGENTS.md and " + str(context) + ". "
         "Follow the persistent prompt-to-PCB engineering workflow using the installed yapnr. "
@@ -95,8 +97,50 @@ def chat_command(provider, executable, context, directive):
         "Begin requirements capture for the following request, or ask for the design directive "
         "if none is supplied. Do not treat missing verification as success.\n" + directive
     )
-    # Both CLIs accept one positional initial prompt. No permission-bypass flags.
-    return [executable, prompt]
+    command = [executable, "--prompt", prompt] if provider == "opencode" else [executable, prompt]
+    if model:
+        command.extend(["--model", model])
+    return command
+
+
+def provider_environment(args):
+    """Configure a compatible API using an environment reference, never a stored key."""
+    endpoint = getattr(args, "base_url", "")
+    model = getattr(args, "model", "")
+    if not endpoint:
+        return None, model
+    if args.provider != "opencode":
+        raise ValueError("--base-url requires --provider opencode")
+    url = urlsplit(endpoint)
+    if (
+        url.scheme not in ("http", "https")
+        or not url.hostname
+        or url.username
+        or url.password
+        or url.query
+        or url.fragment
+    ):
+        raise ValueError(
+            "Endpoint must be an HTTP(S) base URL without credentials, query or fragment"
+        )
+    key_env = getattr(args, "api_key_env", "YAPNR_MODEL_API_KEY")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key_env):
+        raise ValueError("--api-key-env must be an environment variable name")
+    if not model:
+        raise ValueError("Custom endpoints require --model with the server's model ID")
+    config = {
+        "provider": {
+            "yapnr_endpoint": {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": "User endpoint",
+                "options": {"baseURL": endpoint, "apiKey": "{env:" + key_env + "}"},
+                "models": {model: {"name": model}},
+            }
+        }
+    }
+    environment = os.environ.copy()
+    environment["OPENCODE_CONFIG_CONTENT"] = json.dumps(config)
+    return environment, "yapnr_endpoint/" + model
 
 
 def run(args):
@@ -107,6 +151,7 @@ def run(args):
         if args.action == "init":
             print(json.dumps(initialize(args.project, args.directive), indent=2))
             return 0
+        environment, model = provider_environment(args)
         executable = shutil.which(args.provider)
         if not executable:
             print(
@@ -138,9 +183,11 @@ def run(args):
         os.chdir(state["project"])
         # The interactive operator owns this process, rather than a background solver worker.
         # exec preserves terminal control, exit codes and container PID-1 signal forwarding.
-        os.execv(
-            executable, chat_command(args.provider, executable, state["context"], args.directive)
-        )
+        command = chat_command(args.provider, executable, state["context"], args.directive, model)
+        if environment is None:
+            os.execv(executable, command)
+        else:
+            os.execve(executable, command, environment)
     except (OSError, ValueError) as err:
         print(str(err), file=sys.stderr)
         return 2
@@ -160,6 +207,17 @@ def register(commands):
         child.add_argument("--project", default=".")
         child.add_argument("--directive", default="")
         if name == "chat":
-            child.add_argument("--provider", choices=("codex", "claude"), default="codex")
+            child.add_argument(
+                "--provider", choices=("codex", "claude", "opencode"), default="codex"
+            )
+            child.add_argument("--model", default="", help="model ID; OpenCode uses provider/model")
+            child.add_argument(
+                "--base-url", default="", help="OpenAI-compatible API base URL (OpenCode)"
+            )
+            child.add_argument(
+                "--api-key-env",
+                default="YAPNR_MODEL_API_KEY",
+                help="environment variable containing endpoint key",
+            )
             child.add_argument("--dry-run", action="store_true")
         child.set_defaults(func=run)

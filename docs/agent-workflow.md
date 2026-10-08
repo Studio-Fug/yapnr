@@ -8,7 +8,7 @@ An unavailable validator or vendor model remains an explicit blocker.
 
 ## Start a container chat
 
-The application image bundles a checksum-pinned Codex CLI for both Linux
+The application image bundles checksum-pinned Codex and OpenCode CLIs for both Linux
 architectures. No credentials or default paid sessions are built into it. Use a
 release tag, resolve and record its digest, then start an interactive terminal:
 
@@ -30,10 +30,45 @@ The agent must record an explicit experiment budget before launching campaigns.
 Use `docker stop yapnr-design` to interrupt. Resume using the same project/home
 mounts and the checkpoint. No socket to the host Docker daemon is required.
 
-For API-key authentication use the provider's documented login flow inside the
-container; avoid putting secrets in the directive or design repository. Operator
-credentials persist only in the separately mounted provider home. The image has
-no agent permission-bypass flags. Agent CLI approval settings remain effective.
+### Choose authentication and a model
+
+Use `--provider codex` for the official Codex account-login flow, or
+`--provider claude` for the official Claude Code account-login flow. Account login
+is handled by those tools, not by a yapnr OAuth proxy. In a headless container,
+follow the CLI's device-login or browser callback instructions. Claude Code is
+operator-installed and is not redistributed in the image. Persist its installation
+and authentication in the separate home volume. See the official
+[Codex authentication](https://developers.openai.com/codex/auth/)
+and [Claude Code setup](https://code.claude.com/docs/en/setup) instructions.
+
+For **OpenAI, Anthropic, Google Gemini and other provider API keys**, select
+`agent chat --provider opencode`. Use OpenCode's `/connect` to supply your own
+key and `/models` to select a provider/model. You can also select an already
+configured model with `--model provider/model`. No yapnr-managed model account
+is required. See [OpenCode providers](https://opencode.ai/docs/providers/).
+
+For an **OpenAI-compatible model endpoint**, select OpenCode and provide the
+server's base URL and exact model ID:
+
+```sh
+# Supply YAPNR_MODEL_API_KEY in your shell or a private secrets manager.
+# Add `-e YAPNR_MODEL_API_KEY` to the docker run command above, and replace
+# its final `agent chat` arguments with:
+agent chat --provider opencode --base-url https://models.example.com/v1 \
+  --model your-model-id --api-key-env YAPNR_MODEL_API_KEY
+```
+
+The launcher references the named environment variable in process-local
+configuration; it never copies its value into the article or dry-run output.
+An unauthenticated local server can leave the variable unset. In Docker,
+`localhost` refers to the container: use a reachable host address for a host model
+server. Custom models must support the tools required for the engineering loop;
+API compatibility alone does not establish that capability. Endpoint URLs must
+not contain credentials or secret query parameters.
+
+Avoid putting keys in the directive, command arguments or design repository.
+Provider credentials persist in the separately mounted home. The image has no
+agent permission-bypass flags. Agent CLI approval settings remain effective.
 
 `yapnr agent chat --provider claude` selects an operator-installed Claude Code CLI
 instead. Claude Code is not redistributed in the image. For an already authenticated

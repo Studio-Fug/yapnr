@@ -7,10 +7,31 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
-from yapnr.agent.cli import chat_command, initialize, instructions, run
+from yapnr.agent.cli import chat_command, initialize, instructions, provider_environment, run
 
 
 class WorkflowTest(unittest.TestCase):
+    def test_endpoint_uses_environment_reference_without_storing_secret(self):
+        args = Namespace(
+            provider="opencode",
+            base_url="http://localhost:8000/v1",
+            model="local/model",
+            api_key_env="TEST_MODEL_KEY",
+        )
+        with patch.dict("os.environ", {"TEST_MODEL_KEY": "test-secret"}):
+            environment, model = provider_environment(args)
+        config = environment["OPENCODE_CONFIG_CONTENT"]
+        self.assertNotIn("test-secret", config)
+        self.assertIn("{env:TEST_MODEL_KEY}", config)
+        self.assertEqual(model, "yapnr_endpoint/local/model")
+        command = chat_command("opencode", "/bin/opencode", "context.md", "Design X", model)
+        self.assertEqual(command[1], "--prompt")
+        self.assertEqual(command[-2:], ["--model", model])
+        for endpoint in ("https://user:secret@example.com/v1", "https://example.com/?key=secret"):
+            args.base_url = endpoint
+            with self.assertRaises(ValueError):
+                provider_environment(args)
+
     def test_bootstrap_and_resume_preserve_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
             state = initialize(tmp, "Design a divider")

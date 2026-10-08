@@ -887,6 +887,8 @@ source start, whose global placement leaves 4 to 12 parts mostly occluded; witho
 
 ### I. The pool's own screen penalizes wholesale relocation (`PNR_POOL_MOTION_PENALTY`, 2026-10-06)
 
+Superseded by section J: the penalty had no effect on the selection.
+
 Review of the A/B above (section H): "legalization motion stays at the KEEP level" missed its own
 pass mark (999 mm / 43 relocated against 285 mm / 29 with KEEP alone), driven by cells where the
 initial pool picked a start whose global placement left 4 to 12 parts mostly occluded, so
@@ -914,6 +916,34 @@ pass; CI's ladder is green on both `#64` and `#70`. This has _not_ yet been re-m
 plus whether it also narrows the `-pairs` seed-1 gap (a pool-selection problem, not relocation:
 every routed finalist had the LVDS pair uncoupled or a connection missing), is the next step before
 reconsidering the section H merge decision.
+
+### J. A start that relocates much of the board enters no shortlist (`PNR_POOL_RELOCATION_SCREEN`, 2026-10-07)
+
+The confirming A/B of section I (KEEP + detailed placement against KEEP off, every rung at seeds
+0-1) still measured 255 parts, 1522 mm and 73 relocated by legalization against 148, 285 mm and 29
+with KEEP alone. On five cells the pool picked the source start (`start-01`): its global placement
+leaves most parts occluded, so `PNR_LEGALIZE_KEEP` relocated 11 of 11 parts on `-rails` s0 (356 mm)
+and 12 of 19 on `07-chaser-20-4L-SGPS` s0 (617 mm). The cheap_score penalty never acted: the pool's
+proxy budget equals its start count (8), so every legal start reached the capacity proxy whatever
+its cheap score, and the finalists' RMS pose-diversity fill then took the source start because it
+lay far from every other start; the routed comparison picked it for two fewer vias (`-rails` s0: 134
+against 136).
+
+**Change** (`pnr.place.initial_pool.wholesale_relocation`, `legalize_flags.pool_relocation_screen`,
+`PNR_POOL_RELOCATION_SCREEN`; unset follows `PNR_LEGALIZE_KEEP`, `0` off for an A/B). A start whose
+own legalization relocated more than one part and more than 20 % of the movable parts is flagged
+(`wholesale_relocation` and `relocated` on its candidate record) and kept out of the proxy
+shortlist, its diversity fill and the routed finalists while another legal start exists (the report
+lists it under `relocation_screened`); when every legal start is flagged the pool selects among them
+as before. The cheap_score penalty is removed.
+
+**The threshold.** The 20 % is the upper edge of KEEP's own relocation mode. Over the 42 KEEP pools
+logged by the Mac detailed-placement measurement runs (the eight ladder rungs, three flat showcases,
+`09-mcu-usb-31` and buck-pour, mostly seed 0; 373 distinct legalized starts), 321 starts relocate
+nothing, 14 relocate at most 20 % (one or two occluded parts, the case the owner's principle names)
+and 38 relocate 28 % to 100 %, one or two per pool in 33 pools, the source start among them. No
+start lies between 20 % and 28 %, and no pool had every start above 20 %. The one-part floor keeps a
+single fully occluded part legal on a small board (one of five parts is 20 %, one of two is 50 %).
 
 ## 14. Layer-aware channel model (`PNR_CHANNEL_LAYERS`, 2026-10-06)
 

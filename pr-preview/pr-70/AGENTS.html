@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -238,9 +239,12 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/clearance-index-validation.html">Clearance index: integration validation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
@@ -314,6 +318,10 @@ in <a class="reference internal" href="DEVELOPERS.html#kicad"><span class="std s
 claim completion. Electrical contracts are never relaxed without the designer.</p></li>
 <li><p><strong>New engine behaviour lands behind a default-off flag,</strong> with a measured A/B result in the commit
 body.</p></li>
+<li><p><strong>Feature PRs include an animation of the proposed change.</strong> Use reproducible before/after
+views or recorded accepted events with the same viewport/configuration; label synthetic versus
+native evidence and never invent intermediate geometry or validation. If the feature has no
+meaningful visual behavior, explain why an animation is not applicable.</p></li>
 <li><p><strong>Ordering is staging only, and agents only dry-run it.</strong> Agents run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code> only
 with <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>. They never upload a file to a vendor or any third-party service, never call a
 vendor API, and never open a vendor page on a human’s behalf. Paying, confirming an order,

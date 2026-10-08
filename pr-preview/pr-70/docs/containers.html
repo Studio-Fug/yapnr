@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -238,9 +239,12 @@
 <li class="toctree-l1"><a class="reference internal" href="design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/clearance-index-validation.html">Clearance index: integration validation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -374,6 +378,22 @@ seed give a different board, of the same quality on average, because the torch b
 float operations differently (<a class="reference internal" href="decisions.html"><span class="std std-doc">decisions</span></a>). Compare runs on one platform. The KiCad
 version is part of the image, not of the tag: a KiCad patch update ships as a yapnr patch release.
 The image label <code class="docutils literal notranslate"><span class="pre">io.github.studio-fug.yapnr.kicad.version</span></code> and the release notes name it.</p>
+<p>External RF projects use the installed dependency directly: pin a published image
+digest, or install the matching platform’s release wheel with <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">pip</span> <span class="pre">install</span> <span class="pre">./yapnr-&lt;version&gt;-py3-none-&lt;platform&gt;.whl</span></code> and its declared runtime dependencies.
+There is no root Python build backend, so <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">git+...</span></code> is not a supported
+installation path. A source overlay or <code class="docutils literal notranslate"><span class="pre">PYTHONPATH</span></code> pointing at a checkout is not
+required. RF design, export and revalidation are public installed-package APIs:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">yapnr.rf.driver</span><span class="w"> </span><span class="kn">import</span> <span class="n">design</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">yapnr.rf.validate</span><span class="w"> </span><span class="kn">import</span> <span class="n">resimulate</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">yapnr.rf.export.kicad</span><span class="w"> </span><span class="kn">import</span> <span class="n">write_footprint</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">yapnr.rf.export.touchstone</span><span class="w"> </span><span class="kn">import</span> <span class="n">write_touchstone</span>
+</pre></div>
+</div>
+<p>The wheel includes nested RF packages and their catalog/schema resources. Image
+smoke checks on both Linux architectures run a small design/export/revalidation
+outside the checkout and load the FDTD library from that installed wheel. This
+checks packaging and execution, not qualification of the smoke design’s RF limits.
+Gmsh/Palace and openEMS execution use their separately pinned solver runtimes.</p>
 <p><code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr-kicad</span></code> is tagged <code class="docutils literal notranslate"><span class="pre">&lt;KiCad</span> <span class="pre">version&gt;-&lt;N&gt;</span></code> (for example <code class="docutils literal notranslate"><span class="pre">10.0.6-1</span></code>; <code class="docutils literal notranslate"><span class="pre">N</span></code>
 counts rebuilds of one KiCad version, and such a tag is never overwritten), plus the moving
 <code class="docutils literal notranslate"><span class="pre">10.0.6</span></code> and <code class="docutils literal notranslate"><span class="pre">10.0</span></code>. <code class="docutils literal notranslate"><span class="pre">10.0.6-1-src</span></code> holds the source packages of that KiCad build (see

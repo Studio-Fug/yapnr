@@ -212,7 +212,11 @@ The planned full layout is in [docs/migration-plan.md](docs/migration-plan.md#1-
   creates the `gh-pages` branch; the steps are in the comment above the Pages jobs in `ci.yaml`.
 
 `lint`, `test` and `docs` are the required checks. `.github/workflows/macos.yaml` runs the tests on
-`macos-latest` for information only.
+`macos-latest` for information only. Both ordinary test lanes exclude expensive RF tests and
+retain a deterministic native inverse-design smoke. `.github/workflows/rf-nightly.yaml` runs
+the expensive RF coverage nightly and on manual dispatch on Linux and macOS. The complete
+[inventory and cache policy](docs/ci-lanes.md) describe selection, retained manual tests and
+failure-safe cache snapshots.
 
 `.github/workflows/ladder.yaml` runs the native regression ladder (`hardware/pnr/regression`) inside
 the published arm64 image `ghcr.io/studio-fug/yapnr:edge`, resolved to a digest: cases 01 to 06 with

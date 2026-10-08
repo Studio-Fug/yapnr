@@ -59,7 +59,7 @@
       },
       "sha256": "6b2662fa5ddaa3cd05552accbf68ba639a365825a74b8589ccc9c4aaf270f3be",
       "title": "Connector + LED",
-      "trace_sha256": "a85ab5eea5d44577f9dc36e0f2d56ecf4cf8b9529de4a8d54176c42c0c469b85",
+      "trace_sha256": "ee9e8873ee6947b82c313ff8b9a737c3e892b9b2a71ff199889f12d9f6e02067",
       "width": 800
     },
     {
@@ -121,7 +121,7 @@
       },
       "sha256": "9198bd80c321526d0e58c36c856cdef8e8ba56b8be29c21546014254ee0ba5a3",
       "title": "Resistor + LED",
-      "trace_sha256": "44c17eefac91dfb981c3b8a46b014e112b0697166c100a21733c2d78635d9ab0",
+      "trace_sha256": "9b4b6d66e9e759145c8b144358798520fd418d60ba773ba2671c42e14e6f85dd",
       "width": 800
     },
     {
@@ -183,7 +183,7 @@
       },
       "sha256": "4f079f0cd51d605a494e1524ec9ae87fcbeae064b419abd20c36485f11203254",
       "title": "Two LEDs",
-      "trace_sha256": "77e90582d2e4afe7c12bb6caaba43546439fd5d1a3c80c56e937e539dac569b2",
+      "trace_sha256": "0dc0d8afc6c25e7b26cc6c4f98f549518803f4cf0feb1ecf9e3a604f8de6692c",
       "width": 800
     },
     {
@@ -246,7 +246,7 @@
       },
       "sha256": "ab080b79b16ad2bb4d2411e48b530d46e2dfef0d14ccc69019447c0293c7fd59",
       "title": "Inverter indicators",
-      "trace_sha256": "70fbf6df65514456b842820f0bdc2ad9b0726c138d08740bdf6e9709267f71af",
+      "trace_sha256": "5c60b216d53b92cd67ee37a1dd53287d1c54d11707957f5d210baa705901f86d",
       "width": 800
     },
     {
@@ -309,7 +309,7 @@
       },
       "sha256": "1ed8674c5b9f114199ef009cd49168232b9d8886e7590663c4de3d8b11918188",
       "title": "TLC555 blinker",
-      "trace_sha256": "f5641c00a2bf40ae48c49ea76591cc2f3210f66d4f3bf6016191b430989ce2b3",
+      "trace_sha256": "08f3e8b11c7b1b72f248c8aeb2bc9c299e902ffaa596ceebef53e1572ba8dedf",
       "width": 640
     },
     {
@@ -372,7 +372,7 @@
       },
       "sha256": "0cb60ce52a752b1439c2a8761528cab4849e8bd64fa06dd836a295a2abff6b5c",
       "title": "TLC555 blinker",
-      "trace_sha256": "f5641c00a2bf40ae48c49ea76591cc2f3210f66d4f3bf6016191b430989ce2b3",
+      "trace_sha256": "08f3e8b11c7b1b72f248c8aeb2bc9c299e902ffaa596ceebef53e1572ba8dedf",
       "width": 800
     },
     {
@@ -435,7 +435,7 @@
       },
       "sha256": "db6600bdfbe418e2227357928f2690b629c4e2e87a86dc9a4f813698fa587459",
       "title": "Two-stage chaser",
-      "trace_sha256": "cf4cdc7b632d74fddda5836373eece4076d640f18467a4362ba425e4ccdfbe8a",
+      "trace_sha256": "0feb2822a368d18fb6fd97e2f5f663bde6f552d46dd092bfd67fd895337682a6",
       "width": 800
     },
     {
@@ -499,7 +499,7 @@
       },
       "sha256": "14042ec18aafc82e1269bcf878d2a22d3bceb87f65d3ff622a83b0d567c89318",
       "title": "Five-stage chaser",
-      "trace_sha256": "cff658d529c7c6b9dad89d46813f5cda067ad2713101b34bdb4fcfd928bb61fd",
+      "trace_sha256": "828d3e69c9df60e469693ae353376077632a4c4bc2e4acaac8add77db213a01c",
       "width": 800
     },
     {
@@ -562,22 +562,22 @@
       },
       "sha256": "ca5dcf22f57f61f47775310edbd0297923a91c8e4b96b7417ee81728db5ff209",
       "title": "Five-stage chaser with plane",
-      "trace_sha256": "f2d0e1ac1fc6da36ad07d58492006d36cf8691248990b515281c9b44661137c1",
+      "trace_sha256": "675bdb35ed32d99ad51741b7f0029a5cc864dd6ea7f675c7c2a2403d95fe0906",
       "width": 800
     }
   ],
   "generated": {
     "ladder": {
       "engine_dirty": false,
-      "engine_revision": "acec578f02983b873439539a29801d928d1c56a5",
+      "engine_revision": "d002bfab8d66448565b4fcffc006756104042173",
       "fab_profile": "legacy",
       "image": null,
       "kicad": "10.0.6",
       "platform": "darwin-arm64",
-      "sources_sha256": "cce3b5e1ff74738c506bda974a39b4fc3a5b5d2bdf2ed6362a57909b01da9de7"
+      "sources_sha256": "1f43ac8473290d319ff028afa9ceb5d1af802e907b3b732078c706bb0f1f86dc"
     },
     "render": {
-      "date": "2026-10-06",
+      "date": "2026-10-04",
       "pillow": "12.3.0",
       "platform": "darwin-arm64",
       "renderer": 3
@@ -721,8 +721,8 @@
       "sha256": "2f9b99f0f4a036f15e7c946098d62fddf15c980c7296c8546b01764e833f95eb",
       "title": "Five-stage chaser: free LEDs vs. a line group",
       "trace_sha256": {
-        "07-chaser-20": "c3fb0bef37438381bd5f106b62515bb21b2d9249da2a9dd891dc8109df8c8484",
-        "line-chaser-20": "0701ecb1eb9c8326d3c7d8352a6ea45d12bfa0e4a495e2c2675285f2b2d1ac99"
+        "07-chaser-20": "77e574e0fd4849c21424ba1553496bfac0176b969c6673999a6f5e018fdca719",
+        "line-chaser-20": "4844cad76cd2d7edcd98612fa5bebe26d60a7c2dfe4fa9c87ff25efaf7ece5a7"
       },
       "width": 800
     },
@@ -851,8 +851,8 @@
       "sha256": "12e668fbeb082befaa911fb6037a05c8d43954adadc6240d8a43059bbb8e0345",
       "title": "Five-stage chaser: free LEDs vs. a line group",
       "trace_sha256": {
-        "07-chaser-20": "c3fb0bef37438381bd5f106b62515bb21b2d9249da2a9dd891dc8109df8c8484",
-        "line-chaser-20": "0701ecb1eb9c8326d3c7d8352a6ea45d12bfa0e4a495e2c2675285f2b2d1ac99"
+        "07-chaser-20": "77e574e0fd4849c21424ba1553496bfac0176b969c6673999a6f5e018fdca719",
+        "line-chaser-20": "4844cad76cd2d7edcd98612fa5bebe26d60a7c2dfe4fa9c87ff25efaf7ece5a7"
       },
       "width": 960
     },
@@ -996,39 +996,40 @@
       "sha256": "eb1fce335079124884ce74ae0844c46bf241111f7ed9dfd7a8e606ea35bd2434",
       "title": "Hold-to-blink board: free vs. hard board-edge constraints",
       "trace_sha256": {
-        "edge-io-12": "bb566b0039b569f024a5e7e11c05faee4ef51800155c517cf98276deceff9cd4",
-        "edge-io-12-free": "68fb3fa84e9ac395a68c9e0c0db4bcb2cc3bdfd65ed576335f40c782bc5b1ee0"
+        "edge-io-12": "4c1d0ca31a8f8f7b569ee4f4cbd720ec78247f46c61d5598e7eecf48025c1488",
+        "edge-io-12-free": "980e16f3db563649236bd2b0206b058d517ecbfcb88feb8f58ff175abfcca6ac"
       },
       "width": 960
     },
     {
-      "bytes": 3181242,
+      "bytes": 3533582,
       "captions": [
         "1 \u00b7 Blocks",
         "2 \u00b7 Top level",
         "3 \u00b7 Knitting",
         "32 parts \u00b7 28 nets \u00b7 2 layers",
         "32 parts \u00b7 28 nets \u00b7 2 layers \u00b7 3 blocks, 2 templates",
+        "39 vias \u00b7 419.6 mm copper \u00b7 seed 0 \u00b7 rivals set aside: 30 by block rank, 3 by route objective",
         "4 top-level placements knitted, the best route chosen",
-        "40 vias \u00b7 539.5 mm copper \u00b7 seed 0 \u00b7 legalization moved in blocks 1 of 18 (2.2 mm), at top level 0 of 4 (0.2 mm) \u00b7 rivals set aside: 30 by block rank, 3 by route objective",
+        "4 \u00b7 Compaction",
         "Blocks become macros",
         "Blocks: one layout per template \u00b7 bank_a and bank_b: one layout, 2 instances",
         "Blocks: placed and routed on their own boards \u00b7 2 templates, each on its own board",
-        "Detailed placement",
         "Global placement",
-        "Global placement \u00b7 top-01",
-        "Gloss: after \u00b7 539.5 mm of copper (-8.8 mm)",
-        "Gloss: before \u00b7 548.3 mm of copper",
+        "Global placement \u00b7 top-00",
+        "Gloss: after \u00b7 419.6 mm of copper (-9.9 mm)",
+        "Gloss: before \u00b7 429.5 mm of copper",
         "KiCad DRC verdict",
         "KiCad DRC: 0 unconnected \u00b7 0 violations",
         "KiCad: planes",
         "KiCad: writeback",
         "KiCad: zone refill",
         "Legalization",
-        "Legalization \u00b7 top-01",
+        "Legalization \u00b7 top-00",
+        "Placement \u00b7 ?: 0.0 -> 0.0 mm tall, each gutter sized by its copper",
         "Routed",
         "Routed \u00b7 100% routed",
-        "Routed \u00b7 top-01-route",
+        "Routed \u00b7 top-00-route",
         "Routing: commit \u00b7 100% routed",
         "Routing: commit \u00b7 25% routed",
         "Routing: commit \u00b7 36% routed",
@@ -1046,36 +1047,35 @@
         "Routing: commit \u00b7 84% routed",
         "Routing: commit \u00b7 89% routed",
         "Routing: commit \u00b7 94% routed",
-        "Routing: commit \u00b7 top-01-route",
+        "Routing: commit \u00b7 top-00-route",
         "Routing: negotiation \u00b7 0% routed",
-        "Routing: negotiation \u00b7 top-01-route",
+        "Routing: negotiation \u00b7 top-00-route",
         "TLC555 clock and two CD4017B five-LED banks as three blocks (two templates), placed and routed hierarchically.",
         "Twin-bank chaser: hierarchical place and route",
         "Unplaced board",
         "bank_a",
-        "bank_a, bank_b \u00b7 trial start-12",
+        "bank_a, bank_b \u00b7 trial start-13",
         "bank_a, bank_b: 16 trial layouts, the best by rank chosen",
         "bank_b",
-        "chosen \u00b7 start-12",
+        "chosen \u00b7 start-13",
         "clock",
-        "clock \u00b7 trial start-15",
-        "debt 109 \u00b7 525 sq mm \u00b7 16\u2026",
-        "debt 112 \u00b7 525 sq mm \u00b7 32\u2026",
-        "debt 112 \u00b7 525 sq\u2026",
-        "debt 113 \u00b7 525 sq\u2026",
-        "debt 55 \u00b7 262 sq m\u2026",
-        "debt 57 \u00b7 262 sq m\u2026",
-        "debt 61 \u00b7 262\u2026",
-        "debt 72 \u00b7 315 sq mm\u2026",
-        "debt 72 \u00b7 315\u2026",
-        "debt 72 \u00b7 394 sq mm\u2026",
+        "clock \u00b7 trial start-14",
+        "debt 109 \u00b7 525 sq mm \u00b7 18\u2026",
+        "debt 122 \u00b7 525 sq mm \u00b7 20\u2026",
+        "debt 123 \u00b7 525 sq\u2026",
+        "debt 126 \u00b7 525 sq\u2026",
+        "debt 53 \u00b7 262 sq m\u2026",
+        "debt 60 \u00b7 262\u2026",
+        "debt 62 \u00b7 262 sq m\u2026",
+        "debt 64 \u00b7 315 sq mm\u2026",
+        "debt 65 \u00b7 315 sq mm\u2026",
+        "debt 71 \u00b7 315\u2026",
         "debt 73 \u00b7 262\u2026",
-        "debt 74 \u00b7 315 sq mm\u2026",
-        "debt 77 \u00b7 315\u2026",
-        "debt 78 \u00b7 394 sq mm\u2026",
-        "debt 89 \u00b7 394 sq\u2026",
-        "debt 96 \u00b7 394 sq\u2026",
-        "detailed placement moved 14 parts: 6 compacted, 1 turn, 15 slides, 2 swaps, wire -29.0 mm",
+        "debt 75 \u00b7 315\u2026",
+        "debt 93 \u00b7 394 sq\u2026",
+        "debt 95 \u00b7 394 sq mm\u2026",
+        "debt 97 \u00b7 394 sq\u2026",
+        "debt 98 \u00b7 394 sq mm\u2026",
         "each block template is placed and routed on its own board",
         "rank: opens, port debt, area, vias, copper",
         "start-00",
@@ -1090,10 +1090,11 @@
         "start-09",
         "start-10",
         "start-11",
-        "start-13",
+        "start-12",
         "start-14",
         "start-15",
         "the blocks become rigid macros and are placed on the board",
+        "the gutters close to the copper they hold, then the nets between the blocks route again",
         "the nets between the blocks are routed"
       ],
       "cases": [
@@ -1107,34 +1108,34 @@
       ],
       "file": "showcase-hier-twin-bank.webp",
       "format": "webp",
-      "frames": 217,
+      "frames": 275,
       "height": 662,
       "kind": "hier",
       "labels": [],
       "pillow": "12.3.0",
       "results": {
         "hier-twin-bank-32": {
-          "copper_length_mm": 539.505445,
+          "copper_length_mm": 419.586341,
           "opens": 0,
           "passed": true,
           "rules": {},
-          "vias": 40,
+          "vias": 39,
           "violations": {}
         }
       },
-      "seconds": 33.62,
+      "seconds": 34.12,
       "settings": {
         "budget_mb": 3.5,
-        "frame_ms": 80,
+        "frame_ms": 60,
         "max_seconds": 34.0,
         "pacing": "showcase",
         "quality": 60,
         "width": 800
       },
-      "sha256": "b1be68e27fb2d22df3814fd31e3ed5f05acf2305f26f23d2d3f75f22cf8419bb",
+      "sha256": "16f4280756f6cfd705868d5975eff3903864a8088b3a516cc71f8150dcd708f6",
       "title": "Twin-bank chaser: hierarchical place and route",
       "trace_sha256": {
-        "hier-twin-bank-32": "f9b535303056a7213bc6bd6bedfd1ac827323e25df11d09447b077faaf09cd6e"
+        "hier-twin-bank-32": "60da38f94b1eeb079bf3da052bcacfa4bba60a4f4d1217c51515b7d1a89a7020"
       },
       "width": 800
     }
@@ -1142,12 +1143,12 @@
   "showcases_generated": {
     "ladder": {
       "engine_dirty": false,
-      "engine_revision": "e008117521a73c8c2292bbb29d322468a42f3623",
+      "engine_revision": "96f7e0b20034f69d7f7d50093b36b17b487122ac",
       "fab_profile": "legacy",
       "image": null,
       "kicad": "10.0.6",
       "platform": "darwin-arm64",
-      "sources_sha256": "dd8a59973746cd87ac27137328da7a19d9cf94d6d5eed196655cadb02cfafb3b"
+      "sources_sha256": "079ed69e9c5685d53418417a16d3fde4569813a9efcec020fcfb8af47c1859cd"
     },
     "render": {
       "date": "2026-10-06",

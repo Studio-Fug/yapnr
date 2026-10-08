@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -238,9 +239,12 @@
 <li class="toctree-l1"><a class="reference internal" href="design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/clearance-index-validation.html">Clearance index: integration validation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -467,7 +471,10 @@ cycle.</p>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SHA256SUMS</span></code></p></td>
 <td><p>release asset: checksums of the above</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code></p></td>
+<tr class="row-even"><td><p>Both Linux wheels</p></td>
+<td><p>PyPI project <code class="docutils literal notranslate"><span class="pre">yapnr</span></code>, from the same tested Bazel artifacts</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">X.Y.Z</span></code>, <code class="docutils literal notranslate"><span class="pre">X.Y</span></code>, <code class="docutils literal notranslate"><span class="pre">latest</span></code> (see <a class="reference internal" href="containers.html#tags"><span class="std std-ref">containers</span></a>)</p></td>
 </tr>
 </tbody>
@@ -514,6 +521,8 @@ the release becomes <code class="docutils literal notranslate"><span class="pre"
 <li><p><strong>ci:</strong> all of <code class="docutils literal notranslate"><span class="pre">ci.yaml</span></code> at the tag (lint, test, docs).</p></li>
 <li><p><strong>image:</strong> <code class="docutils literal notranslate"><span class="pre">image.yaml</span></code>, publishing <code class="docutils literal notranslate"><span class="pre">X.Y.Z</span></code>, <code class="docutils literal notranslate"><span class="pre">X.Y</span></code> and <code class="docutils literal notranslate"><span class="pre">latest</span></code> (release candidates:
 <code class="docutils literal notranslate"><span class="pre">X.Y.Z-rc.N</span></code> only).</p></li>
+<li><p><strong>pypi:</strong> checks the version and both Linux architectures, then publishes the tested Bazel
+wheels using PyPI Trusted Publishing (OIDC). No API token is stored in GitHub.</p></li>
 <li><p><strong>release:</strong> assembles the files above, attests them, creates a <strong>draft</strong> GitHub release with
 the files and the notes (a prerelease for <code class="docutils literal notranslate"><span class="pre">-rc</span></code> tags), then publishes it. Nothing follows the
 publish step, so the workflow works with immutable releases.</p></li>
@@ -522,7 +531,26 @@ publish step, so the workflow works with immutable releases.</p></li>
 <code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">workflow</span> <span class="pre">run</span> <span class="pre">release.yaml</span> <span class="pre">--ref</span> <span class="pre">&lt;branch&gt;</span></code>. It runs every job and uploads the release files as a
 workflow artifact, writes the release notes into the run summary (the header for the placeholder
 tag <code class="docutils literal notranslate"><span class="pre">v0.0.0</span></code>, and the notes GitHub would generate, through the same API and <code class="docutils literal notranslate"><span class="pre">.github/release.yml</span></code>),
-and publishes nothing: no image tags, no GitHub release.</p>
+and publishes nothing: no image tags, no GitHub release, no PyPI upload.</p>
+</section>
+<section id="pypi-installation-and-setup">
+<h2>PyPI installation and setup<a class="headerlink" href="#pypi-installation-and-setup" title="Link to this heading">¶</a></h2>
+<p>After a release is published:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;yapnr==X.Y.Z&quot;</span><span class="w"> </span>--extra-index-url<span class="w"> </span>https://download.pytorch.org/whl/cpu
+</pre></div>
+</div>
+<p>The published wheels support Linux x86-64 and ARM64 with glibc 2.34 or newer. They include
+RF export modules, coupon resources, the PALACE schema, and the native FDTD library. Headless
+KiCad and external EM solvers are separate runtime requirements; use the pinned container when
+those are needed.</p>
+<p>Before the first upload, a PyPI project owner must register a trusted publisher (or a pending
+publisher for a new project): project <code class="docutils literal notranslate"><span class="pre">yapnr</span></code>, GitHub owner <code class="docutils literal notranslate"><span class="pre">Studio-Fug</span></code>, repository <code class="docutils literal notranslate"><span class="pre">yapnr</span></code>,
+workflow <code class="docutils literal notranslate"><span class="pre">release.yaml</span></code>, environment <code class="docutils literal notranslate"><span class="pre">pypi</span></code>. Configure the GitHub environment with release
+branch/tag restrictions. These names must match exactly. The workflow alone cannot register
+the publisher on PyPI. See <a class="reference external" href="https://docs.pypi.org/trusted-publishers/using-a-publisher/">PyPI Trusted Publishing</a>.</p>
+<p>Manual dry runs never request a publishing token or upload distributions. Only verified release
+tags publish; release candidates use their PEP 440 <code class="docutils literal notranslate"><span class="pre">rc</span></code> version. PyPI versions are immutable:
+fix a failed distribution with a new version rather than replacing an existing release.</p>
 </section>
 <section id="release-checklist-owner">
 <h2>Release checklist (owner)<a class="headerlink" href="#release-checklist-owner" title="Link to this heading">¶</a></h2>
@@ -667,6 +695,7 @@ numpy or torch update, check the native libraries the new wheels bundle and upda
 <li><a class="reference internal" href="#labels-and-release-notes">Labels and release notes</a></li>
 <li><a class="reference internal" href="#what-a-release-publishes">What a release publishes</a></li>
 <li><a class="reference internal" href="#what-the-workflows-do">What the workflows do</a></li>
+<li><a class="reference internal" href="#pypi-installation-and-setup">PyPI installation and setup</a></li>
 <li><a class="reference internal" href="#release-checklist-owner">Release checklist (owner)</a></li>
 <li><a class="reference internal" href="#one-time-repository-settings">One-time repository settings</a></li>
 <li><a class="reference internal" href="#maintaining-the-images">Maintaining the images</a></li>

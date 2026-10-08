@@ -26,18 +26,20 @@ either off for an A/B.
 > (`--fab-profile jlc-pofv`), where the router keeps vias 0.127 mm off SMD pads, every ladder and
 > showcase case passes too (other boards, below).
 >
-> **Default-flip gate (2026-10-06, campaign `20261007-ladder-7fe33f`,
-> [decisions.md](decisions.md)):** the runner's default stays `legacy`. Of the 21 cells
-> `20261006-ladder-b0ec34` found failing under `jlc-pofv`, 20 now pass (the fab-profile-territory
-> ones; rail allocation search is the default separately, PR #81) but
-> `11-ufbga201-fanout-6L-SGSGPS-rails` seed 0 still fails its `rails-In4` plane-partition check
-> under `jlc-pofv` (`legacy` fails that cell on _both_ seeds, so the flip is not a regression
-> there, but the gate text is "all 21 pass" and this is 20 of 21). Across all 45 cells (90 seed
-> runs), `jlc-pofv` passes 89 to `legacy`'s 86 (`legacy` also fails `09-mcu-usb-31-header` seed 0
-> and `09-mcu-usb-31-mc` seed 1 on a skew finding), has the same or fewer opens and DRC findings
-> everywhere, and uses fewer vias (3627 vs 3894; fewer on 37 cases, more on 4) and less copper
-> (29.5 m vs 31.9 m; less on 30 cases, more on 14, e.g. `05-timer-led-10`: 93.1/113.9 mm vs
-> 80.8/101.1 mm). The `-rails` cell is the only thing holding the flip.
+> **Default-flip gate (2026-10-07, campaigns `20261007-ladder-4f191e`, `-0abe44` and `-a98686`,
+> [decisions.md](decisions.md)):** the runner's default stays `legacy`, for the owner to decide.
+> All 21 cells `20261006-ladder-b0ec34` found failing under `jlc-pofv` now pass: the last one,
+> `11-ufbga201-fanout-6L-SGSGPS-rails`, was a plane-partition bug (a plated through-hole pad was
+> modelled as the disc inside it, so VBAT's In4 fill round J7.1's 1.7 mm square pad fell into
+> three pieces whenever the allocation gave VBAT a plane; fixed, `-rails` passes 16 of 16 on seeds
+> 0 to 7 under both profiles). Across the 45 gated cells (90 seed runs) `jlc-pofv` passes 90 to
+> `legacy`'s 88 (`legacy` fails `09-mcu-usb-31-header` seed 0 and `09-mcu-usb-31-mc` seed 1 on
+> skew findings), with the same opens and fewer vias (3627 vs 3894) and less copper (29.5 m vs
+> 31.9 m). But the three manual target rungs, which fail under both profiles, leave more open
+> under `jlc-pofv`: `11-shove-channel-lm-14` 3 nets vs 2 (both seeds), `12-soc-bga-113` (under
+> its declared `jlc-6l-hdi`) 51 unrouted nets on seed 1 vs 33 and 35, and seed 0 past its
+> 3600 s place-and-route budget; `11-shove-channel-14` is equal (2). The gate's "no rung is
+> worse than `legacy`" therefore does not hold for those rungs, and the flip waits for the owner.
 
 ## The cases
 
@@ -497,6 +499,45 @@ manual `09-mcu-usb-31` rung cells had with it at the time (see the
 route falls back to the plain packer) and `PAIRS` (the matched-length pass may turn a pair's
 series parts to face their legs) fixed the lane without losing the rest of the gain, so ladder-v2
 (`docs/decisions.md`) made `--compact` the runner's own default.
+
+## Route-then-compact (opt-in)
+
+`run.py --route-compact [PARTS]` (`PNR_ROUTE_COMPACT`, off by default;
+[design](design/route-compact.md))
+squeezes a routed placement by the copper each gutter actually holds, x then y, and routes it
+again; a worse route backs off and the routed result stands. `PARTS` is `1` (all) or a comma
+list: `TOP` (the hierarchical top level, after the knit), `BLOCK` (inside each block template,
+whose outline then shrinks) and `FLAT` (flat boards, after the place-route loop). With
+`--macro-hull` (`PNR_MACRO_HULL`) hierarchical blocks enter as their routed outlines (per-side
+hulls) and slide into each other's notches; `--hull-dovetail W` (`PNR_HULL_DOVETAIL`) adds a
+packing term to global placement over the hull bodies. `pnr-report.json` records the pass as
+`route_compact` (gutters, steps, bounding box and the outline shrink it frees, seconds).
+
+The hierarchical runner's default bundle includes hull nesting. Legalized hull macros
+search nearby legal poses; incomplete knits retain the un-nested and rectangle fallbacks.
+Use `--hull-nest 0` to disable nesting while keeping the rest of the default bundle, or
+`hull_nest = false` in a ladder campaign. The direct engine equivalent is
+`PNR_HULL_NEST=0`; nesting is otherwise enabled whenever hull macros are enabled.
+See the [nesting validation and limitations](design/hull-nest-validation.md).
+
+Results (2026-10-07, GCP C4D, flags off against each arm, KiCad's DRC judging every board):
+
+| Rungs (cells)                                             | Arm                                              | Pass  | Bounding box | Copper   | Vias   | Place-route time |
+| --------------------------------------------------------- | ------------------------------------------------ | ----- | ------------ | -------- | ------ | ---------------- |
+| ladder 01-08, pool 8/3 (16)                               | off                                              | 16/16 | 3151 mm²     | 1136 mm  | 70     | 115 s            |
+|                                                           | `--route-compact`                                | 16/16 | -21.5 %      | -11.3 %  | -3 %   | +32 %            |
+| hier-twin-bank, 10-quad-bank, 13-dovetail, seeds 0-3 (12) | off                                              | 12/12 | 5336 mm²     | 2181 mm  | 144    | 245 s            |
+|                                                           | `--route-compact`                                | 12/12 | -6.7 %       | -4.4 %   | +4 %   | +84 %            |
+|                                                           | `--macro-hull`                                   | 12/12 | -6.2 %       | -0.8 %   | +3 %   | +35 %            |
+|                                                           | `--route-compact --macro-hull --hull-dovetail 1` | 12/12 | -19.2 %      | -5.3 %   | +4 %   | +64 %            |
+| 35 other hard rungs, seeds 0-1 (70)                       | off                                              | 60/70 | 39029 mm²    | 19266 mm | 2225   | 1939 s           |
+|                                                           | `--route-compact`                                | 61/70 | -6.8 %       | -3.3 %   | -0.4 % | +101 %           |
+
+Bounding box, copper and vias are sums of the per-rung means over the cells that placed in
+both arms; time is the place-route stage. No rung passes less often or ends with more than 1 %
+more copper. The time goes to the reroutes (measuring and checking take under a second per
+board): a few seconds a step on the small boards, one to two minutes on the MCU and BGA
+rungs. The BGA rungs keep their bounding box (the parts at its extremes are fixed).
 
 ## In CI
 

@@ -41,16 +41,18 @@ The layer (or, for an outer pour, the `region` polygon) is rasterized at `h_mm` 
 a cell is free if it is inside the outline, past the edge clearance, and not on another net's
 copper (vias, fixed copper, plated holes, mounting holes, and `copper_keepout`s that bar pours)
 at the pair's clearance -- the larger class clearance of the two nets, as KiCad's own fill
-keeps it.
+keeps it. A plated pad is blocked by its rectangle grown by the clearance, not the disc inside
+it: KiCad clears the clearance about the pad's outline, past a square pad's corners.
 
 ![Free copper and other nets' blocked copper, rasterized inside the region][raster]
 
 ### 2. Terminals
 
-A rail's terminals are its planned drop vias (fanout and fixed vias) and, on an outer pour
-with `terminals: pad`, the pad's whole land (claimed before any tree, like a via land); on a
-plane layer without that key a surface pad without a via yet gets a reach disc instead, the
-circle within `terminal_reach_mm` where its drop will land.
+A rail's terminals are its planned drop vias (fanout and fixed vias), its plated through-hole
+pads (each pad's whole rectangle, claimed like a via land) and, on an outer pour with
+`terminals: pad`, the pad's whole land (claimed before any tree, like a via land); on a plane
+layer without that key a surface pad without a via yet gets a reach disc instead, the circle
+within `terminal_reach_mm` where its drop will land.
 
 ![Every rail's terminals, each in its own colour][terminals]
 
@@ -163,9 +165,11 @@ keeping the one that routes best.
 
 1. **Alternatives.** Every split of the candidates into plane rails (at least one) and traced
    rails, times every leftover option: none (the plane rails compete for it), one of the plane
-   rails (it alone grows; the others keep their trunk, their lands and a 1 mm apron for thermal
-   reliefs), or a `fill_candidates` net. A spec can force a rail with `must_plane` /
-   `must_trace` or the leftover with `fill`; whatever it leaves open is the engine's.
+   rails (it alone grows; the others keep their trunk, their lands and a 1 mm apron, and round
+   a pad's land they grow past its thermal relief, 0.5 mm about the pad's outline, by their
+   minimum width, so the fill round the relief is one piece), or a `fill_candidates` net. A
+   spec can force a rail with `must_plane` / `must_trace` or the leftover with `fill`; whatever
+   it leaves open is the engine's.
 2. **Hard constraints only** prune: a traced rail must carry its current at its class width
    (IPC-2221, external, 10 C) and meet its IR budget along its estimated trace.
 3. **Screen.** One probe route (the real grid and fanouts, every candidate a plane) supplies

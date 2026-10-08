@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Design: the regression ladder in CI, PnR traces and critical-path animations" href="design/animations.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Design: the regression ladder in CI, PnR traces and critical-path animations" href="design/animations.html"><link rel="prev" title="CI lanes and Bazel caches" href="ci-lanes.html">
         <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
         <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -238,9 +239,12 @@
 <li class="toctree-l1"><a class="reference internal" href="design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/clearance-index-validation.html">Clearance index: integration validation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -303,6 +307,13 @@ in the same change as the file that holds a pin (<code class="docutils literal n
 PR7 under <code class="docutils literal notranslate"><span class="pre">docs/adr/</span></code>.</p>
 <section id="decision-log">
 <h2>Decision log<a class="headerlink" href="#decision-log" title="Link to this heading">¶</a></h2>
+<p>Owner decision of 2026-10-07 (PR #91): enable hull nesting by default for hull macros.
+Keep explicit opt-out through <code class="docutils literal notranslate"><span class="pre">PNR_HULL_NEST=0</span></code>, <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--hull-nest</span> <span class="pre">0</span></code> and campaign
+<code class="docutils literal notranslate"><span class="pre">hull_nest</span> <span class="pre">=</span> <span class="pre">false</span></code>; keep legality, native validation and routing fallbacks unchanged.
+This is an explicit exception to the usual default-off rollout. The matched local
+native example and the broader pending campaign are documented in
+<a class="reference internal" href="design/hull-nest-validation.html"><span class="std std-doc">hull nesting validation</span></a>; the decision is not a claim
+that every routing metric improves.</p>
 <p>Owner decisions of 2026-09-29, taken while planning the migration (see
 <a class="reference internal" href="migration-plan.html"><span class="std std-doc">the migration plan</span></a>, §0.2):</p>
 <ul class="simple">
@@ -1397,6 +1408,58 @@ and lengthening the short leg through free space were tried and rejected (sectio
 switches; absent with everything off, so earlier keys are unchanged), and power-first
 placement runs with compact instead of refusing it.</p></li>
 </ul>
+<p>Ladder fab-profile default (2026-10-06, <code class="docutils literal notranslate"><span class="pre">claude/defaults-rails-fab</span></code>, campaign
+<code class="docutils literal notranslate"><span class="pre">20261007-ladder-7fe33f</span></code>, <a class="reference internal" href="regression-ladder.html"><span class="std std-doc">regression-ladder.md</span></a>):</p>
+<ul class="simple">
+<li><p><strong>Gate: flip <code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code> default to <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> only if all 21 of <code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code>’s
+jlc-pofv failures pass on this commit, and no rung is worse than <code class="docutils literal notranslate"><span class="pre">legacy</span></code></strong>
+(<code class="docutils literal notranslate"><span class="pre">experiments/defaults-rails-fab.toml</span></code>: the full ladder + showcases + 33 hard rungs, both fab
+profiles, seeds 0 and 1, rail allocation search as the default in both arms, PR #81).</p></li>
+<li><p><strong>Outcome: stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code>.</strong> 20 of the 21 now pass; <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code> seed 0
+still fails a <code class="docutils literal notranslate"><span class="pre">rails-In4</span></code> plane-partition check under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>. That cell is rail-allocation
+territory, not fab-profile (<code class="docutils literal notranslate"><span class="pre">legacy</span></code> fails it on both seeds, so <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> is not a regression
+there), but the gate as stated is 21 of 21, not 20. Otherwise <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> is no worse than
+<code class="docutils literal notranslate"><span class="pre">legacy</span></code> anywhere: 89 of 90 seed runs pass vs 86 (<code class="docutils literal notranslate"><span class="pre">legacy</span></code> also fails <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> s0
+and <code class="docutils literal notranslate"><span class="pre">-mc</span></code> s1 on skew), opens and DRC findings are the same or fewer, and it uses fewer vias
+(3627 vs 3894) and less copper (29.5 m vs 31.9 m; less on 30 of 45 cases, more on 14). The
+<code class="docutils literal notranslate"><span class="pre">-rails</span></code> cell is the only thing holding the flip.</p></li>
+<li><p><strong>Rail allocation on <code class="docutils literal notranslate"><span class="pre">-rails</span></code>:</strong> with search the default (both arms), <code class="docutils literal notranslate"><span class="pre">-rails</span></code> passes 1 of 4
+cells here (<code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> s1 only; <code class="docutils literal notranslate"><span class="pre">rails-In4</span></code> on the rest), in this campaign’s configuration
+(compact, gloss, initial pool), against #81’s 4 of 4 for search in its own A/B. Search is still
+not worse than static (0 of 4 in #81), but the rung is not settled.</p></li>
+<li><p><strong>Revisit when</strong> the <code class="docutils literal notranslate"><span class="pre">-rails</span></code> cell passes under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> on both seeds (rail allocation or
+the plane-partition checker), or the owner decides the one rail-allocation-territory cell is
+out of scope for this gate.</p></li>
+</ul>
+<p>Ladder fab-profile default, rerun (2026-10-07, <code class="docutils literal notranslate"><span class="pre">claude/rails-settle</span></code>, campaigns
+<code class="docutils literal notranslate"><span class="pre">20261007-ladder-4f191e</span></code> (the 45-cell gate), <code class="docutils literal notranslate"><span class="pre">-0abe44</span></code> (<code class="docutils literal notranslate"><span class="pre">-rails</span></code> seeds 0 to 7) and <code class="docutils literal notranslate"><span class="pre">-a98686</span></code> (the
+three manual rungs), <a class="reference internal" href="regression-ladder.html"><span class="std std-doc">regression-ladder.md</span></a>):</p>
+<ul class="simple">
+<li><p><strong>The <code class="docutils literal notranslate"><span class="pre">-rails</span></code> failure was a plane-partition bug, not rail allocation or the checker.</strong>
+<code class="docutils literal notranslate"><span class="pre">rails-In4</span></code> failed whenever the search chose “plane VDD+VBAT | trace VDDA | leftover VDD”:
+VBAT’s In4 fill came out in three pieces (44.4 mm^2: 43.0 plus two 0.70 mm^2 slivers) round
+J7.1, a 1.7 mm square through-hole pad. <code class="docutils literal notranslate"><span class="pre">pnr.plane_partition</span></code> modelled a plated pad as the disc
+inside it, so the non-owner rail’s 1 mm apron ended about 1.6 mm from the pad’s centre while
+KiCad’s 0.5 mm thermal relief reaches 1.70 mm at the square’s corners; the relief cut the ring
+at each diagonal and every fragment hung on one spoke. Bisect: #81’s head fails identically
+with <code class="docutils literal notranslate"><span class="pre">--compact</span></code> (the gate’s configuration, which #81’s recheck did not use: compact
+placement tips the search to the VBAT plane by about 1 mm-eq); <code class="docutils literal notranslate"><span class="pre">main</span></code> without compact passes.
+Fix: a plated pad is its whole rectangle (claimed as a land; another net’s, or a traced
+candidate’s, blocked by the rectangle at the clearance), and a non-owner rail grows past a
+land’s relief by its minimum width. Result: <code class="docutils literal notranslate"><span class="pre">-rails</span></code> 16 of 16 (seeds 0 to 7, both profiles),
+four of them with VBAT a plane, now one piece.</p></li>
+<li><p><strong>Gate: still not met as stated; the default stays <code class="docutils literal notranslate"><span class="pre">legacy</span></code> for the owner to decide.</strong> All 21
+of <code class="docutils literal notranslate"><span class="pre">20261006-ladder-b0ec34</span></code>’s <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> failures pass (the eleven cases, both seeds); over
+the 45 gated cells <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> passes 90 of 90 to <code class="docutils literal notranslate"><span class="pre">legacy</span></code>’s 88, with fewer vias (3627 vs 3894)
+and less copper (29.5 m vs 31.9 m). But “no rung worse than <code class="docutils literal notranslate"><span class="pre">legacy</span></code>” fails on the manual
+target rungs, which fail under both profiles: <code class="docutils literal notranslate"><span class="pre">11-shove-channel-lm-14</span></code> leaves 3 nets open
+under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> against 2 (both seeds), and <code class="docutils literal notranslate"><span class="pre">12-soc-bga-113</span></code> (its declared <code class="docutils literal notranslate"><span class="pre">jlc-6l-hdi</span></code>)
+leaves 51 unrouted against 33 and 35 on seed 1 and runs past its 3600 s place-and-route
+budget on seed 0 (3485 s on seed 1, against 2500 to 2680 s under <code class="docutils literal notranslate"><span class="pre">legacy</span></code>).
+<code class="docutils literal notranslate"><span class="pre">11-shove-channel-14</span></code> is equal.</p></li>
+<li><p><strong>Revisit when</strong> the owner decides whether the manual target rungs count for the gate, or the
+router closes the gap on them under <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>.</p></li>
+</ul>
 </section>
 <section id="pinned-versions">
 <h2>Pinned versions<a class="headerlink" href="#pinned-versions" title="Link to this heading">¶</a></h2>
@@ -1621,6 +1684,17 @@ adds a separate x86_64 lock with the CPU torch index (<code class="docutils lite
 <code class="docutils literal notranslate"><span class="pre">manual</span></code> and runs in exactly one CI job (<code class="docutils literal notranslate"><span class="pre">test</span></code>).</p>
 </section>
 </section>
+<section id="optional-energy-track-geometry-dependency">
+<h2>Optional energy-track geometry dependency<a class="headerlink" href="#optional-energy-track-geometry-dependency" title="Link to this heading">¶</a></h2>
+<p>The energy proposal generator uses pinned Shapely 2.1.2 rather than introducing a second routing
+kernel or large meshing toolchain. Polygon offsets supply candidates; exact native KiCad checks,
+cold DRC and electrical transaction gates still decide acceptance. GEOS 3.13.1 ships in the
+Shapely wheel and is documented in <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code>.</p>
+<p>Controller/Bazel Python is 3.11; the KiCad worker Python is 3.12. Their compiled geometry wheels
+are separately hash-locked. The image stores worker geometry in <code class="docutils literal notranslate"><span class="pre">/opt/energy-kicad</span></code>, with its ABI
+marker, and only an explicitly enabled energy worker adds it to its import path. This does not
+change the default worker interpreter, system packages or off-path imports.</p>
+</section>
 </section>
 
         </article>
@@ -1637,14 +1711,14 @@ adds a separate x86_64 lock with the CPU torch index (<code class="docutils lite
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="migration-plan.html">
+          <a class="prev-page" href="ci-lanes.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">yapnr migration plan</div>
+                <div class="title">CI lanes and Bazel caches</div>
                 
               </div>
             </a>
@@ -1685,6 +1759,7 @@ adds a separate x86_64 lock with the CPU torch index (<code class="docutils lite
 <li><a class="reference internal" href="#the-requirements-lock">The requirements lock</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#optional-energy-track-geometry-dependency">Optional energy-track geometry dependency</a></li>
 </ul>
 </li>
 </ul>

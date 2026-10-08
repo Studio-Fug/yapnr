@@ -34,6 +34,19 @@ brought in. Update it in the same change that adds, removes or upgrades such mat
 
 `tests/unit/viewer/test_dist.py` checks the sha256 of every served third-party file.
 
+### Shapely and GEOS
+
+- **What:** Shapely 2.1.2 supplies polygonal offsets and exact-distance predicates for the
+  opt-in energy-track proposal generator. Native KiCad DRC remains the acceptance authority.
+- **License:** Shapely is BSD-3-Clause. Its binary wheels bundle GEOS 3.13.1 under LGPL-2.1;
+  both notices remain in the installed `shapely-2.1.2.dist-info/licenses/` directory.
+- **How:** pinned and hash-checked wheels in the Bazel/controller requirements and the separate
+  Python 3.12 KiCad geometry locks. No GEOS source or binary is vendored in the repository.
+  The libraries remain dynamically loaded and replaceable. Sources and license information:
+  [Shapely 2.1.2](https://github.com/shapely/shapely/tree/2.1.2),
+  [bundled GEOS version](https://shapely.readthedocs.io/en/2.1.2/release/2.x.html), and
+  [GEOS source releases](https://libgeos.org/usage/download/).
+
 ### Google API discovery documents
 
 - **What:** the Batch v1 discovery document (revision 20260723), Google's machine-readable
@@ -97,9 +110,11 @@ image, and this file is at `/usr/share/doc/yapnr/THIRD_PARTY.md`.
   `/usr/share/doc/yapnr/licenses/python-build-standalone/`. uv itself is used during the build only
   and is not in the image.
 - **Python packages** from `docker/yapnr/runtime-<arch>.lock` (the runtime subset of
-  `requirements.lock`: numpy, torch, PyYAML and their dependencies) under `/opt/venv`, from PyPI
+  `requirements.lock`: numpy, torch, PyYAML, Shapely and their dependencies) under `/opt/venv`,
+  from PyPI
   and, for torch on linux/amd64, the PyTorch CPU index. Mostly BSD, MIT and Apache-2.0 licensed;
-  each package's `.dist-info` directory holds its license files. The numpy and torch wheels also
+  each package's `.dist-info` directory holds its license files. The numpy, torch and Shapely
+  wheels also
   bundle native libraries, listed per architecture in
   `docker/yapnr/native-libraries-<arch>.txt` (appended to `SOURCES`) with the exact source of each
   GCC runtime library, which the wheels' own notices do not give:

@@ -231,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/plane-partition.html">How plane partition works</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/ci-lanes.html">CI lanes and Bazel caches</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
@@ -238,9 +239,12 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/clearance-index-validation.html">Clearance index: integration validation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/hull-nest-validation.html">Hull nesting: validation status</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
@@ -533,7 +537,11 @@ variable <code class="docutils literal notranslate"><span class="pre">YAPNR_PAGE
 creates the <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> branch; the steps are in the comment above the Pages jobs in <code class="docutils literal notranslate"><span class="pre">ci.yaml</span></code>.</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">lint</span></code>, <code class="docutils literal notranslate"><span class="pre">test</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span></code> are the required checks. <code class="docutils literal notranslate"><span class="pre">.github/workflows/macos.yaml</span></code> runs the tests on
-<code class="docutils literal notranslate"><span class="pre">macos-latest</span></code> for information only.</p>
+<code class="docutils literal notranslate"><span class="pre">macos-latest</span></code> for information only. Both ordinary test lanes exclude expensive RF tests and
+retain a deterministic native inverse-design smoke. <code class="docutils literal notranslate"><span class="pre">.github/workflows/rf-nightly.yaml</span></code> runs
+the expensive RF coverage nightly and on manual dispatch on Linux and macOS. The complete
+<a class="reference internal" href="docs/ci-lanes.html"><span class="std std-doc">inventory and cache policy</span></a> describe selection, retained manual tests and
+failure-safe cache snapshots.</p>
 <p><code class="docutils literal notranslate"><span class="pre">.github/workflows/ladder.yaml</span></code> runs the native regression ladder (<code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression</span></code>) inside
 the published arm64 image <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr:edge</span></code>, resolved to a digest: cases 01 to 06 with
 seed 0 on pull requests that change engine inputs, and nightly all 8 cases with seeds 0 and 1 plus

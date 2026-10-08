@@ -828,15 +828,15 @@
   "generated": {
     "ladder": {
       "engine_dirty": false,
-      "engine_revision": "d14ea11f9e30bc3685c79a6f1a0ba2393810ced2",
+      "engine_revision": "d002bfab8d66448565b4fcffc006756104042173",
       "fab_profile": "legacy",
       "image": null,
       "kicad": "10.0.6",
       "platform": "darwin-arm64",
-      "sources_sha256": "f63a9db80a853cfb614322eb21f91e5c30a5f6d70362e0ef90485878361dd803"
+      "sources_sha256": "1f43ac8473290d319ff028afa9ceb5d1af802e907b3b732078c706bb0f1f86dc"
     },
     "render": {
-      "date": "2026-10-06",
+      "date": "2026-10-04",
       "pillow": "12.3.0",
       "platform": "darwin-arm64",
       "renderer": 3
@@ -1287,13 +1287,13 @@
       "compactness": {
         "area_mm2": 419.978,
         "bbox_mm": [
-          42.452,
-          23.172
+          23.748,
+          29.345
         ],
-        "bbox_mm2": 983.707,
+        "bbox_mm2": 696.87,
         "occupancy": 0.187,
         "outline_mm2": 2240.0,
-        "utilization": 0.427
+        "utilization": 0.603
       },
       "config": [
         "--trace-placement-every",
@@ -1302,145 +1302,48 @@
         "--gloss"
       ],
       "constraint_audit": null,
-      "copper_length_mm": 539.51,
+      "copper_length_mm": 419.59,
       "description": "TLC555 clock and two CD4017B five-LED banks as three blocks (two templates), placed and routed hierarchically.",
-      "detail_motion": {
-        "block": {
-          "channel_delta": -7.1557,
-          "crossing_after": 6.6601,
-          "crossing_before": 20.69,
-          "hpwl_after": 160.2195,
-          "hpwl_before": 175.185,
-          "max_mm": 3.608,
-          "median_mm": 1.1773,
-          "movable": 18,
-          "moved": 14,
-          "moves": {
-            "compact": 6,
-            "slide": 15,
-            "swap": 2,
-            "turn": 1,
-            "wrong_side": 0
-          },
-          "seconds": 0.521,
-          "sum_mm": 20.971,
-          "topology": 0.8361,
-          "wire_saved": 28.5077
-        },
-        "top": {
-          "channel_delta": 0.0,
-          "compact": "illegal",
-          "crossing_after": 10.595,
-          "crossing_before": 10.595,
-          "hpwl_after": 150.2193,
-          "hpwl_before": 150.2193,
-          "max_mm": 0.0,
-          "median_mm": 0.0,
-          "movable": 1,
-          "moved": 0,
-          "moves": {
-            "compact": 0,
-            "slide": 0,
-            "swap": 0,
-            "turn": 0,
-            "wrong_side": 0
-          },
-          "seconds": 0.005,
-          "sum_mm": 0.0,
-          "topology": 1.0,
-          "topology_global": 1.0,
-          "turned": 0,
-          "wire_saved": 0.0
-        }
-      },
       "drc_rules": {},
       "fab_profile": "legacy",
       "gloss": {
-        "accepted": 9,
+        "accepted": 7,
         "bends": [
-          132,
-          57
+          104,
+          38
         ],
         "kept": true,
         "length_mm": [
-          259.484,
-          250.728
+          215.554,
+          205.644
         ],
-        "proposed": 9
+        "proposed": 7
       },
       "layers": 2,
-      "legal_motion": {
-        "block": {
-          "anchored": 18,
-          "channel_short": 17,
-          "channel_unopened": 18,
-          "clean": 10,
-          "count": 18,
-          "max_mm": 0.49,
-          "mean_mm": 0.121,
-          "mild": 8,
-          "moved": 1,
-          "nudged": 0,
-          "pushed": 7,
-          "pushed_far": 0,
-          "relocated": 0,
-          "relocated_push_infeasible": 0,
-          "relocated_severe": 0,
-          "relocated_slot_taken": 0,
-          "severe": 0,
-          "sum_mm": 2.176,
-          "topology": 1.0,
-          "turned": 0
-        },
-        "top": {
-          "anchored": 4,
-          "channel_short": 0,
-          "channel_unopened": 0,
-          "clean": 4,
-          "count": 4,
-          "keep": true,
-          "max_mm": 0.068,
-          "mean_mm": 0.046,
-          "mild": 0,
-          "moved": 0,
-          "nudged": 0,
-          "pushed": 0,
-          "pushed_far": 0,
-          "relocated": 0,
-          "relocated_push_infeasible": 0,
-          "relocated_severe": 0,
-          "relocated_slot_taken": 0,
-          "relocations": {},
-          "severe": 0,
-          "sum_mm": 0.185,
-          "topology": 1.0,
-          "turned": 0
-        }
-      },
       "nets": 28,
       "opens": 0,
       "parts": 32,
       "passed": true,
       "reasons": [],
       "routed": true,
-      "seconds": 154.1,
+      "seconds": 266.9,
       "seed": 0,
       "selected_start": null,
       "title": "Twin-bank chaser, placed and routed hierarchically",
-      "tracks": 1454,
-      "vias": 40,
+      "tracks": 1139,
+      "vias": 39,
       "violations": {}
     }
   ],
   "showcases_generated": {
     "ladder": {
       "engine_dirty": false,
-      "engine_revision": "d14ea11f9e30bc3685c79a6f1a0ba2393810ced2",
+      "engine_revision": "96f7e0b20034f69d7f7d50093b36b17b487122ac",
       "fab_profile": "legacy",
       "image": null,
       "kicad": "10.0.6",
       "platform": "darwin-arm64",
-      "sources_sha256": "f63a9db80a853cfb614322eb21f91e5c30a5f6d70362e0ef90485878361dd803"
+      "sources_sha256": "079ed69e9c5685d53418417a16d3fde4569813a9efcec020fcfb8af47c1859cd"
     },
     "render": {
       "date": "2026-10-06",

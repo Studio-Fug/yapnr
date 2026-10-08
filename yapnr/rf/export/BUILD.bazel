@@ -45,3 +45,11 @@ py_library(
         requirement("numpy"),
     ],
 )
+
+# Package collection only: no architecture-specific pip dependency closure.
+py_library(
+    name = "wheel_files",
+    srcs = glob(["**/*.py"]),
+    imports = ["../../.."],
+    deps = ["//yapnr/rf:package"],
+)

@@ -40,3 +40,55 @@ py_binary(
     main = "__main__.py",
     deps = [":coupons"],
 )
+
+# Package collection only: no architecture-specific pip dependency closure.
+py_library(
+    name = "wheel_files",
+    srcs = glob(["**/*.py"]),
+    data = glob(["data/*.json"]) + [
+        ":winner_0",
+        ":winner_1",
+        ":winner_2",
+    ],
+    imports = ["../../.."],
+    deps = ["//yapnr/rf:package"],
+)
+
+genrule(
+    name = "winner_0",
+    srcs = [
+        "//docs/rf/order0:predictions/D1-d1c/runs/d1-star/footprint.kicad_mod",
+        "//docs/rf/order0:predictions/D1-d1c/runs/d1-star/result.json",
+    ],
+    outs = [
+        "data/winners/predictions/D1-d1c/runs/d1-star/footprint.kicad_mod",
+        "data/winners/predictions/D1-d1c/runs/d1-star/result.json",
+    ],
+    cmd = "cp $(location //docs/rf/order0:predictions/D1-d1c/runs/d1-star/footprint.kicad_mod) $(location data/winners/predictions/D1-d1c/runs/d1-star/footprint.kicad_mod) && cp $(location //docs/rf/order0:predictions/D1-d1c/runs/d1-star/result.json) $(location data/winners/predictions/D1-d1c/runs/d1-star/result.json)",
+)
+
+genrule(
+    name = "winner_1",
+    srcs = [
+        "//docs/rf/order0:predictions/D1/runs/d1-star/footprint.kicad_mod",
+        "//docs/rf/order0:predictions/D1/runs/d1-star/result.json",
+    ],
+    outs = [
+        "data/winners/predictions/D1/runs/d1-star/footprint.kicad_mod",
+        "data/winners/predictions/D1/runs/d1-star/result.json",
+    ],
+    cmd = "cp $(location //docs/rf/order0:predictions/D1/runs/d1-star/footprint.kicad_mod) $(location data/winners/predictions/D1/runs/d1-star/footprint.kicad_mod) && cp $(location //docs/rf/order0:predictions/D1/runs/d1-star/result.json) $(location data/winners/predictions/D1/runs/d1-star/result.json)",
+)
+
+genrule(
+    name = "winner_2",
+    srcs = [
+        "//docs/rf/order0:predictions/D2/runs/d2-star-sched/footprint.kicad_mod",
+        "//docs/rf/order0:predictions/D2/runs/d2-star-sched/result.json",
+    ],
+    outs = [
+        "data/winners/predictions/D2/runs/d2-star-sched/footprint.kicad_mod",
+        "data/winners/predictions/D2/runs/d2-star-sched/result.json",
+    ],
+    cmd = "cp $(location //docs/rf/order0:predictions/D2/runs/d2-star-sched/footprint.kicad_mod) $(location data/winners/predictions/D2/runs/d2-star-sched/footprint.kicad_mod) && cp $(location //docs/rf/order0:predictions/D2/runs/d2-star-sched/result.json) $(location data/winners/predictions/D2/runs/d2-star-sched/result.json)",
+)

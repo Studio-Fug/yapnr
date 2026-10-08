@@ -34,3 +34,20 @@ py_binary(
     main = "__main__.py",
     deps = [":palace"],
 )
+
+# Package collection only: no architecture-specific pip dependency closure.
+py_library(
+    name = "wheel_files",
+    srcs = glob(["**/*.py"]),
+    data = [":schema_resource"],
+    imports = ["../../.."],
+    deps = ["//yapnr/rf:package"],
+)
+
+# Place the authoritative vendored schema inside the installed package.
+genrule(
+    name = "schema_resource",
+    srcs = ["//third_party/palace:config-schema.json"],
+    outs = ["config-schema.json"],
+    cmd = "cp $(location //third_party/palace:config-schema.json) $@",
+)

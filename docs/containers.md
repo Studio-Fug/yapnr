@@ -47,6 +47,26 @@ float operations differently ([decisions](decisions.md)). Compare runs on one pl
 version is part of the image, not of the tag: a KiCad patch update ships as a yapnr patch release.
 The image label `io.github.studio-fug.yapnr.kicad.version` and the release notes name it.
 
+External RF projects use the installed dependency directly: pin a published image
+digest, or install the matching platform's release wheel with `python -m pip install
+./yapnr-<version>-py3-none-<platform>.whl` and its declared runtime dependencies.
+There is no root Python build backend, so `pip install git+...` is not a supported
+installation path. A source overlay or `PYTHONPATH` pointing at a checkout is not
+required. RF design, export and revalidation are public installed-package APIs:
+
+```python
+from yapnr.rf.driver import design
+from yapnr.rf.validate import resimulate
+from yapnr.rf.export.kicad import write_footprint
+from yapnr.rf.export.touchstone import write_touchstone
+```
+
+The wheel includes nested RF packages and their catalog/schema resources. Image
+smoke checks on both Linux architectures run a small design/export/revalidation
+outside the checkout and load the FDTD library from that installed wheel. This
+checks packaging and execution, not qualification of the smoke design's RF limits.
+Gmsh/Palace and openEMS execution use their separately pinned solver runtimes.
+
 `ghcr.io/studio-fug/yapnr-kicad` is tagged `<KiCad version>-<N>` (for example `10.0.6-1`; `N`
 counts rebuilds of one KiCad version, and such a tag is never overwritten), plus the moving
 `10.0.6` and `10.0`. `10.0.6-1-src` holds the source packages of that KiCad build (see

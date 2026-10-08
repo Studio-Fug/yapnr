@@ -13,9 +13,11 @@ import glob
 import os
 import platform
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
+import venv
 import zipfile
 from email.parser import Parser
 
@@ -93,6 +95,21 @@ class WheelTest(unittest.TestCase):
             "yapnr/rf/fdtd/native_kernel.py",
             "yapnr/rf/fdtd/native/fdtd.c",
             "yapnr/rf/fdtd/native/fdtd_kernels.h",
+            "yapnr/rf/export/__init__.py",
+            "yapnr/rf/export/report.py",
+            "yapnr/rf/export/kicad.py",
+            "yapnr/rf/export/touchstone.py",
+            "yapnr/rf/export/contour.py",
+            "yapnr/rf/export/raster.py",
+            "yapnr/rf/export/repair.py",
+            "yapnr/rf/export/drc.py",
+            "yapnr/rf/planar/adapters.py",
+            "yapnr/rf/palace/config.py",
+            "yapnr/rf/palace/config-schema.json",
+            "yapnr/rf/coupons/catalog.py",
+            "yapnr/rf/coupons/data/winners/predictions/D1-d1c/runs/d1-star/footprint.kicad_mod",
+            "yapnr/rf/coupons/data/winners/predictions/D2/runs/d2-star-sched/result.json",
+            "yapnr/rf/order0/demos.py",
             LIBRARY,
         ]:
             self.assertIn(name, self.names)
@@ -119,6 +136,54 @@ class WheelTest(unittest.TestCase):
         kernel = native_kernel.Kernel(ctypes.CDLL(path), path)
         self.assertEqual(kernel.src_sha, native_kernel.source_sha256())
         self.assertTrue(kernel.isa)
+
+    def test_installed_external_rf_workflow(self):
+        """Install the wheel offline; a fresh isolated process cannot import the checkout."""
+        with tempfile.TemporaryDirectory(prefix="yapnr-installed-wheel-") as root:
+            env_root = os.path.join(root, "env")
+            venv.EnvBuilder(with_pip=False, symlinks=True).create(env_root)
+            python = os.path.join(env_root, "bin", "python")
+            env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
+            env["YAPNR_RF_REQUIRE_NATIVE"] = "1"
+            subprocess.run(
+                [python, "-I", "-m", "ensurepip"],
+                cwd=root,
+                env=env,
+                check=True,
+                timeout=60,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            subprocess.run(
+                [python, "-I", "-m", "pip", "install", "--no-index", "--no-deps", self.path],
+                cwd=root,
+                env=env,
+                check=True,
+                timeout=60,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            # Reuse only already-provisioned third-party dependencies, never the
+            # checkout/runfiles package. This keeps the regression offline.
+            sites = [p for p in sys.path if os.path.basename(p.rstrip(os.sep)) == "site-packages"]
+            target = glob.glob(os.path.join(env_root, "lib", "python*", "site-packages"))[0]
+            with open(os.path.join(target, "test-dependencies.pth"), "w", encoding="utf-8") as f:
+                f.write("\n".join(sites) + "\n")
+            smoke = _runfile("tools", "image", "rf_workflow_smoke.py")
+            copied = os.path.join(root, "smoke.py")
+            shutil.copyfile(smoke, copied)
+            probe = (
+                "import pathlib,runpy,yapnr; "
+                "assert pathlib.Path(yapnr.__file__).resolve().is_relative_to(pathlib.Path('env').resolve()); "
+                "runpy.run_path('smoke.py', run_name='__main__')"
+            )
+            subprocess.run(
+                [python, "-I", "-c", probe],
+                cwd=root,
+                env=env,
+                check=True,
+                timeout=180,
+            )
 
     def test_maze_library(self):
         """The router's native maze kernel: built from this checkout's maze.c (the sha256 it

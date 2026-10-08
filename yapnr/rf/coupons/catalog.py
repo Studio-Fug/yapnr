@@ -837,6 +837,20 @@ def o_optimized(stick_id: str, footprint_path: Optional[str]) -> dict:
     win = dict(O_WINDOWS[stick_id])
     if footprint_path is None:
         return win
+    # Registered catalog winners are shipped inside the installed package; do
+    # not substitute a packaged design for an arbitrary client-supplied path.
+    if not os.path.isfile(footprint_path):
+        from pathlib import Path
+
+        for registered in (D1_WINNER, D2_WINNER):
+            if os.path.normpath(footprint_path) == os.path.normpath(
+                os.path.join(_repo_root(), registered)
+            ):
+                relative = registered.removeprefix("docs/rf/order0/")
+                packaged = Path(__file__).parent / "data" / "winners" / relative
+                if packaged.is_file():
+                    footprint_path = str(packaged)
+                break
     if not os.path.isfile(footprint_path):
         raise FileNotFoundError(
             f"{stick_id}'s winner footprint is missing: {footprint_path!r} (fix the *_WINNER"

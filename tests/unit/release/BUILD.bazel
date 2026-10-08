@@ -8,10 +8,14 @@ yapnr_py_tests(
         "//:requirements-runtime.in",
         "//hardware/pnr:pnr/route/detail/native/maze.c",
         "//release:wheel_for_test",
+        "//tools:image/rf_workflow_smoke.py",
     ],
     overrides = {
         # Loads the wheel's native library with yapnr.rf's loader.
-        "test_wheel": {"deps": ["//yapnr/rf"]},
+        "test_wheel": {
+            "deps": ["//yapnr/rf"],
+            "size": "medium",
+        },
     },
     deps = [
         "//tools/release:release_lib",

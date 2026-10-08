@@ -48,3 +48,5 @@ py_binary(
     main = "check_test_wiring.py",
     deps = [":repo_checks"],
 )
+
+exports_files(["image/rf_workflow_smoke.py"])

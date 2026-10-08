@@ -181,7 +181,10 @@ def place(
         from .rows import sample_constraints
 
         constraints = sample_constraints(
-            graph, constraints, seed, **({} if pad_edge is None else dict(pad_edge=pad_edge))
+            graph,
+            constraints,
+            seed,
+            **({} if pad_edge is None else dict(pad_edge=pad_edge)),
         )
     # The source compiler emits every footprint on top. Apply physical side
     # constraints before any obstacle/HPWL calculations, including pad mirroring.
@@ -662,8 +665,10 @@ def _place_line_groups(
                 else {r: v for r, v in initial_sides.items() if r not in plan.member_of}
             ),
         )
+    expanded = plan.expand(placed, flat)
+    line_group.reorder(expanded, constraints, channel_rules, pad_edge)
     return _finish(
-        plan.expand(placed, flat),
+        expanded,
         graph,
         constraints,
         width,

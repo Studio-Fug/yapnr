@@ -59,6 +59,8 @@ bumps added. Nothing here runs without ``route_pairs: coupled``.
 from __future__ import annotations
 
 import math
+import os
+import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -66,7 +68,7 @@ from pnr import length_model as lm
 from pnr.place.geometry import pad_rects
 from pnr.writeback import _segment_distance_sq
 
-from . import coupled
+from . import coupled, pair_access
 from .grid import far_twins, pad_layer
 
 # A pair's default bound on each leg's uncoupled copper (mm), solve_pair's own.
@@ -210,6 +212,11 @@ class Obstacles:
             self.segments[key] = [item for item in items if item[0] not in nets]
         self.cache.clear()
 
+    def add_via(self, owner, point, radius):
+        for key in self._keys(None, *point, *point):
+            self.vias.setdefault(key, []).append((owner, tuple(point), radius))
+        self.cache.clear()
+
     def clear(self, net, layer, a, b, width, ignore=()):
         """Segment ``a``-``b`` of ``width`` for ``net`` on grid layer ``layer``
         clears every obstacle of a net other than ``net`` and ``ignore``."""
@@ -343,6 +350,9 @@ class Terminal:
     # A surface escape's ball: the same pad as a terminal of its own (no escape),
     # on the escape's layer; None otherwise.
     ball: Optional["Terminal"] = None
+    planned: bool = False  # this solve owns the jointly planned access copper
+    access_angle: Optional[float] = None
+    uncoupled_mm: Optional[float] = None
 
 
 def _terminals(grid, graph, net, escapes, via_sizes):
@@ -426,13 +436,26 @@ class Solved:
     bumps: int = 0
     room: int = 2  # the exit room other nets' corridors kept (Obstacles.room)
     start: str = "pads"  # "balls" or "exits" for a pair on fanned-out balls
+    delays_ps: Optional[dict] = None
 
     def tracks(self):
         for net in (self.pair["p"], self.pair["n"]):
+            for end in self.ends:
+                term = end[0] if end[0].net == net else end[1]
+                if term.planned:
+                    for layer, a, b, width in term.tracks:
+                        yield (net, layer, a, b, width)
             path = self.paths[net]
             for a, b in zip(path, path[1:]):
                 if math.dist(a, b) >= 1e-6:
                     yield (net, self.layer, tuple(a), tuple(b), self.width)
+
+    def vias(self):
+        for end in self.ends:
+            for term in end:
+                if term.planned:
+                    for x, y, _radius in term.vias:
+                        yield (term.net, x, y)
 
 
 class PairRouter:
@@ -459,10 +482,14 @@ class PairRouter:
         outline = getattr(graph, "outline", None)
         self.frame = lm.board_frame(outline.height) if outline is not None else None
         self.via_radius = grid.via_radius
+        self.access = os.environ.get("PNR_PAIR_ACCESS") == "1"
+        self.deadline = math.inf
+        self.search_stage = "terminals"
+        self.search_failures = {}
 
     # -- measures --------------------------------------------------------------
 
-    def measure(self, net, path, layer, width, ends):
+    def measure(self, net, path, layer, width, ends, timing=False):
         """KiCad-model length of ``net``: its escapes, then ``path``."""
         tracks, vias = [], []
         for end in ends:
@@ -470,9 +497,19 @@ class PairRouter:
             tracks.extend(term.tracks)
             vias.extend(term.vias)
         tracks += [(layer, tuple(a), tuple(b), width) for a, b in zip(path, path[1:])]
-        return lm.net_length(
-            net, tracks, vias, self.pads, self.st, None, self.via_radius, self.frame
-        ).total_mm
+        if timing and self.delay is None:
+            self.delay = lm.DelayModel(self.st)
+        value = lm.net_length(
+            net,
+            tracks,
+            vias,
+            self.pads,
+            self.st,
+            self.delay if timing else None,
+            self.via_radius,
+            self.frame,
+        )
+        return value.delay_ps if timing else value.total_mm
 
     def budget_mm(self, pair, layer, width):
         if pair.get("skew_ps") is not None:
@@ -513,6 +550,18 @@ class PairRouter:
 
     def solve(self, pair):
         """A :class:`Solved` pair, or ``(reason, details)``."""
+        seconds = float(os.environ.get("PNR_PAIR_ACCESS_SECONDS", "30"))
+        if self.access and (not math.isfinite(seconds) or seconds <= 0):
+            raise ValueError("PNR_PAIR_ACCESS_SECONDS must be finite and positive")
+        self.deadline = time.monotonic() + seconds if self.access else math.inf
+        try:
+            return self._solve_variants(pair)
+        except TimeoutError:
+            return "paired_access_time_budget", dict(
+                stage=self.search_stage, failures=dict(self.search_failures)
+            )
+
+    def _solve_variants(self, pair):
         p, n = pair["p"], pair["n"]
         terms = {}
         for net in (p, n):
@@ -532,13 +581,22 @@ class PairRouter:
             variants.append(("balls", [tuple(t.ball or t for t in end) for end in ends]))
         variants.append(("exits", ends))
         failures: Dict[str, int] = {}
+        self.search_failures = failures
+        self.search_stage = "surface_pair"
         attempts = 0
         reason, details = "no_coupled_channel", {}
+        full_deadline = self.deadline
+        if self.access:
+            self.deadline = time.monotonic() + max(0, full_deadline - time.monotonic()) / 3
         for start, ends in variants:
             self.obstacles.phantom = {p, n} if start == "balls" else set()
             self.obstacles.cache.clear()
             try:
-                result = self._solve(pair, ends, failures)
+                try:
+                    result = self._solve(pair, ends, failures)
+                except TimeoutError:
+                    reason, details = "surface_pair_time_budget", {}
+                    break
             finally:
                 self.obstacles.phantom = set()
                 self.obstacles.cache.clear()
@@ -548,11 +606,237 @@ class PairRouter:
                 return result
             reason, details = result
             attempts += details.get("attempts", 0)
+        self.deadline = full_deadline
+        if self.access:
+            for surface_access in (False, True):
+                self.search_stage = (
+                    "extended_surface_access" if surface_access else "paired_via_access"
+                )
+                self.deadline = (
+                    time.monotonic() + max(0, full_deadline - time.monotonic()) / 2
+                    if not surface_access
+                    else full_deadline
+                )
+                try:
+                    result = self.bridge(pair, ends, failures, surface_access=surface_access)
+                except TimeoutError:
+                    if surface_access:
+                        raise
+                    continue
+                if isinstance(result, Solved):
+                    result.start = "paired_access"
+                    result.attempts += attempts
+                    return result
+                reason, details = result
         if reason == "no_coupled_channel":
             details = dict(attempts=attempts, failures=failures)
         return reason, details
 
-    def _solve(self, pair, ends, failures):
+    def check_time(self):
+        if time.monotonic() >= self.deadline:
+            raise TimeoutError("joint pair search exceeded its time budget")
+
+    def bridge(self, pair, ends, failures, surface_access=False):
+        """Jointly select two-leg accesses and a coupled trunk on another layer."""
+        p, n = pair["p"], pair["n"]
+        width, gap = self.width_gap(pair)
+        cap = float(pair.get("max_uncoupled_mm") or DEFAULT_MAX_UNCOUPLED_MM)
+        fab = self.rules.get("fab") or {}
+        diameter = 2 * self.grid.via_radius
+        drill = 2 * self.grid.via_drill_radius
+        clearance = max(
+            self.grid.clearance, *(self.obstacles.classes.get(net, 0) for net in (p, n))
+        )
+        hole_gap = float(fab.get("hole_to_hole_mm", fab.get("hole_clearance_mm", clearance)))
+        tries, counts = 0, {}
+        for layer in self.allowed_layers(pair):
+            choices = []
+            for end in ends:
+                self.check_time()
+                if all(layer in term.layers for term in end):
+                    choices.append([end])
+                    continue
+                if (
+                    any(term.escape is not None for term in end)
+                    or len(set(t.layers for t in end)) != 1
+                ):
+                    choices.append([])
+                    continue
+                if len(end[0].layers) != 1:
+                    choices.append([])
+                    continue
+                source_layer = end[0].layers[0]
+                if source_layer not in self.allowed_layers(pair):
+                    choices.append([])
+                    continue
+                la = self.grid.layers.index(source_layer)
+
+                def clear(net, a, b, w, la=la):
+                    self.check_time()
+                    return self.obstacles.clear(net, la, a, b, w)
+
+                def via_clear(net, point):
+                    self.check_time()
+                    if not (0 <= point[0] <= self.grid.width and 0 <= point[1] <= self.grid.height):
+                        return False
+                    # These are ordinary through vias, never an implicit via-in-pad.
+                    for _la, owner, r in self.grid.pad_rectangles:
+                        if owner != net:
+                            continue
+                        dx = max(r.left - point[0], 0, point[0] - r.right)
+                        dy = max(r.bottom - point[1], 0, point[1] - r.top)
+                        if math.hypot(dx, dy) < diameter / 2 - 1e-7:
+                            return False
+                    i, j = self.grid.cell_of(*point)
+                    if not self.grid.in_bounds(i, j) or not self.grid.hole_site_clear(point):
+                        return False
+                    if self.grid.smd_via_blocked is not None and not self.grid.smd_via_ok(
+                        point, net
+                    ):
+                        return False
+                    # Exact pair geometry, rather than the maze's cell-grown pad
+                    # halos: those can reject legal paired holes between pads.
+                    via_width = max(diameter, drill + 2 * self.grid.hole_clearance - 2 * clearance)
+                    return all(
+                        not self.grid.via_blocked[li, j, i]
+                        and not (
+                            self.grid.net_keepouts
+                            and self.grid.net_blocked(net, li, i, j, via=True)
+                        )
+                        and self.obstacles.clear(net, li, point, point, via_width)
+                        for li in range(self.grid.nlayers)
+                    )
+
+                def route_access(sites, la=la, end=end):
+                    def accessible(net, a, b, w):
+                        return clear(net, a, b, w) and all(
+                            other == net
+                            or coupled.segment_distance(a, b, q, q)
+                            >= (diameter + w) / 2 + clearance - 1e-7
+                            for other, q in sites.items()
+                        )
+
+                    rr = coupled.solve_pair(
+                        p,
+                        n,
+                        {term.net: (term.point, sites[term.net]) for term in end},
+                        (0, 0, self.grid.width, self.grid.height),
+                        accessible,
+                        lambda a, b, w: (self.check_time() is None)
+                        and self.obstacles.clear(p, la, a, b, w, ignore=(p, n)),
+                        width,
+                        gap,
+                        1e6,
+                        pitch=min(self.grid.pitch, 0.2),
+                        max_expansions=1500,
+                        max_attempts=4,
+                        max_uncoupled=cap,
+                    )
+                    return rr.get("paths") if rr["status"] == "routed" else None
+
+                candidates = pair_access.ports(
+                    {term.net: term.point for term in end},
+                    width,
+                    gap,
+                    diameter,
+                    drill,
+                    clearance,
+                    hole_gap,
+                    cap,
+                    clear,
+                    via_clear,
+                    route_access=route_access if surface_access else None,
+                )
+                counts[layer, source_layer] = len(candidates)
+                # Keep orientation diversity: an inaccessible first embedding must
+                # not consume the entire budget before a different via hand is tried.
+                selected, angles = [], set()
+                for row in candidates:
+                    if row["angle_deg"] not in angles:
+                        selected.append(row)
+                        angles.add(row["angle_deg"])
+                selected += [row for row in candidates if row not in selected]
+                accesses = []
+                for row in selected[:12]:
+                    accesses.append(
+                        tuple(
+                            Terminal(
+                                term.net,
+                                term.ref,
+                                term.pad,
+                                row["sites"][term.net],
+                                (layer,),
+                                row["lengths"][term.net],
+                                tracks=[
+                                    (source_layer, a, b, width)
+                                    for a, b in zip(
+                                        row["paths"][term.net], row["paths"][term.net][1:]
+                                    )
+                                ],
+                                vias=[(*row["sites"][term.net], diameter / 2)],
+                                planned=True,
+                                access_angle=row["angle_deg"],
+                                uncoupled_mm=row.get("uncoupled", row["lengths"])[term.net],
+                            )
+                            for term in end
+                        )
+                    )
+                choices.append(accesses)
+            jobs = sorted(
+                ((a, b) for a in choices[0] for b in choices[1]),
+                key=lambda ab: (
+                    sum(
+                        t.uncoupled_mm if t.uncoupled_mm is not None else t.lead_mm
+                        for end in ab
+                        for t in end
+                    ),
+                    sum(t.lead_mm for end in ab for t in end),
+                ),
+            )
+            for a, b in jobs[:24]:
+                self.check_time()
+                if not any(t.planned for end in (a, b) for t in end):
+                    continue
+                if any(
+                    la == lb
+                    and coupled.segment_distance(x, y, u, v)
+                    < (width + gap if ta.net != tb.net else width) - 1e-7
+                    for ta in a
+                    for tb in b
+                    for la, x, y, _wa in ta.tracks
+                    for lb, u, v, _wb in tb.tracks
+                ):
+                    continue
+                vias = [(t.net, (x, y)) for end in (a, b) for t in end for x, y, _ in t.vias]
+                if any(
+                    math.dist(q, v)
+                    < max(
+                        drill + hole_gap,
+                        diameter + clearance if net != other else 0,
+                    )
+                    - 1e-7
+                    for i, (net, q) in enumerate(vias)
+                    for other, v in vias[i + 1 :]
+                ):
+                    continue
+                old_vias = {key: list(rows) for key, rows in self.obstacles.vias.items()}
+                try:
+                    for net, q in vias:
+                        self.obstacles.add_via(net, q, diameter / 2)
+                    result = self._solve(pair, [a, b], failures, bridge=True)
+                finally:
+                    self.obstacles.vias = old_vias
+                    self.obstacles.cache.clear()
+                tries += 1
+                if isinstance(result, Solved):
+                    return result
+        return "no_joint_pair_access", dict(
+            attempts=tries,
+            access_options={"/".join(key): value for key, value in counts.items()},
+            failures=failures,
+        )
+
+    def _solve(self, pair, ends, failures, bridge=False):
         p, n = pair["p"], pair["n"]
         common = set(self.allowed_layers(pair))
         for end in ends:
@@ -563,9 +847,18 @@ class PairRouter:
             return "no_common_layer", {}
         width, gap = self.width_gap(pair)
         cap = float(pair.get("max_uncoupled_mm") or DEFAULT_MAX_UNCOUPLED_MM)
-        lead = {
+        prefix = {
             p: ends[0][0].lead_mm + ends[1][0].lead_mm,
             n: ends[0][1].lead_mm + ends[1][1].lead_mm,
+        }
+        lead = {
+            net: sum(
+                t.uncoupled_mm if t.uncoupled_mm is not None else t.lead_mm
+                for end in ends
+                for t in end
+                if t.net == net
+            )
+            for net in (p, n)
         }
         remaining = cap - max(lead.values())
         if remaining <= 1e-6:
@@ -593,9 +886,11 @@ class PairRouter:
                 budget = self.budget_mm(pair, layer, width)
 
                 def clear(net, x, y, w, la=la):
+                    self.check_time()
                     return self.obstacles.clear(net, la, x, y, w)
 
                 def envelope(x, y, w, la=la):
+                    self.check_time()
                     return self.obstacles.clear(heavy, la, x, y, w, ignore=(p, n))
 
                 def accept(paths, layer=layer):
@@ -618,10 +913,10 @@ class PairRouter:
                     gap,
                     budget * SKEW_SHARE,
                     pitch=self.grid.pitch,
-                    max_expansions=MAX_EXPANSIONS,
+                    max_expansions=4000 if bridge else MAX_EXPANSIONS,
                     max_uncoupled=remaining,
-                    max_attempts=MAX_ATTEMPTS,
-                    offsets=lead,
+                    max_attempts=8 if bridge else MAX_ATTEMPTS,
+                    offsets=prefix,
                     accept_paths=accept,
                     max_tuning_length=remaining,
                     prefer_paths=keeps_gap if judged(pair) else None,
@@ -632,7 +927,13 @@ class PairRouter:
                 if rr["status"] != "routed":
                     continue
                 paths = rr["paths"]
-                lengths = {net: self.measure(net, paths[net], layer, width, ends) for net in (p, n)}
+                timing = self.access and pair.get("skew_ps") is not None
+
+                def measured(net, path):
+                    value = self.measure(net, path, layer, width, ends, timing=timing)
+                    return value / self.delay.track(layer, width) if timing else value
+
+                lengths = {net: measured(net, paths[net]) for net in (p, n)}
                 if abs(lengths[p] - lengths[n]) > budget * SKEW_SHARE + 1e-9:
                     # The solver matched planar lengths; match KiCad's measure once.
                     offsets = {net: lengths[net] - coupled.length(paths[net]) for net in (p, n)}
@@ -647,9 +948,7 @@ class PairRouter:
                     )
                     if tuned and accept(tuned):
                         paths = tuned
-                        lengths = {
-                            net: self.measure(net, paths[net], layer, width, ends) for net in (p, n)
-                        }
+                        lengths = {net: measured(net, paths[net]) for net in (p, n)}
                 if abs(lengths[p] - lengths[n]) > budget + 1e-9:
                     failures["kicad_skew"] = failures.get("kicad_skew", 0) + 1
                     continue
@@ -661,21 +960,30 @@ class PairRouter:
                     {net: [tuple(q) for q in paths[net]] for net in (p, n)},
                     [tuple(q) for q in rr["centerline"]],
                     ends,
-                    lengths,
+                    {net: self.measure(net, paths[net], layer, width, ends) for net in (p, n)},
                     self.uncoupled(paths, layer, width, gap, lead),
                     budget,
                     cap,
                     attempts,
                     room=room,
+                    delays_ps=(
+                        {
+                            net: self.measure(net, paths[net], layer, width, ends, timing=True)
+                            for net in (p, n)
+                        }
+                        if timing
+                        else None
+                    ),
                 )
         self.obstacles.room = 2
         self.obstacles.cache.clear()
         return "no_coupled_channel", dict(attempts=attempts)
 
     def commit(self, solved):
-        la = self.grid.layers.index(solved.layer)
-        for net, _layer, a, b, w in solved.tracks():
-            self.obstacles.add_segment(net, la, a, b, w)
+        for net, layer, a, b, w in solved.tracks():
+            self.obstacles.add_segment(net, self.grid.layers.index(layer), a, b, w)
+        for net, x, y in solved.vias():
+            self.obstacles.add_via(net, (x, y), self.via_radius)
 
     # -- coupled group tuning ---------------------------------------------------
 
@@ -748,7 +1056,21 @@ class PairRouter:
                                 net: self.measure(net, new[net], solved.layer, width, solved.ends)
                                 for net in (p, n)
                             }
-                            if abs(lengths[p] - lengths[n]) > solved.budget + 1e-9:
+                            delays = (
+                                {
+                                    net: self.measure(
+                                        net, new[net], solved.layer, width, solved.ends, timing=True
+                                    )
+                                    for net in (p, n)
+                                }
+                                if solved.delays_ps is not None
+                                else None
+                            )
+                            if (
+                                abs(delays[p] - delays[n]) > solved.pair["skew_ps"] + 1e-9
+                                if delays is not None
+                                else abs(lengths[p] - lengths[n]) > solved.budget + 1e-9
+                            ):
                                 continue
                             added = min(lengths.values()) - min(solved.lengths.values())
                             if added <= 1e-6:
@@ -756,6 +1078,7 @@ class PairRouter:
                             solved.paths = new
                             solved.centerline = centre[: k + 1] + local[1:-1] + centre[k + 1 :]
                             solved.lengths = lengths
+                            solved.delays_ps = delays
                             solved.uncoupled = unc
                             solved.bumps += 1
                             return added
@@ -882,6 +1205,7 @@ class CoupledRoute:
     # nets whose fanout escapes were dropped (the pair starts at their balls)
     dropped_escapes: set = field(default_factory=set)
     tracks: List[tuple] = field(default_factory=list)  # (net, layer, a, b, width)
+    vias: List[tuple] = field(default_factory=list)  # (net, x, y), fab through vias
     report: dict = field(default_factory=dict)
 
 
@@ -939,7 +1263,15 @@ def route_pairs(grid, graph, rules, *, signal_nets, fanouts, net_width, track_wi
         )
         if s.start == "balls":
             out.dropped_escapes |= {p, n}
+        if s.delays_ps is not None:
+            row["delays_ps"] = s.delays_ps
+            row["skew_ps"] = abs(s.delays_ps[p] - s.delays_ps[n])
+            row["skew_budget_ps"] = s.pair["skew_ps"]
         out.tracks.extend(s.tracks())
+        out.vias.extend(s.vias())
+        if s.start == "paired_access":
+            row["paired_vias"] = [list(v) for v in s.vias()]
+            row["access_angles_deg"] = [end[0].access_angle for end in s.ends]
     if out.dropped_escapes:
         # The dropped stubs are no copper: later escapes judge only what is emitted.
         grid.escape_segments[:] = [
@@ -960,7 +1292,20 @@ def route_pairs(grid, graph, rules, *, signal_nets, fanouts, net_width, track_wi
                 held[(la, *c)] = (grid.pad_net.get((la, *c)), grid.via_halo.get((la, *c)))
         reserve_fixed_copper(
             grid,
-            dict(frame="engine-mm-y-up", tracks=[list(t) for t in out.tracks], vias=[]),
+            dict(
+                frame="engine-mm-y-up",
+                tracks=[list(t) for t in out.tracks],
+                vias=[
+                    dict(
+                        net=net,
+                        xy=[x, y],
+                        diameter_mm=2 * grid.via_radius,
+                        drill_mm=2 * grid.via_drill_radius,
+                        type="through",
+                    )
+                    for net, x, y in out.vias
+                ],
+            ),
             max([track_width] + list(net_width.values())),
             own_net=True,
         )
@@ -1001,4 +1346,7 @@ def route_pairs(grid, graph, rules, *, signal_nets, fanouts, net_width, track_wi
     else:
         pairs_report_extra = {}
     out.report = dict(pairs=pairs_report, groups=groups, **pairs_report_extra)
+    if router.access:
+        grid.escape_vias.extend((net, (x, y)) for net, x, y in out.vias)
+        out.report["required"] = True
     return out

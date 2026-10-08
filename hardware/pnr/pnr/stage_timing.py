@@ -83,6 +83,8 @@ _ALIAS = {
     "drc": "drc-judge",
     "via-scan": "drc-judge",
     "checks": "drc-judge",
+    "pair-coupling-audit": "drc-judge",
+    "native-match": "route",
     "gloss-measure": "gloss",
     # gloss_stage()'s cold kicad-cli DRC before and after the gloss pass (its keep/restore gate).
     "gloss-drc-before": "drc-judge",

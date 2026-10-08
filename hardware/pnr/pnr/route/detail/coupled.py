@@ -13,6 +13,7 @@ to the endpoint path (stub). Nothing calls them unless those flags are set.
 """
 
 import math
+import os
 
 from .keyhole import elbows, length, route
 from .regional import segment_distance
@@ -96,18 +97,35 @@ def relaxed_centerlines(path, clear, pitch):
     return output
 
 
-def geometry_ok(paths, width, gap, clear):
+def geometry_ok(paths, width, gap, clear, baseline=None):
+    def inherited(net, a, b):
+        # A split collinear subsegment retains exactly the baseline copper.
+        for c, d in zip((baseline or {}).get(net, ()), (baseline or {}).get(net, ())[1:]):
+            span = math.dist(c, d)
+            if span > 1e-9 and all(
+                abs(math.dist(c, p) + math.dist(p, d) - span) < 1e-7 for p in (a, b)
+            ):
+                return True
+        return False
+
     for net, path in paths.items():
-        if not all(clear(net, a, b, width) for a, b in zip(path, path[1:])):
+        if not all(
+            (baseline is not None and inherited(net, a, b)) or clear(net, a, b, width)
+            for a, b in zip(path, path[1:])
+        ):
             return False
         edges = list(zip(path, path[1:]))
         for i, (a, b) in enumerate(edges):
             for c, d in edges[i + 2 :]:
+                if baseline is not None and inherited(net, a, b) and inherited(net, c, d):
+                    continue
                 if segment_distance(a, b, c, d) < width + gap - 1e-6:
                     return False
     ps = list(paths.values())
+    nets = list(paths)
     return all(
-        segment_distance(a, b, c, d) >= width + gap - 1e-6
+        (baseline is not None and inherited(nets[0], a, b) and inherited(nets[1], c, d))
+        or segment_distance(a, b, c, d) >= width + gap - 1e-6
         for a, b in zip(ps[0], ps[0][1:])
         for c, d in zip(ps[1], ps[1][1:])
     )
@@ -159,7 +177,16 @@ def gap_breaks(paths, width, gap, tolerance=GAP_BREAK_TOLERANCE_MM):
     return out
 
 
-def tune(paths, width, gap, skew, clear, offsets=None, max_tuning_length=None):
+def tune(
+    paths,
+    width,
+    gap,
+    skew,
+    clear,
+    offsets=None,
+    max_tuning_length=None,
+    baseline_paths=None,
+):
     """Match full endpoint path lengths, including explicitly supplied lead lengths."""
     offsets = offsets or {}
     nets = list(paths)
@@ -177,11 +204,12 @@ def tune(paths, width, gap, skew, clear, offsets=None, max_tuning_length=None):
     # arbitrarily long distances even for a small endpoint skew correction.
     plateau = width + gap
     tuning_length = 2 * h * math.sqrt(2) + plateau
-    if max_tuning_length is not None and tuning_length > max_tuning_length + 1e-7:
+    centered_allowed = max_tuning_length is None or tuning_length <= max_tuning_length + 1e-7
+    if not centered_allowed and os.environ.get("PNR_TUNE_WINDOW_SEARCH") != "1":
         return None
     for i, (a, b) in enumerate(zip(path, path[1:])):
         d = math.dist(a, b)
-        if d < 2 * h + plateau + 2 * (width + gap):
+        if not centered_allowed or d < 2 * h + plateau + 2 * (width + gap):
             continue
         ux, uy = (b[0] - a[0]) / d, (b[1] - a[1]) / d
         for side in (-1, 1):
@@ -196,8 +224,47 @@ def tune(paths, width, gap, skew, clear, offsets=None, max_tuning_length=None):
             ]
             proposed = dict(paths)
             proposed[short] = path[: i + 1] + mid + path[i + 1 :]
-            if geometry_ok(proposed, width, gap, clear):
+            if geometry_ok(proposed, width, gap, clear, baseline_paths):
                 return proposed
+    if os.environ.get("PNR_TUNE_WINDOW_SEARCH") == "1":
+        # A centred trombone can be blocked while an endpoint-adjacent site is free.
+        # Several smaller bumps also fit where one large correction cannot.
+        for count, corners in ((n, c) for n in (1, 2, 3, 4) for c in (45, 90)):
+            height = (h if corners == 45 else max(0, delta - skew * 0.95) / 2) / count
+            ramp = height if corners == 45 else 0
+            footprint = count * (2 * ramp + plateau) + (count - 1) * plateau
+            tuning_length = count * (2 * height * (math.sqrt(2) if corners == 45 else 1) + plateau)
+            if max_tuning_length is not None and tuning_length > max_tuning_length + 1e-7:
+                continue
+            for i, (a, b) in enumerate(zip(path, path[1:])):
+                d = math.dist(a, b)
+                room = d - footprint - 2 * width
+                if room < -1e-9:
+                    continue
+                ux, uy = (b[0] - a[0]) / d, (b[1] - a[1]) / d
+                for fraction in (0, 1, 0.25, 0.75, 0.5):
+                    start = width + max(0, room) * fraction
+                    for side in (-1, 1):
+                        vx, vy = -uy * side, ux * side
+                        at = lambda x, y: (
+                            a[0] + x * ux + y * vx,
+                            a[1] + x * uy + y * vy,
+                        )
+                        mid = []
+                        for j in range(count):
+                            s = start + j * (2 * ramp + 2 * plateau)
+                            mid.extend(
+                                [
+                                    at(s, 0),
+                                    at(s + ramp, height),
+                                    at(s + ramp + plateau, height),
+                                    at(s + 2 * ramp + plateau, 0),
+                                ]
+                            )
+                        proposed = dict(paths)
+                        proposed[short] = path[: i + 1] + mid + path[i + 1 :]
+                        if geometry_ok(proposed, width, gap, clear, baseline_paths):
+                            return proposed
     return None
 
 
@@ -419,7 +486,12 @@ def solve_pair(
             )
         else:
             routed = route(
-                [a], [z], bounds, center_clear, pitch=pitch, max_expansions=max_expansions
+                [a],
+                [z],
+                bounds,
+                center_clear,
+                pitch=pitch,
+                max_expansions=max_expansions,
             )
         attempts += 1
         if routed.status != "routed":
@@ -471,7 +543,13 @@ def solve_pair(
                             and len(fanout_debug) < 8
                         ):
                             fanout_debug.append(
-                                dict(sign=sign, a=a, z=z, centerline=centerline, error=str(exc))
+                                dict(
+                                    sign=sign,
+                                    a=a,
+                                    z=z,
+                                    centerline=centerline,
+                                    error=str(exc),
+                                )
                             )
                         failed("offset_bend")
                         continue
@@ -618,7 +696,8 @@ def path_metrics(tracks, vias, source, target, *, layer_heights=None):
 
     for la, a, b in segments:
         nodes = sorted(
-            (p for p in points[la] if on_segment(p, a, b)), key=lambda p: math.dist(p, a)
+            (p for p in points[la] if on_segment(p, a, b)),
+            key=lambda p: math.dist(p, a),
         )
         for x, y in zip(nodes, nodes[1:]):
             add((la, *x), (la, *y), math.dist(x, y) / 1e6)

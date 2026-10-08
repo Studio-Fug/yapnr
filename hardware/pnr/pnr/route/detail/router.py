@@ -1737,7 +1737,16 @@ def _route_board(
                 board.tracks.append((net, layer, tuple(point), centre, w))
     if coupled_route is not None:
         board.tracks.extend(coupled_route.tracks)
+        board.vias.extend(coupled_route.vias)
         board.escape_diagnostics["coupled_pairs"] = coupled_route.report
+        if coupled_route.report.get("required"):
+            failed = {
+                net
+                for pair in rules["diff_pairs"]
+                if coupled_route.report["pairs"][pair["name"]]["status"] != "coupled"
+                for net in (pair["p"], pair["n"])
+            }
+            board.result.unrouted = sorted(set(board.result.unrouted) | failed)
     if fanouts is not None:
         _fanout_extras(board, emitted, fanouts, fab)
     # Zero-length pad-to-grid stubs add no connection and become dangling items.

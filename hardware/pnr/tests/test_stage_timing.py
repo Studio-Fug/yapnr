@@ -97,6 +97,8 @@ class StageTimingTests(unittest.TestCase):
             "drc",
             "via-scan",
             "checks",
+            "pair-coupling-audit",
+            "native-match",
             "driver-setup",
             "artifacts",
         ):

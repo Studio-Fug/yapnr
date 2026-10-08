@@ -146,7 +146,11 @@ class Constraint:
 
 
 def width_for_current(
-    current_a: float, *, copper_oz: float = 1.0, delta_t_c: float = 10.0, external: bool = True
+    current_a: float,
+    *,
+    copper_oz: float = 1.0,
+    delta_t_c: float = 10.0,
+    external: bool = True,
 ) -> float:
     """Minimum trace width (mm) to carry ``current_a`` within a ``delta_t_c`` rise,
     per **IPC-2221**: ``A[mils²] = (I / (k·ΔT^0.44))^(1/0.725)``, then
@@ -351,8 +355,14 @@ def _positive(value, where: str) -> Optional[float]:
 TUNING_STYLES = ("auto", "trombone", "serpentine", "accordion")
 
 
-TUNING_NUMBERS = ("gap_mm", "amplitude_max_mm", "min_segment_mm", "max_added_mm")
-TUNING_SWITCHES = ("mitre", "meanders", "placement")
+TUNING_NUMBERS = (
+    "gap_mm",
+    "amplitude_max_mm",
+    "min_segment_mm",
+    "max_added_mm",
+    "sequential_max_added_mm",
+)
+TUNING_SWITCHES = ("mitre", "meanders", "placement", "sequential")
 
 
 def _parse_tuning(raw) -> Optional[Dict]:
@@ -399,7 +409,8 @@ def _parse_legalize(raw) -> Optional[Dict]:
     outline by the same test as the hard check, ``order: scarcity`` orders parts held to
     a region or an edge band with the hard-group blocks by remaining slots,
     ``lookahead: regions`` refuses a slot that strands a scarce region or group part).
-    None when absent; only the keys given, so a default-valued key is kept as written."""
+    None when absent; only the keys given, so a default-valued key is kept as written.
+    """
     if raw is None:
         return None
     if not isinstance(raw, dict):
@@ -826,7 +837,8 @@ def _finite_number(value) -> bool:
 def _series_claimed_refs(doc: Dict, graph) -> set:
     """Refs a rigid ``line_group`` could not honour anyway (see ``_parse_line_groups``'s
     own exclusivity list), plus any already a line_group member, plus any locked in
-    the source board: the exact set :func:`infer_series_line_groups` must leave alone."""
+    the source board: the exact set :func:`infer_series_line_groups` must leave alone.
+    """
     claimed = {c.ref for c in graph.components if c.locked}
     claimed.update((doc.get("fixed") or {}).keys())
     claimed.update((doc.get("orientation") or {}).keys())
@@ -936,6 +948,7 @@ def infer_series_line_groups(doc: Dict, graph) -> Dict:
                 name=name,
                 members=[part_p, part_n],
                 rot=rot,
+                **({"allow_reorder": True} if os.environ.get("PNR_LINE_REORDER") == "1" else {}),
                 reason=(
                     "Inferred: %s and %s are diff_pair %r's two two-terminal series "
                     "parts (one per leg, same footprint %r); held side by side, pads "
@@ -1027,6 +1040,8 @@ def _parse_line_groups(raw, known_refs, board, prior) -> List[Constraint]:
         reason = entry.get("reason")
         if reason is not None and not isinstance(reason, str):
             raise ConstraintError(where + ": reason must be a string")
+        if "allow_reorder" in entry and not isinstance(entry["allow_reorder"], bool):
+            raise ConstraintError(where + ": allow_reorder must be true or false")
         for ref in members:
             owner[ref] = name
         out.append(
@@ -1040,6 +1055,7 @@ def _parse_line_groups(raw, known_refs, board, prior) -> List[Constraint]:
                     rot=float(round(rot / 90) * 90 % 360),
                     edge=edge,
                     reason=reason,
+                    **({"allow_reorder": True} if entry.get("allow_reorder") else {}),
                 ),
                 name=name,
             )
@@ -1135,7 +1151,12 @@ def _self_intersection(pts):
 
     def meet(p, q):
         (a, b), (c, d) = p, q
-        o1, o2, o3, o4 = orient(a, b, c), orient(a, b, d), orient(c, d, a), orient(c, d, b)
+        o1, o2, o3, o4 = (
+            orient(a, b, c),
+            orient(a, b, d),
+            orient(c, d, a),
+            orient(c, d, b),
+        )
         if o1 != o2 and o3 != o4 and 0 not in (o1, o2, o3, o4):
             return True
         return (
@@ -1476,7 +1497,12 @@ def compile_constraints(
             if any(value != side for value in prior):
                 raise ConstraintError(f"conflicting hard side rules for {ref}")
         constraints.append(
-            Constraint(kind="side", enforcement=Enforcement.HARD, refs=refs, params={"side": side})
+            Constraint(
+                kind="side",
+                enforcement=Enforcement.HARD,
+                refs=refs,
+                params={"side": side},
+            )
         )
 
     # side_pref: SOFT — bias a set of parts to a side. Only a double-sided board
@@ -1661,7 +1687,8 @@ def compile_constraints(
                 nets=tuple(str(n) for n in nets),
                 tolerance_mm=float(entry.get("tolerance_mm", 1.0)),
                 tolerance_ps=_positive(
-                    entry.get("tolerance_ps"), f"length_match {entry.get('name')!r}.tolerance_ps"
+                    entry.get("tolerance_ps"),
+                    f"length_match {entry.get('name')!r}.tolerance_ps",
                 ),
             )
         )
@@ -1705,7 +1732,12 @@ def compile_constraints(
             raise ConstraintError("mounting_hole clearance envelope must fit inside board")
         hole_names.add(name)
         mounting_holes.append(
-            {"name": name, "at": list(at), "drill_mm": drill, "clearance_diameter_mm": diameter}
+            {
+                "name": name,
+                "at": list(at),
+                "drill_mm": drill,
+                "clearance_diameter_mm": diameter,
+            }
         )
         x, y = at
         constraints.append(
@@ -1776,7 +1808,12 @@ def compile_constraints(
     # reports (pnr.power_spec), validated here; the router and pnr.ir_extract use them.
     partitions, ir_drop, pours = [], [], []
     if any(doc.get(k) is not None for k in ("plane_partition", "ir_drop", "pour")):
-        from pnr.power_spec import PowerSpecError, parse_ir_drop, parse_partition, parse_pour
+        from pnr.power_spec import (
+            PowerSpecError,
+            parse_ir_drop,
+            parse_partition,
+            parse_pour,
+        )
 
         try:
             partitions = parse_partition(doc.get("plane_partition"))
@@ -1945,7 +1982,10 @@ def _parse_fixed_blocks(raw, constraints, known_refs, warnings) -> List[Dict]:
             spec["sha256"] = digest
         spec["solid_layers"] = _string_list(entry.get("solid_layers"), f"{where}.solid_layers")
         refs = _expand_refs(
-            _string_list(entry.get("refs"), f"{where}.refs"), known_refs, warnings, where
+            _string_list(entry.get("refs"), f"{where}.refs"),
+            known_refs,
+            warnings,
+            where,
         )
         if set(refs) & fixed:
             raise ConstraintError(f"{where}: a block footprint is held out, it cannot be fixed")

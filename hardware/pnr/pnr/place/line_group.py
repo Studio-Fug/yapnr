@@ -57,7 +57,14 @@ def layout(graph, con, clearance):
                 raise ValueError(
                     "line_group %r: pitch %.3f mm puts %s and %s closer than the %.3f mm "
                     "clearance (needs at least %.3f mm)"
-                    % (con.name, pitch, con.refs[i - 1], con.refs[i], clearance, need + clearance)
+                    % (
+                        con.name,
+                        pitch,
+                        con.refs[i - 1],
+                        con.refs[i],
+                        clearance,
+                        need + clearance,
+                    )
                 )
             centres.append(centres[-1] + float(pitch))
         else:
@@ -76,6 +83,125 @@ def _turned(x, y, deg):
     t = math.radians(deg)
     c, s = math.cos(t), math.sin(t)
     return x * c - y * s, x * s + y * c
+
+
+def actual_order(graph, con):
+    """Members along the group's local axis, preserving each part's orientation."""
+    turn = graph.component(con.refs[0]).rot - float(con.params.get("rot") or 0)
+    c, s = math.cos(math.radians(turn)), math.sin(math.radians(turn))
+    return tuple(
+        sorted(
+            con.refs,
+            key=lambda r: (
+                graph.component(r).pos[0] * c + graph.component(r).pos[1] * s,
+                r,
+            ),
+        )
+    )
+
+
+def reorder(graph, constraints, rules=None, pad_edge=None):
+    """Bounded order/half-turn search for explicitly unordered lines.
+
+    Prefer fewer straight-line pair crossings, then lower all-net pad HPWL.
+    This is a placement proxy, not a claim that the selected order routes best.
+    Combine slot permutations with a common 180-degree turn, so a line can reverse
+    its pad facing without reversing its board order. Spacing, net identities and
+    external parts stay fixed; no hard finding may be introduced or worsened.
+    """
+    if not any(c.params.get("allow_reorder") for c in groups(constraints)):
+        return graph
+    from collections import Counter
+
+    from . import metrics
+    from .geometry import pin_positions
+
+    def score():
+        pins = {(c.ref, n): xy for c in graph.components for n, xy in pin_positions(c)}
+        ends = {n.name: [pins[p] for p in n.pins if p in pins] for n in graph.nets}
+
+        def cross(a, b, c):
+            return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+        crossings = 0
+        for pair in (rules or {}).get("diff_pairs") or []:
+            p, n = ends.get(pair["p"], []), ends.get(pair["n"], [])
+            if len(p) == len(n) == 2:
+                crossings += (
+                    cross(*p, n[0]) * cross(*p, n[1]) < -1e-9
+                    and cross(*n, p[0]) * cross(*n, p[1]) < -1e-9
+                )
+        return crossings, round(metrics.hpwl(graph), 9)
+
+    found = satellites(graph, constraints)
+    clearance = float(constraints.board.default_clearance_mm)
+    for con in groups(constraints):
+        if not con.params.get("allow_reorder") or any(r in found for r in con.refs):
+            continue
+
+        # Match the placer's final hard check (zero courtyard inflation). Existing
+        # unrelated findings do not prevent a slot permutation; none may worsen.
+        def findings():
+            def normalize(value):
+                if isinstance(value, str):
+                    return "line-member" if value in con.refs else value
+                if isinstance(value, (tuple, list)):
+                    return tuple(normalize(v) for v in value)
+                return value
+
+            return {
+                key: Counter(repr(normalize(v)) for v in values)
+                for key, values in metrics.hard_violations(graph, constraints, 0.0).items()
+            }
+
+        baseline_findings = findings()
+        for _ in range(min(8, 2 * len(con.refs))):
+            order = actual_order(graph, con)
+            current = copy.copy(con)
+            current.refs = order
+            w, h, poses = layout(graph, current, clearance)
+            first = graph.component(order[0])
+            turn = first.rot - poses[first.ref][2]
+            dx, dy = _turned(poses[first.ref][0] - w / 2, poses[first.ref][1] - h / 2, turn)
+            centre = (first.pos[0] - dx, first.pos[1] - dy)
+            original = {r: (graph.component(r).pos, graph.component(r).rot) for r in order}
+            best, selected = score(), None
+            orders = [order, order[::-1]] + [
+                order[:i] + (order[i + 1], order[i]) + order[i + 2 :] for i in range(len(order) - 1)
+            ]
+            candidates = [(candidate, delta) for delta in (0, 180) for candidate in orders]
+            for candidate, delta in candidates:
+                changed = copy.copy(con)
+                changed.refs = candidate
+                try:
+                    nw, nh, offsets = layout(graph, changed, clearance)
+                except ValueError:
+                    continue
+                for r, (x, y, rot) in offsets.items():
+                    ox, oy = _turned(x - nw / 2, y - nh / 2, turn + delta)
+                    comp = graph.component(r)
+                    comp.pos, comp.rot = (centre[0] + ox, centre[1] + oy), (
+                        rot + turn + delta
+                    ) % 360
+                observed = findings()
+                legal = all(
+                    not (values - baseline_findings.get(key, Counter()))
+                    for key, values in observed.items()
+                )
+                if legal and pad_edge is not None:
+                    width, height = metrics.outline_size(graph, constraints)
+                    legal = not metrics.pad_edge_violations(graph, width, height, pad_edge)
+                value = score() if legal else best
+                if value < best:
+                    best = value
+                    selected = {r: (graph.component(r).pos, graph.component(r).rot) for r in order}
+                for r, (pos, rot) in original.items():
+                    graph.component(r).pos, graph.component(r).rot = pos, rot
+            if selected is None:
+                break
+            for r, (pos, rot) in selected.items():
+                graph.component(r).pos, graph.component(r).rot = pos, rot
+    return graph
 
 
 def satellites(graph, constraints):
@@ -124,12 +250,18 @@ def satellite_layout(graph, con, width, height, poses, found, clearance):
     pads lie across the line with the shared pad facing the member's, the shared pads in line,
     the courtyards ``clearance`` apart. A member pad that lies along the line (its offset not
     mostly across it) takes no satellite, nor does one that would come closer than
-    ``clearance`` to an earlier satellite. The frame grows to hold them (origin bottom-left)."""
+    ``clearance`` to an earlier satellite. The frame grows to hold them (origin bottom-left).
+    """
     boxes = {}
     for ref in con.refs:
         x, y, rot = poses[ref]
         along, across = _extent(graph.component(ref), rot)
-        boxes[ref] = (x - along / 2.0, y - across / 2.0, x + along / 2.0, y + across / 2.0)
+        boxes[ref] = (
+            x - along / 2.0,
+            y - across / 2.0,
+            x + along / 2.0,
+            y + across / 2.0,
+        )
     placed = dict(poses)
     for ref in con.refs:
         member = graph.component(ref)
@@ -153,7 +285,12 @@ def satellite_layout(graph, con, width, height, poses, found, clearance):
             edge = mbox[3] if side > 0 else mbox[1]
             sx = mx + px - qx
             sy = edge + side * (clearance + across / 2.0)
-            box = (sx - along / 2.0, sy - across / 2.0, sx + along / 2.0, sy + across / 2.0)
+            box = (
+                sx - along / 2.0,
+                sy - across / 2.0,
+                sx + along / 2.0,
+                sy + across / 2.0,
+            )
             if any(
                 box[0] < b[2] + clearance - 1e-9
                 and b[0] < box[2] + clearance - 1e-9
@@ -226,7 +363,8 @@ def collapse(graph, constraints, rules):
                 graph, con, width, height, poses, found, clearance
             )
         sub = BoardGraph(
-            name=graph.name + ":line:" + con.name, stack=local_record(copy.deepcopy(graph.stack))
+            name=graph.name + ":line:" + con.name,
+            stack=local_record(copy.deepcopy(graph.stack)),
         )
         for ref in list(con.refs) + [r for r in poses if r not in con.refs]:
             comp = copy.deepcopy(graph.component(ref))
@@ -312,8 +450,11 @@ def violations(graph, constraints):
     bad = []
     for con in lines:
         try:
-            parts = [graph.component(ref) for ref in con.refs]
-            width, height, poses = layout(graph, con, clearance)
+            ordered = copy.copy(con)
+            if con.params.get("allow_reorder"):
+                ordered.refs = actual_order(graph, con)
+            parts = [graph.component(ref) for ref in ordered.refs]
+            width, height, poses = layout(graph, ordered, clearance)
         except (KeyError, ValueError):
             bad.extend(con.refs)
             continue

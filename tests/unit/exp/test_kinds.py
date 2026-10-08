@@ -73,7 +73,9 @@ class BenchTest(unittest.TestCase):
 
     def test_unknown_tool_and_options_are_reported(self):
         campaign = dict(
-            BENCH, matrix=dict(BENCH["matrix"], tool=["kicad"]), tools={"yapnr": {"cmd": []}}
+            BENCH,
+            matrix=dict(BENCH["matrix"], tool=["kicad"]),
+            tools={"yapnr": {"cmd": []}},
         )
         errors = kinds.get("bench-cell").check(campaign)
         self.assertTrue(any("no [tools.kicad]" in e for e in errors), errors)
@@ -108,7 +110,13 @@ class MonteCarloTest(unittest.TestCase):
             lines = [
                 {
                     "id": "rung1/cand-03",
-                    "command": ["${PYTHON}", "-m", "pnr.full_iteration", "--out", "out/eval"],
+                    "command": [
+                        "${PYTHON}",
+                        "-m",
+                        "pnr.full_iteration",
+                        "--out",
+                        "out/eval",
+                    ],
                     "inputs": [{"dest": "candidate", "path": "cand-03"}],
                     "record": "out/eval/record.json",
                     "resources": {"cpus": 2, "memory_gb": 8, "max_wall_s": 7200},
@@ -129,7 +137,12 @@ class MonteCarloTest(unittest.TestCase):
             kind = kinds.get("mc-eval")
             self.assertEqual(kind.check(campaign), [])
             ctx = context(
-                tmp, visibility="private", cpus=2, memory_gb=8, disk_gb=10, max_wall_s=14400
+                tmp,
+                visibility="private",
+                cpus=2,
+                memory_gb=8,
+                disk_gb=10,
+                max_wall_s=14400,
             )
             tasks = kind.expand(campaign, ctx)
             self.assertEqual(len(tasks), 2)
@@ -168,13 +181,20 @@ class MonteCarloTest(unittest.TestCase):
                     "record": "out/divider/validation.json",
                     "checkpoint": {"path": "out/divider"},
                     "prune": ["divider/cache"],
-                    "verdict": {"file": "out/divider/validation.json", "json_path": "ok"},
+                    "verdict": {
+                        "file": "out/divider/validation.json",
+                        "json_path": "ok",
+                    },
                 },
                 {
                     "id": "rf/antenna",
                     "command": ["${PYTHON}", "-m", "yapnr.rf.cases", "run", "antenna"],
                     "record": "out/antenna/validation.json",
-                    "checkpoint": {"path": "out/antenna", "sync_every_s": 120, "on_signal": False},
+                    "checkpoint": {
+                        "path": "out/antenna",
+                        "sync_every_s": 120,
+                        "on_signal": False,
+                    },
                 },
                 {"id": "plain", "command": ["true"], "record": "out/r.json"},
             ]
@@ -187,12 +207,14 @@ class MonteCarloTest(unittest.TestCase):
             first, second, plain = kinds.get("mc-eval").expand(campaign, context(tmp))
         self.assertEqual(first["restart"], "resume")
         self.assertEqual(
-            first["checkpoint"], {"path": "out/divider", "sync_every_s": 300, "on_signal": True}
+            first["checkpoint"],
+            {"path": "out/divider", "sync_every_s": 300, "on_signal": True},
         )
         self.assertEqual(first["outputs"]["prune"], ["divider/cache"])
         self.assertEqual(first["verdict"]["json_path"], "ok")
         self.assertEqual(
-            second["checkpoint"], {"path": "out/antenna", "sync_every_s": 120, "on_signal": False}
+            second["checkpoint"],
+            {"path": "out/antenna", "sync_every_s": 120, "on_signal": False},
         )
         self.assertEqual(plain["restart"], "scratch")
         self.assertIsNone(plain["checkpoint"])
@@ -206,7 +228,10 @@ class MonteCarloTest(unittest.TestCase):
             )
             with self.assertRaises(ValueError):
                 mc.read_stage_plan(path)
-            for bad in ({"checkpoint": "out/run"}, {"checkpoint": {"path": "out/r", "every": 1}}):
+            for bad in (
+                {"checkpoint": "out/run"},
+                {"checkpoint": {"path": "out/r", "every": 1}},
+            ):
                 line = dict({"id": "x", "command": ["true"], "record": "out/r.json"}, **bad)
                 path.write_text(json.dumps(line) + "\n")
                 with self.assertRaises(ValueError):
@@ -228,7 +253,8 @@ class RfTest(unittest.TestCase):
         task = tasks[0]
         self.assertEqual(task["restart"], "resume")
         self.assertEqual(
-            task["checkpoint"], {"path": "out/div", "sync_every_s": 120, "on_signal": True}
+            task["checkpoint"],
+            {"path": "out/div", "sync_every_s": 120, "on_signal": True},
         )
         self.assertEqual(task["env"]["OMP_NUM_THREADS"], "4")
         self.assertEqual(task["command"][:4], ["${PYTHON}", "-m", "yapnr.rf.cases", "run"])
@@ -289,7 +315,11 @@ class LadderOptionsTest(unittest.TestCase):
         campaign = {
             "schema": spec.CAMPAIGN_SCHEMA,
             "kind": "ladder-cell",
-            "matrix": {"case": ["01-connector-led-2"], "seed": [0], "config": ["off", "on"]},
+            "matrix": {
+                "case": ["01-connector-led-2"],
+                "seed": [0],
+                "config": ["off", "on"],
+            },
             "configs": {"off": {}, "on": {"compact": True, "compact_off": ["GP"]}},
         }
         self.assertEqual(kind.check(campaign), [])
@@ -391,7 +421,12 @@ class LadderOptionsTest(unittest.TestCase):
         from yapnr.exp.kinds import ladder
 
         args = ladder.runner_arguments(
-            dict(gp_channels=1, legalize_hpwl=4.0, legalize_reorient=True, pool_source_clamp=True)
+            dict(
+                gp_channels=1,
+                legalize_hpwl=4.0,
+                legalize_reorient=True,
+                pool_source_clamp=True,
+            )
         )
         self.assertEqual(args[args.index("--gp-channels") + 1], "1.0")
         self.assertEqual(args[args.index("--legalize-hpwl") + 1], "4.0")
@@ -402,16 +437,41 @@ class LadderOptionsTest(unittest.TestCase):
         wire = ladder.runner_arguments(dict(legalize_reorient_wire=True))
         self.assertEqual(wire[wire.index("--legalize-reorient") + 1], "wire")
         more = ladder.runner_arguments(
-            dict(legalize_channel_clearance_fab=True, line_satellites=True, channel_layers=True)
+            dict(
+                legalize_channel_clearance_fab=True,
+                line_satellites=True,
+                channel_layers=True,
+            )
         )
         self.assertIn("--channel-layers", more)
         self.assertEqual(more[more.index("--legalize-channel-clearance") + 1], "fab")
         self.assertIn("--line-satellites", more)
+        enabled = ladder.runner_arguments(
+            dict(line_reorder=True, tune_window_search=True, tune_sequential=True, pair_access=True)
+        )
+        self.assertIn("--no-pair-access", ladder.runner_arguments(dict(pair_access=False)))
+        self.assertNotIn("--no-pair-access", ladder.runner_arguments({}))
+        for key in ("line_reorder", "tune_window_search"):
+            flag = "--no-" + key.replace("_", "-")
+            self.assertIn(flag, ladder.runner_arguments({key: False}))
+            self.assertNotIn(flag, ladder.runner_arguments({}))
+        for flag in (
+            "--line-reorder",
+            "--tune-window-search",
+            "--tune-sequential",
+            "--pair-access",
+        ):
+            self.assertIn(flag, enabled)
+            self.assertNotIn(flag, ladder.runner_arguments({}))
         kind = kinds.get("ladder-cell")
         campaign = {
             "schema": spec.CAMPAIGN_SCHEMA,
             "kind": "ladder-cell",
-            "matrix": {"case": ["01-connector-led-2"], "seed": [0], "config": ["on", "bad"]},
+            "matrix": {
+                "case": ["01-connector-led-2"],
+                "seed": [0],
+                "config": ["on", "bad"],
+            },
             "configs": {"on": {"legalize_hpwl": 4}, "bad": {"gp_channels": 0}},
         }
         errors = kind.check(campaign)
@@ -427,7 +487,11 @@ class LadderOptionsTest(unittest.TestCase):
         campaign = {
             "schema": spec.CAMPAIGN_SCHEMA,
             "kind": "ladder-cell",
-            "matrix": {"case": ["01-connector-led-2"], "seed": [0], "config": ["a", "b"]},
+            "matrix": {
+                "case": ["01-connector-led-2"],
+                "seed": [0],
+                "config": ["a", "b"],
+            },
             "configs": {"a": {"rail_alloc": "search"}, "b": {"rail_alloc": "rule"}},
         }
         self.assertEqual(kind.check(campaign), ["configs.b.rail_alloc is search or static"])
@@ -512,7 +576,10 @@ class LadderOptionsTest(unittest.TestCase):
             },
         }
         self.assertEqual(kind.check(campaign), [])
-        bad = dict(campaign, matrix=dict(campaign["matrix"], case=["-leading-dash-not-allowed"]))
+        bad = dict(
+            campaign,
+            matrix=dict(campaign["matrix"], case=["-leading-dash-not-allowed"]),
+        )
         self.assertTrue(kind.check(bad))
 
 

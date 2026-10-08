@@ -82,6 +82,10 @@ OPTIONS = {
     "line_satellites": bool,
     "legalize_keep": bool,
     "detail_place": bool,
+    "line_reorder": bool,
+    "tune_window_search": bool,
+    "pair_access": bool,
+    "tune_sequential": bool,
     "channel_layers": bool,
     "power_first": bool,
     "route_pairs_diff_pairs": bool,
@@ -110,6 +114,10 @@ FLAGS = {
     "pool_source_clamp": "--pool-source-clamp",
     "legalize_reorient": "--legalize-reorient",
     "line_satellites": "--line-satellites",
+    "line_reorder": "--line-reorder",
+    "tune_window_search": "--tune-window-search",
+    "pair_access": "--pair-access",
+    "tune_sequential": "--tune-sequential",
     "channel_layers": "--channel-layers",
     # ladder-v2 ab-pairs-pool A/B.
     "power_first": "--power-first",
@@ -205,6 +213,9 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
             args += ["--initial-starts", str(options["initial_starts"])]
         if options.get("initial_finalists") is not None:
             args += ["--initial-finalists", str(options["initial_finalists"])]
+    for key in ("pair_access", "line_reorder", "tune_window_search"):
+        if options.get(key) is False:
+            args.append("--no-" + key.replace("_", "-"))
     if options.get("maze_kernel"):
         args += ["--maze-kernel", str(options["maze_kernel"])]  # packed or native
     if options.get("detail_pitch_mm") is not None:
@@ -217,7 +228,10 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
         if options.get(key) is not None:
             args += [flag, repr(float(options[key]))]
     if options.get("legalize_reorient_wire") and not options.get("legalize_reorient"):
-        args += ["--legalize-reorient", "wire"]  # the in-place turns without the channel guard
+        args += [
+            "--legalize-reorient",
+            "wire",
+        ]  # the in-place turns without the channel guard
     if options.get("legalize_channel_clearance_fab"):
         args += ["--legalize-channel-clearance", "fab"]
     compact_parts = options.get("route_compact")
@@ -378,7 +392,10 @@ class LadderCell(base.Kind):
                         command=command,
                         env=base.SINGLE_THREAD_ENV,
                         outputs={"root": "out", "summary": SUMMARY, "prune": prune},
-                        done={"file": "out/run/summary.json", "json": {"complete": True}},
+                        done={
+                            "file": "out/run/summary.json",
+                            "json": {"complete": True},
+                        },
                         verdict={"file": "out/run/summary.json", "json_path": "passed"},
                         labels={"case": case, "seed": str(seed), "config": name},
                     )
@@ -437,7 +454,10 @@ def assemble_run(plan, tasks, fetched: Path, out: Path, allow_mixed: bool, repor
         complete = complete and bool(summary.get("complete"))
         changed += summary.get("source_changed_during_run") or []
         for result in summary["results"]:
-            directory = result.get("directory") or "%s-seed-%s" % (result["case"], result["seed"])
+            directory = result.get("directory") or "%s-seed-%s" % (
+                result["case"],
+                result["seed"],
+            )
             base.copy_tree(run / directory, out / directory)
             results.append(result)
         provenance = _read_json(run / "provenance.json")

@@ -702,7 +702,10 @@ def _hard_and_source_errors(candidate, source, constraints, rules=None):
 
 def _route_metrics(board):
     unresolved = set(board.result.unrouted) - set(board.deferred_nets)
-    missing = sum(max(1, board.result.nets[n].remaining_connections) for n in unresolved)
+    missing = sum(
+        max(1, board.result.nets[n].remaining_connections) if n in board.result.nets else 1
+        for n in unresolved
+    )
     length = sum(math.dist(a, b) for _, _, a, b, _ in board.tracks)
     # These are screening metrics, not DRC/electrical qualification. Deferred
     # modes remain explicitly listed and all finalists receive the same budget.

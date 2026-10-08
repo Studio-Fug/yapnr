@@ -69,6 +69,8 @@ filegroup(
         "pnr/pair_joint.py",
         "pnr/pair_contact_audit.py",
         "pnr/native_drc.py",
+        "pnr/native_match.py",
+        "pnr/native_pair_audit.py",
         "pnr/route_epoch.py",
         "pnr/drc_warm/__init__.py",
         "pnr/drc_warm/client.py",
@@ -151,6 +153,7 @@ filegroup(
         "pnr/quality.py",
         # pnr.quality measures routed length as KiCad's DRC does (pnr.length_model).
         "pnr/length_model.py",
+        "pnr/copper_clearance.py",
         "pnr/length_oracle.py",
         "pnr/specctra.py",
         "pnr/writeback.py",
@@ -299,6 +302,13 @@ py_library(
     ],
 )
 
+py_test(
+    name = "pair_access_test",
+    srcs = ["tests/test_pair_access.py", "tests/test_pair_route.py"],
+    main = "tests/test_pair_access.py",
+    deps = [":pnr", ":pnr_detail", ":pnr_place"],
+)
+
 # Runnable end-to-end place+route loop: emits the final placed graph JSON that
 # the writeback step turns back into a .kicad_pcb. This is the torch-side step
 # of the <board>.fab flow.
@@ -434,6 +444,22 @@ py_test(
         ":pnr_detail",
         ":pnr_place",
     ],
+)
+
+py_test(
+    name = "tuning_windows_test",
+    size = "small",
+    srcs = ["tests/test_tuning_windows.py"],
+    main = "tests/test_tuning_windows.py",
+    deps = [":pnr", ":pnr_detail", ":pnr_place"],
+)
+
+py_test(
+    name = "line_reorder_test",
+    size = "small",
+    srcs = ["tests/test_line_reorder.py"],
+    main = "tests/test_line_reorder.py",
+    deps = [":pnr", ":pnr_hier", ":pnr_place"],
 )
 
 # Placement keeps the legs of diff pairs and length-match groups even (the global
@@ -3127,4 +3153,12 @@ py_test(
     main = "tests/test_partial_cycle.py",
     imports = ["."],
     deps = [":pnr"],
+)
+
+py_test(
+    name = "native_match_gate_test",
+    size = "small",
+    srcs = ["tests/test_native_match.py"],
+    main = "tests/test_native_match.py",
+    deps = [":pnr", ":pnr_detail"],
 )

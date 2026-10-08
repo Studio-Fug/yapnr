@@ -117,7 +117,8 @@ def copper_sha(board):
     dropped, ends in sorted order, sorted. Writeback gives tracks random uuids, so two runs of
     one case differ in ``sha`` but not here when their copper is the same (pairing A/B arms,
     determinism). Raises ValueError when the board holds a track or via block this reader
-    does not parse (another file layout): a hash of nothing would pair any two boards."""
+    does not parse (another file layout): a hash of nothing would pair any two boards.
+    """
     text = Path(board).read_text()
     blocks, block, depth = [], None, 0
     for line in text.splitlines():
@@ -192,7 +193,8 @@ def _quarter(x, y, rot):
 
 def body_extent(comp, use_body=True):
     """``(x0, y0, x1, y1)`` of a placed.json component's box at its pose: its off-centre
-    ``body`` (``use_body``, when it has one), else the ``courtyard`` centred on ``pos``."""
+    ``body`` (``use_body``, when it has one), else the ``courtyard`` centred on ``pos``.
+    """
     x, y = comp["pos"]
     body = comp.get("body") if use_body else None
     if not body:
@@ -285,7 +287,11 @@ def constraint_reasons(spec, placed, use_body=False, shrunk=False):
 
 # The vendor profile data pnr.fab_profile resolves data profiles from (yapnr.fab.capability), frozen
 # with the engine so a run under oshpark-4l or jlc-4l uses the data of its own checkout.
-FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/capability.py")
+FAB_DATA_SOURCES = (
+    "yapnr/__init__.py",
+    "yapnr/fab/__init__.py",
+    "yapnr/fab/capability.py",
+)
 
 # The parts of PNR_COMPACT (pnr.compact_flags.PARTS; test_compact keeps them equal)
 # --compact-off may drop.
@@ -503,11 +509,18 @@ def engine_revision(repo):
     bundle's work directory may sit inside an unrelated checkout.
     """
     if os.environ.get("YAPNR_ENGINE_REVISION"):
-        return os.environ["YAPNR_ENGINE_REVISION"], os.environ.get("YAPNR_ENGINE_DIRTY") == "1"
+        return (
+            os.environ["YAPNR_ENGINE_REVISION"],
+            os.environ.get("YAPNR_ENGINE_DIRTY") == "1",
+        )
 
     def git(*args):
         return subprocess.run(
-            ["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=60, check=True
+            ["git", "-C", str(repo), *args],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
         ).stdout
 
     try:
@@ -561,7 +574,8 @@ GLOSS_SUMMARY_KEYS = (
 
 def gloss_flags(items, repo):
     """``--gloss-flag KEY=VALUE`` items -> {KEY: VALUE}, PNR_GLOSS_* sub-flags only (the runner
-    strips ambient PNR_* variables). A relative PNR_GLOSS_CLASSES file is taken from the repo."""
+    strips ambient PNR_* variables). A relative PNR_GLOSS_CLASSES file is taken from the repo.
+    """
     out = {}
     for item in items:
         key, sep, value = item.partition("=")
@@ -724,7 +738,8 @@ def gloss_stage(root, board, args, run, flags):
         # no paths in result.json: the error's kind and exit code; the stage logs have the rest
         code = getattr(ex, "returncode", None)
         block.update(
-            status="error", error=type(ex).__name__ + ("" if code is None else " %s" % code)
+            status="error",
+            error=type(ex).__name__ + ("" if code is None else " %s" % code),
         )
     if not block["kept"]:
         shutil.copyfile(pre, board)
@@ -808,7 +823,9 @@ def new_result(spec, seed, root):
 def parser():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
-        "--repo", type=Path, default=Path(os.environ.get("BUILD_WORKSPACE_DIRECTORY", REPO))
+        "--repo",
+        type=Path,
+        default=Path(os.environ.get("BUILD_WORKSPACE_DIRECTORY", REPO)),
     )
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--case", action="append", default=[])
@@ -1121,6 +1138,22 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--pair-access",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Require coupled pair routes with jointly planned via access (default on).",
+    )
+    for flag, help_text in (
+        ("--line-reorder", "Allow inferred series lines to reorder members (default on)."),
+        ("--tune-window-search", "Search off-centre and split meander sites (default on)."),
+    ):
+        ap.add_argument(flag, action=argparse.BooleanOptionalAction, default=True, help=help_text)
+    ap.add_argument(
+        "--tune-sequential",
+        action="store_true",
+        help="Bounded displacement and reconciliation of matched sets (opt-in).",
+    )
+    ap.add_argument(
         "--exact-late-room",
         action="store_true",
         help=(
@@ -1143,7 +1176,8 @@ def parser():
     ap.add_argument(
         "--kicad-python",
         default=os.environ.get(
-            "PNR_KICAD_PYTHON", KI + "/Frameworks/Python.framework/Versions/3.9/bin/python3"
+            "PNR_KICAD_PYTHON",
+            KI + "/Frameworks/Python.framework/Versions/3.9/bin/python3",
         ),
     )  # PNR_KICAD_PYTHON: headless bundle (src15)
     ap.add_argument(
@@ -1275,12 +1309,26 @@ def main():
             raise SystemExit("--hull-dovetail takes a non-negative weight")
         env["PNR_HULL_DOVETAIL"] = repr(float(args.hull_dovetail))
     env.update(hull_nest_environment(args))
-    if args.route_pairs_diff_pairs:
+    if args.route_pairs_diff_pairs or args.pair_access:
         env["PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS"] = "1"
     if args.rail_alloc:
         env["PNR_RAIL_ALLOC"] = args.rail_alloc
     if args.exact_late_room:
         env["PNR_EXACT_LATE_ROOM"] = "1"
+    for key, name in (
+        ("line_reorder", "PNR_LINE_REORDER"),
+        ("pair_access", "PNR_PAIR_ACCESS"),
+        ("tune_window_search", "PNR_TUNE_WINDOW_SEARCH"),
+        ("tune_sequential", "PNR_TUNE_SEQUENTIAL"),
+    ):
+        if getattr(args, key):
+            env[name] = "1"
+    for key, name in (
+        ("pair_access", "PNR_PAIR_ACCESS"),
+        ("line_reorder", "PNR_LINE_REORDER"),
+        ("tune_window_search", "PNR_TUNE_WINDOW_SEARCH"),
+    ):
+        env[name] = "1" if getattr(args, key) else "0"
     if args.detail_pitch_mm is not None:
         import math
 
@@ -1369,7 +1417,8 @@ def main():
 
     def stage(root, name, cmd, extra=None, cpu=None):
         """Run one stage; its wall seconds are returned and, with ``cpu``, its CPU
-        seconds (user + system of the stage's whole waited-for process tree) recorded."""
+        seconds (user + system of the stage's whole waited-for process tree) recorded.
+        """
         t = time.monotonic()
         before = resource.getrusage(resource.RUSAGE_CHILDREN)
         try:
@@ -1387,7 +1436,8 @@ def main():
             after = resource.getrusage(resource.RUSAGE_CHILDREN)
             if cpu is not None:
                 cpu[name] = round(
-                    after.ru_utime - before.ru_utime + after.ru_stime - before.ru_stime, 3
+                    after.ru_utime - before.ru_utime + after.ru_stime - before.ru_stime,
+                    3,
                 )
         return time.monotonic() - t
 
@@ -1495,7 +1545,14 @@ def main():
                     )  # a copy with its own DRC
                 run(
                     "planes",
-                    [args.kicad_python, "-m", "pnr.planes", board, "--rules", root / "rules.json"],
+                    [
+                        args.kicad_python,
+                        "-m",
+                        "pnr.planes",
+                        board,
+                        "--rules",
+                        root / "rules.json",
+                    ],
                 )
                 if native:
                     native.snapshot("planes", board, args.kicad_cli, args.timeout)
@@ -1517,9 +1574,35 @@ def main():
                         result["gloss_error"] = result["gloss"]["error"]
                     if native:
                         native.snapshot("gloss", board, args.kicad_cli, args.timeout)
+                if args.tune_window_search and not args.pair_access:
+                    run(
+                        "native-match",
+                        [
+                            args.kicad_python,
+                            "-m",
+                            "pnr.native_match",
+                            board,
+                            "--rules",
+                            root / "rules.json",
+                            "--kicad-cli",
+                            args.kicad_cli,
+                            "--work",
+                            root / "native-match",
+                        ],
+                    )
+                    result["native_match"] = json.loads(
+                        (root / "native-match/report.json").read_text()
+                    )
                 run(
                     "audit",
-                    [args.kicad_python, frozen_here / "native.py", "audit", root, "--pcb", board],
+                    [
+                        args.kicad_python,
+                        frozen_here / "native.py",
+                        "audit",
+                        root,
+                        "--pcb",
+                        board,
+                    ],
                 )
                 run(
                     "drc",
@@ -1564,6 +1647,21 @@ def main():
                 pnr = json.loads((root / "pnr-report.json").read_text())
                 audit = json.loads((root / "native-audit.json").read_text())
                 drc = json.loads((root / "drc.json").read_text())
+                if args.pair_access:
+                    run(
+                        "pair-coupling-audit",
+                        [
+                            args.kicad_python,
+                            "-m",
+                            "pnr.native_pair_audit",
+                            board,
+                            "--rules",
+                            root / "rules.json",
+                            "--out",
+                            root / "pair-coupling.json",
+                        ],
+                    )
+                    result["pair_coupling"] = json.loads((root / "pair-coupling.json").read_text())
                 result.update(
                     reasons=acceptance(pnr, audit, drc, spec.get("designed_open") or ()),
                     opens=len(drc["unconnected_items"]),
@@ -1577,6 +1675,8 @@ def main():
                     copper_sha256=copper_sha(board),
                     project_sha256=sha(board.with_suffix(".kicad_pro")),
                 )
+                if args.pair_access and not result["pair_coupling"]["passed"]:
+                    result["reasons"].append("pair_not_coupled")
                 if source != sha(root / "source.kicad_pcb"):
                     result["reasons"].append("source_changed")
                 checks = json.loads((root / "checks.json").read_text())
@@ -1609,7 +1709,9 @@ def main():
                     native.finish(board, drc, result)  # the saved board with the runner's final DRC
             except Exception as ex:
                 result.update(
-                    error=str(ex), traceback=traceback.format_exc(), reasons=["stage_failure"]
+                    error=str(ex),
+                    traceback=traceback.format_exc(),
+                    reasons=["stage_failure"],
                 )
             result["elapsed_seconds"] = time.monotonic() - t
             result["cpu_seconds"] = round(sum((result.get("cpu_stages") or {}).values()), 3)
@@ -1644,7 +1746,11 @@ def main():
             results.append(result)
             (out / "summary.json").write_text(
                 json.dumps(
-                    dict(passed=all(r["passed"] for r in results), complete=False, results=results),
+                    dict(
+                        passed=all(r["passed"] for r in results),
+                        complete=False,
+                        results=results,
+                    ),
                     indent=2,
                 )
             )

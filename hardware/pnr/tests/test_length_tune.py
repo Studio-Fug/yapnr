@@ -58,7 +58,10 @@ def pair_board(n_offset=1.5, extra=()):
 
     j1 = [pad("1", "D_P", (0, -0.5)), pad("2", "D_N", (0, 0.5))]
     j2 = [pad("1", "D_P", (0, -0.5)), pad("2", "D_N", (0, n_offset))]
-    nets = [Net("D_P", 1, [("J1", "1"), ("J2", "1")]), Net("D_N", 2, [("J1", "2"), ("J2", "2")])]
+    nets = [
+        Net("D_P", 1, [("J1", "1"), ("J2", "1")]),
+        Net("D_N", 2, [("J1", "2"), ("J2", "2")]),
+    ]
     for k, (net, a, b) in enumerate(extra):
         j1.append(pad(str(10 + k), net, a))
         j2.append(pad(str(10 + k), net, b))
@@ -127,7 +130,8 @@ class TemplateTest(unittest.TestCase):
         for amp in (1, 3):
             path = bump_path(self.line, [Bump(0, 3, 1, amp, 2)])
             self.assertAlmostEqual(
-                path_cells_mm(path, 0.25) - path_cells_mm(self.line, 0.25), 2 * amp * 0.25
+                path_cells_mm(path, 0.25) - path_cells_mm(self.line, 0.25),
+                2 * amp * 0.25,
             )
             self.assertEqual(len(set(path)), len(path))  # no self-intersection
 
@@ -178,7 +182,8 @@ class TemplateTest(unittest.TestCase):
         self.assertEqual(sorted(_piece_cells(path, k)), [2.0, 2.0])
         trial = path[:k] + path[k + 1 :]  # mitred: 1-cell leg, diagonal, 1-cell top
         self.assertEqual(
-            sorted(_piece_cells(trial, k - 1) + _piece_cells(trial, k)), [1.0, 1.0, SQRT2, SQRT2]
+            sorted(_piece_cells(trial, k - 1) + _piece_cells(trial, k)),
+            [1.0, 1.0, SQRT2, SQRT2],
         )
         shape = shape_rules({"tuning": {"min_segment_mm": 0.5}}, 0.25, 0.25, 0.2)
         self.assertEqual((shape.amp_min, shape.min_seg_mm), (2, 0.5))
@@ -214,7 +219,8 @@ class TuneMemberTest(unittest.TestCase):
         b.vias = [(18, 21)]
         b.routed = True
         board = BoardRoute(
-            result=RouteResult(nets={"A": a, "B": b}, unrouted=[], iterations=0), grid=grid
+            result=RouteResult(nets={"A": a, "B": b}, unrouted=[], iterations=0),
+            grid=grid,
         )
         board.tracks = [
             ("A", "F.Cu", grid.center_of(*p), grid.center_of(*q), 0.25) for _l, p, q in a.segments
@@ -349,7 +355,9 @@ class TuneBoardTest(unittest.TestCase):
             board, g, ["D_P", "D_N"], lm.default_stackup(2), via_radius=0.3
         )
         self.assertAlmostEqual(
-            abs(lengths["D_P"].total_mm - lengths["D_N"].total_mm), report["spread"], places=6
+            abs(lengths["D_P"].total_mm - lengths["D_N"].total_mm),
+            report["spread"],
+            places=6,
         )
         tuned = [m for m in report["members"] if m["bumps"]]
         self.assertEqual([m["net"] for m in tuned], ["D_P"])
@@ -380,14 +388,16 @@ class TuneBoardTest(unittest.TestCase):
             for o in tuned.tracks:
                 if o[0] != net and o[1] == layer:
                     self.assertGreaterEqual(
-                        _seg_dist(a, b, o[2], o[3]) + 1e-6, (w + o[4]) / 2 + FAB["clearance_mm"]
+                        _seg_dist(a, b, o[2], o[3]) + 1e-6,
+                        (w + o[4]) / 2 + FAB["clearance_mm"],
                     )
             for pad in pads:
                 if pad.net != net and layer in pad.layers:
                     from pnr.route.detail.tune import _seg_poly_dist
 
                     self.assertGreaterEqual(
-                        _seg_poly_dist(a, b, pad.outline) + 1e-6, w / 2 + FAB["clearance_mm"]
+                        _seg_poly_dist(a, b, pad.outline) + 1e-6,
+                        w / 2 + FAB["clearance_mm"],
                     )
         # Every grid cell a tuned net uses is passable for it.
         for net in ("D_P", "D_N"):
@@ -470,7 +480,14 @@ class TuneBoardTest(unittest.TestCase):
         access = sorted(kwargs["access"]["D_N"], key=lambda c: (c.layer, c.i, c.j))
         detour = _to_geometry(
             _route_one(
-                grid, access, "D_N", defaultdict(int), defaultdict(float), 12, 0.0, wall | p_cells
+                grid,
+                access,
+                "D_N",
+                defaultdict(int),
+                defaultdict(float),
+                12,
+                0.0,
+                wall | p_cells,
             )
         )
         old = {frozenset((grid.center_of(*a), grid.center_of(*b))) for _l, a, b in rn.segments}
@@ -500,7 +517,8 @@ class TuneBoardTest(unittest.TestCase):
         after = lengths()
         self.assertLess(after["D_N"].total_mm, before["D_N"].total_mm - 1.0)
         self.assertLessEqual(
-            abs(after["D_N"].total_mm - after["D_P"].total_mm), report["target_residual"] + 1e-9
+            abs(after["D_N"].total_mm - after["D_P"].total_mm),
+            report["target_residual"] + 1e-9,
         )
         # The new route is the net's own grid route and copper; it clears D_P.
         self.assertTrue(all(grid.passable(c.layer, c.i, c.j, "D_N") for c in rn.cells))
@@ -508,7 +526,8 @@ class TuneBoardTest(unittest.TestCase):
             for o in board.tracks:
                 if o[0] == "D_P" and o[1] == t[1]:
                     self.assertGreaterEqual(
-                        _seg_dist(t[2], t[3], o[2], o[3]) + 1e-6, 0.25 + FAB["clearance_mm"]
+                        _seg_dist(t[2], t[3], o[2], o[3]) + 1e-6,
+                        0.25 + FAB["clearance_mm"],
                     )
 
     def test_a_boxed_in_bus_member_gets_room(self):
@@ -561,7 +580,8 @@ class TuneBoardTest(unittest.TestCase):
             for b in mine:
                 if a[0] < b[0] and a[1] == b[1]:
                     self.assertGreaterEqual(
-                        _seg_dist(a[2], a[3], b[2], b[3]) + 1e-6, 0.25 + FAB["clearance_mm"]
+                        _seg_dist(a[2], a[3], b[2], b[3]) + 1e-6,
+                        0.25 + FAB["clearance_mm"],
                     )
 
     def test_ps_budget(self):
@@ -630,6 +650,60 @@ def hand_tuner(board, g, rules, **kw):
 
 def row(j, i0, i1, layer=0):
     return [Cell(layer, i, j) for i in range(i0, i1 + 1)]
+
+
+class SequentialRecoveryTest(unittest.TestCase):
+    def fixture(self, enabled=True, cap=30):
+        board, g = hand_board(
+            {
+                "A": row(20, 8, 24),
+                "B": row(8, 8, 36),
+                "C": row(17, 6, 32),
+                "D": row(23, 6, 32),
+            }
+        )
+        rules = pair_rules()
+        rules["diff_pairs"] = [
+            dict(name="ab", p="A", n="B", skew_mm=0.5),
+            dict(name="cd", p="C", n="D", skew_mm=0.5),
+        ]
+        rules["tuning"] = dict(sequential=enabled, sequential_max_added_mm=cap)
+        return board, g, rules
+
+    def test_moves_blocking_pair_then_reconciles_both_sets(self):
+        plain, g, rules = self.fixture(False)
+        with mock.patch.dict(os.environ, {"PNR_TUNE_SEQUENTIAL": "0"}):
+            base = hand_tuner(plain, g, rules).run()
+        self.assertEqual(base[0].status, "length_unmatched")
+        self.assertEqual(base[1].status, "ok")
+        board, g, rules = self.fixture()
+        reports = hand_tuner(board, g, rules).run()
+        self.assertTrue(all(r.spread <= r.budget for r in reports))
+        info = reports[0].sequential
+        self.assertEqual(info["stop_reason"], "converged")
+        self.assertTrue(info["accepted_moves"])
+        self.assertLessEqual(info["added_mm"], 30)
+        for a in board.tracks:
+            for b in board.tracks:
+                if a[0] < b[0] and a[1] == b[1]:
+                    self.assertGreaterEqual(_seg_dist(a[2], a[3], b[2], b[3]) + 1e-6, 0.45)
+        self.assertEqual(board.vias, [])
+
+    def test_small_total_cap_rolls_back_displacement_and_keeps_prior_match(self):
+        board, g, rules = self.fixture(cap=0.2)
+        before = sorted(board.tracks)
+        reports = hand_tuner(board, g, rules).run()
+        self.assertEqual(reports[0].status, "length_unmatched")
+        self.assertLessEqual(reports[1].spread, reports[1].budget)
+        self.assertEqual(sorted(board.tracks), before)
+        self.assertLessEqual(reports[0].sequential["added_mm"], 0.2)
+        self.assertEqual(reports[0].sequential["accepted_moves"], [])
+
+    def test_recovery_is_opt_in(self):
+        board, g, rules = self.fixture(False)
+        with mock.patch.dict(os.environ, {"PNR_TUNE_SEQUENTIAL": "0"}):
+            reports = hand_tuner(board, g, rules).run()
+        self.assertNotIn("sequential", reports[0].to_json())
 
 
 class OverlappingSetsTest(unittest.TestCase):
@@ -773,7 +847,15 @@ class FixedCopperTest(unittest.TestCase):
         fixed = {
             "frame": "engine-mm-y-up",
             "tracks": [["A", "F.Cu", list(a_end), [a_end[0] + 2.0, a_end[1]], 0.25]],
-            "vias": [dict(net="Z", xy=[5.0, 7.0], diameter_mm=0.6, drill_mm=0.3, type="through")],
+            "vias": [
+                dict(
+                    net="Z",
+                    xy=[5.0, 7.0],
+                    diameter_mm=0.6,
+                    drill_mm=0.3,
+                    type="through",
+                )
+            ],
         }
         tuner = hand_tuner(board, g, rules, fixed_copper=fixed)
         self.assertAlmostEqual(tuner.measure("A").total_mm, 7.0 + 2.0, places=6)

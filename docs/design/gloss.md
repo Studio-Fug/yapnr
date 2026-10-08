@@ -1,7 +1,10 @@
 # Design: the gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`)
 
-Status: implemented on branch `claude/gloss-port`, off by default. The pass was designed and
-built in Splanc's engine (snapshot src18) and is ported here as a copy plus the loop hunks; where
+Status: `PNR_GLOSS` is the runner's own default since ladder-v2 (2026-10-06,
+`docs/decisions.md`; `--no-gloss` restores the plain runner path), once a native-loop A/B on GCP
+(section 10) showed no regression. Implemented on branch `claude/gloss-port`. The pass was
+designed and built in Splanc's engine (snapshot src18) and is ported here as a copy plus the
+loop hunks; where
 the port differs from the source, §9 says so. Code: `hardware/pnr/pnr/gloss_geometry.py` (pure
 geometry, no KiCad) and `hardware/pnr/pnr/gloss.py` (KiCad adapter, workers, transactional
 controller); the loop hooks are in `pnr/native_loop.py` and `pnr/full_iteration.py`, the ladder
@@ -258,7 +261,7 @@ off-arm twin when its
 `pre_gloss_copper_sha256`, `placed.json` and `routes.json` match the twin's. The ladder
 measures what the pass does to a finished board; it cannot measure completion, because the pass
 runs after a complete route. Results:
-[Regression ladder](../regression-ladder.md#gloss-opt-in).
+[Regression ladder](../regression-ladder.md#gloss).
 
 ## 9. The port
 
@@ -300,13 +303,13 @@ branch and of `main` produce identical outputs, and `pnr.gloss` is not imported.
 
 ## 10. Open points
 
-- **Default-on** needs a paired A/B of the native loop (completion and opens per cycle), larger
-  than the source's inconclusive three-placement run; then the owner decides. For an
-  equal-compute comparison, the A/B reports each arm's wall and CPU per evaluation: the passes'
-  own cost is in `progress.json` (`gloss.<label>.cost`), and `06g-gloss` runs before
-  `begin_refinement`, so its time is outside the refinement budget. Raise `PNR_GLOSS_SECONDS`
-  and bound the passes by `PNR_GLOSS_MAX_TRANSACTIONS` (§5), so a slower machine does not stop
-  one arm early.
+- **Default-on (resolved, 2026-10-06):** the native-loop A/B this needed ran on GCP (PR #62,
+  campaign `20261005-ladder-4b88dd`): ladder + showcases + `09-mcu-usb-31` + the two
+  UFBGA-201 rungs, seeds 0 and 1, gloss off vs on. 52 of 60 tasks passed; the 8 failures are a
+  pre-existing, unrelated `jlc-pofv` BGA fanout via-drill mismatch, identical in both arms. Over
+  the 26 remaining paired cells: 0 regressions (opens and DRC violations stay 0 in every cell,
+  both arms); bends -19.6 %, track segments -38.0 %, copper length -1.4 %, vias unchanged, CPU
+  +393 %. `--gloss` is now the runner's own default (ladder-v2, `docs/decisions.md`).
 - **06g routability** on public boards is unmeasured: the ladder runs the pass after a complete
   route. A real native loop with the flag on a public ladder board (no annotation sources, two
   refinement cycles) ran both passes with real workers: `06g-gloss` (open-net guard) kept two
@@ -315,7 +318,7 @@ branch and of `main` produce identical outputs, and `pnr.gloss` is not imported.
   not evidence about completion.
 - **Cost.** On the ladder the stage costs a roughly fixed 30 to 125 s of CPU per case (KiCad
   worker start-up and three cold DRCs dominate on small boards), so the overhead is largest on
-  the smallest cases (see the [ladder A/B](../regression-ladder.md#gloss-opt-in)). In the native
+  the smallest cases (see the [ladder A/B](../regression-ladder.md#gloss)). In the native
   loop each pass adds its own inspect, check and DRC workers to the evaluation, and
   `full_iteration` one metrics worker; on the private board each pass took 2 to 4 minutes of
   wall time.

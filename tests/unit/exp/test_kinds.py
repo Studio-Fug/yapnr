@@ -320,6 +320,73 @@ class LadderOptionsTest(unittest.TestCase):
         errors = kind.check(campaign)
         self.assertTrue(any("maze_kernel is one of" in e for e in errors), errors)
 
+    def test_default_on_flags_need_an_explicit_off_to_turn_them_off(self):
+        """compact/gloss/route_pairs_diff_pairs/initial_pool default on in the runner itself
+        (ladder-v2): a campaign that omits the key gets no flag at all (the runner's own
+        default decides), and only an explicit ``false`` emits the runner's --no-<flag> so an
+        A/B config can still turn one off."""
+        from yapnr.exp.kinds import ladder
+
+        omitted = ladder.runner_arguments({})
+        for flag in (
+            "--compact",
+            "--no-compact",
+            "--gloss",
+            "--no-gloss",
+            "--initial-pool",
+            "--no-initial-pool",
+            "--route-pairs-diff-pairs",
+            "--no-route-pairs-diff-pairs",
+            "--fab-profile",
+        ):
+            self.assertNotIn(flag, omitted)
+
+        off = ladder.runner_arguments(
+            dict(compact=False, gloss=False, initial_pool=False, route_pairs_diff_pairs=False)
+        )
+        self.assertIn("--no-compact", off)
+        self.assertIn("--no-gloss", off)
+        self.assertIn("--no-initial-pool", off)
+        self.assertIn("--no-route-pairs-diff-pairs", off)
+        for flag in ("--compact", "--gloss", "--initial-pool", "--route-pairs-diff-pairs"):
+            self.assertNotIn(flag, off)
+
+        on = ladder.runner_arguments(
+            dict(compact=True, gloss=True, initial_pool=True, route_pairs_diff_pairs=True)
+        )
+        for flag in ("--compact", "--gloss", "--initial-pool", "--route-pairs-diff-pairs"):
+            self.assertIn(flag, on)
+
+        self.assertIn("--fab-profile", ladder.runner_arguments(dict(fab_profile="legacy")))
+        self.assertEqual(
+            ladder.runner_arguments(dict(fab_profile="legacy"))[
+                ladder.runner_arguments(dict(fab_profile="legacy")).index("--fab-profile") + 1
+            ],
+            "legacy",
+        )
+
+    def test_legalize_keep_can_be_ab_tested_through_the_campaign(self):
+        """Finding 2 (ladder-v2 review): PNR_LEGALIZE_KEEP defaults on in the engine itself with
+        or without --compact, so (like compact/gloss/route_pairs_diff_pairs) a campaign must say
+        ``legalize_keep: false`` explicitly to A/B it -- omitting the key takes the runner's own
+        default, matching DEFAULT_ON_FLAGS."""
+        from yapnr.exp.kinds import ladder
+
+        self.assertNotIn("--legalize-keep", ladder.runner_arguments({}))
+        self.assertNotIn("--no-legalize-keep", ladder.runner_arguments({}))
+        self.assertIn("--legalize-keep", ladder.runner_arguments(dict(legalize_keep=True)))
+        self.assertIn("--no-legalize-keep", ladder.runner_arguments(dict(legalize_keep=False)))
+
+    def test_detail_place_can_be_ab_tested_through_the_campaign(self):
+        """``detail_place`` (PNR_DETAIL_PLACE, pnr.place.detail): true/false emit
+        --detail-place/--no-detail-place; omitted, the engine's own default."""
+        from yapnr.exp.kinds import ladder
+
+        self.assertNotIn("--detail-place", ladder.runner_arguments({}))
+        self.assertNotIn("--no-detail-place", ladder.runner_arguments({}))
+        self.assertIn("--detail-place", ladder.runner_arguments(dict(detail_place=True)))
+        self.assertIn("--no-detail-place", ladder.runner_arguments(dict(detail_place=False)))
+
     def test_legalizer_switches_reach_the_runner(self):
         from yapnr.exp.kinds import ladder
 

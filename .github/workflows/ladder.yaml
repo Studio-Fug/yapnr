@@ -3,20 +3,20 @@ name: Ladder
 # The native regression ladder (hardware/pnr/regression/README.md) inside the published arm64
 # image ghcr.io/studio-fug/yapnr:edge, resolved to a digest:
 #
-#   pull request      cases 01 to 06, seed 0, baseline configuration, when engine inputs changed
-#   nightly (main)    all 8 cases, seeds 0 and 1, baseline; then all 8, seed 0, with the initial
-#                     placement pool and traces, rendered to animations (artifacts only); then
-#                     the showcases (designs.showcases() and 07-chaser-20, traced), rendered too
-#                     (informational: a showcase never decides the job); both traced runs take
-#                     the committed animations' options (--compact --gloss, docs/animations/
-#                     manifest.json), so their trace hashes are comparable; then the opt-in gloss
-#                     stage (run.py --gloss, PNR_GLOSS) on 04-inverter-leds-8 and 07-chaser-20,
-#                     seed 0: no other run exercises it while the flag is off by default; then
-#                     the hard rungs of the ladder lane (the public ladder's rungs 09 to 12,
-#                     docs/regression-ladder.md) and of the nightly lane (hard_rungs.py, ci.lane),
-#                     seed 0 (informational: a hard rung never decides the job)
-#   manual            cases, seeds, animations, showcases, the gloss stage and a hard-rung lane
-#                     as given
+#   pull request      cases 01 to 06, seed 0, the runner's own defaults, when engine inputs
+#                      changed
+#   nightly (main)     all 8 cases, seeds 0 and 1, the runner's own defaults (compact, gloss,
+#                       the initial placement pool, coupled diff-pair routing, displacement-
+#                       minimizing legalization with detailed placement), traced, rendered to
+#                       animations (artifacts only) -- one configuration decides the job and feeds
+#                       the animations and docs numbers alike (ladder-v2: four arms -- baseline,
+#                       traced, gloss, compact -- become one); then the showcases
+#                       (designs.showcases() and 07-chaser-20, traced too, so their trace hashes
+#                       are comparable) and the hard rungs of the ladder lane (the public
+#                       ladder's rungs 09 to 12, docs/regression-ladder.md) and of the nightly
+#                       lane (hard_rungs.py, ci.lane), seed 0 (both informational: neither ever
+#                       decides the job)
+#   manual             cases, seeds, animations, showcases and hard-rung lanes as given
 #
 # Every run first judges the exact-separation router's routes with KiCad's DRC
 # (tests/test_exact_route_kicad.py, the KiCad tier of its unit tests), then runs the KiCad
@@ -48,7 +48,7 @@ on:
         type: string
         default: '0'
       animate:
-        description: Also run the traced pool ladder and render its animations
+        description: Trace this run (the runner's own defaults) and render its animations
         type: boolean
         default: false
       showcases:
@@ -60,10 +60,6 @@ on:
         type: choice
         options: [none, ladder, nightly, ladder nightly, manual]
         default: none
-      gloss:
-        description: Also run the opt-in gloss stage (run.py --gloss) on two cases
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -88,14 +84,11 @@ jobs:
       seeds: ${{ steps.plan.outputs.seeds }}
       animate: ${{ steps.plan.outputs.animate }}
       showcases: ${{ steps.plan.outputs.showcases }}
-      gloss: ${{ steps.plan.outputs.gloss }}
       timeout: ${{ steps.plan.outputs.timeout }}
-      baseline_minutes: ${{ steps.plan.outputs.baseline_minutes }}
-      traced_minutes: ${{ steps.plan.outputs.traced_minutes }}
+      ladder_minutes: ${{ steps.plan.outputs.ladder_minutes }}
       showcase_minutes: ${{ steps.plan.outputs.showcase_minutes }}
       hard_lane: ${{ steps.plan.outputs.hard_lane }}
       hard_minutes: ${{ steps.plan.outputs.hard_minutes }}
-      gloss_minutes: ${{ steps.plan.outputs.gloss_minutes }}
     steps:
       - name: Setup repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,7 +107,6 @@ jobs:
           INPUT_ANIMATE: ${{ inputs.animate }}
           INPUT_SHOWCASES: ${{ inputs.showcases }}
           INPUT_HARD_LANE: ${{ inputs.hard_lane }}
-          INPUT_GLOSS: ${{ inputs.gloss }}
         run: |
           run=true
           cases=""
@@ -122,7 +114,6 @@ jobs:
           animate=false
           showcases=false
           hard_lane=none
-          gloss=false
           if [ "${EVENT}" = pull_request ]; then
             cases="${PR_CASES}"
             changed="$(git diff --name-only "${PR_BASE}...${PR_HEAD}")"
@@ -140,32 +131,29 @@ jobs:
             animate=true
             showcases=true
             hard_lane="ladder nightly"
-            gloss=true
           else
             cases="${INPUT_CASES}"
             seeds="${INPUT_SEEDS:-0}"
             animate="${INPUT_ANIMATE:-false}"
             showcases="${INPUT_SHOWCASES:-false}"
             hard_lane="${INPUT_HARD_LANE:-none}"
-            gloss="${INPUT_GLOSS:-false}"
           fi
-          # Step budgets (minutes) that fit the job's: the runtime guard may take up to 20,
-          # the image pull, summaries and uploads about 10.
+          # Step budget (minutes) that fits the job's: the runtime guard may take up to 20, the
+          # image pull, summaries and uploads about 10. The runner's own defaults (ladder-v2:
+          # compact, gloss, the initial placement pool) now cost every case, not only a traced
+          # arm, and a traced run (--trace) is the same invocation, not a second one.
           if [ "${EVENT}" = pull_request ]; then
-            baseline_minutes=30
-            traced_minutes=0
-            timeout=60
+            ladder_minutes=45
+            timeout=75
           elif [ "${animate}" = true ]; then
-            baseline_minutes=80
-            traced_minutes=40
-            timeout=150
+            ladder_minutes=150
+            timeout=180
           else
-            baseline_minutes=120
-            traced_minutes=0
-            timeout=150
+            ladder_minutes=150
+            timeout=180
           fi
-          # The showcases (about 10 minutes on the development Mac; never measured on the
-          # runner) have their own budget, added to the job's only when they run.
+          # The showcases (traced, with the runner's own defaults) have their own budget, added
+          # to the job's only when they run.
           showcase_minutes=0
           if [ "${showcases}" = true ]; then
             showcase_minutes=45
@@ -187,12 +175,6 @@ jobs:
             fi
             timeout=$((timeout + hard_minutes))
           fi
-          # The gloss stage on two cases (about 4 minutes on the development Mac, gloss included).
-          gloss_minutes=0
-          if [ "${gloss}" = true ]; then
-            gloss_minutes=20
-            timeout=$((timeout + gloss_minutes))
-          fi
           if [ "${run}" = true ] && [ "${EVENT}" = pull_request ] \
               && echo "${changed}" | grep -E '^docker/yapnr-kicad/' | grep -qvE '\.md$'; then
             echo "::notice::docker/yapnr-kicad changed: the new KiCad base is not published yet," \
@@ -206,14 +188,11 @@ jobs:
             echo "seeds=${seeds}"
             echo "animate=${animate}"
             echo "showcases=${showcases}"
-            echo "gloss=${gloss}"
             echo "timeout=${timeout}"
-            echo "baseline_minutes=${baseline_minutes}"
-            echo "traced_minutes=${traced_minutes}"
+            echo "ladder_minutes=${ladder_minutes}"
             echo "showcase_minutes=${showcase_minutes}"
             echo "hard_lane=${hard_lane}"
             echo "hard_minutes=${hard_minutes}"
-            echo "gloss_minutes=${gloss_minutes}"
           } | tee -a "${GITHUB_OUTPUT}"
 
   ladder:
@@ -304,18 +283,26 @@ jobs:
               tests.test_ir_extract_kicad tests.test_plane_partition_kicad \
               tests.test_pad_clearance_kicad tests.test_board_edge_kicad'
 
-      - name: Run the ladder (baseline)
-        id: baseline
+      # ladder-v2 (docs/decisions.md): one configuration -- the runner's own defaults (compact,
+      # gloss, the initial placement pool, coupled diff-pair routing, displacement-minimizing
+      # legalization with detailed placement, the legacy fab profile;
+      # docs/regression-ladder.md) -- decides the job; with --animate it is also traced, so the
+      # same run's cases feed the animations and the docs numbers (docs = CI, no separate arm).
+      - name: Run the ladder
+        id: ladder
         env:
           CASES: ${{ needs.plan.outputs.cases }}
           SEEDS: ${{ needs.plan.outputs.seeds }}
-          MINUTES: ${{ needs.plan.outputs.baseline_minutes }}
+          MINUTES: ${{ needs.plan.outputs.ladder_minutes }}
+          ANIMATE: ${{ needs.plan.outputs.animate }}
         run: |
           args=()
           for case in ${CASES}; do args+=(--case "${case}"); done
           for seed in ${SEEDS}; do args+=(--seed "${seed}"); done
+          if [ "${ANIMATE}" = true ]; then
+            args+=(--trace)
+          fi
           status=0
-          # Leave the job time for the traced run and the uploads after a hang.
           timeout --kill-after=60 "${MINUTES}m" \
             docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work \
               --shm-size 1g --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
@@ -323,37 +310,16 @@ jobs:
                 --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
                 --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
                 --timeout 600 "${args[@]}" || status=$?
+          echo "${LADDER_IMAGE}" > out/ladder/image.txt
           echo "status=${status}" >> "${GITHUB_OUTPUT}"
 
-      - name: Summary (baseline)
+      - name: Summary
         if: always()
-        run: python3 tools/ci/ladder_summary.py out/ladder --title "Regression ladder (baseline)" >> "${GITHUB_STEP_SUMMARY}"
-
-      # The committed animations' options (the opt-in compact placement and gloss stage; each
-      # animation's config in docs/animations/manifest.json), so the traces compare with them.
-      - name: Run the ladder with traces (initial pool, seed 0)
-        if: always() && needs.plan.outputs.animate == 'true'
-        env:
-          CASES: ${{ needs.plan.outputs.cases }}
-          MINUTES: ${{ needs.plan.outputs.traced_minutes }}
-        run: |
-          args=()
-          for case in ${CASES}; do args+=(--case "${case}"); done
-          timeout --kill-after=60 "${MINUTES}m" \
-            docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work \
-              --shm-size 1g --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
-              "${LADDER_PY}" hardware/pnr/regression/run.py --repo /work --out /work/out/traced \
-                --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
-                --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
-                --timeout 600 --seed 0 --trace --initial-pool --initial-starts 8 \
-                --initial-finalists 3 --compact --gloss "${args[@]}" || true
-          mkdir -p out/traced
-          echo "${LADDER_IMAGE}" > out/traced/image.txt
-          python3 tools/ci/ladder_summary.py out/traced --title "Regression ladder (traced, initial pool)" \
-            >> "${GITHUB_STEP_SUMMARY}"
+        run: python3 tools/ci/ladder_summary.py out/ladder --title "Regression ladder (the runner's defaults)" >> "${GITHUB_STEP_SUMMARY}"
 
       # Informational: the showcases (designs.showcases(), outside the ladder) and 07-chaser-20, the
-      # free half of the line-group comparison. A failure or a timeout is a notice, never the job.
+      # free half of the line-group comparison; the runner's own defaults, traced for comparison
+      # with docs/animations. A failure or a timeout is a notice, never the job.
       - name: Run the showcases (traced, informational)
         if: always() && needs.plan.outputs.showcases == 'true'
         env:
@@ -366,8 +332,7 @@ jobs:
               "${LADDER_PY}" hardware/pnr/regression/run.py --repo /work --out /work/out/showcases \
                 --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
                 --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
-                --timeout 1200 --seed 0 --trace --trace-placement-every 5 --initial-pool \
-                --initial-starts 8 --initial-finalists 3 --showcases --compact --gloss \
+                --timeout 1200 --seed 0 --trace --trace-placement-every 5 --showcases \
                 --case 07-chaser-20 --case line-chaser-20 --case edge-io-12-free \
                 --case edge-io-12 --case hier-twin-bank-32 || status=$?
           mkdir -p out/showcases
@@ -379,7 +344,7 @@ jobs:
           fi
 
       # Informational: the hard rungs of the CI lanes given (hardware/pnr/regression/hard_rungs.py),
-      # seed 0, with the initial pool. A failure or a timeout is a notice, never the job.
+      # seed 0, the runner's own defaults. A failure or a timeout is a notice, never the job.
       # --rail-alloc search is the engine's default now (pnr.rail_alloc, #81's A/B); passed
       # explicitly here so the -rails rung's plane_quality check keeps exercising it even if
       # a future run.py invocation elsewhere passes --rail-alloc static.
@@ -398,38 +363,11 @@ jobs:
               "${LADDER_PY}" hardware/pnr/regression/run.py --repo /work --out /work/out/hard \
                 --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
                 --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
-                --timeout 3600 --seed 0 --initial-pool --initial-starts 8 --initial-finalists 3 \
-                --rail-alloc search \
-                "${lanes[@]}" || status=$?
+                --timeout 3600 --seed 0 --rail-alloc search "${lanes[@]}" || status=$?
           python3 tools/ci/ladder_summary.py out/hard --title "Hard rungs, lanes: ${LANE} (informational)" \
             >> "${GITHUB_STEP_SUMMARY}" || true
           if [ "${status}" != 0 ]; then
             echo "::notice::the hard rungs did not all pass (informational: they never decide the job)"
-          fi
-
-      # PNR_GLOSS is opt-in (default off), so no other run takes the pass: the gloss stage
-      # (run.py --gloss, gated by the case's cold DRC) on two cases. A case that fails (a stage
-      # error) fails the job; a stage that kept no edit on either case is a warning.
-      - name: Run the gloss stage (PNR_GLOSS)
-        id: gloss
-        if: always() && needs.plan.outputs.gloss == 'true'
-        env:
-          MINUTES: ${{ needs.plan.outputs.gloss_minutes }}
-        run: |
-          status=0
-          timeout --kill-after=60 "${MINUTES}m" \
-            docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work \
-              --shm-size 1g --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
-              "${LADDER_PY}" hardware/pnr/regression/run.py --repo /work --out /work/out/gloss \
-                --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
-                --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
-                --timeout 900 --seed 0 --gloss --gloss-measure \
-                --case 04-inverter-leds-8 --case 07-chaser-20 || status=$?
-          echo "status=${status}" >> "${GITHUB_OUTPUT}"
-          python3 tools/ci/ladder_summary.py out/gloss --title "Gloss stage (PNR_GLOSS)" \
-            >> "${GITHUB_STEP_SUMMARY}" || true
-          if ! grep -qs '"kept": true' out/gloss/*/result.json; then
-            echo "::warning::the gloss stage kept no edit on any case"
           fi
 
       - name: Collect the boards of failed cases
@@ -438,7 +376,7 @@ jobs:
           python3 - <<'EOF'
           import json, shutil
           from pathlib import Path
-          for run in (Path("out/ladder"), Path("out/traced"), Path("out/showcases"), Path("out/hard"), Path("out/gloss")):
+          for run in (Path("out/ladder"), Path("out/showcases"), Path("out/hard")):
               path = run / "summary.json"
               if not path.is_file():
                   continue
@@ -468,13 +406,10 @@ jobs:
             out/ladder/*/result.json
             out/ladder/*/drc.json
             out/ladder/*/*.log
-            out/gloss/summary.json
-            out/gloss/provenance.json
-            out/gloss/*/result.json
-            out/gloss/*/gloss/*.drc.json
-            out/gloss/*/*.log
             out/failed/
 
+      # The same run that decided the job, as inputs to the animations job (only the files it
+      # needs): one configuration feeds both, so docs/animations and docs = CI.
       - name: Upload the traced run
         if: always() && needs.plan.outputs.animate == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -483,13 +418,13 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
           path: |
-            out/traced/summary.json
-            out/traced/provenance.json
-            out/traced/image.txt
-            out/traced/*-version.txt
-            out/traced/*/design.json
-            out/traced/*/result.json
-            out/traced/*/trace/
+            out/ladder/summary.json
+            out/ladder/provenance.json
+            out/ladder/image.txt
+            out/ladder/*-version.txt
+            out/ladder/*/design.json
+            out/ladder/*/result.json
+            out/ladder/*/trace/
 
       - name: Upload the showcase run
         if: always() && needs.plan.outputs.showcases == 'true'
@@ -523,17 +458,10 @@ jobs:
             out/hard/*/checks.json
             out/hard/*/*.log
 
-      - name: The baseline ladder (and the gloss stage when it ran) decides the job
+      - name: The ladder run decides the job
         env:
-          STATUS: ${{ steps.baseline.outputs.status }}
-          GLOSS: ${{ needs.plan.outputs.gloss }}
-          GLOSS_STATUS: ${{ steps.gloss.outputs.status }}
-        run: |
-          if [ "${GLOSS}" = true ] && [ "${GLOSS_STATUS:-1}" != 0 ]; then
-            echo "::error::the gloss stage failed (status ${GLOSS_STATUS:-none})"
-            exit 1
-          fi
-          exit "${STATUS:-1}"
+          STATUS: ${{ steps.ladder.outputs.status }}
+        run: exit "${STATUS:-1}"
 
   animations:
     needs: [plan, ladder]

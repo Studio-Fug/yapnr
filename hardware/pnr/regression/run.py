@@ -393,17 +393,28 @@ def legalize_environment(
     reorient=None,
     channel_clearance=None,
     line_satellites=False,
+    legalize_keep=True,
+    detail_place=None,
     channel_layers=False,
 ):
     """The PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP / PNR_LEGALIZE_HPWL /
-    PNR_LEGALIZE_REORIENT / PNR_LEGALIZE_CHANNEL_CLEARANCE / PNR_LINE_SATELLITES /
-    PNR_CHANNEL_LAYERS variables of ``--gp-polish``, ``--gp-channels``, ``--pool-source-clamp``,
+    PNR_LEGALIZE_REORIENT / PNR_LEGALIZE_CHANNEL_CLEARANCE / PNR_LINE_SATELLITES / PNR_LEGALIZE_KEEP
+    / PNR_CHANNEL_LAYERS variables of ``--gp-polish``, ``--gp-channels``, ``--pool-source-clamp``,
     ``--legalize-hpwl``, ``--legalize-reorient``, ``--legalize-channel-clearance``,
-    ``--line-satellites`` and ``--channel-layers``
+    ``--line-satellites``, ``--legalize-keep``/``--no-legalize-keep`` and ``--channel-layers``
     (``pnr.legalize_flags``; set after the ambient PNR_* variables are stripped, so provenance
-    records them); empty when none is given. ``reorient`` is ``"1"`` (guarded), ``"wire"`` or
-    None; ``channel_clearance`` is ``"fab"`` or None."""
+    records them). ``reorient`` is ``"1"`` (guarded), ``"wire"`` or None; ``channel_clearance``
+    is ``"fab"`` or None. ``legalize_keep`` true (the default, matching the engine's own default)
+    sets nothing, like every other switch here; false sets ``PNR_LEGALIZE_KEEP=0`` explicitly,
+    since this is the only place that can turn it off -- an ambient ``PNR_LEGALIZE_KEEP=0`` is
+    itself stripped before this runs. ``detail_place`` (``--detail-place``/``--no-detail-place``)
+    sets ``PNR_DETAIL_PLACE`` to ``1`` or ``0``; None (neither flag) leaves the engine's own
+    default (:mod:`pnr.place.detail`: on with ``PNR_LEGALIZE_KEEP``, off without)."""
     env = {}
+    if not legalize_keep:
+        env["PNR_LEGALIZE_KEEP"] = "0"
+    if detail_place is not None:
+        env["PNR_DETAIL_PLACE"] = "1" if detail_place else "0"
     for name, value in (("--gp-channels", gp_channels), ("--legalize-hpwl", legalize_hpwl)):
         if value is not None and not (math.isfinite(value) and value > 0):
             raise ValueError("%s takes a positive weight, got %r" % (name, value))
@@ -454,10 +465,16 @@ def source_inputs(repo):
 
 # The fabrication profile the ladder routes and is judged under (pnr.fab_profile). The fixtures
 # carry their own fab block (0.2 mm clearance, 0.6/0.3 mm vias; README), which is exactly what the
-# legacy profile enforces; the engine's default (jlc-pofv) overrides it with JLC capability values.
+# legacy profile enforces; the engine's own profile (jlc-pofv) uses JLC capability values instead.
 # The vendor profiles of yapnr/fab/data (oshpark-2l, oshpark-4l, jlc-4l, ...) route and judge a
 # case under that vendor's rules (docs/fab-and-ordering.md).
 FAB_PROFILES = ("legacy", "jlc-pofv")
+# Ladder v2 (docs/decisions.md, "New blocker" note): jlc-pofv was tried as the default and every
+# ladder, showcase and nightly-lane hard rung passed under it, but the phase-1 GCP regression
+# found it breaks 11 of the 18 manual-lane-only hard rungs (three distinct profile/
+# manufacturability conflicts) that pass under legacy. Per "never weaken rungs ... a default flip
+# that makes a rung fail is fixed in the engine, not by relaxing the rung", the default stays
+# legacy until those are fixed; pass --fab-profile jlc-pofv to opt in.
 DEFAULT_FAB_PROFILE = "legacy"
 
 
@@ -843,8 +860,12 @@ def parser():
     )
     ap.add_argument(
         "--initial-pool",
-        action="store_true",
-        help="Compare a bounded set of legal global placements before round one",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Compare a bounded set of legal global placements before round one (default: on, "
+            "ladder-v2; --no-initial-pool restores the single-start runner path for A/Bs)"
+        ),
     )
     ap.add_argument("--initial-starts", type=int, default=8)
     ap.add_argument("--initial-finalists", type=int, default=3)
@@ -891,11 +912,13 @@ def parser():
     )
     ap.add_argument(
         "--gloss",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
-            "Run the opt-in PNR_GLOSS pass (dekink, pull-tight, corridor packing; 07g semantics) "
-            "after refill, before the audit; a cold-DRC gate restores the pre-gloss board if "
-            "opens or findings rise"
+            "Run the PNR_GLOSS pass (dekink, pull-tight, corridor packing; 07g semantics) after "
+            "refill, before the audit; a cold-DRC gate restores the pre-gloss board if opens or "
+            "findings rise (default: on, ladder-v2; --no-gloss only skips this pass -- "
+            "PNR_LEGALIZE_KEEP and portable global placement still apply)"
         ),
     )
     ap.add_argument(
@@ -915,10 +938,14 @@ def parser():
     )
     ap.add_argument(
         "--compact",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
-            "PNR_COMPACT=1: compact placement (spread 1.0, clustered starts, the courtyard gap "
-            "and copper margins in the legalizer, offset courtyards, a compactness tie-break)"
+            "PNR_COMPACT=1 (default, ladder-v2): compact placement (spread 1.0, clustered "
+            "starts, the courtyard gap and copper margins in the legalizer, offset courtyards, "
+            "a compactness tie-break, WIRE/TURN/SATELLITES/PAIRS/RELAX); --no-compact only drops "
+            "compact placement for A/B comparisons -- PNR_LEGALIZE_KEEP and portable global "
+            "placement still change the non-compact path too (--no-legalize-keep, --no-gloss)"
         ),
     )
     ap.add_argument(
@@ -981,6 +1008,29 @@ def parser():
         help=(
             "PNR_LINE_SATELLITES=1: a line group carries each member's series part (a two-pad "
             "part on a two-pin net to the member) flush beside it"
+        ),
+    )
+    ap.add_argument(
+        "--legalize-keep",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "PNR_LEGALIZE_KEEP=1 (default, on with or without --compact): displacement-"
+            "minimizing legalization keeps a part legal at its global-placement pose, pushes a "
+            "slight overlap apart in place, and relocates only a mostly occluded part; "
+            "--no-legalize-keep restores the plain nearest-free-slot packer for every part, for "
+            "an A/B (pnr.legalize_flags, pnr.place.keep)"
+        ),
+    )
+    ap.add_argument(
+        "--detail-place",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "PNR_DETAIL_PLACE=1/0: detailed placement after legalization (an order-preserving "
+            "compaction, then turns, slides, swaps and wrong-side moves of legal parts under a "
+            "movement budget, pnr.place.detail); neither flag leaves the engine's default: on "
+            "with --legalize-keep (the default), off with --no-legalize-keep"
         ),
     )
     ap.add_argument(
@@ -1052,10 +1102,12 @@ def parser():
     )
     ap.add_argument(
         "--route-pairs-diff-pairs",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
-            "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS=1: route_pairs: coupled for any design that "
-            "declares a diff_pair, without editing the case (ladder-v2 ab-pairs-pool A/B)"
+            "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS=1 (default, ladder-v2): route_pairs: coupled "
+            "for any design that declares a diff_pair, without editing the case; "
+            "--no-route-pairs-diff-pairs restores the case's own declared route_pairs"
         ),
     )
     ap.add_argument(
@@ -1083,8 +1135,9 @@ def parser():
         default=DEFAULT_FAB_PROFILE,
         help=(
             "PNR_FAB_PROFILE for every stage (default legacy: the fixtures' own fab block); "
-            "jlc-pofv routes and judges under the engine's default profile, a vendor profile "
-            "(oshpark-4l, jlc-4l, ...) under that vendor's rules"
+            "jlc-pofv routes and judges under the engine's own capability profile (not yet the "
+            "default: it fails 11 manual-lane hard rungs, docs/decisions.md); a vendor profile "
+            "(oshpark-4l, jlc-4l, ...) routes and judges under that vendor's rules"
         ),
     )
     ap.add_argument(
@@ -1247,6 +1300,8 @@ def main():
                 args.legalize_reorient,
                 args.legalize_channel_clearance,
                 args.line_satellites,
+                args.legalize_keep,
+                args.detail_place,
                 args.channel_layers,
             )
         )

@@ -86,6 +86,8 @@ class WheelTest(unittest.TestCase):
             "yapnr/agent/cli.py",
             "yapnr/agent/AGENTS.md",
             "yapnr/agent/workflow.md",
+            "yapnr/agent/workflow.py",
+            "yapnr/agent/workflow.json",
         ]:
             self.assertIn(name, self.names)
         # Only the package and its metadata: no tests, tools or repository files.
@@ -190,8 +192,11 @@ class WheelTest(unittest.TestCase):
             probe = (
                 "import pathlib,runpy,yapnr; "
                 "from yapnr.agent.cli import initialize,instructions; "
+                "from yapnr.agent.workflow import init,query; "
                 "assert '<DONE>' in instructions(); "
                 "initialize('article', 'Design X'); "
+                "init('article', 'Design X'); "
+                "assert query('article')['state'] == 'requirements_capture'; "
                 "assert pathlib.Path('article/requirements/manifest.md').exists(); "
                 "assert pathlib.Path(yapnr.__file__).resolve().is_relative_to(pathlib.Path('env').resolve()); "
                 "runpy.run_path('smoke.py', run_name='__main__')"

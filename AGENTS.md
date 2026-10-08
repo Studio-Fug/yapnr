@@ -26,7 +26,7 @@ create permission. An explicitly requested change overrides its default policy.
    Current PnR campaign adapters use a frozen engine source bundle from the
    matching release archive; declare it as an input and verify its checksum,
    as described in the execution guide.
-3. In the article directory run `yapnr agent init --directive "<request>"`.
+3. In the article directory run `yapnr workflow init --directive "<request>"`.
    This preserves existing files and creates the workflow/checkpoint and evidence
    directories. It does **not** approve the requirements or launch compute.
    `yapnr agent chat --provider codex` opens the interactive agent in that project;
@@ -39,6 +39,11 @@ create permission. An explicitly requested change overrides its default policy.
    operator; keep credentials outside article sources, checkpoints and reports.
 4. Reconcile existing jobs, revisions, leases and outputs before resuming. Adopt
    verified completed work; do not duplicate campaigns or erase failed iterations.
+   Run `yapnr workflow query` before choosing the next action. Record transitions
+   through `yapnr workflow next --<event> --evidence <project-relative receipt>`;
+   use its documented event flags and receipt schema. Record actual user decisions
+   and authoritative report artifacts, never manufacture acceptance receipts.
+   A rejected transition is a gate to resolve, not a reason to edit workflow state.
 
 ## Engineering contract and risk analysis
 
@@ -48,6 +53,24 @@ ID, measurable acceptance threshold, verification method, demanded evidence leve
 source and status. Record assumptions and unresolved choices. In
 `requirements/risks.md`, link each credible failure and consequence to a mitigation
 and the requirements implementing it. Update these records as evidence changes.
+
+Produce both documents before schematic capture, part selection or design experiments.
+Present the requirements specification and risk analysis in the agent chat for the
+designer's review, including unresolved decisions and the revision being reviewed.
+Give the designer an opportunity to refine them. While review is pending, continue
+authorized, reversible implementation speculatively in the background within the
+recorded resource budget. Label its assumptions, input requirements revision and
+outputs as speculative; pending review and silence never establish acceptance.
+
+Accept and incorporate the designer's refinements throughout the workflow. Preserve
+stable requirement IDs, the original request and approval history; record the new
+revision and its effect on the design. Invalidate evidence dependent on changed
+requirements. Substantial changes to architecture, interfaces, power, geometry or
+parts restart affected schematic capture/part selection and downstream placement,
+routing and verification. Smaller changes rerun the affected stages and checks.
+Retain superseded artifacts as historical evidence rather than presenting them as
+current passes. Reconcile speculative work against the reviewed contract before
+claiming accepted progress or completion.
 
 Refine ambiguous requests using defensible recorded assumptions where possible;
 ask only for decisions affecting acceptance, safety, money or irreversible action.
@@ -132,6 +155,20 @@ Keep status, revision, failed/open requirements, budgets and next action visible
 Use actual event-backed board views/animations. Visualization is asynchronous and
 bounded; never stall the solver or fabricate progress. If no new frame exists,
 show waiting or the last frame's age. Random visual sampling cannot select winners.
+Deliver visual milestones inline in the active agent chat, including OpenCode:
+attach browser-readable renders of requirements alternatives, schematic capture,
+placement, routing and validation findings as those artifacts become available.
+Use supported attachment/render interfaces and verify that the images load; a
+container-local path or an external viewer link alone does not satisfy inline
+feedback. Distinguish conceptual illustrations from actual CAD and validation
+evidence. Preserve artifact hashes and revision labels alongside the renders.
+
+When requirements choices benefit from visual comparison, provide labeled visual
+alternatives in the selection flow. Small three.js programs may illustrate geometry
+and allow interaction when the host supports inline interactive views. Keep scenes
+bounded, free of credentials and clearly labeled as concepts. If that host lacks
+interactive embedding, attach rendered alternatives inline and disclose the
+limitation; do not claim an external page is an inline interactive selection.
 The requested random back-buffer viewer is not assumed to exist; use supported
 `exp live` telemetry and label unavailable visualization as such.
 

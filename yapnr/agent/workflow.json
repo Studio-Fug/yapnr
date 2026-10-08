@@ -1,0 +1,89 @@
+{
+  "schema": "yapnr-workflow-machine-v1",
+  "initial": "requirements_capture",
+  "transitions": [
+    {
+      "event": "requirements-specification-ready",
+      "from": ["requirements_capture"],
+      "to": "requirements_review"
+    },
+    { "event": "speculative-work-started", "from": ["requirements_review"], "to": "schematic" },
+    {
+      "event": "user-accepted-requirements-specification",
+      "from": [
+        "requirements_review",
+        "schematic",
+        "placement_routing",
+        "verification",
+        "fixup",
+        "engine_repair"
+      ],
+      "to": "accepted"
+    },
+    {
+      "event": "user-revised-requirements-specification",
+      "from": [
+        "requirements_review",
+        "schematic",
+        "placement_routing",
+        "verification",
+        "fixup",
+        "engine_repair",
+        "complete",
+        "blocked",
+        "exhausted",
+        "cancelled"
+      ],
+      "to": "requirements_review"
+    },
+    { "event": "schematic-ready", "from": ["schematic"], "to": "placement_routing" },
+    { "event": "routing-finished", "from": ["placement_routing"], "to": "verification" },
+    { "event": "verification-passed", "from": ["verification"], "to": "complete" },
+    { "event": "verification-failed", "from": ["verification"], "to": "fixup" },
+    { "event": "fixup-applied", "from": ["fixup"], "to": "schematic" },
+    { "event": "engine-repair-required", "from": ["fixup"], "to": "engine_repair" },
+    { "event": "engine-repair-ready", "from": ["engine_repair"], "to": "schematic" },
+    {
+      "event": "blocked",
+      "from": [
+        "requirements_capture",
+        "requirements_review",
+        "schematic",
+        "placement_routing",
+        "verification",
+        "fixup",
+        "engine_repair"
+      ],
+      "to": "blocked"
+    },
+    {
+      "event": "methods-exhausted",
+      "from": [
+        "requirements_capture",
+        "requirements_review",
+        "schematic",
+        "placement_routing",
+        "verification",
+        "fixup",
+        "engine_repair"
+      ],
+      "to": "exhausted"
+    },
+    {
+      "event": "cancelled",
+      "from": [
+        "requirements_capture",
+        "requirements_review",
+        "schematic",
+        "placement_routing",
+        "verification",
+        "fixup",
+        "engine_repair",
+        "blocked",
+        "exhausted"
+      ],
+      "to": "cancelled"
+    },
+    { "event": "resume", "from": ["blocked", "exhausted", "cancelled"], "to": "resume" }
+  ]
+}

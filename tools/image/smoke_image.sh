@@ -262,6 +262,8 @@ echo "${IMAGE}: all checks passed"
 
 # Installed workflow and bundled agent: no authentication or paid model calls.
 timeout 30 docker run --rm --read-only --tmpfs /tmp "${IMAGE}" agent instructions > /dev/null
+timeout 30 docker run --rm --read-only --tmpfs /tmp --entrypoint python "${IMAGE}" -c \
+    'from yapnr.agent.workflow import init,query; init("/tmp/article", "Design X"); assert query("/tmp/article")["state"] == "requirements_capture"'
 timeout 30 docker run --rm --entrypoint codex "${IMAGE}" --version
 timeout 30 docker run --rm --entrypoint opencode "${IMAGE}" --version
 timeout 30 docker run --rm --entrypoint rg "${IMAGE}" --version

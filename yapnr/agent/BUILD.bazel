@@ -21,8 +21,10 @@ py_library(
     srcs = [
         "__init__.py",
         "cli.py",
+        "workflow.py",
     ],
     data = [
+        "workflow.json",
         ":instructions",
         ":workflow",
     ],

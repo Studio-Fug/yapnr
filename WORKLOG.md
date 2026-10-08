@@ -24,6 +24,13 @@ board edges, the hierarchical ladder driver and their animations on
   sessions run in CI. Focused bootstrap/installed-wheel/container checks and hosted
   validation are in progress. Complete populated RF assembly acceptance remains #97,
   not satisfied by DUT-only packaging smoke.
+  Review-first requirements/risk presentation, bounded speculative implementation,
+  refinement-driven restarts and inline visual feedback are now explicit in both
+  embedded guidance and the launcher prompt. `workflow init/query/next` implements
+  a declarative, evidence-gated iteration controller with atomic state/history,
+  immutable receipts, revision invalidation and acceptance/completion guards.
+  Receipts remain assertions requiring genuine user decisions and authoritative
+  validation reports; the controller does not authenticate them or sandbox agents.
 
 - **External RF packaging (#96)**: collect every RF Bazel subpackage explicitly
   without numerical dependency closure in the wheel collector. Export/report,

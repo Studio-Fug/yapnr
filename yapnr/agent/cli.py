@@ -94,6 +94,13 @@ def chat_command(provider, executable, context, directive, model=""):
         "Read the project's AGENTS.md and " + str(context) + ". "
         "Follow the persistent prompt-to-PCB engineering workflow using the installed yapnr. "
         "Reconcile existing checkpoints/jobs first. Preserve accepted requirements and evidence. "
+        "Write and present the requirements specification and risk analysis for review before "
+        "design. While review is pending, continue authorized reversible work speculatively, "
+        "labeling its input revision; silence is not approval. Incorporate refinements and "
+        "restart affected stages when requirements change. Deliver real visual milestones "
+        "inline in this chat and offer visual alternatives for relevant requirements choices. "
+        "Run yapnr workflow query before actions and use yapnr workflow next with real "
+        "evidence receipts for transitions; never fabricate a user acceptance receipt. "
         "Begin requirements capture for the following request, or ask for the design directive "
         "if none is supplied. Do not treat missing verification as success.\n" + directive
     )
@@ -180,6 +187,9 @@ def run(args):
             print("agent chat needs an interactive terminal (docker run -it).", file=sys.stderr)
             return 2
         state = initialize(args.project, args.directive)
+        from yapnr.agent.workflow import init as initialize_workflow
+
+        initialize_workflow(state["project"], args.directive)
         os.chdir(state["project"])
         # The interactive operator owns this process, rather than a background solver worker.
         # exec preserves terminal control, exit codes and container PID-1 signal forwarding.

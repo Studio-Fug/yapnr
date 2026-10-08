@@ -113,6 +113,52 @@ def geometry_ok(paths, width, gap, clear):
     )
 
 
+# KiCad's diff_pair_gap check pairs each segment of one leg with the nearest parallel segment of
+# the other leg on its layer whose projection overlaps it, and judges that gap. Offset lanes keep
+# it exact; a fanout or trombone run parallel to the mate's lane at another distance breaks it.
+GAP_BREAK_TOLERANCE_MM = 0.005
+# Two segments are parallel when the sine of their angle is below this.
+PARALLEL_SINE = 1e-6
+# After a solution that breaks the gap, the search tries this many more centre-line attempts
+# for one that keeps it before it settles for the first (solve_pair ``prefer_paths``).
+PREFER_ATTEMPTS = 8
+
+
+def gap_breaks(paths, width, gap, tolerance=GAP_BREAK_TOLERANCE_MM):
+    """The segments of a two-leg ``paths`` (net -> points, one layer) whose nearest parallel,
+    overlapping segment of the other leg is not ``gap`` away edge to edge (KiCad's
+    ``diff_pair_gap`` model, without its line-of-sight test): [(net, a, b, gap_mm)]."""
+    nets = list(paths)
+    if len(nets) != 2:
+        raise ValueError("gap_breaks needs exactly two nets")
+    out = []
+    for net in nets:
+        mate = paths[nets[1] if net == nets[0] else nets[0]]
+        for a, b in zip(paths[net], paths[net][1:]):
+            span = math.dist(a, b)
+            if span < 1e-6:
+                continue
+            u = ((b[0] - a[0]) / span, (b[1] - a[1]) / span)
+            best = None
+            for c, d in zip(mate, mate[1:]):
+                other = math.dist(c, d)
+                if other < 1e-6:
+                    continue
+                v = ((d[0] - c[0]) / other, (d[1] - c[1]) / other)
+                if abs(u[0] * v[1] - u[1] * v[0]) > PARALLEL_SINE:
+                    continue
+                t0 = (c[0] - a[0]) * u[0] + (c[1] - a[1]) * u[1]
+                t1 = (d[0] - a[0]) * u[0] + (d[1] - a[1]) * u[1]
+                if min(span, max(t0, t1)) - max(0.0, min(t0, t1)) <= 1e-6:
+                    continue
+                apart = abs(u[0] * (c[1] - a[1]) - u[1] * (c[0] - a[0]))
+                if best is None or apart < best:
+                    best = apart
+            if best is not None and abs(best - width - gap) > tolerance:
+                out.append((net, tuple(a), tuple(b), round(best - width, 6)))
+    return out
+
+
 def tune(paths, width, gap, skew, clear, offsets=None, max_tuning_length=None):
     """Match full endpoint path lengths, including explicitly supplied lead lengths."""
     offsets = offsets or {}
@@ -214,7 +260,8 @@ def solve_pair(
     accept_paths=None,
     max_tuning_length=None,
     max_uncoupled_head=None,
-    max_uncoupled_tail=None
+    max_uncoupled_tail=None,
+    prefer_paths=None
 ):
     """Terminals map net -> (exact source, exact target); same-layer geometry.
 
@@ -231,6 +278,10 @@ def solve_pair(
     the straight endpoint approach) keep using ``max_uncoupled``, so a larger
     per-end budget never makes the lane search stricter. Unset, both equal
     ``max_uncoupled`` and the search is unchanged.
+
+    ``prefer_paths`` (paths -> bool, e.g. no :func:`gap_breaks`): a solution it refuses is
+    kept as a fallback while the search goes on for up to :data:`PREFER_ATTEMPTS` more
+    attempts for one it accepts; the fallback is returned when none is found.
     """
     head_cap = max_uncoupled if max_uncoupled_head is None else max_uncoupled_head
     tail_cap = max_uncoupled if max_uncoupled_tail is None else max_uncoupled_tail
@@ -254,6 +305,7 @@ def solve_pair(
     attempts = 0
     fanout_debug = []
     failures = {}
+    fallback = None
 
     def failed(reason):
         failures[reason] = failures.get(reason, 0) + 1
@@ -498,7 +550,7 @@ def solve_pair(
                                 failed("path_validation")
                                 continue
                             if tuned:
-                                return dict(
+                                result = dict(
                                     status="routed",
                                     paths=tuned,
                                     lengths={
@@ -508,8 +560,17 @@ def solve_pair(
                                     centerline=centerline,
                                     attempts=attempts,
                                 )
+                                if prefer_paths is None or prefer_paths(tuned):
+                                    return result
+                                failed("not_preferred")
+                                if fallback is None:
+                                    fallback = (result, attempts)
         if attempts >= max_attempts:
             break
+        if fallback is not None and attempts >= fallback[1] + PREFER_ATTEMPTS:
+            break
+    if fallback is not None:
+        return dict(fallback[0], attempts=attempts, failures=failures)
     return dict(
         status="no_coupled_channel",
         paths={},

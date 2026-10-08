@@ -890,6 +890,29 @@ class LadderResultsContract(unittest.TestCase):
         self.assertNotIn(tmp, json.dumps(info))
         self.assertEqual(entry["fab_profile"], "legacy")  # no .kicad_dru: the run's profile
 
+    def test_order_is_reported_per_case_and_weighted_over_cases(self):
+        from animate_ladder import order_result, order_summary
+
+        self.assertIsNone(order_result({}))
+        legal = dict(neighbour_order=0.9, neighbour_relations=10)
+        # Without detailed placement, end to end is the legal poses' order.
+        off = order_result(dict(legal_motion=legal))
+        self.assertEqual((off["gp_legal"], off["gp_dp"]), (0.9, 0.9))
+        self.assertNotIn("legal_dp", off)
+        detail = dict(
+            neighbour_order=0.5,
+            neighbour_relations=30,
+            neighbour_order_global=0.6,
+            neighbour_relations_global=30,
+        )
+        on = order_result(dict(legal_motion=legal, detail_motion=detail))
+        self.assertEqual((on["gp_legal"], on["legal_dp"], on["gp_dp"]), (0.9, 0.5, 0.6))
+        total = order_summary([dict(order=off), dict(order=on), dict()])
+        self.assertAlmostEqual(total["gp_legal"], 0.9)
+        self.assertAlmostEqual(total["gp_dp"], (0.9 * 10 + 0.6 * 30) / 40)
+        self.assertEqual((total["gp_dp_cases"], total["legal_dp_cases"]), (2, 1))
+        self.assertIsNone(order_summary([dict()]))
+
 
 class SuiteEnvScrubbing(unittest.TestCase):
     """An operator's ambient PNR_* switches must not silently change the suite, but

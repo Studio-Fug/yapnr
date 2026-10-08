@@ -358,6 +358,72 @@ class HalvingUnitTest(unittest.TestCase):
             self.assertEqual((flat["kind"], flat["start_kind"]), ("latin-global", "latin-global"))
             self.assertNotIn("library_sha256", flat)
 
+    def test_place_one_records_legal_and_detail_motion(self):
+        """A legal start carries the placer's legalization motion and detailed-placement
+        moves (mc_case.py reports the selected start's, as route_case.py does)."""
+        placed = mock.Mock(components=[], to_json=lambda: "{}")
+        report = mock.Mock(
+            legal=True,
+            legal_motion=dict(count=3, moved=1, sum_mm=2.5, neighbour_order=0.9),
+            detail_motion=dict(movable=3, moved=2, sum_mm=1.0),
+        )
+        patches = [
+            mock.patch.object(halving, "_load", lambda *a: (object(), object(), {})),
+            mock.patch("pnr.place.initial_pool.preserve_source_locks", lambda g, c: c),
+            mock.patch("pnr.place.initial_pool._prepared_source", lambda g, c, r: g),
+            mock.patch("pnr.place.initial_pool._hard_and_source_errors", lambda *a: []),
+            mock.patch("pnr.place.placer.place", lambda *a, **k: (placed, report)),
+            mock.patch("pnr.place.metrics.hard_violations", lambda *a: {}),
+            mock.patch("pnr.place.metrics.hpwl", lambda g: 10.0),
+            mock.patch("pnr.place.capacity_proxy.cheap_score", lambda g, r: 1.0),
+            mock.patch("pnr.place.capacity_proxy.score", lambda *a, **k: dict(score=2.0)),
+        ]
+        with tempfile.TemporaryDirectory() as d, contextlib.ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            start = dict(id="p001", kind="latin-global", seed=1)
+            rec = halving._place_one((d, d, start, str(Path(d) / "cand"), 1, None, False))
+        self.assertEqual(rec["status"], "legal", rec.get("traceback"))
+        self.assertEqual(rec["legal_motion"]["neighbour_order"], 0.9)
+        self.assertEqual(rec["detail_motion"]["moved"], 2)
+        json.dumps(rec)
+
+    def test_route_finalists_routes_more_only_while_every_finalist_is_unfinished(self):
+        """09-mcu-usb-31-mc: both final routes missed the USB pair's 1 mm skew budget
+        (length_unmatched), which the short screen route cannot see."""
+        ranked = [dict(id="p%03d" % i) for i in range(6)]
+
+        def routed(outcomes):
+            calls = []
+
+            def evaluate(rec):
+                calls.append(rec["id"])
+                return dict(id=rec["id"], metrics=outcomes.get(rec["id"], {}))
+
+            evaluated, extra = halving.route_finalists(ranked, 2, evaluate)
+            self.assertEqual([e["id"] for e in evaluated], calls)
+            return calls, extra
+
+        done = dict(objective=[0, 0, 40, 600.0])
+        skew = dict(objective=[0, 0, 40, 600.0], length_unmatched=1)
+        open_ = dict(objective=[1, 1, 40, 600.0])
+        # One finished finalist: no extra route.
+        self.assertEqual(routed({"p000": skew, "p001": done}), (["p000", "p001"], []))
+        # Both miss a length budget: the next screen is routed, and it finishes.
+        self.assertEqual(
+            routed({"p000": skew, "p001": open_, "p002": done}),
+            (["p000", "p001", "p002"], ["p002"]),
+        )
+        # None finishes: two extra at most.
+        self.assertEqual(
+            routed({k["id"]: skew for k in ranked}),
+            (["p000", "p001", "p002", "p003"], ["p002", "p003"]),
+        )
+        self.assertTrue(
+            halving.gate_unfinished(dict(objective=[0, 0, 1, 1.0], judged_pair_flaws=1))
+        )
+        self.assertFalse(halving.gate_unfinished(dict(objective=[0, 0, 1, 1.0], pairs_uncoupled=2)))
+
 
 class NativeOneTest(unittest.TestCase):
     def setUp(self):

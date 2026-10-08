@@ -8,7 +8,9 @@ under a design's electrical annotation files, which an open ladder board does no
 have. Instead the K2 best screens (halving's own screen ranking) are routed with the
 ladder's detailed-route budget (``route_case.py``: 0.25 mm pitch, 8 iterations), and
 the best by the initial pool's route objective (missing connections, unresolved nets,
-vias, copper; then the candidate id) is kept. Every choice is mechanical.
+vias, copper; then the candidate id) is kept. When every routed finalist leaves a
+connection open or a declared pair outside its length budget, the next screens are
+routed too (``pnr.mc.halving.route_finalists``, two at most). Every choice is mechanical.
 
 Writes the same outputs as ``route_case.py`` (rules.json, placed.json, routes.json,
 pnr-report.json) plus ``mc/`` (halving's dataset and status) and ``mc-summary.json``,
@@ -33,7 +35,7 @@ from pnr.constraints import compile_constraints, compile_routing_rules, infer_se
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
 from pnr.length_model import attach_board
-from pnr.mc.halving import _rank_key
+from pnr.mc.halving import _rank_key, route_finalists
 from pnr.place import compact
 from pnr.place.initial_pool import _route_metrics, route_rank
 from pnr.place.metrics import hpwl
@@ -122,10 +124,9 @@ placed = {r["id"]: r for r in records if r.get("stage") == "place"}
 screens = [r for r in records if r.get("stage") == "screen" and r.get("status") == "ok"]
 if not screens:
     raise RuntimeError("successive halving screened no legal placement")
-finalists = sorted(screens, key=_rank_key("screen"))[: mc["k2"]]
 
-evaluated = []
-for rec in finalists:
+
+def evaluate(rec):
     t = time.monotonic()
     cand = BoardGraph.from_json((out / "cand" / rec["id"] / "placed.json").read_text())
     route = route_board(
@@ -137,20 +138,25 @@ for rec in finalists:
 
         measured = compact.metrics(cand, *outline_size(cand, constraints))
         metrics = dict(metrics, bucket=measured["bucket"], compactness=measured)
-    evaluated.append(
-        dict(
-            id=rec["id"],
-            control=bool(rec.get("control")),
-            proxy_score=placed[rec["id"]].get("proxy_score"),
-            screen_objective=rec.get("objective"),
-            metrics=metrics,
-            hpwl_mm=hpwl(cand),
-            seconds=time.monotonic() - t,
-            graph=cand,
-            route=route,
-        )
-    )
     print("final", rec["id"], metrics["objective"], "%.1fs" % (time.monotonic() - t), flush=True)
+    return dict(
+        id=rec["id"],
+        control=bool(rec.get("control")),
+        proxy_score=placed[rec["id"]].get("proxy_score"),
+        screen_objective=rec.get("objective"),
+        metrics=metrics,
+        hpwl_mm=hpwl(cand),
+        seconds=time.monotonic() - t,
+        graph=cand,
+        route=route,
+    )
+
+
+# The K2 best screens, then (every one gate-unfinished: a connection open or a declared length
+# budget missed) the next screens, EXTRA_FINALISTS at most (pnr.mc.halving.route_finalists).
+evaluated, extra_finalists = route_finalists(
+    sorted(screens, key=_rank_key("screen")), mc["k2"], evaluate
+)
 best = min(evaluated, key=lambda c: (route_rank(c["metrics"]), c["id"]))
 route = best["route"]
 (root / "placed.json").write_text(best["graph"].to_json())
@@ -191,6 +197,7 @@ summary = dict(
         for c in evaluated
     ],
     selected=best["id"],
+    extra_finalists=extra_finalists,
     search_seconds=search_seconds,
 )
 (root / "mc-summary.json").write_text(json.dumps(summary, indent=2))
@@ -207,8 +214,19 @@ unresolved = sorted(set(route.result.unrouted) - set(route.deferred_nets))
             unrouted=route.result.unrouted,
             deferred=sorted(route.deferred_nets),
             unresolved=unresolved,
-            mc=dict(selected=best["id"], finalists=[c["id"] for c in evaluated]),
+            mc=dict(
+                selected=best["id"],
+                finalists=[c["id"] for c in evaluated],
+                extra_finalists=extra_finalists,
+            ),
             sides=sides_report(best["graph"], side_plan(graph, constraints, rules)),
+            # The selected start's legalization motion and detailed-placement moves (halving's
+            # place record), as route_case.py reports its own.
+            **{
+                key: placed[best["id"]][key]
+                for key in ("legal_motion", "detail_motion")
+                if placed.get(best["id"], {}).get(key) is not None
+            },
             escape_diagnostics=getattr(route, "escape_diagnostics", {}),
             maze_kernel=maze_status(),
             exact_separation=exact_mode(),

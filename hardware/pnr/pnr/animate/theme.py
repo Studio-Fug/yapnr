@@ -45,6 +45,7 @@ PHASE_TEXT = {
     "pool": "Initial placement pool",
     "global-placement": "Global placement",
     "legalization": "Legalization",
+    "detailed-placement": "Detailed placement",
     "placement": "Placement",
     "attempts": "Placement attempt failed legalization",
     "negotiation": "Routing: negotiation",

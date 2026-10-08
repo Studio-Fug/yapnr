@@ -1,0 +1,529 @@
+"""Displacement-minimizing legalization: triage and order-preserving local spreading.
+
+:func:`pnr.place.legalize.legalize` uses this (``PNR_LEGALIZE_KEEP``, on by default;
+:mod:`pnr.legalize_flags`) before its slot packer, on boxes it builds from the global placement
+(GP): each movable part's slot (its courtyard grown as the legalizer grows it, rounded up to the
+slot grid) at its GP pose, and the obstacles (fixed parts, keep-outs, parts the spreading may not
+push, the outline).
+
+1. :func:`triage` sorts the movable parts by how badly they conflict at their GP poses. A part's
+   *occlusion* is the fraction of its slot covered by other slots, obstacles or the space outside
+   the outline. While some part has an occlusion of at least :data:`SEVERE` (half its slot or
+   more), the worst one (ties: one free to take either side, then the smaller, then the later
+   reference) is *severe*: it leaves the GP
+   layout, and the occlusions of the rest are taken again without it. What is left is *clean*
+   (occlusion 0: legal where it is) or *mild* (a small overlap).
+2. :func:`spread` resolves the mild overlaps by pushing parts apart along one axis per pair
+   (horizontal and vertical constraint graphs taken from the GP poses): a pair that overlaps is
+   separated along the axis of its smaller penetration, in its GP order; a pair already side by
+   side keeps its order on that axis. The new centres are the weighted least-squares projection
+   of the GP centres (weight: slot area, so a small part gives way to a big one) onto those
+   constraints and each slot's bounds (the outline and the obstacles it faces), computed per axis
+   by Dykstra's alternating projections. Pairs that come to overlap get a constraint on the axis
+   they were apart on at GP, and the solve repeats (:data:`ROUNDS`). A part pushed further than
+   its cascade bound (:func:`reach`), or a solve that cannot meet its constraints, fails the
+   spreading.
+3. :func:`resolve` spreads each cluster of nearby parts in two steps. First the physical overlap
+   alone (slots side by side): when that fails, the cluster's most occluded mild part is given up
+   (``push_infeasible``) and the rest spread again. Then, where the legalizer's routing-channel
+   model asks for an escape channel between two facing pad rows, the channel is a *soft* goal:
+   the cluster is pushed again with each pair's distance grown by its channel, and that push is
+   kept when it meets every constraint within every part's reach; otherwise the overlap-only push
+   stands. A channel never makes the push give up a part, and a cluster with no overlap but a
+   part short of a channel at its GP pose is pushed only when the whole channel fits. (Opening a
+   fraction of the channels instead, the largest the reach allows, moved 2.4 times as many parts
+   on the ladder, showcases and both hierarchical cases at seed 0, mostly legal ones, for no
+   routing gain: r6-fix notes, 2026-10-06.)
+
+The legalizer then takes, for every part that is not severe, the slot nearest its (spread) pose
+within a grid snap at its GP turn; a part that cannot have it (its slot is taken:
+``slot_taken``) or that the push gave up (``push_infeasible``) takes the nearest free slot in
+rings expanding from its GP pose (:data:`RING_GROWTH`), its GP turn first, never the packer's
+full search. Only the severe parts are relocated wholesale, last, by the packer's own cost
+(displacement, routing channels, wirelength) and turn search. The legalizer's motion record
+names each relocated part's reason (:data:`REASONS`).
+"""
+
+from __future__ import annotations
+
+import math
+from typing import Dict, List, Optional, Sequence, Tuple
+
+# Occlusion at or above which a part is relocated instead of spread around.
+SEVERE = 0.5
+# Constraint-adding rounds of :func:`spread`, and the pairs it may move to their other axis
+# when a push is infeasible.
+ROUNDS = 6
+FLIPS = 4
+# Dykstra sweeps per axis solve, and the feasibility tolerance (mm).
+SWEEPS = 3000
+TOL = 1e-6
+# The least cascade bound (mm), and the share of a slot's smaller side that bounds it otherwise.
+REACH_MM = 1.5
+REACH_SHARE = 0.5
+# A cluster whose push fails tries again with a size-scaled reach (these shares of each slot's
+# larger side, capped at REACH_CAP_MM) before it gives a part up; the escalated push is kept only
+# when its area-weighted displacement is below relocating that part to its nearest free spot.
+ESCALATE = (0.75, 1.0)
+REACH_CAP_MM = 4.0
+# The free-spot probe of that comparison: rings of this step (mm) out to this radius.
+PROBE_STEP_MM = 0.25
+PROBE_RADIUS_MM = 24.0
+# The nearest-first search of a part that keeps no slot at its pose: rings of radius
+# ``snap * RING_GROWTH ** k`` around its GP pose (pnr.place.legalize).
+RING_GROWTH = 2.0
+# Why a part left its (pushed) GP pose: half or more of it occluded (relocated wholesale), the
+# push could not clear it (nearest-first rings), or its slot was taken (nearest-first rings).
+SEVERE_REASON, PUSH_REASON, SLOT_REASON = "severe", "push_infeasible", "slot_taken"
+REASONS = (SEVERE_REASON, PUSH_REASON, SLOT_REASON)
+
+
+class Box:
+    """A slot or an obstacle: centre ``x``, ``y``, size ``w``, ``h`` (mm), the occupancy
+    ``planes`` it is on, and for a movable slot its ``ref``, its ``weight`` and the bounds
+    ``(xlo, xhi, ylo, yhi)`` of its centre."""
+
+    __slots__ = ("ref", "x", "y", "w", "h", "planes", "weight", "bounds", "movable")
+
+    def __init__(self, ref, x, y, w, h, planes, weight=1.0, bounds=None, movable=True):
+        self.ref = ref
+        self.x, self.y, self.w, self.h = float(x), float(y), float(w), float(h)
+        self.planes = frozenset(planes)
+        self.weight = float(weight)
+        self.bounds = bounds
+        self.movable = movable
+
+    def overlap(self, other) -> float:
+        dx = min(self.x + self.w / 2, other.x + other.w / 2) - max(
+            self.x - self.w / 2, other.x - other.w / 2
+        )
+        dy = min(self.y + self.h / 2, other.y + other.h / 2) - max(
+            self.y - self.h / 2, other.y - other.h / 2
+        )
+        return dx * dy if dx > 0 and dy > 0 else 0.0
+
+
+def _shares(a: Box, b: Box) -> bool:
+    return bool(a.planes & b.planes)
+
+
+def occlusions(
+    slots: Sequence[Box], obstacles: Sequence[Box], width: float, height: float, skip=()
+) -> Dict[str, float]:
+    """{ref: occluded fraction of its slot} for ``slots`` (refs in ``skip`` are neither measured
+    nor obstacles): the area covered by the other slots and the obstacles on a shared plane,
+    plus the area outside ``width x height``, over the slot area (capped at 1)."""
+    skip = set(skip)
+    board = Box(None, width / 2.0, height / 2.0, width, height, ())
+    out = {}
+    for s in slots:
+        if s.ref in skip:
+            continue
+        area = max(s.w * s.h, 1e-12)
+        covered = area - s.overlap(board)
+        for o in obstacles:
+            if _shares(s, o):
+                covered += s.overlap(o)
+        for t in slots:
+            if t is not s and t.ref not in skip and _shares(s, t):
+                covered += s.overlap(t)
+        out[s.ref] = min(1.0, max(0.0, covered / area))
+    return out
+
+
+def triage(
+    slots: Sequence[Box],
+    obstacles: Sequence[Box],
+    width: float,
+    height: float,
+    free: Optional[Dict[str, int]] = None,
+) -> Tuple[List[str], Dict[str, float]]:
+    """``(severe refs in the order they were taken, {ref: occlusion})``: the occlusion of every
+    slot at the end (severe ones as they were when taken). Among equally occluded parts the one
+    with more ``free`` ({ref: n}, e.g. 1 for a part that may take either side), then the smaller,
+    then the later reference is taken first."""
+    severe: List[str] = []
+    final: Dict[str, float] = {}
+    free = free or {}
+    area = {s.ref: s.w * s.h for s in slots}
+    while True:
+        occ = occlusions(slots, obstacles, width, height, skip=severe)
+        worst = [r for r, v in occ.items() if v >= SEVERE - 1e-12]
+        if not worst:
+            final.update(occ)
+            return severe, final
+        pick = max(worst, key=lambda r: (occ[r], free.get(r, 0), -area[r], str(r)))
+        final[pick] = occ[pick]
+        severe.append(pick)
+
+
+def reach(box: Box, share: Optional[float] = None) -> float:
+    """The furthest :func:`spread` may push ``box`` (mm); with ``share`` (an escalated push,
+    :data:`ESCALATE`) a size-scaled bound, ``share`` of its larger side within
+    [:data:`REACH_MM`, :data:`REACH_CAP_MM`]."""
+    if share is not None:
+        return min(REACH_CAP_MM, max(REACH_MM, share * max(box.w, box.h)))
+    return max(REACH_MM, REACH_SHARE * min(box.w, box.h))
+
+
+def _axis_pairs(slots, obstacles, need=None, share=None):
+    """Initial constraints: ``{(i, j): (axis, first, need)}`` over slot indices (obstacles
+    indexed after the slots), ``first`` the index in front on ``axis`` (``need``: see
+    :func:`spread`)."""
+    boxes = list(slots) + list(obstacles)
+    n = len(slots)
+    out = {}
+    for i in range(n):
+        a = boxes[i]
+        for j in range(i + 1, len(boxes)):
+            b = boxes[j]
+            if not _shares(a, b):
+                continue
+            ox = (a.w + b.w) / 2.0 - abs(a.x - b.x)
+            oy = (a.h + b.h) / 2.0 - abs(a.y - b.y)
+            if ox > 0 and oy > 0:
+                axis = 0 if ox <= oy else 1
+            elif oy > 0 and -ox < reach(a, share) + (reach(b, share) if j < n else 0.0):
+                axis = 0  # side by side along x: keep the order
+            elif ox > 0 and -oy < reach(a, share) + (reach(b, share) if j < n else 0.0):
+                axis = 1  # one above the other: keep the order
+            else:
+                continue
+            out[(i, j)] = (axis,) + _order(a, b, i, j, axis, need)
+    return out
+
+
+def _order(a, b, i, j, axis, need=None):
+    """``(first, need)``: which of ``a`` (index i) and ``b`` (j) is in front on ``axis`` at the
+    GP poses (a tie: the lower index) and the centre distance the pair needs there: their slots
+    side by side, or more where ``need(front, back, axis)`` (refs) asks more (a routing channel)."""
+    ca, cb = (a.x, b.x) if axis == 0 else (a.y, b.y)
+    gap = (a.w + b.w) / 2.0 if axis == 0 else (a.h + b.h) / 2.0
+    first = i if ca <= cb else j
+    if need is not None and a.ref is not None and b.ref is not None:
+        front, back = (a, b) if first == i else (b, a)
+        extra = need(front.ref, back.ref, axis)
+        if extra is not None:
+            gap = max(gap, float(extra))
+    return first, gap
+
+
+def _solve_axis(targets, weights, lo, hi, cons, sweeps=SWEEPS, tol=TOL):
+    """Weighted least-squares projection of ``targets`` onto ``{lo <= x <= hi}`` and
+    ``x[j] - x[i] >= d`` for every ``(i, j, d)`` in ``cons`` (Dykstra). Returns ``(x, ok)``,
+    ``ok`` false when the constraints are not met within ``tol`` after ``sweeps`` sweeps."""
+    x = list(targets)
+    n = len(x)
+    inv = [1.0 / w for w in weights]
+    pc = [(0.0, 0.0)] * len(cons)
+    pb = [0.0] * n
+    for _ in range(sweeps):
+        for k, (i, j, d) in enumerate(cons):
+            pi, pj = pc[k]
+            yi, yj = x[i] + pi, x[j] + pj
+            viol = d - (yj - yi)
+            if viol > 0:
+                mu = viol / (inv[i] + inv[j])
+                xi, xj = yi - mu * inv[i], yj + mu * inv[j]
+            else:
+                xi, xj = yi, yj
+            pc[k] = (yi - xi, yj - xj)
+            x[i], x[j] = xi, xj
+        for i in range(n):
+            y = x[i] + pb[i]
+            v = min(max(y, lo[i]), hi[i])
+            pb[i] = y - v
+            x[i] = v
+        worst = max((d - (x[j] - x[i]) for i, j, d in cons), default=0.0)
+        if worst <= tol:
+            break
+    worst = max((d - (x[j] - x[i]) for i, j, d in cons), default=0.0)
+    bad = any(x[i] < lo[i] - tol or x[i] > hi[i] + tol for i in range(n))
+    return x, worst <= 10 * tol and not bad and all(lo[i] <= hi[i] + tol for i in range(n))
+
+
+def spread(
+    slots: Sequence[Box],
+    obstacles: Sequence[Box],
+    rounds: int = ROUNDS,
+    need=None,
+    share: Optional[float] = None,
+    flips: Optional[int] = None,
+) -> Tuple[Dict[str, Tuple[float, float]], List[str]]:
+    """``({ref: (x, y)} new centres, [refs pushed past their reach or left in conflict])`` for
+    the movable ``slots`` among the fixed ``obstacles`` (the module docstring). ``need(front, back,
+    axis)`` (refs; None: none) is a larger centre distance a pair needs along ``axis``, such as
+    the routing channel between their facing pad rows. An empty failure
+    list means every slot is clear of every other slot and obstacle on a shared plane, inside its
+    bounds and within its reach (``share``: the escalated, size-scaled reach of :func:`reach`).
+
+    A pair is separated along the axis of its smaller penetration; when that leaves the solve
+    infeasible (a column too tall for the outline, a part pushed into the board edge), one of the
+    pairs left in conflict, the one needing the least shift on the other axis, is separated along
+    that axis instead (in its global order there), and the push is solved again, up to ``flips``
+    times (None: :data:`FLIPS` for the overlap push, none for a channel push, ``need``, whose
+    pairs keep their axis: a channel is opened where the rows face, never by stacking the parts
+    the other way)."""
+    if flips is None:
+        flips = FLIPS if need is None else 0
+    n = len(slots)
+    if n == 0:
+        return {}, []
+    boxes = list(slots) + list(obstacles)
+    base = _axis_pairs(slots, obstacles, need, share)
+    flipped: Dict[Tuple[int, int], tuple] = {}
+    for attempt in range(flips + 1):
+        pairs = dict(base)
+        pairs.update(flipped)
+        out, failed, conflict = _spread(slots, boxes, rounds, need, share, pairs)
+        if not failed or attempt == flips:
+            return out, failed
+        options = [key for key in conflict if key not in flipped]
+        if not options:
+            return out, failed
+
+        def shift(key):
+            i, j = key
+            a, b = slots[i], boxes[j]
+            if pairs[key][0] == 0:  # would be separated along y instead
+                return (a.h + b.h) / 2.0 - abs(a.y - b.y)
+            return (a.w + b.w) / 2.0 - abs(a.x - b.x)
+
+        key = min(options, key=lambda k: (shift(k), k))
+        i, j = key
+        axis = 1 - pairs[key][0]
+        flipped[key] = (axis,) + _order(slots[i], boxes[j], i, j, axis, need)
+    return out, failed
+
+
+def _spread(slots, boxes, rounds, need, share, pairs):
+    """One push of :func:`spread` with the axis ``pairs`` (extended with the pairs that come to
+    overlap): ``(centres, failed refs, [pair keys left in conflict])``."""
+    n = len(slots)
+    xs = [s.x for s in slots]
+    ys = [s.y for s in slots]
+    failed: List[str] = []
+    for _ in range(rounds):
+        coords = []
+        ok_all = True
+        for axis in (0, 1):
+            lo, hi = [], []
+            for s in slots:
+                b = s.bounds or (-math.inf, math.inf, -math.inf, math.inf)
+                lo.append(b[2 * axis])
+                hi.append(b[2 * axis + 1])
+            cons = []
+            for (i, j), (ax, first, dist) in pairs.items():
+                if ax != axis:
+                    continue
+                if j >= n:  # an obstacle: a bound on the slot
+                    o = boxes[j]
+                    oc = o.x if axis == 0 else o.y
+                    if first == i:
+                        hi[i] = min(hi[i], oc - dist)
+                    else:
+                        lo[i] = max(lo[i], oc + dist)
+                    continue
+                cons.append((i, j, dist) if first == i else (j, i, dist))
+            target = [s.x if axis == 0 else s.y for s in slots]
+            x, ok = _solve_axis(target, [s.weight for s in slots], lo, hi, cons)
+            ok_all = ok_all and ok
+            coords.append(x)
+        xs, ys = coords
+        moved = [Box(s.ref, xs[k], ys[k], s.w, s.h, s.planes) for k, s in enumerate(slots)]
+        added = False
+        for i in range(n):
+            for j in range(i + 1, len(boxes)):
+                if (i, j) in pairs:
+                    continue
+                a = moved[i]
+                b = moved[j] if j < n else boxes[j]
+                if not _shares(a, b) or a.overlap(b) <= 1e-9:
+                    continue
+                # A new conflict: keep the GP order on the axis the pair was apart on.
+                ga, gb = slots[i], boxes[j]
+                gx = abs(ga.x - gb.x) - (ga.w + gb.w) / 2.0
+                gy = abs(ga.y - gb.y) - (ga.h + gb.h) / 2.0
+                axis = 0 if gx >= gy else 1
+                pairs[(i, j)] = (axis,) + _order(ga, gb, i, j, axis, need)
+                added = True
+        if not added:
+            failed = [] if ok_all else [s.ref for s in slots]
+            break
+    else:
+        failed = [s.ref for s in slots]
+    far = [
+        s.ref
+        for k, s in enumerate(slots)
+        if math.hypot(xs[k] - s.x, ys[k] - s.y) > reach(s, share) + TOL
+    ]
+    conflict = []
+    if failed:
+        pos = [(xs[k], ys[k]) for k in range(n)] + [(o.x, o.y) for o in boxes[n:]]
+        off = set()
+        for k, s in enumerate(slots):
+            b = s.bounds or (-math.inf, math.inf, -math.inf, math.inf)
+            for axis in (0, 1):
+                v = pos[k][axis]
+                if v < b[2 * axis] - 1e-4 or v > b[2 * axis + 1] + 1e-4:
+                    off.add((k, axis))
+        for (i, j), (axis, first, dist) in sorted(pairs.items()):
+            second = j if first == i else i
+            gap = pos[second][axis] - pos[first][axis]
+            if dist - gap > 1e-4 or (i, axis) in off or (j, axis) in off:
+                conflict.append((i, j))
+    out = {s.ref: (xs[k], ys[k]) for k, s in enumerate(slots)}
+    return out, sorted(set(failed) | set(far)), conflict
+
+
+def clusters(slots: Sequence[Box], obstacles: Sequence[Box] = ()) -> List[List[str]]:
+    """Refs of ``slots`` grouped by touching or nearby slots (within both reaches) on a shared
+    plane: the parts one push can reach."""
+    n = len(slots)
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = slots[i], slots[j]
+            if not _shares(a, b):
+                continue
+            gap = reach(a) + reach(b)
+            if (
+                abs(a.x - b.x) < (a.w + b.w) / 2.0 + gap
+                and abs(a.y - b.y) < (a.h + b.h) / 2.0 + gap
+            ):
+                parent[find(i)] = find(j)
+    groups: Dict[int, List[str]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(slots[i].ref)
+    return sorted((sorted(g) for g in groups.values()), key=lambda g: g[0])
+
+
+def resolve(
+    slots: Sequence[Box],
+    obstacles: Sequence[Box],
+    width: float,
+    height: float,
+    occlusion: Optional[Dict[str, float]] = None,
+    need=None,
+    short=(),
+    opened: Optional[Dict[str, bool]] = None,
+    stats: Optional[Dict[str, int]] = None,
+) -> Tuple[Dict[str, Tuple[float, float]], List[str]]:
+    """Spread ``slots`` (none severe) cluster by cluster (:func:`clusters`), the physical overlap
+    first: while a cluster's push fails, its most occluded mild part (``occlusion``; ties: the
+    smaller, then the later reference) joins the returned list of parts the push gave up and the
+    cluster is spread again without it. ``need`` (see :func:`spread`) then widens the pairs'
+    distances by their routing channels, a push kept only when it meets them all: a channel is a
+    soft goal and never gives a part up. A cluster with no overlap is left as it is unless it
+    holds a part of ``short`` (refs short of a channel at their GP poses) and its channels fit.
+    Returns ``({ref: (x, y)}, [refs the push gave up])``; ``opened`` (a dict, when given)
+    receives, for each part of a spread cluster, whether its channels were opened.
+
+    Before a failing cluster gives a part up, its push is tried again with a size-scaled reach
+    (:data:`ESCALATE`, :func:`_escalate`), kept only when it displaces less (area-weighted)
+    than relocating that part would; ``stats`` (a dict, when given) counts in ``pushed_far``
+    the parts such a push moved beyond their first reach."""
+    occlusion = dict(occlusion or occlusions(slots, obstacles, width, height))
+    drop: List[str] = []
+    out: Dict[str, Tuple[float, float]] = {}
+    by_ref = {s.ref: s for s in slots}
+    for group in clusters(slots, obstacles):
+        live = [by_ref[r] for r in group]
+        if not any(occlusion.get(s.ref, 0.0) > 0 or s.ref in short for s in live):
+            out.update({s.ref: (s.x, s.y) for s in live})
+            continue
+        while live:
+            centres, bad = spread(live, obstacles)
+            share = None
+            if bad:
+                mild = [s for s in live if occlusion.get(s.ref, 0.0) > 0]
+                if not mild:
+                    # Nothing overlaps any more but a bound fails: leave the cluster as it was.
+                    out.update({s.ref: (s.x, s.y) for s in live})
+                    break
+                worst = max(mild, key=lambda s: (occlusion[s.ref], -s.w * s.h, str(s.ref)))
+                share, centres = _escalate(live, obstacles, worst, slots, width, height)
+                if share is None:
+                    drop.append(worst.ref)
+                    live = [s for s in live if s is not worst]
+                    occlusion = dict(occlusion)
+                    occlusion.update(occlusions(live, obstacles, width, height))
+                    continue
+                if stats is not None:
+                    stats["pushed_far"] = stats.get("pushed_far", 0) + sum(
+                        1
+                        for s in live
+                        if math.hypot(centres[s.ref][0] - s.x, centres[s.ref][1] - s.y)
+                        > reach(s) + TOL
+                    )
+            channels = False
+            if need is not None:
+                got, bad = spread(live, obstacles, need=need, share=share)
+                if not bad:
+                    centres, channels = got, True
+            out.update(centres)
+            if opened is not None:
+                opened.update({s.ref: channels for s in live})
+            break
+    return out, drop
+
+
+def _escalate(live, obstacles, worst, slots, width, height):
+    """``(share, centres)`` of the first escalated push of the cluster ``live`` that clears it
+    (:data:`ESCALATE`) and displaces less, area-weighted, than relocating ``worst`` (the part
+    it would give up) to its nearest free spot (:func:`nearest_free`, among ``slots`` and
+    ``obstacles``); ``(None, None)`` otherwise."""
+    alone = None
+    for share in ESCALATE:
+        centres, bad = spread(live, obstacles, share=share)
+        if bad:
+            continue
+        cost = 0.0
+        for s in live:
+            x, y = centres[s.ref]
+            cost += s.w * s.h * math.sqrt((x - s.x) * (x - s.x) + (y - s.y) * (y - s.y))
+        if alone is None:
+            alone = nearest_free(worst, slots, obstacles, width, height)
+        if alone is None or cost < worst.w * worst.h * alone:
+            return share, centres
+        return None, None
+    return None, None
+
+
+def nearest_free(box: Box, slots: Sequence[Box], obstacles: Sequence[Box], width, height):
+    """The distance (mm) from ``box``'s centre to the nearest spot, on rings of
+    :data:`PROBE_STEP_MM` out to :data:`PROBE_RADIUS_MM`, where it (at its turn or a quarter
+    turn, as the nearest-first search tries) overlaps no other slot or obstacle on a shared plane
+    and lies inside the outline (and its bounds, at its own turn); None when none."""
+    others = [s for s in slots if s.ref != box.ref and _shares(box, s)]
+    others += [o for o in obstacles if _shares(box, o)]
+    shapes = [(box.w, box.h, box.bounds)]
+    if abs(box.w - box.h) > 1e-9:
+        shapes.append((box.h, box.w, None))
+    step = PROBE_STEP_MM
+    rings = int(PROBE_RADIUS_MM / step)
+    for k in range(0, rings + 1):
+        best = None
+        for i in range(-k, k + 1):
+            for j in (-k, k) if abs(i) < k else range(-k, k + 1):
+                x, y = box.x + i * step, box.y + j * step
+                for w, h, bounds in shapes:
+                    b = bounds or (w / 2.0, width - w / 2.0, h / 2.0, height - h / 2.0)
+                    if not (b[0] - TOL <= x <= b[1] + TOL and b[2] - TOL <= y <= b[3] + TOL):
+                        continue
+                    probe = Box(box.ref, x, y, w, h, box.planes)
+                    if any(probe.overlap(o) > 1e-9 for o in others):
+                        continue
+                    d = math.sqrt((i * step) ** 2 + (j * step) ** 2)
+                    if best is None or d < best:
+                        best = d
+        if best is not None:
+            return best
+    return None

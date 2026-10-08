@@ -95,6 +95,14 @@ def enabled(rules: Optional[dict]) -> bool:
     return (rules or {}).get("route_pairs") == "coupled"
 
 
+def judged(pair: dict) -> bool:
+    """Whether the pair's coupling is judged: it declares its uncoupled budget
+    (``max_uncoupled_mm``), the design's KiCad coupling rules (``diff_pair_uncoupled``, and
+    ``diff_pair_gap`` over every parallel stretch) apply to it. Such a pair prefers fanouts
+    without :func:`.coupled.gap_breaks`, and a screen counts the breaks against it."""
+    return pair.get("max_uncoupled_mm") is not None
+
+
 def pair_layer_masks(grid, rules: Optional[dict]) -> Dict[str, set]:
     """net -> the grid layer indices a declared ``diff_pair.layers`` allows its two
     nets (both legs, routed coupled or not). Empty when no pair declares layers."""
@@ -594,6 +602,11 @@ class PairRouter:
                     unc = self.uncoupled(paths, layer, width, gap, lead)
                     return all(v <= cap + 1e-6 for v in unc.values())
 
+                def keeps_gap(paths):
+                    # KiCad judges every parallel stretch of the pair against its gap rule:
+                    # prefer fanouts that run no stretch parallel to the mate's lane.
+                    return not coupled.gap_breaks(paths, width, gap)
+
                 rr = coupled.solve_pair(
                     p,
                     n,
@@ -611,6 +624,7 @@ class PairRouter:
                     offsets=lead,
                     accept_paths=accept,
                     max_tuning_length=remaining,
+                    prefer_paths=keeps_gap if judged(pair) else None,
                 )
                 attempts += rr.get("attempts", 0)
                 for k, v in (rr.get("failures") or {}).items():
@@ -883,7 +897,7 @@ def route_pairs(grid, graph, rules, *, signal_nets, fanouts, net_width, track_wi
     solved_list: List[Solved] = []
     for pair in rules.get("diff_pairs") or []:
         p, n = pair["p"], pair["n"]
-        row = dict(status="legs")
+        row = dict(status="legs", coupling_judged=judged(pair))
         if p not in signal_nets or n not in signal_nets:
             row["reason"] = "not_signal_nets"
         elif p in blocked or n in blocked:
@@ -897,7 +911,7 @@ def route_pairs(grid, graph, rules, *, signal_nets, fanouts, net_width, track_wi
                 out.nets |= {p, n}
                 solved_list.append(result)
                 solved_by_net[p] = solved_by_net[n] = result
-                row = dict(status="coupled")
+                row = dict(status="coupled", coupling_judged=judged(pair))
             else:
                 reason, details = result
                 row["reason"] = reason
@@ -920,6 +934,8 @@ def route_pairs(grid, graph, rules, *, signal_nets, fanouts, net_width, track_wi
             bumps=s.bumps,
             exit_room=("via", "track", "access")[2 - s.room],
             start=s.start,
+            # Segments whose nearest parallel mate segment is off the gap (coupled.gap_breaks).
+            gap_breaks=len(coupled.gap_breaks(s.paths, s.width, s.gap)),
         )
         if s.start == "balls":
             out.dropped_escapes |= {p, n}

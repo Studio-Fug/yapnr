@@ -63,6 +63,8 @@ __all__ = [
     "legalize_settings",
     "margin_kwargs",
     "placement_clearance",
+    "channel_margin",
+    "gp_channel_inflation",
     "shrink_skip_reason",
     "shrink_lower_bound",
     "scaled_constraints",
@@ -77,6 +79,10 @@ __all__ = [
 GAP_MM = 0.01
 # Slot grid (mm) of the compact legalizer (the placer's default is 0.25 mm).
 GRID_MM = 0.125
+# Cap on the GP channel-inflation floor (:func:`gp_channel_inflation`): a part's
+# escape-channel demand never spreads it past this multiple of its own courtyard,
+# matching the legalizer's own spread cap (``_LEGALIZE_SPREAD_CAP`` in placer.py).
+GP_CHANNEL_INFLATION_CAP = 1.3
 # Cluster box area as a multiple of the summed body area.
 CLUSTER_AREA_FACTOR = 2.0
 # Bucket count of the compactness tie-break: the bbox in 5 % steps of the outline.
@@ -350,6 +356,57 @@ def placement_clearance(constraints) -> float:
     if enabled("LEGALIZE"):
         return courtyard_gap(constraints)
     return float(constraints.board.default_clearance_mm)
+
+
+def channel_margin(comp, channel_model) -> float:
+    """``GP``: a conservative estimate (mm) of the escape-channel room ``comp``'s own
+    pads ask beyond its courtyard on their busiest face, half of
+    :meth:`pnr.place.channels.ChannelModel.demand` over that face's externally
+    connected nets (the other half is the facing neighbour's to ask for). 0 for a
+    part with no classified geometry (:meth:`ChannelModel.shape` returns None) or
+    no face with an external net."""
+    shape = channel_model.shape(comp)
+    if shape is None:
+        return 0.0
+    faces = shape[4]
+    best = 0.0
+    for nets in faces:
+        if not nets:
+            continue
+        best = max(best, channel_model.demand(nets))
+    return best / 2.0
+
+
+def gp_channel_inflation(graph, channel_model) -> Dict[str, float]:
+    """``GP``: {ref: inflation} fed into :func:`pnr.place.model.global_place`'s
+    ``inflation`` floor, so the compact density term already reserves (part of) the
+    escape-channel room the legalizer's push otherwise has to open afterwards —
+    fixing block-level motion at its source instead of relying only on a bigger
+    push. ``channel_model`` is built on ``graph`` at its *current* (pre-placement)
+    rotations — a rough, conservative proxy good enough for a density floor; the
+    legalizer still runs its own exact, post-placement channel push
+    (:mod:`pnr.place.legalize`) on top.
+
+    Per part, :func:`channel_margin` (mm) is turned into a multiplier on the
+    part's own smaller courtyard half-extent (so a part that needs little channel
+    room is barely inflated, and one that needs a lot is capped at
+    :data:`GP_CHANNEL_INFLATION_CAP`, the legalizer's own spread cap). Only
+    strictly-positive floors are returned, so a part with none is left alone
+    (combine with any route-feedback ``inflation`` via ``max`` — the caller's
+    job, as the two are independent spreading floors)."""
+    out = {}
+    for comp in graph.components:
+        margin = channel_margin(comp, channel_model)
+        if margin <= 0:
+            continue
+        x0, y0, x1, y1 = body_box(comp)
+        half = min(x1 - x0, y1 - y0) / 2.0
+        if half <= 0:
+            continue
+        infl = 1.0 + margin / half
+        if infl > 1.0:
+            out[comp.ref] = round(min(infl, GP_CHANNEL_INFLATION_CAP), 4)
+    return out
 
 
 # -------------------------------------------------------------- shrink to fit

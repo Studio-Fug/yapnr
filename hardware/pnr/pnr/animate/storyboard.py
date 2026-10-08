@@ -61,6 +61,68 @@ def subject(trace, title=None, subtitle=None):
     )
 
 
+def legal_motion(trace, scopes):
+    """The legalizer's motion over the last ``legal`` event of each scope in ``scopes`` that
+    records one (``motion``, :func:`pnr.place.motion.summary`), combined (:func:`combine`); None
+    when none does."""
+    records = []
+    for scope in scopes:
+        events = [e for e in trace.kind(scope, "legal") if isinstance(e.get("motion"), dict)]
+        if events:
+            records.append(events[-1]["motion"])
+    return combine(records) if records else None
+
+
+def detail_motion(trace, scopes):
+    """The detailed-placement pass's record over the last ``detail`` event of each scope in
+    ``scopes`` that records one (``motion``, :func:`pnr.place.detail.summary`), combined
+    (:func:`combine_detail`); None when none does."""
+    records = []
+    for scope in scopes:
+        events = [e for e in trace.kind(scope, "detail") if isinstance(e.get("motion"), dict)]
+        if events:
+            records.append(events[-1]["motion"])
+    return combine_detail(records) if records else None
+
+
+DETAIL_KINDS = ("turn", "slide", "swap", "wrong_side", "compact")
+
+
+def combine_detail(records):
+    """``moves`` per kind, ``moved`` and ``wire_saved`` added over ``records`` (what the end card
+    shows; the renderer does not import the placer)."""
+
+    def saved(r):
+        # The whole pass's estimated wiring saving (compaction included), from the record's
+        # before/after totals where it has them.
+        keys = ("hpwl_before", "crossing_before", "hpwl_after", "crossing_after")
+        if all(isinstance(r.get(k), (int, float)) for k in keys):
+            return (r["hpwl_before"] + r["crossing_before"]) - (
+                r["hpwl_after"] + r["crossing_after"]
+            )
+        return float(r.get("wire_saved") or 0.0)
+
+    return dict(
+        moves={
+            k: sum(int((r.get("moves") or {}).get(k) or 0) for r in records) for k in DETAIL_KINDS
+        },
+        moved=sum(int(r.get("moved") or 0) for r in records),
+        wire_saved=round(sum(saved(r) for r in records), 3),
+    )
+
+
+def combine(records):
+    """``moved``, ``count`` and ``sum_mm`` added and ``max_mm`` the largest over ``records``
+    (what the end card shows; :func:`pnr.place.motion.combine` keeps the rest, but the renderer
+    does not import the placer)."""
+    return dict(
+        moved=sum(int(r.get("moved") or 0) for r in records),
+        count=sum(int(r.get("count") or 0) for r in records),
+        sum_mm=round(sum(float(r.get("sum_mm") or 0.0) for r in records), 3),
+        max_mm=round(max(float(r.get("max_mm") or 0.0) for r in records), 3),
+    )
+
+
 def build(trace, title=None, subtitle=None):
     """The storyboard of a loaded :class:`pnr.provenance.Trace`."""
     if trace.root is not None and hier_blocks(trace):
@@ -108,16 +170,18 @@ def build(trace, title=None, subtitle=None):
         last_round = this_round or last_round
     rejected = set_aside(order, index)
     result = trace.results[-1] if trace.results else {}
-    scenes.append(
-        dict(
-            type="end",
-            rejected=rejected,
-            result={
-                k: result.get(k)
-                for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
-            },
-        )
-    )
+    end = {
+        k: result.get(k)
+        for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
+    }
+    placed = [n.scope for n in order if n.stage == "place" and n.scope]
+    motion = legal_motion(trace, placed)
+    if motion is not None:
+        end["legal_motion"] = motion
+    motion = detail_motion(trace, placed)
+    if motion is not None:
+        end["detail_motion"] = motion
+    scenes.append(dict(type="end", rejected=rejected, result=end))
     return dict(
         schema=SCHEMA,
         subject=subject(trace, title, subtitle),

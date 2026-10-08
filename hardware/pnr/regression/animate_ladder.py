@@ -131,6 +131,50 @@ def gloss_result(result):
     )
 
 
+def order_result(pnr):
+    """The neighbour order kept (``pnr.place.motion.neighbour_order``) from global placement
+    to the legal poses (``gp_legal``), from the legal poses to detailed placement
+    (``legal_dp``) and end to end (``gp_dp``; the legal poses' when detailed placement did not
+    run), each with its relation count (``*_relations``); ``None`` without a legalizer
+    record."""
+    legal = pnr.get("legal_motion") or {}
+    if "neighbour_order" not in legal:
+        return None
+    detail = pnr.get("detail_motion") or {}
+    out = dict(
+        gp_legal=legal["neighbour_order"], gp_legal_relations=legal.get("neighbour_relations")
+    )
+    if "neighbour_order" in detail:
+        out.update(
+            legal_dp=detail["neighbour_order"], legal_dp_relations=detail.get("neighbour_relations")
+        )
+    if "neighbour_order_global" in detail:
+        out.update(
+            gp_dp=detail["neighbour_order_global"],
+            gp_dp_relations=detail.get("neighbour_relations_global"),
+        )
+    else:
+        out.update(gp_dp=out["gp_legal"], gp_dp_relations=out["gp_legal_relations"])
+    return out
+
+
+def order_summary(cases):
+    """``order_result`` over ``cases`` (``case_result`` rows): each stage's kept fraction,
+    weighted by its relation counts, and how many cases carry it."""
+    out = {}
+    for stage in ("gp_legal", "legal_dp", "gp_dp"):
+        rows = [
+            (c["order"][stage], c["order"].get(stage + "_relations") or 0)
+            for c in cases
+            if c.get("order") and stage in c["order"]
+        ]
+        total = sum(n for _f, n in rows)
+        if rows:
+            out[stage] = round(sum(f * n for f, n in rows) / total, 4) if total else 1.0
+            out[stage + "_cases"] = len(rows)
+    return out or None
+
+
 def case_result(case, directory, result, config, profile=None):
     """One case of ``ladder-results.json``: the design's size and the gate's result, no paths.
     ``fab_profile`` is the profile of the saved board's custom rules, else the one the
@@ -164,6 +208,12 @@ def case_result(case, directory, result, config, profile=None):
         selected_start=(pnr.get("initial_pool") or {}).get("selected"),
         compactness=result.get("compactness"),
         gloss=gloss_result(result),
+        # The legalizer's motion from the global poses (pnr.place.motion), when recorded.
+        **({"legal_motion": pnr["legal_motion"]} if pnr.get("legal_motion") else {}),
+        # The detailed-placement pass's moves and wiring (pnr.place.detail), when it ran.
+        **({"detail_motion": pnr["detail_motion"]} if pnr.get("detail_motion") else {}),
+        # The neighbour order kept through legalization and detailed placement.
+        **({"order": order_result(pnr)} if order_result(pnr) else {}),
     )
 
 
@@ -326,14 +376,14 @@ def main(argv=None):
         readme=readme,
     )
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    results = dict(
-        schema="yapnr-ladder-results-v1",
-        generated=manifest["generated"],
-        cases=[
-            case_result(c, d, r, cfg, ladder_provenance(run)["fab_profile"])
-            for c, (d, r, cfg, run) in sorted(chosen.items())
-        ],
-    )
+    cases = [
+        case_result(c, d, r, cfg, ladder_provenance(run)["fab_profile"])
+        for c, (d, r, cfg, run) in sorted(chosen.items())
+    ]
+    results = dict(schema="yapnr-ladder-results-v1", generated=manifest["generated"], cases=cases)
+    if order_summary(cases):
+        # Over every case: the neighbour order kept, weighted by relation count.
+        results["order"] = order_summary(cases)
     (out / "ladder-results.json").write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
     return 0 if entries else 1
 

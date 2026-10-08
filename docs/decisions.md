@@ -1066,6 +1066,31 @@ Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`,
   CI traced runs take the same options so their trace hashes stay comparable. The renderer
   (version 3) plays the gloss stage's saved board as a before/after: the copper the stage
   replaced in red, its new copper in green, marked by geometry, not by track rows.
+- **Legalization keeps what global placement got right** (2026-10-05, the owner's report on the
+  hierarchical demo animation and the request for a severity-aware legalizer; the ladder v2 plan's
+  one-default-configuration rule). `PNR_LEGALIZE_KEEP` is on by default, with or without compact
+  placement, and `PNR_LEGALIZE_KEEP=0` restores the plain packer for A/B runs: a part or block legal
+  at its global pose keeps it and its turn, a slight overlap (or a missing routing channel) is
+  resolved by an order-preserving push of the parts around it (the overlap first, routing
+  channels only where they fit), a part the push cannot clear or whose slot is taken takes the
+  nearest free slot around its pose (2026-10-06, the owner's R6 report), and only a mostly
+  occluded part is relocated by the packer's cost. `TURN` turns only the parts the
+  legalizer moved (and gives way to detailed placement, below). Every legalization records its
+  motion (moved parts, displacement, topology kept) in the reports, the trace and the
+  animation's end card. Measurements:
+  [compact placement, section 13](design/compact-placement.md).
+- **Detailed placement wins back the copper KEEP gave up** (2026-10-06, the owner's decision: an
+  order-preserving detailed-placement pass after legalization, on by default with KEEP once an
+  A/B shows copper restored and no rung worse).
+  `PNR_DETAIL_PLACE` follows `PNR_LEGALIZE_KEEP` (on by default; `0` turns it off for an A/B): an
+  order-preserving compaction toward each part's nets, then turns, slides, swaps and wrong-side
+  moves under a movement budget, each legal by the legalizer's own checker, as their own stage
+  after legalization. KEEP's legalization motion is reported as before and the detailed
+  placement's moves separately (`detail_motion`). Over the ladder, showcases and hard rungs at
+  two seeds the copper is within 0.2 % of the packer's (KEEP alone: +7.8 %) and 0.8 % shorter on
+  the ladder; one rung is still behind (`11-ufbga201-fanout-6L-SGSGPS-pairs`, 13 of 16 seeds
+  against 15 of 16 with the packer and 14 of 16 with KEEP alone). Measurements:
+  [compact placement, section 13.H](design/compact-placement.md).
 
 Compact placement before ladder v2 makes it the default (2026-10-06,
 [design, section 12](design/compact-placement.md)):

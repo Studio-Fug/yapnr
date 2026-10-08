@@ -131,6 +131,24 @@ class HierCaseTest(unittest.TestCase):
     def load(self):
         return hier_case.load(self.root)
 
+    def test_the_report_carries_the_legalization_motion(self):
+        """pnr-report.json's ``legal_motion``: the chosen block trials combined and the chosen
+        top seed's macro legalization (pnr.place.motion)."""
+        motion = self.report["legal_motion"]
+        self.assertEqual(set(motion), {"block", "top"})
+        for stage in motion.values():
+            self.assertLessEqual(stage["moved"], stage["count"])
+            self.assertTrue(0.0 <= stage["topology"] <= 1.0)
+        rec = dict(count=2, moved=1, turned=0, sum_mm=1.0, max_mm=1.0, topology=1.0)
+        seeds = [
+            dict(id="top-00", legal_motion=dict(rec, moved=0)),
+            dict(id="top-01", legal_motion=rec),
+        ]
+        synth = [dict(chosen=dict(legal_motion=rec)), dict(chosen=dict(legal_motion=rec))]
+        got = hier_case.legal_motion(synth, seeds, "top-01-route")
+        self.assertEqual(got["top"], rec)
+        self.assertEqual((got["block"]["count"], got["block"]["moved"]), (4, 2))
+
     def test_twins_share_a_template_and_one_layout(self):
         templates = self.report["hier"]["templates"]
         self.assertEqual(sorted(len(t["blocks"]) for t in templates), [1, 2])
@@ -329,7 +347,11 @@ class RouteCompactTest(unittest.TestCase):
         return top
 
     def test_top_and_blocks(self):
-        root, report, _case = self.run_case(PNR_ROUTE_COMPACT="TOP,BLOCK")
+        # Detailed placement (PNR_DETAIL_PLACE, on by default with PNR_LEGALIZE_KEEP) already
+        # closes this small fixture's one closable top-level gutter (C1 beside MB02, by
+        # 0.25 mm) before routing, so route-compact would find nothing left to close
+        # (test_after_detailed_placement); this test keeps it off to exercise the pass itself.
+        root, report, _case = self.run_case(PNR_ROUTE_COMPACT="TOP,BLOCK", PNR_DETAIL_PLACE="0")
         top = self.check(root, report)
         self.assertGreaterEqual(top["routes"], 1)
         blocks = report["route_compact"]["blocks"]
@@ -341,6 +363,18 @@ class RouteCompactTest(unittest.TestCase):
         sizes = {m["template"]: m["size_mm"] for m in report["hier"]["macros"].values()}
         for tid, template in blocks.items():
             self.assertEqual(sizes[tid], template["block_mm"]["after"])
+
+    def test_after_detailed_placement(self):
+        """With the default detailed placement the top level has no gutter left to close: the
+        pass runs, measures, keeps the layout no worse and says why it accepted nothing."""
+        root, report, _case = self.run_case(PNR_ROUTE_COMPACT="TOP,BLOCK")
+        top = self.check(root, report, require_accepted=False)
+        if not top["accepted"]:
+            self.assertTrue(top["attempts"])
+            self.assertTrue(
+                all(a.get("result") == "nothing to close" for a in top["attempts"]),
+                [a.get("result") for a in top["attempts"]],
+            )
 
     def test_with_hulls(self):
         root, report, _case = self.run_case(PNR_ROUTE_COMPACT="TOP", PNR_MACRO_HULL="1")

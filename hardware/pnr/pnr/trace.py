@@ -118,6 +118,7 @@ PHASES = (
     "pool",
     "global-placement",
     "legalization",
+    "detailed-placement",
     "placement",
     "negotiation",
     "commit",
@@ -458,8 +459,9 @@ class Recorder:
         return self._emit("poses", **fields)
 
     @_guarded
-    def legal(self, order, placed, backtracks=0):
-        """The legalizer's accepted placement order (refs) and the legal ``placed`` graph."""
+    def legal(self, order, placed, backtracks=0, motion=None):
+        """The legalizer's accepted placement order (refs) and the legal ``placed`` graph;
+        ``motion`` (:func:`pnr.place.motion.summary`) joins the event when given."""
         rows = graph_poses(placed)
         extra = {}
         if self.expanders:
@@ -470,6 +472,8 @@ class Recorder:
         ordered = [by_ref[r] for r in order if r in by_ref]
         seen = set(order)
         ordered = [p for r, p in sorted(by_ref.items()) if r not in seen] + ordered
+        if motion is not None:
+            extra["motion"] = motion
         if len(ordered) > INLINE_POSES:
             return self._emit(
                 "legal",
@@ -481,6 +485,26 @@ class Recorder:
         return self._emit(
             "legal", order=ordered, backtracks=backtracks, phase="legalization", **extra
         )
+
+    @_guarded
+    def detail(self, placed, moves, motion=None):
+        """The detailed-placement pass after legalization (:mod:`pnr.place.detail`): the
+        ``placed`` graph's poses and its ``moves`` (``[ref, kind, [x, y, rot] before, after,
+        gain mm]``); ``motion`` (:func:`pnr.place.detail.summary`) joins when given."""
+        rows = graph_poses(placed)
+        extra = {}
+        if self.expanders:
+            rows, groups, members = self._expand(rows)
+            extra = dict(groups=groups, group_members=members)
+        rows = sorted(rows)
+        if motion is not None:
+            extra["motion"] = motion
+        extra["moves"] = [list(m) for m in moves]
+        if len(rows) > INLINE_POSES:
+            return self._emit(
+                "detail", poses_blob=self.blob(rows), phase="detailed-placement", **extra
+            )
+        return self._emit("detail", poses=rows, phase="detailed-placement", **extra)
 
     @_guarded
     def fixed(self, copper, groups=None, **meta):
@@ -760,10 +784,16 @@ def placement_tracer(components, iters):
         return None
 
 
-def legal(order, placed, backtracks=0):
+def legal(order, placed, backtracks=0, motion=None):
     recorder = current()
     if recorder is not None:
-        recorder.legal(order, placed, backtracks)
+        recorder.legal(order, placed, backtracks, motion=motion)
+
+
+def detail(placed, moves, motion=None):
+    recorder = current()
+    if recorder is not None:
+        recorder.detail(placed, moves, motion=motion)
 
 
 def board_event(stage, board_path, drc_report=None):

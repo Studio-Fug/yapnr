@@ -292,6 +292,13 @@ def _place_impl(
             record.update(
                 status="legal", hpwl_mm=hpwl(placed), cheap_score=cheap_score(placed, rules)
             )
+            # The legalizer's motion from the global poses and detailed placement's moves
+            # (pnr.place.motion / pnr.place.detail summaries), when the placer recorded them:
+            # mc_case.py reports the selected start's, as route_case.py does its own.
+            for key in ("legal_motion", "detail_motion"):
+                value = getattr(report, key, None)
+                if value is not None:
+                    record[key] = value
             try:
                 proxy = score(placed, rules, pitch=2.0, passes=2)
                 record["proxy_score"] = proxy["score"]
@@ -526,6 +533,43 @@ def _native_one(
 
 
 # ---------------------------------------------------------------- driver
+
+
+def gate_unfinished(metrics) -> bool:
+    """A routed candidate the gate fails as it stands: the initial pool's
+    :func:`pnr.place.initial_pool.unfinished` (a connection open, a judged pair flawed) or a
+    declared pair / group outside its length budget (``length_unmatched``: KiCad's skew and
+    length rules fail it). For a final route, which no routing rounds follow."""
+    from pnr.place.initial_pool import unfinished
+
+    return unfinished(metrics) or metrics.get("length_unmatched", 0) > 0
+
+
+def route_finalists(ranked, k2, evaluate, extra=None):
+    """Route the ``k2`` best screens of ``ranked`` (records in the screen order) with
+    ``evaluate`` (record -> dict carrying the routed ``metrics``); while every one routed so
+    far is :func:`gate_unfinished`, route the next record of ``ranked`` too, ``extra``
+    (default :data:`pnr.place.initial_pool.EXTRA_FINALISTS`) at most: the short screen route
+    sees neither length tuning nor the last connections, and the ladder's mc driver commits
+    to its final routes. Returns ``(evaluated, extra_ids)``; the choice among them is the
+    caller's (``route_rank``), unchanged."""
+    from pnr.place.initial_pool import EXTRA_FINALISTS
+
+    limit = EXTRA_FINALISTS if extra is None else extra
+    queue = list(ranked[:k2])
+    spare = list(ranked[k2:])
+    evaluated, extra_ids = [], []
+    for rec in queue:
+        evaluated.append(evaluate(rec))
+        if (
+            rec is queue[-1]
+            and spare
+            and len(extra_ids) < limit
+            and all(gate_unfinished(c["metrics"]) for c in evaluated)
+        ):
+            queue.append(spare.pop(0))
+            extra_ids.append(queue[-1]["id"])
+    return evaluated, extra_ids
 
 
 def _rank_key(stage):

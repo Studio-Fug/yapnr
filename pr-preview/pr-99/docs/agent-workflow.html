@@ -307,6 +307,120 @@ engineering procedure is <a class="reference internal" href="../AGENTS.html"><sp
 wheel. The agent owns requirements capture, risk analysis, schematic/part selection,
 bounded placement/routing experiments and verification of the delivered artifact.
 An unavailable validator or vendor model remains an explicit blocker.</p>
+<section id="review-and-visual-feedback">
+<h2>Review and visual feedback<a class="headerlink" href="#review-and-visual-feedback" title="Link to this heading">¶</a></h2>
+<p>The agent must write the requirements specification and risk analysis before
+starting design, then present both in chat for review. It may continue authorized,
+reversible implementation speculatively while the designer reviews, recording the
+requirements revision and assumptions behind that work. Review is not approval by
+silence. Designer refinements become tracked revisions; changed requirements
+invalidate dependent evidence and restart affected stages, including schematic
+capture and part selection when the change is substantial.</p>
+<p>Visual feedback belongs inline in the active agent session, including OpenCode.
+Attach renders as schematic, placement, routing and validation artifacts become
+available, with provenance and clear concept-versus-CAD labels. Verify attachment
+delivery rather than relying on container-local image paths. External viewers
+supplement those renders. For requirements alternatives, use small bounded
+three.js scenes in hosts that support inline interactive selections; otherwise
+provide inline still renders and identify the missing interactive capability.</p>
+</section>
+<section id="evidence-gated-iteration-controller">
+<h2>Evidence-gated iteration controller<a class="headerlink" href="#evidence-gated-iteration-controller" title="Link to this heading">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>workflow<span class="w"> </span>init<span class="w"> </span>--project<span class="w"> </span>article<span class="w"> </span>--directive<span class="w"> </span><span class="s1">&#39;Design X&#39;</span>
+yapnr<span class="w"> </span>workflow<span class="w"> </span>query<span class="w"> </span>--project<span class="w"> </span>article
+yapnr<span class="w"> </span>workflow<span class="w"> </span>next<span class="w"> </span>--project<span class="w"> </span>article<span class="w"> </span>--requirements-specification-ready<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--evidence<span class="w"> </span>reports/requirements-ready.json
+yapnr<span class="w"> </span>workflow<span class="w"> </span>next<span class="w"> </span>--project<span class="w"> </span>article<span class="w"> </span>--user-accepted-requirements-specification<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--evidence<span class="w"> </span>reports/user-review.json
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">init</span></code> creates or resumes the Git project and engineering files without overwriting
+existing contracts. <code class="docutils literal notranslate"><span class="pre">query</span></code> returns JSON: current state and revision, whether the
+contract is current, whether work is speculative, available event flags, transition
+history and a receipt template. <code class="docutils literal notranslate"><span class="pre">next</span></code> accepts exactly one event flag and a
+project-relative evidence receipt. The declarative transition table ships with
+the package; it cannot execute arbitrary scripts. State/history are atomically
+stored under <code class="docutils literal notranslate"><span class="pre">.yapnr/workflow/</span></code>, with a per-project writer lock and immutable
+content-addressed copies of receipts, contract documents and supplied artifacts.</p>
+<p>Receipts use this shape, with hashes from <code class="docutils literal notranslate"><span class="pre">query</span></code> and actual artifact SHA-256s:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;yapnr-workflow-evidence-v1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;event&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user-accepted-requirements-specification&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;revision&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;contract&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;manifest&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;SHA-256&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;risks&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;SHA-256&gt;&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;reviewer&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;designer&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;note&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Explicit user acceptance; reference the review decision.&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;artifacts&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Event flag</p></th>
+<th class="head"><p>Guard and resulting stage</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--requirements-specification-ready</span></code></p></td>
+<td><p>Both documents written; receipt supplies the complete unique <code class="docutils literal notranslate"><span class="pre">requirements</span></code> ID list. Enter review and increment the contract revision.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--speculative-work-started</span></code></p></td>
+<td><p>Review already presented. Enter schematic while acceptance remains pending.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--user-accepted-requirements-specification</span></code></p></td>
+<td><p>User receipt and reviewer for the current exact contract. Start schematic or accept the current speculative stage.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--user-revised-requirements-specification</span></code></p></td>
+<td><p>User receipt, reviewer, changed contract documents and updated requirement IDs. Invalidate acceptance and current artifacts, increment revision and restart review. This initial controller conservatively repeats schematic and downstream work after every revision.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--schematic-ready</span></code></p></td>
+<td><p>Hashed implementation artifacts. Enter placement/routing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--routing-finished</span></code></p></td>
+<td><p>Hashed routed artifacts. Enter verification.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--verification-passed</span></code></p></td>
+<td><p>Current revision accepted; complete passing requirement checks, native DRC and connectivity gates on the same unchanged routed artifact; hashed verification reports. Enter complete.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--verification-failed</span></code></p></td>
+<td><p>Hashed failure reports and explanation. Enter fixup.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--fixup-applied</span></code></p></td>
+<td><p>Hashed revised implementation. Repeat schematic and downstream verification.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--engine-repair-required</span></code></p></td>
+<td><p>Hashed repair reports/reproducers. Enter engine repair.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--engine-repair-ready</span></code></p></td>
+<td><p>Hashed repaired inputs. Repeat schematic and downstream verification.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--blocked</span></code>, <code class="docutils literal notranslate"><span class="pre">--methods-exhausted</span></code>, <code class="docutils literal notranslate"><span class="pre">--cancelled</span></code></p></td>
+<td><p>Record the reason and preserve the previous stage.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--resume</span></code></p></td>
+<td><p>Explicit user receipt; return to the preserved stage.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>An artifact entry is <code class="docutils literal notranslate"><span class="pre">{&quot;path&quot;:</span> <span class="pre">&quot;design/board.kicad_pcb&quot;,</span> <span class="pre">&quot;sha256&quot;:</span> <span class="pre">&quot;&lt;SHA-256&gt;&quot;}</span></code>.
+A completion receipt supplies <code class="docutils literal notranslate"><span class="pre">final_artifact_sha256</span></code>, a <code class="docutils literal notranslate"><span class="pre">checks</span></code> list containing
+exactly one entry per accepted requirement (<code class="docutils literal notranslate"><span class="pre">requirement_id</span></code>, <code class="docutils literal notranslate"><span class="pre">status:</span> <span class="pre">&quot;pass&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">artifact_sha256</span></code>), and <code class="docutils literal notranslate"><span class="pre">gates.native_drc</span></code> and <code class="docutils literal notranslate"><span class="pre">gates.connectivity</span></code>, each containing
+<code class="docutils literal notranslate"><span class="pre">status:</span> <span class="pre">&quot;pass&quot;</span></code> and the same <code class="docutils literal notranslate"><span class="pre">artifact_sha256</span></code>. Save the underlying reports in
+its <code class="docutils literal notranslate"><span class="pre">artifacts</span></code> list. Missing, skipped, stale and mixed-artifact checks are rejected.</p>
+<p>This controller validates transitions, receipt structure and preserved hashes; it
+does not authenticate the claimed reviewer or independently reproduce simulations,
+native DRC or physical measurements. Agents must faithfully record real user
+decisions and authoritative tool/bench reports. It does not sandbox the agent,
+launch solver jobs, enforce their resource consumption or add an interactive
+three.js renderer to OpenCode. The agent must still follow the engineering policy
+and bounded experiment interfaces. An engine <code class="docutils literal notranslate"><span class="pre">_DONE</span></code> event is not workflow success.
+Revising requirements while blocked, exhausted or cancelled preserves that stop
+state; an explicit user resume then returns to requirements review.</p>
+</section>
 <section id="start-a-container-chat">
 <h2>Start a container chat<a class="headerlink" href="#start-a-container-chat" title="Link to this heading">¶</a></h2>
 <p>The application image bundles checksum-pinned Codex and OpenCode CLIs for both Linux
@@ -333,7 +447,9 @@ mounts and the checkpoint. No socket to the host Docker daemon is required.</p>
 <p>Use <code class="docutils literal notranslate"><span class="pre">--provider</span> <span class="pre">codex</span></code> for the official Codex account-login flow, or
 <code class="docutils literal notranslate"><span class="pre">--provider</span> <span class="pre">claude</span></code> for the official Claude Code account-login flow. Account login
 is handled by those tools, not by a yapnr OAuth proxy. In a headless container,
-follow the CLI’s device-login or browser callback instructions. Claude Code is
+prefer device-code login: run <code class="docutils literal notranslate"><span class="pre">codex</span> <span class="pre">login</span> <span class="pre">--device-auth</span></code> inside the container.
+Enable device-code login in your ChatGPT security settings or workspace permissions
+if required. Claude Code is
 operator-installed and is not redistributed in the image. Persist its installation
 and authentication in the separate home volume. See the official
 <a class="reference external" href="https://developers.openai.com/codex/auth/">Codex authentication</a>
@@ -343,6 +459,19 @@ and <a class="reference external" href="https://code.claude.com/docs/en/setup">C
 key and <code class="docutils literal notranslate"><span class="pre">/models</span></code> to select a provider/model. You can also select an already
 configured model with <code class="docutils literal notranslate"><span class="pre">--model</span> <span class="pre">provider/model</span></code>. No yapnr-managed model account
 is required. See <a class="reference external" href="https://opencode.ai/docs/providers/">OpenCode providers</a>.</p>
+<p>For <strong>OpenCode’s browser UI running in Docker or on a remote machine</strong>, choose
+<strong>OpenAI → ChatGPT Pro/Plus (headless)</strong>. Open the authorization page and enter
+the one-time code shown in OpenCode, keeping the connection dialog open until
+it completes. Then select an OpenAI model in the model picker. This flow does
+not require a callback listener on the browser’s computer.</p>
+<p>The <strong>ChatGPT Pro/Plus (browser)</strong> method returns to <code class="docutils literal notranslate"><span class="pre">localhost:1455</span></code> on the
+computer running your browser. It only works if that computer can reach the
+callback server running alongside OpenCode. Publishing the web UI’s port alone
+does not publish the callback. Remote desktop also needs a container-to-host
+callback mapping; browsing from another computer additionally needs a tunnel
+to that host. Prefer the headless method rather than exposing the callback
+publicly. After changing the connection method, start a fresh authorization;
+do not copy callback codes or credential files into chat or the article.</p>
 <p>For an <strong>OpenAI-compatible model endpoint</strong>, select OpenCode and provide the
 server’s base URL and exact model ID:</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="c1"># Supply YAPNR_MODEL_API_KEY in your shell or a private secrets manager.</span>
@@ -375,7 +504,7 @@ The viewer’s “Ask” chat remains read-only and is not the design agent laun
 yapnr<span class="w"> </span>doctor<span class="w"> </span>--json
 yapnr<span class="w"> </span>agent<span class="w"> </span>instructions
 yapnr<span class="w"> </span>agent<span class="w"> </span>instructions<span class="w"> </span>--guide
-yapnr<span class="w"> </span>agent<span class="w"> </span>init<span class="w"> </span>--project<span class="w"> </span>article<span class="w"> </span>--directive<span class="w"> </span><span class="s1">&#39;Design X&#39;</span>
+yapnr<span class="w"> </span>workflow<span class="w"> </span>init<span class="w"> </span>--project<span class="w"> </span>article<span class="w"> </span>--directive<span class="w"> </span><span class="s1">&#39;Design X&#39;</span>
 yapnr<span class="w"> </span>agent<span class="w"> </span>chat<span class="w"> </span>--project<span class="w"> </span>article<span class="w"> </span>--provider<span class="w"> </span>codex
 </pre></div>
 </div>
@@ -528,6 +657,8 @@ only after final verification of every accepted requirement on one exact revisio
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Design a PCB with an agent</a><ul>
+<li><a class="reference internal" href="#review-and-visual-feedback">Review and visual feedback</a></li>
+<li><a class="reference internal" href="#evidence-gated-iteration-controller">Evidence-gated iteration controller</a></li>
 <li><a class="reference internal" href="#start-a-container-chat">Start a container chat</a><ul>
 <li><a class="reference internal" href="#choose-authentication-and-a-model">Choose authentication and a model</a></li>
 </ul>

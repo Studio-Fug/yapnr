@@ -8,8 +8,8 @@ so tests and ``yapnr.rf.palace`` catch a misspelt key or a wrong type before a c
 image's ``palace --dry-run`` remains the final word. Keys the schema marks
 ``x-palace-deprecated`` are reported too.
 
-A checkout (and Bazel's runfiles) has the schema; an installed wheel does not, and ``validate``
-then returns None.
+The installed wheel carries the same vendored schema beside this module. A checkout
+also resolves the authoritative source under ``third_party/palace``.
 """
 
 from __future__ import annotations
@@ -28,6 +28,9 @@ _CACHE: Dict[str, Dict[str, Any]] = {}
 def find_schema() -> Optional[Path]:
     here = Path(__file__)
     for base in (here.parent, here.resolve().parent):
+        packaged = base / "config-schema.json"
+        if packaged.is_file():
+            return packaged
         for parent in base.parents:
             candidate = parent / SCHEMA_PATH
             if candidate.is_file():

@@ -100,7 +100,14 @@ py_library(
     ),
     data = _NATIVE_DATA,
     imports = ["../.."],
-    deps = ["//yapnr:package"],
+    deps = [
+        "//yapnr:package",
+        "//yapnr/rf/coupons:wheel_files",
+        "//yapnr/rf/export:wheel_files",
+        "//yapnr/rf/order0:wheel_files",
+        "//yapnr/rf/palace:wheel_files",
+        "//yapnr/rf/planar:wheel_files",
+    ],
 )
 
 # The native FDTD stepper (yapnr.rf.fdtd.native_kernel, backend "native", the default where it

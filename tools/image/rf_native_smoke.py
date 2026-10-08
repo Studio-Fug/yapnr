@@ -29,6 +29,22 @@ from yapnr.rf.stackup import Stackup  # noqa: E402
 
 
 def main() -> int:
+    # Public external-project workflow imports: Bazel's solver closure used to
+    # hide omitted RF subpackages in the installed wheel (#96).
+    from yapnr.rf.driver import design
+    from yapnr.rf.export import contour, drc, raster, repair, report
+    from yapnr.rf.export.kicad import write_footprint
+    from yapnr.rf.export.touchstone import write_touchstone
+    from yapnr.rf.palace.schema import load
+    from yapnr.rf.planar.adapters import read_kicad_copper
+    from yapnr.rf.validate import resimulate
+
+    assert all(
+        callable(fn)
+        for fn in (design, resimulate, write_footprint, write_touchstone, read_kicad_copper)
+    )
+    assert all(module.__file__ for module in (contour, drc, raster, repair, report))
+    assert load() is not None, "installed Palace schema missing"
     kernel = native_kernel.load()
     status = native_kernel.status()
     if kernel is None:

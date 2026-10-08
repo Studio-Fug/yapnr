@@ -30,3 +30,11 @@ py_binary(
     main = "__main__.py",
     deps = [":order0"],
 )
+
+# Package collection only: no architecture-specific pip dependency closure.
+py_library(
+    name = "wheel_files",
+    srcs = glob(["**/*.py"]),
+    imports = ["../../.."],
+    deps = ["//yapnr/rf:package"],
+)

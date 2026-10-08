@@ -103,6 +103,7 @@ if [ "${KICAD_ONLY}" = 0 ]; then
     for name in cpython openssl-3 sqlite tcl ncurses libedit libffi zlib; do
         notices="${notices} /usr/share/doc/yapnr/licenses/python-build-standalone/LICENSE.${name}.txt"
     done
+
 fi
 for notice in ${notices}; do
     if docker run --rm --entrypoint test "${IMAGE}" -s "${notice}"; then
@@ -241,6 +242,16 @@ sys.exit(1 if problems else 0)
             echo "${out}" | sed 's/^/        /' >&2
         fi
     done
+    # No checkout is mounted: run the installed RF workflow outside the package,
+    # bounded independently of the image build job's timeout.
+    if out="$(docker run --rm -v "${HERE}:/smoke:ro" --tmpfs /tmp \
+        --entrypoint /usr/bin/timeout "${IMAGE}" 180 \
+        /opt/venv/bin/python -I /smoke/rf_workflow_smoke.py 2>&1)"; then
+        pass "external installed RF workflow: $(echo "${out}" | tail -n 1)"
+    else
+        fail "external installed RF workflow:"
+        echo "${out}" | sed 's/^/        /' >&2
+    fi
 fi
 
 if [ "${FAILURES}" -gt 0 ]; then

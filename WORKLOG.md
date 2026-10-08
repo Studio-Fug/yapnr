@@ -3,7 +3,7 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-07 (RF CI lanes and cache verification, #95). Previous status:
+Last updated: 2026-10-07 (installed RF packaging and PyPI publishing). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 `claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
 on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
@@ -15,6 +15,17 @@ board edges, the hierarchical ladder driver and their animations on
 `claude/animations-groups-hier`.
 
 ## In progress
+
+- **External RF packaging (#96)**: collect every RF Bazel subpackage explicitly
+  without numerical dependency closure in the wheel collector. Export/report,
+  planar, Palace, coupons and order0 modules now ship, with the authoritative
+  Palace schema and registered coupon copper/results. An isolated installed-wheel
+  test runs design/export/native revalidation outside the checkout; both image
+  architectures run the same external-project smoke. The installed-wheel smoke passes;
+  full-suite and two-architecture CI validation are pending.
+- **PyPI publishing**: the release workflow publishes the same two tested Bazel
+  wheels through OIDC, with version/project/architecture checks and no dry-run uploads.
+  First upload requires the owner to register the documented pending trusted publisher.
 
 - **RF CI lanes and Bazel cache snapshots** (branch `codex/rf-nightly-ci-cache`): expensive RF
   solver/gradient/design and coupon fitting coverage moves to nightly/manual Linux and macOS;

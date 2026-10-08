@@ -117,6 +117,57 @@ jobs:
       attestations: write
       artifact-metadata: write
 
+  # Publish exactly the Bazel wheels already tested in both architecture images.
+  # Register Studio-Fug/yapnr, release.yaml, environment pypi as a PyPI trusted
+  # publisher. No API token is required; manual dry runs never upload.
+  pypi:
+    needs: [verify, ci, image]
+    if: needs.verify.outputs.dry_run == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/yapnr/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download the tested Bazel wheels
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist
+
+      - name: Check release version and both architectures
+        env:
+          EXPECT_VERSION: ${{ needs.verify.outputs.pep440 }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import zipfile
+          from email.parser import Parser
+
+          paths = sorted(pathlib.Path('dist').iterdir())
+          assert len(paths) == 2 and all(p.suffix == '.whl' for p in paths), 'expected only two tested wheels'
+          platforms = set()
+          for path in paths:
+              with zipfile.ZipFile(path) as wheel:
+                  metadata_paths = [n for n in wheel.namelist() if n.endswith('.dist-info/METADATA')]
+                  assert len(metadata_paths) == 1, 'ambiguous wheel metadata'
+                  metadata = Parser().parsestr(wheel.read(metadata_paths[0]).decode())
+                  assert metadata['Name'] == 'yapnr', 'unexpected project'
+                  assert metadata['Version'] == os.environ['EXPECT_VERSION'], 'release version mismatch'
+                  platforms.add(path.stem.rsplit('-', 1)[1])
+          assert platforms == {'manylinux_2_34_x86_64', 'manylinux_2_34_aarch64'}, 'missing release architecture'
+          PY
+
+      - name: Publish Bazel wheels to PyPI through OIDC
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: dist
+
   release:
     needs: [verify, ci, image]
     runs-on: ubuntu-latest

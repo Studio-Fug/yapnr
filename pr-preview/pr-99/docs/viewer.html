@@ -1,0 +1,980 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="The atopile toolchain" href="frontends/atopile.html"><link rel="prev" title="Design a PCB with an agent" href="agent-workflow.html">
+        <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>The live viewer - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agent-workflow.html">Design a PCB with an agent</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ci-lanes.html">CI lanes and Bazel caches</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/clearance-index-validation.html">Clearance index: integration validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/viewer.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/viewer.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="the-live-viewer">
+<h1>The live viewer<a class="headerlink" href="#the-live-viewer" title="Link to this heading">¶</a></h1>
+<p>The viewer is a web front end for place-and-route experiments. A running experiment writes
+telemetry into a <em>live directory</em>; the viewer replays it into lanes (candidates, trials, rounds)
+and shows each lane’s board as it changes: native copper, provisional routes, checkpoints,
+placement costs and the search’s alternatives. Optional services add a schematic view, an
+atopile source browser, design notes, a 3D view and an assistant. The viewer never changes the
+experiment; the only thing it writes into the live directory is what you ask for (runtime
+control requests, pins, annotation drafts and snapshots).</p>
+<p>Code: <code class="docutils literal notranslate"><span class="pre">yapnr/viewer/</span></code>; its <a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/yapnr/viewer/README.md">README</a> describes the layout and the tests.</p>
+<section id="running-it">
+<h2>Running it<a class="headerlink" href="#running-it" title="Link to this heading">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span>run<span class="w"> </span>//:viewer<span class="w"> </span>--<span class="w"> </span>--root<span class="w"> </span>runs/example/live<span class="w">            </span><span class="c1"># http://127.0.0.1:8766</span>
+bazel<span class="w"> </span>run<span class="w"> </span>//:viewer<span class="w"> </span>--<span class="w"> </span>--config<span class="w"> </span>viewer.toml<span class="w"> </span>--port<span class="w"> </span><span class="m">8795</span>
+</pre></div>
+</div>
+<p>For a campaign running on <code class="docutils literal notranslate"><span class="pre">gcp-batch</span></code> or <code class="docutils literal notranslate"><span class="pre">slurm</span></code> (<a class="reference internal" href="cloud-experiments.html"><span class="std std-doc">cloud-experiments.md</span></a>),
+there is no local directory to point at until <code class="docutils literal notranslate"><span class="pre">[live]</span></code> is on in the campaign file and
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">live</span> <span class="pre">&lt;plan&gt;</span></code> mirrors the tasks’ telemetry back from the runs store; point <code class="docutils literal notranslate"><span class="pre">--root</span></code> at
+its <code class="docutils literal notranslate"><span class="pre">--out</span></code> directory instead (the “Live viewer mirror” section has the details).</p>
+<p>Relative paths are relative to the directory <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span></code> was started from. The server listens on
+<code class="docutils literal notranslate"><span class="pre">127.0.0.1</span></code> only, unless you add listeners (see <a class="reference internal" href="#network-access">Network access</a>).</p>
+<p>From a plain checkout, build the static files once and run the package with Python 3.11 or
+newer, with the engine on the import path:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span>build<span class="w"> </span>//yapnr/viewer:dist
+<span class="nv">PYTHONPATH</span><span class="o">=</span>.:hardware/pnr<span class="w"> </span>python3<span class="w"> </span>-m<span class="w"> </span>yapnr.viewer<span class="w"> </span>--root<span class="w"> </span>runs/example/live<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dist<span class="w"> </span>bazel-bin/yapnr/viewer/dist
+</pre></div>
+</div>
+<p>Without the assembled dist the viewer serves its bare static files: everything works except the
+schematic layout (elkjs) and the 3D view (three.js), which say so in the page.</p>
+</section>
+<section id="touch-and-panels">
+<h2>Touch and panels<a class="headerlink" href="#touch-and-panels" title="Link to this heading">¶</a></h2>
+<p><strong>Touch</strong> (Android Chrome, iOS Safari, or a trackpad/mouse — behaviour is unchanged for those):
+pinch with two fingers to zoom the board, the schematic and the 3D view, anchored at the pinch
+centre; a two-finger drag pans; double-tap zooms in (and back out, toggling) centred on the tap.
+One-finger drag keeps its existing meaning on each surface: it pans the board or schematic, except
+while the rectangle-annotation or “Ask region” tool is armed, where it draws that rectangle, same
+as with a mouse. The 3D view’s orbit/pan/zoom is three.js <code class="docutils literal notranslate"><span class="pre">OrbitControls</span></code>, wired for touch
+(<code class="docutils literal notranslate"><span class="pre">controls.touches</span></code>) the same way. Every drawing surface sets CSS <code class="docutils literal notranslate"><span class="pre">touch-action:</span> <span class="pre">none</span></code> so the
+browser’s own page-level pinch-zoom and scroll never fight the gesture; <code class="docutils literal notranslate"><span class="pre">static/touch.js</span></code> holds
+the shared pinch/double-tap math, used by <code class="docutils literal notranslate"><span class="pre">static/app.js</span></code> (the board canvas) and
+<code class="docutils literal notranslate"><span class="pre">static/schematic.js</span></code> (the schematic SVG).</p>
+<p><strong>Dockable panels</strong>: the Experiment lanes column, the Exploration column (tree, placement costs,
+events) and the Inspect/Source/Ask/Notes dock can each be closed and reopened from the small
+toolbar in the header (<code class="docutils literal notranslate"><span class="pre">static/panels.js</span></code>, <code class="docutils literal notranslate"><span class="pre">static/dock.css</span></code>); with all three closed the board (or
+schematic, or 3D view) fills the window. The Inspect/Source/Ask/Notes panel can also collapse to a
+thin rail or be resized (drag its left edge); it is docked to the right edge (not yet to the left
+or bottom — a follow-up). Layout (open/closed, the dock’s width and last tab) persists per browser
+in <code class="docutils literal notranslate"><span class="pre">localStorage</span></code> (wrapped in <code class="docutils literal notranslate"><span class="pre">try</span></code>/<code class="docutils literal notranslate"><span class="pre">catch</span></code>, so a private window or blocked storage degrades to
+“nothing remembered”, never an error), with a <strong>Reset layout</strong> button next to the toggles. The
+Experiment lanes and Exploration panels can each also collapse to a thin rail (mirroring the
+Inspect/Source/Ask/Notes dock) and dock to either the left or right edge, independent of one
+another, on a wide screen. At ≤900px width (phone and small-tablet widths — a laptop keeps both
+columns) every panel becomes a fixed overlay drawer instead of a grid column, closed by default,
+so a phone opens straight onto the maximized board; opening one slides it in over the board rather
+than squeezing the layout. The Inspect/Source/Ask/Notes dock has its own, wider breakpoint
+(≤1360px), since it is a fourth column rather than two of three. A drawer paints a solid, themed
+background — it must never let the board underneath show through — and a scrim dims the board
+behind it and closes it on a tap outside. Every toggle is a real <code class="docutils literal notranslate"><span class="pre">&lt;button&gt;</span></code>
+(keyboard-activatable, <code class="docutils literal notranslate"><span class="pre">aria-pressed</span></code> reflects state), and the page keeps no horizontal scroll down
+to 360px wide.</p>
+</section>
+<section id="the-experiment-tree">
+<h2>The experiment tree<a class="headerlink" href="#the-experiment-tree" title="Link to this heading">¶</a></h2>
+<p>The Experiment lanes panel (<code class="docutils literal notranslate"><span class="pre">#lanes</span></code>) is a collapsible, directory-like tree of every lane the
+live directory has — a campaign’s arms, a board case, a seed, and its placement/routing
+candidates — built from the lane ids themselves, not hard-coded to one campaign’s shape. A lane
+id is slash-separated and already hierarchical in practice (<code class="docutils literal notranslate"><span class="pre">ladder/keep-on/09-mcu-usb-31-6L-</span> <span class="pre">SGSGPS/s0/initial-start-04</span></code>, a bare <code class="docutils literal notranslate"><span class="pre">controller</span></code>, the real <code class="docutils literal notranslate"><span class="pre">pnr.mc.halving</span></code> shape
+<code class="docutils literal notranslate"><span class="pre">&lt;parent&gt;/&lt;candidate&gt;/&lt;stage&gt;</span></code> such as <code class="docutils literal notranslate"><span class="pre">mc/cand03/screen</span></code>, or radar’s flat <code class="docutils literal notranslate"><span class="pre">mc/s0</span></code>..<code class="docutils literal notranslate"><span class="pre">mc/s3</span></code> with
+no per-stage nesting at all); <code class="docutils literal notranslate"><span class="pre">yapnr/viewer/lane_tree.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">build_tree()</span></code> splits each id on <code class="docutils literal notranslate"><span class="pre">/</span></code>
+and walks a trie
+into a nested tree, shipped once per poll as <code class="docutils literal notranslate"><span class="pre">state[&quot;tree&quot;]</span></code> (<code class="docutils literal notranslate"><span class="pre">/api/state</span></code>) so the front end never
+re-derives the hierarchy. A lane id that is itself a prefix of other lane ids (<code class="docutils literal notranslate"><span class="pre">.../s0</span></code> is both a
+lane and the parent of <code class="docutils literal notranslate"><span class="pre">.../s0/initial-start-00</span></code>) becomes a node that is simultaneously a leaf and
+a group; there is no fixed depth limit. The candidate-search audit’s own bookkeeping lanes
+(<code class="docutils literal notranslate"><span class="pre">r03/search</span></code>) are excluded, same as the old flat list excluded them.</p>
+<p>Every node carries <code class="docutils literal notranslate"><span class="pre">counts</span></code> (leaf-descendants by state — <code class="docutils literal notranslate"><span class="pre">running</span></code>/<code class="docutils literal notranslate"><span class="pre">stalled</span></code>/<code class="docutils literal notranslate"><span class="pre">failed</span></code>/<code class="docutils literal notranslate"><span class="pre">rejected</span></code>/
+<code class="docutils literal notranslate"><span class="pre">queued</span></code>/<code class="docutils literal notranslate"><span class="pre">done</span></code>, see <code class="docutils literal notranslate"><span class="pre">lane_tree.STATES</span></code> — and a <code class="docutils literal notranslate"><span class="pre">total</span></code>) and a <code class="docutils literal notranslate"><span class="pre">fraction</span></code> (the mean of every
+descendant leaf’s own progress fraction — a group with 3 lanes done and 1 lane half-routed reads
+as 0.875, not just “3 of 4 done”) and <code class="docutils literal notranslate"><span class="pre">best_leaf</span></code> (the most relevant descendant: whatever is still
+actively happening ranks first — running, then stalled — ahead of a terminal outcome; among
+terminal outcomes, failed, then rejected, then queued, then done last — “select this group, show
+one board”; deliberately <em>not</em> “failed first”: a single failed leaf in an otherwise-running group
+must not steal the selection away from the work actually in progress). <code class="docutils literal notranslate"><span class="pre">static/lane-tree.js</span></code>
+renders it: a toolbar (name filter, state filter chips, Expand
+all/Collapse all) built once, then the row list, rebuilt each poll. Expand/collapse persists per
+node per browser in <code class="docutils literal notranslate"><span class="pre">localStorage</span></code> (<code class="docutils literal notranslate"><span class="pre">yapnr-tree-expand-v1:&lt;run&gt;</span></code>, wrapped in <code class="docutils literal notranslate"><span class="pre">try</span></code>/<code class="docutils literal notranslate"><span class="pre">catch</span></code>); a
+fresh page opens the top two levels and leaves deeper candidates collapsed. Arrow keys move
+between visible rows, Right expands/descends, Left collapses/ascends, Enter selects a leaf or
+toggles+selects a group’s best leaf (roving <code class="docutils literal notranslate"><span class="pre">tabindex</span></code>, <code class="docutils literal notranslate"><span class="pre">role=&quot;tree&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;treeitem&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">aria-expanded</span></code>). Filtering by name or by state keeps a non-matching group visible whenever a
+descendant of it matches, so a hit stays reachable without permanently changing what was left
+collapsed. At ≤900px width it lives in the Experiments drawer like the rest of <code class="docutils literal notranslate"><span class="pre">#lanes-panel</span></code>
+(see “Touch and panels” above).</p>
+<section id="the-phase-progress-model">
+<h3>The phase/progress model<a class="headerlink" href="#the-phase-progress-model" title="Link to this heading">¶</a></h3>
+<p>One place, <code class="docutils literal notranslate"><span class="pre">yapnr/viewer/progress.py</span></code>, turns a lane’s raw telemetry into a progress bar and a
+status string; nothing else in the viewer derives a phase from an event. Every lane is placed on
+one canonical, ordered pipeline (<code class="docutils literal notranslate"><span class="pre">PHASES</span></code>), independent of which campaign produced it — a
+campaign that never visits a stage (most stop at <code class="docutils literal notranslate"><span class="pre">place</span></code> or <code class="docutils literal notranslate"><span class="pre">check</span></code>) just has nothing to report
+past the stage it stopped at:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>phase</p></th>
+<th class="head"><p>label</p></th>
+<th class="head"><p>kept-over fraction within the phase</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">generate</span></code></p></td>
+<td><p>Generating</p></td>
+<td><p>0.5 while running (no finer signal)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">place</span></code></p></td>
+<td><p>Placing</p></td>
+<td><p>0.5 while running</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">legalize</span></code></p></td>
+<td><p>Legalizing</p></td>
+<td><p>0.5 while running</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">detail</span></code></p></td>
+<td><p>Detailed placement</p></td>
+<td><p>0.5 while running</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">route</span></code></p></td>
+<td><p>Routing</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">data.progress.done</span> <span class="pre">/</span> <span class="pre">data.progress.total</span></code> from the latest <code class="docutils literal notranslate"><span class="pre">route_result</span></code>, else 0.5</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">gloss</span></code></p></td>
+<td><p>Glossing</p></td>
+<td><p>0.5 while running</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">check</span></code></p></td>
+<td><p>Checking</p></td>
+<td><p>0.5 while running, 1.0 once done</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A lane’s overall <code class="docutils literal notranslate"><span class="pre">fraction</span></code> is <code class="docutils literal notranslate"><span class="pre">(phase_index</span> <span class="pre">+</span> <span class="pre">phase_fraction)</span> <span class="pre">/</span> <span class="pre">len(PHASES)</span></code>. The raw phase/kind
+string is matched against a keyword table gathered from the engine’s own <code class="docutils literal notranslate"><span class="pre">phase=</span></code> call sites
+(<code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/{trace,provenance,native_loop,gloss,route/feedback,...}.py</span></code>) and real
+live-directory samples — <code class="docutils literal notranslate"><span class="pre">&quot;legalization&quot;</span></code> → <code class="docutils literal notranslate"><span class="pre">legalize</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;global-placement&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;placement&quot;</span></code> →
+<code class="docutils literal notranslate"><span class="pre">place</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;source</span> <span class="pre">p/r&quot;</span></code> (a feedback round restarting the pipeline) → <code class="docutils literal notranslate"><span class="pre">place</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;routed&quot;</span></code>/
+<code class="docutils literal notranslate"><span class="pre">&quot;commit&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;native-phase&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;usb-pairs&quot;</span></code> → <code class="docutils literal notranslate"><span class="pre">route</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;gloss&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;power-bank&quot;</span></code> → <code class="docutils literal notranslate"><span class="pre">gloss</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&quot;congestion&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;selection&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;drc&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;result&quot;</span></code> → <code class="docutils literal notranslate"><span class="pre">check</span></code>, and so on (<code class="docutils literal notranslate"><span class="pre">progress.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">_KEYWORDS</span></code>
+is authoritative; the route family is checked <em>before</em> the check family on purpose, since a bare
+<code class="docutils literal notranslate"><span class="pre">route_result</span></code> event’s <code class="docutils literal notranslate"><span class="pre">kind</span></code> string contains “result” as a substring — checking “result” first
+would misfile it as <code class="docutils literal notranslate"><span class="pre">check</span></code>). <strong>A phase string this has never seen before is never an error</strong>: it
+falls back to the lane’s last known phase bucket (held over from its previous poll — this is a
+<em>per-poll</em>, not per-event, fallback: several raw events folded into one poll only leave their
+<em>last</em> phase visible to it) or, for a lane with no classifiable event at all yet, to “running, 0%”
+— never a crash, never a reset to zero for an unrelated event (a <code class="docutils literal notranslate"><span class="pre">worker_config_applied</span></code>
+mid-route keeps the route phase). <code class="docutils literal notranslate"><span class="pre">status=&quot;queued&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">kind=&quot;candidate_queued&quot;</span></code> is the
+zero-fraction <code class="docutils literal notranslate"><span class="pre">queued</span></code> state; <code class="docutils literal notranslate"><span class="pre">candidate_complete</span></code>/an accepted <code class="docutils literal notranslate"><span class="pre">iteration_complete</span></code> is <code class="docutils literal notranslate"><span class="pre">done</span></code>
+(fraction 1.0); <code class="docutils literal notranslate"><span class="pre">candidate_failed</span></code> is <code class="docutils literal notranslate"><span class="pre">failed</span></code>, keeping whatever fraction the lane had reached
+rather than resetting it — “it got this far, then failed” is more informative than snapping back
+to zero. A <strong>rejected</strong> Monte Carlo candidate (<code class="docutils literal notranslate"><span class="pre">status=&quot;rejected&quot;</span></code>, halving/beam-search discarding
+a losing branch) gets its own <code class="docutils literal notranslate"><span class="pre">rejected</span></code> state the same way — it is a normal search outcome, not
+a failure, and must not read as one. A <strong>running</strong> lane whose last event is more than
+<code class="docutils literal notranslate"><span class="pre">STALE_SECONDS</span></code> (10 minutes) old reads <code class="docutils literal notranslate"><span class="pre">stalled</span></code> instead — a dead worker, a finished campaign the
+viewer never got a final event for, and a lane actually mid-phase are otherwise indistinguishable.</p>
+<p><strong>Repeated rounds never make the bar go backwards.</strong> A feedback round (<code class="docutils literal notranslate"><span class="pre">pnr.route.feedback</span></code>,
+<code class="docutils literal notranslate"><span class="pre">data.source_round</span></code>, mirrored onto <code class="docutils literal notranslate"><span class="pre">lane[&quot;round&quot;]</span></code> by <code class="docutils literal notranslate"><span class="pre">apply_event</span></code>) restarts the whole
+generate→check pipeline for another pass; naively re-mapping that onto the same 0..1 pipeline
+fraction would make the bar visibly drop back toward “generate” every round. Instead, once a
+round completes (<code class="docutils literal notranslate"><span class="pre">round</span></code> increments), the fraction it reached is folded into a <code class="docutils literal notranslate"><span class="pre">round_floor</span></code> —
+raised toward 1.0 asymptotically (<code class="docutils literal notranslate"><span class="pre">floor</span> <span class="pre">+</span> <span class="pre">(1-floor)</span> <span class="pre">*</span> <span class="pre">this_round's_fraction</span></code>), never past it —
+that the next round’s own within-pipeline progress is added on top of. A lane that never repeats
+a round (no <code class="docutils literal notranslate"><span class="pre">round</span></code> field at all, the common single-pass case) has its floor pinned at 0.0
+forever, so this is a no-op for it: <code class="docutils literal notranslate"><span class="pre">fraction</span></code> is exactly the plain in-pipeline read, unchanged.</p>
+<p>A group node’s bar is the mean of its descendant leaves’ fractions, coloured by the most urgent
+state present — the same running-first priority as <code class="docutils literal notranslate"><span class="pre">best_leaf</span></code> above — the width says how far
+along, the colour says whether something needs attention.</p>
+</section>
+<section id="status-text">
+<h3>Status text<a class="headerlink" href="#status-text" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">progress.humanize()</span></code> turns that classification into one short, plain-language line (fits the
+narrow lanes panel; the raw phase/kind and full counts are in each row’s <code class="docutils literal notranslate"><span class="pre">title</span></code> tooltip instead):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Queued</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Waiting</span> <span class="pre">for</span> <span class="pre">placement</span></code> — no classifiable event yet</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Generating</span></code> / <code class="docutils literal notranslate"><span class="pre">Placing</span></code> / <code class="docutils literal notranslate"><span class="pre">Legalizing:</span> <span class="pre">pass</span> <span class="pre">2</span></code> / <code class="docutils literal notranslate"><span class="pre">Glossing</span></code> — mid-phase, no finer detail</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Routing:</span> <span class="pre">412</span> <span class="pre">of</span> <span class="pre">530</span> <span class="pre">connections</span> <span class="pre">(78%)</span></code> — from <code class="docutils literal notranslate"><span class="pre">data.progress</span></code> on the latest <code class="docutils literal notranslate"><span class="pre">route_result</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Checking:</span> <span class="pre">2</span> <span class="pre">opens</span> <span class="pre">/</span> <span class="pre">0</span> <span class="pre">violations</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Stalled:</span> <span class="pre">idle</span> <span class="pre">23</span> <span class="pre">min</span></code> — a running lane with no event in over <code class="docutils literal notranslate"><span class="pre">STALE_SECONDS</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Rejected</span> <span class="pre">candidate</span> <span class="pre">(reached</span> <span class="pre">Routing)</span></code> — a normal Monte Carlo search outcome, not a failure</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Failed:</span> <span class="pre">3</span> <span class="pre">unconnected,</span> <span class="pre">1</span> <span class="pre">DRC</span> <span class="pre">error</span></code> — from the lane’s <code class="docutils literal notranslate"><span class="pre">opens</span></code>/<code class="docutils literal notranslate"><span class="pre">violations</span></code> (a routed/checked
+candidate) or, for a screening-only candidate that never got a board extracted, from its own
+<code class="docutils literal notranslate"><span class="pre">candidate_failed</span></code>/<code class="docutils literal notranslate"><span class="pre">candidate_complete</span></code> payload (<code class="docutils literal notranslate"><span class="pre">data.missing_connections</span></code>/<code class="docutils literal notranslate"><span class="pre">data.opens</span></code>,
+<code class="docutils literal notranslate"><span class="pre">data.violations</span></code>; stored as <code class="docutils literal notranslate"><span class="pre">lane[&quot;last_candidate&quot;]</span></code> by <code class="docutils literal notranslate"><span class="pre">apply_event</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Done:</span> <span class="pre">all</span> <span class="pre">connected,</span> <span class="pre">DRC</span> <span class="pre">clean,</span> <span class="pre">12.4</span> <span class="pre">s</span></code> — <strong>only when the telemetry actually says so</strong>: <code class="docutils literal notranslate"><span class="pre">opens</span></code>
+must be exactly <code class="docutils literal notranslate"><span class="pre">0</span></code> for “all connected” (otherwise it reports the real count, or omits the claim
+entirely if unknown — a screening-only run that never extracted a board never ran DRC, so it
+must not claim “DRC clean” either, and reads plain <code class="docutils literal notranslate"><span class="pre">Done:</span> <span class="pre">finished</span></code> instead). The duration is
+<code class="docutils literal notranslate"><span class="pre">lane[&quot;time&quot;]</span> <span class="pre">-</span> <span class="pre">lane[&quot;started_at&quot;]</span></code> (<code class="docutils literal notranslate"><span class="pre">started_at</span></code>: the lane’s first event time, tracked per-lane
+server-side, mirrored onto the lane dict itself since <code class="docutils literal notranslate"><span class="pre">humanize()</span></code> is a pure function of the
+lane alone); omitted when either timestamp is unavailable.</p></li>
+</ul>
+<p>Tests: <code class="docutils literal notranslate"><span class="pre">tests/unit/viewer/test_lane_tree.py</span></code> and <code class="docutils literal notranslate"><span class="pre">test_progress.py</span></code> (hermetic, against lane-id and
+lane-dict samples drawn from real live directories plus odd shapes — a lane that is both leaf and
+group, empty input, very deep nesting, an unrecognised phase string, the real <code class="docutils literal notranslate"><span class="pre">pnr.mc.halving</span></code>
+<code class="docutils literal notranslate"><span class="pre">&lt;parent&gt;/&lt;candidate&gt;/&lt;stage&gt;</span></code> shape and radar’s flat <code class="docutils literal notranslate"><span class="pre">mc/s0..s3</span></code>, stalled/rejected states, and
+the round-repeat lap-compounding model); <code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer/test_experiment_tree.py</span></code> (headless
+Chrome: the tree renders/collapses/expands and persists, filtering, keyboard navigation (including
+that focus survives a live rebuild, not falling back to <code class="docutils literal notranslate"><span class="pre">&lt;body&gt;</span></code>), progress bar widths against
+this file’s model, status text, board selection via a leaf or a group’s best leaf, and phone
+width). The <code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer</span></code> package is tagged <code class="docutils literal notranslate"><span class="pre">manual</span></code> (see its <code class="docutils literal notranslate"><span class="pre">BUILD.bazel</span></code>) and needs a real
+Chrome/Chromium on the machine; it is <strong>not</strong> run by CI’s <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code> and must be run
+explicitly (<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//tests/e2e/viewer:test_experiment_tree</span></code>) before relying on it.</p>
+</section>
+</section>
+<section id="rendering-and-performance">
+<h2>Rendering and performance<a class="headerlink" href="#rendering-and-performance" title="Link to this heading">¶</a></h2>
+<p>The board canvas (<code class="docutils literal notranslate"><span class="pre">static/app.js</span></code>) used to redraw everything, every frame, in immediate mode: each
+via was two <code class="docutils literal notranslate"><span class="pre">beginPath</span></code>/<code class="docutils literal notranslate"><span class="pre">arc</span></code>/<code class="docutils literal notranslate"><span class="pre">fill</span></code> calls with a <code class="docutils literal notranslate"><span class="pre">fillStyle</span></code> change, forced to at least a 2px
+radius even when zoomed out past legibility, and both drawing and hover/click hit-testing scanned
+every via and track on the board linearly. On a real board with thousands of ground-stitching
+vias (the reported case) this made panning, pinching and zooming visibly laggy. Four changes fix
+it, in order of how much they matter:</p>
+<ol class="arabic">
+<li><p><strong>A spatial grid</strong> (<code class="docutils literal notranslate"><span class="pre">gridFor()</span></code>, one per geometry object, built lazily and cached by object
+identity — nothing invalidates it by hand, a new geometry is simply a new object): uniform cells
+in board mm, sized so each holds a handful of vias and tracks. <code class="docutils literal notranslate"><span class="pre">paintBoard()</span></code> and <code class="docutils literal notranslate"><span class="pre">boardHit()</span></code>
+both use it — drawing culls to the cells the current viewport actually overlaps; hit-testing
+checks only the cells near the query point. Both return exactly what a full linear scan would
+have (same candidates, same priority order), just over far fewer items; this is the one checked
+directly, not just measured, in <code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer/test_viewer_perf.py</span></code>.</p></li>
+<li><p><strong>Via batching</strong>: the via rings and holes in the culled, visible set are drawn as one <code class="docutils literal notranslate"><span class="pre">Path2D</span></code>
+fill each (board-space coordinates, one <code class="docutils literal notranslate"><span class="pre">setTransform</span></code> per tier) instead of two <code class="docutils literal notranslate"><span class="pre">arc</span></code>/<code class="docutils literal notranslate"><span class="pre">fill</span></code>
+calls and a <code class="docutils literal notranslate"><span class="pre">fillStyle</span></code> change per via. Tracks are culled by the same grid but still drawn one
+at a time, since their stroke width and colour both vary per track (a diff view, a draft net) —
+batching those would need bucketing by width too, judged not worth the added complexity once
+culling and the via work below met the target.</p></li>
+<li><p><strong>Via level of detail</strong>, by true on-screen diameter (<code class="docutils literal notranslate"><span class="pre">diameter</span> <span class="pre">*</span> <span class="pre">view.scale</span></code>, no artificial
+minimum): ≥1.5px draws the normal ring and hole; 0.5–1.5px draws a plain dot at its true size
+(a ring is not legible at that size anyway); below 0.5px, too small to resolve individually, one
+representative dot stands in for every via in that grid cell — a cheap stand-in for a
+pre-rendered texture tile that reuses the grid already built for culling. Hit-testing always
+uses a via’s true diameter regardless of which tier drew it, so a via that is just a cell fleck
+on screen is exactly as clickable as it always was.</p></li>
+<li><p><strong>A gesture raster cache</strong>: while a pan, pinch, wheel-zoom or rectangle drag is live, the board
+canvas just blits an offscreen raster of the static board layers with a scale+translate
+transform, at most once per animation frame however many input events arrive; the dynamic
+overlay (selection, routing target, highlights, drag/annotation rectangles, cost dots, note
+badges) is still drawn live on top every frame. The cache is built at a margin around the
+viewport (snapped so its backing store is an exact pixel multiple — no sub-pixel resampling blur
+when nothing has actually moved yet) and is reused for as long as the board content (its
+content hash, layers, toggles, diff and draft) and the view stay the same.</p></li>
+<li><p><strong>Nothing heavy while a finger is down.</strong> A full <code class="docutils literal notranslate"><span class="pre">render()</span></code> requested mid-gesture (a live poll,
+a note, a highlight) is deferred to the release, which renders anyway; the live poll does not
+even advance its revision until the gesture is over. The full-quality redraw after a gesture is
+the release itself (a pause mid-drag no longer triggers one); only the wheel, which has no
+release, still settles 150ms after its last step. After every full render whose content or view
+the cache does not match, the cache is rebuilt — and forced to rasterise, since canvas drawing
+is otherwise only executed on first use — in idle time, so the next drag starts from a ready
+cache and its first frame is a blit like any other. The one exception mid-gesture: a finger held
+still for 0.7s over a region the cache does not cover (a long pan past the margin, or a pinch
+past 2x) rebuilds the cache at the current view, so the blank edge fills in while the user looks.</p>
+<p>Before this, every full render marked the cache stale and the first gesture frame rebuilt it, so
+every drag started with a 60–140ms hitch on a phone; worse, the settle render fired whenever a
+finger paused for 150ms mid-drag (or a frame took that long), which made the next move rebuild
+the cache again — a loop that turned one slow frame into continuous stutter.</p>
+</li>
+</ol>
+<p>A further option, instanced WebGL vias, was in the original plan but turned out unnecessary: items
+1–4 alone already meet the &lt;16ms p95 target during gestures at 1x CPU throttling (see the
+before/after table in the PR). Pads and other tracks were left without additional level-of-detail
+tiers for the same reason — their counts were never the bottleneck.</p>
+<p>Tests: <code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer/test_viewer_perf.py</span></code> (manual, like its siblings — a real headless Chrome
+against a real viewer server and a synthetic dense board; skips without Chrome) checks that
+<code class="docutils literal notranslate"><span class="pre">boardHit()</span></code> matches a verbatim copy of the pre-grid linear scan at many points and across a dense
+sweep at a zoomed-out LoD tier, that the gesture fast path reproduces a full render pixel-for-pixel
+at each via LoD tier, and that panning does not rebuild the cache mid-gesture.
+<code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer/test_viewer_gesture.py</span></code> (same setup, phone profile with touch emulation) drives
+real touch drags with 16ms move steps, mid-drag pauses and a live poll that re-renders mid-drag,
+and checks that no full render and no cache rebuild happen while a finger is down, that the drag
+starts from a cache built in idle time, and frame-time bounds under a modest CPU throttle.</p>
+</section>
+<section id="the-live-directory">
+<h2>The live directory<a class="headerlink" href="#the-live-directory" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>Written by</p></th>
+<th class="head"><p>What</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">events/*.json</span></code></p></td>
+<td><p>the experiment</p></td>
+<td><p>immutable telemetry events (<code class="docutils literal notranslate"><span class="pre">pnr-live-event-v1</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">boards/&lt;sha256&gt;.kicad_pcb</span></code></p></td>
+<td><p>the experiment</p></td>
+<td><p>native board checkpoints, named by content hash</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">geometry/&lt;sha256&gt;.json</span></code></p></td>
+<td><p>the viewer</p></td>
+<td><p>board geometry extracted with KiCad’s Python (cached)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">control.json</span></code></p></td>
+<td><p>the viewer</p></td>
+<td><p>runtime control requests the experiment reads</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pins/</span></code>, <code class="docutils literal notranslate"><span class="pre">drafts/</span></code>, <code class="docutils literal notranslate"><span class="pre">snapshots/</span></code></p></td>
+<td><p>the viewer</p></td>
+<td><p>pinned states and annotated snapshots</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">schematic/</span></code>, <code class="docutils literal notranslate"><span class="pre">source/</span></code>, …</p></td>
+<td><p>the viewer</p></td>
+<td><p>caches (<code class="docutils literal notranslate"><span class="pre">--cache-dir</span></code> moves them)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The <em>experiment folder</em> is the root’s parent unless <code class="docutils literal notranslate"><span class="pre">--experiment-dir</span></code> says otherwise. Trial run
+directories must lie under it; the viewers of one experiment share its 3D export lock, and an
+optional <code class="docutils literal notranslate"><span class="pre">restart-status.json</span></code> there is shown in the page. Design notes default to
+<code class="docutils literal notranslate"><span class="pre">&lt;experiment&gt;/notes</span></code>, control preferences to <code class="docutils literal notranslate"><span class="pre">&lt;experiment&gt;/viewer-preferences.json</span></code>.</p>
+</section>
+<section id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Link to this heading">¶</a></h2>
+<p>Every setting has a flag; a TOML file (<code class="docutils literal notranslate"><span class="pre">--config</span></code>, schema <code class="docutils literal notranslate"><span class="pre">yapnr-viewer-v1</span></code>) holds the same
+settings, with paths relative to the file. A flag wins over the file, the file over the default,
+and every default is derived from the root: nothing points at a machine path.
+<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span> <span class="pre">--</span> <span class="pre">--help</span></code> lists the flags; the file format is in the docstring of
+<code class="docutils literal notranslate"><span class="pre">yapnr/viewer/config.py</span></code>. A typical file:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="n">schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;yapnr-viewer-v1&quot;</span>
+<span class="n">root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;runs/example/live&quot;</span>
+
+<span class="k">[server]</span>
+<span class="n">port</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8766</span>
+<span class="n">title</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Example board&quot;</span>
+
+<span class="k">[design]</span>
+<span class="n">graph</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;inputs/graph.json&quot;</span><span class="w">          </span><span class="c1"># netlist: schematic view, notes, source index</span>
+<span class="n">constraints</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;inputs/constraints.yaml&quot;</span>
+
+<span class="k">[design.atopile]</span>
+<span class="n">root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hardware/example&quot;</span><span class="w">            </span><span class="c1"># the folder with ato.yaml</span>
+<span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w">                    </span><span class="c1"># its build target: the entry module</span>
+</pre></div>
+</div>
+<p>Machine settings never go in that file. KiCad and the <code class="docutils literal notranslate"><span class="pre">claude</span></code> CLI come from flags, the
+environment or the user’s machine config, <code class="docutils literal notranslate"><span class="pre">~/.config/yapnr/config.toml</span></code> (or
+<code class="docutils literal notranslate"><span class="pre">$XDG_CONFIG_HOME/yapnr/config.toml</span></code>; <code class="docutils literal notranslate"><span class="pre">YAPNR_USER_CONFIG</span></code> names another file, empty disables it):</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[kicad]</span>
+<span class="n">cli</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;~/Applications/KiCad-headless.app/Contents/MacOS/kicad-cli&quot;</span>
+<span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;~/Applications/KiCad-headless.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3&quot;</span>
+
+<span class="k">[agent]</span>
+<span class="n">claude</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/opt/claude/bin/claude&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="design-inputs-and-optional-services">
+<h2>Design inputs and optional services<a class="headerlink" href="#design-inputs-and-optional-services" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Feature</p></th>
+<th class="head"><p>Needs</p></th>
+<th class="head"><p>Without it</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Board geometry of checkpoints</p></td>
+<td><p>KiCad’s Python (<code class="docutils literal notranslate"><span class="pre">--kicad-python</span></code>, <code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_PYTHON</span></code>)</p></td>
+<td><p>events without a layout show no board</p></td>
+</tr>
+<tr class="row-odd"><td><p>Placement cost inspection</p></td>
+<td><p>the engine’s cost model (<code class="docutils literal notranslate"><span class="pre">--engine-runtime</span></code>, default: imported)</p></td>
+<td><p>the cost panel says unavailable</p></td>
+</tr>
+<tr class="row-even"><td><p>Schematic view</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--graph</span></code> (plus <code class="docutils literal notranslate"><span class="pre">--constraints</span></code>, <code class="docutils literal notranslate"><span class="pre">--parts</span></code> symbols)</p></td>
+<td><p>the schematic tab says unavailable</p></td>
+</tr>
+<tr class="row-odd"><td><p>Source browser (Inspect)</p></td>
+<td><p>atopile sources (<code class="docutils literal notranslate"><span class="pre">--atopile-root</span></code> + <code class="docutils literal notranslate"><span class="pre">--atopile-build</span></code>) and a graph</p></td>
+<td><p>the Source tab says why; notes use the graph</p></td>
+</tr>
+<tr class="row-even"><td><p>3D view</p></td>
+<td><p>a headless <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code> (<code class="docutils literal notranslate"><span class="pre">--kicad-cli</span></code>, <code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_CLI</span></code>)</p></td>
+<td><p>the 3D pane says why</p></td>
+</tr>
+<tr class="row-odd"><td><p>Design notes</p></td>
+<td><p>nothing (on by default)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>Ask agent, AI net labels</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--agent</span> <span class="pre">on</span></code>, <code class="docutils literal notranslate"><span class="pre">--net-summaries</span> <span class="pre">on</span></code> and the <code class="docutils literal notranslate"><span class="pre">claude</span></code> CLI</p></td>
+<td><p>off (the default): no Ask buttons; the Ask tab says how to turn it on</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The atopile source browser reads the project’s <code class="docutils literal notranslate"><span class="pre">ato.yaml</span></code>: <code class="docutils literal notranslate"><span class="pre">builds.&lt;build&gt;.entry</span></code> names the entry
+module, and the source folder is that file’s folder (<code class="docutils literal notranslate"><span class="pre">--atopile-src</span></code> overrides it; <code class="docutils literal notranslate"><span class="pre">--parts</span></code>
+overrides <code class="docutils literal notranslate"><span class="pre">&lt;src&gt;/parts</span></code>). It joins the instance tree to the netlist by component address and pad
+sets, so its net titles and summaries are mechanical. Without atopile sources the viewer still
+runs: the schematic draws generic symbols, notes resolve targets against the netlist alone and
+3D model paths are used as the board has them.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--engine-runtime</span></code> points the subprocess services (cost replay, schematic builder) at a frozen
+copy of the engine, the one a run was made with; the directory is the one that contains <code class="docutils literal notranslate"><span class="pre">pnr</span></code>.</p>
+<section id="kicad">
+<h3>KiCad<a class="headerlink" href="#kicad" title="Link to this heading">¶</a></h3>
+<p>The viewer runs KiCad only headlessly: KiCad’s Python extracts board geometry (and the graph of
+a routed checkpoint for the cost replay), and <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code> exports the 3D view’s GLB. The order
+is: the flag, the environment (<code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_CLI</span></code>, alias <code class="docutils literal notranslate"><span class="pre">PNR_KICAD_CLI</span></code>; <code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_PYTHON</span></code>),
+the machine config, then discovery: on macOS only the headless copy in
+<code class="docutils literal notranslate"><span class="pre">~/Applications/KiCad-headless.app</span></code> (make it as in <a class="reference internal" href="../DEVELOPERS.html#kicad"><span class="std std-ref">DEVELOPERS.md</span></a>), on
+Linux <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code> on <code class="docutils literal notranslate"><span class="pre">PATH</span></code> and a <code class="docutils literal notranslate"><span class="pre">python3</span></code> that imports <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code>. The GUI application is never
+used: a path inside <code class="docutils literal notranslate"><span class="pre">KiCad.app</span></code> or <code class="docutils literal notranslate"><span class="pre">/Applications/KiCad</span></code>, or inside any application bundle that is
+not background-only, is refused, because every call would put an icon in the Dock.</p>
+</section>
+</section>
+<section id="network-access">
+<h2>Network access<a class="headerlink" href="#network-access" title="Link to this heading">¶</a></h2>
+<p>By default the viewer listens on <code class="docutils literal notranslate"><span class="pre">127.0.0.1</span></code>. To reach it from another machine, add a listener and
+the origin the browser will use, for example:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span>run<span class="w"> </span>//:viewer<span class="w"> </span>--<span class="w"> </span>--root<span class="w"> </span>runs/example/live<span class="w"> </span>--listen<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span>--listen<span class="w"> </span><span class="m">192</span>.0.2.10<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--allow-origin<span class="w"> </span>http://192.0.2.10:8766<span class="w"> </span>--allow-origin<span class="w"> </span>http://viewer.example.com:8766
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Host guard (DNS rebinding):</strong> a request must carry a <code class="docutils literal notranslate"><span class="pre">Host</span></code> that is a loopback name, a
+<code class="docutils literal notranslate"><span class="pre">--listen</span></code> address, an <code class="docutils literal notranslate"><span class="pre">--allow-origin</span></code> host (or its first label) or an <code class="docutils literal notranslate"><span class="pre">--allow-host</span></code> name;
+anything else gets 421.</p></li>
+<li><p><strong>Origin check:</strong> writes need an allowlisted <code class="docutils literal notranslate"><span class="pre">Origin</span></code> (<code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:&lt;port&gt;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">http://localhost:&lt;port&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">--allow-origin</span></code>). The Ask agent and every notes write reject a
+missing <code class="docutils literal notranslate"><span class="pre">Origin</span></code> too.</p></li>
+<li><p>Everyone who reaches the port can see the experiment, the design sources you configured and
+the notes and stored conversations, and can write notes as “the user” (recorded with their
+address). The Origin check stops other web pages, not a client that forges the header. Expose the
+viewer only on networks you trust, and never to the internet.</p></li>
+</ul>
+</section>
+<section id="the-ask-agent-and-ai-net-labels-off-by-default">
+<h2>The Ask agent and AI net labels (off by default)<a class="headerlink" href="#the-ask-agent-and-ai-net-labels-off-by-default" title="Link to this heading">¶</a></h2>
+<p>Both are <strong>off unless you turn them on</strong>, also on a loopback listener:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--agent</span> <span class="pre">on</span></code> enables <strong>Ask</strong>: a read-only assistant that answers questions about the selection
+(parts, nets, pads, regions, source lines, lanes, events). Each question is one headless
+<code class="docutils literal notranslate"><span class="pre">claude</span> <span class="pre">-p</span></code> run. <code class="docutils literal notranslate"><span class="pre">--agent-web</span> <span class="pre">on</span></code> also lets it use WebSearch and WebFetch.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--net-summaries</span> <span class="pre">on</span></code> adds <strong>AI net labels</strong>: one tool-less <code class="docutils literal notranslate"><span class="pre">claude</span></code> call per changed netlist
+dossier (per ~60k characters of it; about $0.20 for a hundred nets with sonnet), labelled as AI
+output in Inspect.</p></li>
+</ul>
+<p>What that means:</p>
+<ul class="simple">
+<li><p><strong>Cost.</strong> Every turn and every labelling call is paid on the operator’s Claude account (the
+<code class="docutils literal notranslate"><span class="pre">claude</span></code> CLI’s login). Each call has a budget that the CLI enforces (<code class="docutils literal notranslate"><span class="pre">--max-budget-usd</span></code>): an Ask
+turn <code class="docutils literal notranslate"><span class="pre">--agent-budget-usd</span></code> (default $2), a net-label call <code class="docutils literal notranslate"><span class="pre">--net-summary-budget-usd</span></code> (default $1).
+Both kinds count against one cap per server process, <code class="docutils literal notranslate"><span class="pre">--agent-total-usd</span></code> (default $20; <code class="docutils literal notranslate"><span class="pre">0</span></code> turns
+the cap off). A call starts only while the cap still covers its whole budget on top of what was
+spent and what the running calls hold, so concurrent turns cannot pass it together; a call that
+ends without a cost report from the CLI (timeout, cancel, a stopped unsafe turn) is counted at
+its whole budget. When the cap cannot cover another call, Ask says so and the remaining net
+labels stay missing until a restart, which resets the count (it is kept in memory). The CLI
+checks its budget as the turn runs, so one call can end slightly above its budget. The default
+model is opus (<code class="docutils literal notranslate"><span class="pre">--agent-model</span> <span class="pre">sonnet</span></code> is cheaper).</p></li>
+<li><p><strong>Reads.</strong> The agent can read the working directory (<code class="docutils literal notranslate"><span class="pre">--agent-cwd</span></code>, default the experiment
+folder) and the folders you allow (<code class="docutils literal notranslate"><span class="pre">--agent-read-dir</span></code>, default the atopile sources and the
+experiment folder). It has no shell and no write tools; its only write path is the design-notes
+tools of a per-turn MCP server, and it can only propose, never accept, a change. A turn whose
+CLI reports any other tool or server is killed.</p></li>
+<li><p><strong>Web.</strong> With <code class="docutils literal notranslate"><span class="pre">--agent-web</span> <span class="pre">on</span></code> fetched pages are untrusted input: a page can try to steer the
+model (prompt injection). WebFetch goes through a guard hook that allows public hosts only
+(loopback, private, link-local, tailnet and <code class="docutils literal notranslate"><span class="pre">.local</span></code> names are refused, also after DNS
+resolution), and the prompt forbids putting design data into URLs or queries, but a model can
+still be misled. Leave web off unless you need datasheets.</p></li>
+<li><p><strong>Exposure.</strong> On a non-loopback listener anyone who reaches the port can run paid turns and
+read what the agent can read; the server warns at startup. Do not enable the agent there unless
+you understand and accept that.</p></li>
+</ul>
+</section>
+<section id="design-notes">
+<h2>Design notes<a class="headerlink" href="#design-notes" title="Link to this heading">¶</a></h2>
+<p>Notes (<code class="docutils literal notranslate"><span class="pre">&lt;experiment&gt;/notes</span></code>, shared by all viewers of an experiment) record observations,
+questions, requirements, decisions and proposals, with targets on the board or in the source.
+People create, edit, accept, reject, apply and delete them in the Notes tab; the Ask agent can
+only add notes, comment and edit its own open notes. <code class="docutils literal notranslate"><span class="pre">design-notes.md</span></code> in the same folder is the
+feed for the next design pass, and <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.viewer.notes.store</span> <span class="pre">report</span> <span class="pre">--dir</span> <span class="pre">&lt;notes&gt;</span></code>
+prints it (<code class="docutils literal notranslate"><span class="pre">--status</span> <span class="pre">accepted</span></code>, <code class="docutils literal notranslate"><span class="pre">--json</span></code>).</p>
+<section id="scope-which-lane-s-a-note-shows-on">
+<h3>Scope: which lane(s) a note shows on<a class="headerlink" href="#scope-which-lane-s-a-note-shows-on" title="Link to this heading">¶</a></h3>
+<p>One experiment (one <code class="docutils literal notranslate"><span class="pre">--root</span></code>) can have many lanes (candidates/trials), each with its own board,
+and the same refdes (<code class="docutils literal notranslate"><span class="pre">C1</span></code>, <code class="docutils literal notranslate"><span class="pre">U5</span></code>, …) names a <em>different</em> instance on each one. A note is therefore
+scoped to the lane it was recorded in, not to the refdes alone: a note about <code class="docutils literal notranslate"><span class="pre">C1</span></code> written while
+looking at lane <code class="docutils literal notranslate"><span class="pre">r05/c02</span></code> is never drawn on, or counted for, lane <code class="docutils literal notranslate"><span class="pre">r05/c07</span></code>’s board, even though
+both boards have their own <code class="docutils literal notranslate"><span class="pre">C1</span></code>.</p>
+<p>Every note carries a computed <code class="docutils literal notranslate"><span class="pre">scope</span></code> (<code class="docutils literal notranslate"><span class="pre">notes/store.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">derive_scope()</span></code>, schema
+<code class="docutils literal notranslate"><span class="pre">yapnr-notes-v2</span></code>), from two inputs already on the note:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">provenance.lane</span></code>, recorded automatically from the lane you were viewing when you created the
+note (via the Inspect panel, a board click, or the Ask agent) — scope <code class="docutils literal notranslate"><span class="pre">{&quot;kind&quot;:&quot;lane&quot;,&quot;lane&quot;:…}</span></code>.</p></li>
+<li><p>an explicit, optional <strong>global</strong> field, off by default, you set yourself (the Notes editor’s
+“Show in every experiment” checkbox; only a user can set it, like status) — scope
+<code class="docutils literal notranslate"><span class="pre">{&quot;kind&quot;:&quot;global&quot;}</span></code>.</p></li>
+<li><p>neither: scope <code class="docutils literal notranslate"><span class="pre">{&quot;kind&quot;:&quot;unscoped&quot;}</span></code> — a note with no recorded lane (written before scoping
+existed, or with the board paused on no particular lane). An unscoped note is never drawn on any
+board; the Notes tab lists it under “Unscoped notes” instead of guessing where it belongs, with
+a button to tag it with the lane you are currently viewing.</p></li>
+</ul>
+<p>Scope is computed fresh every time a note is read, not stored in <code class="docutils literal notranslate"><span class="pre">notes.jsonl</span></code> — so this needed no
+migration: a note from an older viewer that never had a “scope” or “global” field is classified
+the same way new ones are (by its <code class="docutils literal notranslate"><span class="pre">provenance.lane</span></code>, or unscoped), and nothing in the log is
+rewritten or lost. Board badges (<code class="docutils literal notranslate"><span class="pre">note-badges</span></code>), the Inspect panel’s “Notes” section, and the Ask
+agent’s dossier (<code class="docutils literal notranslate"><span class="pre">notes/store.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">relevant()</span></code>) all filter by scope against the lane you are
+currently looking at; the Notes tab’s own search list still shows every note (each with a scope
+label) so you can find and re-tag an unscoped one.</p>
+</section>
+</section>
+<section id="http-interface">
+<h2>HTTP interface<a class="headerlink" href="#http-interface" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Route</p></th>
+<th class="head"><p>What</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/state?lane=&amp;since=&amp;run=</span></code></p></td>
+<td><p>lanes, events, errors (<code class="docutils literal notranslate"><span class="pre">unchanged</span></code> when idle)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/geometry/&lt;sha256&gt;</span></code></p></td>
+<td><p>a checkpoint’s geometry</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET,</span> <span class="pre">POST</span> <span class="pre">/api/controls</span></code></p></td>
+<td><p>runtime controls (requested, active, limits)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/pin</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/draft</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/snapshot</span></code></p></td>
+<td><p>immutable pins, drafts, annotated snapshots</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/component-cost?event_id=&amp;ref=</span></code></p></td>
+<td><p>placement cost replay</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/schematic?lane=[&amp;scope=board]</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/schematic/payload/&lt;key&gt;</span></code></p></td>
+<td><p>the schematic model</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/source/index</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/source/file?path=</span></code></p></td>
+<td><p>the atopile source index and files</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GET,</span> <span class="pre">POST</span> <span class="pre">/api/notes…</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/notes/export?format=md|json</span></code></p></td>
+<td><p>design notes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/agent/status</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/agent/chat</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/agent/cancel</span></code></p></td>
+<td><p>the Ask agent (server-sent events)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/3d?lane=&amp;phase=</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/3d/glb/&lt;key&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/3d/status</span></code></p></td>
+<td><p>the 3D view</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/about</span></code></p></td>
+<td><p>version, source repository and revision</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="source-code-and-license">
+<h2>Source code and license<a class="headerlink" href="#source-code-and-license" title="Link to this heading">¶</a></h2>
+<p>The page header links to the viewer’s source (AGPL-3.0-or-later, section 13): the source tree of
+the revision the server runs (<code class="docutils literal notranslate"><span class="pre">YAPNR_SOURCE_REVISION</span></code>, or the git checkout’s <code class="docutils literal notranslate"><span class="pre">HEAD</span></code>), marked
+“modified” when the checkout has uncommitted changes to tracked files. If you serve a modified
+viewer to other people, publish your changes and point <code class="docutils literal notranslate"><span class="pre">--source-url</span></code> at them. The revision is the
+viewer’s own; runs do not record the engine commit that produced them yet. The front end loads two
+third-party libraries, served unmodified next to their licenses: elkjs (EPL-2.0, with an
+Apache-2.0 web-worker shim; both texts are served) and three.js (MIT); see
+<a class="reference internal" href="../THIRD_PARTY.html"><span class="std std-doc">THIRD_PARTY.md</span></a>.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="frontends/atopile.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">The atopile toolchain</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="agent-workflow.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Design a PCB with an agent</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">The live viewer</a><ul>
+<li><a class="reference internal" href="#running-it">Running it</a></li>
+<li><a class="reference internal" href="#touch-and-panels">Touch and panels</a></li>
+<li><a class="reference internal" href="#the-experiment-tree">The experiment tree</a><ul>
+<li><a class="reference internal" href="#the-phase-progress-model">The phase/progress model</a></li>
+<li><a class="reference internal" href="#status-text">Status text</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#rendering-and-performance">Rendering and performance</a></li>
+<li><a class="reference internal" href="#the-live-directory">The live directory</a></li>
+<li><a class="reference internal" href="#configuration">Configuration</a></li>
+<li><a class="reference internal" href="#design-inputs-and-optional-services">Design inputs and optional services</a><ul>
+<li><a class="reference internal" href="#kicad">KiCad</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#network-access">Network access</a></li>
+<li><a class="reference internal" href="#the-ask-agent-and-ai-net-labels-off-by-default">The Ask agent and AI net labels (off by default)</a></li>
+<li><a class="reference internal" href="#design-notes">Design notes</a><ul>
+<li><a class="reference internal" href="#scope-which-lane-s-a-note-shows-on">Scope: which lane(s) a note shows on</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#http-interface">HTTP interface</a></li>
+<li><a class="reference internal" href="#source-code-and-license">Source code and license</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

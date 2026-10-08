@@ -1,0 +1,608 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="RF inverse design" href="rf-inverse-design.html"><link rel="prev" title="The atopile toolchain" href="frontends/atopile.html">
+        <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>The part cache - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agent-workflow.html">Design a PCB with an agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plane-partition.html">How plane partition works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ci-lanes.html">CI lanes and Bazel caches</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/clearance-index-validation.html">Clearance index: integration validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/hull-nest-validation.html">Hull nesting: validation status</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/part-cache.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/part-cache.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="the-part-cache">
+<h1>The part cache<a class="headerlink" href="#the-part-cache" title="Link to this heading">¶</a></h1>
+<p>yapnr commits no third-party part data. The atopile parts a board uses (footprints, symbols, 3D
+models) and the facts its part picker chooses from live in a <strong>part cache</strong>: a directory on the
+user’s machine, or a server that several machines share. A project pins the parts it uses by
+content id in a parts lock, and every build writes them into its work copy after checking each
+file (<a class="reference internal" href="frontends/atopile.html#parts"><span class="std std-ref">the atopile toolchain</span></a>).</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>part-cache<span class="w"> </span>init<span class="w">                                   </span><span class="c1"># ~/.local/share/yapnr/part-cache</span>
+yapnr<span class="w"> </span>part-cache<span class="w"> </span>import-parts<span class="w"> </span>--imported-from<span class="w"> </span><span class="s2">&quot;board X&quot;</span><span class="w"> </span>path/to/elec/src/parts
+yapnr<span class="w"> </span>part-cache<span class="w"> </span>find<span class="w"> </span>-q<span class="w"> </span>TPS552882
+yapnr<span class="w"> </span>part-cache<span class="w"> </span>show<span class="w"> </span>C15127<span class="w">                            </span><span class="c1"># newest part for an LCSC id</span>
+yapnr<span class="w"> </span>part-cache<span class="w"> </span>materialize<span class="w"> </span>C15127<span class="w"> </span>--into<span class="w"> </span>elec/src/parts
+yapnr<span class="w"> </span>part-cache<span class="w"> </span>serve<span class="w"> </span>--root<span class="w"> </span>~/.local/share/yapnr/part-cache<span class="w">     </span><span class="c1"># http://127.0.0.1:8780</span>
+</pre></div>
+</div>
+<p>The location is <code class="docutils literal notranslate"><span class="pre">--cache</span></code> (a directory or an <code class="docutils literal notranslate"><span class="pre">http(s)://</span></code> URL), else <code class="docutils literal notranslate"><span class="pre">$YAPNR_PART_CACHE</span></code>, else
+<code class="docutils literal notranslate"><span class="pre">$XDG_DATA_HOME/yapnr/part-cache</span></code> (<code class="docutils literal notranslate"><span class="pre">~/.local/share/yapnr/part-cache</span></code>). Keep a cache directory
+outside every repository.</p>
+<p>Tokens are never printed. <code class="docutils literal notranslate"><span class="pre">$YAPNR_PART_CACHE_TOKEN</span></code> (a <code class="docutils literal notranslate"><span class="pre">write</span></code> or <code class="docutils literal notranslate"><span class="pre">admin</span></code> token) is sent with
+writes only; <code class="docutils literal notranslate"><span class="pre">$YAPNR_PART_CACHE_READ_TOKEN</span></code> with reads, for a server that keeps its reads private.
+A token goes only to the server named: redirects are refused rather than followed, and a token is
+sent only over <code class="docutils literal notranslate"><span class="pre">https://</span></code>, or <code class="docutils literal notranslate"><span class="pre">http://</span></code> to a loopback address.</p>
+<section id="what-is-stored">
+<h2>What is stored<a class="headerlink" href="#what-is-stored" title="Link to this heading">¶</a></h2>
+<p><strong>Parts.</strong> A part is one atopile part directory: the <code class="docutils literal notranslate"><span class="pre">.ato</span></code> file with its atomic-part trait, the
+footprint (<code class="docutils literal notranslate"><span class="pre">.kicad_mod</span></code>), the symbol (<code class="docutils literal notranslate"><span class="pre">.kicad_sym</span></code>), 3D models (<code class="docutils literal notranslate"><span class="pre">.step</span></code>, <code class="docutils literal notranslate"><span class="pre">.stp</span></code>, <code class="docutils literal notranslate"><span class="pre">.wrl</span></code>) and notes
+(<code class="docutils literal notranslate"><span class="pre">.md</span></code>, <code class="docutils literal notranslate"><span class="pre">.txt</span></code>). No other file types, no subdirectories, at most 32 files, each at most 64 MB (the
+server’s <code class="docutils literal notranslate"><span class="pre">--max-file-mb</span></code>). Each file’s content must match its type: text files are UTF-8,
+footprints and symbols start as KiCad S-expressions of their kind (<code class="docutils literal notranslate"><span class="pre">(footprint</span></code>/<code class="docutils literal notranslate"><span class="pre">(module</span></code>,
+<code class="docutils literal notranslate"><span class="pre">(kicad_symbol_lib</span></code>), STEP models with <code class="docutils literal notranslate"><span class="pre">ISO-10303-21</span></code> and VRML ones with <code class="docutils literal notranslate"><span class="pre">#VRML</span></code>. Each file is
+stored once, named by its sha256; the part’s <strong>id</strong> is the sha256 of its name and its sorted list
+of (file name, sha256, size). The same files always give the same id, and any change gives a new
+one; older versions stay available by id.</p>
+<p>The manifest of a part also records what the <code class="docutils literal notranslate"><span class="pre">.ato</span></code> file says about it (the LCSC id, manufacturer
+and part number) and two required fields that are not part of the id:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">provenance</span></code>: <code class="docutils literal notranslate"><span class="pre">source</span></code> (required; <code class="docutils literal notranslate"><span class="pre">easyeda:C15127</span></code> when atopile’s <code class="docutils literal notranslate"><span class="pre">is_auto_generated</span></code> trait says
+so, <code class="docutils literal notranslate"><span class="pre">self</span></code>, <code class="docutils literal notranslate"><span class="pre">kicad-library</span></code>, …), and optionally <code class="docutils literal notranslate"><span class="pre">generator</span></code>, <code class="docutils literal notranslate"><span class="pre">created</span></code>, <code class="docutils literal notranslate"><span class="pre">imported_from</span></code> and
+<code class="docutils literal notranslate"><span class="pre">notes</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">licence</span></code>: <code class="docutils literal notranslate"><span class="pre">spdx</span></code> (required: an SPDX identifier, or <code class="docutils literal notranslate"><span class="pre">NOASSERTION</span></code> when unknown), <code class="docutils literal notranslate"><span class="pre">notes</span></code>,
+<code class="docutils literal notranslate"><span class="pre">terms_url</span></code>, and <code class="docutils literal notranslate"><span class="pre">distribution</span></code>: <code class="docutils literal notranslate"><span class="pre">shareable</span></code> (the default) or <code class="docutils literal notranslate"><span class="pre">local-only</span></code>.</p></li>
+</ul>
+<p>A <strong>local-only</strong> part (for example one with a manufacturer’s model whose terms forbid passing it
+on) stays on the machine: the clients never upload it, a server refuses it (400), and
+<code class="docutils literal notranslate"><span class="pre">serve</span> <span class="pre">--public</span></code> refuses to start on a cache that holds one. Mark parts so on import
+(<code class="docutils literal notranslate"><span class="pre">import-parts</span> <span class="pre">--local-only</span></code>) or later (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">part-cache</span> <span class="pre">set-distribution</span> <span class="pre">&lt;id&gt;</span> <span class="pre">local-only</span></code>; the
+licence is not part of the id, so this rewrites only the manifest’s metadata).</p>
+<p>The uploader and time are recorded by the cache (<code class="docutils literal notranslate"><span class="pre">uploaded</span></code>: the token’s label, never a person’s
+details). A part whose <code class="docutils literal notranslate"><span class="pre">.ato</span></code> names a 3D model that is not uploaded is kept with a <code class="docutils literal notranslate"><span class="pre">warnings</span></code>
+entry; a missing footprint or symbol is refused.</p>
+<p><strong>Catalog entries.</strong> The facts the picker needs about one LCSC id, in the
+<a class="reference internal" href="frontends/atopile.html#the-offline-picker"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">yapnr-picker-catalog-v1</span></code></span></a> part format, each with its
+own provenance. A newer upload replaces an entry. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">part-cache</span> <span class="pre">catalog</span></code> exports them as a
+catalog file.</p>
+<p><strong>Not stored:</strong> atopile’s raw EasyEDA cache (<code class="docutils literal notranslate"><span class="pre">build/cache/parts/easyeda/</span></code>: it also holds the
+uploader’s personal data), datasheets, or anything obtained through a vendor API whose terms
+forbid redistribution. A repository check (<code class="docutils literal notranslate"><span class="pre">tools/check_part_data.py</span></code>) keeps generated part data
+out of yapnr itself.</p>
+</section>
+<section id="layout-on-disk">
+<h2>Layout on disk<a class="headerlink" href="#layout-on-disk" title="Link to this heading">¶</a></h2>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;root&gt;/yapnr-part-cache.json        {&quot;schema&quot;: &quot;yapnr-part-cache-v1&quot;}
+&lt;root&gt;/blobs/sha256/ab/&lt;sha256&gt;     file contents, immutable
+&lt;root&gt;/parts/ab/&lt;id&gt;.json           part manifests, immutable
+&lt;root&gt;/catalog/C&lt;digits&gt;.json       the current catalog entry of each LCSC id
+&lt;root&gt;/takedowns.jsonl              append-only log of deleted parts and entries
+&lt;root&gt;/index.sqlite                 an index, rebuilt from the files by `reindex`
+&lt;root&gt;/tmp/                         staging for atomic writes
+</pre></div>
+</div>
+<p>The files are the truth; the index can always be rebuilt. Writes go through a temporary file and
+an atomic rename. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">part-cache</span> <span class="pre">verify</span></code> re-hashes every file and re-checks every manifest and
+file type; <code class="docutils literal notranslate"><span class="pre">gc</span></code> removes files that no part uses.</p>
+</section>
+<section id="the-http-api">
+<h2>The HTTP API<a class="headerlink" href="#the-http-api" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">part-cache</span> <span class="pre">serve</span></code> binds <code class="docutils literal notranslate"><span class="pre">127.0.0.1:8780</span></code> unless <code class="docutils literal notranslate"><span class="pre">--public</span></code> allows another address.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Request</p></th>
+<th class="head"><p>Scope</p></th>
+<th class="head"><p>Answer</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/v1/health</span></code></p></td>
+<td><p>none</p></td>
+<td><p>status and counts (always public)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/v1/parts?lcsc=&amp;manufacturer=&amp;mpn=&amp;name=&amp;q=&amp;all_versions=1&amp;limit=&amp;offset=</span></code></p></td>
+<td><p>read</p></td>
+<td><p>part summaries, newest first</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/v1/parts/&lt;id&gt;</span></code></p></td>
+<td><p>read</p></td>
+<td><p>the manifest</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/v1/lcsc/&lt;C123&gt;</span></code></p></td>
+<td><p>read</p></td>
+<td><p>the newest manifest for an LCSC id</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/v1/blobs/&lt;sha256&gt;</span></code></p></td>
+<td><p>read</p></td>
+<td><p>a file of a stored part (<code class="docutils literal notranslate"><span class="pre">application/octet-stream</span></code>, <code class="docutils literal notranslate"><span class="pre">attachment</span></code>, <code class="docutils literal notranslate"><span class="pre">nosniff</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/v1/catalog[?lcsc=C1,C2]</span></code></p></td>
+<td><p>read</p></td>
+<td><p>a catalog document</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/v1/catalog/&lt;C123&gt;</span></code></p></td>
+<td><p>read</p></td>
+<td><p>one catalog entry with its provenance</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/v0/...</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/v0/query...</span></code></p></td>
+<td><p>read</p></td>
+<td><p>atopile’s components API, from the catalog</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">PUT</span> <span class="pre">/v1/blobs/&lt;sha256&gt;</span></code></p></td>
+<td><p>write</p></td>
+<td><p>upload a file; the body must hash to the name</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/v1/parts</span></code></p></td>
+<td><p>write</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{name,</span> <span class="pre">files:</span> <span class="pre">[{path,</span> <span class="pre">sha256,</span> <span class="pre">size}],</span> <span class="pre">provenance,</span> <span class="pre">licence}</span></code>; 201, or 200 if it exists</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">PUT</span> <span class="pre">/v1/catalog/&lt;C123&gt;</span></code></p></td>
+<td><p>write</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{part,</span> <span class="pre">provenance}</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DELETE</span> <span class="pre">/v1/parts/&lt;id&gt;</span></code></p></td>
+<td><p>admin</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{&quot;reason&quot;:</span> <span class="pre">&quot;...&quot;,</span> <span class="pre">&quot;block&quot;:</span> <span class="pre">...}</span></code>: a takedown</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DELETE</span> <span class="pre">/v1/catalog/&lt;C123&gt;</span></code></p></td>
+<td><p>admin</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{&quot;reason&quot;:</span> <span class="pre">&quot;...&quot;}</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Reads are public unless the server runs with <code class="docutils literal notranslate"><span class="pre">--private-reads</span></code>. Writes need
+<code class="docutils literal notranslate"><span class="pre">Authorization:</span> <span class="pre">Bearer</span> <span class="pre">&lt;token&gt;</span></code> with the <code class="docutils literal notranslate"><span class="pre">write</span></code> scope; takedowns the <code class="docutils literal notranslate"><span class="pre">admin</span></code> scope. The token is
+checked from the request’s headers before its body is read, and a file upload is streamed to disk
+while it is hashed. Errors are JSON <code class="docutils literal notranslate"><span class="pre">{&quot;detail&quot;:</span> <span class="pre">&quot;...&quot;}</span></code> with 400, 401, 403, 404, 410 (taken down),
+413 or 503 (more than <code class="docutils literal notranslate"><span class="pre">--max-connections</span></code> requests at once, default 32).</p>
+<p>An upload sends a part’s files first and then its manifest. A file is served only while a stored
+part uses it, so the cache cannot be used to host other content, and a file that no part took up
+within <code class="docutils literal notranslate"><span class="pre">--orphan-grace-s</span></code> (default an hour) is removed by the server’s periodic collection.</p>
+<p>Tokens: <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">part-cache</span> <span class="pre">token</span> <span class="pre">--scope</span> <span class="pre">write</span> <span class="pre">--label</span> <span class="pre">ci</span></code> prints a new token (give it to the
+client as <code class="docutils literal notranslate"><span class="pre">YAPNR_PART_CACHE_TOKEN</span></code>) and the line for the server’s token file,
+<code class="docutils literal notranslate"><span class="pre">&lt;sha256</span> <span class="pre">of</span> <span class="pre">the</span> <span class="pre">token&gt;</span> <span class="pre">&lt;scope&gt;</span> <span class="pre">&lt;label&gt;</span></code>. The server stores only hashes and compares them in
+constant time.</p>
+<p>A client never trusts a server: <code class="docutils literal notranslate"><span class="pre">materialize</span></code> checks that the manifest is the part the lock names
+(its id is the one asked for, and matches its files) and every file against the manifest’s sha256
+and size, and writes nothing on a mismatch. Downloaded files are kept in a local
+content-addressed directory (<code class="docutils literal notranslate"><span class="pre">$XDG_CACHE_HOME/yapnr/part-cache-blobs</span></code>).</p>
+</section>
+<section id="running-a-public-instance">
+<h2>Running a public instance<a class="headerlink" href="#running-a-public-instance" title="Link to this heading">¶</a></h2>
+<p>The image <code class="docutils literal notranslate"><span class="pre">docker/yapnr-part-cache</span></code> holds Ubuntu 24.04’s Python and yapnr’s stdlib-only cache and
+picker modules (no KiCad, no atopile, no numerical stack). It runs as an unprivileged user and
+keeps everything in the volume <code class="docutils literal notranslate"><span class="pre">/data</span></code>:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span>build<span class="w"> </span>//release:wheel_for_test<span class="w">           </span><span class="c1"># or the stamped //release:wheel.dist</span>
+docker<span class="w"> </span>buildx<span class="w"> </span>build<span class="w"> </span>-f<span class="w"> </span>docker/yapnr-part-cache/Dockerfile<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--build-context<span class="w"> </span><span class="nv">dist</span><span class="o">=</span>&lt;dir<span class="w"> </span>with<span class="w"> </span>the<span class="w"> </span>yapnr<span class="w"> </span>wheel&gt;<span class="w"> </span>-t<span class="w"> </span>yapnr-part-cache:local<span class="w"> </span>.
+docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span>--name<span class="w"> </span>part-cache<span class="w"> </span>-p<span class="w"> </span><span class="m">127</span>.0.0.1:8780:8780<span class="w"> </span>-v<span class="w"> </span>part-cache-data:/data<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-v<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">/tokens:/run/secrets/part-cache-tokens:ro&quot;</span><span class="w"> </span>yapnr-part-cache:local
+tools/image/smoke_part_cache.sh<span class="w">                </span><span class="c1"># build, start, upload, read, take down, remove</span>
+</pre></div>
+</div>
+<p>Settings: <code class="docutils literal notranslate"><span class="pre">YAPNR_PART_CACHE_TOKENS</span></code> (the token file; default
+<code class="docutils literal notranslate"><span class="pre">/run/secrets/part-cache-tokens</span></code>; without one the instance is read-only),
+<code class="docutils literal notranslate"><span class="pre">YAPNR_PART_CACHE_TOKEN_HASHES</span></code> (the file’s lines, for platforms that pass settings as
+variables), <code class="docutils literal notranslate"><span class="pre">YAPNR_PART_CACHE_PRIVATE_READS=1</span></code>, <code class="docutils literal notranslate"><span class="pre">YAPNR_PART_CACHE_MAX_FILE_MB</span></code>,
+<code class="docutils literal notranslate"><span class="pre">YAPNR_PART_CACHE_MAX_CONNECTIONS</span></code> and <code class="docutils literal notranslate"><span class="pre">YAPNR_PART_CACHE_ORPHAN_GRACE_S</span></code>.</p>
+<p>The server speaks plain HTTP with a thread per request, at most <code class="docutils literal notranslate"><span class="pre">--max-connections</span></code> at once. For a
+public instance:</p>
+<ul class="simple">
+<li><p>put a TLS-terminating reverse proxy in front (Caddy, nginx), with request-rate and connection
+limits and a body limit matching <code class="docutils literal notranslate"><span class="pre">--max-file-mb</span></code>;</p></li>
+<li><p>give each uploader their own <code class="docutils literal notranslate"><span class="pre">write</span></code> token, and keep <code class="docutils literal notranslate"><span class="pre">admin</span></code> tokens for takedowns;</p></li>
+<li><p>back up <code class="docutils literal notranslate"><span class="pre">/data</span></code> (the files are the truth; <code class="docutils literal notranslate"><span class="pre">index.sqlite</span></code> is rebuilt by <code class="docutils literal notranslate"><span class="pre">reindex</span></code>);</p></li>
+<li><p>publish terms and a contact for takedown requests. Stored files are user-generated content and
+are always served as attachments, never rendered.</p></li>
+</ul>
+<p><strong>Takedowns.</strong> <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">part-cache</span> <span class="pre">delete</span> <span class="pre">&lt;id&gt;</span> <span class="pre">--reason</span> <span class="pre">&quot;...&quot;</span></code> (with an <code class="docutils literal notranslate"><span class="pre">admin</span></code> token against a
+server, or directly on the directory) removes the manifest and every file no other part uses,
+appends the reason to <code class="docutils literal notranslate"><span class="pre">takedowns.jsonl</span></code>, and refuses the same id from then on (410). It also
+<strong>blocks the part’s files</strong>: by default every file no other part uses is refused from then on
+under any part name, so the same model cannot come back as a “new” part. <code class="docutils literal notranslate"><span class="pre">--block</span> <span class="pre">none</span></code> blocks
+nothing (a takedown of a wrong <code class="docutils literal notranslate"><span class="pre">.ato</span></code>, say); <code class="docutils literal notranslate"><span class="pre">--block</span> <span class="pre">MODEL.step,NOTES.md</span></code> blocks just those files,
+which no other part may use (take those parts down first). Catalog entries are taken down the same
+way over HTTP. To lift a takedown, remove its lines from <code class="docutils literal notranslate"><span class="pre">takedowns.jsonl</span></code> and run <code class="docutils literal notranslate"><span class="pre">reindex</span></code>.</p>
+</section>
+<section id="importing-parts">
+<h2>Importing parts<a class="headerlink" href="#importing-parts" title="Link to this heading">¶</a></h2>
+<p>A project that commits atopile part directories can move them into a cache and keep only a lock:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>part-cache<span class="w"> </span>import-parts<span class="w"> </span>--imported-from<span class="w"> </span><span class="s2">&quot;project@&lt;commit&gt;:elec/src/parts&quot;</span><span class="w"> </span>elec/src/parts
+yapnr<span class="w"> </span>atopile<span class="w"> </span>lock-parts<span class="w"> </span>.<span class="w"> </span>--cache<span class="w"> </span>~/.local/share/yapnr/part-cache<span class="w">     </span><span class="c1"># writes yapnr-parts.lock.json</span>
+yapnr<span class="w"> </span>part-cache<span class="w"> </span>import-catalog<span class="w"> </span>--splanc<span class="w"> </span>tools/picker_catalog.json<span class="w">     </span><span class="c1"># a Splanc-layout catalog</span>
+</pre></div>
+</div>
+<p>Provenance comes from the files: a part with atopile’s <code class="docutils literal notranslate"><span class="pre">is_auto_generated</span></code> trait keeps its source
+(<code class="docutils literal notranslate"><span class="pre">easyeda:C&lt;id&gt;</span></code>) and date; one without it is recorded as hand-authored or hand-edited. The
+licence is recorded as <code class="docutils literal notranslate"><span class="pre">NOASSERTION</span></code>, with a note that points at the source’s terms for generated
+parts; <code class="docutils literal notranslate"><span class="pre">--licence-note</span></code> adds to it. Import refuses parts it cannot check (no atomic-part trait, a
+missing footprint or symbol) and imports the rest.</p>
+<p>Import from a clean export of the commit that <code class="docutils literal notranslate"><span class="pre">--imported-from</span></code> names
+(<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">archive</span> <span class="pre">&lt;commit&gt;</span> <span class="pre">&lt;dir&gt;</span> <span class="pre">|</span> <span class="pre">tar</span> <span class="pre">-x</span> <span class="pre">-C</span> <span class="pre">&lt;scratch&gt;</span></code>), not from a working tree. A working tree can
+hold git-ignored files, and they would be uploaded under a commit that does not contain them.
+Splanc, for example, keeps a manufacturer’s STEP model for one part out of git that way.</p>
+<p>Splanc’s boards were moved this way into a local cache on the development machine: the 276
+committed part directories of four boards (<code class="docutils literal notranslate"><span class="pre">splanc</span></code>, <code class="docutils literal notranslate"><span class="pre">splanc_dev</span></code>, <code class="docutils literal notranslate"><span class="pre">splanc_max</span></code>,
+<code class="docutils literal notranslate"><span class="pre">splanc_eol_tester</span></code>; 957 files, 248 distinct versions of 163 parts, about 90 MB) and the 103 entries
+of its picker catalog. One more version of one part adds the git-ignored manufacturer model; it is
+marked local-only, and only the machine-local <code class="docutils literal notranslate"><span class="pre">splanc_max.local-cad</span></code> lock uses it. Each board’s
+lock materializes every committed file byte-identically. A Splanc Mini build from its lock, with the
+parts directory emptied, gives the same input id as a build from the committed parts. Its board
+matches rules_atopile’s last Nix build of Mini (nets, footprints, pads, positions, outline) when
+both start from the same layout
+(<a class="reference internal" href="frontends/atopile.html#designators-and-the-layout"><span class="std std-ref">designators</span></a>).</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="rf-inverse-design.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">RF inverse design</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="frontends/atopile.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">The atopile toolchain</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">The part cache</a><ul>
+<li><a class="reference internal" href="#what-is-stored">What is stored</a></li>
+<li><a class="reference internal" href="#layout-on-disk">Layout on disk</a></li>
+<li><a class="reference internal" href="#the-http-api">The HTTP API</a></li>
+<li><a class="reference internal" href="#running-a-public-instance">Running a public instance</a></li>
+<li><a class="reference internal" href="#importing-parts">Importing parts</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

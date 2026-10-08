@@ -1,0 +1,1861 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="Route-then-compact and hull packing" href="route-compact.html"><link rel="prev" title="Design: the gloss, dekink and corridor-coalescing pass (PNR_GLOSS)" href="gloss.html">
+        <link rel="prefetch" href="../../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Design: compact placement (PNR_COMPACT) and shrink-to-fit (PNR_SHRINK) - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../agent-workflow.html">Design a PCB with an agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../plane-partition.html">How plane partition works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ci-lanes.html">CI lanes and Bazel caches</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clearance-index-validation.html">Clearance index: integration validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hull-nest-validation.html">Hull nesting: validation status</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/design/compact-placement.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/design/compact-placement.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="design-compact-placement-pnr-compact-and-shrink-to-fit-pnr-shrink">
+<h1>Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)<a class="headerlink" href="#design-compact-placement-pnr-compact-and-shrink-to-fit-pnr-shrink" title="Link to this heading">¶</a></h1>
+<p>Status: <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code> is the runner’s own default since ladder-v2 (2026-10-06,
+<code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>; <code class="docutils literal notranslate"><span class="pre">--no-compact</span></code> restores the pre-ladder-v2 path). Implemented on branch
+<code class="docutils literal notranslate"><span class="pre">claude/compact</span></code>; section 11 (legalizer spacing and turns) on branch <code class="docutils literal notranslate"><span class="pre">claude/legalize</span></code>; section 12
+(the <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane: <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code>, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code>, power-first placement, the router key) on branch
+<code class="docutils literal notranslate"><span class="pre">claude/lv2-compact</span></code>, which is what let the default flip; section 13 (displacement-minimizing
+legalization) on branch <code class="docutils literal notranslate"><span class="pre">claude/lv2-legal</span></code>, on by default with or without compact; appendix F
+(block-level motion, GP reserves escape-channel room) also on <code class="docutils literal notranslate"><span class="pre">claude/lv2-legal</span></code>. Code:
+<code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/compact_flags.py</span></code>
+(the switches, stdlib only) and <code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/place/compact.py</span></code> (metrics, cluster box,
+legalizer settings, shrink search); the call sites guard on the switches. Tests:
+<code class="docutils literal notranslate"><span class="pre">hardware/pnr/tests/test_compact.py</span></code>.</p>
+<blockquote>
+<div><p>Owner request (2026-10-03): the PnR can achieve a much more compact result for the demoed
+blocks, since they are two layers and simple slow digital routing. The minimum distance between
+parts looks too conservative during global placement and legalization.</p>
+</div></blockquote>
+<p>Measured before the change (seed 0): the ladder’s courtyards cover only 11 to 22 % of their
+outlines. Four causes, one switch part each, and a fifth part (<code class="docutils literal notranslate"><span class="pre">DROPS</span></code>) for a defect the denser
+placement exposed:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Part</p></th>
+<th class="head"><p>Cause</p></th>
+<th class="head"><p>Change</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GP</span></code></p></td>
+<td><p>The ladder places at <code class="docutils literal notranslate"><span class="pre">spread=1.3</span></code>, which “makes parts fill the whole board”; the random starts are spread over the whole interior.</p></td>
+<td><p>Spread 1.0; the starts are drawn in a cluster box around the fixed parts. Space grows only where the router measured congestion.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code></p></td>
+<td><p>Slots are <code class="docutils literal notranslate"><span class="pre">ceil((size</span> <span class="pre">+</span> <span class="pre">0.4)</span> <span class="pre">/</span> <span class="pre">0.25</span> <span class="pre">mm)</span></code>: the routing clearance (0.4 mm on the ladder) between courtyards that KiCad already draws about 0.25 mm outside the pads.</p></td>
+<td><p>The courtyard gap (0.01 mm, or <code class="docutils literal notranslate"><span class="pre">board.courtyard_clearance_mm</span></code>), a copper margin only where a box hugs its pads, a 0.125 mm slot grid, pads off the edge.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code></p></td>
+<td><p>Courtyards are modelled symmetric about the footprint origin: a 1x8 pin header whose origin is pin 1 reserves twice its length, and <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> cannot be placed.</p></td>
+<td><p>Each part occupies its ingested body box (<code class="docutils literal notranslate"><span class="pre">Component.body</span></code>), off its origin and turned with the part.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RANK</span></code></p></td>
+<td><p>Selections among equally complete candidates ignore compactness.</p></td>
+<td><p>A compactness tie-break after every completion key and the vias.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DROPS</span></code></p></td>
+<td><p>A <code class="docutils literal notranslate"><span class="pre">plane_layer</span></code> net without a declared stack gets its plane vias from writeback’s dog-bones after routing, where routed copper can enclose a pad (<code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code>).</p></td>
+<td><p>The router plans those drops with the signal escapes before routing, as it does for a declared stack.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<section id="switches">
+<h2>1. Switches<a class="headerlink" href="#switches" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=1</span></code> turns on <code class="docutils literal notranslate"><span class="pre">GP</span></code>, <code class="docutils literal notranslate"><span class="pre">RANK</span></code>, <code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code>, <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code> and <code class="docutils literal notranslate"><span class="pre">DROPS</span></code>, the three
+legalizer parts of section 11 (<code class="docutils literal notranslate"><span class="pre">WIRE</span></code>, <code class="docutils literal notranslate"><span class="pre">TURN</span></code>, <code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code>) and the two parts of section 12
+(<code class="docutils literal notranslate"><span class="pre">PAIRS</span></code>, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code>); <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT_&lt;PART&gt;=0</span></code> drops one part (ablations).</p></li>
+<li><p>The router key (<code class="docutils literal notranslate"><span class="pre">pnr.feedback.signals.current_key</span></code>) carries a <code class="docutils literal notranslate"><span class="pre">compact</span></code> field, a digest of the
+active parts, <code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code> and the legalizer switches’ effective values (section 12), so
+evaluations and block libraries of two placement configurations never mix.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">run.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">--compact-off</span></code> choices and the <code class="docutils literal notranslate"><span class="pre">ladder-cell</span></code> kind’s <code class="docutils literal notranslate"><span class="pre">compact_off</span></code> list the same
+parts as <code class="docutils literal notranslate"><span class="pre">pnr/compact_flags.py</span></code> (tests keep them equal).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PNR_SHRINK=1</span></code> is separate and never on by default: it changes the board outline.</p></li>
+<li><p>Unset, every caller takes its unchanged path and the engine’s JSON gains no key. The flag-off
+identity is tested on 04-inverter-leds-8 and 07-chaser-20 against the parent commit (the
+legalizer, the initial pool’s starts and fixed poses on every platform; the whole placer on the
+platform the golden was recorded on). On every platform a guard test runs the placer, the
+legalizer and the initial pool with the compact-only functions patched to fail and checks
+that no part has an offset body.</p></li>
+<li><p>The ladder: <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--compact</span> <span class="pre">[--compact-off</span> <span class="pre">PART</span> <span class="pre">...]</span> <span class="pre">[--shrink]</span></code> sets the variables after
+the runner strips the ambient <code class="docutils literal notranslate"><span class="pre">PNR_*</span></code> ones, so <code class="docutils literal notranslate"><span class="pre">provenance.json</span></code> records them. The
+<code class="docutils literal notranslate"><span class="pre">ladder-cell</span></code> experiment kind takes <code class="docutils literal notranslate"><span class="pre">compact</span></code>, <code class="docutils literal notranslate"><span class="pre">compact_off</span></code>, <code class="docutils literal notranslate"><span class="pre">shrink</span></code>, <code class="docutils literal notranslate"><span class="pre">gloss</span></code>,
+<code class="docutils literal notranslate"><span class="pre">gloss_measure</span></code> and <code class="docutils literal notranslate"><span class="pre">hard</span></code>.</p></li>
+</ul>
+</section>
+<section id="offset-courtyards-courtyard">
+<h2>2. Offset courtyards (<code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code>)<a class="headerlink" href="#offset-courtyards-courtyard" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Data:</strong> the ingest already records <code class="docutils literal notranslate"><span class="pre">Component.body</span></code>, the box the symmetric <code class="docutils literal notranslate"><span class="pre">courtyard</span></code> is
+built from (courtyard, or body, united with the pads and silk), as it lies about the origin in
+the unrotated frame of the current side, mirrored with the pads. No ingest or schema change.</p></li>
+<li><p><strong>Rectangle:</strong> <code class="docutils literal notranslate"><span class="pre">geometry.courtyard_rect</span></code> returns <code class="docutils literal notranslate"><span class="pre">pos</span> <span class="pre">+</span> <span class="pre">regions.rotate_box(body,</span> <span class="pre">rot)</span></code> and
+<code class="docutils literal notranslate"><span class="pre">geometry.body_shift(comp,</span> <span class="pre">rot)</span></code> its centre’s offset from <code class="docutils literal notranslate"><span class="pre">pos</span></code> (exact at quarter turns). Block
+and line macros keep their centred courtyard.</p></li>
+<li><p><strong>Correct through the rectangle:</strong> hard violations, <code class="docutils literal notranslate"><span class="pre">pose_checker</span></code>, the capacity proxy,
+relocation, feedback moves and the hierarchical extent; regions and aligns already measured
+<code class="docutils literal notranslate"><span class="pre">body</span></code>.</p></li>
+<li><p><strong>Converted between pose and slot centre:</strong> <code class="docutils literal notranslate"><span class="pre">legalize._place_part(...,</span> <span class="pre">shift)</span></code> compares the
+candidate slot centres less the shift with the target, the hard group discs, the edge box and
+the candidate cost, so all of them stay in pose space; callers set <code class="docutils literal notranslate"><span class="pre">pos</span> <span class="pre">=</span> <span class="pre">slot</span> <span class="pre">centre</span> <span class="pre">-</span> <span class="pre">shift</span></code>
+(the main loop, <code class="docutils literal notranslate"><span class="pre">available_pose</span></code>, the power-first look-ahead, <code class="docutils literal notranslate"><span class="pre">centre_limits</span></code>,
+<code class="docutils literal notranslate"><span class="pre">refine_channels</span></code>, <code class="docutils literal notranslate"><span class="pre">matched.refine_matched</span></code>). Landing reserves and region masks take the
+shift; a side retry recomputes it.</p></li>
+<li><p><strong>Global placement:</strong> <code class="docutils literal notranslate"><span class="pre">model.global_place</span></code> and <code class="docutils literal notranslate"><span class="pre">cost_inspect.Objective</span></code> use the body half sizes
+and the body offset expected under the rotation probabilities, mixed over both sides for a
+side-free part like the pin offsets; the overlap, outline, edge and keep-out terms use
+<code class="docutils literal notranslate"><span class="pre">pos</span> <span class="pre">+</span> <span class="pre">offset</span></code>. The cost capture replays the same offsets (<code class="docutils literal notranslate"><span class="pre">effective_shift</span></code>).</p></li>
+<li><p><strong>Also:</strong> edge-resolved fixed poses (the body flush with the edge, at the held rotation),
+ref-relative keep-outs (against the body’s edge), the elastic mesh and its projection, hull
+macro boards (<code class="docutils literal notranslate"><span class="pre">hull.gp_bodies</span></code>), <code class="docutils literal notranslate"><span class="pre">regions.check_feasible</span></code>, and <code class="docutils literal notranslate"><span class="pre">plane_intent</span></code>, which widens
+the body to its symmetric via-array reservation.</p></li>
+<li><p><strong>Unchanged</strong> (the symmetric box contains the body): <code class="docutils literal notranslate"><span class="pre">_fit_outline</span></code>, rows, line-group spacing,
+<code class="docutils literal notranslate"><span class="pre">_opposite_body_basins</span></code>, hierarchical block areas.</p></li>
+<li><p><strong>Power-first placement</strong> (<code class="docutils literal notranslate"><span class="pre">PNR_POWER_FIRST=1</span></code>, <code class="docutils literal notranslate"><span class="pre">power_first.staged_place</span></code>): <code class="docutils literal notranslate"><span class="pre">GP</span></code> (spread and
+the cluster box of the staged placer’s random starts), <code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code> (the courtyard gap in the staged
+overlap term and the legalizer, the slot grid, the copper margins), <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code>, <code class="docutils literal notranslate"><span class="pre">DROPS</span></code> and
+<code class="docutils literal notranslate"><span class="pre">RANK</span></code> apply; <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> and <code class="docutils literal notranslate"><span class="pre">TURN</span></code> do not (the power-first legalizer and its retry judge every slot
+by the hot loops; section 11). Line groups (<code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code>) are refused there with or without
+compact.</p></li>
+</ul>
+</section>
+<section id="global-placement-gp">
+<h2>3. Global placement (<code class="docutils literal notranslate"><span class="pre">GP</span></code>)<a class="headerlink" href="#global-placement-gp" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">compact.spread()</span></code> returns 1.0 at the top of <code class="docutils literal notranslate"><span class="pre">placer.place</span></code>,
+<code class="docutils literal notranslate"><span class="pre">initial_pool.select_initial_placement</span></code> and <code class="docutils literal notranslate"><span class="pre">feedback.route_and_place</span></code>, overriding the ladder’s
+<code class="docutils literal notranslate"><span class="pre">spread=1.3</span></code>; the feedback loop’s per-part inflation (RePlAce, from routed congestion) is
+unchanged.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">compact.cluster_box</span></code>: a rectangle of twice the summed body area with the board’s aspect,
+centred on the fixed parts (else the board) and clamped inside it. <code class="docutils literal notranslate"><span class="pre">global_place(start_box=)</span></code>
+and the initial pool’s stratified and Latin starts map their existing random draws into it (no
+new draws).</p></li>
+<li><p>The hierarchical regression driver’s block trials also try the utilisations 0.5 and 0.6 (its
+own budget, <code class="docutils literal notranslate"><span class="pre">hier_case.budget_of</span></code>; a caller of <code class="docutils literal notranslate"><span class="pre">pnr.hier</span></code> sets its own).</p></li>
+</ul>
+</section>
+<section id="legalizer-legalize">
+<h2>4. Legalizer (<code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code>)<a class="headerlink" href="#legalizer-legalize" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">compact.legalize_settings(graph,</span> <span class="pre">constraints,</span> <span class="pre">rules)</span></code> returns <code class="docutils literal notranslate"><span class="pre">(gap,</span> <span class="pre">grid_mm,</span> <span class="pre">margins)</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">compact.placement_clearance(constraints)</span></code> replaces <code class="docutils literal notranslate"><span class="pre">board.default_clearance_mm</span></code> wherever
+placement reads it as a courtyard clearance: the placer (legalize, <code class="docutils literal notranslate"><span class="pre">snap_aligns</span></code>,
+<code class="docutils literal notranslate"><span class="pre">refine_matched</span></code>, the side moves), the global objective and its inspector, the initial pool’s
+basin fallback and the hierarchical feedback boards. The copper margins go wherever that
+clearance is checked after legalization: <code class="docutils literal notranslate"><span class="pre">snap_aligns</span></code>, the side moves (<code class="docutils literal notranslate"><span class="pre">pose_checker</span></code>) and
+the feedback <code class="docutils literal notranslate"><span class="pre">MoveBoard</span></code> (both parts’ margins added to the gap). Rows and line groups keep the
+board’s <code class="docutils literal notranslate"><span class="pre">default_clearance_mm</span></code>, not the gap, so they need none.</p>
+<ul class="simple">
+<li><p><strong>Gap:</strong> <code class="docutils literal notranslate"><span class="pre">board.courtyard_clearance_mm</span></code> when authored, else 0.01 mm (KiCad courtyards carry
+about 0.25 mm around the pads; touching courtyards are legal; 10 µm guards nanometre rounding).</p></li>
+<li><p><strong>Copper margin:</strong> <code class="docutils literal notranslate"><span class="pre">m</span> <span class="pre">=</span> <span class="pre">max(0,</span> <span class="pre">c</span> <span class="pre">/</span> <span class="pre">2</span> <span class="pre">-</span> <span class="pre">pad</span> <span class="pre">inset)</span></code>, with <code class="docutils literal notranslate"><span class="pre">c</span></code> the routing copper clearance and
+the inset the smallest distance from a pad to the part’s box: zero for library courtyards, up
+to <code class="docutils literal notranslate"><span class="pre">c</span> <span class="pre">/</span> <span class="pre">2</span></code> for a box that hugs its pads (a part without a courtyard layer). Two neighbours’
+pads keep at least <code class="docutils literal notranslate"><span class="pre">c</span></code>.</p></li>
+<li><p><strong>Slot:</strong> <code class="docutils literal notranslate"><span class="pre">ceil((w</span> <span class="pre">·</span> <span class="pre">inflation</span> <span class="pre">+</span> <span class="pre">gap</span> <span class="pre">+</span> <span class="pre">2m)</span> <span class="pre">/</span> <span class="pre">g)</span></code> cells with <code class="docutils literal notranslate"><span class="pre">g</span> <span class="pre">=</span> <span class="pre">0.125</span> <span class="pre">mm</span></code>; edge-band and
+align caps subtract the margin too.</p></li>
+<li><p><strong>Edges:</strong> the pad and drill edge rule (<code class="docutils literal notranslate"><span class="pre">PNR_PAD_EDGE_CLEARANCE</span></code>) is on.</p></li>
+<li><p>Copper clearance stays with the router and native DRC; <code class="docutils literal notranslate"><span class="pre">channels.py</span></code> (escape demand) is
+unchanged.</p></li>
+</ul>
+</section>
+<section id="compactness-metric-and-selection-rank">
+<h2>5. Compactness metric and selection (<code class="docutils literal notranslate"><span class="pre">RANK</span></code>)<a class="headerlink" href="#compactness-metric-and-selection-rank" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">compact.metrics(graph,</span> <span class="pre">W,</span> <span class="pre">H)</span></code> is measured on the body boxes of every part, fixed ones included,
+whatever the switches (so every arm is measured alike): <code class="docutils literal notranslate"><span class="pre">bbox_mm2</span></code>, <code class="docutils literal notranslate"><span class="pre">utilization</span> <span class="pre">=</span> <span class="pre">ΣA</span> <span class="pre">/</span> <span class="pre">bbox</span></code>,
+<code class="docutils literal notranslate"><span class="pre">occupancy</span> <span class="pre">=</span> <span class="pre">ΣA</span> <span class="pre">/</span> <span class="pre">WH</span></code> and <code class="docutils literal notranslate"><span class="pre">bucket</span> <span class="pre">=</span> <span class="pre">floor(20</span> <span class="pre">·</span> <span class="pre">bbox</span> <span class="pre">/</span> <span class="pre">WH)</span></code>, rounded to 1e-3. The ladder records
+the same measure in each case’s <code class="docutils literal notranslate"><span class="pre">result.json</span></code> (<code class="docutils literal notranslate"><span class="pre">compactness</span></code>, every arm).</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">initial_pool.route_rank</span></code> (the pool’s routed finalists, the halving screen, <code class="docutils literal notranslate"><span class="pre">mc_case</span></code>, the
+hierarchical top seed): <code class="docutils literal notranslate"><span class="pre">missing,</span> <span class="pre">unresolved,</span> <span class="pre">length_unmatched,</span> <span class="pre">vias,</span> <span class="pre">bucket,</span> <span class="pre">length</span></code>, then
+the id: on a fixed outline a smaller bounding box is free but a via is not. Under
+<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code> (the outline follows the bounding box) the bucket ranks before the vias. A record
+without a bucket (the switch off) keeps the previous key.</p></li>
+<li><p>Halving native and deep stages: <code class="docutils literal notranslate"><span class="pre">bbox_mm2</span></code> after every completion key, before the id.</p></li>
+<li><p>The place-route loop’s best round: <code class="docutils literal notranslate"><span class="pre">(overflow,</span> <span class="pre">unfinished,</span> <span class="pre">bbox_mm2)</span></code>.</p></li>
+</ul>
+</section>
+<section id="plane-drops-before-routing-drops">
+<h2>6. Plane drops before routing (<code class="docutils literal notranslate"><span class="pre">DROPS</span></code>)<a class="headerlink" href="#plane-drops-before-routing-drops" title="Link to this heading">¶</a></h2>
+<p>A net class with a <code class="docutils literal notranslate"><span class="pre">plane_layer</span></code> and no declared stack (the legacy plane path, e.g.
+<code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code>) routed its signals first and left every surface pad’s via to the plane to
+writeback’s dog-bone search (<code class="docutils literal notranslate"><span class="pre">writeback.apply_planes</span></code>, eight directions and five distances). Where
+routed copper enclosed a pad, the search failed (<code class="docutils literal notranslate"><span class="pre">planes:</span> <span class="pre">no</span> <span class="pre">clear</span> <span class="pre">fanout</span> <span class="pre">for</span> <span class="pre">...</span></code>) and the pad
+stayed off the plane: 1 seed in 6 with the switch off, 3 in 6 under compact. A placement-level
+count (a dog-bone site clear of every other net’s pad and of the edge, writeback’s search
+without the routed copper) found a free site for every plane pad in all 52 runs, so a placement
+margin would not have helped; the routed copper closed them.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">DROPS</span></code>, <code class="docutils literal notranslate"><span class="pre">route_board</span></code> treats those nets as a declared stack’s plane nets are treated: each
+surface pad gets a drop (stub plus through via, the pad’s required width) planned jointly with the
+signal exits and reserved before the maze runs. The via may cross its own net’s plane region on
+the plane layer (<code class="docutils literal notranslate"><span class="pre">RouteGrid.own_plane_cells</span></code>; blocked for tracks there, not for vias), which is
+cleared after the planning so the maze kernels see the grid they model. The planes stage then
+dog-bones only the pads still without a through contact (<code class="docutils literal notranslate"><span class="pre">skip_connected</span></code>).</p>
+</section>
+<section id="shrink-to-fit-pnr-shrink-flat-driver">
+<h2>7. Shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>, flat driver)<a class="headerlink" href="#shrink-to-fit-pnr-shrink-flat-driver" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">route_and_place</span></code> treats the outline as an envelope:</p>
+<ol class="arabic simple">
+<li><p>The loop runs on the envelope (the fallback); the search stops unless it converges legally.</p></li>
+<li><p>The first probe is the envelope run’s body bounding box plus <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">·</span> <span class="pre">(edge</span> <span class="pre">clearance</span> <span class="pre">+</span> <span class="pre">0.5</span> <span class="pre">mm)</span></code>
+per axis, as a scale of the outline.</p></li>
+<li><p>Then bisection between the largest failed scale (at first the lower bound
+<code class="docutils literal notranslate"><span class="pre">max(√(ΣA</span> <span class="pre">/</span> <span class="pre">0.7</span> <span class="pre">WH),</span> <span class="pre">the</span> <span class="pre">part</span> <span class="pre">and</span> <span class="pre">fixed-part</span> <span class="pre">bounds)</span></code>) and the smallest converged one: at most
+four probes, sizes rounded to 0.5 mm.</p></li>
+<li><p>Each probe is a same-seed <code class="docutils literal notranslate"><span class="pre">_place_route_loop</span></code> on <code class="docutils literal notranslate"><span class="pre">compact.scaled_constraints</span></code>. The outline
+keeps its origin and gives up its north and east: a fixed <code class="docutils literal notranslate"><span class="pre">at</span></code> keeps its absolute position,
+except one within 25 % of the north or east edge, which keeps its distance to that edge
+(<code class="docutils literal notranslate"><span class="pre">moved_fixed</span></code> in the record lists those). The lower bound keeps every fixed part’s box
+inside the scaled outline.</p></li>
+<li><p>The smallest probe that converges legally sets the constraints’ outline and fixed poses and
+<code class="docutils literal notranslate"><span class="pre">placed.outline</span></code>, which write-back stamps; <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code> records the search (<code class="docutils literal notranslate"><span class="pre">shrink</span></code>).</p></li>
+</ol>
+<p>Skipped, and recorded so, with <code class="docutils literal notranslate"><span class="pre">auto_outline</span></code>, keep-outs or regions; the hierarchical and Monte
+Carlo drivers never call it and record <code class="docutils literal notranslate"><span class="pre">shrink:</span> <span class="pre">{&quot;skipped&quot;:</span> <span class="pre">&quot;hier</span> <span class="pre">driver&quot;}</span></code> (or <code class="docutils literal notranslate"><span class="pre">&quot;mc</span> <span class="pre">driver&quot;</span></code>),
+and <code class="docutils literal notranslate"><span class="pre">run.py</span></code> exempts the hard rungs (their outline is part of the rung). Under <code class="docutils literal notranslate"><span class="pre">--shrink</span></code> the
+runner’s constraint audit judges hard edges against <code class="docutils literal notranslate"><span class="pre">placed.json</span></code>’s outline, otherwise against
+the design’s.</p>
+</section>
+<section id="trace-and-animation">
+<h2>8. Trace and animation<a class="headerlink" href="#trace-and-animation" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>The trace header carries each part’s <code class="docutils literal notranslate"><span class="pre">body</span></code> (µm) under <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code>; the renderer draws and
+measures it (courtyards, edge tethers, rigid line boxes).</p></li>
+<li><p>Shrink runs are trace scopes <code class="docutils literal notranslate"><span class="pre">shrink-NN</span></code>, the choice the selection <code class="docutils literal notranslate"><span class="pre">shrink</span></code>; the provenance
+model then follows only the chosen run and the header outline becomes its outline.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">animate_ladder.py</span></code> and <code class="docutils literal notranslate"><span class="pre">animate_showcases.py</span></code> take <code class="docutils literal notranslate"><span class="pre">--runner-arg</span> <span class="pre">ARG</span></code> (repeatable); the
+options that changed a run’s boards (<code class="docutils literal notranslate"><span class="pre">--compact</span></code>, <code class="docutils literal notranslate"><span class="pre">--compact-off</span></code>, <code class="docutils literal notranslate"><span class="pre">--shrink</span></code>, <code class="docutils literal notranslate"><span class="pre">--gloss</span></code>,
+<code class="docutils literal notranslate"><span class="pre">--gloss-flag</span></code>, read back from its provenance) are part of each animation’s <code class="docutils literal notranslate"><span class="pre">config</span></code> in the
+manifest. <code class="docutils literal notranslate"><span class="pre">animate_ladder.py</span></code>’s baseline fallback reruns a failed case with the same
+arguments unless <code class="docutils literal notranslate"><span class="pre">--fallback-runner-arg</span> <span class="pre">ARG</span></code> names its own (<code class="docutils literal notranslate"><span class="pre">--fallback-runner-arg=--gloss</span></code>:
+a compact ladder’s failed case falls back to the default mode).</p></li>
+<li><p>The committed animations (<code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code>, 2026-10-03) are rendered from traced runs with
+<code class="docutils literal notranslate"><span class="pre">--compact</span> <span class="pre">--gloss</span></code> (ladder: 8 of 8 pass; showcases: 5 of 5), with the gloss stage as a
+before/after (renderer 3, <a class="reference internal" href="../regression-ladder.html#reading-an-animation"><span class="std std-ref">Regression ladder</span></a>);
+CI’s traced runs take the same options.</p></li>
+</ul>
+</section>
+<section id="determinism">
+<h2>9. Determinism<a class="headerlink" href="#determinism" title="Link to this heading">¶</a></h2>
+<p>No new random streams (the cluster box maps the existing draws), integer buckets, rounded floats,
+a fixed probe order and exact quarter-turn offsets: runs stay bitwise reproducible per platform,
+as before.</p>
+</section>
+<section id="measurements-and-the-default-on-rule">
+<h2>10. Measurements and the default-on rule<a class="headerlink" href="#measurements-and-the-default-on-rule" title="Link to this heading">¶</a></h2>
+<p>Default-on (with <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=0</span></code> restoring the previous behaviour) only if, for each gloss
+setting, every case that passes with the switch off also passes with it on, opens and DRC
+findings are no worse, and <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> passes. Shrink stays opt-in.</p>
+<p><strong>Outcome (2026-10-03): both stay off by default.</strong> Measured on GCP C4D (x86-64), every arm on
+one image, seeds 0 and 1 unless noted:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Cells</p></th>
+<th class="head"><p>off</p></th>
+<th class="head"><p>compact</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code> alone</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>8 ladder cases + 4 showcases (24)</p></td>
+<td><p>24 pass</p></td>
+<td><p>24 pass (also with gloss)</p></td>
+<td><p>24 pass</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> (2)</p></td>
+<td><p>0 (pool fails)</p></td>
+<td><p>2 pass</p></td>
+<td><p>2 pass</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code>, seeds 0 to 9</p></td>
+<td><p>7 pass</p></td>
+<td><p>10 pass (7 without <code class="docutils literal notranslate"><span class="pre">DROPS</span></code>)</p></td>
+<td><p>7 pass</p></td>
+</tr>
+<tr class="row-odd"><td><p>nightly hard rungs, seed 0 (14)</p></td>
+<td><p>14 pass</p></td>
+<td><p>14 pass</p></td>
+<td><p>14 pass</p></td>
+</tr>
+<tr class="row-even"><td><p>manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> rungs (16)</p></td>
+<td><p>16 pass</p></td>
+<td><p>11 pass</p></td>
+<td><p>13 pass</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> (2)</p></td>
+<td><p>1 pass</p></td>
+<td><p>2 pass</p></td>
+<td><p>2 pass</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>On the 24 cells compact cuts the summed placed bounding box from 13068 to 8122 mm² (median
+utilisation 0.36 to 0.55) and copper from 4777 to 4022 mm, for 28 more vias (282 to 310) and
+21 % more CPU; with <code class="docutils literal notranslate"><span class="pre">RANK</span></code> after the vias, dropping <code class="docutils literal notranslate"><span class="pre">RANK</span></code> changes nothing there. The manual
+<code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> rungs fail the rule: their USB pairs end out of skew (<code class="docutils literal notranslate"><span class="pre">skew_out_of_range</span></code>) or
+with one leg or <code class="docutils literal notranslate"><span class="pre">VBUS</span></code> unrouted on 5 cells under compact and 3 under <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code> alone, all of
+which pass with the switch off. Dense placement leaves no room for the pair tuning; reserving
+it (inflating the parts on declared pairs and length groups) is the next step before another
+A/B. Shrink passes 23 of 24: on <code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code> seed 1 a 0.4 mm GND track runs 0.175 mm from
+the shrunk edge, through pad cells the router’s edge inset leaves open.</p>
+<p>The full tables are in the workflow’s A/B notes; the ladder documentation
+(<a class="reference internal" href="../regression-ladder.html#compact-placement"><span class="std std-ref">compact placement</span></a>) summarises them.</p>
+<p>Still open: the 0.01 mm courtyard gap (no DRC finding in any arm). The manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code>
+lane is resolved in section 12.</p>
+</section>
+<section id="spacing-and-turns-at-legalization-pnr-gp-polish-pnr-legalize-hpwl">
+<h2>11. Spacing and turns at legalization (<code class="docutils literal notranslate"><span class="pre">PNR_GP_POLISH</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_HPWL</span></code>, …)<a class="headerlink" href="#spacing-and-turns-at-legalization-pnr-gp-polish-pnr-legalize-hpwl" title="Link to this heading">¶</a></h2>
+<blockquote>
+<div><p>Owner (2026-10-04): the legalizer moves a lot of components. How were the global placement
+distances tuned? Are there slight overlaps with the packed placement? Does legalization have
+the resolution not to treat the closer packing as overlaps? A component the legalizer moves
+should have its rotation re-evaluated to minimise wirelength: the line-constrained LED chaser
+in the README ends with extra track because its series resistors are not turned to lie flush
+with the row after legalization.</p>
+</div></blockquote>
+<p><strong>Findings</strong> (a GCP probe of 81 legalize calls per arm and paired Mac prototypes on 64 recorded
+pool starts; the workflow’s notes keep the data):</p>
+<ul class="simple">
+<li><p><strong>Nothing was tuned.</strong> The global weights are the first placer’s, unchanged; compact chose the
+0.01 mm gap, the 0.125 mm grid, the cluster box and spread 1.0 in its design and measured them
+only as a bundle.</p></li>
+<li><p><strong>Global placement does leave slight overlaps under compact</strong> (6.8 true courtyard overlaps per
+result, median depth 0.07 mm), but removing them alone changes nothing measurable after routing.</p></li>
+<li><p><strong>Resolution is not why parts move.</strong> Re-legalizing the same result on a 0.01 mm grid removes
+2.6 % of the displacement for 375 times the CPU; snapping is 4 % of the moved parts.</p></li>
+<li><p><strong>The legalizer moves parts mainly for its routing-channel cost</strong> (<code class="docutils literal notranslate"><span class="pre">channels.py</span></code>, 70 % of the
+moves over 0.1 mm), which global placement never sees, then for the overlaps.</p></li>
+<li><p><strong>The legalizer never turned a part on these boards:</strong> it tries <code class="docutils literal notranslate"><span class="pre">rot</span> <span class="pre">+</span> <span class="pre">90</span></code> only when the global
+turn has no free slot at all, and its slot cost has no wirelength. The README resistors are not
+a turn-in-place case: the legalizer put them on the far side of the LED row (the nearest free
+slot), where every correctly polarised turn has the same wirelength. Choosing the slot and the
+turn together, with wirelength in the cost, puts them upright beside their LEDs.</p></li>
+</ul>
+<p>Seven switches, each off by default and usable with or without <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>
+(<code class="docutils literal notranslate"><span class="pre">pnr/legalize_flags.py</span></code>, stdlib only):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Switch</p></th>
+<th class="head"><p>Part</p></th>
+<th class="head"><p>What it does</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">PNR_GP_POLISH=1</span></code></p></td>
+<td><p>A</p></td>
+<td><p>200 more iterations of <code class="docutils literal notranslate"><span class="pre">global_place</span></code>’s own loop with turns and free sides frozen, the overlap, outline and keep-out terms on the legalizer’s slots, the overlap weight ramped 1 to 100 and the step 0.3 to 0.005 mm.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">PNR_GP_CHANNELS=&lt;lambda&gt;</span></code></p></td>
+<td><p>A</p></td>
+<td><p>The polish (implied) also carries the legalizer’s channel cost, smooth: <code class="docutils literal notranslate"><span class="pre">lambda</span> <span class="pre">/</span> <span class="pre">2</span> <span class="pre">·</span> <span class="pre">Σ</span> <span class="pre">shortage²</span></code> over facing pad rows.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">PNR_POOL_SOURCE_CLAMP=1</span></code></p></td>
+<td><p>A4</p></td>
+<td><p>The initial pool’s source start begins with every movable part clamped into the outline (the cluster box under <code class="docutils literal notranslate"><span class="pre">GP</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_HPWL=&lt;w&gt;</span></code></p></td>
+<td><p>C1</p></td>
+<td><p>The legalizer’s slot cost gains <code class="docutils literal notranslate"><span class="pre">w</span></code> times the part’s wirelength, and each part’s slot is searched at all four turns: the cheapest wins.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_REORIENT=1</span></code></p></td>
+<td><p>C2</p></td>
+<td><p>After legalization, greedy in-place turns that shorten a part’s wirelength, stay legal and do not raise its channel shortage; <code class="docutils literal notranslate"><span class="pre">=wire</span></code> drops the channel guard.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_CHANNEL_CLEARANCE=fab</span></code></p></td>
+<td><p>D</p></td>
+<td><p>The legalizer’s channel model spaces unclassed nets at the fab clearance (the router’s) instead of the board’s <code class="docutils literal notranslate"><span class="pre">default_clearance_mm</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">PNR_LINE_SATELLITES=1</span></code></p></td>
+<td><p>E</p></td>
+<td><p>A line group carries each member’s satellite (a free two-pad part on a two-pin net to one member pad) flush beside the member, in line with it.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS=1</span></code></p></td>
+<td><p>14</p></td>
+<td><p>The channel model (global placement, the legalizer and its push alike) credits the board’s other signal layers: a net that can drop off the surface asks its share of the channel (section 14).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">run.py</span></code> takes <code class="docutils literal notranslate"><span class="pre">--gp-polish</span></code>, <code class="docutils literal notranslate"><span class="pre">--gp-channels</span> <span class="pre">L</span></code>, <code class="docutils literal notranslate"><span class="pre">--pool-source-clamp</span></code>, <code class="docutils literal notranslate"><span class="pre">--legalize-hpwl</span> <span class="pre">W</span></code>,
+<code class="docutils literal notranslate"><span class="pre">--legalize-reorient</span> <span class="pre">[wire]</span></code>, <code class="docutils literal notranslate"><span class="pre">--legalize-channel-clearance</span> <span class="pre">fab</span></code> and <code class="docutils literal notranslate"><span class="pre">--line-satellites</span></code> (after
+it strips the ambient <code class="docutils literal notranslate"><span class="pre">PNR_*</span></code> variables, so <code class="docutils literal notranslate"><span class="pre">provenance.json</span></code> records them); the <code class="docutils literal notranslate"><span class="pre">ladder-cell</span></code>
+kind takes <code class="docutils literal notranslate"><span class="pre">gp_polish</span></code>, <code class="docutils literal notranslate"><span class="pre">gp_channels</span></code>, <code class="docutils literal notranslate"><span class="pre">pool_source_clamp</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_hpwl</span></code>,
+<code class="docutils literal notranslate"><span class="pre">legalize_reorient</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_reorient_wire</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_channel_clearance_fab</span></code> and
+<code class="docutils literal notranslate"><span class="pre">line_satellites</span></code>. A trace’s header lists the active switches (<code class="docutils literal notranslate"><span class="pre">placement_switches</span></code>).</p>
+<p>Three of them are <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code> parts since the review-fix A/B below: <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_HPWL</span></code>
+at weight 4), <code class="docutils literal notranslate"><span class="pre">TURN</span></code> (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_REORIENT=wire</span></code>) and <code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code> (<code class="docutils literal notranslate"><span class="pre">PNR_LINE_SATELLITES</span></code>).
+Under <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=1</span></code> each is on unless its variable is set (<code class="docutils literal notranslate"><span class="pre">0</span></code> included) or
+<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT_&lt;PART&gt;=0</span></code> drops it. The polish (A) and the fab channel clearance (D) stay opt-in.</p>
+<section id="a-global-placement-and-the-legalizer-agree-on-spacing">
+<h3>A. Global placement and the legalizer agree on spacing<a class="headerlink" href="#a-global-placement-and-the-legalizer-agree-on-spacing" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">pnr/place/gp_polish.py</span></code>, run by <code class="docutils literal notranslate"><span class="pre">model.global_place(polish=...)</span></code> from the placer:</p>
+<ul class="simple">
+<li><p><strong>The legalizer’s slot.</strong> Per frozen turn and side, <code class="docutils literal notranslate"><span class="pre">ceil((w</span> <span class="pre">·</span> <span class="pre">s</span> <span class="pre">+</span> <span class="pre">clearance</span> <span class="pre">+</span> <span class="pre">2m)</span> <span class="pre">/</span> <span class="pre">g)</span> <span class="pre">·</span> <span class="pre">g</span></code> per
+axis, centred where the legalizer centres it (the occupied box centre, offset courtyards
+included), with <code class="docutils literal notranslate"><span class="pre">s</span></code>, <code class="docutils literal notranslate"><span class="pre">clearance</span></code>, <code class="docutils literal notranslate"><span class="pre">m</span></code> and <code class="docutils literal notranslate"><span class="pre">g</span></code> exactly as <code class="docutils literal notranslate"><span class="pre">legalize()</span></code> gets them (compact: 1 or
+the feedback inflation, the gap, the margins, 0.125 mm; off: 1.3 or the inflation, the board
+clearance, none, 0.25 mm). Slots of whole cells that do not overlap stay disjoint after the
+nearest-cell snap, so a polished result legalizes by snapping alone unless the channel cost
+moves a part. With the pad-edge rule the slot centre is also held inside <code class="docutils literal notranslate"><span class="pre">pad_edge_box</span></code>.</p></li>
+<li><p><strong>The channel cost, soft.</strong> The required gap of each ordered pair and facing direction is
+<code class="docutils literal notranslate"><span class="pre">ChannelModel.active_demand</span></code> over the facing rows’ nets that reach a third part (pair-local
+nets reserve nothing), precomputed once for the frozen turns; the term is counted on facing
+envelopes only (gap at least 0, projections overlapping), <code class="docutils literal notranslate"><span class="pre">ChannelModel.penalty</span></code>’s definition.
+Enforcing the full demand as a hard spacing over-spaces (+5 to +11 % wirelength, +11 to +32 %
+bounding box in the prototype); the legalizer itself tolerates some shortage.</p></li>
+<li><p><strong>Everything else stays on</strong> (wirelength, regions, aligns, groups, keep-outs, edge aligns,
+planes, matched lengths, side terms); a fresh positions-only Adam runs the fixed 200 steps.
+The trace shows them as more global-placement snapshots, so parts glide apart before
+legalization instead of jumping at it.</p></li>
+<li><p>Not with hull macros (ignored) or power-first placement (never asked).</p></li>
+</ul>
+</section>
+<section id="b-resolution-no-change">
+<h3>B. Resolution: no change<a class="headerlink" href="#b-resolution-no-change" title="Link to this heading">¶</a></h3>
+<p>The 0.125 mm grid stays: a finer grid or an Abacus-style pass would buy 2.6 % of the
+displacement at 375 times the CPU, and Abacus assumes equal-height rows and a separable cost
+that the channel cost is not. Part A removes the grid’s share instead.</p>
+</section>
+<section id="c-turns">
+<h3>C. Turns<a class="headerlink" href="#c-turns" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>C1, the slot and the turn together</strong> (<code class="docutils literal notranslate"><span class="pre">legalize.py</span></code>: <code class="docutils literal notranslate"><span class="pre">wire_cost</span></code>, <code class="docutils literal notranslate"><span class="pre">wire_turns</span></code>, the nested
+<code class="docutils literal notranslate"><span class="pre">search_scored</span></code>). The candidate cost (displacement², channel demand, soft rules) gains
+<code class="docutils literal notranslate"><span class="pre">w</span> <span class="pre">·</span> <span class="pre">wire_cost</span></code>: the half-perimeter wirelength of the part’s nets with placed parts at their
+legal pins, unplaced parts at their global targets and plane nets left out. <code class="docutils literal notranslate"><span class="pre">search_scored</span></code>
+runs the existing <code class="docutils literal notranslate"><span class="pre">search()</span></code> once per turn of <code class="docutils literal notranslate"><span class="pre">[rot,</span> <span class="pre">rot</span> <span class="pre">+</span> <span class="pre">90,</span> <span class="pre">rot</span> <span class="pre">+</span> <span class="pre">180,</span> <span class="pre">rot</span> <span class="pre">+</span> <span class="pre">270]</span></code> and keeps
+the cheapest outcome by <code class="docutils literal notranslate"><span class="pre">slot_cost</span></code> (which gains the same term); a tie keeps the earlier turn,
+hard rotations and <code class="docutils literal notranslate"><span class="pre">allow_rotation=False</span></code> keep the global turn, line and block macros turn as
+one body, the side retry compares both sides’ best turns, and under <code class="docutils literal notranslate"><span class="pre">lookahead:</span> <span class="pre">regions</span></code> a turn
+whose every slot strands a part counts only when every turn does. The region and align reach
+then also covers the four turns.</p>
+<ul>
+<li><p>The placer passes the weight to <code class="docutils literal notranslate"><span class="pre">legalize()</span></code> (<code class="docutils literal notranslate"><span class="pre">wire_weight</span></code>), which never reads the
+environment: power-first placement and the initial pool’s basin fallback keep the plain
+legalizer, as they keep it without C2.</p></li>
+<li><p>Parts on a <code class="docutils literal notranslate"><span class="pre">diff_pair</span></code> or <code class="docutils literal notranslate"><span class="pre">length_match</span></code> net keep the plain search (<code class="docutils literal notranslate"><span class="pre">wire_exempt</span></code>,
+<code class="docutils literal notranslate"><span class="pre">reorient.matched_refs</span></code>): no wirelength term and no four-turn choice, so the two legs of a
+pair are not turned apart; the matched-length pass evens them afterwards, as without C1.</p></li>
+<li><p>A backtracking ban on a slot also bans the slot at the half turn, which covers the same
+cells (hull macros aside).</p></li>
+<li><p>Cost: the channel cost dominates the search (85 % of the legalizer’s time in a profile of
+<code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code>; the wirelength term 2 %), and four turns score it four times. The search
+therefore ranks every free cell by <code class="docutils literal notranslate"><span class="pre">displacement²</span> <span class="pre">+</span> <span class="pre">w</span> <span class="pre">·</span> <span class="pre">wirelength</span></code>, a lower bound of its full
+cost (the channel and soft terms are never negative), scores the 64 lowest in full, and then
+only the cells whose bound does not exceed the best full cost (<code class="docutils literal notranslate"><span class="pre">_cheapest</span></code>). The sums are
+taken in the same order as the full scoring, so the chosen slot, ties included, is the same:
+96 of 96 recorded pool starts on 12 boards give byte-identical placements, and the
+legalizer’s CPU under C1 falls from 3.7 times compact’s to 1.0 times. Not used with cost
+capture (it records every candidate) or for a part with soft rules.</p></li>
+<li><p>Cost capture records the wirelength term with the others, and the candidate fields gain a
+<code class="docutils literal notranslate"><span class="pre">wire_raw</span></code> column.</p></li>
+</ul>
+</li>
+<li><p><strong>C2, in-place turns</strong> (<code class="docutils literal notranslate"><span class="pre">pnr/place/reorient.py</span></code>), run in <code class="docutils literal notranslate"><span class="pre">placer.place</span></code> after <code class="docutils literal notranslate"><span class="pre">legalize</span></code>,
+<code class="docutils literal notranslate"><span class="pre">snap_aligns</span></code> and <code class="docutils literal notranslate"><span class="pre">refine_matched</span></code> and before <code class="docutils literal notranslate"><span class="pre">detail_moves</span></code>, so inside every pool start, line
+group macro graph and hierarchical block, and only where the placer may turn parts (<code class="docutils literal notranslate"><span class="pre">orient</span></code>).
+Greedy, best wirelength gain first (then the reference, then the turn), to a fixed point with
+at most four times as many turns in all as candidates (every accepted turn shortens the total,
+so the cap only bounds the work), each about the slot centre and checked by
+<code class="docutils literal notranslate"><span class="pre">metrics.pose_checker</span></code> with the legalizer’s clearance, spreading factor, margins and pad-edge
+rule. Never turned: fixed, locked and hard-rotated parts, row and line-group members, macros,
+and parts on a diff-pair or length-match net. Ties keep the turn. With <code class="docutils literal notranslate"><span class="pre">=1</span></code> a turn must not
+raise the part’s <code class="docutils literal notranslate"><span class="pre">ChannelModel.penalty</span></code> against the others.</p></li>
+</ul>
+</section>
+<section id="d-the-channel-model-at-the-fab-clearance-pnr-legalize-channel-clearance-fab">
+<h3>D. The channel model at the fab clearance (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_CHANNEL_CLEARANCE=fab</span></code>)<a class="headerlink" href="#d-the-channel-model-at-the-fab-clearance-pnr-legalize-channel-clearance-fab" title="Link to this heading">¶</a></h3>
+<p>The legalizer’s channel model gives a net without a class the board’s <code class="docutils literal notranslate"><span class="pre">default_clearance_mm</span></code>
+(0.4 mm on the ladder) between tracks and pads, where the router and KiCad hold the fab clearance
+(<code class="docutils literal notranslate"><span class="pre">fab.clearance_mm</span></code>, 0.2 mm): one escaping 0.25 mm track then asks 1.05 mm between facing pad
+rows where 0.65 mm routes. Under compact placement that cost causes 70 % of the legalizer’s moves
+over 0.1 mm. With the switch the placer builds the legalizer’s model (and C2’s guard) at the fab
+clearance; net classes and pairs with their own clearance keep it. Reports and every other model
+are unchanged.</p>
+</section>
+<section id="e-line-satellites-pnr-line-satellites-1">
+<h3>E. Line satellites (<code class="docutils literal notranslate"><span class="pre">PNR_LINE_SATELLITES=1</span></code>)<a class="headerlink" href="#e-line-satellites-pnr-line-satellites-1" title="Link to this heading">¶</a></h3>
+<p>The README’s line-constrained chaser holds the LEDs in a rigid line, but their series resistors
+are free parts: global placement leaves them anywhere along their nets, and wirelength alone
+cannot prefer the pose beside the LED (a resistor anywhere on the straight path from its driver
+pin to its LED has the same wirelength). With the switch a line group carries its members’
+satellites (<code class="docutils literal notranslate"><span class="pre">line_group.satellites</span></code>): a free two-pad part (no constraint names it, not locked, on
+the top side, on no diff-pair or length-match net) one of whose pads shares a two-pin net with one
+member pad. Each sits flush beside its member, across the line on the side of that pad, turned so
+its pads lie across the line with the shared pad facing the member’s, the two shared pads in line
+and the courtyards the line’s clearance apart (<code class="docutils literal notranslate"><span class="pre">satellite_layout</span></code>); a member pad that lies along
+the line takes none, nor does a satellite that would come too close to another. The satellites
+are members of the line’s rigid macro, so global placement turns the line knowing where the
+resistors’ other nets go, and the legalizer packs the row as one body. Not on a double-sided board
+(a satellite there may want the other side).</p>
+</section>
+<section id="determinism-and-tests">
+<h3>Determinism and tests<a class="headerlink" href="#determinism-and-tests" title="Link to this heading">¶</a></h3>
+<p>Fixed step counts, no new random draws, float64 in the legalizer, first-index ties, a fixed
+turn order and <code class="docutils literal notranslate"><span class="pre">(gain,</span> <span class="pre">ref,</span> <span class="pre">turn)</span></code> order in C2: a seed reproduces its board on one platform.
+Tests: <code class="docutils literal notranslate"><span class="pre">test_legalize_flags.py</span></code> (parsing, the runner’s options, the trace header, and the flag-off
+identity on 04-inverter-leds-8 and 07-chaser-20 against the compact goldens with every new
+function patched to fail), <code class="docutils literal notranslate"><span class="pre">test_legalize_wire.py</span></code> (the README case: the near-side slot with the
+term and the far one without; a reversed part half-turned; ties; hard rotations; offset courtyards
+at the chosen turn; and a line-group chaser whose series resistors end upright beside their LEDs
+only with the term), <code class="docutils literal notranslate"><span class="pre">test_reorient.py</span></code> (the best legal turn; neighbours, keep-outs and the spread
+factor rule turns out; the channel guard; exclusions; idempotence; the placer only gets shorter)
+and <code class="docutils literal notranslate"><span class="pre">test_gp_polish.py</span></code> (a tight toy packing legalizes by snapping alone after the polish, at most
+half a cell diagonal per part, against 2.9 mm without; the channel term opens an escaping pair and
+ignores a pair-local net; zero steps change nothing; the source clamp).</p>
+</section>
+<section id="measurements">
+<h3>Measurements<a class="headerlink" href="#measurements" title="Link to this heading">¶</a></h3>
+<p>Wave 0 (2026-10-04, darwin-arm64, compact): the design’s 64 recorded pool starts (8 ladder cases
+and showcases, seed 0) replayed through the unchanged placer with each switch set, every
+placement legal and routed once at the pool’s finalist budget, paired against compact as on
+<code class="docutils literal notranslate"><span class="pre">main</span></code> on the same global result. 56 starts without the source start (which begins up to 233 mm
+off the board); base copper 191 mm per board:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Switches</p></th>
+<th class="head"><p>Legalizer move</p></th>
+<th class="head"><p>Moved &gt; 0.5 mm</p></th>
+<th class="head"><p>HPWL</p></th>
+<th class="head"><p>Bounding box</p></th>
+<th class="head"><p>Copper per board [95 % CI]</p></th>
+<th class="head"><p>Vias</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>none (compact as on <code class="docutils literal notranslate"><span class="pre">main</span></code>)</p></td>
+<td><p>2.31 mm</p></td>
+<td><p>76 %</p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GP_POLISH</span></code></p></td>
+<td><p>1.92 mm</p></td>
+<td><p>70 %</p></td>
+<td><p>−1.8 %</p></td>
+<td><p>+1.4 %</p></td>
+<td><p>+0.1 [−4.1, +4.4]</p></td>
+<td><p>+0.36</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GP_CHANNELS=1</span></code></p></td>
+<td><p>0.53 mm</p></td>
+<td><p>30 %</p></td>
+<td><p>−3.1 %</p></td>
+<td><p>+6.7 %</p></td>
+<td><p>−1.8 [−6.8, +3.2]</p></td>
+<td><p>−1.88</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GP_CHANNELS=0.5</span></code> (placement only)</p></td>
+<td><p>1.06 mm</p></td>
+<td><p>50 %</p></td>
+<td><p>−4.5 %</p></td>
+<td><p>+1.9 %</p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">LEGALIZE_REORIENT=wire</span></code></p></td>
+<td><p>2.31 mm</p></td>
+<td><p>76 %</p></td>
+<td><p>−2.3 %</p></td>
+<td><p>−0.9 %</p></td>
+<td><p>−3.5 [−7.9, +0.9]</p></td>
+<td><p>−0.14</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LEGALIZE_HPWL=4</span></code></p></td>
+<td><p>3.28 mm</p></td>
+<td><p>95 %</p></td>
+<td><p>−13.4 %</p></td>
+<td><p>−5.4 %</p></td>
+<td><p>−22.0 [−28.7, −15.3]</p></td>
+<td><p>−1.25</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">LEGALIZE_HPWL=4</span></code>, <code class="docutils literal notranslate"><span class="pre">REORIENT=1</span></code></p></td>
+<td><p>3.28 mm</p></td>
+<td><p>95 %</p></td>
+<td><p>−13.6 %</p></td>
+<td><p>−5.4 %</p></td>
+<td><p>−23.3 [−29.5, −17.2]</p></td>
+<td><p>−1.20</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LEGALIZE_HPWL=4</span></code>, <code class="docutils literal notranslate"><span class="pre">REORIENT=wire</span></code></p></td>
+<td><p>3.28 mm</p></td>
+<td><p>95 %</p></td>
+<td><p>−14.6 %</p></td>
+<td><p>−6.0 %</p></td>
+<td><p>−26.6 [−32.5, −20.8]</p></td>
+<td><p>−1.50</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">LEGALIZE_HPWL=16</span></code>, <code class="docutils literal notranslate"><span class="pre">REORIENT=wire</span></code></p></td>
+<td><p>4.20 mm</p></td>
+<td><p>95 %</p></td>
+<td><p>−25.6 %</p></td>
+<td><p>−11.1 %</p></td>
+<td><p>−46.5 [−54.9, −38.0]</p></td>
+<td><p>−2.29</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">GP_CHANNELS=1</span></code>, <code class="docutils literal notranslate"><span class="pre">LEGALIZE_HPWL=4</span></code></p></td>
+<td><p>2.42 mm</p></td>
+<td><p>89 %</p></td>
+<td><p>−13.4 %</p></td>
+<td><p>−0.2 %</p></td>
+<td><p>−20.8 [−26.5, −15.1]</p></td>
+<td><p>−1.38</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GP_CHANNELS=1</span></code>, <code class="docutils literal notranslate"><span class="pre">LEGALIZE_HPWL=4</span></code>, <code class="docutils literal notranslate"><span class="pre">REORIENT=wire</span></code></p></td>
+<td><p>2.42 mm</p></td>
+<td><p>89 %</p></td>
+<td><p>−14.1 %</p></td>
+<td><p>−0.5 %</p></td>
+<td><p>−21.2 [−27.9, −14.4]</p></td>
+<td><p>−1.52</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<ul class="simple">
+<li><p>Every figure lies inside the prototype’s confidence interval; the wirelength term reproduces the
+prototype’s placements start by start, and the engine without switches its copper on 60 of 64
+starts (the replay rounds the recorded targets to float32).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">REORIENT=1</span></code> (the channel guard) turns little: −0.5 % HPWL alone and −1.3 mm after
+<code class="docutils literal notranslate"><span class="pre">LEGALIZE_HPWL=4</span></code>, against −2.3 % and −4.6 mm without the guard, whose turns raise the
+channel model’s shortage score from 1.2 to 2.8 mm² per board. The A/B measures both.</p></li>
+<li><p>Legalization CPU per start rises from 0.21 s to 0.77 s with <code class="docutils literal notranslate"><span class="pre">LEGALIZE_HPWL</span></code> (four searches and
+the term) and the polish adds about 0.2 s; global placement is not counted here.</p></li>
+<li><p>README board (<code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code>, seed 0, start 00): 272.0 mm as on <code class="docutils literal notranslate"><span class="pre">main</span></code>; 295.7 mm with
+<code class="docutils literal notranslate"><span class="pre">LEGALIZE_HPWL=4</span></code> alone; 257.9 mm (21 vias) with <code class="docutils literal notranslate"><span class="pre">REORIENT=wire</span></code> too, the series resistors R4,
+R6 and R7 upright beside their LEDs; 277.2 mm (18 vias) with <code class="docutils literal notranslate"><span class="pre">GP_CHANNELS=1</span></code> as well.</p></li>
+<li><p>Switches off: the unit suites, and <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--compact</span></code> on 04-inverter-leds-8 and 05-timer-led-10,
+give the same placements and routes as <code class="docutils literal notranslate"><span class="pre">main</span></code>.</p></li>
+</ul>
+<p>These are one platform, seed 0, one route per placement, without the pool’s ranking, feedback
+rounds or gloss. Adoption waits for the ladder A/B (8 cases and 4 showcases on two seeds, the
+header rung, then 08-chaser-20-plane on ten seeds, the hard rungs, the manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code>
+lane and <code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code>): a switch becomes a <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code> part only if no cell loses
+completion or gains DRC or skew findings, copper improves with its 95 % interval below zero on
+the core cells and no hard family is more than 2 % worse, vias rise by at most 0.5 per board,
+placement CPU by at most 30 % and the bounding box by at most 5 % (<code class="docutils literal notranslate"><span class="pre">GP_CHANNELS=1</span></code> is at +6.7 %
+here, 0.5 the fallback). None of them targets the manual lane’s failure (no room to tune the USB
+pairs), so compact placement itself is expected to stay opt-in.</p>
+</section>
+<section id="review-fix-a-b-2026-10-04">
+<h3>Review-fix A/B (2026-10-04)<a class="headerlink" href="#review-fix-a-b-2026-10-04" title="Link to this heading">¶</a></h3>
+<p>The switches after the review fixes above (the exact prune, matched parts exempt, half-turn bans),
+paired against compact placement as on <code class="docutils literal notranslate"><span class="pre">main</span></code>. Core: the 8 ladder cases and 4 showcases at seeds
+0 and 1 on darwin-arm64 (24 cells); hard cells on GCP x86. Copper is paired over cells both arms
+pass, with a 95 % interval clustered by case.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Arm (with <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>)</p></th>
+<th class="head"><p>Core copper per board</p></th>
+<th class="head"><p>Vias</p></th>
+<th class="head"><p>Bbox</p></th>
+<th class="head"><p>Placement CPU</p></th>
+<th class="head"><p>USB-pair lanes pass</p></th>
+<th class="head"><p>Nightly 14 + 07-rel, 08 x 8, quad x 2</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>none (compact as on <code class="docutils literal notranslate"><span class="pre">main</span></code>)</p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p>22 / 36</p></td>
+<td><p>all pass</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">WIRE</span></code> + <code class="docutils literal notranslate"><span class="pre">TURN</span></code></p></td>
+<td><p>−27.4 [−47.4, −7.5]</p></td>
+<td><p>−1.75</p></td>
+<td><p>−6.4 %</p></td>
+<td><p>×1.10</p></td>
+<td><p>23 / 36</p></td>
+<td><p>all pass; −52.0, −37.7, −184 mm</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CHANNEL_CLEARANCE=fab</span></code></p></td>
+<td><p>−12.1 [−35.3, +11.2]</p></td>
+<td><p>+0.50</p></td>
+<td><p>−8.2 %</p></td>
+<td><p>×1.01</p></td>
+<td><p>23 / 36 (+4.3 vias)</p></td>
+<td><p>all pass; −7.2, −19.2, −86.8 mm</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">WIRE</span></code> + <code class="docutils literal notranslate"><span class="pre">TURN</span></code> + fab</p></td>
+<td><p>−30.2 [−49.7, −10.7]</p></td>
+<td><p>−0.54</p></td>
+<td><p>−9.7 %</p></td>
+<td><p>×1.03</p></td>
+<td><p>16 / 36</p></td>
+<td><p>1 fail</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<ul class="simple">
+<li><p><strong>Cost.</strong> The prune leaves every placement as it was (96 of 96 recorded pool starts, and the
+routed copper of all 33 re-run core cells is byte-identical) and brings placement CPU from
+1.92 times compact’s to 1.10 on the core cells and 0.89 on the nightly rungs.</p></li>
+<li><p><strong>The USB-pair lanes</strong> (<code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> x 7 at seeds 0 to 3, the header rung at 0 to 5 and the
+Monte Carlo driver at 0 and 1): with the matched parts exempt, <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> + <code class="docutils literal notranslate"><span class="pre">TURN</span></code> passes 23 of 36
+against compact’s 22 (9 cells pass only with it, 8 only without), where the version before the
+fixes passed only 18 of them. Boards without a matched net place exactly as before.</p></li>
+<li><p><strong>The fab clearance</strong> shortens the legalizer’s moves on the core (2.00 to 1.46 mm on average,
+parts moved over 0.5 mm 66 to 52 %) but adds vias on the hard cells and, with <code class="docutils literal notranslate"><span class="pre">WIRE</span></code>, packs the
+USB pairs too tightly to tune; it stays opt-in.</p></li>
+<li><p><strong>Line satellites</strong>, on <code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code> at seeds 0 to 9: −82.6 [−117.0, −48.2] mm of copper and
+−11.5 vias per board against compact, 10 of 10 pass, the legalizer’s mean move 2.28 to 1.15 mm;
+on <code class="docutils literal notranslate"><span class="pre">07-chaser-20-rel</span></code> (seeds 0 to 4) −67.6 mm and −8 vias, 5 of 5 pass; on <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-rel</span></code>
+2 of 4 pass against compact’s 1. The README board (seed 0): 205.5 mm and 8 vias against 268.7 mm
+and 20, every series resistor in line with its LED (none with <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> + <code class="docutils literal notranslate"><span class="pre">TURN</span></code> alone).</p></li>
+</ul>
+<p>The ladder’s default stays as it was: compact placement, now with these parts, still fails the
+manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane more often than the default mode (which passes it on every seed), so
+it stays opt-in.</p>
+</section>
+<section id="conflicts-and-open-points">
+<h3>Conflicts and open points<a class="headerlink" href="#conflicts-and-open-points" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>The legalizer options of <code class="docutils literal notranslate"><span class="pre">claude/s3a-legal</span></code> (scarcity order, region look-ahead, exact outline)
+are on <code class="docutils literal notranslate"><span class="pre">main</span></code> (#44); C1 adds one <code class="docutils literal notranslate"><span class="pre">only=</span></code> argument to <code class="docutils literal notranslate"><span class="pre">search()</span></code> and a flag where its stranded
+fallback is taken, so the look-ahead runs per turn. Their interaction is not measured.</p></li>
+<li><p>The channel model reads <code class="docutils literal notranslate"><span class="pre">default_clearance_mm</span></code> (0.4 on the ladder) where the router and KiCad
+use the fab clearance (0.2) for unclassed nets: one escaping track asks 1.05 mm between pads
+where 0.65 to 0.90 mm routes. <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_CHANNEL_CLEARANCE=fab</span></code> measures the change (above).</p></li>
+<li><p>Global placement’s own weights were never tuned; with <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> the legalizer re-places parts for
+wirelength (a mean move of 4.15 mm on the core), which a better global placement would leave
+less to do. The polish (A) brought the two closer by lengthening global placement’s
+wirelength (+16 %) and is not adopted.</p></li>
+</ul>
+</section>
+</section>
+<section id="the-09-mcu-usb-31-lane-pairs-and-relax-2026-10-06">
+<h2>12. The <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane: <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> and <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> (2026-10-06)<a class="headerlink" href="#the-09-mcu-usb-31-lane-pairs-and-relax-2026-10-06" title="Link to this heading">¶</a></h2>
+<p>Ladder v2 makes compact placement the default, which needs the manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane (the
+seven layout and constraint variants, <code class="docutils literal notranslate"><span class="pre">-header</span></code> and <code class="docutils literal notranslate"><span class="pre">-mc</span></code>) to pass with it wherever it passes
+without. At <code class="docutils literal notranslate"><span class="pre">origin/main</span></code> (<code class="docutils literal notranslate"><span class="pre">82ec1a5</span></code>, GCP C4D x86-64, the lane’s options: pool 8/1, 2 rounds,
+packed maze; seeds 0 and 1) it passed 16 of 16 off and 11 of 16 compact (<code class="docutils literal notranslate"><span class="pre">-header</span></code> 0 of 2 off, 1
+of 2 compact).</p>
+<p><strong>Root cause.</strong> All five failing cells (and every failure on seeds 2 and 3) are one of two kinds:</p>
+<ul class="simple">
+<li><p><strong>A pair out of skew</strong> (<code class="docutils literal notranslate"><span class="pre">length_unmatched</span></code>, 1.5 to 12.6 mm). In every one, one leg of a USB pair
+carries a via pair and a detour that its partner does not: the two series resistors sit
+staggered, stacked across the legs or on either side of the connector, so one leg crosses the
+other or squeezes past a resistor through the bottom layer (a via pair alone is 2 x 1.51 mm on
+the 1.6 mm board). Without compact the same crossings happen, and the length tuner meanders the
+short leg back into the 1 mm budget (16 to 20 mm of meanders on some cells); with the courtyards
+packed at 0.01 mm there is no free cell beside the short leg for a bump, so the tuner adds
+nothing and the set is reverted. The place-route loop then stops anyway: it counted only
+unrouted nets, so a round with an unmatched pair was “converged”.</p></li>
+<li><p><strong>A net unrouted</strong> on the plane variants (<code class="docutils literal notranslate"><span class="pre">4L-SGPS</span></code>, <code class="docutils literal notranslate"><span class="pre">4L-SSGS</span></code>, <code class="docutils literal notranslate"><span class="pre">6L-SGSGPS</span></code>): every ground and
+supply pad drops a via to its plane, and the packed layout leaves the signal escapes no room.</p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">PAIRS</span></code>.</strong> The matched-length pass after legalization (<code class="docutils literal notranslate"><span class="pre">pnr.place.matched.refine_matched</span></code>) may
+also turn a part on a pair or length group, or a line group’s rigid macro (the <code class="docutils literal notranslate"><span class="pre">-rel</span></code> variant’s
+authored <code class="docutils literal notranslate"><span class="pre">usb-series</span></code> line), a quarter turn, so that the pads its legs leave from face where the
+legs go. It never turns a part a hard rotation holds, nor without <code class="docutils literal notranslate"><span class="pre">orient</span></code>.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">RELAX</span></code>: compact as far as the board routes.</strong> In the place-route loop
+(<code class="docutils literal notranslate"><span class="pre">pnr.route.feedback</span></code>) a round that leaves a signal net unrouted, or a declared pair or group
+outside its budget, is not converged. Every later round runs with compact placement switched off
+(<code class="docutils literal notranslate"><span class="pre">pnr.compact_flags.relaxed</span></code>, read by every part’s call site) at the board’s own spread, and the
+first of them takes the initial pool again at the run’s seed: it is the first round of the run
+without compact, byte for byte (checked on <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-rel</span></code> seed 0: <code class="docutils literal notranslate"><span class="pre">placed.json</span></code> and
+<code class="docutils literal notranslate"><span class="pre">routes.json</span></code> identical). So a board that routes without compact in one round routes with it in
+two, and keeps the compact layout wherever that routes. A board that does not place without
+compact (the pin-1-origin header’s envelope) keeps its best compact round
+(<code class="docutils literal notranslate"><span class="pre">termination:</span> <span class="pre">relaxed_placement_failed</span></code>). <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code> records the switch (<code class="docutils literal notranslate"><span class="pre">relaxed</span></code>:
+the round, the spread, why).</p>
+<p><strong>Rejected on the way</strong> (A/B on GCP, the 8 rungs with the lane’s options, seeds 0 to 3):</p>
+<ul class="simple">
+<li><p>the two series resistors placed as a rigid mirrored twin (an engine line group): 15 of 32
+against 21 of 32 without it, since a twin of 0805s puts its legs 2 mm apart and a twin turned
+across the legs mismatches them by that pitch;</p></li>
+<li><p>the declared pairs routed coupled (<code class="docutils literal notranslate"><span class="pre">board.route_pairs:</span> <span class="pre">coupled</span></code>): the staggered resistors give
+the coupled solver no channel (<code class="docutils literal notranslate"><span class="pre">no_coupled_channel</span></code>), both pairs fall back to legs;</p></li>
+<li><p>the short leg routed again, longer, through a waypoint or a via hop where meanders find no
+room: unit-tested, but on the lane’s boards no such route cleared the other nets, so it never
+fired and was removed.</p></li>
+</ul>
+<p><strong>Measured</strong> (GCP C4D, x86-64; the 8 rungs of the lane run with the initial pool, seeds 0 to 3,
+32 cells; <code class="docutils literal notranslate"><span class="pre">-mc</span></code> passes in every arm):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Arm</p></th>
+<th class="head"><p>Pass</p></th>
+<th class="head"><p>Rounds run without compact</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>off (<code class="docutils literal notranslate"><span class="pre">main</span></code>)</p></td>
+<td><p>26/32</p></td>
+<td><p>-</p></td>
+</tr>
+<tr class="row-odd"><td><p>compact (<code class="docutils literal notranslate"><span class="pre">main</span></code>)</p></td>
+<td><p>21/32</p></td>
+<td><p>-</p></td>
+</tr>
+<tr class="row-even"><td><p>compact, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> placing at the board’s spread, no pool</p></td>
+<td><p>28/32</p></td>
+<td><p>17</p></td>
+</tr>
+<tr class="row-odd"><td><p>compact, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> (pool again), <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> off</p></td>
+<td><p>31/32</p></td>
+<td><p>16</p></td>
+</tr>
+<tr class="row-even"><td><p>compact, <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> and <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code></p></td>
+<td><p>32/32</p></td>
+<td><p>14</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Off fails <code class="docutils literal notranslate"><span class="pre">-header</span></code> on every seed (its envelope cannot be placed) and <code class="docutils literal notranslate"><span class="pre">-abs</span></code>, <code class="docutils literal notranslate"><span class="pre">-sidelock</span></code> on seed 3
+(pairs out of skew). The one failure with <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> off is <code class="docutils literal notranslate"><span class="pre">-header</span></code> seed 0, whose round without
+compact cannot place the header: the run stopped there, before the fallback kept its compact
+round (fixed since).</p>
+<p>The plane variants fall back on most seeds (their compact rounds leave a net unrouted); the
+two-layer variants keep their compact layout on most.</p>
+<p><strong>Validation</strong> (<code class="docutils literal notranslate"><span class="pre">c5c1f5c</span></code> against <code class="docutils literal notranslate"><span class="pre">main</span></code> <code class="docutils literal notranslate"><span class="pre">586857d</span></code>, GCP C4D x86-64, seeds 0 and 1; the lane with
+its options, the ladder and showcases with the pool 8/3, the 15 nightly hard rungs as the nightly
+lane runs them):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Cells</p></th>
+<th class="head"><p>compact</p></th>
+<th class="head"><p>off</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">RELAX</span></code> rounds</p></th>
+<th class="head"><p>Placed bbox, compact vs off</p></th>
+<th class="head"><p>Copper</p></th>
+<th class="head"><p>Vias</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>8 ladder cases (16)</p></td>
+<td><p>16/16</p></td>
+<td><p>16/16</p></td>
+<td><p>0</p></td>
+<td><p>6427 to 3795 mm² (-41 %)</p></td>
+<td><p>2317 → 1633</p></td>
+<td><p>134 → 128</p></td>
+</tr>
+<tr class="row-odd"><td><p>4 showcases (8)</p></td>
+<td><p>8/8</p></td>
+<td><p>8/8</p></td>
+<td><p>0</p></td>
+<td><p>6641 to 3899 mm² (-41 %)</p></td>
+<td><p>2460 → 1660</p></td>
+<td><p>148 → 132</p></td>
+</tr>
+<tr class="row-even"><td><p>15 nightly hard rungs (30)</p></td>
+<td><p>30/30</p></td>
+<td><p>30/30</p></td>
+<td><p>0</p></td>
+<td><p>26629 to 16935 mm² (-36 %)</p></td>
+<td><p>8514 → 5787</p></td>
+<td><p>821 → 775</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane (18)</p></td>
+<td><p>18/18</p></td>
+<td><p>16/18</p></td>
+<td><p>7</p></td>
+<td><p>22412 to 19833 mm² (-12 %)</p></td>
+<td><p>12012 → 10244</p></td>
+<td><p>983 → 964</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The bbox, copper (mm) and vias are summed over the cells that place in both arms (the lane
+without <code class="docutils literal notranslate"><span class="pre">-header</span></code>, which off cannot place). Off on the branch is byte-identical to <code class="docutils literal notranslate"><span class="pre">main</span></code> on 70
+of 72 cells (<code class="docutils literal notranslate"><span class="pre">placed.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code>, the routed board modulo UUIDs); the other two are
+<code class="docutils literal notranslate"><span class="pre">-header</span></code>, which neither places (the same pool exhaustion). Compact costs 2 to 18 % more CPU
+(the lane’s fallback rounds).</p>
+<p><strong>Power-first placement</strong> (<code class="docutils literal notranslate"><span class="pre">PNR_POWER_FIRST=1</span></code>) no longer refuses compact (section 2).</p>
+</section>
+<section id="displacement-minimizing-legalization-pnr-legalize-keep-on-by-default">
+<h2>13. Displacement-minimizing legalization (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>, on by default)<a class="headerlink" href="#displacement-minimizing-legalization-pnr-legalize-keep-on-by-default" title="Link to this heading">¶</a></h2>
+<blockquote>
+<div><p>Owner report (2026-10-05): the hierarchical demo animation “shows a lot of component movement at
+the legalization phase, both at the block level and at the top level … even though all three
+blocks find positions with plenty of room around them, all three of them get relocated.” And:
+a part that is fully occluded is a candidate for relocation, but a slight overlap should push
+the parts around it outwards rather than upset the order global placement found.</p>
+</div></blockquote>
+<p><strong>Measured cause</strong> (seed 0, ladder, showcases and <code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code>, every <code class="docutils literal notranslate"><span class="pre">legalize()</span></code> call
+recorded from its global poses; <code class="docutils literal notranslate"><span class="pre">pnr.place.motion</span></code>): before #41 and on <code class="docutils literal notranslate"><span class="pre">main</span></code> without compact, the
+parts that were legal where global placement left them (no overlap, inside the outline, clearance
+met) mostly stayed (0 to 50 % of them moved; 0 % at the hier top level). Under <code class="docutils literal notranslate"><span class="pre">--compact</span></code> every
+one of them moved and about half turned (100 % on 13 of 15 stages; topology kept 0.76 to 0.90),
+at the top level of <code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> all four bodies (19.1 mm in all, 56 % turned). Without
+<code class="docutils literal notranslate"><span class="pre">WIRE</span></code> (<code class="docutils literal notranslate"><span class="pre">--compact-off</span> <span class="pre">WIRE</span></code>) the top level moves 2.2 mm in all. The causes, in order of weight:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">WIRE</span></code> (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_HPWL</span></code> 4 under compact) prices each part’s slot by its wirelength there
+and searches all four turns, so every part, legal or not, is re-sited and re-turned toward a
+wirelength optimum (the top level’s three blocks among them); <code class="docutils literal notranslate"><span class="pre">TURN</span></code> then turns any part.</p></li>
+<li><p>The routing-channel term of the slot cost moves legal parts whose pads face a neighbour’s.</p></li>
+<li><p>The packer places biggest first into the nearest free slot, so a part that conflicts can take
+the place of one that did not.</p></li>
+</ol>
+<p>There was no frame or origin mismatch between block and top level, no courtyard inflation and no
+snap offset beyond half a grid cell.</p>
+<p><strong>Change</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.keep</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.place.legalize</span></code>; <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP=0</span></code> restores the packer):</p>
+<ul class="simple">
+<li><p><em>Triage.</em> Each movable part’s slot (as the packer sizes it) is tested at its global pose. A
+part half or more occluded (by other slots, fixed parts, keep-outs, the outside of the outline)
+is <em>severe</em> (the worst first, re-measured without it); the rest are <em>clean</em> or <em>mild</em>.</p></li>
+<li><p><em>Push.</em> Mild overlaps are resolved by an order-preserving push: horizontal and vertical
+constraint graphs from the global poses (an overlapping pair separates along its smaller
+penetration, a side-by-side pair keeps its order), solved as the weighted least-squares
+projection of the global centres (Dykstra, per axis), with the outline, fixed parts and the
+parts the push may not move (regions, aligns, edge bands, hard discs, hull macros) as bounds.
+The physical overlap is cleared first: a cluster whose push goes beyond a part’s reach (1.5 mm
+or half its smaller side) gives up its most occluded mild part (<code class="docutils literal notranslate"><span class="pre">push_infeasible</span></code>) and is pushed
+again. Then the escape channel the packer’s channel model asks between facing pad rows is a soft
+goal: the cluster is pushed again with each pair’s distance including its channel, and that
+push is kept when it fits within every part’s reach; otherwise the overlap-only push stands. A
+channel never makes the push give up a part; a cluster with no overlap but a part short of a
+channel is pushed only when the whole channel fits.</p></li>
+<li><p><em>Anchors.</em> Held parts (hard groups, aligns, regions, edge bands, hard discs) are placed first as
+before; then every part that is not severe takes the free slot nearest its (pushed) pose within
+1.5 grid cells, at its global turn, without the channel or wirelength terms. A part whose slot
+is taken (<code class="docutils literal notranslate"><span class="pre">slot_taken</span></code>) or that the push gave up (<code class="docutils literal notranslate"><span class="pre">push_infeasible</span></code>) then takes the nearest free
+slot in rings expanding from its global pose (radius 3, 6, 12, … grid cells; its global turn
+first at each ring, then its other turns), never the full search; a held part whose slot is
+taken keeps the packer’s own search, which carries its constraint’s costs (an exact align
+needs them). Only the severe parts go through the packer’s full search (its cost, <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> and
+turns). <code class="docutils literal notranslate"><span class="pre">TURN</span></code> turns only the parts the
+legalizer moved. If the result leaves a part without a slot, the board is legalized again with
+the plain packer (<code class="docutils literal notranslate"><span class="pre">keep_fallback</span></code>).</p></li>
+<li><p><em>Metric.</em> Every legalization records its motion: parts moved (beyond 0.4 mm or turned),
+displacement sum and maximum, turns, topology kept (the fraction of pairwise left/right and
+above/below relations of the global poses that the legal poses keep), the neighbour order kept
+(<code class="docutils literal notranslate"><span class="pre">neighbour_order</span></code>: the same over each part’s four nearest parts only, counting an axis when it
+carries at least a quarter of the pair’s distance; <code class="docutils literal notranslate"><span class="pre">neighbour_relations</span></code> is its count), the
+triage counts and,
+per part that left its pose, the reason (<code class="docutils literal notranslate"><span class="pre">relocations</span></code>; <code class="docutils literal notranslate"><span class="pre">relocated_severe</span></code>,
+<code class="docutils literal notranslate"><span class="pre">relocated_push_infeasible</span></code>, <code class="docutils literal notranslate"><span class="pre">relocated_slot_taken</span></code>, <code class="docutils literal notranslate"><span class="pre">nudged</span></code>, <code class="docutils literal notranslate"><span class="pre">channel_unopened</span></code>). It
+is in the placement report, <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code> (<code class="docutils literal notranslate"><span class="pre">legal_motion</span></code>; <code class="docutils literal notranslate"><span class="pre">block</span></code> and <code class="docutils literal notranslate"><span class="pre">top</span></code> for the
+hierarchical driver), <code class="docutils literal notranslate"><span class="pre">ladder-results.json</span></code>, the trace’s <code class="docutils literal notranslate"><span class="pre">legal</span></code> events and the animation’s end
+card (“legalization moved …”).</p></li>
+</ul>
+<p><strong>Measured after</strong> (the same runs, Mac, seed 0; <code class="docutils literal notranslate"><span class="pre">legalize-motion</span></code> notes): under <code class="docutils literal notranslate"><span class="pre">--compact</span></code> the
+hier top level moves 0 of 4 bodies (0.3 mm) in the docs run, 1.2 mm per top-level seed on average
+(topology 1.00), against 19.1 mm; <code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> top 7.7 mm against 34.4 mm. On the larger
+flat cases (06 to 08, the edge-io pair, the line chaser) 40 to 74 % of the parts move against 90
+to 100 %, with 40 to 64 % less displacement, and topology kept is 0.80 to 1.00 against 0.76 to
+1.00. Most of what still moves is the push opening routing channels the compact global placement
+left out, and the parts relocated where a push could not open them.</p>
+<p>Regression (GCP, <code class="docutils literal notranslate"><span class="pre">c4d</span></code>, seeds 0 and 1, every cell of the ladder, the showcases, the quad bank, the
+MCU lane, the six UFBGA-201 rungs, the 15 nightly hard rungs and the buck rungs under <code class="docutils literal notranslate"><span class="pre">--compact</span></code>,
+and the ladder, showcases, quad bank and nightly rungs without it; control <code class="docutils literal notranslate"><span class="pre">main</span></code> 82ec1a5, the MCU
+lane’s from campaign <code class="docutils literal notranslate"><span class="pre">20261005-mceval-f97cc0</span></code>; plus seeds 2 to 9 of <code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code> and 2 to
+5 of the quad bank): 84 of 92 compact cells pass against 86, and 61 of 64 default-mode cells
+against 62; every flip has a counterpart (the MCU lane 11 of 18 against 12, gaining three cells
+and losing four; <code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code> 7 of 10 against 8 of 10; the quad bank 5 of 6 against 6
+of 6). Copper is 597 mm shorter over the default-mode cells and 416 mm longer over the compact
+ones; vias −29 and +42 (seeds 0 and 1). The control’s seeds 0 and 1 of the core and hard rungs
+ran on <code class="docutils literal notranslate"><span class="pre">c4</span></code> (another region’s Spot quota), the branch’s on <code class="docutils literal notranslate"><span class="pre">c4d</span></code>; the extra seeds ran both on
+<code class="docutils literal notranslate"><span class="pre">c4d</span></code>. A first version without the channels in the push moved fewer parts still (the core flat
+cases 0 to 43 %) but passed only 40 of 50 compact cells against 44 (the MCU lane 8 of 18), so the
+channels stay.</p>
+<section id="f-block-level-motion-reserving-channel-room-in-gp-not-only-in-the-push">
+<h3>F. Block-level motion: reserving channel room in GP, not only in the push<a class="headerlink" href="#f-block-level-motion-reserving-channel-room-in-gp-not-only-in-the-push" title="Link to this heading">¶</a></h3>
+<p>The above still left the block level moving almost as much as before the push’s channel term
+(<code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> block: 70 % of parts, 16.3 mm; <code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> block: 65 %, 16.3 mm — both
+close to, not below, <code class="docutils literal notranslate"><span class="pre">main</span></code>’s non-compact 65–67 % / 15.0 mm). Mechanically this is because <code class="docutils literal notranslate"><span class="pre">GP</span></code>’s
+density term (<code class="docutils literal notranslate"><span class="pre">w_spread</span> <span class="pre">*</span> <span class="pre">overlap</span></code>, §4) only ever reserves each part’s own courtyard at the global
+spread floor; it has no notion of the escape-channel room classified nets will need between facing
+pads, so the legalizer’s push still has to open that room itself, at legalization time, moving
+parts that were already legal by the courtyard-only measure.</p>
+<p><strong>Fix</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.compact.channel_margin</span></code>, <code class="docutils literal notranslate"><span class="pre">gp_channel_inflation</span></code>; <code class="docutils literal notranslate"><span class="pre">GP</span></code> only, additive): before
+<code class="docutils literal notranslate"><span class="pre">global_place</span></code> runs, a <code class="docutils literal notranslate"><span class="pre">pnr.place.channels.ChannelModel</span></code> is built on the incoming (pre-placement)
+graph — a rough proxy, since <code class="docutils literal notranslate"><span class="pre">GP</span></code> may still turn a part, but good enough for a density floor. For
+each part, <code class="docutils literal notranslate"><span class="pre">channel_margin</span></code> takes the largest single-face demand (mm) its own externally-connected
+pads ask for (half of it: the facing neighbour owes the other half), and <code class="docutils literal notranslate"><span class="pre">gp_channel_inflation</span></code>
+turns that into a multiplier on the part’s own smaller courtyard half-extent, capped at 1.3 (the
+legalizer’s own spread cap). The result merges (<code class="docutils literal notranslate"><span class="pre">max</span></code>) into the existing <code class="docutils literal notranslate"><span class="pre">inflation</span></code> floor
+<code class="docutils literal notranslate"><span class="pre">global_place</span></code> already took from the place-route loop’s congestion feedback (§6) — the same
+mechanism, a different reason to ask for room, so GP’s density term now reserves (part of) the
+channel room up front instead of leaving it entirely to the legalizer’s push.</p>
+<p><strong>Measured</strong> (Mac, seed 0, <code class="docutils literal notranslate"><span class="pre">--compact</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.place.motion</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize-motion/table-final.md</span></code>):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stage</p></th>
+<th class="head text-right"><p><code class="docutils literal notranslate"><span class="pre">main</span></code> (no compact)</p></th>
+<th class="head text-right"><p>§13 push alone</p></th>
+<th class="head text-right"><p>+ this fix</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> block</p></td>
+<td class="text-right"><p>65 % moved, 15.0 mm</p></td>
+<td class="text-right"><p>70 %, 16.3 mm</p></td>
+<td class="text-right"><p><strong>14 %, 3.2 mm</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> top</p></td>
+<td class="text-right"><p>33 %, 30.0 mm</p></td>
+<td class="text-right"><p>17 %, 7.7 mm</p></td>
+<td class="text-right"><p><strong>0 %, 0.3 mm</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> block</p></td>
+<td class="text-right"><p>67 %, 14.9 mm</p></td>
+<td class="text-right"><p>65 %, 16.3 mm</p></td>
+<td class="text-right"><p><strong>18 %, 3.4 mm</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> top</p></td>
+<td class="text-right"><p>19 %, 13.0 mm</p></td>
+<td class="text-right"><p>19 %, 1.2 mm</p></td>
+<td class="text-right"><p><strong>0 %, 0.2 mm</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Block-level motion now sits well below the non-compact baseline instead of at parity with it, and
+top-level motion is essentially zero. The same improvement holds across every ladder and showcase
+case (01–08, the edge-io pair, the line chaser): every one moves less, and by a wider margin, than
+<code class="docutils literal notranslate"><span class="pre">main</span></code> without compact (<code class="docutils literal notranslate"><span class="pre">legalize-motion/gp3-on.out</span></code>, <code class="docutils literal notranslate"><span class="pre">summary-main-off-main-on-v2-on-gp3-on.json</span></code>).
+All 13 cases still pass. The trade-off is a smaller compaction win on 11 of the 13 — copper is
+still below <code class="docutils literal notranslate"><span class="pre">main</span></code>’s non-compact figure by 2–27 % on 11 cases (06–08, the line chaser, both edge-io
+cases, both hierarchical cases), but 2 trivial cases (01, 02: two and three parts) end up a few mm
+<em>longer</em> than uncompacted, since reserving channel room up front leaves GP less free to shrink an
+already-tiny board. Frame strips: <code class="docutils literal notranslate"><span class="pre">legalize-motion/strips/after-gp-*.png</span></code>.</p>
+<p>Not done: the early <code class="docutils literal notranslate"><span class="pre">ChannelModel</span></code> ignores the rotation <code class="docutils literal notranslate"><span class="pre">GP</span></code> may still pick (the final legalizer’s
+own channel push, §13, still uses the correct post-placement one); <code class="docutils literal notranslate"><span class="pre">_place_line_groups</span></code> and
+power-first staged placement do not call this path (compact does not support power-first, and no
+rung currently needs the channel-aware GP floor inside a line group).</p>
+</section>
+<section id="g-a-slight-overlap-is-nudged-never-re-placed-2026-10-06">
+<h3>G. A slight overlap is nudged, never re-placed (2026-10-06)<a class="headerlink" href="#g-a-slight-overlap-is-nudged-never-re-placed-2026-10-06" title="Link to this heading">¶</a></h3>
+<blockquote>
+<div><p>Owner report (2026-10-05): “In the block step, the global placement puts R6 overlapping with
+D4, and instead of nudging R6 a bit to the right, it re-places it north of the SOIC.” And: “if
+it’s only a very small overlap that caused the placement to be illegal, then it would be much
+smarter to push all of the other parts around it outwards to make room slightly rather than
+completely replacing it.”</p>
+</div></blockquote>
+<p><strong>Cause</strong> (<code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> seed 0, block <code class="docutils literal notranslate"><span class="pre">top.bank_a</span></code> trial <code class="docutils literal notranslate"><span class="pre">start-13</span></code>, 19.75 x 13.25 mm,
+reproduced from the legalizer’s input alone: <code class="docutils literal notranslate"><span class="pre">hardware/pnr/testdata/legalize_keep</span></code>). Four parts
+overlap slightly (R6 over D4 among them), none severe, and all 12 are short of an escape channel.
+The push asked for the overlap and the full channels at once; with every part channel-short that
+exceeded the 1.5 mm cascade bound, so the cluster gave up its most occluded part (R6), the push
+failed again and the cluster was left as it was (pushed 0). R6, its slot taken by D4, went to
+the packer’s full search with <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> and landed 10.7 mm away, north of the SOIC, with a quarter
+turn; R7 also left its slot with a half turn.</p>
+<p><strong>Fix</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.keep.resolve</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.place.legalize</span></code>): the courtyard overlap is cleared first
+and the channels are a soft goal (kept only where they fit; never a reason to give a part up); a
+part the push cannot clear (<code class="docutils literal notranslate"><span class="pre">push_infeasible</span></code>) or whose slot is taken (<code class="docutils literal notranslate"><span class="pre">slot_taken</span></code>) takes the
+nearest free slot in rings around its global pose, its global turn first, never the full search;
+only severe parts are relocated wholesale. The motion record names each relocated part’s reason.
+On <code class="docutils literal notranslate"><span class="pre">start-13</span></code> R6 now stays put (under 0.4 mm, same turn): D4 moves 0.47 mm, nothing else moves
+more than a snap, and nothing is relocated (was: max 10.7 mm, 2 relocated).</p>
+<p><strong>Measured</strong> (Mac, seed 0, <code class="docutils literal notranslate"><span class="pre">--compact</span></code>, every <code class="docutils literal notranslate"><span class="pre">legalize()</span></code> call; ladder, showcases and both
+hierarchical cases, 1448 part placements; <code class="docutils literal notranslate"><span class="pre">r6-fix</span></code> notes):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Legalizer</p></th>
+<th class="head text-right"><p>Parts moved</p></th>
+<th class="head text-right"><p>Sum (mm)</p></th>
+<th class="head text-right"><p>Max (mm)</p></th>
+<th class="head"><p>Relocated (severe / push / slot)</p></th>
+<th class="head text-right"><p>Moved &gt; 3 mm</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>before (<code class="docutils literal notranslate"><span class="pre">7ab6fbd5</span></code>)</p></td>
+<td class="text-right"><p>218</p></td>
+<td class="text-right"><p>463.1</p></td>
+<td class="text-right"><p>14.1</p></td>
+<td><p>86 (by the full search)</p></td>
+<td class="text-right"><p>24</p></td>
+</tr>
+<tr class="row-odd"><td><p>this fix</p></td>
+<td class="text-right"><p>132</p></td>
+<td class="text-right"><p>216.5</p></td>
+<td class="text-right"><p>10.1</p></td>
+<td><p>4 (0 / 4 / 0)</p></td>
+<td class="text-right"><p>2</p></td>
+</tr>
+<tr class="row-even"><td><p>channels opened as far as reach</p></td>
+<td class="text-right"><p>518</p></td>
+<td class="text-right"><p>580.0</p></td>
+<td class="text-right"><p>8.5</p></td>
+<td><p>4 (0 / 4 / 0)</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Block level: <code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> 106 parts moved and 220 mm before, 58 and 103 mm after (40
+relocated before, 2 after); <code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> 82 and 202 mm before, 50 and 73 mm after (34 and
+2). The two parts still moved far are the same D4 in the <code class="docutils literal notranslate"><span class="pre">start-14</span></code> block trial of
+<code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> and of <code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> (13.25 x 19.75 mm, a mild part, 22 % occluded),
+whose column above the SOIC is full: no push within reach clears it, so it takes the nearest free
+slot (10.1 mm, a quarter turn). Neither trial is the chosen block. All 13 cases pass in every
+arm. The third row opens each cluster’s channels by the largest fraction the reach allows: it
+moves 2.4 times as many parts, mostly legal ones, for no routing gain on these cases, so channels
+are all or nothing.</p>
+<p><strong>A/B</strong> (GCP <code class="docutils literal notranslate"><span class="pre">c4d</span></code> us-west4 for both arms, the runner’s ladder-v2 defaults, <code class="docutils literal notranslate"><span class="pre">--legalize-keep</span></code>
+against <code class="docutils literal notranslate"><span class="pre">--no-legalize-keep</span></code>; ladder, showcases and all 33 hard rungs, seeds 0 and 1; campaigns
+<code class="docutils literal notranslate"><span class="pre">20261006-ladder-091262</span></code> and, after the fixes below, <code class="docutils literal notranslate"><span class="pre">20261006-ladder-8a0b4d</span></code>):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Arm</p></th>
+<th class="head"><p>Pass</p></th>
+<th class="head text-right"><p>Parts moved by legalization</p></th>
+<th class="head text-right"><p>Copper (both pass)</p></th>
+<th class="head text-right"><p>Vias (both pass)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>KEEP on</p></td>
+<td><p>88/90</p></td>
+<td class="text-right"><p>148 of 1496 (285 mm)</p></td>
+<td class="text-right"><p>33455 mm</p></td>
+<td class="text-right"><p>3828</p></td>
+</tr>
+<tr class="row-odd"><td><p>KEEP off</p></td>
+<td><p>90/90</p></td>
+<td class="text-right"><p>1361 of 1496 (4677 mm)</p></td>
+<td class="text-right"><p>31131 mm</p></td>
+<td class="text-right"><p>3772</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The first run found three cells that failed only with KEEP on. Seeds 2 to 7 of those rungs
+decided which were real. <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-pairs</span></code> (5 of 8 seeds against 7 of 8): the
+initial pool took the finalist with the fewest vias although its LVDS pair had fallen back to
+two legs, which KiCad’s gap rule fails; the pool now ranks a pair left as legs with the length
+budgets, before the vias, and the rung passes 8 of 8 in both arms. <code class="docutils literal notranslate"><span class="pre">-rails</span></code> fails 3 of 8 seeds
+in both arms (different seeds): no change. <code class="docutils literal notranslate"><span class="pre">11-buck-vqfnhr-4L-SGPS-pour</span></code> stays at 5 of 8 against
+7 of 8: global placement leaves the feedback resistor on the far side of the 2 x 2 mm regulator
+from its pin, KEEP keeps it there, the feedback net crosses under the part and the ground pin
+next to it loses its pad entry (<code class="docutils literal notranslate"><span class="pre">unqualified_pad_entry</span></code>); the wirelength packer moves the
+resistor beside the pin. Moving such wrong-side parts back is open (a rescue tried here moved
+them but the board then failed on a router short). Copper is 7.5 % longer with KEEP on (13 to
+18 % on the ladder, showcases and <code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code> variants, 6 % on the MCU lane, none on the BGA
+rungs): the wirelength packer improves every legal pose, KEEP keeps them.</p>
+</section>
+<section id="h-detailed-placement-after-legalization-pnr-detail-place-on-with-keep-2026-10-06">
+<h3>H. Detailed placement after legalization (<code class="docutils literal notranslate"><span class="pre">PNR_DETAIL_PLACE</span></code>, on with KEEP; 2026-10-06)<a class="headerlink" href="#h-detailed-placement-after-legalization-pnr-detail-place-on-with-keep-2026-10-06" title="Link to this heading">¶</a></h3>
+<blockquote>
+<div><p>Owner decision (2026-10-06): the displacement-minimizing legalizer ends wholesale relocations
+but costs copper; add an order-preserving detailed-placement pass after legalization, then turn
+KEEP and it on by default once the A/B shows no rung worse and copper restored.</p>
+</div></blockquote>
+<p><strong>Why KEEP costs copper.</strong> With KEEP off, <code class="docutils literal notranslate"><span class="pre">WIRE</span></code> re-sites every part by displacement, channels and
+four times its wirelength, over all four turns: 1361 of 1496 parts moved, 4677 mm (3.4 mm each),
+and that is the 7.5 % less copper. With KEEP on every legal part keeps its global pose and turn,
+and <code class="docutils literal notranslate"><span class="pre">TURN</span></code> only turns the parts the legalizer moved.</p>
+<p><strong>Change</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.detail</span></code>, its own stage after legalization, the align snap and the
+matched-length pass, before the side moves and routing; <code class="docutils literal notranslate"><span class="pre">PNR_DETAIL_PLACE=0</span></code> turns it off,
+unset it follows <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>):</p>
+<ol class="arabic simple">
+<li><p><em>Compaction.</em> Every movable part is drawn half way toward the point that minimizes its
+wirelength (per axis the median of its nets’ spans), and the layout is projected, weighted
+least squares (the KEEP push’s solver), onto its present order: two parts side by side keep
+their order, their slots apart and as much of the routing channel between them as they have;
+every part stays in the outline and within 3 mm of its legal pose; four rounds, and a pair that
+comes to overlap keeps the order it had. It is kept only when the legalizer’s checker accepts
+every shifted part (a part it refuses is held where it was and the compaction solved again)
+and the wiring shortens.</p></li>
+<li><p><em>Greedy moves</em>, best gain first, each legal by the legalizer’s checker (its clearance,
+spreading, margins, pad-edge rule, regions, aligns, bands, group radii): a turn about the slot
+centre (every movable part, in place of <code class="docutils literal notranslate"><span class="pre">TURN</span></code>), a slide along x or y within a budget of
+max(1.5 mm, the larger courtyard side) from where compaction left it (blocked, it shifts up to
+two parts in front along, in order), a swap of two adjacent parts of one size class with
+nothing between them (each re-picks its turn), and a wrong-side move: a part whose connection
+crosses the body of the part it connects to goes beside the edge that pin faces, within that
+part’s extent plus its own plus two cells, only where the other part’s channel penalty does
+not rise. Ball arrays route through their vias and have no far side.</p></li>
+<li><p><em>Cost.</em> Half-perimeter wirelength (plane nets out) plus the crossing detour (a Manhattan
+spanning tree per net; a segment a same-side courtyard cuts across, the endpoint’s own body
+behind its pin included, costs the shorter way round) plus the channel penalty at the
+packer’s ratio (25 / 4) and the soft terms. A move must shorten the wiring by more than
+0.05 mm.</p></li>
+<li><p>Never moved: fixed, locked and hard-rotated parts, macros, row and line-group members, parts
+with landing reserves, parts on a pair or length-match net, and parts within 3 mm of a ball
+array (its escape and fanout are the board’s tightest routing). Held parts only turn and slide.
+A part also keeps out of a ball array’s 1.5 mm escape field and stays 1 mm clear of the line
+between consecutive pins of a matched net, moving no deeper into the box between them (or
+keeps what it has, if less). Deterministic (fixed orders, float64, exact quarter turns, no
+random draws; a golden hash).</p></li>
+</ol>
+<p>Its moves are a trace event (<code class="docutils literal notranslate"><span class="pre">detail</span></code>, phase <code class="docutils literal notranslate"><span class="pre">detailed-placement</span></code>), their own animation segment
+and an end-card line, and the record <code class="docutils literal notranslate"><span class="pre">detail_motion</span></code> (moves by kind, parts moved, sum, maximum
+and median distance, wirelength and crossing before and after, channel delta, topology, time) in
+the placement report, <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code>, the hierarchical report and <code class="docutils literal notranslate"><span class="pre">ladder-results.json</span></code>.
+<code class="docutils literal notranslate"><span class="pre">legal_motion</span></code> stays the legalizer’s own. The record carries the neighbour order kept from the
+legal poses (<code class="docutils literal notranslate"><span class="pre">neighbour_order</span></code>) and from the global poses (<code class="docutils literal notranslate"><span class="pre">neighbour_order_global</span></code>), and
+<code class="docutils literal notranslate"><span class="pre">ladder-results.json</span></code> gives each case <code class="docutils literal notranslate"><span class="pre">order</span></code> (<code class="docutils literal notranslate"><span class="pre">gp_legal</span></code>, <code class="docutils literal notranslate"><span class="pre">legal_dp</span></code>, <code class="docutils literal notranslate"><span class="pre">gp_dp</span></code>; end to end is
+the legal poses’ when the pass did not run) and the document <code class="docutils literal notranslate"><span class="pre">order</span></code> (<code class="docutils literal notranslate"><span class="pre">showcases_order</span></code> for the
+showcases): each stage’s order kept over every case, weighted by relation count.</p>
+<p><strong>KEEP push.</strong> A cluster whose push is infeasible now moves the conflicting pair needing the
+least shift to its other axis and solves again (up to four times; channel pushes keep their
+axis), and a failing push is retried with a size-scaled reach (0.75, then 1.0 of the larger side,
+at most 4 mm), kept only when it displaces less (area-weighted) than relocating the part it would
+give up. <code class="docutils literal notranslate"><span class="pre">start-14</span></code> of the hierarchical block (<code class="docutils literal notranslate"><span class="pre">testdata/legalize_keep</span></code>): the column under D4 was
+0.12 mm too tall for the outline in y, so D4 went 10.1 mm east; D4 is now pushed 0.76 mm and
+nothing is relocated. <code class="docutils literal notranslate"><span class="pre">04-inverter-leds-8</span></code> seed 1’s U1 stays relocated: the outline corner and
+the fixed connector box it in, and no push in its global order exists.</p>
+<p><strong>A/B</strong> (GCP <code class="docutils literal notranslate"><span class="pre">c4d</span></code> us-west4 for both arms, the runner’s ladder-v2 defaults, <code class="docutils literal notranslate"><span class="pre">--legalize-keep</span> <span class="pre">--detail-place</span></code> against <code class="docutils literal notranslate"><span class="pre">--no-legalize-keep</span> <span class="pre">--no-detail-place</span></code>; ladder, showcases and all 33 hard
+rungs, seeds 0 and 1, then seeds 2 to 7 of the BGA rungs and buck-pour and 2 to 15 of the BGA
+<code class="docutils literal notranslate"><span class="pre">-pairs</span></code> rung; KEEP alone from the R6 A/B above; campaigns <code class="docutils literal notranslate"><span class="pre">20261006-ladder-e132b3</span></code> (both arms),
+<code class="docutils literal notranslate"><span class="pre">-9c8a75</span></code>, <code class="docutils literal notranslate"><span class="pre">-931103</span></code>, <code class="docutils literal notranslate"><span class="pre">-56306d</span></code>, <code class="docutils literal notranslate"><span class="pre">-6f8fb4</span></code> (detailed placement at the final code) and <code class="docutils literal notranslate"><span class="pre">-67bfc3</span></code>,
+<code class="docutils literal notranslate"><span class="pre">-6f7476</span></code>, <code class="docutils literal notranslate"><span class="pre">-c18ee3</span></code> (KEEP off at the extra seeds)):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rungs (seeds 0 and 1)</p></th>
+<th class="head text-right"><p>Cells</p></th>
+<th class="head"><p>Pass: KEEP+DP / KEEP / off</p></th>
+<th class="head text-right"><p>Copper: KEEP+DP vs off</p></th>
+<th class="head text-right"><p>KEEP alone vs off</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>ladder 01-08</p></td>
+<td class="text-right"><p>16</p></td>
+<td><p>16 / 16 / 16</p></td>
+<td class="text-right"><p>-0.8 %</p></td>
+<td class="text-right"><p>+15.7 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>showcases</p></td>
+<td class="text-right"><p>8</p></td>
+<td><p>8 / 8 / 8</p></td>
+<td class="text-right"><p>+5.8 %</p></td>
+<td class="text-right"><p>+13.7 %</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code> variants</p></td>
+<td class="text-right"><p>28</p></td>
+<td><p>28 / 28 / 28</p></td>
+<td class="text-right"><p>+3.3 %</p></td>
+<td class="text-right"><p>+17.5 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>MCU lane</p></td>
+<td class="text-right"><p>18</p></td>
+<td><p>18 / 18 / 18</p></td>
+<td class="text-right"><p>-1.3 %</p></td>
+<td class="text-right"><p>+5.8 %</p></td>
+</tr>
+<tr class="row-even"><td><p>BGA</p></td>
+<td class="text-right"><p>12</p></td>
+<td><p>11 / 11 / 12</p></td>
+<td class="text-right"><p>-0.2 %</p></td>
+<td class="text-right"><p>+0.0 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>quad-bank, power-switch, buck</p></td>
+<td class="text-right"><p>8</p></td>
+<td><p>8 / 7 / 8</p></td>
+<td class="text-right"><p>-2.2 %</p></td>
+<td class="text-right"><p>+11.4 %</p></td>
+</tr>
+<tr class="row-even"><td><p>all</p></td>
+<td class="text-right"><p>90</p></td>
+<td><p>89 / 88 / 90</p></td>
+<td class="text-right"><p>+0.12 %</p></td>
+<td class="text-right"><p>+7.84 %</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Copper on the 87 cells all three arms pass; over the 140 cells with the extra seeds KEEP+DP is
+0.9 % shorter than KEEP off. Extra seeds: buck-pour 7 of 8 in both arms (seed 5 fails with
+detailed placement on a pad entry, seed 3 without; on the KEEP-only placement of seed 5,
+<code class="docutils literal notranslate"><span class="pre">testdata/detail_place</span></code>, detailed placement takes R1 off U1’s far side); BGA base,
+<code class="docutils literal notranslate"><span class="pre">-block</span></code>, <code class="docutils literal notranslate"><span class="pre">-classes</span></code> and <code class="docutils literal notranslate"><span class="pre">-partial</span></code> 8 of 8 in both arms; <code class="docutils literal notranslate"><span class="pre">-rails</span></code> 7 of 8 against 5 of 8; <code class="docutils literal notranslate"><span class="pre">-pairs</span></code>
+13 of 16 against 15 of 16 with KEEP off and 14 of 16 with KEEP alone (<code class="docutils literal notranslate"><span class="pre">-4cf25e</span></code>): seeds 9 and 12
+fail the LVDS pair’s gap rule by one or two findings with KEEP alone too (detailed placement moved
+nothing in their chosen placements), and on seed 1 every finalist the initial pool routed had the
+pair uncoupled or a connection missing, so it took one with the pair as legs. Parts within 3 mm
+of the ball array no longer move, so the BGA rungs gain little copper.
+The confirming round fixed both causes, which are the pool’s and the pair router’s, not the
+placement’s. The router now prefers pad fanouts without a stretch parallel to the other leg off
+the gap for a pair whose coupling the design judges (<code class="docutils literal notranslate"><span class="pre">max_uncoupled_mm</span></code>; <code class="docutils literal notranslate"><span class="pre">coupled.gap_breaks</span></code>,
+KiCad’s nearest-parallel model). The pool counts such a pair off its gap or as legs against a
+finalist (<code class="docutils literal notranslate"><span class="pre">pairs_gap</span></code>, <code class="docutils literal notranslate"><span class="pre">judged_pair_flaws</span></code>) and routes up to two more candidates by the proxy
+screen when every finalist leaves a connection open or such a pair flawed (<code class="docutils literal notranslate"><span class="pre">EXTRA_FINALISTS</span></code>).
+On the Mac, seeds 1, 9 and 12 pass.
+Detailed placement moved 1174 parts by 2243 mm in the final placements (the median of the cells’
+medians 1.2 mm, mostly compaction; the largest 14 mm), 79 s in all. The
+legalization motion (the legalizer’s own, <code class="docutils literal notranslate"><span class="pre">legal_motion</span></code>) is 179 of 1496 parts and 999 mm with 43
+relocated, against 148, 285 mm and 29 with KEEP alone: on four cells the pool now picks the
+source start, whose global placement leaves 4 to 12 parts mostly occluded; without those 155 of
+1455 parts and 283 mm (KEEP alone on the same cells: 131 and 237 mm).</p>
+</section>
+<section id="i-the-pool-s-own-screen-penalizes-wholesale-relocation-pnr-pool-motion-penalty-2026-10-06">
+<h3>I. The pool’s own screen penalizes wholesale relocation (<code class="docutils literal notranslate"><span class="pre">PNR_POOL_MOTION_PENALTY</span></code>, 2026-10-06)<a class="headerlink" href="#i-the-pool-s-own-screen-penalizes-wholesale-relocation-pnr-pool-motion-penalty-2026-10-06" title="Link to this heading">¶</a></h3>
+<p>Superseded by section J: the penalty had no effect on the selection.</p>
+<p>Review of the A/B above (section H): “legalization motion stays at the KEEP level” missed its own
+pass mark (999 mm / 43 relocated against 285 mm / 29 with KEEP alone), driven by cells where the
+initial pool picked a start whose global placement left 4 to 12 parts mostly occluded, so
+<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> correctly relocated them (the packer’s cost and turn search, per its own
+triage) but the <em>pool</em> had a legal, lower-relocation alternative on the shortlist and never
+screened for that. <code class="docutils literal notranslate"><span class="pre">11-ufbga201-fanout-6L-SGSGPS-rails</span></code> seeds 3, 4, 6 and 7 (11 of 11 parts, 356 mm
+each) and the <code class="docutils literal notranslate"><span class="pre">07-chaser-20-4L-SGPS</span></code> family seed 0 (12 parts, 617 mm) carried most of the overshoot.</p>
+<p><strong>Change</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.initial_pool.pool_motion_penalty_factor</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_flags.pool_motion_penalty</span></code>,
+<code class="docutils literal notranslate"><span class="pre">PNR_POOL_MOTION_PENALTY</span></code>; unset follows <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>, <code class="docutils literal notranslate"><span class="pre">0</span></code> off for an A/B): each start’s
+<code class="docutils literal notranslate"><span class="pre">cheap_score</span></code> (the pool’s own screen, before the capacity proxy and the routed comparison) is
+multiplied by <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">+</span> <span class="pre">4</span> <span class="pre">*</span> <span class="pre">max(0,</span> <span class="pre">relocated_fraction</span> <span class="pre">-</span> <span class="pre">0.2)</span></code>, where <code class="docutils literal notranslate"><span class="pre">relocated_fraction</span></code> is that
+start’s <code class="docutils literal notranslate"><span class="pre">legal_motion.relocated</span></code> (parts <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> actually relocated, not pushed) over
+the movable part count. A start under the fifth of the board the owner’s principle treats as
+normal (only a mostly occluded part relocates) screens exactly as before; a start that forces
+relocation of most or all of the board, as <code class="docutils literal notranslate"><span class="pre">-rails</span></code>/<code class="docutils literal notranslate"><span class="pre">07-SGPS</span></code> did, loses its shortlist slot to any
+legal alternative at a comparable raw screen, before proxy scoring or routing ever sees it. The
+penalty is diagnostic-visible (<code class="docutils literal notranslate"><span class="pre">pool_motion_penalty</span></code>, <code class="docutils literal notranslate"><span class="pre">raw_cheap_score</span></code> on the candidate record)
+and never improves a start’s score, so a design with no low-relocation alternative is unaffected.</p>
+<p><strong>Status.</strong> Unit-level (<code class="docutils literal notranslate"><span class="pre">initial_pool_test</span></code>: <code class="docutils literal notranslate"><span class="pre">PoolMotionPenaltyTest</span></code>) and the full legalizer/pool
+suites (<code class="docutils literal notranslate"><span class="pre">legalize_flags_test</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_keep_test</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_wire_test</span></code>, <code class="docutils literal notranslate"><span class="pre">detail_place_test</span></code>)
+pass; CI’s ladder is green on both <code class="docutils literal notranslate"><span class="pre">#64</span></code> and <code class="docutils literal notranslate"><span class="pre">#70</span></code>. This has <em>not</em> yet been re-measured on
+<code class="docutils literal notranslate"><span class="pre">-rails</span></code>/<code class="docutils literal notranslate"><span class="pre">07-SGPS</span></code> themselves on GCP (the A/B in section H predates this change) — that re-run,
+plus whether it also narrows the <code class="docutils literal notranslate"><span class="pre">-pairs</span></code> seed-1 gap (a pool-selection problem, not relocation:
+every routed finalist had the LVDS pair uncoupled or a connection missing), is the next step before
+reconsidering the section H merge decision.</p>
+</section>
+<section id="j-a-start-that-relocates-much-of-the-board-enters-no-shortlist-pnr-pool-relocation-screen-2026-10-07">
+<h3>J. A start that relocates much of the board enters no shortlist (<code class="docutils literal notranslate"><span class="pre">PNR_POOL_RELOCATION_SCREEN</span></code>, 2026-10-07)<a class="headerlink" href="#j-a-start-that-relocates-much-of-the-board-enters-no-shortlist-pnr-pool-relocation-screen-2026-10-07" title="Link to this heading">¶</a></h3>
+<p>The confirming A/B of section I (KEEP + detailed placement against KEEP off, every rung at seeds
+0-1) still measured 255 parts, 1522 mm and 73 relocated by legalization against 148, 285 mm and 29
+with KEEP alone. On five cells the pool picked the source start (<code class="docutils literal notranslate"><span class="pre">start-01</span></code>): its global placement
+leaves most parts occluded, so <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> relocated 11 of 11 parts on <code class="docutils literal notranslate"><span class="pre">-rails</span></code> s0 (356 mm)
+and 12 of 19 on <code class="docutils literal notranslate"><span class="pre">07-chaser-20-4L-SGPS</span></code> s0 (617 mm). The cheap_score penalty never acted: the pool’s
+proxy budget equals its start count (8), so every legal start reached the capacity proxy whatever
+its cheap score, and the finalists’ RMS pose-diversity fill then took the source start because it
+lay far from every other start; the routed comparison picked it for two fewer vias (<code class="docutils literal notranslate"><span class="pre">-rails</span></code> s0: 134
+against 136).</p>
+<p><strong>Change</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.place.initial_pool.wholesale_relocation</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize_flags.pool_relocation_screen</span></code>,
+<code class="docutils literal notranslate"><span class="pre">PNR_POOL_RELOCATION_SCREEN</span></code>; unset follows <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>, <code class="docutils literal notranslate"><span class="pre">0</span></code> off for an A/B). A start whose
+own legalization relocated more than one part and more than 20 % of the movable parts is flagged
+(<code class="docutils literal notranslate"><span class="pre">wholesale_relocation</span></code> and <code class="docutils literal notranslate"><span class="pre">relocated</span></code> on its candidate record) and kept out of the proxy
+shortlist, its diversity fill and the routed finalists while another legal start exists (the report
+lists it under <code class="docutils literal notranslate"><span class="pre">relocation_screened</span></code>); when every legal start is flagged the pool selects among them
+as before. The cheap_score penalty is removed.</p>
+<p><strong>The threshold.</strong> The 20 % is the upper edge of KEEP’s own relocation mode. Over the 42 KEEP pools
+logged by the Mac detailed-placement measurement runs (the eight ladder rungs, three flat showcases,
+<code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> and buck-pour, mostly seed 0; 373 distinct legalized starts), 321 starts relocate
+nothing, 14 relocate at most 20 % (one or two occluded parts, the case the owner’s principle names)
+and 38 relocate 28 % to 100 %, one or two per pool in 33 pools, the source start among them. No
+start lies between 20 % and 28 %, and no pool had every start above 20 %. The one-part floor keeps a
+single fully occluded part legal on a small board (one of five parts is 20 %, one of two is 50 %).</p>
+</section>
+</section>
+<section id="layer-aware-channel-model-pnr-channel-layers-2026-10-06">
+<h2>14. Layer-aware channel model (<code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS</span></code>, 2026-10-06)<a class="headerlink" href="#layer-aware-channel-model-pnr-channel-layers-2026-10-06" title="Link to this heading">¶</a></h2>
+<p>The routing-channel model (<code class="docutils literal notranslate"><span class="pre">pnr.place.channels.ChannelModel</span></code>) prices the gap between two facing
+pad rows as if every externally connected net on both rows ran along it on the surface. Global
+placement (the compact <code class="docutils literal notranslate"><span class="pre">GP</span></code> inflation floor), the legalizer’s slot cost and the
+<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code> push all read it, so an overestimate spreads parts that the router never
+needed apart, or makes the push give up on channels it cannot open.</p>
+<p><strong>Measurement</strong> (<code class="docutils literal notranslate"><span class="pre">regression/channel_audit.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.place.channel_audit</span></code>). For each channel the
+model prices on a routed board, the audit takes the busiest cut across the gap and counts the
+surface tracks that run along the channel there (tracks crossing straight from row to row do not
+count) and the vias in it, priced the way the model prices its own demand. Each predicted net is
+classed as <em>surface</em> (it ran along the channel), <em>dropped</em> (a via within 1 mm of its pad) or
+<em>elsewhere</em>. On the 88 passing cells of the default configuration (ladder, showcases and the 33
+hard rungs, seeds 0 and 1), in the channels the model calls short:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Copper layers</p></th>
+<th class="head text-right"><p>Short channels</p></th>
+<th class="head text-right"><p>Width used / predicted</p></th>
+<th class="head"><p>Predicted nets on surface / dropped / elsewhere</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>2</p></td>
+<td class="text-right"><p>752</p></td>
+<td class="text-right"><p>36 %</p></td>
+<td><p>23 / 32 / 45 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td class="text-right"><p>208</p></td>
+<td class="text-right"><p>38 %</p></td>
+<td><p>13 / 54 / 33 %</p></td>
+</tr>
+<tr class="row-even"><td><p>6</p></td>
+<td class="text-right"><p>87</p></td>
+<td class="text-right"><p>45 %</p></td>
+<td><p>13 / 56 / 31 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td class="text-right"><p>22</p></td>
+<td class="text-right"><p>35 %</p></td>
+<td><p>11 / 57 / 31 %</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The model is about 2.5 times too conservative at every layer count. Two things account for it:
+nets leave by another face (a two-pad part’s pad lies on three faces of its part), and nets
+drop to another layer next to their pad. Dropping grows from a third of the nets on two layers
+to over half on four or more.</p>
+<p><strong>Model.</strong> With <code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS=1</span></code> the model credits the board’s other signal layers (copper
+layers less plane layers, <code class="docutils literal notranslate"><span class="pre">channels.signal_layers</span></code>). A net with a drop site off the channel asks
+only its surface share, one over the signal-layer count. A drop site is a through-hole pad, a pad
+that holds a via in pad under the fab’s in-pad class, or a pad that also lies on another face of
+its part, whose via can go out that way. A mid-row net may also drop at that share, but then the
+channel pays one shared via row (the via diameter and a clearance). The demand is the cheaper of
+the two options, never more than the surface-only one. It is unchanged on a single signal layer
+and for plane nets. A block’s port nets (<code class="docutils literal notranslate"><span class="pre">block_ports</span></code>) keep the surface price, because they must
+reach the block edge where the parent board routes them. Without this rule both seeds of
+<code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code> lost <code class="docutils literal notranslate"><span class="pre">CLOCK</span></code> at the top level. The change lives in the model itself, so
+global placement, the legalizer and its push price every channel the same way. Repriced on the
+same boards, the short channels fall to 258 / 111 / 49 / 11, and the router still used about half
+of the new predicted width there.</p>
+<p><strong>A/B</strong> (GCP C4D, <code class="docutils literal notranslate"><span class="pre">claude/lv2-defaults</span></code> plus this change, every ladder-v2 default on, the same
+90 cells per arm; hierarchical cells from the rerun with the block-port rule, seeds 0 to 5):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Arm</p></th>
+<th class="head"><p>Pass</p></th>
+<th class="head"><p>Copper (86 both-pass cells)</p></th>
+<th class="head"><p>Vias</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">channel_short</span></code> parts</p></th>
+<th class="head"><p>Legalization motion, cells with the same pool start (47)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>on</p></td>
+<td><p>89/90</p></td>
+<td><p>31826 mm (-1.8 %)</p></td>
+<td><p>3696</p></td>
+<td><p>582</p></td>
+<td><p>56 parts moved, 141 mm, 22 relocated</p></td>
+</tr>
+<tr class="row-odd"><td><p>off</p></td>
+<td><p>88/90</p></td>
+<td><p>32405 mm</p></td>
+<td><p>3740</p></td>
+<td><p>1033</p></td>
+<td><p>71 parts moved, 157 mm, 21 relocated</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Both arms fail <code class="docutils literal notranslate"><span class="pre">11-buck-vqfnhr-4L-SGPS-pour</span></code> seed 0 (the open issue in section 11). Off also
+fails <code class="docutils literal notranslate"><span class="pre">11-ufbga201-...-rails</span></code> seed 1. <code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> loses <code class="docutils literal notranslate"><span class="pre">CLOCK</span></code> on seeds 2 and 3 in both
+arms (a top-level knit issue, independent of the switch). Copper by family: 07 variants -3.9 %,
+MCU lane -1.2 %, BGA -0.1 %, showcases -3.0 %, power -20 %, ladder +3.0 %. The two BGA cells with
+large relocations in the on arm picked the initial pool’s source start, whose global placement
+stacks the decoupling capacitors (severe, relocated 74 mm). The off arm picked another start, so
+the full-table motion total (976 against 285 mm) compares different starts. On cells where both
+arms chose the same start, on moves less.</p>
+<p>The switch stays off by default here. Turning it on with the other ladder-v2 defaults changes the
+flag-off identity goldens (<code class="docutils literal notranslate"><span class="pre">compact_test</span></code>) and the shortage-driven fixtures (<code class="docutils literal notranslate"><span class="pre">elastic_test</span></code>,
+<code class="docutils literal notranslate"><span class="pre">region_align_test</span></code>), which then need regenerating.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="route-compact.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Route-then-compact and hull packing</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="gloss.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a><ul>
+<li><a class="reference internal" href="#switches">1. Switches</a></li>
+<li><a class="reference internal" href="#offset-courtyards-courtyard">2. Offset courtyards (<code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code>)</a></li>
+<li><a class="reference internal" href="#global-placement-gp">3. Global placement (<code class="docutils literal notranslate"><span class="pre">GP</span></code>)</a></li>
+<li><a class="reference internal" href="#legalizer-legalize">4. Legalizer (<code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code>)</a></li>
+<li><a class="reference internal" href="#compactness-metric-and-selection-rank">5. Compactness metric and selection (<code class="docutils literal notranslate"><span class="pre">RANK</span></code>)</a></li>
+<li><a class="reference internal" href="#plane-drops-before-routing-drops">6. Plane drops before routing (<code class="docutils literal notranslate"><span class="pre">DROPS</span></code>)</a></li>
+<li><a class="reference internal" href="#shrink-to-fit-pnr-shrink-flat-driver">7. Shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>, flat driver)</a></li>
+<li><a class="reference internal" href="#trace-and-animation">8. Trace and animation</a></li>
+<li><a class="reference internal" href="#determinism">9. Determinism</a></li>
+<li><a class="reference internal" href="#measurements-and-the-default-on-rule">10. Measurements and the default-on rule</a></li>
+<li><a class="reference internal" href="#spacing-and-turns-at-legalization-pnr-gp-polish-pnr-legalize-hpwl">11. Spacing and turns at legalization (<code class="docutils literal notranslate"><span class="pre">PNR_GP_POLISH</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_HPWL</span></code>, …)</a><ul>
+<li><a class="reference internal" href="#a-global-placement-and-the-legalizer-agree-on-spacing">A. Global placement and the legalizer agree on spacing</a></li>
+<li><a class="reference internal" href="#b-resolution-no-change">B. Resolution: no change</a></li>
+<li><a class="reference internal" href="#c-turns">C. Turns</a></li>
+<li><a class="reference internal" href="#d-the-channel-model-at-the-fab-clearance-pnr-legalize-channel-clearance-fab">D. The channel model at the fab clearance (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_CHANNEL_CLEARANCE=fab</span></code>)</a></li>
+<li><a class="reference internal" href="#e-line-satellites-pnr-line-satellites-1">E. Line satellites (<code class="docutils literal notranslate"><span class="pre">PNR_LINE_SATELLITES=1</span></code>)</a></li>
+<li><a class="reference internal" href="#determinism-and-tests">Determinism and tests</a></li>
+<li><a class="reference internal" href="#measurements">Measurements</a></li>
+<li><a class="reference internal" href="#review-fix-a-b-2026-10-04">Review-fix A/B (2026-10-04)</a></li>
+<li><a class="reference internal" href="#conflicts-and-open-points">Conflicts and open points</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-09-mcu-usb-31-lane-pairs-and-relax-2026-10-06">12. The <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane: <code class="docutils literal notranslate"><span class="pre">PAIRS</span></code> and <code class="docutils literal notranslate"><span class="pre">RELAX</span></code> (2026-10-06)</a></li>
+<li><a class="reference internal" href="#displacement-minimizing-legalization-pnr-legalize-keep-on-by-default">13. Displacement-minimizing legalization (<code class="docutils literal notranslate"><span class="pre">PNR_LEGALIZE_KEEP</span></code>, on by default)</a><ul>
+<li><a class="reference internal" href="#f-block-level-motion-reserving-channel-room-in-gp-not-only-in-the-push">F. Block-level motion: reserving channel room in GP, not only in the push</a></li>
+<li><a class="reference internal" href="#g-a-slight-overlap-is-nudged-never-re-placed-2026-10-06">G. A slight overlap is nudged, never re-placed (2026-10-06)</a></li>
+<li><a class="reference internal" href="#h-detailed-placement-after-legalization-pnr-detail-place-on-with-keep-2026-10-06">H. Detailed placement after legalization (<code class="docutils literal notranslate"><span class="pre">PNR_DETAIL_PLACE</span></code>, on with KEEP; 2026-10-06)</a></li>
+<li><a class="reference internal" href="#i-the-pool-s-own-screen-penalizes-wholesale-relocation-pnr-pool-motion-penalty-2026-10-06">I. The pool’s own screen penalizes wholesale relocation (<code class="docutils literal notranslate"><span class="pre">PNR_POOL_MOTION_PENALTY</span></code>, 2026-10-06)</a></li>
+<li><a class="reference internal" href="#j-a-start-that-relocates-much-of-the-board-enters-no-shortlist-pnr-pool-relocation-screen-2026-10-07">J. A start that relocates much of the board enters no shortlist (<code class="docutils literal notranslate"><span class="pre">PNR_POOL_RELOCATION_SCREEN</span></code>, 2026-10-07)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#layer-aware-channel-model-pnr-channel-layers-2026-10-06">14. Layer-aware channel model (<code class="docutils literal notranslate"><span class="pre">PNR_CHANNEL_LAYERS</span></code>, 2026-10-06)</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

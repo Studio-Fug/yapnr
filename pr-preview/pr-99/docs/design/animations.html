@@ -1,0 +1,1557 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="Design: line groups, board edges and hierarchical PnR, animated" href="constraint-and-hier-animations.html"><link rel="prev" title="Decisions" href="../decisions.html">
+        <link rel="prefetch" href="../../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Design: the regression ladder in CI, PnR traces and critical-path animations - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../agent-workflow.html">Design a PCB with an agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../plane-partition.html">How plane partition works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ci-lanes.html">CI lanes and Bazel caches</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../decisions.html">Decisions</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clearance-index-validation.html">Clearance index: integration validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="route-compact.html">Route-then-compact and hull packing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hull-nest-validation.html">Hull nesting: validation status</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/design/animations.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/design/animations.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="design-the-regression-ladder-in-ci-pnr-traces-and-critical-path-animations">
+<h1>Design: the regression ladder in CI, PnR traces and critical-path animations<a class="headerlink" href="#design-the-regression-ladder-in-ci-pnr-traces-and-critical-path-animations" title="Link to this heading">¶</a></h1>
+<p>Status: implemented on branch <code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code>, based on <code class="docutils literal notranslate"><span class="pre">main</span></code> at 2b8e52d; the result
+is the <a class="reference internal" href="../regression-ladder.html"><span class="std std-doc">Regression ladder</span></a> page. Where the implementation differs from
+this design:</p>
+<ul class="simple">
+<li><p><strong>The fabrication profile.</strong> On <code class="docutils literal notranslate"><span class="pre">main</span></code> at 2b8e52d the ladder left <code class="docutils literal notranslate"><span class="pre">PNR_FAB_PROFILE</span></code> unset, so
+writeback stamped the engine’s default <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> rules into each project while the router used
+the fixtures’ own rules; cases 04 to 08 then failed KiCad’s gate on the via-to-SMD-pad rule
+alone. The runner now sets one profile for every stage, <code class="docutils literal notranslate"><span class="pre">legacy</span></code> by default (the fixtures’ own
+rules, which the ladder README documents), and <code class="docutils literal notranslate"><span class="pre">route_case.py</span></code> applies the selected profile to
+the router’s rules; all eight cases pass, and §8.4 and §9 hold. <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> runs
+the ladder under the JLCPCB profile.</p></li>
+<li><p><strong>Montage placement.</strong> A montage follows the winner’s own replay once it has reached the state
+its tiles show (the shortlist after the chosen start’s legalization, the routed finalists after
+its route), not before the replay (§4.4, §4.5), so the zoom lands on the frame on screen and the
+timeline never shows routed copper at 0 %. Montages cross-fade with the board.</p></li>
+<li><p><strong>Progress bar.</strong> The number and the bar count committed connections; negotiation fills a
+lighter bar behind them (§5.2 drew the provisional count in the bar itself, which reached 100 %
+and then dropped when commits began). The title card’s backdrop is the unplaced board.</p></li>
+<li><p><strong>The gloss stage (renderer 3, 2026-10-03).</strong> A board saved after <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--gloss</span></code>’s stage
+(a <code class="docutils literal notranslate"><span class="pre">native</span></code> board event with <code class="docutils literal notranslate"><span class="pre">stage:</span> <span class="pre">gloss</span></code>) plays as a before/after: the board before it
+with the copper the stage replaced drawn as ripped (dashed red), a cross-fade, and the board
+after it with its new copper flashed (green); the footer gives the copper length before and
+after. The changed copper is the geometric difference of the two boards
+(<code class="docutils literal notranslate"><span class="pre">pnr.animate.gloss</span></code>: track pieces no collinear track of the same layer and width covers,
+sampled every 0.1 mm), so the pass’s merging of collinear pieces is not marked. A stage that
+changed no copper holds for 0.4 s (“Gloss · no copper changed”). Traces without the stage
+render as before (the timeline golden holds).</p></li>
+<li><p><strong>Draw order.</strong> Vias are drawn after pads, as KiCad draws them (§5.2 had them before, which hid
+a via on a pad); native frames ring each KiCad DRC finding.</p></li>
+<li><p><strong>Results.</strong> <code class="docutils literal notranslate"><span class="pre">docs/animations/ladder-results.json</span></code> (every case’s gate result, with KiCad’s
+findings by rule; since 2026-10-03 also the placed parts’ <code class="docutils literal notranslate"><span class="pre">compactness</span></code> and the gloss stage’s
+bends and length) sits next to the manifest. The manifest records the ladder run’s own
+provenance (commit and dirty flag, <code class="docutils literal notranslate"><span class="pre">sources_sha256</span></code>, profile, platform, image, KiCad) apart from
+the render’s, and frame counts as encoded.</p></li>
+<li><p><strong>README case.</strong> The README shows <code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>, the TLC555 blinker: the request’s “555
+flasher” literally (§0, §1 chose <code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code>); the chasers are the fallbacks.</p></li>
+<li><p><strong>Halving and synthesis (§4.3, §4.4).</strong> A successive-halving run is animated in coarse mode
+(<code class="docutils literal notranslate"><span class="pre">pnr.provenance.halving_trace</span></code>): the winner’s placement as one move from the source board, the
+promotion montages (placements with their rung objective, no copper ahead of the timeline), the
+winning rung’s native phases and a montage of that rung’s final boards. Not done: the per-block
+montages of the assembled synthesis layouts and the generation-lineage strip; a synthesis
+library alone has no board, so <code class="docutils literal notranslate"><span class="pre">--storyboard</span></code> writes its critical path, competitors and
+montages as data.</p></li>
+<li><p><strong>Encoding.</strong> WebP uses method 4 (about 20 times faster than 6, and smaller here); the GIF
+palette keeps the theme’s signal and copper-layer colours besides the median-cut entries.</p></li>
+<li><p><strong>Trace.</strong> The legalizer’s result is one <code class="docutils literal notranslate"><span class="pre">legal</span></code> event (the accepted order); a <code class="docutils literal notranslate"><span class="pre">board</span></code> event’s
+DRC summary also counts findings by rule (<code class="docutils literal notranslate"><span class="pre">by_rule</span></code>) and records their positions (<code class="docutils literal notranslate"><span class="pre">findings</span></code>),
+and the ladder’s <code class="docutils literal notranslate"><span class="pre">result</span></code> event has <code class="docutils literal notranslate"><span class="pre">rules</span></code>. The native snapshots’ DRC uses the board’s
+<code class="docutils literal notranslate"><span class="pre">.kicad_dru</span></code> too, and the copied library table is removed after it (no absolute paths).</p></li>
+</ul>
+<section id="summary">
+<h2>0. Summary<a class="headerlink" href="#summary" title="Link to this heading">¶</a></h2>
+<p>The request: add the ramping-complexity test suite (up to the 555 flasher); add a feature that
+generates animations of the place-and-route process in a straight line from zero to 100 % routed,
+including all experiments along the critical path through the graph to the result; generate
+animations of all ladder boards and commit them in the docs; show the 555 flasher in the README.</p>
+<ul class="simple">
+<li><p><strong>The suite.</strong> The 8-case native ladder already in <code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression/</span></code> (imported with PR2)
+is “added” by making it run anywhere (Bazel, the container image), running it in CI and
+documenting it with one animation per case. No fixture edits.</p></li>
+<li><p><strong>README sizzle.</strong> <code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code> (Five-stage chaser: TLC555 + CD4017B, 20 parts, 2 layers) as a
+GIF near the top. Fallback, if its GIF misses the budget: <code class="docutils literal notranslate"><span class="pre">06-chaser-14</span></code>, then <code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>.
+The caption names the case.</p></li>
+<li><p><strong>Recorder.</strong> <code class="docutils literal notranslate"><span class="pre">pnr.trace</span></code>: stdlib only, opt-in through <code class="docutils literal notranslate"><span class="pre">PNR_TRACE_DIR</span></code>. A trace is a directory in
+format <code class="docutils literal notranslate"><span class="pre">pnr-trace-v1</span></code>: JSON header, JSONL event streams, content-addressed geometry blobs; integer
+micrometres in the engine frame.</p></li>
+<li><p><strong>No side effect.</strong> Unset: every hook is one hoisted environment lookup. Set or unset, results are
+identical; a test compares outputs byte for byte.</p></li>
+<li><p><strong>Native stages.</strong> The ladder runner parses each saved <code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code> with a stdlib S-expression
+reader (<code class="docutils literal notranslate"><span class="pre">pnr.trace_board</span></code>), no KiCad process; opens come from KiCad DRC on a copy.</p></li>
+<li><p><strong>Critical path.</strong> <code class="docutils literal notranslate"><span class="pre">pnr.provenance</span></code>: a DAG of experiments and artifacts with <em>derive</em> and <em>select</em>
+edges. The path is the ancestry of the final board, following only the winner through each
+selection; the losers become montage scenes.</p></li>
+<li><p><strong>Renderer.</strong> <code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code>: pure Python + Pillow. Animated WebP for the docs (800 px, at most 2.5
+MB), GIF for the README (640 px, at most 5 MB), MP4 only when <code class="docutils literal notranslate"><span class="pre">ffmpeg</span></code> exists. Viewer palette.
+Deterministic.</p></li>
+<li><p><strong>CLI and Bazel.</strong> <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">pnr.animate</span> <span class="pre">SOURCE</span> <span class="pre">--out</span> <span class="pre">...</span></code>, <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:animate</span></code>,
+<code class="docutils literal notranslate"><span class="pre">regression/run.py</span> <span class="pre">--trace</span></code>, <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:ladder_animations</span></code>.</p></li>
+<li><p><strong>CI.</strong> New <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code> on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code>: the ladder inside <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr:edge</span></code>
+(resolved to a digest). PR: cases 01 to 06, seed 0. Nightly: all 8 cases, seeds 0 and 1, plus a
+traced run whose animations are uploaded.</p></li>
+<li><p><strong>Docs.</strong> <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>; animations in <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> (not <code class="docutils literal notranslate"><span class="pre">static</span></code>); a
+manifest with hashes and provenance; the large-file hook excludes the folder and a repository test
+enforces a size budget instead.</p></li>
+</ul>
+</section>
+<section id="scope-and-interpretation">
+<h2>1. Scope and interpretation<a class="headerlink" href="#scope-and-interpretation" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>The suite.</strong> “The ramping complexity test suite that we built” is the native ladder of
+<code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression/</span></code> (<code class="docutils literal notranslate"><span class="pre">designs.py</span></code>, <code class="docutils literal notranslate"><span class="pre">run.py</span></code>, <code class="docutils literal notranslate"><span class="pre">RESULTS-118.md</span></code>): 2, 3, 5, 8, 10, 14, 20
+and 20 parts, the last one on four layers with a ground plane. It is in <code class="docutils literal notranslate"><span class="pre">main</span></code> already, but it
+only runs by hand on the development Mac: its defaults point at the macOS application bundle,
+and <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:native_regression</span></code> is a manual target. Adding it means: runnable in the
+container image, a CI lane, a docs page, and animations. The fixtures, budgets and the
+acceptance gate stay as they are.</p></li>
+<li><p><strong>“Up to the 555 flasher.”</strong> The ladder tops out with the TLC555-clocked cases: the TLC555
+blinker (05) is the literal 555 flasher; the chasers (06 to 08) are a 555 driving a CD4017B LED
+sequence. All 8 cases get an animation. The README shows <code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code>, the densest 555 board
+on two layers; on <code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code> the ground pour hides the inner-layer copper at 640 px.</p></li>
+<li><p><strong>“Straight line from zero to 100 % routed.”</strong> One linear timeline per board: it starts on the
+unplaced board (every connection open, ratsnest drawn) and ends on the saved board with KiCad’s
+own DRC verdict. The timeline never branches; alternatives appear as short montages at the point
+where the engine chose between them.</p></li>
+<li><p><strong>“All experiments along the critical path.”</strong> Every experiment the final board derives from
+(the chosen start’s placement, the feedback rounds up to the best round, the winner’s rungs, the
+block layouts it assembled), plus, at each selection, the candidates it was chosen from (shown,
+not replayed). The formal definition is in §4.</p></li>
+<li><p><strong>Out of scope:</strong> any change to the engine’s decisions, fixtures or acceptance; the viewer
+(PR4, <code class="docutils literal notranslate"><span class="pre">yapnr/viewer</span></code>); moving code out of <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> (PR3b).</p></li>
+</ul>
+</section>
+<section id="what-exists-today">
+<h2>2. What exists today<a class="headerlink" href="#what-exists-today" title="Link to this heading">¶</a></h2>
+<p><strong>The ladder runner</strong> (<code class="docutils literal notranslate"><span class="pre">regression/run.py</span></code>) runs per case and seed: <code class="docutils literal notranslate"><span class="pre">generate</span></code> (KiCad Python,
+<code class="docutils literal notranslate"><span class="pre">native.py</span> <span class="pre">make</span></code>: library footprints in a naive row, no copper) → <code class="docutils literal notranslate"><span class="pre">place-route</span></code> (numerical Python,
+<code class="docutils literal notranslate"><span class="pre">route_case.py</span></code>: <code class="docutils literal notranslate"><span class="pre">route_and_place(iters=350,</span> <span class="pre">max_rounds=--rounds,</span> <span class="pre">detail_pitch_mm=.25,</span> <span class="pre">detail_iters=8,</span> <span class="pre">spread=1.3)</span></code> with <code class="docutils literal notranslate"><span class="pre">PNR_ROUND_DIAGNOSTICS=&lt;case&gt;/rounds</span></code>) → <code class="docutils literal notranslate"><span class="pre">writeback</span></code> → <code class="docutils literal notranslate"><span class="pre">planes</span></code>
+→ <code class="docutils literal notranslate"><span class="pre">refill</span></code> → <code class="docutils literal notranslate"><span class="pre">audit</span></code> → <code class="docutils literal notranslate"><span class="pre">drc</span></code> (<code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code>) → <code class="docutils literal notranslate"><span class="pre">via-scan</span></code>. It freezes the sources, strips ambient
+<code class="docutils literal notranslate"><span class="pre">PNR_*</span></code> variables, and writes <code class="docutils literal notranslate"><span class="pre">provenance.json</span></code>, <code class="docutils literal notranslate"><span class="pre">summary.json</span></code>, per-case <code class="docutils literal notranslate"><span class="pre">result.json</span></code> and
+<code class="docutils literal notranslate"><span class="pre">junit.xml</span></code>. <code class="docutils literal notranslate"><span class="pre">--initial-pool</span></code> switches on the bounded initial-placement pool.</p>
+<p><strong>Telemetry and diagnostics the engine already writes:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pnr.live.emit</span></code> (<code class="docutils literal notranslate"><span class="pre">PNR_LIVE_DIR</span></code>): viewer events, optionally with a board copy or a layout. The
+maze router’s <code class="docutils literal notranslate"><span class="pre">live_net</span></code> emits <code class="docutils literal notranslate"><span class="pre">signal_net_added</span></code>/<code class="docutils literal notranslate"><span class="pre">signal_net_removed</span></code> with provisional grid
+tracks (no vias, no pad escapes). The initial pool emits <code class="docutils literal notranslate"><span class="pre">candidate_start</span></code>/<code class="docutils literal notranslate"><span class="pre">candidate_complete</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pnr.place.cost_capture</span></code> (<code class="docutils literal notranslate"><span class="pre">PNR_COST_CAPTURE_DIR</span></code>): the optimizer’s last step and every
+legalizer decision.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pnr.phase_capture</span></code>: board snapshots with DRC in <code class="docutils literal notranslate"><span class="pre">pnr.full_iteration</span></code> (<code class="docutils literal notranslate"><span class="pre">phases/NN-name/</span></code>).</p></li>
+<li><p>Round diagnostics: <code class="docutils literal notranslate"><span class="pre">rounds/round-NN/</span></code> (<code class="docutils literal notranslate"><span class="pre">placed.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code>, <code class="docutils literal notranslate"><span class="pre">result.json</span></code>,
+<code class="docutils literal notranslate"><span class="pre">congestion.json</span></code>) and <code class="docutils literal notranslate"><span class="pre">rounds/initial-pool/&lt;start-id&gt;/</span></code> (<code class="docutils literal notranslate"><span class="pre">placed.json</span></code>,
+<code class="docutils literal notranslate"><span class="pre">placement-result.json</span></code>, <code class="docutils literal notranslate"><span class="pre">capacity-proxy.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routing-result.json</span></code>) plus
+<code class="docutils literal notranslate"><span class="pre">report.json</span></code> (shortlist, finalists, selection).</p></li>
+</ul>
+<p><strong>Search provenance of the bigger runs:</strong></p>
+<ul class="simple">
+<li><p>Successive halving (<code class="docutils literal notranslate"><span class="pre">pnr.mc.halving</span></code>): <code class="docutils literal notranslate"><span class="pre">dataset.jsonl</span></code> (one record per candidate and stage:
+<code class="docutils literal notranslate"><span class="pre">place</span></code>, <code class="docutils literal notranslate"><span class="pre">screen</span></code>, <code class="docutils literal notranslate"><span class="pre">native</span></code>, <code class="docutils literal notranslate"><span class="pre">deep</span></code>, <code class="docutils literal notranslate"><span class="pre">gen-place</span></code> with <code class="docutils literal notranslate"><span class="pre">parent</span></code>, <code class="docutils literal notranslate"><span class="pre">gen</span></code>, <code class="docutils literal notranslate"><span class="pre">arm</span></code>; <code class="docutils literal notranslate"><span class="pre">seed-from</span></code>
+imports with <code class="docutils literal notranslate"><span class="pre">imported_from</span></code>), <code class="docutils literal notranslate"><span class="pre">cand/&lt;id&gt;/{placed.json,blocks.json,screen.json}</span></code> and a
+<code class="docutils literal notranslate"><span class="pre">pnr.full_iteration</span></code> round directory per native rung (<code class="docutils literal notranslate"><span class="pre">phases/*/diagnostic.kicad_pcb</span></code>,
+<code class="docutils literal notranslate"><span class="pre">phase.json</span></code>, <code class="docutils literal notranslate"><span class="pre">evaluation.json</span></code>, <code class="docutils literal notranslate"><span class="pre">electrical/native-loop/progress.json</span></code>).</p></li>
+<li><p>Hierarchical synthesis (<code class="docutils literal notranslate"><span class="pre">pnr.hier.synth_native</span></code>): <code class="docutils literal notranslate"><span class="pre">&lt;library&gt;/&lt;template&gt;/library.json</span></code> (ranked
+layouts; each instance names its native directory) and <code class="docutils literal notranslate"><span class="pre">native/&lt;tag&gt;/</span></code> per evaluation. The
+halving place record <code class="docutils literal notranslate"><span class="pre">hier</span></code> names, per block, the drawn layout (<code class="docutils literal notranslate"><span class="pre">seed</span></code>, size, <code class="docutils literal notranslate"><span class="pre">tier_rank</span></code>,
+<code class="docutils literal notranslate"><span class="pre">native_dir</span></code>) that <code class="docutils literal notranslate"><span class="pre">pnr.hier.assemble</span></code> copies into the top-level board.</p></li>
+</ul>
+<p><strong>What is missing:</strong> nothing records the global-placement iterations, the legalization order, the
+committed routes with vias and escapes in commit order, rip-ups as they happen, or which of these
+experiments lead to the final board. That is what this design adds.</p>
+<p><strong>Gaps that block CI</strong> (found while reading <code class="docutils literal notranslate"><span class="pre">run.py</span></code> against the image):</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">run.py</span></code> writes <code class="docutils literal notranslate"><span class="pre">python-version.txt</span></code> with <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">pip</span> <span class="pre">freeze</span></code>; the image’s <code class="docutils literal notranslate"><span class="pre">/opt/venv</span></code> is
+built by <code class="docutils literal notranslate"><span class="pre">uv</span></code> and has no pip, so the runner fails before the first case. Fall back to
+<code class="docutils literal notranslate"><span class="pre">importlib.metadata</span></code> when pip is absent.</p></li>
+<li><p>The defaults of <code class="docutils literal notranslate"><span class="pre">--python</span></code>, <code class="docutils literal notranslate"><span class="pre">--kicad-python</span></code>, <code class="docutils literal notranslate"><span class="pre">--kicad-cli</span></code> and <code class="docutils literal notranslate"><span class="pre">--library</span></code> point at the macOS
+bundle; CI passes all four explicitly (PR6a replaces the defaults with toolchain discovery).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">result.json</span></code>, <code class="docutils literal notranslate"><span class="pre">summary.json</span></code> and <code class="docutils literal notranslate"><span class="pre">junit.xml</span></code> hold absolute case directories; public CI
+artifacts should carry run-relative ones (<code class="docutils literal notranslate"><span class="pre">export_reviews.py</span></code> then resolves them against the
+run directory).</p></li>
+</ol>
+</section>
+<section id="a-trace-format-pnr-trace-v1">
+<h2>3. (a) Trace format <code class="docutils literal notranslate"><span class="pre">pnr-trace-v1</span></code><a class="headerlink" href="#a-trace-format-pnr-trace-v1" title="Link to this heading">¶</a></h2>
+<section id="principles">
+<h3>3.1 Principles<a class="headerlink" href="#principles" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Observational.</strong> The engine never reads a trace; no decision depends on one.</p></li>
+<li><p><strong>Opt-in.</strong> <code class="docutils literal notranslate"><span class="pre">PNR_TRACE_DIR</span></code> unset: each hook costs one environment lookup, hoisted out of loops
+(a <code class="docutils literal notranslate"><span class="pre">tracer</span></code> object that is <code class="docutils literal notranslate"><span class="pre">None</span></code>); the recorder module is not even imported. No hook uses a
+random number generator (Python, numpy or torch), adds a torch operation, or mutates engine
+state; ids are counters.</p></li>
+<li><p><strong>Stdlib only and 3.9-parseable,</strong> like <code class="docutils literal notranslate"><span class="pre">pnr.live</span></code>, so future KiCad-side hooks can use it
+(listed in <code class="docutils literal notranslate"><span class="pre">pnr_kicad_srcs</span></code> then).</p></li>
+<li><p><strong>Never fails the engine.</strong> The first recorder error disables recording for the process and
+writes <code class="docutils literal notranslate"><span class="pre">errors.json</span></code> (the same stance as cost capture: diagnostics are “unavailable, never a
+score”).</p></li>
+<li><p><strong>Bounded</strong> (§3.8), <strong>path-free</strong> (names and run-relative paths only, never absolute ones) and
+<strong>deterministic</strong> (no wall-clock value in any field the renderer reads; sorted keys; integer
+micrometres).</p></li>
+</ul>
+</section>
+<section id="layout">
+<h3>3.2 Layout<a class="headerlink" href="#layout" title="Link to this heading">¶</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;trace&gt;/
+  run.json               written by the orchestrator (ladder runner): subject, stage order, config
+  header.json            board, stack-up, components with pads, nets, total connection count
+  streams/&lt;lane&gt;.jsonl   one writer per file; events in emission order
+  blobs/&lt;sha256&gt;.json    geometry, content-addressed (a re-added identical route costs nothing)
+  errors.json            only if the recorder disabled itself
+</pre></div>
+</div>
+<p>A lane is a writer process: <code class="docutils literal notranslate"><span class="pre">engine</span></code> (the place-route process) and <code class="docutils literal notranslate"><span class="pre">native</span></code> (the runner’s native
+stages). A child process gets its lane from <code class="docutils literal notranslate"><span class="pre">PNR_TRACE_LANE</span></code>; a second writer on an existing lane
+file gets <code class="docutils literal notranslate"><span class="pre">&lt;lane&gt;.&lt;n&gt;.jsonl</span></code> (exclusive create), so no two processes ever append to one file.
+Halving and synthesis give each evaluation its own trace directory inside its candidate or native
+directory (the parent sets <code class="docutils literal notranslate"><span class="pre">PNR_TRACE_DIR</span></code> for the child); <code class="docutils literal notranslate"><span class="pre">pnr.provenance</span></code> links them (§4).</p>
+</section>
+<section id="frame-and-units">
+<h3>3.3 Frame and units<a class="headerlink" href="#frame-and-units" title="Link to this heading">¶</a></h3>
+<p>The engine frame of <code class="docutils literal notranslate"><span class="pre">pnr.graph</span></code>: millimetres, y up, origin at the outline’s bottom-left corner,
+stored as <strong>integer micrometres</strong>. Angles are degrees counter-clockwise (engine convention).
+Layers are indices into <code class="docutils literal notranslate"><span class="pre">header.copper_layers</span></code>, outer to outer (<code class="docutils literal notranslate"><span class="pre">F.Cu</span></code>, <code class="docutils literal notranslate"><span class="pre">In1.Cu</span></code>, <code class="docutils literal notranslate"><span class="pre">In2.Cu</span></code>,
+<code class="docutils literal notranslate"><span class="pre">B.Cu</span></code>).</p>
+</section>
+<section id="header-json">
+<h3>3.4 <code class="docutils literal notranslate"><span class="pre">header.json</span></code><a class="headerlink" href="#header-json" title="Link to this heading">¶</a></h3>
+<p>Written once, by the first <code class="docutils literal notranslate"><span class="pre">trace.begin_board(graph,</span> <span class="pre">constraints,</span> <span class="pre">rules)</span></code> (called at the start of
+<code class="docutils literal notranslate"><span class="pre">route_and_place</span></code>), with exclusive create; a later call checks that its component set matches.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;pnr-trace-v1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;recorder&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;outline&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;w&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">30000</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;h&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">24000</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;polygon&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;copper_layers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;F.Cu&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;B.Cu&quot;</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;plane_layers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{},</span>
+<span class="w">  </span><span class="nt">&quot;components&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;ref&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;U1&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;footprint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Package_SO:SOIC-8_3.9x4.9mm_P1.27mm&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;TLC555&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;courtyard&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">7400</span><span class="p">,</span><span class="w"> </span><span class="mi">5400</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;fixed&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;pads&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">          </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;net&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;GND&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;offset&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">-2475</span><span class="p">,</span><span class="w"> </span><span class="mi">1905</span><span class="p">],</span>
+<span class="w">          </span><span class="nt">&quot;size&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">1950</span><span class="p">,</span><span class="w"> </span><span class="mi">600</span><span class="p">],</span>
+<span class="w">          </span><span class="nt">&quot;shape&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;roundrect&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;corner&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">150</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;drill&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;nets&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;GND&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;pins&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">[</span><span class="s2">&quot;U1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;1&quot;</span><span class="p">],</span>
+<span class="w">        </span><span class="p">[</span><span class="s2">&quot;C1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;2&quot;</span><span class="p">]</span>
+<span class="w">      </span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;width&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">400</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;plane&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;connections_total&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">17</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Pad shapes come from the graph (<code class="docutils literal notranslate"><span class="pre">size</span></code>, <code class="docutils literal notranslate"><span class="pre">land_corner</span></code>, <code class="docutils literal notranslate"><span class="pre">through_hole</span></code>, <code class="docutils literal notranslate"><span class="pre">drill_size</span></code>); the ladder
+runner refines them (shape name, round-rect ratio, pad angle) from <code class="docutils literal notranslate"><span class="pre">source.kicad_pcb</span></code> with the
+reader of §3.11. <code class="docutils literal notranslate"><span class="pre">connections_total</span></code> is the sum over nets of (pads − 1): the ratsnest edge count
+of the unrouted board, the same quantity KiCad’s <code class="docutils literal notranslate"><span class="pre">unconnected_items</span></code> counts down.</p>
+</section>
+<section id="events">
+<h3>3.5 Events<a class="headerlink" href="#events" title="Link to this heading">¶</a></h3>
+<p>Every event carries <code class="docutils literal notranslate"><span class="pre">seq</span></code> (per-stream counter), <code class="docutils literal notranslate"><span class="pre">kind</span></code>, <code class="docutils literal notranslate"><span class="pre">scope</span></code> (a path-like id such as
+<code class="docutils literal notranslate"><span class="pre">initial-pool/start-05</span></code> or <code class="docutils literal notranslate"><span class="pre">round-02/route</span></code>, never a file path), <code class="docutils literal notranslate"><span class="pre">phase</span></code> (from a fixed list the
+renderer maps to display text) and, where known, <code class="docutils literal notranslate"><span class="pre">progress:</span> <span class="pre">{done,</span> <span class="pre">total,</span> <span class="pre">source}</span></code>.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Kind</p></th>
+<th class="head"><p>Fields</p></th>
+<th class="head"><p>Emitted by</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">scope_begin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">type</span></code> (round, attempt, pool, start, finalist, route, stage, block, candidate), <code class="docutils literal notranslate"><span class="pre">parent</span></code>, <code class="docutils literal notranslate"><span class="pre">meta</span></code></p></td>
+<td><p>hooks</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scope_end</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">status</span></code> (ok, illegal, failed, dropped), <code class="docutils literal notranslate"><span class="pre">metrics</span></code></p></td>
+<td><p>hooks</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">poses</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">stage</span></code> (source, global, legal, relocate, elastic, local-move), <code class="docutils literal notranslate"><span class="pre">iter</span></code>, <code class="docutils literal notranslate"><span class="pre">iters</span></code>, <code class="docutils literal notranslate"><span class="pre">poses</span></code> (inline up to 64 parts, else a blob)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pnr.place.model</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.route.feedback</span></code>, initial pool</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">legal_step</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ref</span></code>, <code class="docutils literal notranslate"><span class="pre">pose</span></code>, <code class="docutils literal notranslate"><span class="pre">order</span></code>; <code class="docutils literal notranslate"><span class="pre">legal_restore</span></code> with the restored poses when the legalizer backtracks</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pnr.place.legalize</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">select</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">among</span></code> (scope ids), <code class="docutils literal notranslate"><span class="pre">chosen</span></code>, <code class="docutils literal notranslate"><span class="pre">criterion</span></code>, <code class="docutils literal notranslate"><span class="pre">scores</span></code></p></td>
+<td><p>initial pool (shortlist, finalists, chosen), feedback loop</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">route_begin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pitch</span></code>, <code class="docutils literal notranslate"><span class="pre">layers</span></code>, <code class="docutils literal notranslate"><span class="pre">nets</span></code>, <code class="docutils literal notranslate"><span class="pre">plane_nets</span></code>, <code class="docutils literal notranslate"><span class="pre">deferred</span></code>, <code class="docutils literal notranslate"><span class="pre">max_iters</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pnr.route.detail.router</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">net</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">net</span></code>, <code class="docutils literal notranslate"><span class="pre">op</span></code> (add, rip, commit, drop, recover), <code class="docutils literal notranslate"><span class="pre">pass</span></code>, <code class="docutils literal notranslate"><span class="pre">provisional</span></code>, <code class="docutils literal notranslate"><span class="pre">copper</span></code> (blob), <code class="docutils literal notranslate"><span class="pre">groups</span></code> (pad groups), <code class="docutils literal notranslate"><span class="pre">progress</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pnr.route.detail.maze</span></code> through the router context</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">route_end</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">copper</span></code> (blob: the final <code class="docutils literal notranslate"><span class="pre">BoardRoute</span></code>, escapes included), <code class="docutils literal notranslate"><span class="pre">unrouted</span></code>, <code class="docutils literal notranslate"><span class="pre">deferred</span></code>, <code class="docutils literal notranslate"><span class="pre">progress</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pnr.route.detail.router</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">congestion</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pitch</span></code>, <code class="docutils literal notranslate"><span class="pre">nx</span></code>, <code class="docutils literal notranslate"><span class="pre">ny</span></code>, <code class="docutils literal notranslate"><span class="pre">cells</span></code> (quantized 0 to 255), <code class="docutils literal notranslate"><span class="pre">inflation</span></code> (ref to factor)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pnr.route.feedback</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">board</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">stage</span></code>, <code class="docutils literal notranslate"><span class="pre">copper</span></code> (blob with zones), <code class="docutils literal notranslate"><span class="pre">poses</span></code> (from footprints), <code class="docutils literal notranslate"><span class="pre">drc</span></code> (<code class="docutils literal notranslate"><span class="pre">unconnected</span></code>, <code class="docutils literal notranslate"><span class="pre">violations</span></code>, <code class="docutils literal notranslate"><span class="pre">by_type</span></code>, <code class="docutils literal notranslate"><span class="pre">open_pairs</span></code>)</p></td>
+<td><p>ladder runner, <code class="docutils literal notranslate"><span class="pre">pnr.phase_capture</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">result</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">passed</span></code>, <code class="docutils literal notranslate"><span class="pre">reasons</span></code>, <code class="docutils literal notranslate"><span class="pre">opens</span></code>, <code class="docutils literal notranslate"><span class="pre">violations</span></code>, <code class="docutils literal notranslate"><span class="pre">vias</span></code>, <code class="docutils literal notranslate"><span class="pre">copper_length_mm</span></code></p></td>
+<td><p>ladder runner</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">truncated</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bytes</span></code>, <code class="docutils literal notranslate"><span class="pre">dropped_kinds</span></code></p></td>
+<td><p>recorder</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The sequence of <code class="docutils literal notranslate"><span class="pre">net</span></code> events with <code class="docutils literal notranslate"><span class="pre">op</span></code> in (commit, recover) and <code class="docutils literal notranslate"><span class="pre">provisional:</span> <span class="pre">false</span></code> is the
+per-connection commit order; <code class="docutils literal notranslate"><span class="pre">add</span></code>/<code class="docutils literal notranslate"><span class="pre">rip</span></code> with <code class="docutils literal notranslate"><span class="pre">provisional:</span> <span class="pre">true</span></code> are the negotiation passes
+(overlaps allowed), and <code class="docutils literal notranslate"><span class="pre">rip</span></code> in the final rip-up-and-reroute pass is a real rip-up.</p>
+</section>
+<section id="blobs">
+<h3>3.6 Blobs<a class="headerlink" href="#blobs" title="Link to this heading">¶</a></h3>
+<p>Canonical JSON (sorted keys, no spaces), named by its SHA-256:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>copper: {&quot;tracks&quot;: [[layer, x0, y0, x1, y1, width]],
+         &quot;vias&quot;:   [[x, y, diameter, drill]],
+         &quot;zones&quot;:  [[layer, net, [outer ring, hole rings...]]]}
+poses:  [[ref, x, y, rot, side]]
+</pre></div>
+</div>
+<p>A net’s copper blob is complete for that net at that moment: grid segments, vias (plated pad
+transitions excluded exactly as <code class="docutils literal notranslate"><span class="pre">route_board</span></code> excludes them) and the pad escapes of the escape
+plan (<code class="docutils literal notranslate"><span class="pre">_emit_escape</span></code> into a scratch object), so what is drawn is what the router would hand to
+writeback.</p>
+</section>
+<section id="progress-routed">
+<h3>3.7 Progress: “% routed”<a class="headerlink" href="#progress-routed" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">done</span> <span class="pre">/</span> <span class="pre">total</span></code> connections, with <code class="docutils literal notranslate"><span class="pre">total</span> <span class="pre">=</span> <span class="pre">connections_total</span></code> (§3.4) throughout:</p>
+<ul class="simple">
+<li><p><strong>engine steps</strong> (<code class="docutils literal notranslate"><span class="pre">source:</span> <span class="pre">router</span></code>, or <code class="docutils literal notranslate"><span class="pre">router-provisional</span></code> during negotiation): per net,
+<code class="docutils literal notranslate"><span class="pre">pads</span> <span class="pre">−</span> <span class="pre">groups</span></code>, where the groups are the net’s pads joined by the route’s own edges (a
+union-find over the route edges, projected to pads through the escape plan’s access cells).
+Nets the grid router does not route (plane nets, deferred electrical nets) count as fully open.
+This matches the router’s <code class="docutils literal notranslate"><span class="pre">remaining_connections</span></code> bookkeeping.</p></li>
+<li><p><strong>native steps</strong> (<code class="docutils literal notranslate"><span class="pre">source:</span> <span class="pre">kicad</span></code>): <code class="docutils literal notranslate"><span class="pre">total</span> <span class="pre">−</span> <span class="pre">len(unconnected_items)</span></code> from KiCad DRC on the
+saved board.</p></li>
+<li><p><strong>placement</strong> (<code class="docutils literal notranslate"><span class="pre">source:</span> <span class="pre">none</span></code>): 0.</p></li>
+</ul>
+<p>The bar is honest, not monotone: rip-ups make it dip. The final value is KiCad’s.</p>
+</section>
+<section id="bounds">
+<h3>3.8 Bounds<a class="headerlink" href="#bounds" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Global placement: a snapshot every <code class="docutils literal notranslate"><span class="pre">ceil(iters</span> <span class="pre">/</span> <span class="pre">24)</span></code> optimizer steps and at the last step
+(<code class="docutils literal notranslate"><span class="pre">PNR_TRACE_PLACEMENT_EVERY</span></code> overrides).</p></li>
+<li><p>Router detail is recorded only inside a <code class="docutils literal notranslate"><span class="pre">route</span></code> scope opened by a caller (rounds, pool
+finalists, halving screens). <code class="docutils literal notranslate"><span class="pre">route_board</span></code> calls elsewhere (relocation probes, holdout routing)
+record only a <code class="docutils literal notranslate"><span class="pre">route_end</span></code> summary, so probe storms cannot flood a trace.</p></li>
+<li><p>Size: <code class="docutils literal notranslate"><span class="pre">PNR_TRACE_MAX_MB</span></code> (default 64). Past half of it, negotiation passes are written as one
+keyframe per pass instead of per-net events; past 90 %, only scopes, selections, <code class="docutils literal notranslate"><span class="pre">board</span></code> and
+<code class="docutils literal notranslate"><span class="pre">result</span></code> events and one <code class="docutils literal notranslate"><span class="pre">truncated</span></code> event (10 % is reserved for them). Expected size of a
+ladder case: well under 5 MB (to be measured).</p></li>
+</ul>
+</section>
+<section id="hook-points-all-small-guarded-at-stable-anchors">
+<h3>3.9 Hook points (all small, guarded, at stable anchors)<a class="headerlink" href="#hook-points-all-small-guarded-at-stable-anchors" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Hook</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pnr/route/feedback.py</span></code></p></td>
+<td><p>header at entry; scope per round and placement attempt; <code class="docutils literal notranslate"><span class="pre">poses</span></code>, <code class="docutils literal notranslate"><span class="pre">congestion</span></code>, <code class="docutils literal notranslate"><span class="pre">select</span></code> of the best round</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pnr/place/model.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tracer</span> <span class="pre">=</span> <span class="pre">trace.placement_tracer(...)</span></code> before the optimizer loop; <code class="docutils literal notranslate"><span class="pre">tracer.snapshot(step,</span> <span class="pre">pos,</span> <span class="pre">p)</span></code> when due</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pnr/place/legalize.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">legal_step</span></code> after each part is placed; <code class="docutils literal notranslate"><span class="pre">legal_restore</span></code> at the backtrack restore</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pnr/place/initial_pool.py</span></code></p></td>
+<td><p>scope per start and finalist; shortlist, finalist and chosen <code class="docutils literal notranslate"><span class="pre">select</span></code> events</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pnr/route/detail/router.py</span></code></p></td>
+<td><p>router context (grid, escape plan, net widths) around <code class="docutils literal notranslate"><span class="pre">route(...)</span></code>; <code class="docutils literal notranslate"><span class="pre">route_begin</span></code>/<code class="docutils literal notranslate"><span class="pre">route_end</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pnr/route/detail/maze.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">live_net</span></code> also calls the trace hook (today it returns early unless <code class="docutils literal notranslate"><span class="pre">PNR_LIVE_DIR</span></code> is set)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pnr/phase_capture.py</span></code></p></td>
+<td><p>a <code class="docutils literal notranslate"><span class="pre">board</span></code> event from the captured board and its DRC (halving and synthesis runs)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">regression/run.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--trace</span></code> (§3.10)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The displayed rotation during global placement is the arg-max of the rotation probabilities, as
+cost capture does; positions are the optimizer’s current <code class="docutils literal notranslate"><span class="pre">pos</span></code> (read with <code class="docutils literal notranslate"><span class="pre">detach()</span></code>).</p>
+</section>
+<section id="native-stages-in-the-ladder">
+<h3>3.10 Native stages in the ladder<a class="headerlink" href="#native-stages-in-the-ladder" title="Link to this heading">¶</a></h3>
+<p>With <code class="docutils literal notranslate"><span class="pre">--trace</span></code>, the runner sets <code class="docutils literal notranslate"><span class="pre">PNR_TRACE_DIR=&lt;case&gt;/trace</span></code> for the <code class="docutils literal notranslate"><span class="pre">place-route</span></code> stage only
+(explicitly, like the pool flags; ambient <code class="docutils literal notranslate"><span class="pre">PNR_*</span></code> variables stay stripped), writes <code class="docutils literal notranslate"><span class="pre">run.json</span></code>, and
+after <code class="docutils literal notranslate"><span class="pre">writeback</span></code>, <code class="docutils literal notranslate"><span class="pre">planes</span></code> and <code class="docutils literal notranslate"><span class="pre">refill</span></code> it:</p>
+<ol class="arabic simple">
+<li><p>copies the board, its <code class="docutils literal notranslate"><span class="pre">.kicad_pro</span></code> and <code class="docutils literal notranslate"><span class="pre">fp-lib-table</span></code> to <code class="docutils literal notranslate"><span class="pre">&lt;case&gt;/trace/native/&lt;stage&gt;/</span></code>;</p></li>
+<li><p>runs <code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">pcb</span> <span class="pre">drc</span></code> on the copy (bounded by <code class="docutils literal notranslate"><span class="pre">--timeout</span></code>), except after <code class="docutils literal notranslate"><span class="pre">refill</span></code>, where the
+runner’s own final DRC report is used;</p></li>
+<li><p>parses the board (§3.11) and appends a <code class="docutils literal notranslate"><span class="pre">board</span></code> event to the <code class="docutils literal notranslate"><span class="pre">native</span></code> lane.</p></li>
+</ol>
+<p>That is two extra <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code> runs per case, sequential, never on the saved board itself. The
+final <code class="docutils literal notranslate"><span class="pre">result</span></code> event repeats the acceptance fields of <code class="docutils literal notranslate"><span class="pre">result.json</span></code>. <code class="docutils literal notranslate"><span class="pre">provenance.json</span></code> records
+<code class="docutils literal notranslate"><span class="pre">trace:</span> <span class="pre">true</span></code>.</p>
+</section>
+<section id="the-kicad-pcb-reader-pnr-trace-board">
+<h3>3.11 The <code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code> reader (<code class="docutils literal notranslate"><span class="pre">pnr.trace_board</span></code>)<a class="headerlink" href="#the-kicad-pcb-reader-pnr-trace-board" title="Link to this heading">¶</a></h3>
+<p>A stdlib S-expression tokenizer that extracts: the frame (the <code class="docutils literal notranslate"><span class="pre">Edge.Cuts</span></code> extent, as
+<code class="docutils literal notranslate"><span class="pre">pnr.ingest._board_frame</span></code> uses the physical contour), the net table, <code class="docutils literal notranslate"><span class="pre">segment</span></code>, <code class="docutils literal notranslate"><span class="pre">arc</span></code>
+(tessellated), <code class="docutils literal notranslate"><span class="pre">via</span></code>, the <code class="docutils literal notranslate"><span class="pre">filled_polygon</span></code>s of zones, and footprints (position, side, pads with
+local position, size, shape, round-rect ratio, drill). It accepts nets written as codes or as
+names. It needs no KiCad process, so it runs in the controller and in CI outside the image.
+Tests use small hand-written snippets; a manual <code class="docutils literal notranslate"><span class="pre">requires-kicad</span></code> test checks it against <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code>
+on one ladder board (coordinates within 1 micrometre, same counts, same poses as <code class="docutils literal notranslate"><span class="pre">placed.json</span></code>).</p>
+</section>
+<section id="the-no-behaviour-change-guarantee">
+<h3>3.12 The no-behaviour-change guarantee<a class="headerlink" href="#the-no-behaviour-change-guarantee" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">trace_noop_test</span></code> runs a synthetic 5-part board through <code class="docutils literal notranslate"><span class="pre">route_and_place</span></code> with detailed
+routing, with and without the initial pool, three times: tracing unset, set, unset again, and
+requires byte-identical <code class="docutils literal notranslate"><span class="pre">placed</span></code> JSON and routes (timing fields removed).</p></li>
+<li><p>On the ladder (development Mac and the container), a traced and an untraced run of the same
+seed must give byte-identical <code class="docutils literal notranslate"><span class="pre">placed.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code> and <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code> (minus elapsed
+seconds) and equal audit and DRC metrics. Board files are compared by metrics only: writeback
+gives new items fresh UUIDs. The measured overhead goes into the commit body (AGENTS.md: new
+behaviour is default-off, with a measured A/B).</p></li>
+</ul>
+</section>
+</section>
+<section id="b-provenance-and-the-critical-path">
+<h2>4. (b) Provenance and the critical path<a class="headerlink" href="#b-provenance-and-the-critical-path" title="Link to this heading">¶</a></h2>
+<section id="model-pnr-provenance-v1">
+<h3>4.1 Model (<code class="docutils literal notranslate"><span class="pre">pnr-provenance-v1</span></code>)<a class="headerlink" href="#model-pnr-provenance-v1" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Nodes:</strong> <code class="docutils literal notranslate"><span class="pre">artifact</span></code> (a pose set, a route result, a board, a DRC report), <code class="docutils literal notranslate"><span class="pre">experiment</span></code> (a
+global placement, a legalization, a detailed route, a native stage, a block evaluation) and
+<code class="docutils literal notranslate"><span class="pre">selection</span></code> (a ranking that picks one candidate). Each has a stable, path-free id (for example
+<code class="docutils literal notranslate"><span class="pre">ladder:round-02/route</span></code>, <code class="docutils literal notranslate"><span class="pre">pool:start-05/place</span></code>, <code class="docutils literal notranslate"><span class="pre">halving:p017/deep</span></code>,
+<code class="docutils literal notranslate"><span class="pre">block:&lt;template&gt;/&lt;layout-tag&gt;</span></code>), a label, a status, metrics, an order key, and either a trace
+scope or run-relative artifact paths.</p></li>
+<li><p><strong>Edges:</strong> <code class="docutils literal notranslate"><span class="pre">derive</span></code> (input artifact to experiment, experiment to output artifact) and <code class="docutils literal notranslate"><span class="pre">select</span></code>
+(candidate to selection, selection to chosen).</p></li>
+</ul>
+</section>
+<section id="the-critical-path">
+<h3>4.2 The critical path<a class="headerlink" href="#the-critical-path" title="Link to this heading">¶</a></h3>
+<p>The critical path of a final artifact is its derivation ancestry, where a selection contributes
+only its chosen input; the other inputs of a selection are that selection’s <em>competitors</em>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">critical_path</span><span class="p">(</span><span class="n">dag</span><span class="p">,</span> <span class="n">final</span><span class="p">):</span>
+    <span class="n">order</span><span class="p">,</span> <span class="n">competitors</span><span class="p">,</span> <span class="n">seen</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">{},</span> <span class="nb">set</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">visit</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;selection&quot;</span><span class="p">:</span>
+            <span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">chosen</span><span class="p">)</span>
+            <span class="n">competitors</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">candidates</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">node</span><span class="o">.</span><span class="n">chosen</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">source</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">dag</span><span class="o">.</span><span class="n">derive_inputs</span><span class="p">(</span><span class="n">node</span><span class="p">),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">n</span><span class="p">:</span> <span class="n">n</span><span class="o">.</span><span class="n">order</span><span class="p">):</span>
+            <span class="n">visit</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+        <span class="n">order</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>  <span class="c1"># post-order: inputs before their consumer</span>
+
+    <span class="n">visit</span><span class="p">(</span><span class="n">final</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">order</span><span class="p">,</span> <span class="n">competitors</span>
+</pre></div>
+</div>
+<p>Post-order keeps each input’s whole ancestry contiguous, so independent inputs (block layouts
+that an assembly consumes) become consecutive sub-sequences before their consumer, in time order.</p>
+<p>Consequences for the ladder: round <em>k+1</em>’s placement derives from the congestion history of
+rounds 1 to <em>k</em>, so every round up to the best round is on the path; rounds after the best round
+are competitors of the “best round” selection (named on the end card, not replayed). Illegal
+placement attempts are competitors of the round’s “first legal attempt”. With the pool, the
+chosen start’s global placement, legalization and finalist route are on the path (the winner’s
+finalist route is reused as round 1’s route); the other starts and finalists are competitors.</p>
+</section>
+<section id="adapters">
+<h3>4.3 Adapters<a class="headerlink" href="#adapters" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Source</p></th>
+<th class="head"><p>Detected by</p></th>
+<th class="head"><p>Nodes come from</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>trace directory</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">header.json</span></code></p></td>
+<td><p>scopes, <code class="docutils literal notranslate"><span class="pre">select</span></code> and <code class="docutils literal notranslate"><span class="pre">board</span></code> events</p></td>
+</tr>
+<tr class="row-odd"><td><p>ladder case</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">design.json</span></code> + <code class="docutils literal notranslate"><span class="pre">result.json</span></code></p></td>
+<td><p>its <code class="docutils literal notranslate"><span class="pre">trace/</span></code>, else the round diagnostics and the saved boards (coarse mode)</p></td>
+</tr>
+<tr class="row-even"><td><p>ladder run</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">summary.json</span></code> + <code class="docutils literal notranslate"><span class="pre">provenance.json</span></code></p></td>
+<td><p>one case (<code class="docutils literal notranslate"><span class="pre">--case</span></code>, <code class="docutils literal notranslate"><span class="pre">--seed</span></code>, default seed 0), or all cases in a batch</p></td>
+</tr>
+<tr class="row-odd"><td><p>halving run</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dataset.jsonl</span></code> + <code class="docutils literal notranslate"><span class="pre">cand/</span></code></p></td>
+<td><p>stage records (rungs), <code class="docutils literal notranslate"><span class="pre">gen-place</span></code> parents, <code class="docutils literal notranslate"><span class="pre">seed-from</span></code> imports, the winner’s <code class="docutils literal notranslate"><span class="pre">hier</span></code> choice</p></td>
+</tr>
+<tr class="row-even"><td><p>hierarchical synthesis</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">library.json</span></code> per template + <code class="docutils literal notranslate"><span class="pre">native/</span></code></p></td>
+<td><p>ranked layouts (a selection per template), each native directory’s phases</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Coarse mode</strong> animates an untraced directory from what it saved: <code class="docutils literal notranslate"><span class="pre">placed.json</span></code> poses, a round’s
+<code class="docutils literal notranslate"><span class="pre">routes.json</span></code> drawn net by net in file order, <code class="docutils literal notranslate"><span class="pre">phases/*/diagnostic.kicad_pcb</span></code> as native
+keyframes, <code class="docutils literal notranslate"><span class="pre">evaluation.json</span></code> and DRC. The overlay then says “reconstructed from saved results”.
+The animator only reads its sources and refuses an output path inside one (AGENTS.md: never write
+into experiment directories).</p>
+</section>
+<section id="storyboard-pnr-storyboard-v1">
+<h3>4.4 Storyboard (<code class="docutils literal notranslate"><span class="pre">pnr-storyboard-v1</span></code>)<a class="headerlink" href="#storyboard-pnr-storyboard-v1" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">critical_path</span></code> becomes an ordered list of scenes; <code class="docutils literal notranslate"><span class="pre">pnr.animate</span> <span class="pre">--storyboard</span> <span class="pre">FILE</span></code> writes it for
+inspection and golden tests.</p>
+<p><strong>Ladder, baseline configuration:</strong></p>
+<ol class="arabic simple">
+<li><p>Title card: case title, circuit description, parts, nets, layers.</p></li>
+<li><p>Source: the generated board (parts in the generator’s naive row, partly outside the outline),
+full ratsnest, 0 %.</p></li>
+<li><p>Round 1: failed placement attempts flash (if any); global placement (parts fly in and spread);
+legalization (parts snap to their slots one by one).</p></li>
+<li><p>Round 1 routing: negotiation (provisional routes, dashed, overlaps allowed), commit passes
+(copper settles into layer colours), rip-up and reroute (red fades), recovery.</p></li>
+<li><p>Per further round on the path: congestion heat overlay with the inflated parts named, the new
+placement, its routing.</p></li>
+<li><p>Native: writeback (engine copper cross-fades to the KiCad board), planes (zone pour revealed
+by a wipe), refill, DRC.</p></li>
+<li><p>End card: the saved board, KiCad’s verdict and the metrics.</p></li>
+</ol>
+<p><strong>Ladder with the initial pool</strong> replaces step 3’s first half with two montages (the 8 legal
+starts with their proxy scores, the shortlisted 3 lit; then the 3 routed finalists with their
+objectives, the winner lit), a zoom into the winner, and the winner’s own global placement and
+legalization replayed in full.</p>
+<p><strong>Halving and hierarchical runs:</strong> per assembled block, a montage of its template’s ranked
+layouts (chosen one lit, with its rank) and the chosen layout’s native sequence on its sub-board
+(at most 3 s per block; beyond 6 blocks, one combined montage); then the rung montages (place,
+screen, native, deep; promoted candidates lit at each rung), the winner’s generation lineage as a
+strip of its ancestors’ final boards, the macro placement, the assembly (block copper moves from
+the sub-board into the macro pose), and the winner’s native phases to its DRC verdict.</p>
+</section>
+<section id="how-competitors-are-shown">
+<h3>4.5 How competitors are shown<a class="headerlink" href="#how-competitors-are-shown" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>A selection with at least two candidates on the path becomes a montage placed before the
+winner’s replay; consecutive selections (shortlist, then finalists) form one montage group in
+stage order.</p></li>
+<li><p>At most 8 tiles (4 × 2): up to 7 competitors (the best by the selection’s own criterion) plus
+the winner; more candidates show as a “+N more” tile.</p></li>
+<li><p>Each tile is the candidate’s end state at that stage (legal placement, or routed copper) with
+its score in the selection’s criterion; losers are dimmed to 35 %, the winner is outlined in
+the accent colour and labelled “chosen”. Timing: 0.4 s in, 1.0 s hold, 0.6 s zoom into the
+winner.</p></li>
+</ul>
+</section>
+</section>
+<section id="c-renderer-pnr-animate">
+<h2>5. (c) Renderer (<code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code>)<a class="headerlink" href="#c-renderer-pnr-animate" title="Link to this heading">¶</a></h2>
+<section id="pipeline">
+<h3>5.1 Pipeline<a class="headerlink" href="#pipeline" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">sources</span> <span class="pre">→</span> <span class="pre">provenance</span> <span class="pre">DAG</span> <span class="pre">→</span> <span class="pre">critical</span> <span class="pre">path</span> <span class="pre">→</span> <span class="pre">storyboard</span> <span class="pre">→</span> <span class="pre">timeline</span> <span class="pre">(frames</span> <span class="pre">with</span> <span class="pre">durations)</span> <span class="pre">→</span> <span class="pre">raster</span> <span class="pre">frames</span> <span class="pre">(Pillow)</span> <span class="pre">→</span> <span class="pre">encoders</span></code>. Pure Python and Pillow (no numpy, no torch, no KiCad), so it
+runs on any host through Bazel. Modules: <code class="docutils literal notranslate"><span class="pre">storyboard.py</span></code>, <code class="docutils literal notranslate"><span class="pre">timeline.py</span></code>, <code class="docutils literal notranslate"><span class="pre">render.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">encode.py</span></code>, <code class="docutils literal notranslate"><span class="pre">theme.py</span></code>, <code class="docutils literal notranslate"><span class="pre">__main__.py</span></code>.</p>
+</section>
+<section id="visual-specification">
+<h3>5.2 Visual specification<a class="headerlink" href="#visual-specification" title="Link to this heading">¶</a></h3>
+<p>Colours are the viewer’s (<code class="docutils literal notranslate"><span class="pre">yapnr/viewer/static/app.js</span></code> in PR4), copied into <code class="docutils literal notranslate"><span class="pre">theme.py</span></code> with a
+comment naming the source; two new tokens are marked.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element</p></th>
+<th class="head"><p>Colour</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>background</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#10191e</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>board substrate (new)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#15232a</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>outline</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#acc7ce</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">F.Cu</span></code> / <code class="docutils literal notranslate"><span class="pre">In1.Cu</span></code> / <code class="docutils literal notranslate"><span class="pre">In2.Cu</span></code> / <code class="docutils literal notranslate"><span class="pre">B.Cu</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#e89a73</span></code> / <code class="docutils literal notranslate"><span class="pre">#aa9de9</span></code> / <code class="docutils literal notranslate"><span class="pre">#dfbd62</span></code> / <code class="docutils literal notranslate"><span class="pre">#6eb6e5</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>zones</p></td>
+<td><p>layer colour at 15 % (the viewer’s <code class="docutils literal notranslate"><span class="pre">25</span></code> alpha)</p></td>
+</tr>
+<tr class="row-odd"><td><p>via ring / hole</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#b3c1c9</span></code> / <code class="docutils literal notranslate"><span class="pre">#15252c</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>pads</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#cdd2be</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>courtyards (new)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#3b5561</span></code>, 1 px outline</p></td>
+</tr>
+<tr class="row-even"><td><p>ratsnest</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#8da4ba</span></code> at 33 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>new copper (2 frames)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#62ffad</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>ripped copper (fade)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#ff566b</span></code>, dashed</p></td>
+</tr>
+<tr class="row-odd"><td><p>provisional (negotiation)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#d39af6</span></code>, dashed</p></td>
+</tr>
+<tr class="row-even"><td><p>chosen, accent</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#9ee6d1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>congestion heat</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#61dbac</span></code> to <code class="docutils literal notranslate"><span class="pre">#f07769</span></code>, alpha by value</p></td>
+</tr>
+<tr class="row-even"><td><p>text / muted text</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">#dce5e9</span></code> / <code class="docutils literal notranslate"><span class="pre">#8a9ea7</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<ul class="simple">
+<li><p><strong>Draw order:</strong> background, substrate, zones (bottom layer first), tracks (<code class="docutils literal notranslate"><span class="pre">B.Cu</span></code>, <code class="docutils literal notranslate"><span class="pre">In2.Cu</span></code>,
+<code class="docutils literal notranslate"><span class="pre">In1.Cu</span></code>, <code class="docutils literal notranslate"><span class="pre">F.Cu</span></code>), vias, pads, courtyards, reference labels (only when at least 7 px tall),
+ratsnest, highlights, outline, overlay.</p></li>
+<li><p><strong>Ratsnest:</strong> per net, a minimum spanning tree between its pad groups (§3.7), nearest pad pair
+per group pair. Native frames draw KiCad’s <code class="docutils literal notranslate"><span class="pre">open_pairs</span></code> instead.</p></li>
+<li><p><strong>Camera:</strong> the first scenes frame the source row and the outline together; the view eases to
+the outline (plus 4 % margin) as global placement starts. The y axis is flipped for the image.</p></li>
+<li><p><strong>Overlay:</strong> a header with the case title (left) and “10 parts · 9 nets · 2 layers” (right); a
+footer with the phase text (left), the “% routed” bar with its number, and a small step counter
+“step 412/980” (right). The end card adds “KiCad DRC: 0 unconnected · 0 violations”,
+“7 vias · 120.1 mm copper · seed 0” and the engine revision. The bar is drawn lighter during
+provisional negotiation.</p></li>
+<li><p><strong>Text is whitelisted:</strong> titles and descriptions from the ladder’s title map, reference
+designators, net names, counts, and phase strings from a fixed table. A validator rejects any
+overlay string that looks like a path (<code class="docutils literal notranslate"><span class="pre">/</span></code> between word characters, <code class="docutils literal notranslate"><span class="pre">~</span></code>, a drive letter) or an
+e-mail address; the manifest lists every overlay string, so the privacy scan sees them as text.</p></li>
+<li><p><strong>Font:</strong> Pillow’s embedded default TrueType font at a fixed size (<code class="docutils literal notranslate"><span class="pre">ImageFont.load_default(size)</span></code>,
+Aileron, CC0), so no system font is involved.</p></li>
+</ul>
+</section>
+<section id="timing">
+<h3>5.3 Timing<a class="headerlink" href="#timing" title="Link to this heading">¶</a></h3>
+<p>Frames carry their own durations, so holds cost one frame. WebP frames are 60 ms (16.7 fps); GIF
+frames 80 ms (GIF delays are in 10 ms units). Motion uses ease-in-out cubic.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Scene</p></th>
+<th class="head"><p>Duration</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>title card</p></td>
+<td><p>1.0 s</p></td>
+</tr>
+<tr class="row-odd"><td><p>source board</p></td>
+<td><p>0.8 s</p></td>
+</tr>
+<tr class="row-even"><td><p>montage (per group)</p></td>
+<td><p>1.4 s, plus 0.6 s zoom into the winner</p></td>
+</tr>
+<tr class="row-odd"><td><p>failed placement attempt</p></td>
+<td><p>0.3 s each, at most 3</p></td>
+</tr>
+<tr class="row-even"><td><p>global placement</p></td>
+<td><p>2.0 to 3.0 s, positions interpolated between snapshots</p></td>
+</tr>
+<tr class="row-odd"><td><p>legalization</p></td>
+<td><p>0.08 s per part, at most 1.6 s</p></td>
+</tr>
+<tr class="row-even"><td><p>routing (one route scope)</p></td>
+<td><p>3 to 8 s, log-scaled in its event count; negotiation at most 40 % of it</p></td>
+</tr>
+<tr class="row-odd"><td><p>congestion between rounds</p></td>
+<td><p>0.8 s</p></td>
+</tr>
+<tr class="row-even"><td><p>native writeback, planes, refill</p></td>
+<td><p>0.6 s, 1.2 s, 0.4 s</p></td>
+</tr>
+<tr class="row-odd"><td><p>DRC verdict and end hold</p></td>
+<td><p>2.5 s</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Routing events are batched per frame (<code class="docutils literal notranslate"><span class="pre">k</span> <span class="pre">=</span> <span class="pre">ceil(events</span> <span class="pre">/</span> <span class="pre">frames)</span></code>); a committed net flashes for
+two frames, a ripped net fades over three. Expected lengths: about 8 to 10 s for the small cases
+and 18 to 22 s for the chasers; <code class="docutils literal notranslate"><span class="pre">--max-seconds</span></code> (default 22) scales scenes down proportionally.
+Rigid bodies (line groups, block macros), the hierarchical lift and the holds of a side-by-side
+comparison are specified in <a class="reference internal" href="constraint-and-hier-animations.html"><span class="std std-doc">the constraint and hierarchy design</span></a>,
+section 6.1, which lists everything a frame may interpolate.</p>
+</section>
+<section id="outputs-and-budgets">
+<h3>5.4 Outputs and budgets<a class="headerlink" href="#outputs-and-budgets" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Output</p></th>
+<th class="head"><p>Width</p></th>
+<th class="head"><p>Budget</p></th>
+<th class="head"><p>Encoder settings (first try)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>docs WebP</p></td>
+<td><p>800 px</p></td>
+<td><p>2.5 MB</p></td>
+<td><p>lossy, quality 80, method 6, <code class="docutils literal notranslate"><span class="pre">minimize_size</span></code>, loop 0</p></td>
+</tr>
+<tr class="row-odd"><td><p>README GIF</p></td>
+<td><p>640 px</p></td>
+<td><p>5 MB</p></td>
+<td><p>one fixed 128-colour palette for all frames, no dithering, loop 0</p></td>
+</tr>
+<tr class="row-even"><td><p>MP4 (optional)</p></td>
+<td><p>800 px</p></td>
+<td><p>none</p></td>
+<td><p>only if <code class="docutils literal notranslate"><span class="pre">ffmpeg</span></code> is on <code class="docutils literal notranslate"><span class="pre">PATH</span></code>: H.264, yuv420p, CRF 23, <code class="docutils literal notranslate"><span class="pre">+faststart</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Frames are drawn at twice the size and reduced with a Lanczos filter (Pillow draws without
+anti-aliasing). If an output exceeds its budget, the encoder steps down deterministically: WebP
+quality 80, 70, 60, then a longer frame interval, then width 720, 640; GIF 128, 96, 64 colours,
+then 100 ms frames, then width 560. The chosen settings are recorded in the manifest; an output
+still over budget is an error. <code class="docutils literal notranslate"><span class="pre">ffmpeg</span></code> runs with a deadline (<code class="docutils literal notranslate"><span class="pre">pnr.proc</span></code>).</p>
+</section>
+<section id="determinism">
+<h3>5.5 Determinism<a class="headerlink" href="#determinism" title="Link to this heading">¶</a></h3>
+<p>The output bytes are a function of the trace content, the options and the Pillow version: no
+time, no environment, no path, iteration always in sorted order, a fixed palette and font. Tests
+render twice, and from a copy of the trace at another path, and compare hashes. Across platforms
+the output is expected, not promised, to be identical (the Pillow wheels bundle their own
+FreeType, zlib and libwebp); the manifest records the Pillow version. The engine results
+themselves are reproducible per platform only (docs/decisions.md), which is why the manifest
+records the platform and image the ladder ran on.</p>
+</section>
+<section id="performance">
+<h3>5.6 Performance<a class="headerlink" href="#performance" title="Link to this heading">¶</a></h3>
+<p>A static layer (substrate, outline, courtyards of fixed parts) is cached; the copper layer is
+redrawn only when copper changed; placement frames redraw parts only. Target: all 8 ladder cases
+rendered in a few minutes on one core (to be measured).</p>
+</section>
+</section>
+<section id="d-command-line-and-bazel">
+<h2>6. (d) Command line and Bazel<a class="headerlink" href="#d-command-line-and-bazel" title="Link to this heading">¶</a></h2>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>python -m pnr.animate SOURCE [SOURCE ...] --out PATH
+  SOURCE              trace dir, ladder case or run dir, halving out dir, or synthesis library dir
+  --out PATH          a file (.webp, .gif, .mp4) or a directory (&lt;label&gt;.&lt;ext&gt; per --format)
+  --format LIST       webp,gif (default webp); mp4 only with ffmpeg, else a warning
+  --case NAME --seed N   pick a case of a ladder run
+  --width, --max-seconds, --budget-mb, --gif-budget-mb
+  --title, --subtitle validated overlay text (no paths)
+  --storyboard FILE   write the storyboard JSON and stop
+  --manifest FILE     add or update this animation&#39;s entry
+  --coarse            allow reconstruction from saved results when there is no trace
+</pre></div>
+</div>
+<p>Bazel (<code class="docutils literal notranslate"><span class="pre">hardware/pnr/BUILD.bazel</span></code>):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pnr/trace.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr/trace_board.py</span></code> and <code class="docutils literal notranslate"><span class="pre">pnr/provenance.py</span></code> join <code class="docutils literal notranslate"><span class="pre">:pnr</span></code> through its existing
+<code class="docutils literal notranslate"><span class="pre">pnr/*.py</span></code> glob;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">py_library(name</span> <span class="pre">=</span> <span class="pre">&quot;pnr_animate&quot;)</span></code> over <code class="docutils literal notranslate"><span class="pre">pnr/animate/*.py</span></code> (without <code class="docutils literal notranslate"><span class="pre">__main__.py</span></code>), depending
+on <code class="docutils literal notranslate"><span class="pre">:pnr</span></code> and <code class="docutils literal notranslate"><span class="pre">requirement(&quot;pillow&quot;)</span></code> only (no torch, so building it fetches no torch wheel);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">py_binary(name</span> <span class="pre">=</span> <span class="pre">&quot;animate&quot;)</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">py_binary(name</span> <span class="pre">=</span> <span class="pre">&quot;ladder_animations&quot;)</span></code> for <code class="docutils literal notranslate"><span class="pre">regression/animate_ladder.py</span></code>, tagged <code class="docutils literal notranslate"><span class="pre">manual</span></code> and
+<code class="docutils literal notranslate"><span class="pre">requires-kicad</span></code>: it runs <code class="docutils literal notranslate"><span class="pre">run.py</span></code> with <code class="docutils literal notranslate"><span class="pre">--trace</span></code>, <code class="docutils literal notranslate"><span class="pre">--initial-pool</span></code>, <code class="docutils literal notranslate"><span class="pre">--initial-starts</span> <span class="pre">8</span></code>,
+<code class="docutils literal notranslate"><span class="pre">--initial-finalists</span> <span class="pre">3</span></code> and <code class="docutils literal notranslate"><span class="pre">--seed</span> <span class="pre">0</span></code> into <code class="docutils literal notranslate"><span class="pre">&lt;repo&gt;/.yapnr/ladder/&lt;run-id&gt;</span></code> (git-ignored),
+renders every case into <code class="docutils literal notranslate"><span class="pre">docs/animations/&lt;case&gt;.webp</span></code>, the README GIF, and <code class="docutils literal notranslate"><span class="pre">manifest.json</span></code>.
+With <code class="docutils literal notranslate"><span class="pre">--render-only</span> <span class="pre">RUN_DIR</span></code> it skips the ladder, so no KiCad is needed. The case titles
+(“TLC555 blinker”, …) live in this script, so <code class="docutils literal notranslate"><span class="pre">designs.py</span></code> and the fixtures stay unchanged.</p></li>
+</ul>
+<p><strong>The animations use the initial pool</strong> (<code class="docutils literal notranslate"><span class="pre">--initial-pool</span></code>): the pool is where the ladder’s search
+happens (the montages of §4.4), and RESULTS-118 measured it as a quality gain on two cases. The
+baseline ladder stays the regression gate. A case that fails in pool mode is rendered from the
+baseline configuration instead, and the manifest records the configuration per case.</p>
+<p><code class="docutils literal notranslate"><span class="pre">regression/run.py</span></code> gains <code class="docutils literal notranslate"><span class="pre">--trace</span></code> (§3.10), the pip-less version listing, run-relative case
+directories, and nothing else. Pillow joins <code class="docutils literal notranslate"><span class="pre">requirements.in</span></code> under a new “Tooling” section with
+a major-version ceiling (for example <code class="docutils literal notranslate"><span class="pre">pillow&gt;=12,&lt;13</span></code>, whatever major is current at
+implementation), locked with <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:requirements.update</span></code> (<code class="docutils literal notranslate"><span class="pre">MODULE.bazel.lock</span></code> committed),
+and pinned in <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>. It does <strong>not</strong> join <code class="docutils literal notranslate"><span class="pre">requirements-runtime.in</span></code>: the renderer
+is a contributor and docs tool, so the image and its runtime locks do not change (when a
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">animate</span></code> command ships in the image, Pillow moves to the runtime set).</p>
+<p>New files under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> are outside prek’s scope until PR3a; they are written black, isort
+and flake8 clean at 100 columns from the start (checked by hand with those tools), so PR3a’s
+reformatting is a no-op for them.</p>
+</section>
+<section id="e-ci">
+<h2>7. (e) CI<a class="headerlink" href="#e-ci" title="Link to this heading">¶</a></h2>
+<section id="workflow-ladder-yaml">
+<h3>7.1 Workflow <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code><a class="headerlink" href="#workflow-ladder-yaml" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Triggers:</strong> every pull request (a plan step skips the ladder unless engine inputs changed:
+<code class="docutils literal notranslate"><span class="pre">hardware/pnr/</span></code>, <code class="docutils literal notranslate"><span class="pre">hardware/tools/scan_via_proximity.py</span></code>, <code class="docutils literal notranslate"><span class="pre">requirements*</span></code>, <code class="docutils literal notranslate"><span class="pre">docker/</span></code>, the
+workflow), a nightly <code class="docutils literal notranslate"><span class="pre">schedule</span></code> on <code class="docutils literal notranslate"><span class="pre">main</span></code>, and <code class="docutils literal notranslate"><span class="pre">workflow_dispatch</span></code> (inputs: cases, seeds,
+animate). A final <code class="docutils literal notranslate"><span class="pre">ladder</span></code> job always reports, as <code class="docutils literal notranslate"><span class="pre">image.yaml</span></code> does, so the check can become
+required later without a path filter leaving it pending.</p></li>
+<li><p><strong>Permissions:</strong> <code class="docutils literal notranslate"><span class="pre">contents:</span> <span class="pre">read</span></code>, <code class="docutils literal notranslate"><span class="pre">packages:</span> <span class="pre">read</span></code>. Concurrency per PR, cancelling superseded
+PR runs.</p></li>
+<li><p><strong>Runner:</strong> <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code> (the image’s arm64 build; the same architecture as the <code class="docutils literal notranslate"><span class="pre">test</span></code>
+job).</p></li>
+</ul>
+</section>
+<section id="the-image-and-the-runtime-guard">
+<h3>7.2 The image and the runtime guard<a class="headerlink" href="#the-image-and-the-runtime-guard" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">docker/login-action</span></code> (pinned by commit, as in <code class="docutils literal notranslate"><span class="pre">image.yaml</span></code>) with <code class="docutils literal notranslate"><span class="pre">GITHUB_TOKEN</span></code>. While the
+package is private, the repository needs read access to it (packages pushed by this
+repository’s workflows are linked to it; otherwise Package settings, Manage Actions access).
+Once the owner makes the packages public, the login stays harmless. Fork PRs skip the ladder
+until then.</p></li>
+<li><p>Resolve <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr:edge</span></code> to a digest and use the digest (recorded in the step
+summary and the manifest).</p></li>
+<li><p><strong>Runtime guard.</strong> <code class="docutils literal notranslate"><span class="pre">edge</span></code> is built from <code class="docutils literal notranslate"><span class="pre">main</span></code>; a PR can change the runtime pins. A step
+compares the image’s <code class="docutils literal notranslate"><span class="pre">/opt/venv</span></code> distributions with the checkout’s
+<code class="docutils literal notranslate"><span class="pre">docker/yapnr/runtime-arm64.lock</span></code>. If they differ, it creates an overlay venv inside the
+container from the image’s own CPython (<code class="docutils literal notranslate"><span class="pre">/opt/python</span></code>) and installs the checkout’s lock with
+<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">--require-hashes</span> <span class="pre">--no-deps</span></code>: the same packages the PR’s image would get, in a minute or
+two, without building an image. This is the simplest reliable option; building the app image
+in the job (Bazel wheel plus <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">buildx</span></code>) was rejected as slow for no gain, since the
+ladder runs the checkout’s engine sources, not the image’s wheel.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/</span></code> changed (a new KiCad base that is not published yet), the ladder is
+skipped with a notice: <code class="docutils literal notranslate"><span class="pre">image.yaml</span></code> smoke-tests the new base on the PR, and the nightly run on
+<code class="docutils literal notranslate"><span class="pre">main</span></code> covers the ladder after the merge.</p></li>
+</ol>
+</section>
+<section id="running-the-ladder-in-the-container">
+<h3>7.3 Running the ladder in the container<a class="headerlink" href="#running-the-ladder-in-the-container" title="Link to this heading">¶</a></h3>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>timeout<span class="w"> </span>--kill-after<span class="o">=</span><span class="m">60</span><span class="w"> </span>50m<span class="w"> </span>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--init<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-u<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">&quot;</span>:/work<span class="w"> </span>-w<span class="w"> </span>/work<span class="w"> </span>--shm-size<span class="w"> </span>1g<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--entrypoint<span class="w"> </span>/usr/local/bin/yapnr-kicad-env<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$IMAGE</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;</span><span class="nv">$PY</span><span class="s2">&quot;</span><span class="w"> </span>hardware/pnr/regression/run.py<span class="w"> </span>--repo<span class="w"> </span>/work<span class="w"> </span>--out<span class="w"> </span>/work/out/ladder<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--python<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PY</span><span class="s2">&quot;</span><span class="w"> </span>--kicad-python<span class="w"> </span>/usr/bin/python3<span class="w"> </span>--kicad-cli<span class="w"> </span>/usr/bin/kicad-cli<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--library<span class="w"> </span>/usr/share/kicad/footprints<span class="w"> </span>--timeout<span class="w"> </span><span class="m">600</span><span class="w"> </span><span class="nv">$CASES</span><span class="w"> </span><span class="nv">$SEEDS</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">$PY</span></code> is <code class="docutils literal notranslate"><span class="pre">/opt/venv/bin/python</span></code> or the overlay venv’s. <code class="docutils literal notranslate"><span class="pre">yapnr-kicad-env</span></code> gives the runner’s UID a
+writable home with KiCad’s library tables. The KiCad-side stages run under the image’s KiCad
+Python (3.12) from the frozen sources on <code class="docutils literal notranslate"><span class="pre">PYTHONPATH</span></code>, as the runner already arranges.</p>
+</section>
+<section id="what-runs-when">
+<h3>7.4 What runs when<a class="headerlink" href="#what-runs-when" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Event</p></th>
+<th class="head"><p>Cases and seeds</p></th>
+<th class="head"><p>Job timeout</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>pull request</p></td>
+<td><p>01 to 06, seed 0, baseline (about 1 min on the Mac; estimated 3 to 6 min)</p></td>
+<td><p>45 min</p></td>
+</tr>
+<tr class="row-odd"><td><p>nightly (<code class="docutils literal notranslate"><span class="pre">main</span></code>)</p></td>
+<td><p>all 8, seeds 0 and 1, baseline; then all 8, seed 0, <code class="docutils literal notranslate"><span class="pre">--initial-pool</span> <span class="pre">--trace</span></code></p></td>
+<td><p>150 min</p></td>
+</tr>
+<tr class="row-even"><td><p>manual</p></td>
+<td><p>as given; <code class="docutils literal notranslate"><span class="pre">animate:</span> <span class="pre">true</span></code> adds the traced run and the animations</p></td>
+<td><p>150 min</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The PR subset is revisited after the first CI timings (all 8 cases at seed 0 took about 3 min on
+the Mac, so the full seed-0 ladder may fit a PR too).</p>
+</section>
+<section id="reporting-and-artifacts">
+<h3>7.5 Reporting and artifacts<a class="headerlink" href="#reporting-and-artifacts" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>A stdlib script (<code class="docutils literal notranslate"><span class="pre">tools/ci/ladder_summary.py</span></code>) turns <code class="docutils literal notranslate"><span class="pre">summary.json</span></code> into the step summary: case,
+seed, pass, opens, violations, vias, copper, seconds, and the failure reasons. <code class="docutils literal notranslate"><span class="pre">junit.xml</span></code> is
+uploaded as is (no third-party reporter action needed).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">if:</span> <span class="pre">always()</span></code> uploads <code class="docutils literal notranslate"><span class="pre">ladder-results</span></code> (summary, junit, per-case <code class="docutils literal notranslate"><span class="pre">result.json</span></code>, <code class="docutils literal notranslate"><span class="pre">drc.json</span></code>,
+stage logs; boards of failed cases) for 14 days. Case directories in these files are
+run-relative (§2).</p></li>
+<li><p>Timeouts at three levels: <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--timeout</span></code> per stage, <code class="docutils literal notranslate"><span class="pre">timeout</span></code> around <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">run</span></code> (so the
+upload still runs after a hang), and the job’s <code class="docutils literal notranslate"><span class="pre">timeout-minutes</span></code>.</p></li>
+<li><p><strong>Animations</strong> (nightly and <code class="docutils literal notranslate"><span class="pre">animate:</span> <span class="pre">true</span></code>): a second job on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code> sets up Bazel
+with the same caches as <code class="docutils literal notranslate"><span class="pre">ci.yaml</span></code>, downloads the traced run, runs
+<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//hardware/pnr:ladder_animations</span> <span class="pre">--</span> <span class="pre">--render-only</span> <span class="pre">...</span></code>, uploads <code class="docutils literal notranslate"><span class="pre">ladder-animations</span></code>,
+and compares the trace hashes with <code class="docutils literal notranslate"><span class="pre">docs/animations/manifest.json</span></code>; a drift is a notice, never
+a failure. Refreshing the committed animations stays a deliberate change (§8.4).</p></li>
+<li><p>The lane is informational at first; after about a week of green nightly runs the owner can make
+<code class="docutils literal notranslate"><span class="pre">ladder</span></code> a required check.</p></li>
+</ul>
+</section>
+</section>
+<section id="f-documentation">
+<h2>8. (f) Documentation<a class="headerlink" href="#f-documentation" title="Link to this heading">¶</a></h2>
+<section id="files">
+<h3>8.1 Files<a class="headerlink" href="#files" title="Link to this heading">¶</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>docs/animations/&lt;case&gt;.webp     one per ladder case (8)
+docs/animations/07-chaser-20.gif README sizzle
+docs/animations/manifest.json   provenance, hashes, sizes, settings, overlay strings
+docs/regression-ladder.md       the &quot;Regression ladder&quot; page
+</pre></div>
+</div>
+<p>The folder is <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code>, not <code class="docutils literal notranslate"><span class="pre">docs/static/animations/</span></code>: <code class="docutils literal notranslate"><span class="pre">docs/build_docs.py</span></code> stages only
+Markdown from <code class="docutils literal notranslate"><span class="pre">docs/</span></code>, and its GitHub Pages step rewrites every <code class="docutils literal notranslate"><span class="pre">static</span></code> reference in the HTML,
+which would break raw <code class="docutils literal notranslate"><span class="pre">&lt;img&gt;</span></code> paths. <code class="docutils literal notranslate"><span class="pre">build_docs.py</span></code> gets one more step: copy <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code>
+to <code class="docutils literal notranslate"><span class="pre">_extra/docs/animations/</span></code>, which <code class="docutils literal notranslate"><span class="pre">html_extra_path</span></code> places at <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> in the site.
+Then the same relative paths work on GitHub and on the site, for <code class="docutils literal notranslate"><span class="pre">README.md</span></code> (staged at the site
+root) and for <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>. Both use raw HTML <code class="docutils literal notranslate"><span class="pre">&lt;img&gt;</span></code> inside a <code class="docutils literal notranslate"><span class="pre">&lt;p&gt;</span></code> or <code class="docutils literal notranslate"><span class="pre">&lt;figure&gt;</span></code>
+(not a standalone <code class="docutils literal notranslate"><span class="pre">&lt;img&gt;</span></code>, which MyST’s <code class="docutils literal notranslate"><span class="pre">html_image</span></code> would turn into a Sphinx image node).</p>
+</section>
+<section id="the-page-and-the-readme">
+<h3>8.2 The page and the README<a class="headerlink" href="#the-page-and-the-readme" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>: what the ladder tests and its gate (from the regression README),
+how to run it (Mac with the headless KiCad copy, container, Bazel), the CI lanes, how to read
+an animation (colours, bar, montages), then one section per case: its animation, a caption
+from the manifest (parts, nets, layers, vias, copper, KiCad result, seed, configuration, engine
+revision, platform). Linked from <code class="docutils literal notranslate"><span class="pre">docs/index.md</span></code> (“Start here”) and the “Project” toctree, and
+from <code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression/README.md</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">README.md</span></code>, right after the first paragraph under the title:</p></li>
+</ul>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;p align=&quot;center&quot;&gt;
+  &lt;img src=&quot;docs/animations/07-chaser-20.gif&quot; width=&quot;640&quot;
+    alt=&quot;yapnr placing and routing a TLC555 + CD4017B LED chaser, from an unplaced board
+    to a KiCad-DRC-clean result&quot;&gt;
+&lt;/p&gt;
+&lt;p align=&quot;center&quot;&gt;&lt;sub&gt;TLC555 + CD4017B five-stage LED chaser (20 parts), from the
+  &lt;a href=&quot;docs/regression-ladder.md&quot;&gt;regression ladder&lt;/a&gt;: initial placement pool,
+  placement, routing and KiCad DRC.&lt;/sub&gt;&lt;/p&gt;
+</pre></div>
+</div>
+</section>
+<section id="size-budget-instead-of-the-large-file-hook">
+<h3>8.3 Size budget instead of the large-file hook<a class="headerlink" href="#size-budget-instead-of-the-large-file-hook" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">.pre-commit-config.yaml</span></code>: <code class="docutils literal notranslate"><span class="pre">check-added-large-files</span></code> gets
+<code class="docutils literal notranslate"><span class="pre">exclude:</span> <span class="pre">^(third_party/|docs/animations/)</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_animations.py</span></code> (a repository check, stdlib only, tagged like the others)
+enforces: every file in <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> is in the manifest with a matching SHA-256 and size;
+extensions are <code class="docutils literal notranslate"><span class="pre">.webp</span></code>, <code class="docutils literal notranslate"><span class="pre">.gif</span></code> and <code class="docutils literal notranslate"><span class="pre">.json</span></code> only; WebP at most 2.5 MB, GIF at most 5 MB, folder
+total at most 20 MB; widths between 480 and 960 px (read from the file headers); no EXIF, XMP or
+GIF comment chunks; every ladder case (from <code class="docutils literal notranslate"><span class="pre">designs.py</span></code>) has an animation; the README and the
+page reference only files that exist.</p></li>
+</ul>
+<p>Manifest shape:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;yapnr-animations-v1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;generated&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-10-01&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;engine_revision&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;commit&gt;&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;renderer&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;pillow&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;version&gt;&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;platform&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;linux-aarch64&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;image&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ghcr.io/studio-fug/yapnr@sha256:&lt;digest&gt;&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;kicad&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;10.0.6&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;animations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;case&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;05-timer-led-10&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;TLC555 blinker&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;seed&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;config&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;--initial-pool&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;--initial-starts&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;8&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;--initial-finalists&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;3&quot;</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;file&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;05-timer-led-10.webp&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;bytes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">812345</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;sha256&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;hash&gt;&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;width&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;frames&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">240</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;seconds&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">16.2</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;trace_sha256&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;hash&gt;&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;result&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;passed&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;opens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;violations&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;vias&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;copper_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">120.1</span><span class="w"> </span><span class="p">},</span>
+<span class="w">      </span><span class="nt">&quot;settings&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;quality&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">80</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;frame_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span><span class="w"> </span><span class="p">},</span>
+<span class="w">      </span><span class="nt">&quot;captions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;TLC555 blinker&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;10 parts · 9 nets · 2 layers&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Global placement&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;readme&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;case&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;07-chaser-20&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;file&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;07-chaser-20.gif&quot;</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="where-the-committed-animations-come-from-and-how-often-they-change">
+<h3>8.4 Where the committed animations come from, and how often they change<a class="headerlink" href="#where-the-committed-animations-come-from-and-how-often-they-change" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Preferred: the ladder in the published arm64 image (locally with colima, or the nightly
+artifact), so CI can reproduce them; the manifest records the image digest and platform.
+Fallback: the development Mac (headless KiCad copy, the experiment runtime), recorded as
+<code class="docutils literal notranslate"><span class="pre">darwin-arm64</span></code>.</p></li>
+<li><p>Only boards that pass KiCad’s gate are committed; the renderer refuses to write into
+<code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> for a failed case unless <code class="docutils literal notranslate"><span class="pre">--allow-failed</span></code>, and then the end card says FAIL.</p></li>
+<li><p>Each refresh adds about 10 to 16 MB to the history. Refresh deliberately (a notable engine
+change, or a release), never on every PR; the total budget bounds each refresh. Git LFS and
+Pages-only hosting were considered and rejected for now: the request is to commit them, LFS
+complicates the Pages checkout and the README.</p></li>
+</ul>
+</section>
+</section>
+<section id="tests-and-acceptance">
+<h2>9. Tests and acceptance<a class="headerlink" href="#tests-and-acceptance" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test</p></th>
+<th class="head"><p>Tier and size</p></th>
+<th class="head"><p>Checks</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">trace_test</span></code></p></td>
+<td><p>unit, small</p></td>
+<td><p>format, bounds and truncation, self-disable on error, no absolute paths, determinism</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">trace_noop_test</span></code></p></td>
+<td><p>unit, medium</p></td>
+<td><p>byte-identical engine outputs with tracing unset, set, unset (§3.12)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">trace_board_test</span></code></p></td>
+<td><p>unit, small</p></td>
+<td><p>reader on snippets: frame, segments, arcs, vias, zones, both net syntaxes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">trace_board_kicad_test</span></code></p></td>
+<td><p>manual, requires-kicad</p></td>
+<td><p>parity with <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code> on a ladder board</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">provenance_test</span></code></p></td>
+<td><p>unit, small</p></td>
+<td><p>critical path and competitors on synthetic ladder, pool, halving and synthesis dirs</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">animate_test</span></code></p></td>
+<td><p>unit, medium</p></td>
+<td><p>storyboard golden, frame count, identical bytes twice and from a moved trace, budgets, no metadata, overlay validator</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">regression_contract_test</span></code> (extended)</p></td>
+<td><p>unit, small</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--trace</span></code> parsing, run-relative directories, pip-less version listing</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_animations.py</span></code></p></td>
+<td><p>repo check</p></td>
+<td><p>§8.3</p></td>
+</tr>
+<tr class="row-even"><td><p>ladder A/B, traced against untraced</p></td>
+<td><p>manual (Mac, container)</p></td>
+<td><p>§3.12; result and overhead in the commit body</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Acceptance: all 8 cases pass the unchanged gate in the traced run; 8 WebP files and the README
+GIF within budget; <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code> and <code class="docutils literal notranslate"><span class="pre">prek</span> <span class="pre">run</span> <span class="pre">--all-files</span></code> green; the docs build shows the
+page and the README animation; the CI lane green on a PR and on a manual nightly run.</p>
+</section>
+<section id="implementation-order-and-coordination">
+<h2>10. Implementation order and coordination<a class="headerlink" href="#implementation-order-and-coordination" title="Link to this heading">¶</a></h2>
+<p>Small commits, each with its tests:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pnr.trace</span></code> and the engine hooks (§3.9); <code class="docutils literal notranslate"><span class="pre">trace_test</span></code>, <code class="docutils literal notranslate"><span class="pre">trace_noop_test</span></code>; A/B in the body.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pnr.trace_board</span></code>; <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--trace</span></code>, the pip-less listing, run-relative directories.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pnr.provenance</span></code> and the storyboard; <code class="docutils literal notranslate"><span class="pre">provenance_test</span></code>.</p></li>
+<li><p>Pillow in <code class="docutils literal notranslate"><span class="pre">requirements.in</span></code> and the lock; <code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code>; <code class="docutils literal notranslate"><span class="pre">:animate</span></code>; <code class="docutils literal notranslate"><span class="pre">animate_test</span></code>;
+<code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code> pin.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">regression/animate_ladder.py</span></code> and <code class="docutils literal notranslate"><span class="pre">:ladder_animations</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code>, <code class="docutils literal notranslate"><span class="pre">tools/ci/ladder_summary.py</span></code>, the CI section of <code class="docutils literal notranslate"><span class="pre">DEVELOPERS.md</span></code>.</p></li>
+<li><p>Docs: <code class="docutils literal notranslate"><span class="pre">build_docs.py</span></code> step, <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>, index and toctree (this design
+document too), README sizzle, hook exclusion, <code class="docutils literal notranslate"><span class="pre">test_animations.py</span></code>, the animations and the
+manifest.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">WORKLOG.md</span></code> and <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code> (Pillow pin, animations policy, the CI lane).</p></li>
+</ol>
+<ul class="simple">
+<li><p><strong>PR3a</strong> (format and lint of <code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code>): engine edits are insertions of two to six lines at
+stable anchors in six files (<code class="docutils literal notranslate"><span class="pre">feedback.py</span></code>, <code class="docutils literal notranslate"><span class="pre">model.py</span></code>, <code class="docutils literal notranslate"><span class="pre">legalize.py</span></code>, <code class="docutils literal notranslate"><span class="pre">initial_pool.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">router.py</span></code>, <code class="docutils literal notranslate"><span class="pre">maze.py</span></code>) plus <code class="docutils literal notranslate"><span class="pre">phase_capture.py</span></code> and <code class="docutils literal notranslate"><span class="pre">run.py</span></code>; rebasing onto PR3a means
+re-inserting them into the reformatted files. Landing after PR3a is preferred.</p></li>
+<li><p><strong>PR4</strong> (viewer): nothing under <code class="docutils literal notranslate"><span class="pre">yapnr/viewer</span></code> changes; the palette is copied. A later viewer
+could replay <code class="docutils literal notranslate"><span class="pre">pnr-trace-v1</span></code>.</p></li>
+<li><p><strong>PR6a</strong> replaces <code class="docutils literal notranslate"><span class="pre">run.py</span></code>’s macOS defaults with toolchain discovery; this change keeps passing
+explicit paths. <strong>PR3b</strong> moves the new modules with the rest of <code class="docutils literal notranslate"><span class="pre">pnr</span></code>.</p></li>
+<li><p><strong>On the shared Mac:</strong> the ladder runs niced and sequentially (one KiCad process at a time,
+within the two-process budget), only through the headless KiCad copy; Bazel with
+<code class="docutils literal notranslate"><span class="pre">--config=lowmem</span></code>; the image, if used through colima, needs about 2.3 GB of disk.</p></li>
+</ul>
+</section>
+<section id="risks-and-open-questions-for-the-owner">
+<h2>11. Risks and open questions for the owner<a class="headerlink" href="#risks-and-open-questions-for-the-owner" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p><strong>Pool configuration for the animations</strong> (§6): they show the search, but not the exact
+regression configuration. The alternative is baseline-only animations with no montages for
+most cases.</p></li>
+<li><p><strong>Repository growth</strong> from committed binaries (§8.4), about 10 to 16 MB per refresh.</p></li>
+<li><p><strong>Platform of record:</strong> the arm64 image (reproducible by CI) or the Mac. Boards differ between
+platforms by design (decisions: placement is reproducible per platform only).</p></li>
+<li><p><strong>README format:</strong> GIF, because GitHub autoplays it everywhere; WebP only on the docs site.</p></li>
+<li><p><strong>Pad fidelity:</strong> shapes from the graph refined from the source board, not KiCad’s exact pad
+polygons (the viewer’s <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code> extraction), to keep KiCad processes out of rendering.</p></li>
+<li><p><strong>Halving and synthesis adapters</strong> are built and tested on synthetic directories. Real
+Splanc-shaped runs depend on Splanc paths in <code class="docutils literal notranslate"><span class="pre">pnr.mc.halving</span></code> and <code class="docutils literal notranslate"><span class="pre">pnr.hier.native_block</span></code>
+(PR3c); coarse mode can animate them read-only in the meantime.</p></li>
+<li><p><strong>Private image:</strong> fork PRs and anyone without package access cannot run the lane until the
+packages are public (WORKLOG, next step 5).</p></li>
+</ol>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="constraint-and-hier-animations.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Design: line groups, board edges and hierarchical PnR, animated</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../decisions.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Decisions</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Design: the regression ladder in CI, PnR traces and critical-path animations</a><ul>
+<li><a class="reference internal" href="#summary">0. Summary</a></li>
+<li><a class="reference internal" href="#scope-and-interpretation">1. Scope and interpretation</a></li>
+<li><a class="reference internal" href="#what-exists-today">2. What exists today</a></li>
+<li><a class="reference internal" href="#a-trace-format-pnr-trace-v1">3. (a) Trace format <code class="docutils literal notranslate"><span class="pre">pnr-trace-v1</span></code></a><ul>
+<li><a class="reference internal" href="#principles">3.1 Principles</a></li>
+<li><a class="reference internal" href="#layout">3.2 Layout</a></li>
+<li><a class="reference internal" href="#frame-and-units">3.3 Frame and units</a></li>
+<li><a class="reference internal" href="#header-json">3.4 <code class="docutils literal notranslate"><span class="pre">header.json</span></code></a></li>
+<li><a class="reference internal" href="#events">3.5 Events</a></li>
+<li><a class="reference internal" href="#blobs">3.6 Blobs</a></li>
+<li><a class="reference internal" href="#progress-routed">3.7 Progress: “% routed”</a></li>
+<li><a class="reference internal" href="#bounds">3.8 Bounds</a></li>
+<li><a class="reference internal" href="#hook-points-all-small-guarded-at-stable-anchors">3.9 Hook points (all small, guarded, at stable anchors)</a></li>
+<li><a class="reference internal" href="#native-stages-in-the-ladder">3.10 Native stages in the ladder</a></li>
+<li><a class="reference internal" href="#the-kicad-pcb-reader-pnr-trace-board">3.11 The <code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code> reader (<code class="docutils literal notranslate"><span class="pre">pnr.trace_board</span></code>)</a></li>
+<li><a class="reference internal" href="#the-no-behaviour-change-guarantee">3.12 The no-behaviour-change guarantee</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#b-provenance-and-the-critical-path">4. (b) Provenance and the critical path</a><ul>
+<li><a class="reference internal" href="#model-pnr-provenance-v1">4.1 Model (<code class="docutils literal notranslate"><span class="pre">pnr-provenance-v1</span></code>)</a></li>
+<li><a class="reference internal" href="#the-critical-path">4.2 The critical path</a></li>
+<li><a class="reference internal" href="#adapters">4.3 Adapters</a></li>
+<li><a class="reference internal" href="#storyboard-pnr-storyboard-v1">4.4 Storyboard (<code class="docutils literal notranslate"><span class="pre">pnr-storyboard-v1</span></code>)</a></li>
+<li><a class="reference internal" href="#how-competitors-are-shown">4.5 How competitors are shown</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#c-renderer-pnr-animate">5. (c) Renderer (<code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code>)</a><ul>
+<li><a class="reference internal" href="#pipeline">5.1 Pipeline</a></li>
+<li><a class="reference internal" href="#visual-specification">5.2 Visual specification</a></li>
+<li><a class="reference internal" href="#timing">5.3 Timing</a></li>
+<li><a class="reference internal" href="#outputs-and-budgets">5.4 Outputs and budgets</a></li>
+<li><a class="reference internal" href="#determinism">5.5 Determinism</a></li>
+<li><a class="reference internal" href="#performance">5.6 Performance</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#d-command-line-and-bazel">6. (d) Command line and Bazel</a></li>
+<li><a class="reference internal" href="#e-ci">7. (e) CI</a><ul>
+<li><a class="reference internal" href="#workflow-ladder-yaml">7.1 Workflow <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code></a></li>
+<li><a class="reference internal" href="#the-image-and-the-runtime-guard">7.2 The image and the runtime guard</a></li>
+<li><a class="reference internal" href="#running-the-ladder-in-the-container">7.3 Running the ladder in the container</a></li>
+<li><a class="reference internal" href="#what-runs-when">7.4 What runs when</a></li>
+<li><a class="reference internal" href="#reporting-and-artifacts">7.5 Reporting and artifacts</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#f-documentation">8. (f) Documentation</a><ul>
+<li><a class="reference internal" href="#files">8.1 Files</a></li>
+<li><a class="reference internal" href="#the-page-and-the-readme">8.2 The page and the README</a></li>
+<li><a class="reference internal" href="#size-budget-instead-of-the-large-file-hook">8.3 Size budget instead of the large-file hook</a></li>
+<li><a class="reference internal" href="#where-the-committed-animations-come-from-and-how-often-they-change">8.4 Where the committed animations come from, and how often they change</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#tests-and-acceptance">9. Tests and acceptance</a></li>
+<li><a class="reference internal" href="#implementation-order-and-coordination">10. Implementation order and coordination</a></li>
+<li><a class="reference internal" href="#risks-and-open-questions-for-the-owner">11. Risks and open questions for the owner</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

@@ -259,3 +259,9 @@ if [ "${FAILURES}" -gt 0 ]; then
     exit 1
 fi
 echo "${IMAGE}: all checks passed"
+
+# Installed workflow and bundled agent: no authentication or paid model calls.
+timeout 30 docker run --rm --read-only --tmpfs /tmp "${IMAGE}" agent instructions > /dev/null
+timeout 30 docker run --rm --entrypoint codex "${IMAGE}" --version
+timeout 30 docker run --rm --entrypoint rg "${IMAGE}" --version
+timeout 30 docker run --rm "${IMAGE}" agent chat --dry-run

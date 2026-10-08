@@ -49,3 +49,8 @@ compile_pip_requirements(
     requirements_txt = "requirements.lock",
     tags = ["manual"],
 )
+
+exports_files(
+    ["AGENTS.md"],
+    visibility = ["//visibility:public"],
+)

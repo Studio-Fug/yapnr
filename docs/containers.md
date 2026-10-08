@@ -73,6 +73,13 @@ counts rebuilds of one KiCad version, and such a tag is never overwritten), plus
 [Licenses and source](#licenses-and-source)). The base is rebuilt under a new `N` for Ubuntu
 security updates (see [releases](releases.md#maintaining-the-images)).
 
+## Agent-directed design
+
+Run `agent chat` in an interactive container to use the bundled Codex CLI.
+Engineering guidance ships in the wheel; see [the workflow](agent-workflow.md)
+for authentication, mounts, resource limits, resume and validation gates.
+The existing viewer Ask chat remains read-only.
+
 ## Quick start
 
 ```sh

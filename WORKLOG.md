@@ -16,6 +16,15 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
+- **Prompt-to-PCB agent workflow**: owner-provided engineering workflow is now
+  scoped into AGENTS.md; the installed wheel ships exact instructions and execution
+  guide. `agent init` preserves contracts/checkpoints, `agent instructions` exposes
+  guidance and `agent chat` opens an operator-owned interactive Codex/Claude terminal.
+  The image includes checksum-pinned Codex and Git; no credentials or paid model
+  sessions run in CI. Focused bootstrap/installed-wheel/container checks and hosted
+  validation are in progress. Complete populated RF assembly acceptance remains #97,
+  not satisfied by DUT-only packaging smoke.
+
 - **External RF packaging (#96)**: collect every RF Bazel subpackage explicitly
   without numerical dependency closure in the wheel collector. Export/report,
   planar, Palace, coupons and order0 modules now ship, with the authoritative

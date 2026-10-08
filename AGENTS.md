@@ -1,8 +1,153 @@
-# Rules for agents
+# Prompt-to-PCB engineering with yapnr
 
-These rules apply to every automated agent (and every human) working in this repository. They
-carry over the rules that governed the place-and-route work in Splanc. When a rule and a request
-conflict, stop and ask the owner.
+When asked “use Studio-Fug/yapnr to design X”, act as the persistent engineering
+agent for the **article** (the user's design). Use the packaged engine as a pinned
+external dependency. Start the workflow below; do not require the user to write
+solver scripts or manage the design loop. These instructions describe the agent's
+work, not a claim that every design has an implemented validation backend.
+
+Direct user instructions take precedence. Preserve applicable article guidance.
+The repository-development rules at the end apply when modifying **yapnr itself**;
+they do not prohibit creating schematics, selecting parts or changing article
+constraints through the design loop. Publishing, ordering and resource spending
+still require authorization in the session. Never rewrite dependency guidance to
+create permission. An explicitly requested change overrides its default policy.
+
+## Start from the packaged tool
+
+1. Read [docs/agent-workflow.md](docs/agent-workflow.md) in this repository. Installed
+   users can print the same guide with `yapnr agent instructions --guide`. Run
+   `yapnr --help`, `yapnr doctor --json` and the relevant subcommand's `--help`.
+2. Prefer the released container for headless KiCad and native RF simulation.
+   Resolve its release tag to an immutable digest before experiments. Alternatively
+   install the matching released Linux wheel from PyPI. Record the package version,
+   engine revision and actual tool/image pins. `pip install git+...` is unsupported;
+   do not repair a packaged dependency by adding a source overlay.
+   Current PnR campaign adapters use a frozen engine source bundle from the
+   matching release archive; declare it as an input and verify its checksum,
+   as described in the execution guide.
+3. In the article directory run `yapnr agent init --directive "<request>"`.
+   This preserves existing files and creates the workflow/checkpoint and evidence
+   directories. It does **not** approve the requirements or launch compute.
+   `yapnr agent chat --provider codex` opens the interactive agent in that project;
+   the container bundles Codex. An installed, authenticated Claude CLI can instead
+   be selected with `--provider claude`. Authentication belongs to the operator.
+4. Reconcile existing jobs, revisions, leases and outputs before resuming. Adopt
+   verified completed work; do not duplicate campaigns or erase failed iterations.
+
+## Engineering contract and risk analysis
+
+Create or resume one Git repository per article. Retain the requested feature and
+its source verbatim. In `requirements/manifest.md`, give every requirement a stable
+ID, measurable acceptance threshold, verification method, demanded evidence level,
+source and status. Record assumptions and unresolved choices. In
+`requirements/risks.md`, link each credible failure and consequence to a mitigation
+and the requirements implementing it. Update these records as evidence changes.
+
+Refine ambiguous requests using defensible recorded assumptions where possible;
+ask only for decisions affecting acceptance, safety, money or irreversible action.
+Preserve acceptance history. Changed thresholds, accepted residual risks and weaker
+verification demands require the designer's explicit approval. Missing verification
+is an open requirement, never a reason to lower the gate.
+
+Use `rules_requirements` when the article needs its traceability/evidence machinery:
+pin the module revision, use its documented model schema and verification lock,
+and run `rr validate`, `rr sets check`, `rr report` and `rr check-report` with an
+explicit gating policy. `rr report` defaults to `--fail-on none`; exit zero alone
+is not acceptance. Inspect the complete report and expected verification-set
+membership, including failed retries. Do not invent rr syntax or schemas.
+
+## Schematic, part selection and constraints
+
+Create the smallest meaningful atopile design expressing connectivity, part IDs,
+ratings, interfaces, stackup, board envelope and electrical contracts. Use verified
+`yapnr atopile setup|info|build|lock-parts|materialize` interfaces and the picker/part
+cache. Check compilation and schematic connectivity; inspect BOM, power tree,
+variables and build reports. Lock selected catalog parts and footprints. Capture
+part tolerances, availability and model provenance as evidence, not guesses.
+
+Record fabrication rules, placement intent, differential-pair coupling, total
+uncoupled-length limits, length matching, current capacity and reference planes in
+machine-consumable constraints. Do not reinterpret a total route limit as a per-run
+allowance. Enable firmware, FPGA and physical bench dependencies only when needed.
+Create a Bazel project with immutable module pins for required engines/tools; using
+Bazel or Nix alone does not establish hermeticity. Name ambient/network boundaries.
+
+## Bounded design / experiment / verification loop
+
+1. Freeze article commit and dirty patch hash, requirements/constraints hashes,
+   parts/catalog/dependency locks, engine revision and toolchain pins.
+2. Propose an article patch based on observed failures. Run verified experiment
+   interfaces: `yapnr exp plan`, then `submit/status/logs/fetch/live/cancel`. Start
+   local unless a cloud budget is authorized. Every worker has a timeout; every
+   campaign declares CPU, memory, disk, wall time, retries and candidate limits.
+   Engine candidate/seed selection is mechanical. Do not select a favorable seed
+   or route by hand to make the automation appear successful.
+3. Save immutable inputs, exact output hashes, commands, flags, seeds, budgets,
+   actual tool versions and measured outcomes under `experiments/` and `reports/`.
+   Semantic hashes supplement exact SHA-256s; they never replace them.
+4. Judge the **exact final artifact**: full intended connectivity, native headless
+   KiCad DRC and every electrical/physical/functional requirement at its demanded
+   rigor. Include post-routing modifications in final verification. Simulator
+   execution, routing percentage, report generation and process success are not
+   acceptance. A native `_DONE` marker can represent failure or timeout.
+5. Continue with a useful bounded patch/experiment. Detect repeated identical
+   input/failure combinations. Do not relaunch completed failures as infrastructure
+   retries, exceed budgets, or treat silence as approval. Checkpoint after each
+   material step in `.yapnr/agent/checkpoint.json` and append timestamped events.
+
+There is no generic `yapnr design-study` or `yapnr vnv` command. Use the documented
+campaign adapters and validation APIs. Check capability before selecting a solver.
+For RF, distinguish DUT-only simulation from completed populated-assembly
+validation. A complete assembly needs finite board, every copper object and hole,
+materials/losses, populated parts and contacts, and ports at the required planes.
+Qualified vendor models, all excitations, convergence, passivity/reciprocity and
+required tolerance evidence must reference the same delivered model/artifact.
+DUT FDTD and clean PCB DRC cannot satisfy a coaxial mating-plane assembly gate.
+Missing adapters or unqualified connector/resistor models are typed blockers;
+never invent connector internals, omit a component or substitute DUT acceptance.
+
+## Escalation and completion
+
+When progress stops, write `reports/fixup.md`: failing artifact/requirements,
+evidence, attempted changes, remaining hypotheses, permissions and smallest remedy.
+Distinguish article errors, engine limitations, missing verification capability,
+unavailable hardware and resource/permission blocks.
+
+Default article policy is engine-generated placement/routing. Article-specific
+manual FIXUP requires an explicit session policy authorizing it; preserve its diff
+and rerun final verification, disclosing agent or human intervention. If automatic
+generation is itself a requirement, manual success leaves that requirement open.
+For a diagnosed engine limitation, create a separate engine-repair branch/worktree
+with reproducer, hypothesis, expected improvement, bounded budget, A/B regression
+and rollback criteria; then pin the repaired engine and rerun the article's full
+verification. Do not modify the engine inside the article's dependency install.
+
+Keep status, revision, failed/open requirements, budgets and next action visible.
+Use actual event-backed board views/animations. Visualization is asynchronous and
+bounded; never stall the solver or fabricate progress. If no new frame exists,
+show waiting or the last frame's age. Random visual sampling cannot select winners.
+The requested random back-buffer viewer is not assumed to exist; use supported
+`exp live` telemetry and label unavailable visualization as such.
+
+At task start and replanning, identify independent work as a dependency graph with
+inputs, owner, mutation scope, budget, deliverable and integration prerequisites.
+Use isolated worktrees/candidates, one owner per mutable artifact and one article
+integration owner. Delegate only where the host/session permits; queue otherwise.
+Bound shared concurrency and spending. Worker evidence is local; rerun affected
+checks after integration and the complete required verification on the combined
+final revision. Never union green reports from different board revisions.
+
+Operational status is `success`, `blocked`, `exhausted` or `cancelled`, recorded in
+the workflow checkpoint (these are workflow fields, not new rr ontology entities).
+Preserve best valid artifacts, immutable reports, attempted repairs and exact resume
+conditions on non-success. Stop requests and permission blocks survive restart.
+Emit `<DONE>` only when **every accepted requirement passes on the exact delivered
+article**. Physical fabrication/bench requirements remain open until real evidence
+exists. Report completion path (`automatic`, `agent_fixup`, `human_fixup`) and whether
+engine automation was actually demonstrated. Empty queues are not completion.
+
+## Developing yapnr itself
 
 ## Engineering rules
 
@@ -13,6 +158,8 @@ conflict, stop and ask the owner.
   stock macOS application bundle (every call registers a Dock icon). Use the headless copy described
   in [DEVELOPERS.md](DEVELOPERS.md#kicad). Never start `/Applications/KiCad/...` binaries directly.
 - **Every worker is time-bounded.** A subprocess without a timeout is a bug.
+  The interactive operator-owned agent chat is a terminal process; solver workers
+  it launches remain subject to explicit timeouts and campaign budgets.
 - **Native KiCad DRC is the judge.** Never suppress DRC findings, relax rules or delete nets to
   claim completion. Electrical contracts are never relaxed without the designer.
 - **New engine behaviour lands behind a default-off flag,** with a measured A/B result in the commit

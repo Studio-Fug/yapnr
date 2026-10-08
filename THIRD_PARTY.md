@@ -175,3 +175,15 @@ image, and this file is at `/usr/share/doc/yapnr/THIRD_PARTY.md`.
 
 The yapnr logo, mark and favicons in `branding/` are project assets created for yapnr (see
 [docs/about-the-name.md](docs/about-the-name.md)); they are covered by the repository license.
+
+### Interactive Codex terminal
+
+The application image installs OpenAI Codex 0.161.0 native Linux binaries from
+the official npm architecture archives, checked against immutable SHA-512 pins
+in `docker/yapnr/codex.lock.json`. Source is
+[97901140](https://github.com/openai/codex/tree/979011409de0a60b52f179721948e65531d26144).
+Codex is Apache-2.0; its LICENSE/NOTICE and dependency notices are shipped in
+`/usr/share/doc/yapnr/licenses/codex/`. The separate ripgrep and bubblewrap binaries
+retain their upstream licenses and source links there. Optional voice and bundled
+zsh runtimes are excluded. Claude Code is not redistributed. Credentials and
+provider accounts are supplied by the operator and are never part of the image.

@@ -184,12 +184,14 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--json", action="store_true", help="machine-readable output")
     doctor.set_defaults(func=_cmd_doctor)
 
+    from yapnr.agent.cli import register as register_agent
     from yapnr.exp.cli import register as register_exp
     from yapnr.fab.cli import register as register_fab
     from yapnr.frontends.atopile.cli import register_atopile, register_picker
     from yapnr.order.cli import register as register_order
     from yapnr.partcache.cli import register as register_part_cache
 
+    register_agent(commands)
     register_atopile(commands)
     register_picker(commands)
     register_part_cache(commands)

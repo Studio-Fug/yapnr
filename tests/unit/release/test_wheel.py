@@ -79,7 +79,14 @@ class WheelTest(unittest.TestCase):
         self.assertIn("Root-Is-Purelib: false", wheel)
 
     def test_package_files(self):
-        for name in ["yapnr/__init__.py", "yapnr/__main__.py", "yapnr/cli.py"]:
+        for name in [
+            "yapnr/__init__.py",
+            "yapnr/__main__.py",
+            "yapnr/cli.py",
+            "yapnr/agent/cli.py",
+            "yapnr/agent/AGENTS.md",
+            "yapnr/agent/workflow.md",
+        ]:
             self.assertIn(name, self.names)
         # Only the package and its metadata: no tests, tools or repository files.
         for name in self.names:
@@ -145,6 +152,14 @@ class WheelTest(unittest.TestCase):
             python = os.path.join(env_root, "bin", "python")
             env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
             env["YAPNR_RF_REQUIRE_NATIVE"] = "1"
+            for name in (
+                "OPENBLAS_NUM_THREADS",
+                "OMP_NUM_THREADS",
+                "MKL_NUM_THREADS",
+                "VECLIB_MAXIMUM_THREADS",
+                "YAPNR_RF_THREADS",
+            ):
+                env[name] = "1"
             subprocess.run(
                 [python, "-I", "-m", "ensurepip"],
                 cwd=root,
@@ -174,6 +189,10 @@ class WheelTest(unittest.TestCase):
             shutil.copyfile(smoke, copied)
             probe = (
                 "import pathlib,runpy,yapnr; "
+                "from yapnr.agent.cli import initialize,instructions; "
+                "assert '<DONE>' in instructions(); "
+                "initialize('article', 'Design X'); "
+                "assert pathlib.Path('article/requirements/manifest.md').exists(); "
                 "assert pathlib.Path(yapnr.__file__).resolve().is_relative_to(pathlib.Path('env').resolve()); "
                 "runpy.run_path('smoke.py', run_name='__main__')"
             )

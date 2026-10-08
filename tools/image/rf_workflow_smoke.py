@@ -5,12 +5,28 @@ This tiny-grid packaging check makes no claim of RF performance qualification.
 
 from __future__ import annotations
 
+import os
 import tempfile
 from dataclasses import replace
 from pathlib import Path
 
 
 def main() -> None:
+    # Set BLAS caps before importing NumPy/Torch, not after pool creation.
+    for name in (
+        "OPENBLAS_NUM_THREADS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+        "YAPNR_RF_THREADS",
+    ):
+        os.environ[name] = "1"
+    import torch
+
+    # Tiny smoke workloads otherwise oversubscribe shared CI/Bazel workers.
+    os.environ["YAPNR_RF_THREADS"] = "1"
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
     from yapnr.rf.cases import divider
     from yapnr.rf.driver import design
     from yapnr.rf.export.kicad import read_footprint

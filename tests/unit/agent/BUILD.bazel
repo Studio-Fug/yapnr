@@ -1,0 +1,3 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+yapnr_py_tests(deps = ["//yapnr/agent"])

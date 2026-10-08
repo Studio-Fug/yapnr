@@ -86,6 +86,7 @@ cycle.
 | `yapnr-X.Y.Z-py3-none-manylinux_2_34_{x86_64,aarch64}.whl` | release assets: the stamped wheels, one per Linux architecture (with yapnr.rf's native FDTD library) |
 | `yapnr-docs-X.Y.Z.tar.gz`                                  | release asset: the documentation site                                                                |
 | `SHA256SUMS`                                               | release asset: checksums of the above                                                                |
+| Both Linux wheels                                          | PyPI project `yapnr`, from the same tested Bazel artifacts                                           |
 | `ghcr.io/studio-fug/yapnr`                                 | `X.Y.Z`, `X.Y`, `latest` (see [containers](containers.md#tags))                                      |
 
 Every release file and image is attested; check one with
@@ -130,7 +131,9 @@ archive_override(                              # moving to the BCR = deleting th
 2. **ci:** all of `ci.yaml` at the tag (lint, test, docs).
 3. **image:** `image.yaml`, publishing `X.Y.Z`, `X.Y` and `latest` (release candidates:
    `X.Y.Z-rc.N` only).
-4. **release:** assembles the files above, attests them, creates a **draft** GitHub release with
+4. **pypi:** checks the version and both Linux architectures, then publishes the tested Bazel
+   wheels using PyPI Trusted Publishing (OIDC). No API token is stored in GitHub.
+5. **release:** assembles the files above, attests them, creates a **draft** GitHub release with
    the files and the notes (a prerelease for `-rc` tags), then publishes it. Nothing follows the
    publish step, so the workflow works with immutable releases.
 
@@ -138,7 +141,30 @@ archive_override(                              # moving to the BCR = deleting th
 `gh workflow run release.yaml --ref <branch>`. It runs every job and uploads the release files as a
 workflow artifact, writes the release notes into the run summary (the header for the placeholder
 tag `v0.0.0`, and the notes GitHub would generate, through the same API and `.github/release.yml`),
-and publishes nothing: no image tags, no GitHub release.
+and publishes nothing: no image tags, no GitHub release, no PyPI upload.
+
+## PyPI installation and setup
+
+After a release is published:
+
+```sh
+python -m pip install "yapnr==X.Y.Z" --extra-index-url https://download.pytorch.org/whl/cpu
+```
+
+The published wheels support Linux x86-64 and ARM64 with glibc 2.34 or newer. They include
+RF export modules, coupon resources, the PALACE schema, and the native FDTD library. Headless
+KiCad and external EM solvers are separate runtime requirements; use the pinned container when
+those are needed.
+
+Before the first upload, a PyPI project owner must register a trusted publisher (or a pending
+publisher for a new project): project `yapnr`, GitHub owner `Studio-Fug`, repository `yapnr`,
+workflow `release.yaml`, environment `pypi`. Configure the GitHub environment with release
+branch/tag restrictions. These names must match exactly. The workflow alone cannot register
+the publisher on PyPI. See [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/).
+
+Manual dry runs never request a publishing token or upload distributions. Only verified release
+tags publish; release candidates use their PEP 440 `rc` version. PyPI versions are immutable:
+fix a failed distribution with a new version rather than replacing an existing release.
 
 ## Release checklist (owner)
 

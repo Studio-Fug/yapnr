@@ -19,3 +19,13 @@ filegroup(
         "predictions/D2/runs/d2-star-sched/result.json",
     ],
 )
+
+# Installed RF coupon catalog resources, collected without solver dependencies.
+exports_files([
+    "predictions/D1-d1c/runs/d1-star/footprint.kicad_mod",
+    "predictions/D1-d1c/runs/d1-star/result.json",
+    "predictions/D1/runs/d1-star/footprint.kicad_mod",
+    "predictions/D1/runs/d1-star/result.json",
+    "predictions/D2/runs/d2-star-sched/footprint.kicad_mod",
+    "predictions/D2/runs/d2-star-sched/result.json",
+])

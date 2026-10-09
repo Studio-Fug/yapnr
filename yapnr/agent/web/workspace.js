@@ -31,6 +31,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
     newNote: { title: '', body: '' },
     sessionId: '',
     messagesKey: '',
+    sending: false,
     providers: null,
     chatDrafts: (() => {
       try {
@@ -1736,7 +1737,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
       }
       $('chat-status').textContent = status;
       $('stop').disabled = status === 'idle' && !state.data?.harness?.enabled;
-      $('send').disabled = status !== 'idle';
+      $('send').disabled = state.sending;
       await refreshRequests();
     } catch (e) {
       say(e.message);
@@ -1895,11 +1896,15 @@ import { mountTraceability } from '/yapnr/traceability.js';
     model.value = selected;
   }
   $('send').onclick = async () => {
+    if (state.sending) return;
     const submittedContext = structuredClone({
       selection: state.selection,
       scope: state.selectionScope || null,
     });
-    const text = $('prompt').value.trim();
+    const submittedProject = state.project;
+    const submittedSession = session();
+    const submittedDraft = $('prompt').value;
+    const text = submittedDraft.trim();
     if (!text) return;
     if (!session()) {
       say('Create or select a conversation first.');
@@ -1910,6 +1915,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
       return;
     }
     const [providerID, modelID] = $('model').value.split('::');
+    state.sending = true;
     $('send').disabled = true;
     try {
       await json(endpoint('message'), {
@@ -1922,12 +1928,20 @@ import { mountTraceability } from '/yapnr/traceability.js';
               JSON.stringify(submittedContext, null, 2)
             : ''),
       });
-      $('prompt').value = '';
-      state.chatDrafts[state.project + ':' + session()] = '';
+      if (
+        state.project === submittedProject &&
+        session() === submittedSession &&
+        $('prompt').value === submittedDraft
+      ) {
+        $('prompt').value = '';
+        state.chatDrafts[state.project + ':' + session()] = '';
+      }
       localStorage.setItem('yapnr.ask-drafts', JSON.stringify(state.chatDrafts));
       await refreshChat();
     } catch (e) {
       say(e.message);
+    } finally {
+      state.sending = false;
       $('send').disabled = false;
     }
   };

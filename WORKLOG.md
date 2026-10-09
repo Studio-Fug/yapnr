@@ -564,3 +564,11 @@ experiment/web tests pass. Packaged live browser QA verifies twelve native
 progress bars, four nested candidates, collapse/expand, selection, and visible
 progress contained within each row. The feature animation uses actual completed
 results; unknown progress remains indeterminate.
+
+### Questions during active agent turns
+
+Keep Send available while the agent is working, so users can submit questions
+and corrections to the existing conversation. Disable it only during delivery,
+guard duplicate clicks, and preserve a newer draft or a switched conversation
+while the request is pending. Packaged browser QA intercepts the delivery to
+verify busy-state sending without a paid test turn.

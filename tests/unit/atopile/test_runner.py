@@ -109,6 +109,27 @@ class RunnerTest(unittest.TestCase):
         with mock.patch.dict(os.environ, self.env):
             return runner.build(options, log=lambda _text: None)
 
+    def test_authoring_captures_parts_for_a_self_contained_offline_build(self):
+        authored = self.build(offline=False)
+        self.assertTrue(authored.ok, authored.summary)
+        self.assertEqual(authored.summary["part_capture_errors"], [])
+        self.assertTrue((self.project / ".yapnr/parts/cache").is_dir())
+        self.assertTrue((self.project / "elec/src/parts" / testing.SYNTHETIC_PART).is_dir())
+        options = runner.BuildOptions(
+            project=self.project,
+            out=self.root / "replayed",
+            cache=str(self.root / "unavailable-operator-cache"),
+            kicad_cli=str(self.cli),
+            timeout=60,
+            work_root=self.root / "work",
+            offline=True,
+        )
+        with mock.patch.dict(os.environ, self.env):
+            replayed = runner.build(options, log=lambda _text: None)
+        self.assertTrue(replayed.ok, replayed.summary)
+        self.assertEqual(replayed.summary["parts"], authored.summary["parts"])
+        self.assertEqual(replayed.input_id, authored.input_id)
+
     def test_build_copies_named_outputs_only(self):
         result = self.build(keep_work=True)
         self.assertTrue(result.ok)

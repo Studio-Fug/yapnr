@@ -3,7 +3,7 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-08 (workspace-native conversation and artifact review). Previous status:
+Last updated: 2026-10-09 (workspace-native conversation and artifact review). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 `claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
 on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
@@ -16,6 +16,12 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
+- **On-demand parts**: authoring CLI builds fetch missing component queries, retain response
+  digests and selected assets/locks in the article, and replay offline/frozen. Operator
+  component-service sign-in is separate from model authentication; no shared catalog
+  uploads or prepopulated local library are required. Live selection remains blocked
+  where that service returns an authentication error.
+
 - **Workspace search and Performance**: Cmd/Ctrl-F opens a floating source/component/net
   search, including in embedded frames; repeated shortcuts preserve/clear queries.
   Inspect tab layouts migrate to the dialog. Performance holds native controls and
@@ -25,7 +31,8 @@ board edges, the hierarchical ladder driver and their animations on
   failures before PnR, and opens their result JSON in read-only source tabs. Restored active
   tabs initialize on first drawer open. Embedded styling and saved theme apply before
   renderer scripts load, avoiding the legacy-theme flash. Live discovery is read-only
-  and retains failed attempts.
+  and retains failed attempts. The workspace server accepts cold-start asset bursts
+  without dropping concurrent proxy connections.
 
 - **Experiments embed**: workbench tabs own panel visibility; the native legacy drawer
   controller is bypassed in embeds. Experiment lane selections follow through to the live

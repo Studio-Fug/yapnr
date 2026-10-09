@@ -87,7 +87,7 @@ def _cmd_build(args: argparse.Namespace) -> int:
         stock_footprints=args.stock_footprints,
         kicad_cli=args.kicad_cli,
         replace_parts=args.replace_parts,
-        offline=not args.online,
+        offline=getattr(args, "offline", False) or args.frozen,
         files=_read_list(args.files_from) if args.files_from else None,
     )
     try:
@@ -142,6 +142,25 @@ def _cmd_materialize(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_auth(args):
+    import subprocess
+
+    from yapnr.frontends.atopile import toolchain
+
+    tool = toolchain.discover()
+    return subprocess.call(
+        [
+            str(tool.python),
+            "-I",
+            "-m",
+            "atopile",
+            "auth",
+            args.auth_action,
+            *(["--timeout", str(args.timeout)] if args.auth_action == "login" else []),
+        ]
+    )
+
+
 def register_atopile(commands: "argparse._SubParsersAction") -> None:
     top = commands.add_parser(
         "atopile", help=f"the atopile {ATOPILE_VERSION} toolchain (setup, build, parts)"
@@ -161,7 +180,14 @@ def register_atopile(commands: "argparse._SubParsersAction") -> None:
     info.add_argument("--root", help="environments directory, as given to setup --root")
     info.set_defaults(func=_cmd_info)
 
-    build = sub.add_parser("build", help="build an atopile project offline, in isolation")
+    auth = sub.add_parser("auth", help="operator-owned Atopile component service authentication")
+    auth.add_argument("auth_action", choices=["login", "logout", "status"])
+    auth.add_argument("--timeout", type=int, default=120)
+    auth.set_defaults(func=_cmd_auth)
+
+    build = sub.add_parser(
+        "build", help="build in isolation; discover missing selections unless --offline or --frozen"
+    )
     build.add_argument("project", help="the directory holding ato.yaml")
     build.add_argument("--build", "-b", default="default", help="the ato.yaml build")
     build.add_argument("--target", "-t", action="append", help="build target (repeatable)")
@@ -186,10 +212,12 @@ def register_atopile(commands: "argparse._SubParsersAction") -> None:
         "--files-from",
         help="copy only these files of the project (one path per line, relative to it)",
     )
-    build.add_argument(
-        "--online",
-        action="store_true",
-        help="let atopile fetch parts that are not locked from EasyEDA (not reproducible)",
+    network = build.add_mutually_exclusive_group()
+    network.add_argument(
+        "--online", action="store_true", help="discover missing parts (authoring default)"
+    )
+    network.add_argument(
+        "--offline", action="store_true", help="use only captured component queries and local parts"
     )
     build.set_defaults(func=_cmd_build)
 

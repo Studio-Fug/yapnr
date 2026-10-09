@@ -40,6 +40,7 @@ class CloudTest(unittest.TestCase):
             path.write_text("[local]\nworkers = 2\n")
             child = root / "design"
             child.mkdir()
+            (child / ".yapnr/parts").mkdir(parents=True)
             with patch.object(config.Path, "cwd", return_value=child), patch.dict(
                 os.environ, {}, clear=True
             ):

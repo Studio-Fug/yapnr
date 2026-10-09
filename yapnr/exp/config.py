@@ -327,7 +327,8 @@ def config_path(explicit: Optional[str] = None) -> Path:
                 project_config = marker / "workspace/cloud.toml"
                 if project_config.is_file():
                     return project_config
-                break
+                if (marker / "workspace").is_dir() or (marker / "workflow").is_dir():
+                    break
     raw = raw or DEFAULT_PATH
     return Path(os.path.expanduser(raw))
 

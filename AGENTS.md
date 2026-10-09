@@ -112,7 +112,13 @@ Create the smallest meaningful atopile design expressing connectivity, part IDs,
 ratings, interfaces, stackup, board envelope and electrical contracts. Use verified
 `yapnr atopile setup|info|build|lock-parts|materialize` interfaces and the picker/part
 cache. Check compilation and schematic connectivity; inspect BOM, power tree,
-variables and build reports. Lock selected catalog parts and footprints. Capture
+variables and build reports. Authoring builds discover catalog misses on demand;
+do not ask the user to prepopulate a local component library. Resolve an explicit
+component-service authentication failure through operator sign-in, rather than
+misdiagnosing it as missing local catalog data. Retain the discovered responses,
+selected assets and locks in the article; replay with `--offline` or `--frozen`.
+Use `yapnr atopile auth login` for that service, keeping credentials outside the
+article. Lock selected catalog parts and footprints. Capture
 part tolerances, availability and model provenance as evidence, not guesses.
 
 Record fabrication rules, placement intent, differential-pair coupling, total

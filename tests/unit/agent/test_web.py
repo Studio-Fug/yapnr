@@ -173,6 +173,24 @@ class WebTest(unittest.TestCase):
             },
         )
 
+    def test_native_experiment_lanes_are_data_with_explicit_missing_inputs(self):
+        status, _, raw = self.request("/yapnr/api/experiment-lanes/article")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(raw), {"runs": []})
+        self.server.experiments["article"] = "https://viewer.example.test"
+        with patch.object(
+            web,
+            "api",
+            return_value={"lanes": {"candidate": {"progress": {"state": "done", "fraction": 1}}}},
+        ) as remote:
+            status, _, raw = self.request("/yapnr/api/experiment-lanes/article")
+        self.assertEqual(status, 200)
+        run = json.loads(raw)["runs"][0]
+        self.assertEqual(run["kind"], "pnr")
+        self.assertEqual(run["status"], "finished")
+        self.assertEqual(run["inputs"], [])
+        remote.assert_called_once_with("https://viewer.example.test", "/api/state")
+
     def test_source_index_uses_configured_viewer_and_returns_only_navigation(self):
         self.server.experiments["article"] = "https://viewer.example.test"
         with patch.object(

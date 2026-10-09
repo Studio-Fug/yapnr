@@ -361,11 +361,20 @@ import { mountTraceability } from '/yapnr/traceability.js';
         entry.experimentsBrowser = mountExperiments(container, {
           project: key,
           open: openSource,
+          artifact: id => {
+            const item = state.data?.artifacts?.find(item => item.id === id);
+            if (item) showArtifact(item);
+          },
+          select: run => {
+            for (const id of ['board', 'schematic', 'three'])
+              sendView(state.viewerFrames[id], 'yapnr-select-lane', { lane: run.lane });
+          },
           report: say,
         });
         entry.experimentsProject = key;
       }
-      container = entry.experimentsBrowser.native;
+      delete state.viewerFrames.experiments;
+      return;
     }
     state.viewerFrames[id] = mountViewer(
       container,
@@ -1165,6 +1174,30 @@ import { mountTraceability } from '/yapnr/traceability.js';
       }),
       node('h2', item.title),
       node('div', item.id, 'muted')
+    );
+    body.append(
+      button('Show experiment provenance', async () => {
+        try {
+          const data = await json(endpoint('experiments'));
+          const run =
+            data.runs.find(run => run.id === item.metadata?.experiment) ||
+            data.runs.find(run =>
+              run.outputs?.some(
+                ref =>
+                  ref.sha256 === item.sha256 && ['verified', 'observed'].includes(ref.verification)
+              )
+            );
+          if (!run) {
+            say('No producing experiment recorded for this artifact.');
+            return;
+          }
+          wb.open('experiments');
+          ensureViewer('experiments');
+          wb.registry.get('experiments').experimentsBrowser.reveal(run.id);
+        } catch (error) {
+          say(error.message);
+        }
+      })
     );
     reviewControls(body, [item]);
     const view = node('div', undefined, 'view');

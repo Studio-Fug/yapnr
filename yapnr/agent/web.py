@@ -393,6 +393,30 @@ class Handler(BaseHTTPRequestHandler):
                         ],
                     }
                 )
+            live_experiments = re.fullmatch(
+                r"/yapnr/api/experiment-lanes/([a-z0-9-]+)", parsed.path
+            )
+            if live_experiments:
+                root = self.server.project(live_experiments[1])
+                target = self.server.experiments.get(live_experiments[1])
+                if not target:
+                    artifacts = self.registry(root)["artifacts"]
+                    target = next(
+                        (
+                            item.get("metadata", {}).get("viewer_url")
+                            for item in reversed(artifacts)
+                            if item["kind"] in ("board", "schematic")
+                            and item.get("metadata", {}).get("viewer_url")
+                        ),
+                        None,
+                    )
+                if target and urlsplit(target).scheme not in ("http", "https"):
+                    target = None
+                from yapnr.experiments import live_attempts
+
+                return self.json(
+                    {"runs": live_attempts(api(target, "/api/state")) if target else []}
+                )
             experiments = re.fullmatch(r"/yapnr/api/experiments/([a-z0-9-]+)", parsed.path)
             if experiments:
                 return self.json({"runs": design.experiments(self.server.project(experiments[1]))})

@@ -191,11 +191,13 @@ def build_parser() -> argparse.ArgumentParser:
     from yapnr.agent.workflow import register as register_workflow
     from yapnr.agent.workspace import register as register_workspace
     from yapnr.exp.cli import register as register_exp
+    from yapnr.experiments import register as register_experiments
     from yapnr.fab.cli import register as register_fab
     from yapnr.frontends.atopile.cli import register_atopile, register_picker
     from yapnr.order.cli import register as register_order
     from yapnr.partcache.cli import register as register_part_cache
 
+    register_experiments(commands)
     register_agent(commands)
     register_workflow(commands)
     register_workspace(commands)

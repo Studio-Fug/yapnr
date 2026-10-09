@@ -270,3 +270,23 @@ The development Mac also runs long place-and-route experiments. On it:
 - Run Bazel niced with `--config=lowmem`, one Bazel server at a time, with the output base on the
   internal disk (see [DEVELOPERS.md](DEVELOPERS.md#bazel)). Check free disk space first.
 - Install tools into a private virtualenv or with `uv`/`pipx`; never into the system Python.
+
+### Record experiments and provenance
+
+Treat each discovery, part-picking, schematic, PnR, simulation, and validation
+attempt as an experiment, including failures. Atopile builds record themselves.
+For other tools, start a record before running the tool:
+
+```sh
+printf '{"seed":0}\n' > simulation-settings.json
+yapnr experiment start --project . --kind simulation --title "RF validation" --input design.kicad_pcb --parameters simulation-settings.json
+yapnr experiment finish E000001 --project . --status passed --output simulation-report.json
+yapnr experiment list --project .
+```
+
+Use the ID returned by `start`, the actual terminal status, all consumed inputs,
+and generated evidence. Record seeds and tool settings in parameters. The workspace
+manages immutable input/output objects and publishes output artifacts. Experiments
+shows typed attempts and upstream/downstream links established by matching content
+hashes; missing historical input evidence remains explicitly unknown. Do not claim
+provenance from filenames alone. The workspace manifest indexes the attempt registry.

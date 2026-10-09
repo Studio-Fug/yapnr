@@ -522,3 +522,13 @@ board edges, the hierarchical ladder driver and their animations on
   nothing, and Adam's `addcmul` also rounds differently between the torch builds (#6).
 - Comparing one seed's HPWL between placer variants, or across platforms: the per-seed spread
   (about 100 mm, 5 %) exceeds most effects; compare means over seeds on one platform (#6).
+
+### Native typed experiment attempts
+
+Replaced the embedded legacy experiment browser with a native workbench tree.
+Added durable attempt records, immutable consumed inputs/produced artifacts,
+terminal failures, seeds/settings, generic experiment CLI, automatic Atopile
+recording, historical build and routing import, discovery/picker stage evidence,
+and hash-supported upstream/downstream navigation. Native routing telemetry is
+projected as data; absent provenance is explicitly unknown. The manifest indexes
+the registry and the workspace journal records attempt transitions.

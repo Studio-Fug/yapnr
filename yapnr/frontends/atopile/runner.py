@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
+from yapnr import experiments as experiment_records
 from yapnr.frontends.atopile import env as env_mod
 from yapnr.frontends.atopile import kicad, outline, parts, proc, toolchain
 from yapnr.frontends.atopile.picker import catalog as catalog_mod
@@ -173,6 +174,8 @@ def _copy_project(source: Path, dest: Path, files: Optional[Sequence[str]] = Non
         skip = [n for n in names if n in COPY_IGNORE]
         if Path(directory) == source:
             skip += [n for n in names if n in COPY_IGNORE_TOP]
+        if Path(directory) == source / ".yapnr":
+            skip += [n for n in names if n in ("workspace", "workflow")]
         return skip
 
     shutil.copytree(source, dest, ignore=ignore, symlinks=False)
@@ -297,6 +300,49 @@ def _catalogs(
 
 
 def build(options: BuildOptions, log=print) -> BuildResult:
+    project = Path(options.project).resolve()
+    root = experiment_records.workspace_root(project)
+    inputs = sorted(
+        path
+        for path in project.rglob("*.ato")
+        if not any(
+            part in COPY_IGNORE + (".ato", ".yapnr") for part in path.relative_to(project).parts
+        )
+    )[:256]
+    inputs += [path for path in (project / "ato.yaml", project / parts.LOCK_NAME) if path.is_file()]
+    attempt = experiment_records.begin(
+        root,
+        "schematic",
+        "Atopile · " + options.build,
+        inputs,
+        {"build": options.build, "targets": list(options.targets), "offline": options.offline},
+    )
+    try:
+        result = _build(options, log)
+    except BaseException as error:
+        experiment_records.finish(
+            root,
+            attempt["id"],
+            "cancelled" if isinstance(error, KeyboardInterrupt) else "failed",
+            summary={"error_type": type(error).__name__},
+        )
+        raise
+    outputs = [
+        path
+        for path in result.out.iterdir()
+        if path.is_file() and path.resolve().is_relative_to(root)
+    ]
+    experiment_records.finish(
+        root,
+        attempt["id"],
+        "timed out" if result.timed_out else "passed" if result.ok else "failed",
+        outputs,
+        {"returncode": result.returncode, "input_id": result.input_id},
+    )
+    return result
+
+
+def _build(options: BuildOptions, log=print) -> BuildResult:
     project = Path(options.project).resolve()
     if not (project / "ato.yaml").is_file():
         raise BuildError(f"{project} has no ato.yaml")

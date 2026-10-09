@@ -253,6 +253,7 @@ def index(project):
                 if (root / ".yapnr/workflow/state.json").is_file()
                 else None
             ),
+            "experiments": ".yapnr/workspace/experiments.json",
             "artifact_reviews": (
                 ".yapnr/workspace/reviews.json" if (folder / "reviews.json").is_file() else None
             ),

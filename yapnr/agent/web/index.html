@@ -28,6 +28,7 @@
 <details class="session-list"><summary>Conversations and focused threads</summary><button id="new-thread">New conversation</button><div id="thread-list"></div></details>
 <div id="messages" aria-live="polite"></div><div id="requests"></div>
 <div id="composer"><div class="actions"><span id="selection-context" class="muted"></span><button id="clear-context">Clear context</button></div><select id="model" aria-label="Model"></select><textarea id="prompt" aria-label="Message" placeholder="Ask about your design, share evidence, or refine a requirement…"></textarea>
+<div id="message-delivery" class="message-delivery" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 <div class="actions"><button id="resume-harness" hidden>Continue workflow</button><button id="send">Send</button><button id="stop" disabled>Stop</button><button id="connect">Connect provider</button></div></div>
 </section>
 <footer id="footer"><button id="pending-actions" hidden>Pending action</button><span id="workflow-label">Workflow not initialized</span><nav id="workflow-bar" aria-label="Engineering workflow"></nav><span id="status" role="status" aria-live="polite"></span><span id="recording"></span></footer>

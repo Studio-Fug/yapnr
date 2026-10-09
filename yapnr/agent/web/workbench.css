@@ -1063,3 +1063,7 @@ dialog::backdrop {
 .assembly-release li { margin: 8px 0; }
 .assembly-release li code { margin-left: 8px; }
 .assembly-release > button, .assembly-release > label, .assembly-release > a { display: block; margin-top: 12px; }
+
+.message-delivery { display: flex; align-items: center; gap: 8px; padding: 10px 0; font-size: 13px; color: var(--yp-ink); }
+.message-delivery[hidden] { display: none; }
+.message-delivery[data-phase="uncertain"] { font-weight: 600; }

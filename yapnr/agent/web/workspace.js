@@ -33,6 +33,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
     sessionId: '',
     messagesKey: '',
     sending: false,
+    delivery: null,
+    chatStatus: null,
     providers: null,
     chatDrafts: (() => {
       try {
@@ -1721,8 +1723,59 @@ import { mountTraceability } from '/yapnr/traceability.js';
     bar.title =
       'Workflow stages, not an estimate of elapsed time or percentage complete. Revisions and rework can move backwards.';
   }
+  function renderDelivery() {
+    const receipt = state.delivery?.project === state.project && state.delivery?.session === session()
+      ? state.delivery : null;
+    const status = state.chatStatus?.project === state.project && state.chatStatus?.session === session()
+      ? state.chatStatus.type : 'idle';
+    $('send').disabled = state.sending;
+    $('send').textContent = state.sending ? 'Sending…' : 'Send';
+    $('chat-status').textContent = receipt?.phase === 'sending' ? 'Sending…' : status === 'idle' ? 'Ready' : status === 'error' ? 'Connection error' : 'Working…';
+    let text = '', spinning = false;
+    if (receipt?.phase === 'sending') { text = 'Sending message…'; spinning = true; }
+    else if (receipt?.phase === 'uncertain') text = 'Could not confirm delivery. Draft retained — check the chat before retrying.';
+    else if (status === 'error') text = receipt ? 'Message delivered · Agent connection unavailable' : 'Agent connection unavailable';
+    else if (status !== 'idle') { text = receipt ? 'Message delivered · Agent working…' : 'Agent working…'; spinning = true; }
+    else if (receipt?.phase === 'delivered') { text = 'Message delivered · Waiting for agent…'; spinning = true; }
+    else if (receipt?.phase === 'answered') text = 'Message delivered · Reply received';
+    const target = $('message-delivery');
+    const key = text + ':' + spinning + ':' + (receipt?.phase || status);
+    if (target.dataset.renderKey === key) return;
+    target.dataset.renderKey = key;
+    target.hidden = !text;
+    target.dataset.phase = receipt?.phase || status;
+    target.replaceChildren();
+    if (spinning) {
+      const spinner = node('span', undefined, 'loading-chiral');
+      spinner.setAttribute('aria-hidden', 'true');
+      target.append(spinner);
+    }
+    if (text) target.append(node('span', text));
+  }
+  async function refreshChatStatus() {
+    if (!session()) return;
+    const id = session(), project = state.project, flight = project + ':' + id;
+    state.statusPending ||= new Set();
+    if (state.statusPending.has(flight)) return;
+    state.statusPending.add(flight);
+    try {
+      const statuses = await json('/session/status' + scope());
+      if (id !== session() || project !== state.project) return;
+      const type = statuses?.[id]?.type || 'idle';
+      state.chatStatus = {project, session: id, type};
+      $('stop').disabled = type === 'idle' && !state.data?.harness?.enabled;
+      renderDelivery();
+    } catch (e) {
+      if (id === session() && project === state.project) {
+        state.chatStatus = {project, session: id, type: 'error'};
+        renderDelivery();
+      }
+    } finally { state.statusPending.delete(flight); }
+  }
   async function refreshChat() {
     if (!session()) return;
+    refreshChatStatus();
+    renderDelivery();
     const id = session(),
       project = state.project;
     const flight = project + ':' + id;
@@ -1730,12 +1783,11 @@ import { mountTraceability } from '/yapnr/traceability.js';
     if (state.chatPending.has(flight)) return;
     state.chatPending.add(flight);
     try {
-      const [messages, statuses] = await Promise.all([
-        json('/session/' + id + '/message' + scope()),
-        json('/session/status' + scope()),
-      ]);
+      const messages = await json('/session/' + id + '/message' + scope());
       if (id !== session() || project !== state.project) return;
-      const status = statuses?.[id]?.type || 'idle';
+      state.chatSnapshot = {project, session: id, ids: messages.map(m => m.info.id)};
+      const status = state.chatStatus?.project === project && state.chatStatus?.session === id
+        ? state.chatStatus.type : 'idle';
       const key =
         status +
         JSON.stringify(messages) +
@@ -1756,11 +1808,22 @@ import { mountTraceability } from '/yapnr/traceability.js';
           $('model').value = previous.model.providerID + '::' + previous.model.modelID;
         }
       }
-      $('chat-status').textContent = status;
+      const receipt = state.delivery;
+      if (receipt?.project === project && receipt?.session === id && receipt.phase === 'delivered' && status === 'idle') {
+        const delivered = messages.findLastIndex(m => m.info.role === 'user' &&
+          !receipt.baseline.includes(m.info.id) && m.parts?.some(p => p.type === 'text' && p.text === receipt.text));
+        if (delivered >= 0 && messages.slice(delivered + 1).some(m => m.info.role === 'assistant' && m.info.time?.completed))
+          receipt.phase = 'answered';
+      }
+      renderDelivery();
       $('stop').disabled = status === 'idle' && !state.data?.harness?.enabled;
       $('send').disabled = state.sending;
       await refreshRequests();
     } catch (e) {
+      if (id === session() && project === state.project) {
+        state.chatStatus = {project, session: id, type: 'error'};
+        renderDelivery();
+      }
       say(e.message);
     } finally {
       state.chatPending.delete(flight);
@@ -1936,19 +1999,21 @@ import { mountTraceability } from '/yapnr/traceability.js';
       return;
     }
     const [providerID, modelID] = $('model').value.split('::');
+    const submittedText = text + (submittedContext.selection
+      ? '\n\nSubmitted engineering context (frozen artifact scope):\n' + JSON.stringify(submittedContext, null, 2) : '');
     state.sending = true;
-    $('send').disabled = true;
+    const receipt = state.delivery = {project: submittedProject, session: submittedSession, phase: 'sending', text: submittedText,
+      baseline: state.chatSnapshot?.project === submittedProject && state.chatSnapshot?.session === submittedSession
+        ? state.chatSnapshot.ids : []};
+    renderDelivery();
     try {
       await json(endpoint('message'), {
         session: session(),
         model: { providerID, modelID },
-        text:
-          text +
-          (submittedContext.selection
-            ? '\n\nSubmitted engineering context (frozen artifact scope):\n' +
-              JSON.stringify(submittedContext, null, 2)
-            : ''),
+        text: submittedText,
       });
+      receipt.phase = 'delivered';
+      renderDelivery();
       if (
         state.project === submittedProject &&
         session() === submittedSession &&
@@ -1958,12 +2023,13 @@ import { mountTraceability } from '/yapnr/traceability.js';
         state.chatDrafts[state.project + ':' + session()] = '';
       }
       localStorage.setItem('yapnr.ask-drafts', JSON.stringify(state.chatDrafts));
-      await refreshChat();
+      refreshChat();
     } catch (e) {
+      if (receipt.phase === 'sending') receipt.phase = 'uncertain';
       say(e.message);
     } finally {
       state.sending = false;
-      $('send').disabled = false;
+      renderDelivery();
     }
   };
   $('prompt').onkeydown = e => {

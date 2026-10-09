@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -59,6 +60,43 @@ def atomic(path, data):
     finally:
         if os.path.exists(name):
             os.unlink(name)
+
+
+def exclude_runtime_snapshots(root):
+    """Keep journals portable without recursively embedding them in Git diffs."""
+    root = Path(root).resolve()
+    result = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--git-path", "info/exclude"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if result.returncode:
+        return
+    path = Path(result.stdout.strip())
+    if not path.is_absolute():
+        path = root / path
+    # The initialized article owns its repository; nested repositories use a scoped rule.
+    top = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    )
+    relative = root.relative_to(Path(top.stdout.strip()).resolve())
+    rule = (
+        "/" + ((relative.as_posix() + "/") if relative != Path(".") else "") + ".yapnr/workspace/"
+    )
+    content = path.read_text() if path.exists() else ""
+    if rule not in content.splitlines():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic(
+            path,
+            (
+                content.rstrip() + "\n# Avoid recursive agent journal snapshots.\n" + rule + "\n"
+            ).encode(),
+        )
 
 
 @contextmanager
@@ -194,6 +232,9 @@ def index(project):
             "files": files,
             "artifacts": artifacts,
             "conversation": ".yapnr/workspace/conversation.jsonl",
+            "harness": (
+                ".yapnr/workspace/harness.json" if (folder / "harness.json").is_file() else None
+            ),
             "opencode_sessions": ".yapnr/workspace/opencode",
             "thread_state": (
                 ".yapnr/workspace/thread-state.json"

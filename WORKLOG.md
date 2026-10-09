@@ -34,7 +34,13 @@ board edges, the hierarchical ladder driver and their animations on
 
 - **Workspace-native browser UI**: replaced the OpenCode overlay with one layout
   for projects, focused/main conversations, artifacts, engineering views and a
-  resizable chat pane. OpenCode remains the headless provider/tool/session runtime.
+  resizable chat pane. Background activity collapses into one spinner/details group;
+  the footer follows controller stages, including review and rework. The journaled
+  main-thread harness continues idle agents with their selected model, stopping at
+  genuine review checkpoints, native questions/permissions and bounded limits.
+  Stop and explicit resume are persistent. Runtime logs remain exportable but are
+  excluded from Git snapshots to prevent recursive chat-summary growth.
+  OpenCode remains the headless provider/tool/session runtime.
   Canonical notes carry immutable focused transcripts into the main conversation
   without starting a model turn; shared document edits use revision checks.
   Pinned sandboxed three.js choices, rendered artifact markup, full conversation

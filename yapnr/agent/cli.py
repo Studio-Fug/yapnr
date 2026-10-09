@@ -21,6 +21,9 @@ def instructions(guide=False):
 def initialize(project, directive=""):
     root = Path(project).resolve()
     root.mkdir(parents=True, exist_ok=True)
+    from yapnr.agent.workspace import exclude_runtime_snapshots
+
+    exclude_runtime_snapshots(root)
     installed = root / ".yapnr/agent"
     installed.mkdir(parents=True, exist_ok=True)
     guide = instructions()

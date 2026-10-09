@@ -26,7 +26,7 @@
         height: 100dvh;
         display: grid;
         grid-template-columns: 230px minmax(0, 1fr) 7px var(--chat-width);
-        grid-template-rows: 58px minmax(0, 1fr) 26px;
+        grid-template-rows: 58px minmax(0, 1fr) 70px;
       }
       button,
       input,
@@ -423,7 +423,7 @@
       }
       #loading {
         position: fixed;
-        inset: 58px 0 26px 230px;
+        inset: 58px 0 70px 230px;
         display: grid;
         place-content: center;
         background: var(--bg);
@@ -440,7 +440,7 @@
       @media (max-width: 800px) {
         body {
           grid-template-columns: 160px minmax(0, 1fr);
-          grid-template-rows: 58px minmax(260px, 1fr) minmax(300px, 1fr) 26px;
+          grid-template-rows: 58px minmax(260px, 1fr) minmax(300px, 1fr) 70px;
         }
         #sidebar {
           grid-row: 2/4;
@@ -470,6 +470,109 @@
         }
         #loading {
           left: 160px;
+        }
+      }
+      #footer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: 16px 24px 16px;
+        gap: 3px 16px;
+        padding: 5px 15px;
+      }
+      #workflow-label {
+        font-size: 12px;
+        color: var(--text);
+        grid-column: 1/-1;
+      }
+      #workflow-bar {
+        grid-column: 1/-1;
+        display: flex;
+        gap: 4px;
+        min-width: 0;
+      }
+      .workflow-step {
+        flex: 1;
+        border-top: 3px solid #35414b;
+        padding-top: 3px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 10px;
+        white-space: nowrap;
+      }
+      .workflow-step.reached {
+        border-color: #426b60;
+      }
+      .workflow-step.current {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      #workflow-bar.paused .current,
+      #workflow-bar.rework .current {
+        border-color: #e3bc72;
+        color: #e3bc72;
+      }
+      .tool-rollup {
+        margin: 12px 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .tool-rollup > summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        list-style: none;
+      }
+      .tool-rollup > summary::after {
+        content: '›';
+        margin-left: 3px;
+      }
+      .tool-rollup[open] > summary::after {
+        transform: rotate(90deg);
+      }
+      .tool-rollup .tool {
+        margin: 8px 0;
+      }
+      .loading-chiral {
+        display: inline-block;
+        width: 13px;
+        height: 13px;
+        border: 2px solid #3e544f;
+        border-top-color: var(--accent);
+        border-right-color: var(--accent);
+        border-radius: 50%;
+        animation: chiral-spin 0.8s linear infinite;
+        flex-shrink: 0;
+      }
+      .activity-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #6a8279;
+        flex-shrink: 0;
+      }
+      .agent-loading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        padding: 8px 0;
+      }
+      @keyframes chiral-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .loading-chiral {
+          animation: none;
+        }
+      }
+      @media (max-width: 800px) {
+        .workflow-step {
+          font-size: 9px;
         }
       }
     </style>
@@ -526,12 +629,17 @@
           placeholder="Describe your design, ask a question, or refine a requirement…"
         ></textarea>
         <div class="actions">
-          <button id="send">Send</button><button id="stop" disabled>Stop</button
+          <button id="resume-harness" hidden>Continue workflow</button
+          ><button id="send">Send</button><button id="stop" disabled>Stop</button
           ><span class="muted">⌘ / Ctrl + Enter</span>
         </div>
       </div>
     </section>
-    <footer id="footer"><span id="status" role="status"></span><span id="recording"></span></footer>
+    <footer id="footer">
+      <span id="workflow-label">Workflow not initialized</span>
+      <nav id="workflow-bar" aria-label="Engineering workflow"></nav>
+      <span id="status" role="status"></span><span id="recording"></span>
+    </footer>
     <div id="loading">Connecting to workspace…</div>
     <dialog id="project-dialog">
       <button class="close" onclick="this.closest('dialog').close()">Close</button>

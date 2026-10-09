@@ -75,6 +75,42 @@ class WebTest(unittest.TestCase):
         response = connection.getresponse()
         return response.status, response.getheaders(), response.read()
 
+    def test_main_message_arms_selected_model_and_stop_disables_continuation(self):
+        with workspace.lock(self.root) as folder:
+            workspace.atomic(
+                folder / "thread-state.json", workspace.encoded({"main_thread": "ses_test"})
+            )
+        calls = []
+
+        def remote(upstream, path, data=None, method=None):
+            if data is not None:
+                calls.append((path, data))
+                return None
+            if "/message?" in path:
+                return []
+            return {"directory": "/projects/article"}
+
+        with patch.object(web, "api", side_effect=remote):
+            status, _, _ = self.request(
+                "/yapnr/api/message/article",
+                {
+                    "session": "ses_test",
+                    "model": {"providerID": "fixture", "modelID": "selected"},
+                    "text": "Synthetic design request",
+                },
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(web.query(self.root)["state"], "requirements_capture")
+            value = web.harness.read(self.root)
+            self.assertTrue(value["enabled"])
+            self.assertEqual(value["model"]["modelID"], "selected")
+            self.assertTrue(calls[0][1]["parts"][0]["metadata"]["yapnr_request"])
+            self.assertEqual(
+                self.request("/yapnr/api/harness-stop/article", {"session": "ses_test"})[0], 200
+            )
+            self.assertFalse(web.harness.read(self.root)["enabled"])
+            self.assertIn("/abort", calls[-1][0])
+
     def test_proxy_preserves_both_auth_cookies_without_injecting_ui(self):
         status, headers, body = self.request("/upstream-resource")
         self.assertEqual(status, 200)

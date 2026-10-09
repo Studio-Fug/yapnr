@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -20,6 +21,24 @@ class WorkspaceTest(unittest.TestCase):
         self.root = self.base / "article"
         self.root.mkdir()
         (self.root / "design.txt").write_text("Recorded design input\n")
+
+    def test_runtime_journal_is_git_ignored_but_still_exported(self):
+        subprocess.run(["git", "init", str(self.root)], check=True, capture_output=True)
+        workspace.exclude_runtime_snapshots(self.root)
+        workspace.exclude_runtime_snapshots(self.root)
+        workspace.record(self.root, {"source": "synthetic-fixture"})
+        result = subprocess.run(
+            ["git", "-C", str(self.root), "check-ignore", ".yapnr/workspace/conversation.jsonl"],
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(
+            ".yapnr/workspace/conversation.jsonl",
+            {f["path"] for f in workspace.index(self.root)["files"]},
+        )
+        self.assertEqual(
+            (self.root / ".git/info/exclude").read_text().count("/.yapnr/workspace/"), 1
+        )
 
     def test_export_rejects_write_then_restore_race_in_the_bytes_actually_archived(self):
         original = tarfile.TarFile.addfile

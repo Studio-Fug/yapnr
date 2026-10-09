@@ -15,17 +15,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
-from yapnr.agent import threads, workspace
+from yapnr.agent import harness, threads, workspace
 from yapnr.agent.workflow import init, query
 
 WEB = Path(__file__).with_name("web")
 
 
-def api(upstream, path, data=None):
+def api(upstream, path, data=None, method=None):
     request = urllib.request.Request(
         upstream.rstrip("/") + path,
         data=workspace.encoded(data) if data is not None else None,
         headers={"Content-Type": "application/json"},
+        method=method,
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         body = response.read()
@@ -136,6 +137,22 @@ class Server(ThreadingHTTPServer):
         self.recorder_lock = threading.Lock()
         self.experiments = experiments or {}
         self.agent_projects = str(Path(agent_projects)).rstrip("/")
+        for root in self.projects.iterdir():
+            if root.is_dir() and not root.is_symlink():
+                workspace.exclude_runtime_snapshots(root)
+        self.harness = harness.Manager(
+            self.project,
+            self.directory,
+            lambda path, data=None, method=None: api(self.upstream, path, data, method),
+            lambda: [
+                p.name
+                for p in self.projects.iterdir()
+                if p.is_dir()
+                and not p.is_symlink()
+                and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", p.name)
+            ],
+        )
+        self.harness.start()
 
     def project(self, name):
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", name):
@@ -157,6 +174,7 @@ class Server(ThreadingHTTPServer):
                 )
 
     def server_close(self):
+        self.harness.close()
         for recorder in self.recorders.values():
             recorder.stop.set()
         super().server_close()
@@ -244,6 +262,7 @@ class Handler(BaseHTTPRequestHandler):
             "scratchpad": workspace.scratchpad(root),
             "experiment_url": experiment,
             "workflow": workflow,
+            "harness": harness.read(root),
             "recording": self.server.recorders[name].status,
         }
 
@@ -394,7 +413,8 @@ class Handler(BaseHTTPRequestHandler):
                     {"error": "Project creation failed; use a new lowercase project name"}, 400
                 )
         match = re.fullmatch(
-            r"/yapnr/api/(scratchpad|annotation|review|thread|note|attach-note|main-thread)/([a-z0-9-]+)",
+            r"/yapnr/api/(scratchpad|annotation|review|thread|note|attach-note|main-thread|message|"
+            r"harness-resume|harness-stop)/([a-z0-9-]+)",
             urlsplit(self.path).path,
         )
         if match is None:
@@ -407,9 +427,23 @@ class Handler(BaseHTTPRequestHandler):
             def remote(path, value=None):
                 return api(self.server.upstream, path, value)
 
+            if action == "harness-stop":
+                self.server.harness.stop(name, data["session"])
+                threads.session_info(remote, name, data["session"], self.server.directory(name))
+                remote(
+                    "/session/"
+                    + data["session"]
+                    + "/abort?directory="
+                    + quote(self.server.directory(name), safe=""),
+                    {},
+                )
+                return self.json(harness.read(root))
             if action == "main-thread":
                 if data["session"]:
                     threads.session_info(remote, name, data["session"], self.server.directory(name))
+                active = harness.read(root)
+                if active.get("enabled") and active.get("session") != data["session"]:
+                    self.server.harness.stop(name)
                 result = {"main_thread": data["session"]}
                 with workspace.lock(root) as folder:
                     workspace.atomic(folder / "thread-state.json", workspace.encoded(result))
@@ -479,6 +513,19 @@ class Handler(BaseHTTPRequestHandler):
             previous = next(
                 (m["info"] for m in reversed(messages) if m["info"].get("role") == "user"), {}
             )
+            if action == "harness-resume":
+                main = workspace.read_json(root / ".yapnr/workspace/thread-state.json", {}).get(
+                    "main_thread"
+                )
+                if main != session:
+                    raise ValueError("Resume the main design thread")
+                if not previous.get("model"):
+                    raise ValueError("Session has no selected model")
+                return self.json(
+                    self.server.harness.arm(
+                        name, session, previous["model"], previous.get("agent", "build")
+                    )
+                )
             prompt = {"parts": [{"type": "text", "text": str(data["text"])}]}
             if data.get("model"):
                 prompt["model"] = data["model"]
@@ -500,10 +547,43 @@ class Handler(BaseHTTPRequestHandler):
                         + base64.b64encode(path.read_bytes()).decode(),
                     }
                 )
-            workspace.record(
-                root, {"source": "user-review-request", "session": session, "request": prompt}
+            main = workspace.read_json(root / ".yapnr/workspace/thread-state.json", {}).get(
+                "main_thread"
             )
-            api(self.server.upstream, "/session/" + session + "/prompt_async" + directory, prompt)
+            if action in ("message", "review") and main == session:
+                if not prompt.get("model"):
+                    raise ValueError("Select a model before starting the harness")
+                if not (root / ".yapnr/workflow/state.json").exists():
+                    init(root, str(data["text"]))
+                prompt["system"] = harness.INSTRUCTIONS
+                nonce = harness.uuid.uuid4().hex
+                prompt["parts"][0]["metadata"] = {"yapnr_request": nonce}
+                armed = self.server.harness.arm(
+                    name, session, prompt["model"], prompt.get("agent", "build"), nonce
+                )
+                workspace.record(
+                    root, {"source": "user-message-request", "session": session, "request": prompt}
+                )
+                try:
+                    api(
+                        self.server.upstream,
+                        "/session/" + session + "/prompt_async" + directory,
+                        prompt,
+                    )
+                except (OSError, ValueError):
+                    self.server.harness.update(
+                        root, armed["epoch"], enabled=False, status="delivery_uncertain"
+                    )
+                    raise
+            else:
+                workspace.record(
+                    root, {"source": "user-review-request", "session": session, "request": prompt}
+                )
+                api(
+                    self.server.upstream,
+                    "/session/" + session + "/prompt_async" + directory,
+                    prompt,
+                )
             return self.json({"status": "sent"})
         except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
             self.json({"error": "Workspace edit or review request rejected"}, 400)

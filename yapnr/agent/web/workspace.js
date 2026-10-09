@@ -160,9 +160,13 @@
       const data = await json(endpoint('project'));
       if (project !== state.project) return;
       state.data = data;
-      $('stage').textContent = `${data.workflow.state} · revision ${data.workflow.revision ?? '—'}${
-        data.workflow.speculative ? ' · speculative' : ''
-      }`;
+      $('stage').textContent =
+        data.workflow.revision === undefined
+          ? ''
+          : `Revision ${data.workflow.revision}${
+              data.workflow.speculative ? ' · pending acceptance' : ''
+            }`;
+      renderWorkflow(data.workflow, data.harness);
       $('recording').textContent = `Recording: ${data.recording}`;
       renderSidebar();
       if (!state.dirty && state.tab === 'scratchpad' && !state.active) {
@@ -853,7 +857,7 @@
     }
     markdown(text.slice(cursor), container);
   }
-  function renderMessages(messages) {
+  function renderMessages(messages, status = 'idle') {
     const area = $('messages');
     const nearBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 100;
     const oldScroll = area.scrollTop;
@@ -861,7 +865,7 @@
       [...area.querySelectorAll('details[open][data-part]')].map(n => n.dataset.part)
     );
     area.replaceChildren();
-    if (!messages.length)
+    if (!messages.length && status === 'idle')
       area.append(
         node(
           'div',
@@ -869,19 +873,71 @@
           'empty'
         )
       );
+    const batches = [];
     for (const message of messages) {
-      const card = node('article', undefined, 'message ' + message.info.role);
-      card.dataset.message = message.info.id;
-      card.append(node('header', message.info.role === 'user' ? 'You' : 'Agent'));
-      for (const part of message.parts || []) {
-        if (part.type === 'text') richText(part.text || '', card);
-        else if (part.type === 'reasoning') {
-          const d = node('details');
-          d.dataset.part = part.id;
-          d.open = expanded.has(part.id);
-          d.append(node('summary', 'Reasoning'), node('div', part.text, 'message-text'));
-          card.append(d);
-        } else if (part.type === 'tool') {
+      if (message.info.role === 'user' && !message.parts?.some(p => p.metadata?.yapnr_harness)) {
+        batches.push({ user: message });
+      } else if (message.info.role === 'assistant') {
+        let batch = batches.at(-1);
+        if (!batch || batch.user) {
+          batch = { assistant: [] };
+          batches.push(batch);
+        }
+        batch.assistant.push(message);
+      }
+    }
+    if (status !== 'idle' && !batches.at(-1)?.assistant) batches.push({ assistant: [] });
+    for (const [index, batch] of batches.entries()) {
+      const card = node('article', undefined, 'message ' + (batch.user ? 'user' : 'assistant'));
+      card.append(node('header', batch.user ? 'You' : 'Agent'));
+      const tools = [],
+        reasoning = [];
+      for (const message of batch.user ? [batch.user] : batch.assistant) {
+        card.dataset.message ||= message.info.id;
+        for (const part of message.parts || []) {
+          if (part.type === 'text') richText(part.text || '', card);
+          else if (part.type === 'tool') tools.push(part);
+          else if (part.type === 'reasoning' && part.text) reasoning.push(part);
+          else if (part.type === 'file') {
+            const u = part.url || '';
+            if (
+              /^(data:image\/(png|jpeg|webp|gif);base64,|\/yapnr\/artifact\/|https?:\/\/)/.test(
+                u
+              ) &&
+              part.mime?.startsWith('image/')
+            ) {
+              const img = node('img');
+              img.src = u;
+              img.alt = part.filename || 'Generated image';
+              img.loading = 'lazy';
+              card.append(img);
+            } else card.append(node('p', `Attachment: ${part.filename || part.mime}`));
+          }
+        }
+        if (message.info.error)
+          card.append(node('pre', JSON.stringify(message.info.error), 'error'));
+      }
+      const busy = !batch.user && index === batches.length - 1 && status !== 'idle';
+      if (tools.length || reasoning.length) {
+        const rollup = node('details', undefined, 'tool-rollup');
+        rollup.dataset.part = (card.dataset.message || 'pending') + ':activity';
+        rollup.open = expanded.has(rollup.dataset.part);
+        const summary = node('summary');
+        const spinner = node('span', undefined, busy ? 'loading-chiral' : 'activity-dot');
+        spinner.setAttribute('aria-hidden', 'true');
+        summary.append(
+          spinner,
+          node(
+            'span',
+            `${busy ? 'Working' : 'Activity'}${
+              tools.length
+                ? ' · ' + tools.length + ' tool call' + (tools.length === 1 ? '' : 's')
+                : ''
+            }${tools.some(t => t.state?.status === 'error') ? ' · errors recorded' : ''}`
+          )
+        );
+        rollup.append(summary);
+        for (const part of tools) {
           const d = node('details', undefined, 'tool');
           d.dataset.part = part.id;
           d.open = expanded.has(part.id);
@@ -889,25 +945,102 @@
             node('summary', `${part.tool} · ${part.state?.status || ''}`),
             node('pre', JSON.stringify(part.state, null, 2))
           );
-          card.append(d);
-        } else if (part.type === 'file') {
-          const u = part.url || '';
-          if (
-            /^(data:image\/(png|jpeg|webp|gif);base64,|\/yapnr\/artifact\/|https?:\/\/)/.test(u) &&
-            part.mime?.startsWith('image/')
-          ) {
-            const img = node('img');
-            img.src = u;
-            img.alt = part.filename || 'Generated image';
-            img.loading = 'lazy';
-            card.append(img);
-          } else card.append(node('p', `Attachment: ${part.filename || part.mime}`));
+          rollup.append(d);
         }
+        for (const part of reasoning) {
+          const d = node('details');
+          d.dataset.part = part.id;
+          d.open = expanded.has(part.id);
+          d.append(node('summary', 'Reasoning'), node('div', part.text, 'message-text'));
+          rollup.append(d);
+        }
+        card.append(rollup);
+      } else if (busy) {
+        const loading = node('div', undefined, 'agent-loading');
+        const spinner = node('span', undefined, 'loading-chiral');
+        spinner.setAttribute('aria-hidden', 'true');
+        loading.append(spinner, node('span', 'Working…'));
+        loading.setAttribute('role', 'status');
+        card.append(loading);
       }
-      if (message.info.error) card.append(node('pre', JSON.stringify(message.info.error), 'error'));
       area.append(card);
     }
     area.scrollTop = nearBottom ? area.scrollHeight : oldScroll;
+  }
+  function renderWorkflow(workflow, harness) {
+    const stages = [
+      ['requirements_capture', 'Requirements'],
+      ['requirements_review', 'Review'],
+      ['schematic', 'Schematic'],
+      ['placement_routing', 'Place & route'],
+      ['verification', 'Verify'],
+      ['complete', 'Complete'],
+    ];
+    const stopped = ['blocked', 'exhausted', 'cancelled'].includes(workflow.state);
+    const effective = stopped ? workflow.resume_state : workflow.state;
+    const rework = ['fixup', 'engine_repair'].includes(effective);
+    const phase = rework ? 'schematic' : effective;
+    const index = stages.findIndex(([key]) => key === phase);
+    const bar = $('workflow-bar');
+    bar.replaceChildren();
+    for (const [i, [key, label]] of stages.entries()) {
+      const step = node(
+        'span',
+        label,
+        'workflow-step' + (i === index ? ' current' : i < index ? ' reached' : '')
+      );
+      step.dataset.stage = key;
+      if (i === index) step.setAttribute('aria-current', 'step');
+      bar.append(step);
+    }
+    const labels = {
+      not_initialized: 'Workflow not initialized',
+      requirements_capture: 'Capturing requirements & risks',
+      requirements_review: 'Awaiting requirements & risk review',
+      schematic: 'Schematic & part selection',
+      placement_routing: 'Placement & routing',
+      verification: 'Verification',
+      fixup: 'Rework',
+      engine_repair: 'Engine repair',
+      complete: 'Complete · ready for PCB review',
+      blocked: 'Blocked',
+      exhausted: 'Methods exhausted',
+      cancelled: 'Cancelled',
+    };
+    const label = labels[workflow.state] || 'Workflow state unavailable';
+    const statuses = {
+      budget_reached: 'Continuation budget reached',
+      waiting_question: 'Awaiting your answer',
+      waiting_permission: 'Awaiting permission',
+      delivery_uncertain: 'Delivery uncertain · review before retrying',
+      model_error: 'Model error · review before retrying',
+      stopped: 'Automation stopped',
+      turn_timeout: 'Agent turn timed out',
+      connection_error: 'Agent connection error',
+      resume_required: 'Imported workspace · continuation requires confirmation',
+    };
+    const budget = statuses[harness?.status] ? ' · ' + statuses[harness.status] : '';
+    $('resume-harness').hidden =
+      !statuses[harness?.status] ||
+      harness?.enabled ||
+      ['requirements_review', 'complete', 'blocked', 'exhausted', 'cancelled'].includes(
+        workflow.state
+      ) ||
+      !session() ||
+      session() !== state.main[state.project];
+    const speculative =
+      workflow.speculative &&
+      ['schematic', 'placement_routing', 'verification', 'fixup', 'engine_repair'].includes(
+        workflow.state
+      )
+        ? ' · speculative'
+        : '';
+    $('workflow-label').textContent = label + speculative + budget;
+    bar.setAttribute('aria-label', 'Engineering workflow: ' + label);
+    bar.classList.toggle('paused', stopped || workflow.state === 'requirements_review' || !!budget);
+    bar.classList.toggle('rework', rework);
+    bar.title =
+      'Workflow stages, not an estimate of elapsed time or percentage complete. Revisions and rework can move backwards.';
   }
   async function refreshChat() {
     if (!session()) return;
@@ -919,11 +1052,14 @@
         json('/session/status' + scope()),
       ]);
       if (id !== session() || project !== state.project) return;
+      const status = statuses?.[id]?.type || 'idle';
       const key =
-        JSON.stringify(messages) + JSON.stringify(state.data?.artifacts.map(a => a.id) || []);
+        status +
+        JSON.stringify(messages) +
+        JSON.stringify(state.data?.artifacts.map(a => a.id) || []);
       if (key !== state.messagesKey) {
         state.messagesKey = key;
-        renderMessages(messages);
+        renderMessages(messages, status);
         const previous = [...messages]
           .reverse()
           .find(
@@ -937,9 +1073,8 @@
           $('model').value = previous.model.providerID + '::' + previous.model.modelID;
         }
       }
-      const status = statuses?.[id]?.type || 'idle';
       $('chat-status').textContent = status;
-      $('stop').disabled = status === 'idle';
+      $('stop').disabled = status === 'idle' && !state.data?.harness?.enabled;
       $('send').disabled = status !== 'idle';
       await refreshRequests();
     } catch (e) {
@@ -1108,19 +1243,15 @@
     const [providerID, modelID] = $('model').value.split('::');
     $('send').disabled = true;
     try {
-      await json('/session/' + session() + '/prompt_async' + scope(), {
+      await json(endpoint('message'), {
+        session: session(),
         model: { providerID, modelID },
-        parts: [
-          {
-            type: 'text',
-            text:
-              text +
-              (state.selection
-                ? '\n\nSelected engineering context (inspect against current artifact):\n' +
-                  JSON.stringify(state.selection, null, 2)
-                : ''),
-          },
-        ],
+        text:
+          text +
+          (state.selection
+            ? '\n\nSelected engineering context (inspect against current artifact):\n' +
+              JSON.stringify(state.selection, null, 2)
+            : ''),
       });
       $('prompt').value = '';
       state.chatDrafts[state.project + ':' + session()] = '';
@@ -1136,9 +1267,17 @@
       if (!$('send').disabled) $('send').click();
     }
   };
+  $('resume-harness').onclick = async () => {
+    try {
+      await json(endpoint('harness-resume'), { session: session() });
+      await refresh();
+    } catch (e) {
+      say(e.message);
+    }
+  };
   $('stop').onclick = async () => {
     try {
-      await json('/session/' + session() + '/abort' + scope(), {});
+      await json(endpoint('harness-stop'), { session: session() });
       await refreshChat();
     } catch (e) {
       say(e.message);

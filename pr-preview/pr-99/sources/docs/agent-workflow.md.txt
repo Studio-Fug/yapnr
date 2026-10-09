@@ -6,6 +6,22 @@ wheel. The agent owns requirements capture, risk analysis, schematic/part select
 bounded placement/routing experiments and verification of the delivered artifact.
 An unavailable validator or vendor model remains an explicit blocker.
 
+## Part selection without a preloaded library
+
+Authoring `yapnr atopile build` discovers missing catalog candidates on demand.
+The operator connects the Atopile component service with `yapnr atopile auth login`
+on the execution host, independently of their model provider. A headless login
+prints its authorization URL. Credentials remain outside the workspace. An
+explicit service authentication failure requires that connection; do not ask the
+user to maintain a prepopulated component library to work around it.
+
+Successful queries, source provenance, selected symbol/footprint/model assets and
+content locks stay in the article. Record their hashes as evidence and preserve
+them through export/import. Use `--offline` or `--frozen` after selection for
+captured replay. Changed electrical constraints can require a new authoring query;
+part ratings and tolerance still need engineering verification. Catalog management
+and sharing are separate from selecting the components a design needs.
+
 ## Review and visual feedback
 
 The agent must write the requirements specification and risk analysis before

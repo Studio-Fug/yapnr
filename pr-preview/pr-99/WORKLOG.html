@@ -305,7 +305,7 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-08 (workspace-native conversation and artifact review). Previous status:
+<p>Last updated: 2026-10-09 (workspace-native conversation and artifact review). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>). Earlier the same day: RF round 2 with the native FDTD kernel
 on <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>, merged with <code class="docutils literal notranslate"><span class="pre">main</span></code>; the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the
@@ -318,6 +318,11 @@ board edges, the hierarchical ladder driver and their animations on
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul>
+<li><p><strong>On-demand parts</strong>: authoring CLI builds fetch missing component queries, retain response
+digests and selected assets/locks in the article, and replay offline/frozen. Operator
+component-service sign-in is separate from model authentication; no shared catalog
+uploads or prepopulated local library are required. Live selection remains blocked
+where that service returns an authentication error.</p></li>
 <li><p><strong>Workspace search and Performance</strong>: Cmd/Ctrl-F opens a floating source/component/net
 search, including in embedded frames; repeated shortcuts preserve/clear queries.
 Inspect tab layouts migrate to the dialog. Performance holds native controls and
@@ -326,7 +331,8 @@ validated project cloud settings with read-only SDK status and no job submission
 failures before PnR, and opens their result JSON in read-only source tabs. Restored active
 tabs initialize on first drawer open. Embedded styling and saved theme apply before
 renderer scripts load, avoiding the legacy-theme flash. Live discovery is read-only
-and retains failed attempts.</p></li>
+and retains failed attempts. The workspace server accepts cold-start asset bursts
+without dropping concurrent proxy connections.</p></li>
 <li><p><strong>Experiments embed</strong>: workbench tabs own panel visibility; the native legacy drawer
 controller is bypassed in embeds. Experiment lane selections follow through to the live
 board/schematic/3D views while pinned comparisons remain independent.</p></li>

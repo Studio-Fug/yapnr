@@ -308,6 +308,21 @@ engineering procedure is <a class="reference internal" href="../AGENTS.html"><sp
 wheel. The agent owns requirements capture, risk analysis, schematic/part selection,
 bounded placement/routing experiments and verification of the delivered artifact.
 An unavailable validator or vendor model remains an explicit blocker.</p>
+<section id="part-selection-without-a-preloaded-library">
+<h2>Part selection without a preloaded library<a class="headerlink" href="#part-selection-without-a-preloaded-library" title="Link to this heading">¶</a></h2>
+<p>Authoring <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">build</span></code> discovers missing catalog candidates on demand.
+The operator connects the Atopile component service with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">auth</span> <span class="pre">login</span></code>
+on the execution host, independently of their model provider. A headless login
+prints its authorization URL. Credentials remain outside the workspace. An
+explicit service authentication failure requires that connection; do not ask the
+user to maintain a prepopulated component library to work around it.</p>
+<p>Successful queries, source provenance, selected symbol/footprint/model assets and
+content locks stay in the article. Record their hashes as evidence and preserve
+them through export/import. Use <code class="docutils literal notranslate"><span class="pre">--offline</span></code> or <code class="docutils literal notranslate"><span class="pre">--frozen</span></code> after selection for
+captured replay. Changed electrical constraints can require a new authoring query;
+part ratings and tolerance still need engineering verification. Catalog management
+and sharing are separate from selecting the components a design needs.</p>
+</section>
 <section id="review-and-visual-feedback">
 <h2>Review and visual feedback<a class="headerlink" href="#review-and-visual-feedback" title="Link to this heading">¶</a></h2>
 <p>The agent must write the requirements specification and risk analysis before
@@ -787,6 +802,7 @@ CPU measurements and source/build equivalence remain explicitly unavailable.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Design a PCB with an agent</a><ul>
+<li><a class="reference internal" href="#part-selection-without-a-preloaded-library">Part selection without a preloaded library</a></li>
 <li><a class="reference internal" href="#review-and-visual-feedback">Review and visual feedback</a></li>
 <li><a class="reference internal" href="#shared-browser-workspace">Shared browser workspace</a></li>
 <li><a class="reference internal" href="#evidence-gated-iteration-controller">Evidence-gated iteration controller</a></li>

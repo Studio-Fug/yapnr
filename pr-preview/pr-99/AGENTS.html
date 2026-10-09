@@ -409,7 +409,13 @@ membership, including failed retries. Do not invent rr syntax or schemas.</p>
 ratings, interfaces, stackup, board envelope and electrical contracts. Use verified
 <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup|info|build|lock-parts|materialize</span></code> interfaces and the picker/part
 cache. Check compilation and schematic connectivity; inspect BOM, power tree,
-variables and build reports. Lock selected catalog parts and footprints. Capture
+variables and build reports. Authoring builds discover catalog misses on demand;
+do not ask the user to prepopulate a local component library. Resolve an explicit
+component-service authentication failure through operator sign-in, rather than
+misdiagnosing it as missing local catalog data. Retain the discovered responses,
+selected assets and locks in the article; replay with <code class="docutils literal notranslate"><span class="pre">--offline</span></code> or <code class="docutils literal notranslate"><span class="pre">--frozen</span></code>.
+Use <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">auth</span> <span class="pre">login</span></code> for that service, keeping credentials outside the
+article. Lock selected catalog parts and footprints. Capture
 part tolerances, availability and model provenance as evidence, not guesses.</p>
 <p>Record fabrication rules, placement intent, differential-pair coupling, total
 uncoupled-length limits, length matching, current capacity and reference planes in

@@ -73,3 +73,9 @@ that occurred before a placement-and-routing lane existed. Expanding an attempt
 shows its recorded duration and catalog-candidate count; its result opens as a
 read-only source tab. This capture uses two existing failed build reports, without
 running a model turn or claiming a completed PCB.
+
+Restored active experiment views mount when project data arrives, and opening a
+drawer activates its selected view. A first-open browser regression starts with
+Experiments selected in a closed drawer and never switches tabs to initialize it.
+Embedded mode and theme are applied by an early parser script, before native
+renderer scripts load; changing theme preserves existing frame instances.

@@ -318,7 +318,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
   function mountProjectViews() {
     for (const id of ['board', 'schematic']) ensureViewer(id);
     for (const id of ['three', 'experiments', 'exploration', 'native-timing'])
-      if (state.viewerFrames[id]) ensureViewer(id);
+      if (state.viewerFrames[id] || Object.values(wb.layout.panes).some(pane => pane.active === id))
+        ensureViewer(id);
     ensureSource('source');
     if (state.sourceBrowserProject !== state.project) {
       state.sourceBrowser?.dispose();

@@ -14,8 +14,15 @@ export function mountViewer(container, url, mode, scope = 'Live / graph revision
     throw Error('Invalid renderer URL');
   target.searchParams.set('workspace', '1');
   target.searchParams.set('embed', mode);
+  target.searchParams.delete('theme');
   let frame = container.querySelector('iframe');
-  if (!frame || frame.src !== target.href) {
+  const existing = frame ? new URL(frame.src) : null;
+  existing?.searchParams.delete('theme');
+  if (!frame || existing.href !== target.href) {
+    target.searchParams.set(
+      'theme',
+      document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+    );
     frame = document.createElement('iframe');
     frame.src = target.href;
     frame.title = 'yapnr ' + mode;

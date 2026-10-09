@@ -17,8 +17,10 @@ board edges, the hierarchical ladder driver and their animations on
 ## In progress
 
 - **Recorded build attempts**: Experiments lists archived schematic-build results, including
-  failures before PnR, and opens their result JSON in read-only source tabs. Live discovery
-  is read-only and retains failed attempts.
+  failures before PnR, and opens their result JSON in read-only source tabs. Restored active
+  tabs initialize on first drawer open. Embedded styling and saved theme apply before
+  renderer scripts load, avoiding the legacy-theme flash. Live discovery is read-only
+  and retains failed attempts.
 
 - **Experiments embed**: workbench tabs own panel visibility; the native legacy drawer
   controller is bypassed in embeds. Experiment lane selections follow through to the live

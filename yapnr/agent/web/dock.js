@@ -92,8 +92,10 @@ export class Workbench {
     node.dataset.side = side;
     const pull = button(side === 'left' ? 'Experiments' : 'Ask', `Open ${side} drawer`, () => {
       this.dispatch({ type: 'drawer', side, values: { open: !this.layout.drawers[side].open } });
-      if (this.layout.drawers[side].open)
+      if (this.layout.drawers[side].open) {
+        this.onActivate?.(this.layout.panes[side].active);
         this.panes.get(side)?.querySelector('[aria-selected="true"]')?.focus();
+      }
     });
     pull.className = 'drawer-pull';
     const lock = button('◇', `Lock ${side} drawer open`, () =>

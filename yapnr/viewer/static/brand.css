@@ -1,0 +1,234 @@
+/* Branded existing renderer; physical layer colors retain their electrical meaning. */
+:root {
+  --bg: var(--yp-canvas);
+  --panel: var(--yp-surface);
+  --text: var(--yp-ink);
+  --muted: var(--yp-muted);
+  --line: var(--yp-line);
+  font-family: var(--yp-ui);
+}
+body {
+  font-family: var(--yp-ui);
+  background: var(--yp-canvas);
+  color: var(--yp-ink);
+}
+button,
+input,
+select,
+textarea,
+.dk-panel {
+  font-family: var(--yp-ui);
+  border-radius: 0 !important;
+}
+pre,
+code,
+.mono {
+  font-family: var(--yp-mono);
+}
+body.workspace-embedded {
+  background: var(--yp-canvas);
+  color: var(--yp-ink);
+}
+.workspace-embedded .toolbar,
+.workspace-embedded .footer,
+.workspace-embedded > header {
+  background: var(--yp-surface);
+  color: var(--yp-ink);
+}
+body[data-embed] > header,
+body[data-embed] > .sp-fab,
+body[data-embed] > #dk-fab {
+  display: none !important;
+}
+body[data-embed] > main {
+  height: 100dvh !important;
+  min-width: 0;
+  display: block !important;
+}
+body[data-embed] #lanes-panel,
+body[data-embed] #explore-panel,
+body[data-embed] #dock {
+  display: none !important;
+}
+body[data-embed] .workspace {
+  height: 100dvh;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+body[data-embed] .workspace > .toolbar,
+body[data-embed] .workspace > .footer,
+body[data-embed] #sch-bar,
+body[data-embed] #sch-legend,
+body[data-embed] #v3-bar,
+body[data-embed] #v3-foot {
+  display: none !important;
+}
+body[data-embed] #views {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+body[data-embed] #boardwrap,
+body[data-embed] #schwrap,
+body[data-embed] #v3wrap {
+  height: 100%;
+  background: #0e1713;
+}
+body[data-embed] #sch-main,
+body[data-embed] #v3-main {
+  height: 100%;
+}
+body[data-embed='experiments'] .workspace,
+body[data-embed='exploration'] .workspace,
+body[data-embed='timing'] .workspace {
+  display: none !important;
+}
+body[data-embed='experiments'] #lanes-panel,
+body[data-embed='exploration'] #explore-panel {
+  display: block !important;
+  position: static !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  overflow: auto;
+  background: var(--yp-surface);
+  border: 0;
+}
+body[data-embed='timing'] #dock {
+  display: flex !important;
+  position: static !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  background: var(--yp-surface);
+  border: 0;
+}
+body[data-embed='timing'] .dk-head,
+body[data-embed='timing'] .dk-grip {
+  display: none !important;
+}
+* {
+  border-radius: 0 !important;
+}
+.legend i {
+  width: 20px;
+  height: 6px;
+}
+#sch-root .rf {
+  font-family: var(--yp-ui);
+}
+.nt-body.clamp {
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+.ln.nm {
+  background: var(--yp-raised);
+}
+body[data-embed='experiments'] button,
+body[data-embed='exploration'] button {
+  background: var(--yp-surface);
+  color: var(--yp-ink);
+  border-color: var(--yp-control);
+}
+body[data-embed='experiments'] .muted,
+body[data-embed='exploration'] .muted,
+body[data-embed='experiments'] h2,
+body[data-embed='exploration'] h2 {
+  color: var(--yp-muted);
+}
+
+body[data-embed='ask'] .workspace {
+  display: none !important;
+}
+body[data-embed='ask'] #dock {
+  display: flex !important;
+  position: static !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  border: 0;
+}
+body[data-embed='ask'] .dk-head,
+body[data-embed='ask'] .dk-grip {
+  display: none !important;
+}
+body[data-embed='ask'] .dk-panel,
+body[data-embed='timing'] .dk-panel {
+  background: var(--yp-surface);
+  color: var(--yp-ink);
+}
+
+/* Standalone experiment views share the palette with the project shell. */
+body > header,
+.toolbar,
+.footer,
+aside,
+#dock,
+.dk-panel,
+.dk-foot,
+.dk-head {
+  background: var(--yp-surface);
+  color: var(--yp-ink);
+  border-color: var(--yp-line);
+}
+button,
+input,
+select,
+textarea {
+  background: var(--yp-surface);
+  color: var(--yp-ink);
+  border-color: var(--yp-control);
+}
+button:hover {
+  background: var(--yp-hover);
+}
+a {
+  color: var(--yp-brand);
+}
+h2,
+.muted {
+  color: var(--yp-muted);
+}
+#layers label,
+.dk-badge {
+  border-color: var(--yp-line);
+}
+.lane.active {
+  background: var(--yp-selected);
+  border-color: var(--yp-brand);
+}
+.lane span {
+  color: var(--yp-muted);
+}
+.dk-code,
+.src-bar,
+.src-files-list {
+  background: var(--yp-surface);
+  color: var(--yp-ink);
+}
+.tk.k {
+  color: var(--yp-gold-ink);
+}
+.tk.s {
+  color: var(--yp-provisional);
+}
+.tk.n {
+  color: var(--yp-info);
+}
+
+body[data-embed='source'] .workspace {
+  display: none !important;
+}
+body[data-embed='source'] #dock {
+  display: flex !important;
+  position: static !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  border: 0;
+}
+body[data-embed='source'] .dk-head,
+body[data-embed='source'] .dk-grip {
+  display: none !important;
+}

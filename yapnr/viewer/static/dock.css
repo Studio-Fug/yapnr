@@ -240,7 +240,7 @@ body.dk-min #dock .dk-rail{display:flex}
 #dock .nt-t{display:block;width:100%;text-align:left;background:transparent;border:0;border-radius:0;padding:0;margin:4px 0 2px;color:#e8f2f5;font:600 12.5px/1.4 Inter,system-ui,sans-serif;overflow-wrap:anywhere;cursor:pointer}
 #dock button.nt-t:hover{color:#fff}
 .nt-body{margin:2px 0 4px;color:#c9d6db;font-size:12px;line-height:1.52}.nt-body>:first-child{margin-top:2px}.nt-body>:last-child{margin-bottom:0}
-.nt-body.clamp{max-height:5.2em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.nt-body.clamp{max-height:5.2em;overflow:hidden;}
 #dock .nt-mo{margin:0 0 4px}
 .nt-tg{display:flex;flex-wrap:wrap;gap:3px 0;align-items:center;margin:4px 0 2px}.nt-tg .dk-more{margin:1px 2px}
 .nt-tags{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0}
@@ -292,7 +292,7 @@ body.dk-min #dock .dk-rail{display:flex}
 .ln i{position:relative}
 .nmk{position:absolute;left:1px;top:50%;width:6px;height:7px;margin-top:-4px;border-radius:2px 0 2px 2px;background:var(--sc,#ffd166);box-shadow:0 0 0 1px #0e171b;cursor:pointer}
 .nmk:hover{transform:scale(1.35)}
-.ln.nm{background:linear-gradient(90deg,#2a251388,transparent 55%)}.ln.nm.hl{background:#233b33}
+.ln.nm{background:#2a251388}.ln.nm.hl{background:#233b33}
 /* Ask: web toggle, history, turn footer, inline note cards */
 .ask{position:relative}
 #dock .ask-web{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;color:#8fa4ad}

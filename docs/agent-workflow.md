@@ -390,3 +390,16 @@ Entering the schematic stage opens the attached experiment workspace directly.
 Sources and schematic belong to that engineering surface; there is no intermediate
 source/netlist placeholder page. Attach the article's viewer with
 `--experiment ARTICLE=URL`. The conversation remains beside it.
+
+## Engineering workbench
+
+The shared workspace supports persistent Board, Schematic, 3D, source, artifact
+and Ask tabs; keyboard Move menus, splitters, minimized panes and drawer locks.
+Open view exposes arrangements and preferences on narrow screens. Closing a view
+retains project data and agent activity. Close project records UI presence only;
+Reopen project returns to that session without restarting backend work.
+
+[Workbench walkthrough and validation scope](feature-animations/workspace-workbench.md)
+shows the packaged UI. Timing distinguishes project-open interval union from
+workflow state occupancy and summed native tool wall time. Missing session ends,
+CPU measurements and source/build equivalence remain explicitly unavailable.

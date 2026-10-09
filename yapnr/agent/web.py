@@ -15,11 +15,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
-from yapnr.agent import design, harness, requirements, reviews, threads, workspace
+from yapnr.agent import activity, design, harness, requirements, reviews, threads, workspace
 from yapnr.agent.cli import opencode_environment
 from yapnr.agent.workflow import init, query
 
 WEB = Path(__file__).with_name("web")
+BRAND = Path(__file__).parent.parent / "brand"
 
 
 def api(upstream, path, data=None, method=None):
@@ -307,6 +308,29 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_bytes(
                     (WEB / Path(parsed.path).name).read_bytes(), "text/javascript"
                 )
+            module = re.fullmatch(
+                r"/yapnr/(dock|dock-model|timing-view|source-view|adapters)\.js", parsed.path
+            )
+            if module:
+                return self.send_bytes(
+                    (WEB / Path(parsed.path).name).read_bytes(), "text/javascript"
+                )
+            if parsed.path in ("/yapnr/workbench.css", "/yapnr/content.css"):
+                return self.send_bytes((WEB / Path(parsed.path).name).read_bytes(), "text/css")
+            brand = re.fullmatch(r"/yapnr/brand/([a-zA-Z0-9/_.-]+)", parsed.path)
+            if brand:
+                relative = Path(brand[1])
+                if relative.is_absolute() or ".." in relative.parts:
+                    raise ValueError("Invalid brand resource")
+                # Bundled Bazel runfiles are trusted symlinks; article files use stricter checks.
+                path = BRAND / relative
+                return self.send_bytes(
+                    path.read_bytes(),
+                    mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+                )
+            timing_route = re.fullmatch(r"/yapnr/api/timing/([a-z0-9-]+)", parsed.path)
+            if timing_route:
+                return self.json(activity.timeline(self.server.project(timing_route[1])))
             vendor = re.fullmatch(
                 r"/yapnr/vendor/(three\.core\.js|three\.module\.js|OrbitControls\.js|"
                 r"elk\.bundled\.js|elk-LICENSE\.md|elk-Apache-2\.0\.txt|LICENSE)",
@@ -425,7 +449,8 @@ class Handler(BaseHTTPRequestHandler):
                 )
         match = re.fullmatch(
             r"/yapnr/api/(scratchpad|annotation|review|thread|note|attach-note|main-thread|message|"
-            r"harness-resume|harness-stop|approve|artifact-feedback|resolve-feedback)/([a-z0-9-]+)",
+            r"harness-resume|harness-stop|approve|artifact-feedback|resolve-feedback|"
+            r"presence|source-update)/([a-z0-9-]+)",
             urlsplit(self.path).path,
         )
         if match is None:
@@ -531,6 +556,10 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 workspace.record(root, {"source": "user-annotation", "artifact": item})
                 return self.json(item)
+            if action == "presence":
+                return self.json(activity.presence(root, data))
+            if action == "source-update":
+                return self.json(design.update(root, data["path"], data["text"], data["sha256"]))
             session = data["session"]
             if not re.fullmatch(r"ses_[A-Za-z0-9]+", session):
                 raise ValueError("Select an existing project session first")

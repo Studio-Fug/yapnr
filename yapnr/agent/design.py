@@ -67,3 +67,25 @@ def snapshot(project):
         "status": "ready" if selected else "waiting",
         "reason": None if selected else reason,
     }
+
+
+def update(project, name, text, expected):
+    root = Path(project).resolve()
+    if (
+        not isinstance(name, str)
+        or Path(name).suffix != ".ato"
+        or any(p in SKIP for p in Path(name).parts)
+    ):
+        raise ValueError("Edit a project atopile source, not a dependency")
+    if not isinstance(text, str) or len(text.encode()) > 4 * 1024 * 1024:
+        raise ValueError("Source exceeds the size limit")
+    with workspace.lock(root) as folder:
+        path = workspace.relative_file(root, name)
+        previous = path.read_bytes()
+        if workspace.sha(previous) != expected:
+            raise ValueError("Source changed concurrently; review the current source before saving")
+        workspace.blob(folder, previous, ".ato")
+        workspace.atomic(path, text.encode())
+        result = {"path": name, "sha256": workspace.file_sha(path), "previous_sha256": expected}
+    workspace.record(root, {"source": "user-source-edit", **result})
+    return result

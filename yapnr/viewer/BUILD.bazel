@@ -36,6 +36,20 @@ DIST = {src: "dist/" + src[len("static/"):] for src in STATIC}
 
 DIST.update({src: "dist/" + dest for src, dest in THIRD_PARTY.items()})
 
+DIST.update({"//yapnr/brand:" + brand_file: "dist/brand/" + brand_file for brand_file in [
+    "tokens.css",
+    "assets/yapnr-favicon.svg",
+    "assets/yapnr-mark-light.svg",
+    "assets/yapnr-mark-dark.svg",
+    "fonts/fonts.css",
+    "fonts/SpaceGrotesk.woff2",
+    "fonts/IBMPlexSans.woff2",
+    "fonts/IBMPlexMono.woff2",
+    "fonts/spacegrotesk-OFL.txt",
+    "fonts/ibmplexsans-OFL.txt",
+    "fonts/ibmplexmono-OFL.txt",
+]})
+
 genrule(
     name = "dist",
     srcs = DIST.keys(),

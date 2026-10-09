@@ -45,6 +45,20 @@ class DesignTest(unittest.TestCase):
             (dependency / "part.ato").write_text("dependency")
             self.assertEqual(design.snapshot(root)["sources"], [])
 
+    def test_source_edit_is_optimistic_and_excludes_dependencies(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "main.ato"
+            source.write_text("module Main:\n    pass\n")
+            sha = design.snapshot(root)["sources"][0]["sha256"]
+            saved = design.update(root, "main.ato", "module Main:\n    x = 1\n", sha)
+            self.assertNotEqual(saved["sha256"], sha)
+            with self.assertRaisesRegex(ValueError, "concurrently"):
+                design.update(root, "main.ato", "stale edit", sha)
+            with self.assertRaisesRegex(ValueError, "dependency"):
+                design.update(root, ".ato/part.ato", "change", sha)
+            self.assertEqual(source.read_text(), "module Main:\n    x = 1\n")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -96,7 +96,7 @@ function gridCandidates(idx,x0,y0,x1,y1){
 // Hit-testing (boardHit) always uses each via's true diameter regardless of this tier, so a via
 // that is barely a cell-cluster fleck on screen is still exactly as clickable as it always was.
 function paintBoard(c,v,w,h,g,dpr){
- c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);c.fillStyle='#10191e';c.fillRect(0,0,w,h);
+ c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);c.fillStyle='#0e1713';c.fillRect(0,0,w,h);
  const scr=p=>[v.x+p[0]*v.scale,v.y-p[1]*v.scale];
  const ln=(a,b,color,width=1,dash=[],round=false)=>{c.lineCap=round?'round':'butt';c.lineJoin=round?'round':'miter';c.strokeStyle=color;c.lineWidth=width;c.setLineDash(dash);c.beginPath();c.moveTo(...scr(a));c.lineTo(...scr(b));c.stroke();c.setLineDash([])};
  let step=v.scale<7?5:1;c.lineWidth=.4;for(let x=0;x<=g.width;x+=step)ln([x,0],[x,g.height],'#23343c',.4);for(let y=0;y<=g.height;y+=step)ln([0,y],[g.width,y],'#23343c',.4);
@@ -152,7 +152,7 @@ function paintFull(){
  if(frameQ){cancelAnimationFrame(frameQ);frameQ=0} // a queued gesture frame would only blit over this full-quality one
  renderDeferred=false;
  let [c,w,h]=resize(canvas),g=geo();
- if(!g){c.clearRect(0,0,w,h);c.fillStyle='#10191e';c.fillRect(0,0,w,h);c.fillStyle='#8fa7b3';c.fillText('Waiting for native placement…',30,40);gestureCache=null;gestureCacheDirty=true;renderSearch();return}
+ if(!g){c.clearRect(0,0,w,h);c.fillStyle='#0e1713';c.fillRect(0,0,w,h);c.fillStyle='#8fa7b3';c.fillText('Waiting for native placement…',30,40);gestureCache=null;gestureCacheDirty=true;renderSearch();return}
  if(pendingComponentRef){let requested=pendingComponentRef;pendingComponentRef=null;jumpToComponent(requested);return;}
  refreshComponentOptions(g);
  paintBoard(c,view,w,h,g,window.devicePixelRatio||1);
@@ -251,7 +251,7 @@ function fastFrame(){
  let g=geo();if(!g){paintFull();return}
  if(gestureCacheDirty||!gestureCache)buildGestureCache(g);
  if(!gestureCache){paintFull();return}
- let [c,w,h]=resize(canvas);c.clearRect(0,0,w,h);c.fillStyle='#10191e';c.fillRect(0,0,w,h);
+ let [c,w,h]=resize(canvas);c.clearRect(0,0,w,h);c.fillStyle='#0e1713';c.fillRect(0,0,w,h);
  let k=view.scale/gestureCache.scale0,dx=view.x-(gestureCache.x0+gestureCache.marginX)*k,dy=view.y-(gestureCache.y0+gestureCache.marginY)*k;
  c.save();c.translate(dx,dy);c.scale(k,k);c.drawImage(gestureCache.canvas,0,0,gestureCache.cssW,gestureCache.cssH);c.restore();
  renderOverlay(g);

@@ -59,7 +59,7 @@ exclude_patterns = [
 html_title = "yapnr documentation"
 html_theme = "furo"
 html_static_path = ["_static"]
-html_css_files = ["custom.css"]
+html_css_files = ["fonts/fonts.css", "custom.css"]
 html_favicon = "_static/yapnr-favicon.svg"
 # branding/ is copied into the output root so the raw-HTML images in README.md
 # (branding/yapnr-logo-256.png) resolve.
@@ -68,8 +68,8 @@ html_extra_path = ["_extra"]
 # Palette (branding/README.md): forest green #024823, antique gold #ba9015,
 # light sage #ddeee0 (replaces the green on dark backgrounds).
 html_theme_options = {
-    "light_logo": "yapnr-logo-256.png",
-    "dark_logo": "yapnr-logo-light.png",
+    "light_logo": "yapnr-logo-primary-light.svg",
+    "dark_logo": "yapnr-logo-primary-dark.svg",
     "sidebar_hide_name": True,
     "navigation_with_keys": True,
     "source_repository": "https://github.com/Studio-Fug/yapnr/",

@@ -75,6 +75,29 @@ class WebTest(unittest.TestCase):
         response = connection.getresponse()
         return response.status, response.getheaders(), response.read()
 
+    def test_brand_resources_presence_and_optimistic_source_edit(self):
+        status, _, data = self.request("/yapnr/brand/fonts/SpaceGrotesk.woff2")
+        self.assertEqual(status, 200)
+        self.assertEqual(data[:4], b"wOF2")
+        self.assertEqual(self.request("/yapnr/brand/../agent/web.py")[0], 400)
+        payload = dict(
+            action="open",
+            client="00000000-0000-0000-0000-000000000000",
+            session="00000000-0000-0000-0000-000000000001",
+        )
+        self.assertEqual(self.request("/yapnr/api/presence/article", payload, origin=False)[0], 400)
+        self.assertEqual(self.request("/yapnr/api/presence/article", payload)[0], 200)
+        status, _, data = self.request("/yapnr/api/timing/article")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(json.loads(data)["sessions"]), 1)
+        source = self.root / "main.ato"
+        source.write_text("module Main:\n    pass\n")
+        payload = dict(
+            path="main.ato", sha256=workspace.file_sha(source), text="module Main:\n    x = 1\n"
+        )
+        self.assertEqual(self.request("/yapnr/api/source-update/article", payload)[0], 200)
+        self.assertEqual(self.request("/yapnr/api/source-update/article", payload)[0], 400)
+
     def test_main_message_arms_selected_model_and_stop_disables_continuation(self):
         with workspace.lock(self.root) as folder:
             workspace.atomic(

@@ -1,9 +1,14 @@
 /* Workspace-native UI. OpenCode supplies the runtime API, never the page shell. */
+import { Workbench } from '/yapnr/dock.js';
+import { mountSource } from '/yapnr/source-view.js';
+import { mountTiming } from '/yapnr/timing-view.js';
+import { mountViewer, sendView } from '/yapnr/adapters.js';
 import { mountTraceability } from '/yapnr/traceability.js';
 
 (() => {
   const shadow = document;
-  const $ = id => document.getElementById(id);
+  const $ = id =>
+    id === 'body' && state.bodyTarget ? state.bodyTarget : document.getElementById(id);
   const state = {
     project: '',
     tab: 'artifacts',
@@ -24,7 +29,17 @@ import { mountTraceability } from '/yapnr/traceability.js';
     sessionId: '',
     messagesKey: '',
     providers: null,
-    chatDrafts: {},
+    chatDrafts: (() => {
+      try {
+        return JSON.parse(localStorage.getItem('yapnr.ask-drafts') || '{}');
+      } catch {
+        return {};
+      }
+    })(),
+    bodyTarget: null,
+    nativeViews: {},
+    sourceViews: {},
+    viewerFrames: {},
     generation: 0,
   };
   const say = text => {
@@ -67,37 +82,340 @@ import { mountTraceability } from '/yapnr/traceability.js';
   const chatPath = id => `/workspace/${state.project}/session/${id}`;
   const scope = () =>
     '?directory=' + encodeURIComponent(state.data?.agent_directory || '/projects/' + state.project);
+  const legacyTypes = {
+    artifacts: 'Artifacts',
+    scratchpad: 'Design document',
+    threads: 'Notes',
+    requirements: 'Requirements & risks',
+    activity: 'Activity',
+  };
+  const viewTitles = {
+    board: 'Board',
+    schematic: 'Schematic',
+    three: '3D',
+    source: 'Sources',
+    experiments: 'Experiments',
+    controls: 'View controls',
+    exploration: 'Exploration',
+    ask: 'Ask',
+    inspect: 'Inspect',
+    notes: 'Notes',
+    timing: 'Timing',
+    activity: 'Activity',
+    requirements: 'Requirements & risks',
+    artifacts: 'Artifacts',
+    scratchpad: 'Design document',
+  };
+  const wb = new Workbench($('shell'), {
+    activate: activateView,
+    announce: say,
+    layout: l => {
+      for (const name of ['conversation', 'inspect'])
+        $(name + '-layout').setAttribute('aria-pressed', String(l.preset === name));
+    },
+    close: async ids => {
+      if (
+        ids.some(id => state.sourceViews[id]?.dirty()) &&
+        !confirm('Discard unsaved source edits and close these views?')
+      )
+        return false;
+      if (
+        ids.includes('scratchpad') &&
+        state.dirty &&
+        !confirm('Discard unsaved document edits and close this view?')
+      )
+        return false;
+      for (const id of ids) state.sourceViews[id]?.discard();
+      if (ids.includes('scratchpad')) {
+        state.dirty = false;
+        delete wb.registry.get('scratchpad').element.dataset.rendered;
+      }
+      return true;
+    },
+  });
+  for (const [id, title] of Object.entries(viewTitles)) {
+    const element = id === 'ask' ? $('chat') : id === 'board' ? $('experiment') : node('div');
+    const entry = wb.register({ id, title, type: id, scope: 'Project / working tree' }, element);
+    if (legacyTypes[id] || id === 'notes') {
+      element.classList.add('legacy-view');
+      state.nativeViews[id] = entry;
+    }
+  }
+  let presenceSession = '',
+    presenceProject = '';
+  const client = localStorage.getItem('yapnr.client') || crypto.randomUUID();
+  localStorage.setItem('yapnr.client', client);
+  async function lifecycle(action, project = presenceProject) {
+    if (!project || !presenceSession) return;
+    await json('/yapnr/api/presence/' + encodeURIComponent(project), {
+      action,
+      client,
+      session: presenceSession,
+    });
+  }
+  async function startPresence(project) {
+    if (presenceProject) await lifecycle('close');
+    presenceProject = project;
+    presenceSession = crypto.randomUUID();
+    await lifecycle('open');
+  }
+  setInterval(() => lifecycle('heartbeat').catch(() => {}), 15000);
+  function activateView(id) {
+    if (id === 'notes') id = 'threads';
+    if (legacyTypes[id]) {
+      const entry = wb.registry.get(id === 'threads' ? 'notes' : id);
+      state.tab = id;
+      state.bodyTarget = entry.element;
+      if (
+        id === 'requirements' ||
+        entry.project !== state.project ||
+        !entry.element.dataset.rendered
+      ) {
+        entry.project = state.project;
+        entry.element.dataset.rendered = '1';
+        render();
+      }
+    }
+    if (id === 'source') ensureSource('source');
+    if (id === 'timing' && !state.timingProject) {
+      state.timingProject = state.project;
+      state.disposeTiming = mountTiming(wb.registry.get('timing').element, state.project, {
+        reveal: receipt => {
+          const item = state.data?.artifacts.find(a => a.id === receipt);
+          if (item) showArtifact(item);
+          else {
+            openLegacy('activity');
+            say('Workflow receipt ' + receipt + ' is recorded in .yapnr/workflow/objects.');
+          }
+        },
+        native: () => {
+          wb.register({
+            id: 'native-timing',
+            title: 'Experiment timing',
+            type: 'timing',
+            scope: 'Native experiment statistics',
+          });
+          ensureViewer('native-timing');
+          wb.open('native-timing');
+        },
+      });
+    }
+    if (['board', 'schematic', 'three', 'experiments', 'exploration', 'native-timing'].includes(id))
+      ensureViewer(id);
+    if (id === 'controls') requestControls();
+  }
+  function openLegacy(type, force = false) {
+    const id = type === 'threads' ? 'notes' : type,
+      entry = wb.registry.get(type) || wb.registry.get(id);
+    if (force && entry) delete entry.element.dataset.rendered;
+    wb.open(id);
+    activateView(id);
+  }
+  function ensureSource(id, path) {
+    const entry = wb.registry.get(id);
+    if (!entry || (entry.project === state.project && state.sourceViews[id])) return;
+    entry.project = state.project;
+    entry.type = 'source';
+    state.sourceViews[id] = mountSource(entry.element, {
+      project: state.project,
+      path,
+      report: say,
+      onOpen: p => openSource(p),
+      onDirty: dirty => {
+        entry.scope = (dirty ? 'Unsaved buffer' : 'Working tree') + (path ? ' / ' + path : '');
+        wb.render();
+      },
+    });
+  }
+  function openSource(path) {
+    if (
+      path.split('/').some(p => ['.ato', '.venv', 'venv', 'site-packages'].includes(p)) &&
+      state.data?.experiment_url
+    ) {
+      const id = 'reference:' + state.project + ':' + path,
+        url = new URL(state.data.experiment_url);
+      url.searchParams.set('src', path + ':1');
+      const entry = wb.register({
+        id,
+        title: path.split('/').pop(),
+        type: 'source',
+        project: state.project,
+        scope: 'Read-only reference source',
+        viewerUrl: url.href,
+      });
+      state.viewerFrames[id] = mountViewer(entry.element, url.href, 'source');
+      wb.open(id);
+      return;
+    }
+
+    const id = 'source:' + state.project + ':' + path;
+    wb.register({
+      id,
+      title: path.split('/').pop(),
+      path,
+      type: 'source',
+      project: state.project,
+      scope: 'Working tree / ' + path,
+    });
+    ensureSource(id, path);
+    wb.open(id, wb.layout.panes.source ? 'source' : undefined);
+  }
+  function requestControls() {
+    const id =
+      state.pinnedControls ||
+      (wb.activeCentral ? wb.layout.panes[wb.activeCentral]?.active : 'board');
+    const target = state.viewerFrames[id] || state.viewerFrames.board;
+    state.controlsTarget = target;
+    sendView(target, 'yapnr-view-controls');
+  }
+  function ensureViewer(id) {
+    const entry = wb.registry.get(id);
+    if (!entry) return;
+    const mode = id === 'native-timing' ? 'timing' : id;
+    state.viewerFrames[id] = mountViewer(
+      entry.element,
+      state.data?.experiment_url,
+      mode,
+      'Live / artifact hash unavailable'
+    );
+  }
+  function mountProjectViews() {
+    for (const id of ['board', 'schematic']) ensureViewer(id);
+    for (const id of ['three', 'experiments', 'exploration', 'native-timing'])
+      if (state.viewerFrames[id]) ensureViewer(id);
+    ensureSource('source');
+    const inspect = wb.registry.get('inspect').element;
+    if (!inspect.childElementCount) {
+      inspect.classList.add('inspection');
+      inspect.append(
+        node(
+          'p',
+          'Select an object in a linked engineering view. Highlights preserve the camera; Reveal navigates explicitly.'
+        )
+      );
+    }
+    for (const [id, entry] of wb.registry) {
+      if (entry.project !== state.project) continue;
+      if (id.startsWith('source:')) ensureSource(id, entry.path);
+      if (entry.artifact) {
+        const item = state.data.artifacts.find(a => a.id === entry.artifact);
+        if (item) showArtifact(item, { open: false });
+      }
+      if (entry.viewerUrl && !state.viewerFrames[id])
+        state.viewerFrames[id] = mountViewer(
+          entry.element,
+          entry.viewerUrl,
+          id.startsWith('reference:') ? 'source' : 'board'
+        );
+    }
+    for (const [id, entry] of Object.entries(state.nativeViews))
+      if (!entry.element.hidden && entry.project !== state.project) activateView(id);
+    activateView('timing');
+  }
   function openPanel() {
-    document.body.classList.remove('chat-expanded');
+    /* Native content belongs to its persistent dock tab. */
   }
   function switchView(mode) {
-    state.mode = mode;
     if (mode === 'chat') {
-      document.body.classList.add('chat-expanded');
+      wb.dispatch({ type: 'preset', name: 'conversation' });
       return;
     }
-    openPanel();
-    state.tab = 'experiment';
-    $('view-title').textContent = 'Experiment';
-    $('body').replaceChildren();
-    $('body').hidden = true;
-    $('experiment').hidden = false;
-    const url = state.data?.experiment_url;
-    if (!url) {
-      $('experiment').replaceChildren();
-      return;
-    }
-    const embedded = new URL(url, location.href);
-    embedded.searchParams.set('workspace', '1');
-    let frame = $('experiment').querySelector('iframe');
-    if (!frame || frame.src !== embedded.href) {
-      frame = node('iframe');
-      frame.src = embedded.href;
-      frame.title = `${state.project} experiment`;
-      frame.addEventListener('load', () => (frame.dataset.loaded = '1'));
-      $('experiment').replaceChildren(frame);
-    }
+    if (wb.layout.preset === 'conversation') wb.dispatch({ type: 'preset', name: 'inspect' });
+    wb.open('board');
   }
+  $('conversation-layout').onclick = () => wb.dispatch({ type: 'preset', name: 'conversation' });
+  $('inspect-layout').onclick = () => wb.dispatch({ type: 'preset', name: 'inspect' });
+  $('undo-layout').onclick = () => wb.undoLayout();
+  $('view-menu').onclick = () => {
+    const choices = $('view-choices');
+    choices.replaceChildren();
+    for (const [id, entry] of wb.registry)
+      if (!entry.project || entry.project === state.project)
+        choices.append(
+          button(entry.title, () => {
+            wb.open(id);
+            activateView(id);
+            $('views-dialog').close();
+          })
+        );
+    choices.append(
+      button('Conversation arrangement', () => {
+        $('views-dialog').close();
+        switchView('chat');
+      }),
+      button('Inspect arrangement', () => {
+        $('views-dialog').close();
+        switchView('experiment');
+      }),
+      button('Undo layout', () => wb.undoLayout()),
+      button('Preferences', () => {
+        $('views-dialog').close();
+        $('preferences-dialog').showModal();
+      }),
+      button($('shell').hidden ? 'Reopen project' : 'Close project', () => {
+        $('views-dialog').close();
+        $('close-project').click();
+      })
+    );
+    $('views-dialog').showModal();
+  };
+  $('reset-layout').onclick = () => {
+    wb.dispatch({ type: 'reset' });
+    $('views-dialog').close();
+  };
+  const theme = localStorage.getItem('yapnr.theme') || 'light';
+  document.documentElement.dataset.theme = theme;
+  function syncTheme() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    $('theme').textContent = dark ? 'Light' : 'Dark';
+    $('brand').querySelector('img').src =
+      '/yapnr/brand/assets/yapnr-mark-' + (dark ? 'dark' : 'light') + '.svg';
+    for (const f of Object.values(state.viewerFrames))
+      sendView(f, 'yapnr-theme', {
+        theme: dark ? 'dark' : 'light',
+        reduceTransparency: $('reduce-transparency').checked,
+      });
+  }
+  $('theme').onclick = () => {
+    document.documentElement.dataset.theme =
+      document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('yapnr.theme', document.documentElement.dataset.theme);
+    syncTheme();
+  };
+  $('preferences').onclick = () => $('preferences-dialog').showModal();
+  $('reduce-transparency').checked = localStorage.getItem('yapnr.reduce-transparency') === 'true';
+  document.documentElement.dataset.reduceTransparency = String($('reduce-transparency').checked);
+  $('reduce-transparency').onchange = () => {
+    document.documentElement.dataset.reduceTransparency = String($('reduce-transparency').checked);
+    localStorage.setItem('yapnr.reduce-transparency', String($('reduce-transparency').checked));
+    syncTheme();
+  };
+  $('prompt').addEventListener('input', () => {
+    if (session()) {
+      state.chatDrafts[state.project + ':' + session()] = $('prompt').value;
+      localStorage.setItem('yapnr.ask-drafts', JSON.stringify(state.chatDrafts));
+    }
+  });
+  $('close-project').onclick = async () => {
+    if ($('shell').hidden) {
+      await startPresence(state.project);
+      $('shell').hidden = false;
+      $('close-project').textContent = 'Close project';
+      wb.render();
+      return;
+    }
+    await lifecycle('close');
+    presenceProject = '';
+    say('Project closed in this window. Background work continues.');
+    $('shell').hidden = true;
+    $('close-project').textContent = 'Reopen project';
+  };
+  $('pending-actions').onclick = async () => {
+    if ($('shell').hidden) await $('close-project').onclick();
+    if (state.data?.workflow.state === 'requirements_review') openLegacy('requirements');
+    else wb.open('ask');
+  };
+  syncTheme();
   async function setMain(id) {
     await json(endpoint('main-thread'), { session: id });
     state.main[state.project] = id;
@@ -122,9 +440,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
     list.replaceChildren();
     for (const t of state.threads?.threads || []) {
       const b = button(t.title, () =>
-        t.kind === 'opencode'
-          ? selectSession(t.id)
-          : ((state.tab = 'threads'), openPanel(), showThread(t))
+        t.kind === 'opencode' ? selectSession(t.id) : (openLegacy('threads'), showThread(t))
       );
       b.className = 'thread-link' + (t.id === session() ? ' selected' : '');
       b.append(
@@ -167,21 +483,6 @@ import { mountTraceability } from '/yapnr/traceability.js';
               data.workflow.speculative ? ' · pending acceptance' : ''
             }`;
       renderWorkflow(data.workflow, data.harness);
-      const reviewKey = project + ':' + data.workflow.revision;
-      if (data.workflow.state === 'requirements_review' && state.reviewNotification !== reviewKey) {
-        state.reviewNotification = reviewKey;
-        state.tab = 'requirements';
-        state.active = null;
-        render();
-      }
-
-      const captureKey = project + ':' + data.workflow.revision;
-      if (data.workflow.state === 'schematic' && state.captureNotification !== captureKey) {
-        state.captureNotification = captureKey;
-        state.active = null;
-        switchView('experiment');
-      }
-
       $('recording').textContent = `Recording: ${data.recording}`;
       renderSidebar();
       if (!state.dirty && state.tab === 'scratchpad' && !state.active) {
@@ -191,8 +492,13 @@ import { mountTraceability } from '/yapnr/traceability.js';
           state.revision = data.scratchpad.revision;
         }
       }
-      if (state.tab === 'experiment') switchView('experiment');
-      else if (!$('body').childElementCount) render();
+      mountProjectViews();
+      $('pending-actions').hidden =
+        data.workflow.state !== 'requirements_review' && !$('requests').childElementCount;
+      $('pending-actions').textContent =
+        data.workflow.state === 'requirements_review'
+          ? 'Requirements review'
+          : 'Agent needs your input';
     } catch (e) {
       say(e.message);
     } finally {
@@ -301,12 +607,20 @@ import { mountTraceability } from '/yapnr/traceability.js';
       if (t.kind === 'focused' && state.data?.experiment_url)
         body.append(
           button('Continue in Experiment Ask', () => {
-            switchView('experiment');
-            const frame = $('experiment').querySelector('iframe');
+            const id = 'focused:' + state.project + ':' + t.id;
+            const entry = wb.register({
+              id,
+              title: 'Focused Ask · ' + t.title,
+              type: 'ask',
+              project: state.project,
+              scope: 'Focused thread / ' + t.id,
+            });
+            const frame = mountViewer(entry.element, state.data.experiment_url, 'ask');
+            wb.open(id, 'right');
             const send = () =>
               frame.contentWindow.postMessage(
                 { type: 'yapnr-open-thread', session: t.id },
-                new URL(state.data.experiment_url, location.href).origin
+                new URL(frame.src).origin
               );
             if (frame.dataset.loaded) send();
             else
@@ -504,7 +818,9 @@ import { mountTraceability } from '/yapnr/traceability.js';
       try {
         await json(endpoint('approve'), { artifacts: entries.map(x => x.item.id) });
         await refresh();
-        render();
+        panel.remove();
+        reviewControls(container, items);
+        if (state.data.workflow.state === 'schematic') switchView('experiment');
         if (
           state.data.workflow.state === 'schematic' &&
           state.data.workflow.accepted_revision === state.data.workflow.revision &&
@@ -551,7 +867,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
                   revision: note.rev,
                 });
                 await refresh();
-                render();
+                panel.remove();
+                reviewControls(container, items);
               } catch (e) {
                 say(e.message);
               }
@@ -578,7 +895,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
             question: question.checked,
           });
           await refresh();
-          render();
+          panel.remove();
+          reviewControls(container, items);
         } catch (e) {
           say(e.message);
         }
@@ -603,17 +921,17 @@ import { mountTraceability } from '/yapnr/traceability.js';
       switchView('experiment');
       return;
     }
-    $('experiment').hidden = true;
     if (state.tab === 'requirements') {
       const article = state.project;
       state.active = null;
       body.append(node('p', 'Loading requirements model…'));
       json(endpoint('requirements'))
         .then(data => {
-          if (state.tab === 'requirements' && state.project === article) {
+          if (state.project === article) {
             mountTraceability(body, data, {
               openArtifact: showArtifact,
               ask: text => {
+                wb.open('ask');
                 $('prompt').value = text;
                 $('prompt').focus();
               },
@@ -629,6 +947,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
             );
             const controls = node('div');
             reviewControls(controls, pending);
+            controls.append(button('Reload YAML model', () => openLegacy('requirements', true)));
             body.prepend(controls);
           }
         })
@@ -717,18 +1036,27 @@ import { mountTraceability } from '/yapnr/traceability.js';
       body.append(card);
     }
   }
-  async function showArtifact(item) {
-    $('experiment').hidden = true;
-    $('body').hidden = false;
-    $('view-title').textContent = item.title;
-    state.active = item;
-    state.strokes = [];
-    state.view = null;
-    const body = $('body');
+  async function showArtifact(item, { open = true } = {}) {
+    const id = 'artifact:' + state.project + ':' + item.id;
+    const entry = wb.register({
+      id,
+      title: item.title,
+      type: item.kind,
+      project: state.project,
+      artifact: item.id,
+      scope: 'Artifact / ' + item.id,
+    });
+    if (open) {
+      wb.open(id);
+      state.active = item;
+    }
+    const body = entry.element;
+    if (body.dataset.rendered) return;
+    body.dataset.rendered = '1';
     body.replaceChildren(
       button('← Artifacts', () => {
         state.active = null;
-        render();
+        openLegacy('artifacts');
       }),
       node('h2', item.title),
       node('div', item.id, 'muted')
@@ -780,10 +1108,12 @@ import { mountTraceability } from '/yapnr/traceability.js';
       say(e.message);
     }
   }
-  function imageEditor(view, actions, url, item) {
+  function imageEditor(view, actions, url, item, capturedView = null) {
+    const strokes = [];
+    const project = state.project;
     const image = new Image();
     image.onload = () => {
-      if (state.active?.id !== item.id) return;
+      if (!view.isConnected || project !== state.project) return;
       const canvas = node('canvas');
       const scale = Math.min(1, 1600 / image.width, 1600 / image.height);
       canvas.width = Math.max(1, Math.round(image.width * scale));
@@ -804,7 +1134,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
         ctx.strokeStyle = '#ff4545';
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
-        for (const points of state.strokes) {
+        for (const points of strokes) {
           ctx.beginPath();
           points.forEach(([x, y], i) =>
             i
@@ -817,7 +1147,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
       canvas.onpointerdown = event => {
         canvas.setPointerCapture(event.pointerId);
         drawing = [position(event)];
-        state.strokes.push(drawing);
+        strokes.push(drawing);
       };
       canvas.onpointermove = event => {
         if (drawing) {
@@ -833,7 +1163,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
       view.append(node('label', 'Review note'), note);
       actions.append(
         button('Undo mark', () => {
-          state.strokes.pop();
+          strokes.pop();
           redraw();
         }),
         button('Save annotation', async () => {
@@ -841,8 +1171,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
             const annotated = await json(endpoint('annotation'), {
               artifact: item.id,
               image: canvas.toDataURL('image/png'),
-              strokes: state.strokes,
-              view: state.view,
+              strokes: strokes,
+              view: capturedView,
               note: note.value,
             });
             state.savedAnnotation = annotated;
@@ -856,8 +1186,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
             const annotated = await json(endpoint('annotation'), {
               artifact: item.id,
               image: canvas.toDataURL('image/png'),
-              strokes: state.strokes,
-              view: state.view,
+              strokes: strokes,
+              view: capturedView,
               note: note.value,
             });
             await review(
@@ -875,27 +1205,24 @@ import { mountTraceability } from '/yapnr/traceability.js';
   }
   addEventListener('message', event => {
     const value = event.data;
-    if (
-      !['yapnr-ready', 'yapnr-snapshot'].includes(value?.type) ||
-      !state.active ||
-      value.artifact !== state.active.id
-    )
-      return;
-    const frame = shadow.querySelector('iframe[data-yapnr-artifact]');
-    if (!frame || event.source !== frame.contentWindow) return;
+    if (!['yapnr-ready', 'yapnr-snapshot'].includes(value?.type)) return;
+    const entry = wb.registry.get('artifact:' + state.project + ':' + value.artifact);
+    const frame = entry?.element.querySelector('iframe[data-yapnr-artifact]');
+    const item = state.data?.artifacts.find(a => a.id === value.artifact);
+    if (!frame || event.source !== frame.contentWindow || !item) return;
     if (value.type === 'yapnr-ready') {
-      const capture = shadow.querySelector('button[data-scene-capture]');
-      if (capture) capture.disabled = false;
+      entry.element.querySelector('[data-scene-capture]').disabled = false;
       return;
     }
-    if (!value.image?.startsWith('data:image/png;base64,')) {
-      say('Scene has no valid render yet. Try again after it loads.');
-      return;
-    }
-    state.view = value.view;
-    const view = $('body').querySelector('.view'),
-      actions = $('body').querySelector('.actions');
-    imageEditor(view, actions, value.image, state.active);
+    if (!value.image?.startsWith('data:image/png;base64,'))
+      return say('Scene has no valid render yet.');
+    imageEditor(
+      entry.element.querySelector('.view'),
+      entry.element.querySelector('.actions'),
+      value.image,
+      item,
+      value.view
+    );
   });
 
   function inlineArtifact(id, container) {
@@ -1244,6 +1571,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
     if (state.sessionId)
       state.chatDrafts[state.project + ':' + state.sessionId] = $('prompt').value;
     state.sessionId = id;
+    wb.registry.get('ask').scope = 'Session / ' + id;
+    wb.render();
     state.messagesKey = '';
     $('prompt').value = state.chatDrafts[state.project + ':' + id] || '';
     $('chat-title').textContent =
@@ -1387,6 +1716,10 @@ import { mountTraceability } from '/yapnr/traceability.js';
     model.value = selected;
   }
   $('send').onclick = async () => {
+    const submittedContext = structuredClone({
+      selection: state.selection,
+      scope: state.selectionScope || null,
+    });
     const text = $('prompt').value.trim();
     if (!text) return;
     if (!session()) {
@@ -1405,13 +1738,14 @@ import { mountTraceability } from '/yapnr/traceability.js';
         model: { providerID, modelID },
         text:
           text +
-          (state.selection
-            ? '\n\nSelected engineering context (inspect against current artifact):\n' +
-              JSON.stringify(state.selection, null, 2)
+          (submittedContext.selection
+            ? '\n\nSubmitted engineering context (frozen artifact scope):\n' +
+              JSON.stringify(submittedContext, null, 2)
             : ''),
       });
       $('prompt').value = '';
       state.chatDrafts[state.project + ':' + session()] = '';
+      localStorage.setItem('yapnr.ask-drafts', JSON.stringify(state.chatDrafts));
       await refreshChat();
     } catch (e) {
       say(e.message);
@@ -1441,17 +1775,26 @@ import { mountTraceability } from '/yapnr/traceability.js';
     }
   };
   $('new-thread').onclick = newThread;
-  $('expand-chat').onclick = () => document.body.classList.toggle('chat-expanded');
+  $('expand-chat').onclick = () =>
+    wb.dispatch({
+      type: 'preset',
+      name: wb.layout.preset === 'conversation' ? 'inspect' : 'conversation',
+    });
   $('tabs').onclick = e => {
     const tab = e.target.dataset.tab;
     if (!tab) return;
-    state.tab = tab;
     state.active = null;
     state.thread = null;
-    openPanel();
-    render();
+    if (tab === 'experiment') switchView('experiment');
+    else openLegacy(tab, true);
     if (tab === 'threads') refreshThreads();
   };
+  addEventListener('beforeunload', e => {
+    if (state.dirty || Object.values(state.sourceViews).some(v => v.dirty())) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
   let eventStream = null,
     eventTimer = null;
   function subscribe() {
@@ -1472,7 +1815,10 @@ import { mountTraceability } from '/yapnr/traceability.js';
     };
   }
   async function changeProject(name, wanted) {
-    if (state.dirty && !confirm('Discard unsaved document edits?')) {
+    if (
+      (state.dirty || Object.values(state.sourceViews).some(v => v.dirty())) &&
+      !confirm('Discard unsaved document/source edits?')
+    ) {
       $('project').value = state.project;
       return;
     }
@@ -1497,19 +1843,34 @@ import { mountTraceability } from '/yapnr/traceability.js';
     $('body').replaceChildren();
     state.disposeDesign?.();
     state.designKey = null;
-    $('experiment').replaceChildren();
-    $('experiment').hidden = true;
+    for (const [id, view] of Object.entries(state.sourceViews)) {
+      view.discard();
+      view.dispose();
+      wb.registry.get(id).project = null;
+    }
+    state.sourceViews = {};
+    for (const id of ['source', 'inspect']) wb.registry.get(id).element.replaceChildren();
     $('project').value = name;
     subscribe();
+    wb.setProject(name);
+    $('shell').hidden = false;
+    $('close-project').textContent = 'Close project';
+    for (const entry of Object.values(state.nativeViews)) delete entry.element.dataset.rendered;
+    state.disposeTiming?.();
+    state.timingProject = null;
+    state.sourceViews.source?.dispose();
+    wb.registry.get('source').project = null;
+    await startPresence(name);
     await refresh();
     await refreshThreads();
     const chats = state.threads?.threads.filter(t => t.kind === 'opencode') || [];
     if (!state.main[name] && chats.length === 1) await setMain(chats[0].id);
-    state.tab = state.data?.workflow.state === 'requirements_review'
-      ? 'requirements'
-      : state.data?.workflow.state === 'schematic' || state.data?.experiment_url
-        ? 'experiment'
-        : 'artifacts';
+    state.tab =
+      state.data?.workflow.state === 'requirements_review'
+        ? 'requirements'
+        : state.data?.workflow.state === 'schematic' || state.data?.experiment_url
+          ? 'experiment'
+          : 'artifacts';
     const id = chats.find(t => t.id === wanted)?.id || state.main[name] || chats[0]?.id;
     if (id) await selectSession(id);
     else {
@@ -1517,7 +1878,13 @@ import { mountTraceability } from '/yapnr/traceability.js';
       history.replaceState(null, '', '/workspace/' + name);
       $('messages').append(node('p', 'Start a conversation to begin this project.', 'empty'));
     }
-    render();
+    if (state.data?.workflow.state === 'requirements_review') openLegacy('requirements');
+    else activateView(wb.layout.panes[leavesForLayout()].active);
+    function leavesForLayout() {
+      let node = wb.layout.tree;
+      while (!node.pane) node = node.first;
+      return node.pane;
+    }
   }
   $('project').onchange = () => changeProject($('project').value).catch(e => say(e.message));
   $('new-project').onclick = () => {
@@ -1652,21 +2019,195 @@ import { mountTraceability } from '/yapnr/traceability.js';
     }
   };
   addEventListener('message', event => {
-    const frame = $('experiment').querySelector('iframe');
-    if (
-      !frame ||
-      event.source !== frame.contentWindow ||
-      event.origin !== new URL(frame.src).origin ||
-      !['yapnr-selection', 'yapnr-ask-selection'].includes(event.data?.type)
-    )
+    const frame = Object.values(state.viewerFrames).find(
+      f => f && event.source === f.contentWindow
+    );
+    if (!frame || event.origin !== new URL(frame.src).origin) return;
+    const data = event.data;
+    if (data?.type === 'yapnr-view-error') return say('Viewer: ' + data.error);
+    if (data?.type === 'yapnr-comparison-ready') {
+      const id = 'comparison:' + state.project + ':' + data.pin,
+        base = new URL(state.data.experiment_url);
+      base.searchParams.set('checkpoint', data.pin);
+      base.searchParams.set('lane', data.scope.lane);
+      base.searchParams.set('phase', data.scope.phase);
+      const entry = wb.register({
+        id,
+        title: 'Pinned Board · ' + data.pin.slice(0, 8),
+        type: 'board',
+        project: state.project,
+        viewerUrl: base.href,
+        scope:
+          'Pinned artifact / ' + (data.scope.board_sha256 || data.scope.layout_sha256 || data.pin),
+      });
+      state.viewerFrames[id] = mountViewer(entry.element, base.href, 'board');
+      wb.open(id);
       return;
-    state.selection = event.data.selection;
+    }
+    if (data?.type === 'yapnr-central-interaction') {
+      wb.dismiss();
+      return;
+    }
+    if (data?.type === 'yapnr-view-ready') {
+      const entry = wb.registry.get(
+        Object.keys(state.viewerFrames).find(id => state.viewerFrames[id] === frame)
+      );
+      if (!entry) return;
+      entry.scope =
+        (entry.viewerUrl?.includes('checkpoint=')
+          ? 'Pinned artifact / '
+          : entry.type === 'source'
+            ? 'Reference source / '
+            : 'Artifact / ') +
+        (data.scope?.board_sha256?.slice(0, 12) || 'hash unavailable') +
+        ' / ' +
+        (data.scope?.lane || 'no lane') +
+        ' / ' +
+        (data.scope?.phase || 'live');
+      frame.dataset.scope = JSON.stringify(data.scope || {});
+      wb.render();
+      syncTheme();
+      return;
+    }
+    if (data?.type === 'yapnr-context-mismatch')
+      return say('Selection revision differs from this view. Highlight not applied.');
+    if (data?.type === 'yapnr-controls-state' && frame === state.controlsTarget) {
+      const body = wb.registry.get('controls').element;
+      body.replaceChildren(node('h3', 'View controls'));
+      const targets = node('select');
+      targets.setAttribute('aria-label', 'View controls target');
+      const follow = node('option', 'Follow active engineering view');
+      follow.value = '';
+      targets.append(follow);
+      for (const [id, f] of Object.entries(state.viewerFrames)) {
+        if (!f || !['board', 'schematic', 'three'].includes(id)) continue;
+        const o = node('option', 'Pin to ' + id);
+        o.value = id;
+        targets.append(o);
+      }
+      targets.value = state.pinnedControls || '';
+      targets.onchange = () => {
+        state.pinnedControls = targets.value;
+        requestControls();
+      };
+      body.append(
+        targets,
+        node('p', 'Target: ' + frame.dataset.mode),
+        button('Pin comparison view', () => sendView(frame, 'yapnr-pin-comparison'))
+      );
+      for (const item of data.items || []) {
+        let input;
+        if (item.type === 'button')
+          input = button(item.label, () => sendView(frame, 'yapnr-view-command', { id: item.id }));
+        else if (item.options) {
+          input = node('select');
+          for (const option of item.options) {
+            const o = node('option', option.label);
+            o.value = option.value;
+            input.append(o);
+          }
+          input.value = item.value;
+        } else {
+          input = node('input');
+          input.type = item.type === 'checkbox' ? 'checkbox' : 'text';
+          input.checked = !!item.checked;
+          input.value = item.value || '';
+        }
+        input.onchange = () =>
+          sendView(frame, 'yapnr-view-command', {
+            id: item.id,
+            value: input.value,
+            checked: input.checked,
+          });
+        const label = node('label', item.type === 'button' ? '' : item.label);
+        label.append(input);
+        body.append(label);
+      }
+      return;
+    }
+    if (!['yapnr-selection', 'yapnr-ask-selection'].includes(data?.type)) return;
+    state.selection = structuredClone(data.selection);
+    state.selectionScope = data.scope || JSON.parse(frame.dataset.scope || '{}');
     $('selection-context').textContent = state.selection
-      ? `Context: ${
-          state.selection.ref || state.selection.name || state.selection.kind || 'selection'
-        }`
+      ? 'Context: ' + (state.selection.ref || state.selection.name || state.selection.kind)
       : '';
-    if (event.data.type === 'yapnr-ask-selection') $('prompt').focus();
+    const inspect = wb.registry.get('inspect').element;
+    inspect.replaceChildren(
+      node('h3', state.selection?.ref || state.selection?.name || 'Selection'),
+      node(
+        'pre',
+        JSON.stringify({ selection: state.selection, scope: state.selectionScope }, null, 2)
+      ),
+      node(
+        'p',
+        'Source-index metadata is shown when available; equivalence to the built artifact is not recorded.'
+      ),
+      button('Reveal', () =>
+        sendView(frame, 'yapnr-linked-selection', {
+          selection: state.selection,
+          scope: state.selectionScope,
+          reveal: true,
+        })
+      ),
+      button('Add to Ask', () => {
+        wb.open('ask');
+        $('prompt').focus();
+      })
+    );
+    for (const [key, label] of [
+      ['octopart_url', 'Octopart'],
+      ['easyeda_url', 'EasyEDA'],
+      ['datasheet_url', 'Datasheet'],
+    ]) {
+      const link = data.record?.part_links?.[key] || data.record?.[key];
+      try {
+        const url = new URL(link);
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) continue;
+        const a = node('a', label);
+        a.href = url.href;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        inspect.append(a, node('br'));
+      } catch {}
+    }
+    if (data.record) {
+      const part = data.record;
+      for (const key of ['type', 'part', 'instance', 'value', 'footprint', 'doc'])
+        if (typeof part[key] === 'string') inspect.append(node('p', part[key]));
+      if (part.file)
+        inspect.append(
+          button('Source · ' + part.file + ':' + (part.line || 1), () => openSource(part.file))
+        );
+      if (part.pins) {
+        const table = node('table');
+        const header = node('tr');
+        for (const title of ['Pad', 'Pin', 'Net']) header.append(node('th', title));
+        table.append(header);
+        for (const [pad, pin] of Object.entries(part.pins)) {
+          const row = node('tr');
+          for (const text of [pad, pin.pin || '', pin.net || 'unconnected'])
+            row.append(node('td', text));
+          table.append(row);
+        }
+        inspect.append(table);
+      }
+      const details = node('details');
+      details.append(
+        node('summary', 'Source-index record'),
+        node('pre', JSON.stringify(part, null, 2))
+      );
+      inspect.append(details);
+    }
+    for (const other of Object.values(state.viewerFrames))
+      if (other && other !== frame)
+        sendView(other, 'yapnr-linked-selection', {
+          selection: state.selection,
+          scope: state.selectionScope,
+        });
+    if (data.type === 'yapnr-ask-selection') {
+      wb.open('ask');
+      $('prompt').focus();
+    }
   });
   $('clear-context').onclick = () => {
     state.selection = null;

@@ -4,7 +4,7 @@ import * as THREE from '@@ORIGIN@@/yapnr/vendor/three.module.js';
 import {OrbitControls} from '@@ORIGIN@@/yapnr/vendor/OrbitControls.js';
 let seed=Number('@@SEED@@');
 Math.random=()=>{seed=(1664525*seed+1013904223)>>>0;return seed/4294967296};
-const scene=new THREE.Scene();scene.background=new THREE.Color('#172331');
+const scene=new THREE.Scene();scene.background=new THREE.Color('#0e1713');
 const camera=new THREE.PerspectiveCamera(45,Math.max(1,innerWidth)/Math.max(1,innerHeight),.01,1000);camera.position.set(6,6,8);
 const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(1);renderer.setSize(Math.max(1,innerWidth),Math.max(1,innerHeight));document.body.append(renderer.domElement);
 const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=false;

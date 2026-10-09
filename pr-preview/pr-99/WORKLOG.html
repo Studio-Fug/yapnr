@@ -825,6 +825,38 @@ and hash-supported upstream/downstream navigation. Native routing telemetry is
 projected as data; absent provenance is explicitly unknown. The manifest indexes
 the registry and the workspace journal records attempt transitions.</p>
 </section>
+<section id="generated-build-diagnostics">
+<h3>Generated build diagnostics<a class="headerlink" href="#generated-build-diagnostics" title="Link to this heading">¶</a></h3>
+<p>OpenCode can read yapnr’s temporary Atopile build directories without external
+directory prompts, alongside installed dependencies and cached toolchains.
+Generated staging files remain protected from edits; unrelated temporary files
+retain their existing policy. Regression coverage checks the narrow rule and
+configuration preservation. This permission policy has no visual behavior, so
+an animation is not applicable.</p>
+</section>
+<section id="schematic-visual-milestones">
+<h3>Schematic visual milestones<a class="headerlink" href="#schematic-visual-milestones" title="Link to this heading">¶</a></h3>
+<p>Require screenshots of the existing schematic layout and selected symbols,
+instead of ad-hoc net-label sheets. Inline artifacts can link directly to the
+Schematic, Board or 3D tab through portable <code class="docutils literal notranslate"><span class="pre">workspace_view</span></code> metadata; matching
+workspace URLs restore that tab. Full regression: 291 targets pass; affected
+workflow, web and schematic checks pass after the link change. Live browser
+capture/link validation and reproducible visual evidence accompany the change.</p>
+</section>
+<section id="routing-observability-repair">
+<h3>Routing observability repair<a class="headerlink" href="#routing-observability-repair" title="Link to this heading">¶</a></h3>
+<p>Restore native per-candidate phase progress and missing campaign ancestors in
+the typed experiment tree. Preserve progress when a live lane is joined to a
+recorded attempt, retain sibling candidates, prioritize telemetry, and support
+expanding/collapsing groups with worker-status counts. Unknown progress remains
+indeterminate. The workflow guide requires connecting telemetry before routing;
+a phase transition alone does not create board geometry. Current validation:
+live native board capture succeeds; all 291 regression targets and final affected
+experiment/web tests pass. Packaged live browser QA verifies twelve native
+progress bars, four nested candidates, collapse/expand, selection, and visible
+progress contained within each row. The feature animation uses actual completed
+results; unknown progress remains indeterminate.</p>
+</section>
 </section>
 </section>
 
@@ -891,6 +923,9 @@ the registry and the workspace journal records attempt transitions.</p>
 <li><a class="reference internal" href="#known-issues">Known issues</a></li>
 <li><a class="reference internal" href="#do-not-retry">Do not retry</a><ul>
 <li><a class="reference internal" href="#native-typed-experiment-attempts">Native typed experiment attempts</a></li>
+<li><a class="reference internal" href="#generated-build-diagnostics">Generated build diagnostics</a></li>
+<li><a class="reference internal" href="#schematic-visual-milestones">Schematic visual milestones</a></li>
+<li><a class="reference internal" href="#routing-observability-repair">Routing observability repair</a></li>
 </ul>
 </li>
 </ul>

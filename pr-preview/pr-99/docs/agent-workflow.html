@@ -340,6 +340,22 @@ delivery rather than relying on container-local image paths. External viewers
 supplement those renders. For requirements alternatives, use small bounded
 three.js scenes in hosts that support inline interactive selections; otherwise
 provide inline still renders and identify the missing interactive capability.</p>
+<p>For schematic milestones, use the existing viewer’s schematic layout workflow
+with the successful build’s actual graph and selected symbol libraries. Capture
+a readable screenshot of that rendered schematic; a list of component boxes,
+footprint positions or net labels is not a schematic milestone. Publish the image
+with metadata <code class="docutils literal notranslate"><span class="pre">workspace_view:</span> <span class="pre">schematic</span></code> and the input graph SHA-256, then attach
+it with <code class="docutils literal notranslate"><span class="pre">[yapnr-artifact:ARTIFACT_ID]</span></code>. Its card links to the workspace’s Schematic
+tab; <code class="docutils literal notranslate"><span class="pre">/workspace/PROJECT?view=schematic</span></code> also opens that tab directly. Preserve
+superseded diagnostic images with accurate labels rather than deleting history.</p>
+<p>Connect placement and routing telemetry before launching a campaign: use
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">live</span> <span class="pre">PLAN</span> <span class="pre">--out</span> <span class="pre">viewer-live</span></code> for a supported campaign adapter, or set
+the engine worker’s <code class="docutils literal notranslate"><span class="pre">PNR_LIVE_DIR</span></code> to the attached viewer’s event directory root.
+Publish real engine events and native geometry with exact board hashes; keep
+candidate lanes distinct so the native Experiments tree can show sibling work
+and phase progress. A workflow transition alone supplies no board geometry.
+For completed runs without telemetry, import their actual placement/board outputs
+as labeled result previews; never fabricate intermediate frames or worker activity.</p>
 </section>
 <section id="shared-browser-workspace">
 <h2>Shared browser workspace<a class="headerlink" href="#shared-browser-workspace" title="Link to this heading">¶</a></h2>

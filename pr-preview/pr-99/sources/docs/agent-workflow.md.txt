@@ -386,14 +386,7 @@ only after final verification of every accepted requirement on one exact revisio
 
 ### Live schematic capture
 
-Entering the schematic stage opens the engineering workspace with a live atopile
-source pane. The browser polls article sources and completed netlist exports every
-second, retaining source selection and the last valid schematic during partial
-writes or build errors. The native schematic fallback draws generic component/pin
-symbols and actual exported net connectivity; an attached engineering viewer
-continues to provide its full schematic and PCB views alongside the sources.
-Run bounded incremental atopile builds after meaningful valid source edits and
-export the actual current `graph.json`. When multiple exports exist, declare the
-active project-relative path in `.yapnr/workspace/design.json` as
-`{"graph": "build/current/graph.json"}`. The view does not simulate connectivity
-from incomplete source text or claim a build succeeded merely because text changed.
+Entering the schematic stage opens the attached experiment workspace directly.
+Sources and schematic belong to that engineering surface; there is no intermediate
+source/netlist placeholder page. Attach the article's viewer with
+`--experiment ARTICLE=URL`. The conversation remains beside it.

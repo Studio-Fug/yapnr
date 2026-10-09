@@ -181,7 +181,7 @@ of the same sources give the same input id.
 ### On-demand selection and captured replay
 
 Authoring is the CLI default; `--online` remains an explicit alias. A catalog miss
-fetches the matching native component-service query. Successful responses are
+fetches public supplier facts for our local catalog matcher. Successful responses are
 hashed and retained in `.yapnr/parts/discovery.json`; every build report includes
 `discovery.json`, its digest, lookup/replay counts and explicit service failures.
 This captures the service's electrical attributes without inventing ratings.
@@ -191,12 +191,21 @@ catalog uploads occur. These files travel with a workspace archive. Captured
 article inputs take precedence over an operator cache, so replay does not depend
 on that cache containing parts selected in a later authoring build.
 
-The hosted Atopile service requires operator authentication, independently of the
-model provider. Run `yapnr atopile auth login` on the execution host; the official
-login prints a browser URL when headless and polls for completion. Alternatively,
-configure `YAPNR_COMPONENTS_API_TOKEN` outside the article. Credentials are never
-forwarded from the loopback client or written into snapshots/build environments.
-HTTP 401/403 is reported as an authentication failure, not an empty local catalog.
+The rules_atopile-derived local picker is the only component picker. It fetches
+public jlcsearch supplier facts and EasyEDA identity metadata on demand; it never
+calls the hosted Atopile API or reads an Atopile account/token. The existing hook
+provides a loopback-only placeholder where native Atopile expects authentication.
+No Atopile login is required. Raw supplier replies, their URLs and hashes, and
+converted catalogs are retained with each captured query. Public network/service
+failures are explicit, with no login remedy. Geometry continues through native
+EasyEDA import and is captured into the article for subsequent offline builds.
+
+Discovery supports typed resistor/capacitor requests and explicit LCSC/MPN picks.
+Other parameterized types need an explicit selection or a verified imported catalog.
+Supplier searches return at most 100 rows; up to eight matching identities are
+resolved per query. A search miss is bounded discovery, not proof that no matching
+part exists. Unknown ratings are not inferred from prose. Overload voltage is not
+substituted for a resistor's continuous working-voltage rating.
 
 Use `--offline` or `--frozen` for replay. Frozen CLI builds disable discovery;
 the runner rejects an explicit online/frozen combination. Captured successful

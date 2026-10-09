@@ -3,7 +3,7 @@
 atopile 0.15.8 resolves parameterised parts (a ``Resistor`` with a ``resistance`` and a
 ``package``) and explicit picks (``lcsc_id``, ``mpn``) by asking a components service. This
 service answers from local catalogs (``catalog.py``); an optional parent resolver captures
-missing hosted queries while the child continues to use loopback only. The footprints of a
+missing supplier facts while the child continues to use loopback only. The footprints of a
 picked part come from the project's parts directory, which the runner
 fills from the part cache; the atopile hook makes ``ato`` use them (``hook/``).
 

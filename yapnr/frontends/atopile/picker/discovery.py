@@ -1,8 +1,8 @@
 """Demand-driven components queries, captured in the article for offline replay.
 
-Credentials are read from the operator environment or native Atopile user session;
-loopback bearer headers are never forwarded or recorded. Responses remain in the
-pinned upstream wire format, without invented electrical attributes.
+Our rules_atopile-derived picker matches captured public supplier facts locally.
+No hosted Atopile API, credentials, or login are used. Loopback bearer headers are
+ignored. Raw supplier responses and converted catalogs are pinned for replay.
 """
 
 from __future__ import annotations
@@ -11,45 +11,22 @@ import contextlib
 import hashlib
 import json
 import os
-import subprocess
 import tempfile
 import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-SOURCE = "https://legacy.atopileapi.com"
-SCHEMA = "yapnr-components-discovery-v1"
+from yapnr.frontends.atopile.picker import supplier
+
+SOURCE = supplier.SOURCE
+SCHEMA = "yapnr-components-discovery-v2"
 RELATIVE = ".yapnr/parts/discovery.json"
-TOKEN_ENV = "YAPNR_COMPONENTS_API_TOKEN"
 MAX_RESPONSE = 4 * 1024 * 1024
 
 
 def encoded(value):
-    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
-
-
-def token(python):
-    value = os.environ.get(TOKEN_ENV)
-    if value:
-        return value
-    try:
-        result = subprocess.run(
-            [
-                str(python),
-                "-I",
-                "-c",
-                "from atopile.auth.session import get_stored_access_token; print(get_stored_access_token() or '')",
-            ],
-            capture_output=True,
-            timeout=15,
-            check=True,
-        )
-        if len(result.stdout) > 16384:
-            return None
-        return result.stdout.decode().strip() or None
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return None
+    return supplier.encoded(value)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -57,46 +34,50 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def fetch(method, path, body, bearer):
-    headers = {"User-Agent": "yapnr-components-discovery", "Accept": "application/json"}
-    if bearer:
-        headers["Authorization"] = "Bearer " + bearer
-    if body is not None:
-        headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(SOURCE + path, data=body, headers=headers, method=method)
+def read_public(url):
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; yapnr component-catalog)",
+            "Accept": "application/json",
+        },
+    )
+    with urllib.request.build_opener(NoRedirect()).open(request, timeout=12) as response:
+        raw = response.read(MAX_RESPONSE + 1)
+        if len(raw) > MAX_RESPONSE:
+            raise ValueError("Supplier response exceeds its size limit")
+        return json.loads(raw)
+
+
+def fetch(method, path, body):
     try:
-        with urllib.request.build_opener(NoRedirect()).open(request, timeout=12) as response:
-            raw = response.read(MAX_RESPONSE + 1)
-            if len(raw) > MAX_RESPONSE:
-                return 502, {"detail": "Component response exceeds its size limit"}
-            return response.status, json.loads(raw)
+        return 200, supplier.discover(method, path, body, read_public)
     except urllib.error.HTTPError as error:
-        if error.code in (401, 403):
-            return error.code, {
-                "detail": "Component service sign-in required: run yapnr atopile auth login "
-                "on the execution host, or configure " + TOKEN_ENV + " outside the article."
-            }
-        return 502, {"detail": "Component service returned HTTP " + str(error.code)}
-    except (OSError, ValueError, urllib.error.URLError):
-        return 502, {"detail": "Component service request failed; check connectivity and sign-in"}
+        return 502, {
+            "detail": "Public supplier returned HTTP "
+            + str(error.code)
+            + "; no Atopile login is used"
+        }
+    except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
+        return 502, {
+            "detail": "Public supplier discovery failed; check connectivity, query support and supplier metadata"
+        }
 
 
 class Discovery:
-    def __init__(self, project, *, online=False, python=None, request=fetch):
+    def __init__(self, project, *, online=False, request=fetch):
         self.root = Path(project).resolve()
         self.path = self.root / RELATIVE
         if self.path.exists() and (
             self.path.is_symlink() or not self.path.resolve().is_relative_to(self.root)
         ):
             raise ValueError("Component snapshot must stay inside the article")
-        self.online, self.python, self.request = online, python, request
+        self.online, self.request = online, request
         self.lock = threading.RLock()
         self.failures = []
         self.remote_queries = 0
         self.replayed_queries = 0
-        self._bearer = None
-        self._authenticated = False
-        self._auth_failure = None
+        self._service_failure = None
         self.document = self.read()
 
     def read(self):
@@ -105,6 +86,10 @@ class Discovery:
         if self.path.stat().st_size > 32 * 1024 * 1024:
             raise ValueError("Component snapshot exceeds its size limit")
         data = json.loads(self.path.read_text())
+        # The removed hosted fallback produced empty snapshots on authentication failure.
+        # Discard only those empty inputs; never silently rewrite captured evidence.
+        if data.get("schema") == "yapnr-components-discovery-v1" and data.get("queries") == {}:
+            return {"schema": SCHEMA, "source": SOURCE, "queries": {}}
         if (
             data.get("schema") != SCHEMA
             or data.get("source") != SOURCE
@@ -112,7 +97,8 @@ class Discovery:
         ):
             raise ValueError("Unsupported component snapshot")
         for key, entry in data["queries"].items():
-            if hashlib.sha256(encoded(entry["response"])).hexdigest() != entry["sha256"]:
+            content = {name: entry[name] for name in ("response", "catalogs", "sources")}
+            if hashlib.sha256(encoded(content)).hexdigest() != entry["sha256"]:
                 raise ValueError("Component snapshot response digest mismatch")
             if hashlib.sha256(encoded(entry["request"])).hexdigest() != key:
                 raise ValueError("Component snapshot request digest mismatch")
@@ -182,12 +168,19 @@ class Discovery:
                 return 200, entry["response"]
             if not self.online:
                 return local
-            if self._auth_failure:
-                return self._auth_failure
-            if not self._authenticated:
-                self._bearer = token(self.python) if self.python else os.environ.get(TOKEN_ENV)
-                self._authenticated = True
-            status, remote = self.request(method, path, body, self._bearer)
+            if self._service_failure:
+                return self._service_failure
+            missing = None
+            discovery_body = body
+            if path == "/v0/query":
+                queries = request["body"].get("queries", [])
+                missing = [
+                    index for index, result in enumerate(results) if not result.get("components")
+                ]
+                discovery_body = encoded({"queries": [queries[index] for index in missing]})
+            status, remote = self.request(method, path, discovery_body)
+            catalogs = remote.pop("_catalogs", []) if isinstance(remote, dict) else []
+            sources = remote.pop("_sources", []) if isinstance(remote, dict) else []
             self.remote_queries += 1
             batches = (
                 remote.get("results", [])
@@ -207,7 +200,7 @@ class Discovery:
                 for item in batches
             )
             if path == "/v0/query":
-                valid = valid and len(batches) == len(request["body"].get("queries", []))
+                valid = valid and len(batches) == len(missing)
             if status != 200 or not valid:
                 failure = {
                     "status": status if status != 200 else 502,
@@ -218,13 +211,19 @@ class Discovery:
                     ),
                 }
                 self.failures.append(failure)
-                if failure["status"] in (401, 403):
-                    self._auth_failure = (failure["status"], {"detail": failure["detail"]})
+                if status != 200 and failure["status"] in (401, 403, 502):
+                    self._service_failure = (failure["status"], {"detail": failure["detail"]})
                 return failure["status"], {"detail": failure["detail"]}
+            if missing is not None:
+                combined = list(results)
+                for index, batch in zip(missing, batches):
+                    combined[index] = batch
+                remote["results"] = combined
+            content = {"response": remote, "catalogs": catalogs, "sources": sources}
             self.document["queries"][key] = {
                 "request": request,
-                "response": remote,
-                "sha256": hashlib.sha256(encoded(remote)).hexdigest(),
+                **content,
+                "sha256": hashlib.sha256(encoded(content)).hexdigest(),
             }
             try:
                 self.save()

@@ -376,7 +376,7 @@ def build(options: BuildOptions, log=print) -> BuildResult:
             cmd += ["-x", target]
         cmd.append("--frozen" if options.frozen else "--no-frozen")
         try:
-            discovery = Discovery(project, online=not options.offline, python=tool.python)
+            discovery = Discovery(project, online=not options.offline)
         except (OSError, ValueError, KeyError) as error:
             raise BuildError("Cannot read captured component queries: " + str(error)) from error
         with PickerServer(docs, on_request=requests.append, resolve=discovery.answer) as picker:
@@ -415,6 +415,23 @@ def build(options: BuildOptions, log=print) -> BuildResult:
                 hashes[name] = _sha256(dest)
             copied[name] = dest.name
         native_returncode = code
+        # Export newly discovered facts through the same catalog schema used by our picker.
+        docs.extend(
+            document
+            for entry in discovery.document["queries"].values()
+            for document in entry["catalogs"]
+        )
+        merged_parts = list(catalog_mod.Catalog(docs).parts)
+        catalog_snapshot.write_text(
+            catalog_mod.dump(
+                {
+                    "schema": catalog_mod.SCHEMA,
+                    "provenance": {"source": "yapnr atopile build (merged)"},
+                    "parts": merged_parts,
+                }
+            ),
+            encoding="utf-8",
+        )
         capture_errors = []
         if not options.offline:
             try:

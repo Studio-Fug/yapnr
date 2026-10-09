@@ -21,7 +21,7 @@ class DiscoveryTest(unittest.TestCase):
     def test_fetch_once_pin_and_replay_offline_without_auth(self):
         with tempfile.TemporaryDirectory() as directory:
             remote = Mock(return_value=(200, {"components": [PART]}))
-            with patch.dict(discovery.os.environ, {discovery.TOKEN_ENV: "fixture-token"}):
+            with patch.dict(discovery.os.environ, {"YAPNR_COMPONENTS_API_TOKEN": "unused-token"}):
                 capture = discovery.Discovery(directory, online=True, request=remote)
                 with PickerServer([], resolve=capture.answer) as server:
                     request = Request(
@@ -30,8 +30,8 @@ class DiscoveryTest(unittest.TestCase):
                     )
                     with urlopen(request) as response:
                         self.assertEqual(json.load(response)["components"], [PART])
-            self.assertEqual(remote.call_args.args[-1], "fixture-token")
-            self.assertNotIn("fixture-token", capture.path.read_text())
+            self.assertEqual(len(remote.call_args.args), 3)
+            self.assertNotIn("unused-token", capture.path.read_text())
             offline = discovery.Discovery(
                 directory, request=Mock(side_effect=AssertionError("Network forbidden"))
             )
@@ -44,17 +44,40 @@ class DiscoveryTest(unittest.TestCase):
             self.assertEqual(offline.replayed_queries, 1)
             self.assertEqual(remote.call_count, 1)
 
-    def test_auth_failure_is_explicit_and_not_cached_as_an_empty_catalog(self):
+    def test_public_supplier_failure_is_explicit_and_not_cached_as_an_empty_catalog(self):
         with tempfile.TemporaryDirectory() as directory:
-            remote = Mock(return_value=(401, {"detail": "Sign-in required"}))
+            remote = Mock(
+                return_value=(
+                    502,
+                    {"detail": "Public supplier unavailable; no Atopile login is used"},
+                )
+            )
             capture = discovery.Discovery(directory, online=True, request=remote)
             local = (200, {"components": []})
             result = capture.answer("GET", "/v0/component/lcsc/1234", None, local)
-            self.assertEqual(result[0], 401)
-            self.assertEqual(capture.failures[0]["status"], 401)
+            self.assertEqual(result[0], 502)
+            self.assertEqual(capture.failures[0]["status"], 502)
             self.assertFalse(capture.path.exists())
             capture.answer("GET", "/v0/component/lcsc/5678", None, local)
             self.assertEqual(remote.call_count, 1)
+
+    def test_partial_batch_discovers_only_missing_queries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            remote = Mock(return_value=(200, {"results": [{"components": [PART]}]}))
+            capture = discovery.Discovery(directory, online=True, request=remote)
+            query = {"queries": [{"lcsc": 5678}, {"lcsc": 1234}]}
+            existing = {**PART, "lcsc": 5678}
+            status, response = capture.answer(
+                "POST",
+                "/v0/query",
+                discovery.encoded(query),
+                (200, {"results": [{"components": [existing]}, {"components": []}]}),
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(remote.call_args.args[2]), {"queries": [{"lcsc": 1234}]})
+            self.assertEqual(
+                [result["components"][0]["lcsc"] for result in response["results"]], [5678, 1234]
+            )
 
     def test_failed_snapshot_write_is_reported_and_not_replayed(self):
         with tempfile.TemporaryDirectory() as directory:

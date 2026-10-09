@@ -24,6 +24,7 @@ py_library(
         "picker/catalog.py",
         "picker/discovery.py",
         "picker/server.py",
+        "picker/supplier.py",
     ],
     imports = ["../../.."],
     deps = ["//yapnr:package"],

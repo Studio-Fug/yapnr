@@ -9,11 +9,12 @@ An unavailable validator or vendor model remains an explicit blocker.
 ## Part selection without a preloaded library
 
 Authoring `yapnr atopile build` discovers missing catalog candidates on demand.
-The operator connects the Atopile component service with `yapnr atopile auth login`
-on the execution host, independently of their model provider. A headless login
-prints its authorization URL. Credentials remain outside the workspace. An
-explicit service authentication failure requires that connection; do not ask the
-user to maintain a prepopulated component library to work around it.
+Our rules_atopile-derived picker fetches public supplier facts, matches locally,
+and resolves geometry through EasyEDA. It does not call the hosted Atopile picker,
+read Atopile credentials or require any Atopile login. Public supplier failures
+need network/data diagnosis; do not ask the user to sign in or maintain a
+prepopulated component library. Typed discovery currently covers resistors and
+capacitors; other types can use explicit LCSC/MPN selections or verified catalogs.
 
 Successful queries, source provenance, selected symbol/footprint/model assets and
 content locks stay in the article. Record their hashes as evidence and preserve

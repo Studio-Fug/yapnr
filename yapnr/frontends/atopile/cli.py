@@ -142,25 +142,6 @@ def _cmd_materialize(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_auth(args):
-    import subprocess
-
-    from yapnr.frontends.atopile import toolchain
-
-    tool = toolchain.discover()
-    return subprocess.call(
-        [
-            str(tool.python),
-            "-I",
-            "-m",
-            "atopile",
-            "auth",
-            args.auth_action,
-            *(["--timeout", str(args.timeout)] if args.auth_action == "login" else []),
-        ]
-    )
-
-
 def register_atopile(commands: "argparse._SubParsersAction") -> None:
     top = commands.add_parser(
         "atopile", help=f"the atopile {ATOPILE_VERSION} toolchain (setup, build, parts)"
@@ -179,11 +160,6 @@ def register_atopile(commands: "argparse._SubParsersAction") -> None:
     info.add_argument("--json", action="store_true")
     info.add_argument("--root", help="environments directory, as given to setup --root")
     info.set_defaults(func=_cmd_info)
-
-    auth = sub.add_parser("auth", help="operator-owned Atopile component service authentication")
-    auth.add_argument("auth_action", choices=["login", "logout", "status"])
-    auth.add_argument("--timeout", type=int, default=120)
-    auth.set_defaults(func=_cmd_auth)
 
     build = sub.add_parser(
         "build", help="build in isolation; discover missing selections unless --offline or --frozen"

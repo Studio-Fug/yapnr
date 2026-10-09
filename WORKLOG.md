@@ -18,9 +18,10 @@ board edges, the hierarchical ladder driver and their animations on
 
 - **On-demand parts**: authoring CLI builds fetch missing component queries, retain response
   digests and selected assets/locks in the article, and replay offline/frozen. Operator
-  component-service sign-in is separate from model authentication; no shared catalog
-  uploads or prepopulated local library are required. Live selection remains blocked
-  where that service returns an authentication error.
+  our rules_atopile-derived picker matches public supplier facts without hosted
+  Atopile calls, accounts or tokens. No shared catalog uploads or prepopulated local
+  library are required. Typed discovery covers resistors/capacitors and explicit
+  LCSC/MPN picks; network/data failures remain explicit.
 
 - **Workspace search and Performance**: Cmd/Ctrl-F opens a floating source/component/net
   search, including in embedded frames; repeated shortcuts preserve/clear queries.

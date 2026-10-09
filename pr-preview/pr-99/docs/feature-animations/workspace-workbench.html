@@ -190,7 +190,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
       </label>
     </div>
@@ -296,7 +296,7 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
           </label>
         </div>
@@ -329,6 +329,33 @@ parallel tool spans. Native experiment statistics remain a separate Timing view.
 workspace did not record them. Linked highlights reject unknown or mismatched
 artifact hashes. Touch hardware, screen-reader behavior and a sustained 60 fps
 performance benchmark have not been certified by these checks.</p>
+<section id="drawer-motion-and-source-navigation">
+<h2>Drawer motion and source navigation<a class="headerlink" href="#drawer-motion-and-source-navigation" title="Link to this heading">¶</a></h2>
+<p><img alt="Drawer dismissal and reopening" src="../../images/workspace-drawers.gif" /></p>
+<p>The synthetic fixture shows the actual 180 ms drawer transitions. Drawer contents
+stay mounted while closing, rapid reopening cancels the prior motion, and reduced
+motion uses immediate visibility changes. This capture is a UI demonstration,
+not an electrical verification.</p>
+<p><img alt="Project files and source-selection context" src="../../images/workspace-source-context.gif" /></p>
+<p>The source tree starts in the left drawer and preserves directory expansion while
+files update. Non-Atopile text files are read-only; binary and oversized files are
+rejected rather than decoded as source.</p>
+<p>Source reads use syntax-colored Atopile text with line numbers. Resolved project
+imports open source tabs; managed imports use the existing read-only native source
+browser and its module index. Selecting text enables Ask about selection, which
+attaches immutable file/line/text and working-tree/buffer hashes. Unsaved edits
+are explicitly marked as drafts. No selection itself submits a model turn.</p>
+</section>
+<section id="embedded-experiment-tree">
+<h2>Embedded experiment tree<a class="headerlink" href="#embedded-experiment-tree" title="Link to this heading">¶</a></h2>
+<p><img alt="Experiment tree in its workbench tab" src="../../images/workspace-experiments.gif" /></p>
+<p>The embedded tree retains the native hierarchy, filters and progress data. Its
+visibility belongs to the workbench drawer; the standalone viewer’s older panel
+controller does not close it based on the embedded frame width. Selecting a new
+lane updates the live Board, Schematic and 3D views, while pinned comparisons stay
+independent. The capture uses the synthetic workspace and its existing recorded
+LED-ring lane, without a model turn or an electrical validation claim.</p>
+</section>
 </section>
 
         </article>
@@ -356,8 +383,28 @@ performance benchmark have not been certified by these checks.</p>
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Unified engineering workbench</a><ul>
+<li><a class="reference internal" href="#drawer-motion-and-source-navigation">Drawer motion and source navigation</a></li>
+<li><a class="reference internal" href="#embedded-experiment-tree">Embedded experiment tree</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>

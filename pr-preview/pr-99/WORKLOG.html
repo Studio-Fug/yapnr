@@ -318,6 +318,11 @@ board edges, the hierarchical ladder driver and their animations on
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul>
+<li><p><strong>Recorded build attempts</strong>: Experiments lists archived schematic-build results, including
+failures before PnR, and opens their result JSON in read-only source tabs. Restored active
+tabs initialize on first drawer open. Embedded styling and saved theme apply before
+renderer scripts load, avoiding the legacy-theme flash. Live discovery is read-only
+and retains failed attempts.</p></li>
 <li><p><strong>Experiments embed</strong>: workbench tabs own panel visibility; the native legacy drawer
 controller is bypassed in embeds. Experiment lane selections follow through to the live
 board/schematic/3D views while pinned comparisons remain independent.</p></li>

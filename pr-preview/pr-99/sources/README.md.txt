@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="branding/yapnr-logo-light.png">
-    <img src="branding/yapnr-logo-256.png" alt="yapnr" width="256">
+    <source media="(prefers-color-scheme: dark)" srcset="yapnr/brand/assets/yapnr-logo-primary-dark.svg">
+    <img src="yapnr/brand/assets/yapnr-logo-primary-light.svg" alt="yapnr" width="256">
   </picture>
 </p>
 

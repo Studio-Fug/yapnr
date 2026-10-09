@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="The live viewer" href="viewer.html"><link rel="prev" title="Container images" href="containers.html">
-        <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
-        <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-primary-light.svg" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-primary-dark.svg" as="image">
 
     <link rel="shortcut icon" href="../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
         <title>Design a PCB with an agent - yapnr documentation</title>
@@ -14,7 +14,8 @@
     <link rel="stylesheet" type="text/css" href="../static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=ad564152" />
+    <link rel="stylesheet" type="text/css" href="../static/fonts/fonts.css?v=eeaf125c" />
+    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=2fd37b7c" />
     
     
 
@@ -199,8 +200,8 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="../static/yapnr-logo-256.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-light.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="../static/yapnr-logo-primary-light.svg" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-primary-dark.svg" alt="Dark Logo"/>
   </div>
   
   
@@ -716,6 +717,18 @@ source/netlist placeholder page. Attach the article’s viewer with
 <code class="docutils literal notranslate"><span class="pre">--experiment</span> <span class="pre">ARTICLE=URL</span></code>. The conversation remains beside it.</p>
 </section>
 </section>
+<section id="engineering-workbench">
+<h2>Engineering workbench<a class="headerlink" href="#engineering-workbench" title="Link to this heading">¶</a></h2>
+<p>The shared workspace supports persistent Board, Schematic, 3D, source, artifact
+and Ask tabs; keyboard Move menus, splitters, minimized panes and drawer locks.
+Open view exposes arrangements and preferences on narrow screens. Closing a view
+retains project data and agent activity. Close project records UI presence only;
+Reopen project returns to that session without restarting backend work.</p>
+<p><a class="reference internal" href="feature-animations/workspace-workbench.html"><span class="std std-doc">Workbench walkthrough and validation scope</span></a>
+shows the packaged UI. Timing distinguishes project-open interval union from
+workflow state occupancy and summed native tool wall time. Missing session ends,
+CPU measurements and source/build equivalence remain explicitly unavailable.</p>
+</section>
 </section>
 
         </article>
@@ -787,6 +800,7 @@ source/netlist placeholder page. Attach the article’s viewer with
 <li><a class="reference internal" href="#live-schematic-capture">Live schematic capture</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#engineering-workbench">Engineering workbench</a></li>
 </ul>
 </li>
 </ul>

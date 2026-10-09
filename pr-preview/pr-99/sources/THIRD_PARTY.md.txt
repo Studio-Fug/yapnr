@@ -209,3 +209,10 @@ SHA-256 pins in `docker/yapnr/opencode.lock.json`. Its source is
 licensed under MIT; the license is shipped in `licenses/opencode/`. Provider
 credentials are operator-supplied. Official Codex/Claude account authentication
 uses the respective official CLI rather than OpenCode's provider adapters.
+
+## Workbench fonts
+
+The bundled Space Grotesk, IBM Plex Sans and IBM Plex Mono fonts are licensed
+under the SIL Open Font License 1.1. Original license files are included in
+[yapnr/brand/fonts](yapnr/brand/fonts). The application serves WOFF2 conversions
+locally; it does not contact a font CDN.

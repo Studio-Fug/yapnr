@@ -1,5 +1,9 @@
 # Live source and schematic capture
 
+Historical capture: the intermediate live-source/netlist page was replaced by
+the [unified workbench](workspace-workbench.md). This page records the earlier
+implementation and does not describe the current interface.
+
 ![Synthetic live capture fixture](workspace-live-capture.gif)
 
 Entering schematic capture opens the source and engineering view together. The

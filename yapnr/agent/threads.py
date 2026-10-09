@@ -168,6 +168,8 @@ def attach_note(root, api, name, data, directory=None):
     for key in ("model", "agent"):
         if previous.get(key):
             request[key] = previous[key]
+    if data.get("model"):
+        request["model"] = data["model"]
     workspace.record(
         root,
         {

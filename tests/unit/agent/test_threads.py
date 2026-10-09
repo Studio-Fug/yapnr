@@ -80,6 +80,21 @@ class ThreadTest(unittest.TestCase):
         self.assertEqual(threads.notes(self.root).all()[0]["id"], note["id"])
         self.assertEqual(threads.notes(self.root).all()[0]["status"], "open")
 
+    def test_note_attachment_preserves_explicit_ui_model_without_a_turn(self):
+        note = threads.notes(self.root).create(
+            {"title": "Finding", "body": "Review"}, {"kind": "user"}
+        )
+        selected = {"providerID": "test-provider", "modelID": "test-model"}
+        threads.attach_note(
+            self.root,
+            self.api,
+            "article",
+            {"session": "ses_main", "note": note["id"], "revision": note["rev"], "model": selected},
+        )
+        request = [data for _, data in self.calls if data][-1]
+        self.assertEqual(request["model"], selected)
+        self.assertIs(request["noReply"], True)
+
     def test_legacy_viewer_note_elevates_with_its_focused_transcript(self):
         note = threads.notes(self.root).create(
             {

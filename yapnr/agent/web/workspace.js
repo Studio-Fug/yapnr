@@ -186,7 +186,13 @@
       return false;
     }
     try {
-      await json(endpoint('attach-note'), { session: id, note: note.id, revision: note.rev });
+      const model = $('model').value.split('::');
+      await json(endpoint('attach-note'), {
+        session: id,
+        note: note.id,
+        revision: note.rev,
+        ...($('model').value ? { model: { providerID: model[0], modelID: model[1] } } : {}),
+      });
       say(
         `Attached ${note.id} to the main thread. Send a message there when ready for the agent to act.`
       );
@@ -918,7 +924,15 @@
       if (key !== state.messagesKey) {
         state.messagesKey = key;
         renderMessages(messages);
-        const previous = [...messages].reverse().find(m => m.info.role === 'user')?.info;
+        const previous = [...messages]
+          .reverse()
+          .find(
+            m =>
+              m.info.role === 'user' &&
+              !m.parts?.some(
+                p => p.type === 'text' && p.text?.startsWith('Attached workspace note ')
+              )
+          )?.info;
         if (previous?.model && !$('model').value) {
           $('model').value = previous.model.providerID + '::' + previous.model.modelID;
         }

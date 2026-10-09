@@ -324,6 +324,62 @@ supplement those renders. For requirements alternatives, use small bounded
 three.js scenes in hosts that support inline interactive selections; otherwise
 provide inline still renders and identify the missing interactive capability.</p>
 </section>
+<section id="shared-browser-workspace">
+<h2>Shared browser workspace<a class="headerlink" href="#shared-browser-workspace" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">web</span> <span class="pre">--projects</span> <span class="pre">/projects</span></code> starts the workspace-native browser application
+and a headless OpenCode runtime. The page has project/thread/artifact navigation,
+an engineering view and a resizable conversation pane. Expand the conversation
+for focused chat, or keep it beside the board, schematic, 3D or shared document.
+OpenCode supplies sessions, provider authentication, model selection, streaming,
+tools, questions and permissions through its API; its web application is not
+embedded or overlaid.</p>
+<p>To reuse an existing OpenCode service, supply <code class="docutils literal notranslate"><span class="pre">--upstream</span> <span class="pre">URL</span></code>. Existing provider
+connections and sessions are retained. For a remote runtime, <code class="docutils literal notranslate"><span class="pre">--agent-projects</span></code>
+specifies its project mount path (default <code class="docutils literal notranslate"><span class="pre">/projects</span></code>); a locally launched runtime
+uses the actual <code class="docutils literal notranslate"><span class="pre">--projects</span></code> directory. Both services must see the same article
+files. Attach a running viewer with <code class="docutils literal notranslate"><span class="pre">--experiment</span> <span class="pre">ARTICLE=URL</span></code>. The engineering
+viewer occupies the center panel while the conversation stays visible. Configure
+<code class="docutils literal notranslate"><span class="pre">--public-origin</span></code> to the browser-facing origin when serving through a proxy.
+The New project action initializes the evidence-gated workflow without approving
+requirements or launching a model turn. Select a connected model and send the
+directive to start the conversation. Provider connections support API keys and
+provider-supplied OAuth methods; account login remains operator-owned.</p>
+<p>Threads &amp; notes lists both OpenCode sessions and the experiment’s focused Ask
+conversations from <code class="docutils literal notranslate"><span class="pre">notes/conversations/</span></code>. Choose a main OpenCode thread, inspect
+a focused conversation and save its finding as a note. <strong>Save &amp; attach to main</strong>
+attaches the canonical note revision and an immutable source transcript, including
+selection and tool context, to that main conversation. Existing viewer notes can
+also be attached. Attachment preserves note status, does not approve requirements
+and does not start a model turn. The user sends a follow-up when ready for the
+agent to reconcile it. Notes created from OpenCode use the same <code class="docutils literal notranslate"><span class="pre">notes/notes.jsonl</span></code>
+store as the experiment viewer; there is no separate chat-only notes database.</p>
+<p>Publish generated artifacts with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">workspace</span> <span class="pre">publish</span> <span class="pre">--artifact</span> <span class="pre">PATH</span> <span class="pre">--kind</span> <span class="pre">KIND</span> <span class="pre">--title</span> <span class="pre">TITLE</span></code>. Published artifacts appear in the sidebar; image and scene views support
+markup with the original artifact hash and view preserved. The Design document view
+edits <code class="docutils literal notranslate"><span class="pre">reports/design.md</span></code> with revision checks and immutable history. User edits
+remain refinements requiring reconciliation through the workflow controller.</p>
+<p>Interactive scene artifacts are JavaScript modules exporting
+<code class="docutils literal notranslate"><span class="pre">build({THREE,</span> <span class="pre">scene,</span> <span class="pre">camera,</span> <span class="pre">renderer,</span> <span class="pre">controls,</span> <span class="pre">seed})</span></code>. They run in an isolated
+iframe with pinned three.js and restricted resource access. Put
+<code class="docutils literal notranslate"><span class="pre">[yapnr-visual:ARTIFACT_ID]</span></code> in an agent question option description to
+show the scene beside that option. Keep scenes bounded and label conceptual
+geometry; interaction is not mechanical or electrical validation. Put
+<code class="docutils literal notranslate"><span class="pre">[yapnr-artifact:ARTIFACT_ID]</span></code> in a conversation message to render a published
+image or scene inline and link it to the central inspection/annotation view.
+Component and source selections in an attached viewer become visible conversation
+context; the next user message includes that context for the agent to verify.</p>
+<p>The embedded OpenCode recorder and focused viewer capture conversation/tool
+events in <code class="docutils literal notranslate"><span class="pre">.yapnr/workspace/conversation.jsonl</span></code>. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">workspace</span> <span class="pre">manifest</span></code> indexes
+workspace files, artifacts, notes and focused conversations. Export with
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">workspace</span> <span class="pre">export</span> <span class="pre">--archive</span> <span class="pre">../article.tar.gz</span></code>; import into a new directory
+with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">workspace</span> <span class="pre">import</span> <span class="pre">--project</span> <span class="pre">restored</span> <span class="pre">--archive</span> <span class="pre">../article.tar.gz</span></code>.
+Archives preserve indexed bytes and reject unsafe paths, links and corrupt
+members. Exporting the same stable state produces identical archive bytes;
+concurrent edits cause export to fail rather than produce a mixed snapshot.
+Exact regeneration of solver artifacts still needs pinned inputs, tools and seeds
+and an independently verified replay recipe. The manifest reports reproducibility
+as unverified until that replay exists; it does not imply deterministic fresh
+model responses or qualified engineering results.</p>
+</section>
 <section id="evidence-gated-iteration-controller">
 <h2>Evidence-gated iteration controller<a class="headerlink" href="#evidence-gated-iteration-controller" title="Link to this heading">¶</a></h2>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>workflow<span class="w"> </span>init<span class="w"> </span>--project<span class="w"> </span>article<span class="w"> </span>--directive<span class="w"> </span><span class="s1">&#39;Design X&#39;</span>
@@ -415,8 +471,8 @@ its <code class="docutils literal notranslate"><span class="pre">artifacts</span
 does not authenticate the claimed reviewer or independently reproduce simulations,
 native DRC or physical measurements. Agents must faithfully record real user
 decisions and authoritative tool/bench reports. It does not sandbox the agent,
-launch solver jobs, enforce their resource consumption or add an interactive
-three.js renderer to OpenCode. The agent must still follow the engineering policy
+launch solver jobs or enforce their resource consumption. The browser workspace
+provides the interactive renderer separately. The agent must still follow the engineering policy
 and bounded experiment interfaces. An engine <code class="docutils literal notranslate"><span class="pre">_DONE</span></code> event is not workflow success.
 Revising requirements while blocked, exhausted or cancelled preserves that stop
 state; an explicit user resume then returns to requirements review.</p>
@@ -658,6 +714,7 @@ only after final verification of every accepted requirement on one exact revisio
             <ul>
 <li><a class="reference internal" href="#">Design a PCB with an agent</a><ul>
 <li><a class="reference internal" href="#review-and-visual-feedback">Review and visual feedback</a></li>
+<li><a class="reference internal" href="#shared-browser-workspace">Shared browser workspace</a></li>
 <li><a class="reference internal" href="#evidence-gated-iteration-controller">Evidence-gated iteration controller</a></li>
 <li><a class="reference internal" href="#start-a-container-chat">Start a container chat</a><ul>
 <li><a class="reference internal" href="#choose-authentication-and-a-model">Choose authentication and a model</a></li>

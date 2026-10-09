@@ -304,7 +304,7 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-07 (installed RF packaging and PyPI publishing). Previous status:
+<p>Last updated: 2026-10-08 (workspace-native conversation and artifact review). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>). Earlier the same day: RF round 2 with the native FDTD kernel
 on <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>, merged with <code class="docutils literal notranslate"><span class="pre">main</span></code>; the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the
@@ -332,6 +332,16 @@ a declarative, evidence-gated iteration controller with atomic state/history,
 immutable receipts, revision invalidation and acceptance/completion guards.
 Receipts remain assertions requiring genuine user decisions and authoritative
 validation reports; the controller does not authenticate them or sandbox agents.</p></li>
+<li><p><strong>Workspace-native browser UI</strong>: replaced the OpenCode overlay with one layout
+for projects, focused/main conversations, artifacts, engineering views and a
+resizable chat pane. OpenCode remains the headless provider/tool/session runtime.
+Canonical notes carry immutable focused transcripts into the main conversation
+without starting a model turn; shared document edits use revision checks.
+Pinned sandboxed three.js choices, rendered artifact markup, full conversation
+journaling and integrity-checked workspace archives are implemented. Browser
+checks distinguish synthetic review fixtures from actual engineering views.
+Solver regeneration remains unverified until a pinned replay recipe passes;
+image-build toolchain warming remains outstanding.</p></li>
 <li><p><strong>External RF packaging (#96)</strong>: collect every RF Bazel subpackage explicitly
 without numerical dependency closure in the wheel collector. Export/report,
 planar, Palace, coupons and order0 modules now ship, with the authoritative

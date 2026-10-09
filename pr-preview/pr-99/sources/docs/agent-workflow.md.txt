@@ -24,6 +24,68 @@ supplement those renders. For requirements alternatives, use small bounded
 three.js scenes in hosts that support inline interactive selections; otherwise
 provide inline still renders and identify the missing interactive capability.
 
+## Shared browser workspace
+
+`yapnr web --projects /projects` starts the workspace-native browser application
+and a headless OpenCode runtime. The page has project/thread/artifact navigation,
+an engineering view and a resizable conversation pane. Expand the conversation
+for focused chat, or keep it beside the board, schematic, 3D or shared document.
+OpenCode supplies sessions, provider authentication, model selection, streaming,
+tools, questions and permissions through its API; its web application is not
+embedded or overlaid.
+
+To reuse an existing OpenCode service, supply `--upstream URL`. Existing provider
+connections and sessions are retained. For a remote runtime, `--agent-projects`
+specifies its project mount path (default `/projects`); a locally launched runtime
+uses the actual `--projects` directory. Both services must see the same article
+files. Attach a running viewer with `--experiment ARTICLE=URL`. The engineering
+viewer occupies the center panel while the conversation stays visible. Configure
+`--public-origin` to the browser-facing origin when serving through a proxy.
+The New project action initializes the evidence-gated workflow without approving
+requirements or launching a model turn. Select a connected model and send the
+directive to start the conversation. Provider connections support API keys and
+provider-supplied OAuth methods; account login remains operator-owned.
+
+Threads & notes lists both OpenCode sessions and the experiment's focused Ask
+conversations from `notes/conversations/`. Choose a main OpenCode thread, inspect
+a focused conversation and save its finding as a note. **Save & attach to main**
+attaches the canonical note revision and an immutable source transcript, including
+selection and tool context, to that main conversation. Existing viewer notes can
+also be attached. Attachment preserves note status, does not approve requirements
+and does not start a model turn. The user sends a follow-up when ready for the
+agent to reconcile it. Notes created from OpenCode use the same `notes/notes.jsonl`
+store as the experiment viewer; there is no separate chat-only notes database.
+
+Publish generated artifacts with `yapnr workspace publish --artifact PATH --kind
+KIND --title TITLE`. Published artifacts appear in the sidebar; image and scene views support
+markup with the original artifact hash and view preserved. The Design document view
+edits `reports/design.md` with revision checks and immutable history. User edits
+remain refinements requiring reconciliation through the workflow controller.
+
+Interactive scene artifacts are JavaScript modules exporting
+`build({THREE, scene, camera, renderer, controls, seed})`. They run in an isolated
+iframe with pinned three.js and restricted resource access. Put
+`[yapnr-visual:ARTIFACT_ID]` in an agent question option description to
+show the scene beside that option. Keep scenes bounded and label conceptual
+geometry; interaction is not mechanical or electrical validation. Put
+`[yapnr-artifact:ARTIFACT_ID]` in a conversation message to render a published
+image or scene inline and link it to the central inspection/annotation view.
+Component and source selections in an attached viewer become visible conversation
+context; the next user message includes that context for the agent to verify.
+
+The embedded OpenCode recorder and focused viewer capture conversation/tool
+events in `.yapnr/workspace/conversation.jsonl`. `yapnr workspace manifest` indexes
+workspace files, artifacts, notes and focused conversations. Export with
+`yapnr workspace export --archive ../article.tar.gz`; import into a new directory
+with `yapnr workspace import --project restored --archive ../article.tar.gz`.
+Archives preserve indexed bytes and reject unsafe paths, links and corrupt
+members. Exporting the same stable state produces identical archive bytes;
+concurrent edits cause export to fail rather than produce a mixed snapshot.
+Exact regeneration of solver artifacts still needs pinned inputs, tools and seeds
+and an independently verified replay recipe. The manifest reports reproducibility
+as unverified until that replay exists; it does not imply deterministic fresh
+model responses or qualified engineering results.
+
 ## Evidence-gated iteration controller
 
 ```sh
@@ -86,8 +148,8 @@ This controller validates transitions, receipt structure and preserved hashes; i
 does not authenticate the claimed reviewer or independently reproduce simulations,
 native DRC or physical measurements. Agents must faithfully record real user
 decisions and authoritative tool/bench reports. It does not sandbox the agent,
-launch solver jobs, enforce their resource consumption or add an interactive
-three.js renderer to OpenCode. The agent must still follow the engineering policy
+launch solver jobs or enforce their resource consumption. The browser workspace
+provides the interactive renderer separately. The agent must still follow the engineering policy
 and bounded experiment interfaces. An engine `_DONE` event is not workflow success.
 Revising requirements while blocked, exhausted or cancelled preserves that stop
 state; an explicit user resume then returns to requirements review.

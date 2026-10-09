@@ -311,11 +311,12 @@ An unavailable validator or vendor model remains an explicit blocker.</p>
 <section id="part-selection-without-a-preloaded-library">
 <h2>Part selection without a preloaded library<a class="headerlink" href="#part-selection-without-a-preloaded-library" title="Link to this heading">¶</a></h2>
 <p>Authoring <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">build</span></code> discovers missing catalog candidates on demand.
-The operator connects the Atopile component service with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">auth</span> <span class="pre">login</span></code>
-on the execution host, independently of their model provider. A headless login
-prints its authorization URL. Credentials remain outside the workspace. An
-explicit service authentication failure requires that connection; do not ask the
-user to maintain a prepopulated component library to work around it.</p>
+Our rules_atopile-derived picker fetches public supplier facts, matches locally,
+and resolves geometry through EasyEDA. It does not call the hosted Atopile picker,
+read Atopile credentials or require any Atopile login. Public supplier failures
+need network/data diagnosis; do not ask the user to sign in or maintain a
+prepopulated component library. Typed discovery currently covers resistors and
+capacitors; other types can use explicit LCSC/MPN selections or verified catalogs.</p>
 <p>Successful queries, source provenance, selected symbol/footprint/model assets and
 content locks stay in the article. Record their hashes as evidence and preserve
 them through export/import. Use <code class="docutils literal notranslate"><span class="pre">--offline</span></code> or <code class="docutils literal notranslate"><span class="pre">--frozen</span></code> after selection for
@@ -743,6 +744,24 @@ Reopen project returns to that session without restarting backend work.</p>
 shows the packaged UI. Timing distinguishes project-open interval union from
 workflow state occupancy and summed native tool wall time. Missing session ends,
 CPU measurements and source/build equivalence remain explicitly unavailable.</p>
+<section id="record-experiments-and-provenance">
+<h3>Record experiments and provenance<a class="headerlink" href="#record-experiments-and-provenance" title="Link to this heading">¶</a></h3>
+<p>Treat each discovery, part-picking, schematic, PnR, simulation, and validation
+attempt as an experiment, including failures. Atopile builds record themselves.
+For other tools, start a record before running the tool:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;{&quot;seed&quot;:0}\n&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>simulation-settings.json
+yapnr<span class="w"> </span>experiment<span class="w"> </span>start<span class="w"> </span>--project<span class="w"> </span>.<span class="w"> </span>--kind<span class="w"> </span>simulation<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;RF validation&quot;</span><span class="w"> </span>--input<span class="w"> </span>design.kicad_pcb<span class="w"> </span>--parameters<span class="w"> </span>simulation-settings.json
+yapnr<span class="w"> </span>experiment<span class="w"> </span>finish<span class="w"> </span>E000001<span class="w"> </span>--project<span class="w"> </span>.<span class="w"> </span>--status<span class="w"> </span>passed<span class="w"> </span>--output<span class="w"> </span>simulation-report.json
+yapnr<span class="w"> </span>experiment<span class="w"> </span>list<span class="w"> </span>--project<span class="w"> </span>.
+</pre></div>
+</div>
+<p>Use the ID returned by <code class="docutils literal notranslate"><span class="pre">start</span></code>, the actual terminal status, all consumed inputs,
+and generated evidence. Record seeds and tool settings in parameters. The workspace
+manages immutable input/output objects and publishes output artifacts. Experiments
+shows typed attempts and upstream/downstream links established by matching content
+hashes; missing historical input evidence remains explicitly unknown. Do not claim
+provenance from filenames alone. The workspace manifest indexes the attempt registry.</p>
+</section>
 </section>
 </section>
 
@@ -816,7 +835,10 @@ CPU measurements and source/build equivalence remain explicitly unavailable.</p>
 <li><a class="reference internal" href="#live-schematic-capture">Live schematic capture</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#engineering-workbench">Engineering workbench</a></li>
+<li><a class="reference internal" href="#engineering-workbench">Engineering workbench</a><ul>
+<li><a class="reference internal" href="#record-experiments-and-provenance">Record experiments and provenance</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

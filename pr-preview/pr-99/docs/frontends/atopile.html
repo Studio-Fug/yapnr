@@ -535,7 +535,7 @@ of the same sources give the same input id.</p>
 <section id="on-demand-selection-and-captured-replay">
 <h3>On-demand selection and captured replay<a class="headerlink" href="#on-demand-selection-and-captured-replay" title="Link to this heading">¶</a></h3>
 <p>Authoring is the CLI default; <code class="docutils literal notranslate"><span class="pre">--online</span></code> remains an explicit alias. A catalog miss
-fetches the matching native component-service query. Successful responses are
+fetches public supplier facts for our local catalog matcher. Successful responses are
 hashed and retained in <code class="docutils literal notranslate"><span class="pre">.yapnr/parts/discovery.json</span></code>; every build report includes
 <code class="docutils literal notranslate"><span class="pre">discovery.json</span></code>, its digest, lookup/replay counts and explicit service failures.
 This captures the service’s electrical attributes without inventing ratings.
@@ -544,12 +544,20 @@ Selected symbol/footprint/model files are imported into the article’s own
 catalog uploads occur. These files travel with a workspace archive. Captured
 article inputs take precedence over an operator cache, so replay does not depend
 on that cache containing parts selected in a later authoring build.</p>
-<p>The hosted Atopile service requires operator authentication, independently of the
-model provider. Run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">auth</span> <span class="pre">login</span></code> on the execution host; the official
-login prints a browser URL when headless and polls for completion. Alternatively,
-configure <code class="docutils literal notranslate"><span class="pre">YAPNR_COMPONENTS_API_TOKEN</span></code> outside the article. Credentials are never
-forwarded from the loopback client or written into snapshots/build environments.
-HTTP 401/403 is reported as an authentication failure, not an empty local catalog.</p>
+<p>The rules_atopile-derived local picker is the only component picker. It fetches
+public jlcsearch supplier facts and EasyEDA identity metadata on demand; it never
+calls the hosted Atopile API or reads an Atopile account/token. The existing hook
+provides a loopback-only placeholder where native Atopile expects authentication.
+No Atopile login is required. Raw supplier replies, their URLs and hashes, and
+converted catalogs are retained with each captured query. Public network/service
+failures are explicit, with no login remedy. Geometry continues through native
+EasyEDA import and is captured into the article for subsequent offline builds.</p>
+<p>Discovery supports typed resistor/capacitor requests and explicit LCSC/MPN picks.
+Other parameterized types need an explicit selection or a verified imported catalog.
+Supplier searches return at most 100 rows; up to eight matching identities are
+resolved per query. A search miss is bounded discovery, not proof that no matching
+part exists. Unknown ratings are not inferred from prose. Overload voltage is not
+substituted for a resistor’s continuous working-voltage rating.</p>
 <p>Use <code class="docutils literal notranslate"><span class="pre">--offline</span></code> or <code class="docutils literal notranslate"><span class="pre">--frozen</span></code> for replay. Frozen CLI builds disable discovery;
 the runner rejects an explicit online/frozen combination. Captured successful
 queries replay without contacting the service, with response/request hashes

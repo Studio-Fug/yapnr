@@ -320,9 +320,10 @@ board edges, the hierarchical ladder driver and their animations on
 <ul>
 <li><p><strong>On-demand parts</strong>: authoring CLI builds fetch missing component queries, retain response
 digests and selected assets/locks in the article, and replay offline/frozen. Operator
-component-service sign-in is separate from model authentication; no shared catalog
-uploads or prepopulated local library are required. Live selection remains blocked
-where that service returns an authentication error.</p></li>
+our rules_atopile-derived picker matches public supplier facts without hosted
+Atopile calls, accounts or tokens. No shared catalog uploads or prepopulated local
+library are required. Typed discovery covers resistors/capacitors and explicit
+LCSC/MPN picks; network/data failures remain explicit.</p></li>
 <li><p><strong>Workspace search and Performance</strong>: Cmd/Ctrl-F opens a floating source/component/net
 search, including in embedded frames; repeated shortcuts preserve/clear queries.
 Inspect tab layouts migrate to the dialog. Performance holds native controls and
@@ -814,6 +815,16 @@ nothing, and Adam’s <code class="docutils literal notranslate"><span class="pr
 <li><p>Comparing one seed’s HPWL between placer variants, or across platforms: the per-seed spread
 (about 100 mm, 5 %) exceeds most effects; compare means over seeds on one platform (#6).</p></li>
 </ul>
+<section id="native-typed-experiment-attempts">
+<h3>Native typed experiment attempts<a class="headerlink" href="#native-typed-experiment-attempts" title="Link to this heading">¶</a></h3>
+<p>Replaced the embedded legacy experiment browser with a native workbench tree.
+Added durable attempt records, immutable consumed inputs/produced artifacts,
+terminal failures, seeds/settings, generic experiment CLI, automatic Atopile
+recording, historical build and routing import, discovery/picker stage evidence,
+and hash-supported upstream/downstream navigation. Native routing telemetry is
+projected as data; absent provenance is explicitly unknown. The manifest indexes
+the registry and the workspace journal records attempt transitions.</p>
+</section>
 </section>
 </section>
 
@@ -878,7 +889,10 @@ nothing, and Adam’s <code class="docutils literal notranslate"><span class="pr
 <li><a class="reference internal" href="#next">Next</a></li>
 <li><a class="reference internal" href="#blockers">Blockers</a></li>
 <li><a class="reference internal" href="#known-issues">Known issues</a></li>
-<li><a class="reference internal" href="#do-not-retry">Do not retry</a></li>
+<li><a class="reference internal" href="#do-not-retry">Do not retry</a><ul>
+<li><a class="reference internal" href="#native-typed-experiment-attempts">Native typed experiment attempts</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

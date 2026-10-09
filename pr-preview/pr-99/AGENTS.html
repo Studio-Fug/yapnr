@@ -410,12 +410,12 @@ ratings, interfaces, stackup, board envelope and electrical contracts. Use verif
 <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup|info|build|lock-parts|materialize</span></code> interfaces and the picker/part
 cache. Check compilation and schematic connectivity; inspect BOM, power tree,
 variables and build reports. Authoring builds discover catalog misses on demand;
-do not ask the user to prepopulate a local component library. Resolve an explicit
-component-service authentication failure through operator sign-in, rather than
-misdiagnosing it as missing local catalog data. Retain the discovered responses,
-selected assets and locks in the article; replay with <code class="docutils literal notranslate"><span class="pre">--offline</span></code> or <code class="docutils literal notranslate"><span class="pre">--frozen</span></code>.
-Use <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">auth</span> <span class="pre">login</span></code> for that service, keeping credentials outside the
-article. Lock selected catalog parts and footprints. Capture
+do not ask the user to prepopulate a local component library. Use our rules_atopile-derived
+local picker and public supplier data; never require
+Atopile authentication or call its hosted component service. Retain discovered
+responses, selected assets and locks in the article; replay with <code class="docutils literal notranslate"><span class="pre">--offline</span></code> or
+<code class="docutils literal notranslate"><span class="pre">--frozen</span></code>. Report public supplier failures as network/data failures, with no
+Atopile login remedy. Lock selected catalog parts and footprints. Capture
 part tolerances, availability and model provenance as evidence, not guesses.</p>
 <p>Record fabrication rules, placement intent, differential-pair coupling, total
 uncoupled-length limits, length matching, current capacity and reference planes in
@@ -568,6 +568,24 @@ operations, and report it rather than competing.</p></li>
 internal disk (see <a class="reference internal" href="DEVELOPERS.html#bazel"><span class="std std-ref">DEVELOPERS.md</span></a>). Check free disk space first.</p></li>
 <li><p>Install tools into a private virtualenv or with <code class="docutils literal notranslate"><span class="pre">uv</span></code>/<code class="docutils literal notranslate"><span class="pre">pipx</span></code>; never into the system Python.</p></li>
 </ul>
+<section id="record-experiments-and-provenance">
+<h3>Record experiments and provenance<a class="headerlink" href="#record-experiments-and-provenance" title="Link to this heading">¶</a></h3>
+<p>Treat each discovery, part-picking, schematic, PnR, simulation, and validation
+attempt as an experiment, including failures. Atopile builds record themselves.
+For other tools, start a record before running the tool:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;{&quot;seed&quot;:0}\n&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>simulation-settings.json
+yapnr<span class="w"> </span>experiment<span class="w"> </span>start<span class="w"> </span>--project<span class="w"> </span>.<span class="w"> </span>--kind<span class="w"> </span>simulation<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;RF validation&quot;</span><span class="w"> </span>--input<span class="w"> </span>design.kicad_pcb<span class="w"> </span>--parameters<span class="w"> </span>simulation-settings.json
+yapnr<span class="w"> </span>experiment<span class="w"> </span>finish<span class="w"> </span>E000001<span class="w"> </span>--project<span class="w"> </span>.<span class="w"> </span>--status<span class="w"> </span>passed<span class="w"> </span>--output<span class="w"> </span>simulation-report.json
+yapnr<span class="w"> </span>experiment<span class="w"> </span>list<span class="w"> </span>--project<span class="w"> </span>.
+</pre></div>
+</div>
+<p>Use the ID returned by <code class="docutils literal notranslate"><span class="pre">start</span></code>, the actual terminal status, all consumed inputs,
+and generated evidence. Record seeds and tool settings in parameters. The workspace
+manages immutable input/output objects and publishes output artifacts. Experiments
+shows typed attempts and upstream/downstream links established by matching content
+hashes; missing historical input evidence remains explicitly unknown. Do not claim
+provenance from filenames alone. The workspace manifest indexes the attempt registry.</p>
+</section>
 </section>
 </section>
 
@@ -635,7 +653,10 @@ internal disk (see <a class="reference internal" href="DEVELOPERS.html#bazel"><s
 <li><a class="reference internal" href="#developing-yapnr-itself">Developing yapnr itself</a></li>
 <li><a class="reference internal" href="#engineering-rules">Engineering rules</a></li>
 <li><a class="reference internal" href="#repository-rules">Repository rules</a></li>
-<li><a class="reference internal" href="#shared-machines">Shared machines</a></li>
+<li><a class="reference internal" href="#shared-machines">Shared machines</a><ul>
+<li><a class="reference internal" href="#record-experiments-and-provenance">Record experiments and provenance</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

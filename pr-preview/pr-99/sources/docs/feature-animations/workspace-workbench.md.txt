@@ -53,32 +53,23 @@ browser and its module index. Selecting text enables Ask about selection, which
 attaches immutable file/line/text and working-tree/buffer hashes. Unsaved edits
 are explicitly marked as drafts. No selection itself submits a model turn.
 
-## Embedded experiment tree
+## Native experiments and artifact provenance
 
-![Experiment tree in its workbench tab](workspace-experiments.gif)
+![Typed experiments with upstream and downstream provenance](workspace-experiment-provenance.gif)
 
-The embedded tree retains the native hierarchy, filters and progress data. Its
-visibility belongs to the workbench drawer; the standalone viewer's older panel
-controller does not close it based on the embedded frame width. Selecting a new
-lane updates the live Board, Schematic and 3D views, while pinned comparisons stay
-independent. The capture uses the synthetic workspace and its existing recorded
-LED-ring lane, without a model turn or an electrical validation claim.
+Experiments is a native workbench tree, without the legacy experiment-browser
+iframe. Failed attempts remain visible, with icons and filters for discovery,
+part picking, schematic builds, PCB placement/routing, simulation and validation.
+Selecting an attempt exposes its captured inputs, produced artifacts, parameters
+and seeds. Content hashes establish navigable upstream and downstream links;
+missing historical input evidence stays explicitly unknown. Registered attempts
+capture immutable inputs and outputs in the workspace artifact store.
 
-## Recorded build attempts
-
-![Recorded schematic-build attempts and result links](workspace-build-history.gif)
-
-The Experiments tab also lists archived Atopile build results, including failures
-that occurred before a placement-and-routing lane existed. Expanding an attempt
-shows its recorded duration and catalog-candidate count; its result opens as a
-read-only source tab. This capture uses two existing failed build reports, without
-running a model turn or claiming a completed PCB.
-
-Restored active experiment views mount when project data arrives, and opening a
-drawer activates its selected view. A first-open browser regression starts with
-Experiments selected in a closed drawer and never switches tabs to initialize it.
-Embedded mode and theme are applied by an early parser script, before native
-renderer scripts load; changing theme preserves existing frame instances.
+The capture uses the existing LED-ring schematic build and PnR reports. The PnR
+input hash matches the frozen schematic PCB output. This illustrates recorded
+lineage, without claiming electrical qualification of the board. Opening the
+drawer initializes Experiments immediately, without switching tabs. Selecting a
+recorded routing lane updates the existing Board, Schematic and 3D surfaces.
 
 ## Floating workspace search and performance settings
 

@@ -9,11 +9,12 @@ An unavailable validator or vendor model remains an explicit blocker.
 ## Part selection without a preloaded library
 
 Authoring `yapnr atopile build` discovers missing catalog candidates on demand.
-The operator connects the Atopile component service with `yapnr atopile auth login`
-on the execution host, independently of their model provider. A headless login
-prints its authorization URL. Credentials remain outside the workspace. An
-explicit service authentication failure requires that connection; do not ask the
-user to maintain a prepopulated component library to work around it.
+Our rules_atopile-derived picker fetches public supplier facts, matches locally,
+and resolves geometry through EasyEDA. It does not call the hosted Atopile picker,
+read Atopile credentials or require any Atopile login. Public supplier failures
+need network/data diagnosis; do not ask the user to sign in or maintain a
+prepopulated component library. Typed discovery currently covers resistors and
+capacitors; other types can use explicit LCSC/MPN selections or verified catalogs.
 
 Successful queries, source provenance, selected symbol/footprint/model assets and
 content locks stay in the article. Record their hashes as evidence and preserve
@@ -419,3 +420,23 @@ Reopen project returns to that session without restarting backend work.
 shows the packaged UI. Timing distinguishes project-open interval union from
 workflow state occupancy and summed native tool wall time. Missing session ends,
 CPU measurements and source/build equivalence remain explicitly unavailable.
+
+### Record experiments and provenance
+
+Treat each discovery, part-picking, schematic, PnR, simulation, and validation
+attempt as an experiment, including failures. Atopile builds record themselves.
+For other tools, start a record before running the tool:
+
+```sh
+printf '{"seed":0}\n' > simulation-settings.json
+yapnr experiment start --project . --kind simulation --title "RF validation" --input design.kicad_pcb --parameters simulation-settings.json
+yapnr experiment finish E000001 --project . --status passed --output simulation-report.json
+yapnr experiment list --project .
+```
+
+Use the ID returned by `start`, the actual terminal status, all consumed inputs,
+and generated evidence. Record seeds and tool settings in parameters. The workspace
+manages immutable input/output objects and publishes output artifacts. Experiments
+shows typed attempts and upstream/downstream links established by matching content
+hashes; missing historical input evidence remains explicitly unknown. Do not claim
+provenance from filenames alone. The workspace manifest indexes the attempt registry.

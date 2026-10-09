@@ -51,6 +51,20 @@
       );
   }
   if (['timing', 'ask', 'source'].includes(mode)) window.YapnrDock?.tab(mode);
+  if (mode === 'experiments') {
+    for (const event of ['click', 'keydown'])
+      document.getElementById('lanes-panel')?.addEventListener(
+        event,
+        () => {
+          const before = laneId;
+          queueMicrotask(() => {
+            if (laneId && laneId !== before)
+              post('yapnr-experiment-selection', { lane: laneId, scope: scope() });
+          });
+        },
+        { capture: true }
+      );
+  }
   const allowed = new Set([
     'changes',
     'labels',
@@ -97,6 +111,10 @@
           post('yapnr-comparison-ready', { pin: r.pin_id, scope: scope(), viewport: { ...view } })
         )
         .catch(e => post('yapnr-view-error', { error: e.message }));
+    }
+    if (data?.type === 'yapnr-select-lane' && typeof data.lane === 'string') {
+      window.YapnrView?.selectLane(data.lane);
+      reportScope();
     }
     if (data?.type === 'yapnr-view-controls')
       post('yapnr-controls-state', { scope: scope(), items: controls() });

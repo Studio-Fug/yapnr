@@ -52,3 +52,14 @@ imports open source tabs; managed imports use the existing read-only native sour
 browser and its module index. Selecting text enables Ask about selection, which
 attaches immutable file/line/text and working-tree/buffer hashes. Unsaved edits
 are explicitly marked as drafts. No selection itself submits a model turn.
+
+## Embedded experiment tree
+
+![Experiment tree in its workbench tab](workspace-experiments.gif)
+
+The embedded tree retains the native hierarchy, filters and progress data. Its
+visibility belongs to the workbench drawer; the standalone viewer's older panel
+controller does not close it based on the embedded frame width. Selecting a new
+lane updates the live Board, Schematic and 3D views, while pinned comparisons stay
+independent. The capture uses the synthetic workspace and its existing recorded
+LED-ring lane, without a model turn or an electrical validation claim.

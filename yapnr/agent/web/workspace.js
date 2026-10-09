@@ -2077,6 +2077,11 @@ import { mountTraceability } from '/yapnr/traceability.js';
     );
     if (!frame || event.origin !== new URL(frame.src).origin) return;
     const data = event.data;
+    if (data?.type === 'yapnr-experiment-selection' && frame === state.viewerFrames.experiments) {
+      for (const id of ['board', 'schematic', 'three'])
+        sendView(state.viewerFrames[id], 'yapnr-select-lane', { lane: data.lane });
+      return;
+    }
     if (data?.type === 'yapnr-view-error') return say('Viewer: ' + data.error);
     if (data?.type === 'yapnr-comparison-ready') {
       const id = 'comparison:' + state.project + ':' + data.pin,

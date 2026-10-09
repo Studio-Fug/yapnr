@@ -16,6 +16,10 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
+- **Experiments embed**: workbench tabs own panel visibility; the native legacy drawer
+  controller is bypassed in embeds. Experiment lane selections follow through to the live
+  board/schematic/3D views while pinned comparisons remain independent.
+
 - **Workbench follow-up**: drawer open/dismiss motion respects reduced motion; startup no longer
   waits for provider discovery. Source syntax, import navigation and hash-scoped selected-text Ask
   context pass browser checks. A project directory tree starts in the left drawer.

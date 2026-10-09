@@ -315,7 +315,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             module = re.fullmatch(
                 r"/yapnr/(dock|dock-model|timing-view|source-view|adapters|experiments-view|"
-                r"search-view|performance-view)\.js",
+                r"search-view|performance-view|manufacturing-view)\.js",
                 parsed.path,
             )
             if module:
@@ -335,6 +335,13 @@ class Handler(BaseHTTPRequestHandler):
                     path.read_bytes(),
                     mimetypes.guess_type(path.name)[0] or "application/octet-stream",
                 )
+            manufacturing_route = re.fullmatch(
+                r"/yapnr/api/manufacturing/([a-z0-9-]+)", parsed.path
+            )
+            if manufacturing_route:
+                from yapnr.agent import manufacturing
+
+                return self.json(manufacturing.state(self.server.project(manufacturing_route[1])))
             timing_route = re.fullmatch(r"/yapnr/api/timing/([a-z0-9-]+)", parsed.path)
             if timing_route:
                 return self.json(activity.timeline(self.server.project(timing_route[1])))

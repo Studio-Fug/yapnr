@@ -15,7 +15,7 @@ export function initialLayout() {
       schematic: { tabs: ['schematic'], active: 'schematic' },
       source: { tabs: ['source'], active: 'source' },
       left: {
-        tabs: ['source-browser', 'experiments', 'performance', 'controls', 'exploration'],
+        tabs: ['source-browser', 'experiments', 'manufacturing', 'performance', 'controls', 'exploration'],
         active: 'source-browser',
       },
       right: { tabs: ['ask', 'notes', 'timing', 'activity'], active: 'ask' },

@@ -304,3 +304,11 @@ and publish their plots inline with linked run reports. Mixed analog/digital
 coupling is allowed when its assumptions are explicit. See the circuit simulation
 section in `docs/agent-workflow.md`; behavioral surrogate models do not establish
 supplier-device or bench acceptance.
+
+For turnkey assembly, reuse `yapnr fab build --assembly` and
+`yapnr order stage --dry-run`, then register the checked bundle with
+`yapnr workspace assembly --bundle DIR --board BOARD`. Present the native
+Manufacturing tab for package approval and human vendor handoff. Keep bench
+checks open until real evidence exists; never infer approval, upload files, open
+vendor pages, order or pay. See the turnkey assembly section of
+`docs/agent-workflow.md`.

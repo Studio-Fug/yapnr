@@ -483,3 +483,43 @@ Publish trace images inline and into the artifact browser, alongside the model
 and run report. Link the evidence in the requirements YAML with an accurate
 partial/verified status. A nominal behavioral plot does not satisfy requirements
 that also demand tolerance corners, supplier-device behavior or bench tests.
+
+### Turnkey assembly review and vendor handoff
+
+Use the existing vendor-specific fabrication/assembly pipeline; do not create
+ad-hoc Gerber, BOM or placement exporters. Build an assembly bundle under the
+selected vendor's fabrication profile, with locked manufacturer/supplier parts:
+
+```sh
+yapnr fab build design/board.kicad_pcb --vendor jlcpcb --assembly \
+  --parts-lock design/parts.lock --out reports/fab
+# DIR is the actual bundle directory returned by fab build.
+yapnr order stage --bundle DIR --vendor jlcpcb --assembly --dry-run
+yapnr workspace assembly --bundle DIR --board design/board.kicad_pcb
+```
+
+Use `pcbway` for the other vendor. Current standard profiles cover JLCPCB
+four/six-layer boards and PCBWay four-layer boards; the PCBWay two-layer RF
+profile is a different stackup. A standard two-layer board requires a supported,
+verified fabrication profile before preparing a package; do not substitute
+an unrelated profile to bypass checks. Bundle and board paths passed to `workspace
+assembly` are project-relative. This command verifies the bundle and complete
+archive, publishes immutable download artifacts, and requests a content-bound
+package review in the native **Manufacturing** tab. The existing workflow state
+remains authoritative; manufacturing handoff is an artifact review stage and
+does not replace electrical/bench verification or infer design completion.
+
+Discuss unresolved risks and user questions. Review all BOM rows, part sourcing,
+DNP/consigned items, placement/polarity, assembly sides, stock, price and lead time.
+After explicit package approval, the user can download Gerbers/drills, BOM, CPL,
+instructions and the complete assembly archive and continue on the vendor's
+assembly quote page. Changed board or requirement revisions invalidate handoff;
+rebuild and request a new review. Preserve any prototype-only verification limits.
+Package approval authorizes this local handoff, not an order or a payment.
+
+The user uploads the package, checks the vendor's actual placement preview and
+part matching, confirms the quote and completes checkout. Archive the resulting
+quote/order receipt as a workspace artifact and link it into manufacturing
+traceability. Vendor substitutions or board edits require renewed engineering
+checks and package review. Agents do not upload, call vendor APIs, open vendor
+pages on the user's behalf, order or pay.

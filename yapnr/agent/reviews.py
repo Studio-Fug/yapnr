@@ -138,6 +138,16 @@ def approve(root, identifiers):
     items = [artifact(root, i) for i in identifiers]
     if not items:
         raise ValueError("Select artifacts for approval")
+    for item in items:
+        if item.get("metadata", {}).get("assembly_handoff"):
+            from yapnr.agent import manufacturing
+
+            release = next(
+                (r for r in manufacturing.state(root)["releases"] if r["artifact"] == item["id"]),
+                None,
+            )
+            if not release or not release["current"]:
+                raise ValueError("Assembly inputs changed; prepare and review a new package")
     with workspace.lock(root) as folder:
         current = state(root)
         data = read(root)

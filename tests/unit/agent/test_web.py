@@ -88,6 +88,14 @@ class WebTest(unittest.TestCase):
         response = connection.getresponse()
         return response.status, response.getheaders(), response.read()
 
+    def test_native_manufacturing_empty_state_and_module(self):
+        status, _, data = self.request("/yapnr/api/manufacturing/article")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(data), {"releases": []})
+        status, _, data = self.request("/yapnr/manufacturing-view.js")
+        self.assertEqual(status, 200)
+        self.assertIn(b"mountManufacturing", data)
+
     def test_concurrent_startup_asset_burst(self):
         count = 32
         barrier = threading.Barrier(count)

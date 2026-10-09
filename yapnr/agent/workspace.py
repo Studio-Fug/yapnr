@@ -376,7 +376,11 @@ def import_archive(archive, project):
 
 def run(args):
     try:
-        if args.action == "manifest":
+        if args.action == "assembly":
+            from yapnr.agent import manufacturing
+
+            result = manufacturing.prepare(args.project, args.bundle, args.board)
+        elif args.action == "manifest":
             result = index(args.project)
         elif args.action == "publish":
             metadata = (
@@ -418,9 +422,12 @@ def register(commands):
         "workspace", help="artifact manifest and portable workspace archives"
     )
     subs = parser.add_subparsers(dest="action", required=True)
-    for action in ("manifest", "publish", "export", "import", "scratchpad"):
+    for action in ("manifest", "publish", "export", "import", "scratchpad", "assembly"):
         child = subs.add_parser(action)
         child.add_argument("--project", default=".")
+        if action == "assembly":
+            child.add_argument("--bundle", required=True)
+            child.add_argument("--board", required=True)
         if action == "publish":
             child.add_argument("--artifact", required=True)
             child.add_argument("--kind", choices=KINDS, required=True)

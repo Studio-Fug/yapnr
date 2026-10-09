@@ -55,6 +55,7 @@ py_library(
         "cloud.py",
         "design.py",
         "harness.py",
+        "manufacturing.py",
         "requirements.py",
         "reviews.py",
         "threads.py",
@@ -70,6 +71,7 @@ py_library(
         "web/dock-model.js",
         "web/experiments-view.js",
         "web/index.html",
+        "web/manufacturing-view.js",
         "web/performance-view.js",
         "web/scene.html",
         "web/search-view.js",
@@ -87,6 +89,7 @@ py_library(
     deps = [
         "//yapnr:package",
         "//yapnr/exp",
+        "//yapnr/order",
         "//yapnr/viewer:notes_store",
         "@rules_requirements_toolkit//:toolkit",
     ],

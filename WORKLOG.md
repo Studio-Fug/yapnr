@@ -593,3 +593,12 @@ scroll at 220 px across selection and verify collapsed candidate groups and
 busy-turn delivery guards. Actual ngspice 42 decks execute in the workspace;
 repeat raw traces/report are byte-identical and recorded as simulation E000023.
 The configured shared-library/XSPICE paths resolve through the existing SI runner.
+
+### Native turnkey assembly handoff
+
+Connect checked JLCPCB/PCBWay assembly bundles to a native Manufacturing tab.
+Register immutable package downloads and a content-bound review; enable the
+human vendor link only after approval. Board/requirements changes and unresolved
+feedback block handoff. No vendor upload, order or payment is implemented.
+Reuse existing fabrication outputs and preserve the controller definition, so
+existing workspaces need no workflow migration. Validation in progress.

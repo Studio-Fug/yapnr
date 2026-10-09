@@ -5,6 +5,7 @@ import { mountTiming } from '/yapnr/timing-view.js';
 import { mountViewer, sendView } from '/yapnr/adapters.js';
 import { mountSearch } from '/yapnr/search-view.js';
 import { mountPerformance } from '/yapnr/performance-view.js';
+import { mountManufacturing } from '/yapnr/manufacturing-view.js';
 import { mountExperiments } from '/yapnr/experiments-view.js';
 import { mountTraceability } from '/yapnr/traceability.js';
 
@@ -100,6 +101,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
     source: 'Sources',
     'source-browser': 'Source browser',
     experiments: 'Experiments',
+    manufacturing: 'Manufacturing',
     performance: 'Performance',
     controls: 'View controls',
     exploration: 'Exploration',
@@ -245,6 +247,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
         'schematic',
         'three',
         'experiments',
+        'manufacturing',
         'exploration',
         'native-timing',
         'performance',
@@ -355,6 +358,24 @@ import { mountTraceability } from '/yapnr/traceability.js';
       }
       container = entry.performanceView.native;
     }
+    if (id === 'manufacturing') {
+      if (entry.manufacturingProject !== state.project) {
+        entry.manufacturingView?.dispose();
+        entry.manufacturingView = mountManufacturing(container, {
+          project: state.project,
+          approve: async artifact => { await json(endpoint('approve'), {artifacts: [artifact]}); await refresh(); },
+          artifact: async id => {
+            await refresh();
+            const item = state.data?.artifacts.find(item => item.id === id);
+            if (item) await showArtifact(item);
+          },
+          review: release => review(`Review the feedback on assembly package ${release.artifact}:\n${release.feedback.map(note => note.body).join('\n')}\nDiscuss questions before proceeding. Rebuild and republish changed assembly files and request a fresh package review. Never upload, order or pay.`, release.artifact),
+          report: say,
+        });
+        entry.manufacturingProject = state.project;
+      }
+      return;
+    }
     if (id === 'experiments') {
       const key = state.project;
       if (entry.experimentsProject !== key) {
@@ -396,7 +417,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
   }
   function mountProjectViews() {
     for (const id of ['board', 'schematic']) ensureViewer(id);
-    for (const id of ['three', 'experiments', 'exploration', 'native-timing', 'performance'])
+    for (const id of ['three', 'experiments', 'manufacturing', 'exploration', 'native-timing', 'performance'])
       if (state.viewerFrames[id] || Object.values(wb.layout.panes).some(pane => pane.active === id))
         ensureViewer(id);
     ensureSource('source');
@@ -1398,7 +1419,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
       card.append(img);
     }
     const view = item.metadata?.workspace_view;
-    if (['schematic', 'board', 'three'].includes(view)) {
+    if (['schematic', 'board', 'three', 'manufacturing'].includes(view)) {
       const link = node('a', 'Open ' + (view === 'three' ? '3D' : view) + ' tab');
       link.href = '/workspace/' + encodeURIComponent(state.project) + '?view=' + view;
       link.onclick = event => {
@@ -2458,7 +2479,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
       $('body').append(node('p', 'Create your first project to begin.', 'empty'));
     }
     const requestedView = new URLSearchParams(location.search).get('view');
-    if (state.project && ['schematic', 'board', 'three'].includes(requestedView)) {
+    if (state.project && ['schematic', 'board', 'three', 'manufacturing'].includes(requestedView)) {
       ensureViewer(requestedView);
       wb.open(requestedView);
     }

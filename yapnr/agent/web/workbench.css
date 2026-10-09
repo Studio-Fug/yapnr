@@ -1056,3 +1056,10 @@ dialog::backdrop {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.manufacturing-browser { padding: 16px; overflow: auto; height: 100%; }
+.assembly-release { border: 1px solid var(--yp-control); padding: 16px; margin: 16px 0; }
+.assembly-release code { overflow-wrap: anywhere; }
+.assembly-release li { margin: 8px 0; }
+.assembly-release li code { margin-left: 8px; }
+.assembly-release > button, .assembly-release > label, .assembly-release > a { display: block; margin-top: 12px; }

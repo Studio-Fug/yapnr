@@ -138,6 +138,14 @@ def opencode_environment():
             if isinstance(current, str):
                 current = {"*": current}
             permission[key] = {**current, pattern: value}
+    cache = Path(environment.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "yapnr/atopile"
+    pattern = str(cache) + "/*/venv/lib/python*/site-packages/*"
+    permission = config.setdefault("permission", {})
+    for key, value in (("external_directory", "allow"), ("edit", "deny")):
+        current = permission.get(key, {})
+        if isinstance(current, str):
+            current = {"*": current}
+        permission[key] = {**current, pattern: value}
     environment["OPENCODE_CONFIG_CONTENT"] = json.dumps(config)
     return environment
 

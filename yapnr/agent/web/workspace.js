@@ -1,5 +1,4 @@
 /* Workspace-native UI. OpenCode supplies the runtime API, never the page shell. */
-import { mountDesign } from '/yapnr/design.js';
 import { mountTraceability } from '/yapnr/traceability.js';
 
 (() => {
@@ -83,11 +82,20 @@ import { mountTraceability } from '/yapnr/traceability.js';
     $('body').replaceChildren();
     $('body').hidden = true;
     $('experiment').hidden = false;
-    const key = state.project + ':' + (state.data?.experiment_url || '');
-    if (state.designKey !== key || !$('experiment').querySelector('.live-design')) {
-      state.disposeDesign?.();
-      state.designKey = key;
-      state.disposeDesign = mountDesign($('experiment'), state.project, state.data?.experiment_url);
+    const url = state.data?.experiment_url;
+    if (!url) {
+      $('experiment').replaceChildren();
+      return;
+    }
+    const embedded = new URL(url, location.href);
+    embedded.searchParams.set('workspace', '1');
+    let frame = $('experiment').querySelector('iframe');
+    if (!frame || frame.src !== embedded.href) {
+      frame = node('iframe');
+      frame.src = embedded.href;
+      frame.title = `${state.project} experiment`;
+      frame.addEventListener('load', () => (frame.dataset.loaded = '1'));
+      $('experiment').replaceChildren(frame);
     }
   }
   async function setMain(id) {
@@ -183,7 +191,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
           state.revision = data.scratchpad.revision;
         }
       }
-      if (!$('body').childElementCount && state.tab !== 'experiment') render();
+      if (state.tab === 'experiment') switchView('experiment');
+      else if (!$('body').childElementCount) render();
     } catch (e) {
       say(e.message);
     } finally {

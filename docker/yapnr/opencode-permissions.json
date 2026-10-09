@@ -3,12 +3,14 @@
   "permission": {
     "external_directory": {
       "/opt/venv/lib/python*/site-packages/yapnr/*": "allow",
-      "/opt/venv/lib/python*/site-packages/rules_requirements/*": "allow"
+      "/opt/venv/lib/python*/site-packages/rules_requirements/*": "allow",
+      "/var/lib/yapnr/.cache/yapnr/atopile/*/venv/lib/python*/site-packages/*": "allow"
     },
     "edit": {
       "*": "allow",
       "/opt/venv/lib/python*/site-packages/yapnr/*": "deny",
-      "/opt/venv/lib/python*/site-packages/rules_requirements/*": "deny"
+      "/opt/venv/lib/python*/site-packages/rules_requirements/*": "deny",
+      "/var/lib/yapnr/.cache/yapnr/atopile/*/venv/lib/python*/site-packages/*": "deny"
     }
   }
 }

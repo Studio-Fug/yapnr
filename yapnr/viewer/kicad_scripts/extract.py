@@ -21,6 +21,14 @@ def arc_sweep(t):
     return get().AsRadians()
 
 
+def display_bounds(board, outline):
+    """Show an unplaced board's real object bounds without inventing Edge.Cuts."""
+    if outline is not None:
+        return outline.width, outline.height, True
+    box = board.ComputeBoundingBox(False)
+    return box.GetWidth() / 1e6, box.GetHeight() / 1e6, False
+
+
 def tracks_and_vias(k, b, xy):
     tracks = []
     vias = []
@@ -126,6 +134,7 @@ def main(argv):
 
     b = k.LoadBoard(argv[1])
     frame, outline = _board_frame(b)
+    width, height, outline_present = display_bounds(b, outline)
 
     def xy(p):
         return list(frame.point(p.x, p.y))
@@ -133,8 +142,9 @@ def main(argv):
     tracks, vias = tracks_and_vias(k, b, xy)
     doc = dict(
         frame="mm-y-up",
-        width=outline.width,
-        height=outline.height,
+        width=width,
+        height=height,
+        outline_present=outline_present,
         parts=parts_of(k, b, xy),
         tracks=tracks,
         vias=vias,

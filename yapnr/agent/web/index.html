@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>yapnr · Design workspace</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --chat-width: 440px;
+        --bg: #101419;
+        --panel: #181e25;
+        --line: #303a45;
+        --text: #e3e9ef;
+        --muted: #9daebd;
+        --accent: #8ed6c0;
+        font: 14px system-ui;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        height: 100dvh;
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr) 7px var(--chat-width);
+        grid-template-rows: 58px minmax(0, 1fr) 26px;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+      button {
+        background: #25303b;
+        border: 1px solid #3c4a58;
+        border-radius: 6px;
+        padding: 7px 10px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #344553;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      input,
+      textarea,
+      select {
+        background: #10161d;
+        border: 1px solid #405161;
+        border-radius: 5px;
+        padding: 8px;
+        max-width: 100%;
+      }
+      textarea {
+        resize: vertical;
+        width: 100%;
+        min-height: 110px;
+      }
+      a {
+        color: #99cfed;
+      }
+      h2 {
+        font-size: 18px;
+      }
+      h3 {
+        font-size: 15px;
+      }
+      .muted,
+      small {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .error {
+        color: #ffaeae;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0;
+      }
+      .card {
+        padding: 14px;
+        margin: 10px 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+      .card button {
+        max-width: 100%;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: #111820;
+        padding: 12px;
+        max-height: 450px;
+        overflow: auto;
+      }
+      label {
+        display: block;
+        margin: 10px 0;
+      }
+      .empty {
+        padding: 28px;
+        color: var(--muted);
+      }
+      #top {
+        grid-column: 1/-1;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 10px 18px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      #brand {
+        font-size: 21px;
+        font-weight: 650;
+        letter-spacing: -1px;
+        color: var(--accent);
+      }
+      #stage {
+        flex: 1;
+      }
+      #sidebar {
+        grid-column: 1;
+        grid-row: 2;
+        border-right: 1px solid var(--line);
+        padding: 14px;
+        overflow: auto;
+        background: #151b22;
+      }
+      #sidebar select {
+        width: 100%;
+      }
+      #sidebar h2 {
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        margin: 24px 0 10px;
+      }
+      .thread-link,
+      .artifact-link {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        border-color: transparent;
+        margin: 4px 0;
+        overflow-wrap: anywhere;
+      }
+      .thread-link small,
+      .artifact-link small {
+        display: block;
+        margin-top: 4px;
+      }
+      .selected {
+        background: #243b38;
+        border-color: #3f6d61;
+      }
+      #tabs {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-top: 15px;
+      }
+      #tabs button {
+        text-align: left;
+        background: transparent;
+      }
+      #work {
+        grid-column: 2;
+        grid-row: 2;
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #view-header {
+        display: flex;
+        align-items: center;
+        min-height: 54px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 20px;
+      }
+      #view-title {
+        margin: 0;
+      }
+      #body {
+        flex: 1;
+        overflow: auto;
+        padding: 20px;
+      }
+      #experiment {
+        flex: 1;
+        min-height: 0;
+      }
+      #experiment[hidden] {
+        display: none;
+      }
+      #experiment iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+      #scratch {
+        min-height: 65vh;
+        line-height: 1.6;
+        font-family: ui-monospace, monospace;
+      }
+      .view img,
+      .view canvas {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+      .view iframe {
+        width: 100%;
+        height: 55vh;
+        border: 0;
+      }
+      canvas {
+        touch-action: none;
+      }
+      #resize-chat {
+        grid-column: 3;
+        grid-row: 2;
+        cursor: col-resize;
+        border-left: 1px solid var(--line);
+        touch-action: none;
+      }
+      #chat {
+        grid-column: 4;
+        grid-row: 2;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: #151b22;
+      }
+      #chat-header {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      #chat-title {
+        font-weight: 600;
+        flex: 1;
+        overflow-wrap: anywhere;
+      }
+      #messages {
+        flex: 1;
+        overflow: auto;
+        padding: 16px;
+      }
+      .message {
+        margin-bottom: 20px;
+        overflow-wrap: anywhere;
+      }
+      .message header {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin: 0 0 8px;
+      }
+      .message.user {
+        background: #23302f;
+        padding: 12px;
+        border-radius: 8px;
+      }
+      .table-scroll {
+        overflow: auto;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 12px;
+        margin: 12px 0;
+      }
+      td,
+      th {
+        border: 1px solid var(--line);
+        padding: 7px;
+        text-align: left;
+      }
+      code {
+        font-family: ui-monospace, monospace;
+        background: #0f151b;
+        border-radius: 3px;
+        padding: 1px 4px;
+      }
+      .message-text {
+        white-space: pre-wrap;
+        line-height: 1.6;
+      }
+      .message img,
+      .inline-artifact img {
+        display: block;
+        max-width: 100%;
+        max-height: 500px;
+        object-fit: contain;
+      }
+      .tool {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        margin: 8px 0;
+        padding: 9px;
+      }
+      .tool summary {
+        cursor: pointer;
+        font:
+          12px ui-monospace,
+          monospace;
+      }
+      .inline-artifact {
+        padding: 10px;
+        border: 1px solid #436356;
+        border-radius: 8px;
+        margin: 12px 0;
+      }
+      .inline-artifact iframe {
+        width: 100%;
+        height: 300px;
+        border: 0;
+      }
+      .inline-artifact strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+      #composer {
+        padding: 12px;
+        border-top: 1px solid var(--line);
+      }
+      #composer textarea {
+        min-height: 100px;
+        max-height: 260px;
+      }
+      #composer select {
+        width: 100%;
+        margin-bottom: 8px;
+      }
+      #requests {
+        max-height: 50vh;
+        overflow: auto;
+      }
+      .request {
+        margin: 12px;
+        padding: 12px;
+        border: 1px solid #6d8056;
+        border-radius: 7px;
+      }
+      .request button {
+        margin: 8px 5px 0 0;
+      }
+      .question-option {
+        border: 1px solid var(--line);
+        padding: 9px;
+        border-radius: 6px;
+      }
+      .question-option input {
+        margin-right: 8px;
+      }
+      .question-option .inline-artifact {
+        cursor: default;
+      }
+      .thread-turn,
+      .thread-note {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      #footer {
+        grid-column: 1/-1;
+        display: flex;
+        gap: 16px;
+        padding: 4px 15px;
+        background: var(--panel);
+        border-top: 1px solid var(--line);
+        font-size: 11px;
+      }
+      #status {
+        flex: 1;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .chat-expanded {
+        grid-template-columns: 230px minmax(0, 1fr);
+      }
+      .chat-expanded #work,
+      .chat-expanded #resize-chat {
+        display: none;
+      }
+      .chat-expanded #chat {
+        grid-column: 2;
+      }
+      dialog {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 24px;
+        width: min(600px, 95vw);
+      }
+      dialog::backdrop {
+        background: #0009;
+      }
+      dialog input,
+      dialog select {
+        width: 100%;
+        margin: 6px 0;
+      }
+      dialog .close {
+        float: right;
+      }
+      #loading {
+        position: fixed;
+        inset: 58px 0 26px 230px;
+        display: grid;
+        place-content: center;
+        background: var(--bg);
+        z-index: 2;
+      }
+      @media (max-width: 1100px) {
+        body {
+          grid-template-columns: 190px minmax(0, 1fr) 7px 360px;
+        }
+        #loading {
+          left: 190px;
+        }
+      }
+      @media (max-width: 800px) {
+        body {
+          grid-template-columns: 160px minmax(0, 1fr);
+          grid-template-rows: 58px minmax(260px, 1fr) minmax(300px, 1fr) 26px;
+        }
+        #sidebar {
+          grid-row: 2/4;
+        }
+        #work {
+          grid-column: 2;
+          grid-row: 2;
+        }
+        #chat {
+          grid-column: 2;
+          grid-row: 3;
+        }
+        #resize-chat {
+          display: none;
+        }
+        #footer {
+          grid-row: 4;
+        }
+        #top {
+          gap: 8px;
+        }
+        #stage {
+          display: none;
+        }
+        .chat-expanded #chat {
+          grid-row: 2/4;
+        }
+        #loading {
+          left: 160px;
+        }
+      }
+    </style>
+    <script defer src="/yapnr/workspace.js"></script>
+  </head>
+  <body>
+    <header id="top">
+      <span id="brand">yapnr</span><span class="muted">Design workspace</span
+      ><span id="stage"></span><button id="connect">Connect provider</button>
+    </header>
+    <aside id="sidebar">
+      <select id="project" aria-label="Project"></select>
+      <div class="actions"><button id="new-project">New project</button></div>
+      <nav id="tabs" aria-label="Workspace views">
+        <button data-tab="experiment">Board · schematic · 3D</button
+        ><button data-tab="artifacts">Artifacts</button
+        ><button data-tab="scratchpad">Design document</button
+        ><button data-tab="threads">Notes & threads</button
+        ><button data-tab="activity">Workflow</button>
+      </nav>
+      <h2>Conversations</h2>
+      <button id="new-thread">+ New conversation</button>
+      <div id="thread-list"></div>
+      <h2>Artifacts</h2>
+      <div id="artifact-list"></div>
+    </aside>
+    <main id="work">
+      <header id="view-header"><h2 id="view-title">Artifacts</h2></header>
+      <div id="body"></div>
+      <section id="experiment" hidden></section>
+    </main>
+    <div
+      id="resize-chat"
+      role="separator"
+      aria-label="Resize conversation"
+      aria-orientation="vertical"
+    ></div>
+    <section id="chat" aria-label="Conversation">
+      <header id="chat-header">
+        <span id="chat-title">Conversation</span><span id="chat-status" class="muted"></span
+        ><button id="expand-chat" aria-label="Expand or dock conversation">↔</button>
+      </header>
+      <div id="messages" aria-live="polite"></div>
+      <div id="requests"></div>
+      <div id="composer">
+        <div class="actions">
+          <span id="selection-context" class="muted"></span
+          ><button id="clear-context">Clear selection</button>
+        </div>
+        <select id="model" aria-label="Model"></select
+        ><textarea
+          id="prompt"
+          aria-label="Message"
+          placeholder="Describe your design, ask a question, or refine a requirement…"
+        ></textarea>
+        <div class="actions">
+          <button id="send">Send</button><button id="stop" disabled>Stop</button
+          ><span class="muted">⌘ / Ctrl + Enter</span>
+        </div>
+      </div>
+    </section>
+    <footer id="footer"><span id="status" role="status"></span><span id="recording"></span></footer>
+    <div id="loading">Connecting to workspace…</div>
+    <dialog id="project-dialog">
+      <button class="close" onclick="this.closest('dialog').close()">Close</button>
+      <h2>New design project</h2>
+      <label
+        >Project name<input
+          id="project-name"
+          placeholder="my-design"
+          pattern="[a-z0-9][a-z0-9-]{0,62}" /></label
+      ><label>What do you want to design?<textarea id="directive"></textarea></label>
+      <p class="muted">
+        Initializes the engineering workflow. Requirements and risk analysis come first.
+      </p>
+      <p id="project-error" class="error"></p>
+      <button id="create-project">Create project</button>
+    </dialog>
+    <dialog id="provider-dialog">
+      <button class="close" onclick="this.closest('dialog').close()">Close</button>
+      <h2>Connect a model provider</h2>
+      <label>Provider<select id="provider"></select></label
+      ><label>Authentication<select id="auth-method"></select></label
+      ><label>API key<input id="api-key" type="password" autocomplete="off" /></label
+      ><button id="authorize">Connect</button>
+      <div id="auth-result"></div>
+      <details>
+        <summary>OpenAI-compatible endpoint</summary>
+        <label>Connection name<input id="compat-name" placeholder="local-model" /></label
+        ><label>API base URL<input id="compat-url" placeholder="https://example.com/v1" /></label
+        ><label>Model ID<input id="compat-model" placeholder="model-id" /></label
+        ><label
+          >API key (if required)<input id="compat-key" type="password" autocomplete="off" /></label
+        ><button id="connect-compatible">Save endpoint</button>
+      </details>
+    </dialog>
+  </body>
+</html>

@@ -3,7 +3,7 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-07 (installed RF packaging and PyPI publishing). Previous status:
+Last updated: 2026-10-08 (workspace-native conversation and artifact review). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 `claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
 on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
@@ -31,6 +31,17 @@ board edges, the hierarchical ladder driver and their animations on
   immutable receipts, revision invalidation and acceptance/completion guards.
   Receipts remain assertions requiring genuine user decisions and authoritative
   validation reports; the controller does not authenticate them or sandbox agents.
+
+- **Workspace-native browser UI**: replaced the OpenCode overlay with one layout
+  for projects, focused/main conversations, artifacts, engineering views and a
+  resizable chat pane. OpenCode remains the headless provider/tool/session runtime.
+  Canonical notes carry immutable focused transcripts into the main conversation
+  without starting a model turn; shared document edits use revision checks.
+  Pinned sandboxed three.js choices, rendered artifact markup, full conversation
+  journaling and integrity-checked workspace archives are implemented. Browser
+  checks distinguish synthetic review fixtures from actual engineering views.
+  Solver regeneration remains unverified until a pinned replay recipe passes;
+  image-build toolchain warming remains outstanding.
 
 - **External RF packaging (#96)**: collect every RF Bazel subpackage explicitly
   without numerical dependency closure in the wheel collector. Export/report,

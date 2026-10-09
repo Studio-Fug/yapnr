@@ -1,3 +1,4 @@
+if(window.parent!==window&&new URLSearchParams(location.search).get('workspace')==='1')document.body.classList.add('workspace-embedded');
 'use strict';
 const $=id=>document.getElementById(id), canvas=$('board'),ctx=canvas.getContext('2d');
 let state=null,pinned=null,pinId=null,laneId=null,phase='live',phaseGeo=null,annotations=[],drawing=false,drag=null,preview=null,view={scale:8,x:40,y:500},fitted=false,revision=-1;

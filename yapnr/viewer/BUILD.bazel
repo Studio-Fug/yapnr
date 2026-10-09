@@ -56,12 +56,24 @@ filegroup(
 )
 
 py_library(
+    name = "notes_store",
+    srcs = [
+        "__init__.py",
+        "notes/__init__.py",
+        "notes/store.py",
+    ],
+)
+
+py_library(
     name = "viewer",
     srcs = glob(
         ["**/*.py"],
         exclude = [
             "kicad_scripts/**",
             "testing.py",
+            "notes/__init__.py",
+            "notes/store.py",
+            "__init__.py",
         ],
     ),
     data = [
@@ -71,6 +83,7 @@ py_library(
         ":kicad_scripts",
     ],
     deps = [
+        ":notes_store",
         "//hardware/pnr",
         "//hardware/pnr:pnr_hier",
         "//hardware/pnr:pnr_place",

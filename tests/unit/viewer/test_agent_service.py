@@ -548,6 +548,31 @@ class TranslatorTest(unittest.TestCase):
 
 
 class StreamTest(Base):
+    def test_workspace_journal_preserves_prompt_and_full_tool_result(self):
+        root = self.dir / "article"
+        output = "full tool output " * 4000
+        steps = tool_msg("m1", "Read", dict(file_path=str(REPO / "x.ato")))
+        steps[-1]["line"]["message"]["content"][0]["content"] = output
+        self.scenario([init(), *steps, *text_msg("m2", ["Finding."]), result("Finding.")])
+        events = self.run_chat(
+            self.svc(workspace_dir=root), {"message": "Inspect the part", "model": "sonnet"}
+        )
+        self.assertEqual(events[-1][0], "done")
+        rows = [
+            json.loads(line)
+            for line in (root / ".yapnr/workspace/conversation.jsonl").read_text().splitlines()
+        ]
+        self.assertEqual(rows[0]["request"]["message"], "Inspect the part")
+        self.assertIn("Question:\nInspect the part", rows[0]["prompt"])
+        results = [
+            part["content"]
+            for row in rows[1:]
+            if row.get("source") == "focused-agent-event"
+            for part in row["event"].get("message", {}).get("content", [])
+            if part.get("type") == "tool_result"
+        ]
+        self.assertEqual(results, [output])
+
     def test_stream_resume_and_log(self):
         s = self.svc()
         self.scenario(

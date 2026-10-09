@@ -36,6 +36,7 @@ py_library(
     name = "package",
     srcs = [
         "__init__.py",
+        "events.py",
         "frontends/__init__.py",
     ],
     imports = [".."],

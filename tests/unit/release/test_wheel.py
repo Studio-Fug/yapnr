@@ -88,6 +88,18 @@ class WheelTest(unittest.TestCase):
             "yapnr/agent/workflow.md",
             "yapnr/agent/workflow.py",
             "yapnr/agent/workflow.json",
+            "yapnr/agent/workspace.py",
+            "yapnr/agent/threads.py",
+            "yapnr/agent/web.py",
+            "yapnr/agent/web/workspace.js",
+            "yapnr/agent/web/index.html",
+            "yapnr/agent/web/scene.html",
+            "yapnr/agent/web/vendor/three.module.js",
+            "yapnr/agent/web/vendor/three.core.js",
+            "yapnr/agent/web/vendor/OrbitControls.js",
+            "yapnr/agent/web/vendor/LICENSE",
+            "yapnr/viewer/notes/store.py",
+            "yapnr/events.py",
         ]:
             self.assertIn(name, self.names)
         # Only the package and its metadata: no tests, tools or repository files.

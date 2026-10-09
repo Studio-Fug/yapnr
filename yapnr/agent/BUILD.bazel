@@ -3,6 +3,27 @@ load("@rules_python//python:defs.bzl", "py_library")
 package(default_visibility = ["//visibility:public"])
 
 genrule(
+    name = "web_vendor",
+    srcs = [
+        "@threejs//:build/three.core.js",
+        "@threejs//:build/three.module.js",
+        "@threejs//:examples/jsm/controls/OrbitControls.js",
+        "@threejs//:LICENSE",
+    ],
+    outs = [
+        "web/vendor/three.core.js",
+        "web/vendor/three.module.js",
+        "web/vendor/OrbitControls.js",
+        "web/vendor/LICENSE",
+    ],
+    cmd = "mkdir -p $(RULEDIR)/web/vendor && " +
+          "cp $(location @threejs//:build/three.core.js) $(RULEDIR)/web/vendor/three.core.js && " +
+          "cp $(location @threejs//:build/three.module.js) $(RULEDIR)/web/vendor/three.module.js && " +
+          "cp $(location @threejs//:examples/jsm/controls/OrbitControls.js) $(RULEDIR)/web/vendor/OrbitControls.js && " +
+          "cp $(location @threejs//:LICENSE) $(RULEDIR)/web/vendor/LICENSE",
+)
+
+genrule(
     name = "instructions",
     srcs = ["//:AGENTS.md"],
     outs = ["AGENTS.md"],
@@ -21,12 +42,22 @@ py_library(
     srcs = [
         "__init__.py",
         "cli.py",
+        "threads.py",
+        "web.py",
         "workflow.py",
+        "workspace.py",
     ],
     data = [
+        "web/index.html",
+        "web/scene.html",
+        "web/workspace.js",
         "workflow.json",
         ":instructions",
+        ":web_vendor",
         ":workflow",
     ],
-    deps = ["//yapnr:package"],
+    deps = [
+        "//yapnr:package",
+        "//yapnr/viewer:notes_store",
+    ],
 )

@@ -430,6 +430,7 @@ class Viewer:
                 engine_runtime=self.runtime,
                 meter=self.spend,
                 notes=self.notes,
+                workspace_dir=self.experiment,
                 web=cfg.agent_web,
                 viewer_port=lambda: self.port,
                 local_names=own_names,

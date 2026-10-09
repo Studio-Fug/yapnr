@@ -984,17 +984,30 @@ dialog::backdrop {
 .experiment-tree {
   display: grid;
   gap: 4px;
-  max-height: 30vh;
+  max-height: 55vh;
   overflow: auto;
   flex-shrink: 0;
 }
 .experiment-attempt {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   width: 100%;
   text-align: left;
   padding: 10px 8px 10px calc(8px + var(--depth) * 16px);
+}
+.experiment-progress-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-basis: 100%;
+  padding-left: 28px;
+}
+.experiment-progress {
+  width: 90px;
+  height: 6px;
+  accent-color: var(--accent);
 }
 .experiment-attempt > span:nth-child(2) {
   flex: 1;

@@ -116,6 +116,38 @@ class ExperimentTest(unittest.TestCase):
         self.assertEqual(runs[1]["kind"], "discovery")
         self.assertEqual(runs[0]["inputs"], [])
         self.assertEqual(runs[0]["dependencies"], [])
+        self.assertEqual(runs[0]["progress"]["fraction"], 1)
+
+    def test_missing_telemetry_ancestors_keep_parallel_candidates_and_progress(self):
+        runs = experiments.live_attempts(
+            {
+                "lanes": {
+                    "campaign/s0/start-00": {
+                        "progress": {"state": "running", "fraction": 0.25, "phase_label": "Routing"}
+                    },
+                    "campaign/s0/start-01": {"progress": {"state": "done", "fraction": 1}},
+                }
+            }
+        )
+        indexed = {run["id"]: run for run in runs}
+        self.assertEqual(indexed["route:campaign/s0/start-00"]["parent"], "route:campaign/s0")
+        self.assertEqual(indexed["route:campaign/s0"]["counts"], {"running": 1, "done": 1})
+        self.assertEqual(indexed["route:campaign/s0"]["progress"]["fraction"], 0.625)
+        self.assertEqual(indexed["route:campaign/s0"]["parent"], "route:campaign")
+
+    def test_completed_schematic_capture_is_not_a_stalled_routing_worker(self):
+        runs = experiments.live_attempts(
+            {
+                "lanes": {
+                    "schematic/build": {
+                        "kind": "schematic_capture",
+                        "progress": {"state": "stalled", "fraction": 0.5},
+                    }
+                }
+            }
+        )
+        self.assertTrue(all(run["kind"] == "schematic" for run in runs))
+        self.assertTrue(all(run["progress"]["fraction"] == 1 for run in runs))
 
     def test_corrupt_registry_and_escaping_files_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as other:

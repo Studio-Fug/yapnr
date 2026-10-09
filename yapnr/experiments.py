@@ -432,23 +432,28 @@ def live_attempts(state):
     """Native telemetry is data for this browser, not another browser embedded in it."""
     result = []
     lanes = state.get("lanes", {})
+    groups = {}
     for identifier, lane in lanes.items():
         progress = lane.get("progress", {})
         ancestors = identifier.split("/")
-        parent = next(
-            (
-                "route:" + "/".join(ancestors[:size])
-                for size in range(len(ancestors) - 1, 0, -1)
-                if "/".join(ancestors[:size]) in lanes
-            ),
-            None,
-        )
+        parent = "route:" + "/".join(ancestors[:-1]) if len(ancestors) > 1 else None
         status = progress.get("state", "unknown")
+        schematic = lane.get("kind") == "schematic_capture"
+        if schematic:
+            progress = {"state": "done", "fraction": 1, "phase_label": "Schematic capture"}
+            status = "done"
+        kind = (
+            "schematic" if schematic else "discovery" if identifier.endswith("/search") else "pnr"
+        )
+        for size in range(1, len(ancestors)):
+            prefix = "/".join(ancestors[:size])
+            if prefix not in lanes:
+                groups.setdefault(prefix, []).append({"progress": progress, "kind": kind})
         result.append(
             {
                 "id": "route:" + identifier,
-                "title": identifier,
-                "kind": "discovery" if identifier.endswith("/search") else "pnr",
+                "title": identifier.rsplit("/", 1)[-1],
+                "kind": kind,
                 "status": "finished" if status == "done" else status,
                 "parent": parent,
                 "lane": identifier,
@@ -457,10 +462,45 @@ def live_attempts(state):
                 "dependencies": [],
                 "provenance": "Inputs not recorded in this telemetry stream",
                 "parameters": {"phase": lane.get("phase"), "progress": progress.get("fraction")},
+                "progress": progress,
                 "origin": "native telemetry",
             }
         )
-    return result[:500]
+    for identifier, children in groups.items():
+        counts = {}
+        kinds = {child["kind"] for child in children}
+        for child in children:
+            status = child.get("progress", {}).get("state", "unknown")
+            counts[status] = counts.get(status, 0) + 1
+        fractions = [child.get("progress", {}).get("fraction") for child in children]
+        known = all(isinstance(value, (int, float)) for value in fractions)
+        status = (
+            "running"
+            if counts.get("running")
+            else "finished" if counts.get("done") == len(children) else "mixed"
+        )
+        result.append(
+            {
+                "id": "route:" + identifier,
+                "title": identifier.split("/")[-1],
+                "kind": (
+                    next(iter(kinds)) if len(kinds) == 1 else "pnr" if "pnr" in kinds else "other"
+                ),
+                "status": status,
+                "group": True,
+                "counts": counts,
+                "parent": "route:" + identifier.rsplit("/", 1)[0] if "/" in identifier else None,
+                "inputs": [],
+                "outputs": [],
+                "dependencies": [],
+                "progress": {"fraction": sum(fractions) / len(fractions) if known else None},
+                "origin": "native telemetry",
+                "provenance": "Telemetry hierarchy; inputs not recorded",
+            }
+        )
+    # Keep ancestors ahead of leaves when bounding a large telemetry response.
+    # Otherwise the first page can contain children whose parents were truncated.
+    return sorted(result, key=lambda run: (not run.get("group", False), run["id"]))[:2000]
 
 
 def register(commands):

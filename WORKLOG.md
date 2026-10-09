@@ -550,3 +550,14 @@ Schematic, Board or 3D tab through portable `workspace_view` metadata; matching
 workspace URLs restore that tab. Full regression: 291 targets pass; affected
 workflow, web and schematic checks pass after the link change. Live browser
 capture/link validation and reproducible visual evidence accompany the change.
+
+### Routing observability repair
+
+Restore native per-candidate phase progress and missing campaign ancestors in
+the typed experiment tree. Preserve progress when a live lane is joined to a
+recorded attempt, retain sibling candidates, prioritize telemetry, and support
+expanding/collapsing groups with worker-status counts. Unknown progress remains
+indeterminate. The workflow guide requires connecting telemetry before routing;
+a phase transition alone does not create board geometry. Current validation:
+live native board capture succeeds; all 291 regression targets and final affected
+experiment/web tests pass. Tree browser QA follows the packaged deployment.

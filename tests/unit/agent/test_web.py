@@ -29,6 +29,18 @@ class Upstream(BaseHTTPRequestHandler):
 
 
 class WebTest(unittest.TestCase):
+    def test_viewer_selection_query_does_not_corrupt_api_routes(self):
+        from unittest.mock import MagicMock
+
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"lanes":{}}'
+        with patch.object(web.urllib.request, "urlopen", return_value=response) as remote:
+            self.assertEqual(
+                web.api("https://viewer.example.test/?lane=selected#view", "/api/state"),
+                {"lanes": {}},
+            )
+        self.assertEqual(remote.call_args.args[0].full_url, "https://viewer.example.test/api/state")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

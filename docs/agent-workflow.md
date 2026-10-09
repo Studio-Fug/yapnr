@@ -50,6 +50,15 @@ it with `[yapnr-artifact:ARTIFACT_ID]`. Its card links to the workspace's Schema
 tab; `/workspace/PROJECT?view=schematic` also opens that tab directly. Preserve
 superseded diagnostic images with accurate labels rather than deleting history.
 
+Connect placement and routing telemetry before launching a campaign: use
+`yapnr exp live PLAN --out viewer-live` for a supported campaign adapter, or set
+the engine worker's `PNR_LIVE_DIR` to the attached viewer's event directory root.
+Publish real engine events and native geometry with exact board hashes; keep
+candidate lanes distinct so the native Experiments tree can show sibling work
+and phase progress. A workflow transition alone supplies no board geometry.
+For completed runs without telemetry, import their actual placement/board outputs
+as labeled result previews; never fabricate intermediate frames or worker activity.
+
 ## Shared browser workspace
 
 `yapnr web --projects /projects` starts the workspace-native browser application

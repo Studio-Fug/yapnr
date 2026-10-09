@@ -46,6 +46,7 @@ export function mountExperiments(container, { project, open, artifact, select, r
     livePending = false,
     liveKey = '',
     selected = null;
+  const collapsed = new Set();
   const file = ref => {
     const button = el('button', ref.path.split('/').pop(), 'experiment-file');
     button.title = ref.path + '\n' + (ref.sha256 || 'Hash unavailable');
@@ -88,15 +89,41 @@ export function mountExperiments(container, { project, open, artifact, select, r
       const glyph = el('span', icon, 'experiment-kind');
       glyph.title = label;
       glyph.setAttribute('aria-label', label);
+      const children = matches.filter(child => child.parent === run.id);
+      if (children.length) {
+        button.setAttribute('aria-expanded', String(!collapsed.has(run.id)));
+        glyph.textContent = collapsed.has(run.id) ? '▸' : '▾';
+      }
       button.append(
         glyph,
         el('span', run.title || run.id),
         el('span', run.status, 'experiment-status')
       );
-      button.onclick = () => choose(run.id);
+      if (run.progress) {
+        const progress = el('progress', undefined, 'experiment-progress');
+        progress.max = 1;
+        const fraction = run.progress.fraction;
+        if (typeof fraction === 'number' && Number.isFinite(fraction))
+          progress.value = Math.max(0, Math.min(1, fraction));
+        progress.setAttribute('aria-label', (run.title || run.id) + ' progress');
+        const caption = [run.progress.phase_label || run.parameters?.phase];
+        if (progress.hasAttribute('value')) caption.push(Math.round(progress.value * 100) + '%');
+        if (run.counts)
+          caption.push(Object.entries(run.counts).map(([status, count]) => `${count} ${status}`).join(' · '));
+        const line = el('span', undefined, 'experiment-progress-line');
+        line.append(progress, el('small', caption.filter(Boolean).join(' · ')));
+        button.append(line);
+      }
+      button.onclick = () => {
+        if (children.length) {
+          if (collapsed.has(run.id)) collapsed.delete(run.id);
+          else collapsed.add(run.id);
+        }
+        choose(run.id);
+      };
       tree.append(button);
-      for (const child of matches.filter(child => child.parent === run.id))
-        add(child, depth + 1, seen);
+      if (!collapsed.has(run.id))
+        for (const child of children) add(child, depth + 1, seen);
     };
     for (const run of matches.filter(run => !included.has(run.parent))) add(run);
     if (!matches.length)
@@ -192,7 +219,16 @@ export function mountExperiments(container, { project, open, artifact, select, r
   }
   function merge() {
     const attached = new Set(recorded.map(run => run.lane).filter(Boolean));
-    runs = [...recorded, ...live.filter(run => !attached.has(run.lane))];
+    const byLane = new Map(live.filter(run => run.lane).map(run => [run.lane, run]));
+    const ids = new Map(recorded.filter(run => run.lane).map(run => ['route:' + run.lane, run.id]));
+    runs = [
+      ...recorded.map(run => {
+        const lane = byLane.get(run.lane);
+        return lane ? {...run, progress: lane.progress, counts: lane.counts} : run;
+      }),
+      ...live.filter(run => !attached.has(run.lane)).map(run => ({...run, parent: ids.get(run.parent) || run.parent})),
+    ];
+    runs.sort((a, b) => Number(!a.progress) - Number(!b.progress));
     render();
   }
   async function updateLive() {

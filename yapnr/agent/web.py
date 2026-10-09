@@ -24,6 +24,8 @@ BRAND = Path(__file__).parent.parent / "brand"
 
 
 def api(upstream, path, data=None, method=None):
+    # Page links can select lanes/checkpoints; API routes use the server base.
+    upstream = urlsplit(upstream)._replace(query="", fragment="").geturl()
     request = urllib.request.Request(
         upstream.rstrip("/") + path,
         data=workspace.encoded(data) if data is not None else None,

@@ -73,6 +73,22 @@ ARG PBS_RELEASE
 
 USER root
 
+# General circuit simulation as well as the SI runner's shared-library backend.
+# Pin the Ubuntu package; retain its copyright/source metadata in the image.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ngspice=42+ds-3build1; \
+    rm -rf /var/lib/apt/lists/*; \
+    mkdir -p /opt/yapnr/lib; \
+    lib="$(dpkg -L libngspice0 | sed -n '/\/libngspice.so.0$/p')"; \
+    test -f "${lib}"; \
+    ln -s "${lib}" /opt/yapnr/lib/libngspice.so; \
+    ln -s "$(dirname "${lib}")/ngspice" /opt/yapnr/lib/ngspice; \
+    test -f /opt/yapnr/lib/ngspice/analog.cm; \
+    ngspice --version
+ENV PNR_NGSPICE_LIB=/opt/yapnr/lib/libngspice.so \
+    PNR_NGSPICE_CODEMODELS=/opt/yapnr/lib/ngspice
+
 # The runtime: exactly the pins (and hashes) of requirements.lock, per architecture. On amd64
 # torch is the CPU-only build from the PyTorch index (--torch-backend=cpu); PyPI's arm64 torch
 # wheel is CPU-only already. Headers and tests of torch are not needed at run time. uv runs as

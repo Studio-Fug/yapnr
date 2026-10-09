@@ -66,6 +66,8 @@ export function mountExperiments(container, { project, open, artifact, select, r
     if (run?.lane) select?.(run);
   }
   function render() {
+    const scrollTop = tree.scrollTop;
+    const focused = tree.contains(document.activeElement) ? document.activeElement.dataset.attempt : null;
     const query = filter.value.toLowerCase(),
       matches = runs.filter(
         run =>
@@ -130,6 +132,10 @@ export function mountExperiments(container, { project, open, artifact, select, r
       tree.append(
         el('p', runs.length ? 'No matching experiments.' : 'No experiments recorded yet.')
       );
+    tree.scrollTop = scrollTop;
+    if (focused)
+      [...tree.querySelectorAll('[data-attempt]')].find(button => button.dataset.attempt === focused)
+        ?.focus({ preventScroll: true });
     detail.replaceChildren();
     const run = runs.find(run => run.id === selected);
     if (!run) {
@@ -185,8 +191,10 @@ export function mountExperiments(container, { project, open, artifact, select, r
       detail.append(settings);
     }
   }
-  filter.oninput = render;
-  type.onchange = render;
+  filter.oninput = type.onchange = () => {
+    tree.scrollTop = 0;
+    render();
+  };
   tree.onkeydown = event => {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     const buttons = [...tree.querySelectorAll('[role="treeitem"]')];

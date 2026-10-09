@@ -572,3 +572,17 @@ and corrections to the existing conversation. Disable it only during delivery,
 guard duplicate clicks, and preserve a newer draft or a switched conversation
 while the request is pending. Packaged browser QA intercepts the delivery to
 verify busy-state sending without a paid test turn.
+
+### Circuit simulation and stable experiment browsing
+
+Bundle pinned ngspice 42 and XSPICE code models in the workspace image, expose
+the shared library to the existing SI runner, and document general circuit decks,
+model provenance, analog/digital coupling and inline trace publication. Live RGB
+nominal behavioral simulation uses the real clock passive values, simulated
+falling edges, an ideal modulo-three counter and analog LED-driver decks. Its
+model assumptions and input hashes are retained; it is not bench acceptance.
+
+Preserve experiment-tree scroll and focused row when selection or telemetry
+rebuilds the tree. Search changes deliberately start at the top; campaign groups
+remain collapsible. Busy-chat browser checks pass with isolated request capture,
+without a paid test turn.

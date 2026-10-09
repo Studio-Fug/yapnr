@@ -296,3 +296,11 @@ manages immutable input/output objects and publishes output artifacts. Experimen
 shows typed attempts and upstream/downstream links established by matching content
 hashes; missing historical input evidence remains explicitly unknown. Do not claim
 provenance from filenames alone. The workspace manifest indexes the attempt registry.
+
+For circuit verification, use the container's pinned `ngspice` command and its
+shared-library/XSPICE tooling. Build and retain SPICE decks and device-model
+provenance in the workspace; run the actual models, export voltage/current traces,
+and publish their plots inline with linked run reports. Mixed analog/digital
+coupling is allowed when its assumptions are explicit. See the circuit simulation
+section in `docs/agent-workflow.md`; behavioral surrogate models do not establish
+supplier-device or bench acceptance.

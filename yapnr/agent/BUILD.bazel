@@ -67,6 +67,7 @@ py_library(
         "web/design.js",
         "web/dock.js",
         "web/dock-model.js",
+        "web/experiments-view.js",
         "web/index.html",
         "web/scene.html",
         "web/source-view.js",

@@ -3,6 +3,7 @@ import { Workbench } from '/yapnr/dock.js';
 import { mountSource, mountSourceBrowser } from '/yapnr/source-view.js';
 import { mountTiming } from '/yapnr/timing-view.js';
 import { mountViewer, sendView } from '/yapnr/adapters.js';
+import { mountExperiments } from '/yapnr/experiments-view.js';
 import { mountTraceability } from '/yapnr/traceability.js';
 
 (() => {
@@ -293,8 +294,22 @@ import { mountTraceability } from '/yapnr/traceability.js';
     const entry = wb.registry.get(id);
     if (!entry) return;
     const mode = id === 'native-timing' ? 'timing' : id;
+    let container = entry.element;
+    if (id === 'experiments') {
+      const key = state.project;
+      if (entry.experimentsProject !== key) {
+        entry.experimentsBrowser?.dispose();
+        entry.experimentsBrowser = mountExperiments(container, {
+          project: key,
+          open: openSource,
+          report: say,
+        });
+        entry.experimentsProject = key;
+      }
+      container = entry.experimentsBrowser.native;
+    }
     state.viewerFrames[id] = mountViewer(
-      entry.element,
+      container,
       state.data?.experiment_url,
       mode,
       'Live / artifact hash unavailable'

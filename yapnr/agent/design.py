@@ -116,3 +116,39 @@ def read_source(project, name):
         "sha256": hashlib.sha256(raw).hexdigest(),
         "modified": path.stat().st_mtime_ns,
     }
+
+
+def experiments(project):
+    root = Path(project).resolve()
+    runs = []
+    reports = root / "reports"
+    if not reports.is_dir():
+        return runs
+    for path in sorted(reports.rglob("result.json")):
+        if len(runs) >= 200:
+            break
+        try:
+            path = workspace.relative_file(root, path.relative_to(root).as_posix())
+            if path.stat().st_size > 1024 * 1024:
+                continue
+            data = json.loads(path.read_text())
+            if not isinstance(data, dict) or "atopile" not in data or "returncode" not in data:
+                continue
+            runs.append(
+                {
+                    "id": path.parent.relative_to(root).as_posix(),
+                    "kind": "schematic build",
+                    "path": path.relative_to(root).as_posix(),
+                    "status": (
+                        "timed out"
+                        if data.get("timed_out")
+                        else "passed" if data["returncode"] == 0 else "failed"
+                    ),
+                    "seconds": data.get("seconds"),
+                    "catalog_parts": data.get("catalog_parts"),
+                    "sha256": workspace.file_sha(path),
+                }
+            )
+        except (OSError, ValueError):
+            continue
+    return runs

@@ -309,7 +309,8 @@ class Handler(BaseHTTPRequestHandler):
                     (WEB / Path(parsed.path).name).read_bytes(), "text/javascript"
                 )
             module = re.fullmatch(
-                r"/yapnr/(dock|dock-model|timing-view|source-view|adapters)\.js", parsed.path
+                r"/yapnr/(dock|dock-model|timing-view|source-view|adapters|experiments-view)\.js",
+                parsed.path,
             )
             if module:
                 return self.send_bytes(
@@ -388,6 +389,9 @@ class Handler(BaseHTTPRequestHandler):
                         ],
                     }
                 )
+            experiments = re.fullmatch(r"/yapnr/api/experiments/([a-z0-9-]+)", parsed.path)
+            if experiments:
+                return self.json({"runs": design.experiments(self.server.project(experiments[1]))})
             source_file = re.fullmatch(r"/yapnr/api/source-file/([a-z0-9-]+)", parsed.path)
             if source_file:
                 from urllib.parse import parse_qs

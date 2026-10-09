@@ -63,3 +63,13 @@ controller does not close it based on the embedded frame width. Selecting a new
 lane updates the live Board, Schematic and 3D views, while pinned comparisons stay
 independent. The capture uses the synthetic workspace and its existing recorded
 LED-ring lane, without a model turn or an electrical validation claim.
+
+## Recorded build attempts
+
+![Recorded schematic-build attempts and result links](workspace-build-history.gif)
+
+The Experiments tab also lists archived Atopile build results, including failures
+that occurred before a placement-and-routing lane existed. Expanding an attempt
+shows its recorded duration and catalog-candidate count; its result opens as a
+read-only source tab. This capture uses two existing failed build reports, without
+running a model turn or claiming a completed PCB.

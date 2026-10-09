@@ -64,6 +64,23 @@ class DesignTest(unittest.TestCase):
                 with self.assertRaises((ValueError, OSError)):
                     design.read_source(root, name)
 
+    def test_recorded_build_attempts_keep_failures_and_exclude_unrelated_reports(self):
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as outside:
+            root = Path(folder)
+            for name, code in [("first", 1), ("second", 0)]:
+                path = root / "reports" / name / "result.json"
+                path.parent.mkdir(parents=True)
+                path.write_text(json.dumps({"atopile": "0.15.8", "returncode": code, "seconds": 2}))
+            unrelated = root / "reports" / "result.json"
+            unrelated.write_text('{"returncode": 0}')
+            external = Path(outside) / "result.json"
+            external.write_text('{"atopile": "0.15.8", "returncode": 0}')
+            (root / "reports" / "escape").symlink_to(Path(outside), target_is_directory=True)
+            runs = design.experiments(root)
+            self.assertEqual([r["status"] for r in runs], ["failed", "passed"])
+            self.assertEqual(runs[0]["path"], "reports/first/result.json")
+            self.assertEqual(len(runs[0]["sha256"]), 64)
+
     def test_source_edit_is_optimistic_and_excludes_dependencies(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

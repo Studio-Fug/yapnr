@@ -16,6 +16,11 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
+- **Workspace search and Performance**: Cmd/Ctrl-F opens a floating source/component/net
+  search, including in embedded frames; repeated shortcuts preserve/clear queries.
+  Inspect tab layouts migrate to the dialog. Performance holds native controls and
+  validated project cloud settings with read-only SDK status and no job submission.
+
 - **Recorded build attempts**: Experiments lists archived schematic-build results, including
   failures before PnR, and opens their result JSON in read-only source tabs. Restored active
   tabs initialize on first drawer open. Embedded styling and saved theme apply before

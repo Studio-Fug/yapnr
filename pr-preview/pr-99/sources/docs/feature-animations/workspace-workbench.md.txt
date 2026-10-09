@@ -79,3 +79,22 @@ drawer activates its selected view. A first-open browser regression starts with
 Experiments selected in a closed drawer and never switches tabs to initialize it.
 Embedded mode and theme are applied by an early parser script, before native
 renderer scripts load; changing theme preserves existing frame instances.
+
+## Floating workspace search and performance settings
+
+![Source and component search in the same floating dialog](workspace-search.gif)
+
+Cmd-F or Ctrl-F opens workspace search, including from embedded renderer frames.
+Reopening retains the query; repeating the shortcut while open clears it. Matching
+source lines open their files, and components/nets reveal through the existing
+artifact-hash checks. Selected-object metadata, pin tables and vendor/datasheet
+links remain available in the dialog. Inspect is removed from saved tab layouts.
+The capture combines synthetic source text with an existing recorded component,
+without asserting source-to-board equivalence or electrical validation.
+
+Performance has its own tab. Native routing controls retain their existing safe
+boundary/restart choices. Google Cloud Batch settings use the engine's validated
+configuration and save to the project, with optimistic concurrency. SDK profiles
+and authentication status are read from the UI host; credentials and credential
+lookup commands are not copied into workspace artifacts. The execution environment
+must have the corresponding SDK credentials. Saving settings launches no jobs.

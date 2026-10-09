@@ -601,4 +601,8 @@ Register immutable package downloads and a content-bound review; enable the
 human vendor link only after approval. Board/requirements changes and unresolved
 feedback block handoff. No vendor upload, order or payment is implemented.
 Reuse existing fabrication outputs and preserve the controller definition, so
-existing workspaces need no workflow migration. Validation in progress.
+existing workspaces need no workflow migration. All 292 Bazel targets and all-file
+prek pass. Packaged browser checks verify the native empty state and synthetic
+confirmation/approval/feedback gating without vendor access or paid turns.
+The RGB demo has no assembly package: standard two-layer vendor profiles are
+not yet supported; no unrelated stackup is substituted.

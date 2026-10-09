@@ -2453,6 +2453,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
     handle.onpointerup = handle.onpointercancel = () => (handle.onpointermove = null);
   };
   async function boot() {
+    const requestedView = new URLSearchParams(location.search).get('view');
     const listing = await json('/yapnr/api/projects');
     for (const name of listing.projects) {
       const o = node('option', name);
@@ -2478,7 +2479,6 @@ import { mountTraceability } from '/yapnr/traceability.js';
     else {
       $('body').append(node('p', 'Create your first project to begin.', 'empty'));
     }
-    const requestedView = new URLSearchParams(location.search).get('view');
     if (state.project && ['schematic', 'board', 'three', 'manufacturing'].includes(requestedView)) {
       ensureViewer(requestedView);
       wb.open(requestedView);

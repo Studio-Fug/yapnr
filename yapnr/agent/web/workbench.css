@@ -983,6 +983,7 @@ dialog::backdrop {
 }
 .experiment-tree {
   display: grid;
+  grid-auto-rows: max-content;
   gap: 4px;
   max-height: 55vh;
   overflow: auto;

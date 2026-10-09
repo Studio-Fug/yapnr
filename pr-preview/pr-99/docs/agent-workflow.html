@@ -778,6 +778,29 @@ shows typed attempts and upstream/downstream links established by matching conte
 hashes; missing historical input evidence remains explicitly unknown. Do not claim
 provenance from filenames alone. The workspace manifest indexes the attempt registry.</p>
 </section>
+<section id="circuit-simulation">
+<h3>Circuit simulation<a class="headerlink" href="#circuit-simulation" title="Link to this heading">¶</a></h3>
+<p>The workspace container includes the pinned <code class="docutils literal notranslate"><span class="pre">ngspice</span></code> executable, shared library,
+and XSPICE code models. The shared-library paths are configured for the existing
+SI runner; agents can also build general SPICE decks and run
+<code class="docutils literal notranslate"><span class="pre">ngspice</span> <span class="pre">-b</span> <span class="pre">-o</span> <span class="pre">run.log</span> <span class="pre">circuit.cir</span></code> from a workspace simulation directory.
+Use <code class="docutils literal notranslate"><span class="pre">.control</span></code>/<code class="docutils literal notranslate"><span class="pre">wrdata</span></code> to export named voltages and currents for plotting, and
+check the return code, simulator log, finite vectors and adequate time coverage.
+The <a class="reference external" href="https://ngspice.sourceforge.io/ngspice-control-language-tutorial.html">ngspice control-language tutorial</a>
+explains batch runs and trace export.</p>
+<p>Store decks, included device models, digital coupling code, raw traces, plots,
+model provenance, simulator version and input hashes in the workspace. Prefer
+supplier models with documented pin mapping and license; label behavioral
+surrogates and their limitations explicitly. A coupled simulation may feed an
+analog clock’s measured edges into a digital counter and its output waveforms
+back into analog LED-driver decks. It must model the actual circuit’s clock edge,
+reset logic, passive values and channel connections; record any effects omitted
+by the coupling. Do not substitute invented ideal waveforms for a simulated clock.</p>
+<p>Publish trace images inline and into the artifact browser, alongside the model
+and run report. Link the evidence in the requirements YAML with an accurate
+partial/verified status. A nominal behavioral plot does not satisfy requirements
+that also demand tolerance corners, supplier-device behavior or bench tests.</p>
+</section>
 </section>
 </section>
 
@@ -853,6 +876,7 @@ provenance from filenames alone. The workspace manifest indexes the attempt regi
 </li>
 <li><a class="reference internal" href="#engineering-workbench">Engineering workbench</a><ul>
 <li><a class="reference internal" href="#record-experiments-and-provenance">Record experiments and provenance</a></li>
+<li><a class="reference internal" href="#circuit-simulation">Circuit simulation</a></li>
 </ul>
 </li>
 </ul>

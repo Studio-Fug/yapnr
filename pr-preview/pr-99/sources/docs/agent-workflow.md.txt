@@ -458,3 +458,28 @@ manages immutable input/output objects and publishes output artifacts. Experimen
 shows typed attempts and upstream/downstream links established by matching content
 hashes; missing historical input evidence remains explicitly unknown. Do not claim
 provenance from filenames alone. The workspace manifest indexes the attempt registry.
+
+### Circuit simulation
+
+The workspace container includes the pinned `ngspice` executable, shared library,
+and XSPICE code models. The shared-library paths are configured for the existing
+SI runner; agents can also build general SPICE decks and run
+`ngspice -b -o run.log circuit.cir` from a workspace simulation directory.
+Use `.control`/`wrdata` to export named voltages and currents for plotting, and
+check the return code, simulator log, finite vectors and adequate time coverage.
+The [ngspice control-language tutorial](https://ngspice.sourceforge.io/ngspice-control-language-tutorial.html)
+explains batch runs and trace export.
+
+Store decks, included device models, digital coupling code, raw traces, plots,
+model provenance, simulator version and input hashes in the workspace. Prefer
+supplier models with documented pin mapping and license; label behavioral
+surrogates and their limitations explicitly. A coupled simulation may feed an
+analog clock's measured edges into a digital counter and its output waveforms
+back into analog LED-driver decks. It must model the actual circuit's clock edge,
+reset logic, passive values and channel connections; record any effects omitted
+by the coupling. Do not substitute invented ideal waveforms for a simulated clock.
+
+Publish trace images inline and into the artifact browser, alongside the model
+and run report. Link the evidence in the requirements YAML with an accurate
+partial/verified status. A nominal behavioral plot does not satisfy requirements
+that also demand tolerance corners, supplier-device behavior or bench tests.

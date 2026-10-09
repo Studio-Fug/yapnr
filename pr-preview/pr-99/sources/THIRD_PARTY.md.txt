@@ -6,6 +6,19 @@ brought in. Update it in the same change that adds, removes or upgrades such mat
 
 ## Shipped or served with yapnr
 
+### rules_requirements
+
+- **What:** the authoritative YAML model, validation, verification-set attribution,
+  status rollups and trace graph renderer from Studio-Fug/rules_requirements,
+  pinned to `aabecadd6e8710a11e99ccb366e63d858d92f6c6`.
+- **License:** AGPL-3.0-or-later; its vendored YAML parser retains the upstream
+  MIT license. The wheel includes both license texts.
+- **How:** Bazel fetches the immutable source archive with a checked SHA-256
+  (`@rules_requirements_toolkit`). The pure Python toolkit is included in the
+  packaged wheel, so requirements review does not need a runtime download or
+  build. The native traceability surface uses its entity payloads and SVG;
+  pan/zoom interaction is adapted from the upstream graph view with attribution.
+
 ### elkjs
 
 - **What:** [elkjs](https://github.com/kieler/elkjs) 0.9.3 (`lib/elk.bundled.js`), the graph

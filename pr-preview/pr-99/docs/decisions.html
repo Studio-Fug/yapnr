@@ -1775,6 +1775,28 @@ are separately hash-locked. The image stores worker geometry in <code class="doc
 marker, and only an explicitly enabled energy worker adds it to its import path. This does not
 change the default worker interpreter, system packages or off-path imports.</p>
 </section>
+<section id="native-requirements-review-and-artifact-approval">
+<h2>Native requirements review and artifact approval<a class="headerlink" href="#native-requirements-review-and-artifact-approval" title="Link to this heading">¶</a></h2>
+<p>The embedded workflow uses the pure Python rules_requirements toolkit at
+<code class="docutils literal notranslate"><span class="pre">aabecadd6e8710a11e99ccb366e63d858d92f6c6</span></code> (archive SHA-256
+<code class="docutils literal notranslate"><span class="pre">69cc1de7bbfabfb8025d44a8dbec7c349ddb09600976c679c58eaa2b92e2f938</span></code>). It is
+fetched as an immutable archive rather than importing its development toolchain
+modules. The wheel includes the model, validation, attribution, trace renderer
+and licenses; review works without runtime fetching or compilation.</p>
+<p>YAML entity models under requirements/ are authoritative. Native evidence records
+and JUnit under requirements/evidence/ are ingested separately so adding a result
+does not revise the engineering contract. Test ownership, rigor, freshness and
+trace status come from the upstream engine. Published report artifacts link to
+actual case records using their content hash; corrupt links fail the case.</p>
+<p>Artifact approvals bind one published content revision. Canonical notes hold
+feedback and questions, and new revisions retain unresolved feedback. The native
+Approve action can create a genuine user requirements-acceptance receipt only for
+the complete unchanged review bundle. Questions and feedback must be addressed
+first. Feedback starts an explicit model turn; it does not approve the result.</p>
+<p>OpenCode receives narrow read access to bundled package directories, with edit
+access denied there. This policy is shipped in the image and installed launchers;
+project permission decisions remain separate from dependency inspection.</p>
+</section>
 </section>
 
         </article>
@@ -1840,6 +1862,7 @@ change the default worker interpreter, system packages or off-path imports.</p>
 </ul>
 </li>
 <li><a class="reference internal" href="#optional-energy-track-geometry-dependency">Optional energy-track geometry dependency</a></li>
+<li><a class="reference internal" href="#native-requirements-review-and-artifact-approval">Native requirements review and artifact approval</a></li>
 </ul>
 </li>
 </ul>

@@ -333,6 +333,37 @@ for focused chat, or keep it beside the board, schematic, 3D or shared document.
 OpenCode supplies sessions, provider authentication, model selection, streaming,
 tools, questions and permissions through its API; its web application is not
 embedded or overlaid.</p>
+<p>The <strong>Requirements &amp; risks</strong> panel is a native traceability browser populated
+from <code class="docutils literal notranslate"><span class="pre">rules_requirements</span></code> YAML under <code class="docutils literal notranslate"><span class="pre">requirements/</span></code>. It shows user needs,
+requirements, mitigations, risks and methods, validation issues, source locations,
+trace links and the live graph. The model’s descriptions/notes carry measurable
+thresholds, sources, assumptions and residual-risk decisions. Markdown may be
+published as a derived explanation; editing it does not change a YAML contract.
+Existing Markdown-only workspaces retain their legacy controller contract until
+migrated to YAML; migration is a recorded requirements revision, never approval.</p>
+<p>Verification artifacts remain in the workspace sidebar and open directly from
+an entity’s evidence cases. Publish the report first, keep actual results in
+<code class="docutils literal notranslate"><span class="pre">requirements/evidence/*.rr.yaml</span></code> or JUnit XML, and name those targets/cases in
+<code class="docutils literal notranslate"><span class="pre">verified_by</span></code>/<code class="docutils literal notranslate"><span class="pre">validated_by</span></code>. Bind a native case to its report with:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>workspace<span class="w"> </span>publish<span class="w"> </span>--artifact<span class="w"> </span>reports/rf-sim.json<span class="w"> </span>--kind<span class="w"> </span>report<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;RF simulation&quot;</span>
+yapnr<span class="w"> </span>requirements<span class="w"> </span>link-evidence<span class="w"> </span>--record<span class="w"> </span>requirements/evidence/rf.rr.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--report-artifact<span class="w"> </span>ARTIFACT_ID<span class="w"> </span>--target<span class="w"> </span>record:rf<span class="w"> </span>--case<span class="w"> </span>rf::return-loss
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">requirements</span> <span class="pre">query</span></code> prints the current <code class="docutils literal notranslate"><span class="pre">requirements_sha256</span></code> and, when
+available, <code class="docutils literal notranslate"><span class="pre">dut_sha256</span></code> stamps. Actual result records must carry those identities,
+provided rigor, result, run/seed/tool provenance and report artifact hash. The
+link command preserves the recorded outcome. Failed, missing, stale or weak
+cases never become verified because a report was published. The packaged toolkit
+needs no additional runtime download or compile step.</p>
+<p>Request artifact review with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">review</span> <span class="pre">request</span> <span class="pre">--artifact</span> <span class="pre">ID</span></code> (repeat for a
+bundle), <code class="docutils literal notranslate"><span class="pre">--stage</span></code> and <code class="docutils literal notranslate"><span class="pre">--revision</span></code>. Requested reviews show <strong>Approve</strong> and
+<strong>Review Feedback</strong>. The latter is disabled without unresolved canonical notes.
+Add feedback or a question, send the feedback cycle to the agent, discuss questions
+in chat, then explicitly mark notes addressed. New artifacts need fresh approval
+and retain unresolved feedback from superseded revisions. Requirements approval
+accepts the complete unchanged revision through a controller receipt; board
+approval never orders or uploads fabrication files.</p>
 <p>Background tools and reasoning roll up into a collapsed activity indicator per
 agent turn; expand it to inspect the preserved inputs, outputs and errors. The
 bottom workflow bar shows the controller’s current stage, including review and
@@ -344,11 +375,14 @@ review (<code class="docutils literal notranslate"><span class="pre">complete</s
 and permission requests also pause continuation. Automation never supplies user
 acceptance. A real review reply permits the agent to reconcile that decision and
 continue; focused inspection threads do not start the main design loop.</p>
-<p>Each explicit send/resume permits at most eight automatic continuation turns over
-30 minutes, with a ten-minute running-turn watchdog. Stop disables continuation
-and interrupts the active turn. Model/connection failures, uncertain delivery and
-budget exhaustion pause with a visible status; inspect the cause before using
-<strong>Continue workflow</strong>. Imported or moved workspaces require explicit resume.
+<p>Each explicit send/resume enables automatic continuation until a user-review
+checkpoint or an explicit pause. There is no elapsed-turn, wall-clock or
+continuation-count cutoff. Individual tools and solver workers retain their own
+timeouts and campaign budgets. Stop disables continuation
+and interrupts the active turn. Connection failures reconnect automatically;
+provider failures retry with backoff. Uncertain delivery waits for its recorded delivery marker without
+replaying a possibly accepted request. All have visible status. Imported or moved
+workspaces require explicit resume.
 The harness records requests, interruptions and checkpoints in the workspace
 JSONL, preserves model selection, and avoids replaying uncertain paid requests.
 An expired tool call in an idle runtime is recorded as interrupted, preserving
@@ -674,6 +708,20 @@ assembly acceptance. A physical bench requirement remains open until measurement
 <p>On inability to progress, retain the best artifact, failed/open requirements,
 fixup report, attempted engine repairs and exact resume conditions. Emit <code class="docutils literal notranslate"><span class="pre">&lt;DONE&gt;</span></code>
 only after final verification of every accepted requirement on one exact revision.</p>
+<section id="live-schematic-capture">
+<h3>Live schematic capture<a class="headerlink" href="#live-schematic-capture" title="Link to this heading">¶</a></h3>
+<p>Entering the schematic stage opens the engineering workspace with a live atopile
+source pane. The browser polls article sources and completed netlist exports every
+second, retaining source selection and the last valid schematic during partial
+writes or build errors. The native schematic fallback draws generic component/pin
+symbols and actual exported net connectivity; an attached engineering viewer
+continues to provide its full schematic and PCB views alongside the sources.
+Run bounded incremental atopile builds after meaningful valid source edits and
+export the actual current <code class="docutils literal notranslate"><span class="pre">graph.json</span></code>. When multiple exports exist, declare the
+active project-relative path in <code class="docutils literal notranslate"><span class="pre">.yapnr/workspace/design.json</span></code> as
+<code class="docutils literal notranslate"><span class="pre">{&quot;graph&quot;:</span> <span class="pre">&quot;build/current/graph.json&quot;}</span></code>. The view does not simulate connectivity
+from incomplete source text or claim a build succeeded merely because text changed.</p>
+</section>
 </section>
 </section>
 
@@ -742,7 +790,10 @@ only after final verification of every accepted requirement on one exact revisio
 </li>
 <li><a class="reference internal" href="#installed-wheel-or-source-independent-use">Installed-wheel or source-independent use</a></li>
 <li><a class="reference internal" href="#execute-the-article-loop">Execute the article loop</a></li>
-<li><a class="reference internal" href="#ghz-power-divider-coverage">28 GHz power-divider coverage</a></li>
+<li><a class="reference internal" href="#ghz-power-divider-coverage">28 GHz power-divider coverage</a><ul>
+<li><a class="reference internal" href="#live-schematic-capture">Live schematic capture</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

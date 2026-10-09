@@ -350,11 +350,15 @@ A rejected transition is a gate to resolve, not a reason to edit workflow state.
 <section id="engineering-contract-and-risk-analysis">
 <h2>Engineering contract and risk analysis<a class="headerlink" href="#engineering-contract-and-risk-analysis" title="Link to this heading">¶</a></h2>
 <p>Create or resume one Git repository per article. Retain the requested feature and
-its source verbatim. In <code class="docutils literal notranslate"><span class="pre">requirements/manifest.md</span></code>, give every requirement a stable
-ID, measurable acceptance threshold, verification method, demanded evidence level,
-source and status. Record assumptions and unresolved choices. In
-<code class="docutils literal notranslate"><span class="pre">requirements/risks.md</span></code>, link each credible failure and consequence to a mitigation
-and the requirements implementing it. Update these records as evidence changes.</p>
+its source verbatim. Maintain authoritative <code class="docutils literal notranslate"><span class="pre">rules_requirements</span></code> YAML models under
+<code class="docutils literal notranslate"><span class="pre">requirements/</span></code>: user needs,
+requirements, risks, mitigations and test methods are distinct linked entities. Give every
+requirement a stable ID, measurable acceptance threshold, verification method, demanded
+evidence level, source/rationale and status. Trace <code class="docutils literal notranslate"><span class="pre">satisfies</span></code>, <code class="docutils literal notranslate"><span class="pre">refines</span></code>, <code class="docutils literal notranslate"><span class="pre">mitigates</span></code>,
+<code class="docutils literal notranslate"><span class="pre">implemented_by</span></code> and <code class="docutils literal notranslate"><span class="pre">method</span></code> using the pinned model schema. Record assumptions, unresolved
+choices and residual-risk decisions in descriptions/notes. Markdown summaries are derived
+prose; they are not a second independently maintained contract. Update the YAML as evidence
+changes. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">requirements</span> <span class="pre">query</span></code> populates the native traceability review browser.</p>
 <p>Produce both documents before schematic capture, part selection or design experiments.
 Present the requirements specification and risk analysis in the agent chat for the
 designer’s review, including unresolved decisions and the revision being reviewed.
@@ -371,13 +375,28 @@ routing and verification. Smaller changes rerun the affected stages and checks.
 Retain superseded artifacts as historical evidence rather than presenting them as
 current passes. Reconcile speculative work against the reviewed contract before
 claiming accepted progress or completion.</p>
+<p>Publish verification reports as workspace artifacts. Keep their actual test cases in
+<code class="docutils literal notranslate"><span class="pre">requirements/evidence/*.rr.yaml</span></code> (or JUnit XML), and link them to the model’s
+<code class="docutils literal notranslate"><span class="pre">verified_by</span></code>/<code class="docutils literal notranslate"><span class="pre">validated_by</span></code> target and case selectors. Use
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">requirements</span> <span class="pre">link-evidence</span> <span class="pre">--record</span> <span class="pre">PATH</span> <span class="pre">--report-artifact</span> <span class="pre">ID</span> <span class="pre">--case</span> <span class="pre">CASE</span> <span class="pre">--target</span> <span class="pre">TARGET</span></code>
+to bind an existing result to a published report without changing its outcome. Stamp evidence
+with <code class="docutils literal notranslate"><span class="pre">requirements_sha256</span></code> and the tested <code class="docutils literal notranslate"><span class="pre">dut_sha256</span></code> from <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">requirements</span> <span class="pre">query</span></code>;
+retain engine/tool pins, seeds, input hashes and run provenance in the report. Publishing or
+linking a report never supplies a passing result. Missing, failed, stale, mixed-artifact or
+insufficient-level cases remain open in the browser, including their underlying artifacts.</p>
+<p>Request review with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">review</span> <span class="pre">request</span> <span class="pre">--artifact</span> <span class="pre">ID</span></code> (repeat for a bundle), including the
+workflow stage and revision. The native workspace shows Approve and Review Feedback.
+Only a genuine user action approves a particular content revision. Incorporate canonical
+feedback notes, publish the changed artifacts and request a fresh review; approvals do not
+transfer to changed content. Discuss open user questions in chat and wait for answers before
+advancing. Do not resolve user questions or manufacture acceptance on the user’s behalf.</p>
 <p>Refine ambiguous requests using defensible recorded assumptions where possible;
 ask only for decisions affecting acceptance, safety, money or irreversible action.
 Preserve acceptance history. Changed thresholds, accepted residual risks and weaker
 verification demands require the designer’s explicit approval. Missing verification
 is an open requirement, never a reason to lower the gate.</p>
-<p>Use <code class="docutils literal notranslate"><span class="pre">rules_requirements</span></code> when the article needs its traceability/evidence machinery:
-pin the module revision, use its documented model schema and verification lock,
+<p>Use the bundled, pinned <code class="docutils literal notranslate"><span class="pre">rules_requirements</span></code> model and traceability machinery.
+Use its documented model schema and verification lock,
 and run <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">validate</span></code>, <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">sets</span> <span class="pre">check</span></code>, <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">report</span></code> and <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">check-report</span></code> with an
 explicit gating policy. <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">report</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">--fail-on</span> <span class="pre">none</span></code>; exit zero alone
 is not acceptance. Inspect the complete report and expected verification-set

@@ -307,6 +307,21 @@ material that is, or will be, part of what yapnr ships or serves, with its licen
 brought in. Update it in the same change that adds, removes or upgrades such material.</p>
 <section id="shipped-or-served-with-yapnr">
 <h2>Shipped or served with yapnr<a class="headerlink" href="#shipped-or-served-with-yapnr" title="Link to this heading">¶</a></h2>
+<section id="rules-requirements">
+<h3>rules_requirements<a class="headerlink" href="#rules-requirements" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>What:</strong> the authoritative YAML model, validation, verification-set attribution,
+status rollups and trace graph renderer from Studio-Fug/rules_requirements,
+pinned to <code class="docutils literal notranslate"><span class="pre">aabecadd6e8710a11e99ccb366e63d858d92f6c6</span></code>.</p></li>
+<li><p><strong>License:</strong> AGPL-3.0-or-later; its vendored YAML parser retains the upstream
+MIT license. The wheel includes both license texts.</p></li>
+<li><p><strong>How:</strong> Bazel fetches the immutable source archive with a checked SHA-256
+(<code class="docutils literal notranslate"><span class="pre">&#64;rules_requirements_toolkit</span></code>). The pure Python toolkit is included in the
+packaged wheel, so requirements review does not need a runtime download or
+build. The native traceability surface uses its entity payloads and SVG;
+pan/zoom interaction is adapted from the upstream graph view with attribution.</p></li>
+</ul>
+</section>
 <section id="elkjs">
 <h3>elkjs<a class="headerlink" href="#elkjs" title="Link to this heading">¶</a></h3>
 <ul class="simple">
@@ -571,6 +586,7 @@ uses the respective official CLI rather than OpenCode’s provider adapters.</p>
             <ul>
 <li><a class="reference internal" href="#">Third-party material</a><ul>
 <li><a class="reference internal" href="#shipped-or-served-with-yapnr">Shipped or served with yapnr</a><ul>
+<li><a class="reference internal" href="#rules-requirements">rules_requirements</a></li>
 <li><a class="reference internal" href="#elkjs">elkjs</a></li>
 <li><a class="reference internal" href="#three-js">three.js</a></li>
 <li><a class="reference internal" href="#shapely-and-geos">Shapely and GEOS</a></li>

@@ -560,4 +560,7 @@ expanding/collapsing groups with worker-status counts. Unknown progress remains
 indeterminate. The workflow guide requires connecting telemetry before routing;
 a phase transition alone does not create board geometry. Current validation:
 live native board capture succeeds; all 291 regression targets and final affected
-experiment/web tests pass. Tree browser QA follows the packaged deployment.
+experiment/web tests pass. Packaged live browser QA verifies twelve native
+progress bars, four nested candidates, collapse/expand, selection, and visible
+progress contained within each row. The feature animation uses actual completed
+results; unknown progress remains indeterminate.

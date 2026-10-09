@@ -1396,6 +1396,17 @@ import { mountTraceability } from '/yapnr/traceability.js';
       img.alt = item.title;
       card.append(img);
     }
+    const view = item.metadata?.workspace_view;
+    if (['schematic', 'board', 'three'].includes(view)) {
+      const link = node('a', 'Open ' + (view === 'three' ? '3D' : view) + ' tab');
+      link.href = '/workspace/' + encodeURIComponent(state.project) + '?view=' + view;
+      link.onclick = event => {
+        event.preventDefault();
+        ensureViewer(view);
+        wb.open(view);
+      };
+      card.append(link);
+    }
     card.append(
       button('Open / annotate', () => {
         state.tab = 'artifacts';
@@ -2431,6 +2442,11 @@ import { mountTraceability } from '/yapnr/traceability.js';
     if (name || listing.projects[0]) await changeProject(name || listing.projects[0], wanted);
     else {
       $('body').append(node('p', 'Create your first project to begin.', 'empty'));
+    }
+    const requestedView = new URLSearchParams(location.search).get('view');
+    if (state.project && ['schematic', 'board', 'three'].includes(requestedView)) {
+      ensureViewer(requestedView);
+      wb.open(requestedView);
     }
     $('loading').remove();
     performance.mark('yapnr:workspace-ready');

@@ -41,6 +41,15 @@ supplement those renders. For requirements alternatives, use small bounded
 three.js scenes in hosts that support inline interactive selections; otherwise
 provide inline still renders and identify the missing interactive capability.
 
+For schematic milestones, use the existing viewer's schematic layout workflow
+with the successful build's actual graph and selected symbol libraries. Capture
+a readable screenshot of that rendered schematic; a list of component boxes,
+footprint positions or net labels is not a schematic milestone. Publish the image
+with metadata `workspace_view: schematic` and the input graph SHA-256, then attach
+it with `[yapnr-artifact:ARTIFACT_ID]`. Its card links to the workspace's Schematic
+tab; `/workspace/PROJECT?view=schematic` also opens that tab directly. Preserve
+superseded diagnostic images with accurate labels rather than deleting history.
+
 ## Shared browser workspace
 
 `yapnr web --projects /projects` starts the workspace-native browser application

@@ -190,6 +190,12 @@ container-local path or an external viewer link alone does not satisfy inline
 feedback. Distinguish conceptual illustrations from actual CAD and validation
 evidence. Preserve artifact hashes and revision labels alongside the renders.
 
+Schematic milestones use the existing viewer schematic layout, its actual build
+graph and selected symbol libraries. Publish a readable screenshot with artifact
+metadata `workspace_view: schematic` and the graph hash, then attach it inline;
+the card links to the Schematic tab. Do not substitute component lists, footprint
+plots or hand-built net-label sheets for the schematic renderer.
+
 When requirements choices benefit from visual comparison, provide labeled visual
 alternatives in the selection flow. Small three.js programs may illustrate geometry
 and allow interaction when the host supports inline interactive views. Keep scenes

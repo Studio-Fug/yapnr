@@ -124,6 +124,7 @@ def chat_command(provider, executable, context, directive, model=""):
 def opencode_environment():
     """Read bundled dependency packages without asking for external-directory access."""
     from importlib.util import find_spec
+    from tempfile import gettempdir
 
     environment = os.environ.copy()
     config = json.loads(environment.get("OPENCODE_CONFIG_CONTENT", "{}"))
@@ -141,6 +142,14 @@ def opencode_environment():
     cache = Path(environment.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "yapnr/atopile"
     pattern = str(cache) + "/*/venv/lib/python*/site-packages/*"
     permission = config.setdefault("permission", {})
+    for key, value in (("external_directory", "allow"), ("edit", "deny")):
+        current = permission.get(key, {})
+        if isinstance(current, str):
+            current = {"*": current}
+        permission[key] = {**current, pattern: value}
+    # Authoring builds stage their generated sources outside the article. Reading
+    # those diagnostics is part of the workflow, just like reading the toolchain.
+    pattern = str(Path(gettempdir()) / "yapnr-atopile-*") + "/*"
     for key, value in (("external_directory", "allow"), ("edit", "deny")):
         current = permission.get(key, {})
         if isinstance(current, str):

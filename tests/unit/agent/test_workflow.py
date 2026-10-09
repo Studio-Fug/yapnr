@@ -42,6 +42,17 @@ class WorkflowTest(unittest.TestCase):
             "allow",
         )
 
+    def test_build_staging_is_readable_without_granting_all_temporary_files(self):
+        from yapnr.agent.cli import opencode_environment
+
+        with patch("tempfile.gettempdir", return_value="/tmp"), patch.dict(
+            "os.environ", {"OPENCODE_CONFIG_CONTENT": "{}"}
+        ):
+            permission = json.loads(opencode_environment()["OPENCODE_CONFIG_CONTENT"])["permission"]
+        self.assertEqual(permission["external_directory"]["/tmp/yapnr-atopile-*/*"], "allow")
+        self.assertEqual(permission["edit"]["/tmp/yapnr-atopile-*/*"], "deny")
+        self.assertNotIn("/tmp/*", permission["external_directory"])
+
     def test_endpoint_uses_environment_reference_without_storing_secret(self):
         args = Namespace(
             provider="opencode",

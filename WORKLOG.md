@@ -532,3 +532,21 @@ recording, historical build and routing import, discovery/picker stage evidence,
 and hash-supported upstream/downstream navigation. Native routing telemetry is
 projected as data; absent provenance is explicitly unknown. The manifest indexes
 the registry and the workspace journal records attempt transitions.
+
+### Generated build diagnostics
+
+OpenCode can read yapnr's temporary Atopile build directories without external
+directory prompts, alongside installed dependencies and cached toolchains.
+Generated staging files remain protected from edits; unrelated temporary files
+retain their existing policy. Regression coverage checks the narrow rule and
+configuration preservation. This permission policy has no visual behavior, so
+an animation is not applicable.
+
+### Schematic visual milestones
+
+Require screenshots of the existing schematic layout and selected symbols,
+instead of ad-hoc net-label sheets. Inline artifacts can link directly to the
+Schematic, Board or 3D tab through portable `workspace_view` metadata; matching
+workspace URLs restore that tab. Full regression: 291 targets pass; affected
+workflow, web and schematic checks pass after the link change. Live browser
+capture/link validation and reproducible visual evidence accompany the change.

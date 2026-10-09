@@ -219,6 +219,8 @@ export class Workbench {
     } catch {
       this.layout = initialLayout();
     }
+    if (!location(this.layout, 'source-browser') && !this.layout.closed.includes('source-browser'))
+      this.layout.panes.left.tabs.unshift('source-browser');
     for (const entry of Object.values(this.layout.bindings || {}))
       if (!this.registry.has(entry.id)) this.register({ ...entry, type: 'missing' });
     this.render();
@@ -412,6 +414,14 @@ export class Workbench {
     return p;
   }
   render() {
+    const drawerBefore = Object.fromEntries(
+      ['left', 'right'].map(side => {
+        const ui = this[side];
+        const visible = ui.visible ?? !ui.node.hidden;
+        const rect = ui.node.getBoundingClientRect();
+        return [side, { visible, rect }];
+      })
+    );
     this.rendering = true;
     const narrow = innerWidth < 900;
     const centralMin = this.minimum(this.layout.tree, 'x');
@@ -522,7 +532,13 @@ export class Workbench {
     for (const side of ['left', 'right']) {
       const d = this.layout.drawers[side],
         ui = this[side];
-      ui.node.hidden = !d.open;
+      if (ui.motion && d.open !== ui.visible) {
+        ui.motion.forEach(a => a.cancel());
+        ui.motion = null;
+        ui.closing = false;
+        for (const key of ['position', 'left', 'right', 'width']) ui.node.style[key] = '';
+      }
+      ui.node.hidden = !d.open && !ui.closing;
       ui.node.dataset.locked = String(d.locked);
       ui.node.dataset.reserved = String(reserve[side]);
       ui.node.style.setProperty('--drawer-width', d.width + 'px');
@@ -582,6 +598,51 @@ export class Workbench {
     this.rendering = false;
     this.onLayout?.(this.layout);
     this.updateViews();
+    for (const side of ['left', 'right']) {
+      const ui = this[side],
+        before = drawerBefore[side];
+      const visible = this.layout.drawers[side].open && (!ui.node.hidden || ui.closing);
+      ui.visible = visible;
+      if (visible === before.visible || matchMedia('(prefers-reduced-motion: reduce)').matches)
+        continue;
+      ui.motion?.forEach(a => a.cancel());
+      const content = this.registry.get(this.layout.panes[side].active)?.element;
+      const offset =
+        (side === 'left' ? -1 : 1) * (before.rect.width || this.layout.drawers[side].width);
+      if (!visible) {
+        const root = this.root.getBoundingClientRect();
+        ui.closing = true;
+        ui.node.hidden = false;
+        Object.assign(ui.node.style, {
+          position: 'absolute',
+          left: before.rect.left - root.left + 'px',
+          right: 'auto',
+          width: before.rect.width + 'px',
+        });
+        if (content) content.hidden = false;
+      }
+      const frames = visible
+        ? [
+            { transform: `translateX(${offset}px)`, opacity: 0 },
+            { transform: 'translateX(0)', opacity: 1 },
+          ]
+        : [
+            { transform: 'translateX(0)', opacity: 1 },
+            { transform: `translateX(${offset}px)`, opacity: 0 },
+          ];
+      ui.motion = [ui.node, content]
+        .filter(Boolean)
+        .map(node => node.animate(frames, { duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' }));
+      const motion = ui.motion;
+      Promise.all(motion.map(a => a.finished.catch(() => {}))).then(() => {
+        if (ui.motion !== motion) return;
+        ui.motion = null;
+        ui.closing = false;
+        for (const key of ['position', 'left', 'right', 'width']) ui.node.style[key] = '';
+        ui.node.hidden = !ui.visible;
+        this.updateViews();
+      });
+    }
     requestAnimationFrame(() => this.updateViews());
     if (!this.observer) {
       this.observer = new ResizeObserver(() => this.updateViews());
@@ -601,6 +662,7 @@ export class Workbench {
         pane?.isConnected &&
         !pane.closest('[hidden]') &&
         !pane.parentElement?.closest('.view-parking');
+      if (['left', 'right'].includes(paneId) && this[paneId].closing) continue;
       view.element.hidden = !visible;
       if (!visible) continue;
       const r = body.getBoundingClientRect();

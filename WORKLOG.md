@@ -16,6 +16,10 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
+- **Workbench follow-up**: drawer open/dismiss motion respects reduced motion; startup no longer
+  waits for provider discovery. Source syntax, import navigation and hash-scoped selected-text Ask
+  context pass browser checks. A project directory tree starts in the left drawer.
+
 - **Prompt-to-PCB agent workflow**: owner-provided engineering workflow is now
   scoped into AGENTS.md; the installed wheel ships exact instructions and execution
   guide. `agent init` preserves contracts/checkpoints, `agent instructions` exposes

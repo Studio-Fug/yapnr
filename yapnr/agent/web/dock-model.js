@@ -14,7 +14,10 @@ export function initialLayout() {
       board: { tabs: ['board', 'three'], active: 'board' },
       schematic: { tabs: ['schematic'], active: 'schematic' },
       source: { tabs: ['source'], active: 'source' },
-      left: { tabs: ['experiments', 'controls', 'exploration'], active: 'experiments' },
+      left: {
+        tabs: ['source-browser', 'experiments', 'controls', 'exploration'],
+        active: 'source-browser',
+      },
       right: { tabs: ['ask', 'inspect', 'notes', 'timing', 'activity'], active: 'ask' },
     },
     drawers: {

@@ -365,6 +365,44 @@ class Handler(BaseHTTPRequestHandler):
             state = re.fullmatch(r"/yapnr/api/project/([a-z0-9-]+)", parsed.path)
             if state:
                 return self.json(self.project_state(state[1]))
+            if parsed.path == "/yapnr/api/providers":
+                listing = api(self.server.upstream, "/provider")
+                connected = listing.get("connected", [])
+                return self.json(
+                    {
+                        "connected": connected,
+                        "all": [
+                            {
+                                "id": p["id"],
+                                "name": p.get("name", p["id"]),
+                                "models": (
+                                    {
+                                        key: {"name": value.get("name", key)}
+                                        for key, value in p.get("models", {}).items()
+                                    }
+                                    if p["id"] in connected
+                                    else {}
+                                ),
+                            }
+                            for p in listing.get("all", [])
+                        ],
+                    }
+                )
+            source_file = re.fullmatch(r"/yapnr/api/source-file/([a-z0-9-]+)", parsed.path)
+            if source_file:
+                from urllib.parse import parse_qs
+
+                name = parse_qs(parsed.query).get("path", [""])[0]
+                return self.json(design.read_source(self.server.project(source_file[1]), name))
+            source_index = re.fullmatch(r"/yapnr/api/source-index/([a-z0-9-]+)", parsed.path)
+            if source_index:
+                target = self.project_state(source_index[1])["experiment_url"]
+                if not target:
+                    return self.json({"files": [], "modules": {}})
+                index = api(target, "/api/source/index")
+                return self.json(
+                    {"files": index.get("files", []), "modules": index.get("modules", {})}
+                )
             design_route = re.fullmatch(r"/yapnr/api/design/([a-z0-9-]+)", parsed.path)
             if design_route:
                 return self.json(design.snapshot(self.server.project(design_route[1])))

@@ -1,6 +1,6 @@
 /* Workspace-native UI. OpenCode supplies the runtime API, never the page shell. */
 import { Workbench } from '/yapnr/dock.js';
-import { mountSource } from '/yapnr/source-view.js';
+import { mountSource, mountSourceBrowser } from '/yapnr/source-view.js';
 import { mountTiming } from '/yapnr/timing-view.js';
 import { mountViewer, sendView } from '/yapnr/adapters.js';
 import { mountTraceability } from '/yapnr/traceability.js';
@@ -94,6 +94,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
     schematic: 'Schematic',
     three: '3D',
     source: 'Sources',
+    'source-browser': 'Source browser',
     experiments: 'Experiments',
     controls: 'View controls',
     exploration: 'Exploration',
@@ -220,21 +221,41 @@ import { mountTraceability } from '/yapnr/traceability.js';
       project: state.project,
       path,
       report: say,
-      onOpen: p => openSource(p),
+      onOpen: (p, reference, line) => openSource(p, reference, line),
+      onAsk: context => {
+        state.selection = context;
+        state.selectionScope = {
+          project: state.project,
+          file: context.file,
+          working_tree_sha256: context.working_tree_sha256,
+          buffer_sha256: context.buffer_sha256,
+          draft: context.draft,
+        };
+        $('selection-context').textContent =
+          context.file +
+          ':' +
+          context.line +
+          '–' +
+          context.end +
+          (context.draft ? ' · unsaved draft' : '');
+        wb.open('ask');
+        $('prompt').focus();
+      },
       onDirty: dirty => {
         entry.scope = (dirty ? 'Unsaved buffer' : 'Working tree') + (path ? ' / ' + path : '');
         wb.render();
       },
     });
   }
-  function openSource(path) {
+  function openSource(path, reference = false, line = 1) {
     if (
-      path.split('/').some(p => ['.ato', '.venv', 'venv', 'site-packages'].includes(p)) &&
+      (reference ||
+        path.split('/').some(p => ['.ato', '.venv', 'venv', 'site-packages'].includes(p))) &&
       state.data?.experiment_url
     ) {
       const id = 'reference:' + state.project + ':' + path,
         url = new URL(state.data.experiment_url);
-      url.searchParams.set('src', path + ':1');
+      url.searchParams.set('src', path + ':' + line);
       const entry = wb.register({
         id,
         title: path.split('/').pop(),
@@ -284,6 +305,15 @@ import { mountTraceability } from '/yapnr/traceability.js';
     for (const id of ['three', 'experiments', 'exploration', 'native-timing'])
       if (state.viewerFrames[id]) ensureViewer(id);
     ensureSource('source');
+    if (state.sourceBrowserProject !== state.project) {
+      state.sourceBrowser?.dispose();
+      state.sourceBrowserProject = state.project;
+      state.sourceBrowser = mountSourceBrowser(wb.registry.get('source-browser').element, {
+        project: state.project,
+        onOpen: p => openSource(p),
+        report: say,
+      });
+    }
     const inspect = wb.registry.get('inspect').element;
     if (!inspect.childElementCount) {
       inspect.classList.add('inspection');
@@ -1420,23 +1450,37 @@ import { mountTraceability } from '/yapnr/traceability.js';
           )
         );
         rollup.append(summary);
-        for (const part of tools) {
-          const d = node('details', undefined, 'tool');
-          d.dataset.part = part.id;
-          d.open = expanded.has(part.id);
-          d.append(
-            node('summary', `${part.tool} · ${part.state?.status || ''}`),
-            node('pre', JSON.stringify(part.state, null, 2))
-          );
-          rollup.append(d);
-        }
-        for (const part of reasoning) {
-          const d = node('details');
-          d.dataset.part = part.id;
-          d.open = expanded.has(part.id);
-          d.append(node('summary', 'Reasoning'), node('div', part.text, 'message-text'));
-          rollup.append(d);
-        }
+        let populated = false;
+        const populate = () => {
+          if (populated || !rollup.open) return;
+          populated = true;
+          for (const part of [...tools, ...reasoning]) {
+            const d = node('details', undefined, part.type === 'tool' ? 'tool' : 'reasoning');
+            d.dataset.part = part.id;
+            d.open = expanded.has(part.id);
+            d.append(
+              node(
+                'summary',
+                part.type === 'tool' ? `${part.tool} · ${part.state?.status || ''}` : 'Reasoning'
+              )
+            );
+            let filled = false;
+            const fill = () => {
+              if (!d.open || filled) return;
+              filled = true;
+              d.append(
+                part.type === 'tool'
+                  ? node('pre', JSON.stringify(part.state, null, 2))
+                  : node('div', part.text, 'message-text')
+              );
+            };
+            d.addEventListener('toggle', fill);
+            fill();
+            rollup.append(d);
+          }
+        };
+        rollup.addEventListener('toggle', populate);
+        populate();
         card.append(rollup);
       } else if (busy) {
         const loading = node('div', undefined, 'agent-loading');
@@ -1530,6 +1574,10 @@ import { mountTraceability } from '/yapnr/traceability.js';
     if (!session()) return;
     const id = session(),
       project = state.project;
+    const flight = project + ':' + id;
+    state.chatPending ||= new Set();
+    if (state.chatPending.has(flight)) return;
+    state.chatPending.add(flight);
     try {
       const [messages, statuses] = await Promise.all([
         json('/session/' + id + '/message' + scope()),
@@ -1563,6 +1611,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
       await refreshRequests();
     } catch (e) {
       say(e.message);
+    } finally {
+      state.chatPending.delete(flight);
     }
   }
   async function selectSession(id) {
@@ -1696,7 +1746,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
     }
   }
   async function providers() {
-    state.providers = await json('/provider');
+    state.providers = await json('/yapnr/api/providers');
     const model = $('model'),
       selected = model.value;
     model.replaceChildren();
@@ -1797,6 +1847,10 @@ import { mountTraceability } from '/yapnr/traceability.js';
   });
   let eventStream = null,
     eventTimer = null;
+  addEventListener('pagehide', () => {
+    eventStream?.close();
+    clearTimeout(eventTimer);
+  });
   function subscribe() {
     eventStream?.close();
     clearTimeout(eventTimer);
@@ -1860,9 +1914,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
     state.timingProject = null;
     state.sourceViews.source?.dispose();
     wb.registry.get('source').project = null;
-    await startPresence(name);
-    await refresh();
-    await refreshThreads();
+    startPresence(name).catch(e => say(e.message));
+    await Promise.all([refresh(), refreshThreads()]);
     const chats = state.threads?.threads.filter(t => t.kind === 'opencode') || [];
     if (!state.main[name] && chats.length === 1) await setMain(chats[0].id);
     state.tab =
@@ -2246,12 +2299,15 @@ import { mountTraceability } from '/yapnr/traceability.js';
       } catch {}
     }
     if (name && !listing.projects.includes(name)) name = null;
-    await providers();
+    const providerLoad = providers().catch(e => say(e.message));
     if (name || listing.projects[0]) await changeProject(name || listing.projects[0], wanted);
     else {
       $('body').append(node('p', 'Create your first project to begin.', 'empty'));
     }
     $('loading').remove();
+    performance.mark('yapnr:workspace-ready');
+    await providerLoad;
+    performance.mark('yapnr:providers-ready');
   }
   boot().catch(e => {
     say(e.message);

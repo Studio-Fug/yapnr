@@ -12,12 +12,20 @@ SKIP = {".git", ".yapnr", ".ato", "node_modules", ".venv", "venv", "__pycache__"
 
 def snapshot(project):
     root = Path(project).resolve()
-    sources, graphs = [], []
+    sources, graphs, files = [], [], []
     for base, dirs, names in os.walk(root, followlinks=False):
         dirs[:] = sorted(d for d in dirs if d not in SKIP and not (Path(base) / d).is_symlink())
         for name in sorted(names):
             path = Path(base) / name
-            if path.is_symlink() or (path.suffix != ".ato" and name != "graph.json"):
+            if path.is_symlink():
+                continue
+            try:
+                size = path.stat().st_size
+            except OSError:
+                continue
+            if len(files) < 4096:
+                files.append({"path": path.relative_to(root).as_posix(), "bytes": size})
+            if path.suffix != ".ato" and name != "graph.json":
                 continue
             relative = path.relative_to(root).as_posix()
             try:
@@ -63,6 +71,7 @@ def snapshot(project):
     return {
         "source_newer": changed,
         "sources": sources,
+        "files": files,
         "schematic": selected,
         "status": "ready" if selected else "waiting",
         "reason": None if selected else reason,
@@ -89,3 +98,21 @@ def update(project, name, text, expected):
         result = {"path": name, "sha256": workspace.file_sha(path), "previous_sha256": expected}
     workspace.record(root, {"source": "user-source-edit", **result})
     return result
+
+
+def read_source(project, name):
+    """Bounded, read-only article file access; edits retain the narrower ato contract."""
+    path = workspace.relative_file(project, name)
+    if any(part in SKIP for part in Path(name).parts):
+        raise ValueError("Managed source is available through the reference browser")
+    if path.stat().st_size > 1024 * 1024:
+        raise ValueError("File exceeds the source browser limit")
+    raw = path.read_bytes()
+    if b"\0" in raw:
+        raise ValueError("Binary file: use the artifact viewer")
+    return {
+        "path": name,
+        "text": raw.decode("utf-8"),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "modified": path.stat().st_mtime_ns,
+    }

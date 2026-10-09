@@ -45,6 +45,25 @@ class DesignTest(unittest.TestCase):
             (dependency / "part.ato").write_text("dependency")
             self.assertEqual(design.snapshot(root)["sources"], [])
 
+    def test_directory_files_and_read_only_file_boundaries(self):
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as outside:
+            root = Path(folder)
+            (root / "requirements").mkdir()
+            text = root / "requirements/spec.yaml"
+            text.write_text("requirements: []\n")
+            (root / "binary.bin").write_bytes(b"a\0b")
+            (root / "linked.yaml").symlink_to(Path(outside) / "secret.yaml")
+            self.assertEqual(
+                {f["path"] for f in design.snapshot(root)["files"]},
+                {"requirements/spec.yaml", "binary.bin"},
+            )
+            self.assertEqual(
+                design.read_source(root, "requirements/spec.yaml")["text"], text.read_text()
+            )
+            for name in ["../secret.yaml", "linked.yaml", "binary.bin"]:
+                with self.assertRaises((ValueError, OSError)):
+                    design.read_source(root, name)
+
     def test_source_edit_is_optimistic_and_excludes_dependencies(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

@@ -838,3 +838,74 @@ dialog::backdrop {
 .tool-drawer[data-locked='true'][data-reserved='false'] .pane-scope::after {
   content: ' · Locked as overlay';
 }
+
+.source-code {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  white-space: pre;
+  font: 13px/21px var(--yp-mono);
+  margin: 8px 0;
+  counter-reset: source-line;
+}
+.source-code > div {
+  counter-increment: source-line;
+}
+.source-code > div::before {
+  content: counter(source-line);
+  display: inline-block;
+  width: 3em;
+  padding-right: 1em;
+  color: var(--yp-muted);
+  user-select: none;
+}
+.source-keyword {
+  color: var(--yp-action);
+  font-weight: 600;
+}
+.source-string {
+  color: var(--yp-muted);
+}
+.source-number {
+  color: var(--yp-action);
+}
+.source-comment {
+  color: var(--yp-muted);
+  font-style: italic;
+}
+.source-code a {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.source-browser {
+  padding: 12px;
+  overflow: auto;
+  background: var(--yp-surface);
+}
+.source-browser input {
+  width: 100%;
+  margin-bottom: 12px;
+}
+.source-browser ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 12px;
+}
+.source-browser > div > ul {
+  padding-left: 0;
+}
+.source-browser summary {
+  cursor: pointer;
+  padding: 4px 0;
+  font: 12px var(--yp-mono);
+}
+.source-browser li button {
+  text-align: left;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font: 12px var(--yp-mono);
+  padding: 4px;
+  border: 0;
+  background: transparent;
+}

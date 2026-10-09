@@ -98,6 +98,57 @@ class WebTest(unittest.TestCase):
         self.assertEqual(self.request("/yapnr/api/source-update/article", payload)[0], 200)
         self.assertEqual(self.request("/yapnr/api/source-update/article", payload)[0], 400)
 
+    def test_provider_catalog_omits_unused_payload_but_preserves_connect_choices(self):
+        catalog = {
+            "connected": ["paid"],
+            "all": [
+                {
+                    "id": "paid",
+                    "name": "Connected",
+                    "models": {"model": {"name": "Model", "large": "unused"}},
+                },
+                {"id": "other", "name": "Other", "models": {"model": {"large": "unused"}}},
+            ],
+        }
+        with patch.object(web, "api", return_value=catalog):
+            status, _, raw = self.request("/yapnr/api/providers")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            json.loads(raw),
+            {
+                "connected": ["paid"],
+                "all": [
+                    {"id": "paid", "name": "Connected", "models": {"model": {"name": "Model"}}},
+                    {"id": "other", "name": "Other", "models": {}},
+                ],
+            },
+        )
+
+    def test_source_index_uses_configured_viewer_and_returns_only_navigation(self):
+        self.server.experiments["article"] = "https://viewer.example.test"
+        with patch.object(
+            web,
+            "api",
+            return_value={
+                "src_root": "/private/source",
+                "files": [{"path": "parts/LED.ato"}],
+                "modules": {"LED": {"file": "parts/LED.ato", "line": 3}},
+                "components": {"irrelevant": {}},
+            },
+        ) as remote:
+            status, _, raw = self.request("/yapnr/api/source-index/article")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            json.loads(raw),
+            {
+                "files": [{"path": "parts/LED.ato"}],
+                "modules": {"LED": {"file": "parts/LED.ato", "line": 3}},
+            },
+        )
+        self.assertEqual(
+            remote.call_args.args, ("https://viewer.example.test", "/api/source/index")
+        )
+
     def test_main_message_arms_selected_model_and_stop_disables_continuation(self):
         with workspace.lock(self.root) as folder:
             workspace.atomic(

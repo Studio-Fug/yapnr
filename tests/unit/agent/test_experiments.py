@@ -74,6 +74,20 @@ class ExperimentTest(unittest.TestCase):
             self.assertEqual(pnr["dependencies"], [])
             self.assertEqual(pnr["inputs"][0]["verification"], "changed")
 
+    def test_growing_registry_preserves_records_beyond_report_read_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / experiments.REGISTRY
+            path.parent.mkdir(parents=True)
+            path.write_bytes(
+                experiments.encoded(
+                    {"schema": experiments.SCHEMA, "attempts": [], "retained": "x" * (1024 * 1024)}
+                )
+            )
+            item = experiments.begin(root, "validation", "Validation")
+            self.assertEqual(item["id"], "E000001")
+            self.assertEqual(len(experiments.load(root)["retained"]), 1024 * 1024)
+
     def test_live_lanes_are_typed_without_inventing_provenance(self):
         runs = experiments.live_attempts(
             {

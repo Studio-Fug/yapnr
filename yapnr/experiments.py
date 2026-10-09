@@ -35,9 +35,9 @@ def atomic(path, data):
         Path(name).unlink(missing_ok=True)
 
 
-def read(path, fallback=None):
+def read(path, fallback=None, limit=1024 * 1024):
     try:
-        if path.is_symlink() or not path.is_file() or path.stat().st_size > 1024 * 1024:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
             return fallback
         value = json.loads(path.read_bytes())
         return value if isinstance(value, dict) else fallback
@@ -87,7 +87,9 @@ def reference(root, path, expected=None):
 
 def load(root):
     path = Path(root) / REGISTRY
-    data = read(path) if path.exists() else {"schema": SCHEMA, "attempts": []}
+    data = (
+        read(path, limit=32 * 1024 * 1024) if path.exists() else {"schema": SCHEMA, "attempts": []}
+    )
     if data is None:
         raise ValueError("Experiment registry is unreadable")
     if data.get("schema") != SCHEMA or not isinstance(data.get("attempts"), list):
@@ -149,7 +151,7 @@ def finish(project, identifier, status, outputs=(), summary=None):
             raise ValueError("Experiment is missing or already completed")
         artifact_path = folder / "artifacts.json"
         artifacts = (
-            read(artifact_path)
+            read(artifact_path, limit=32 * 1024 * 1024)
             if artifact_path.exists()
             else {"schema": "yapnr-artifacts-v1", "artifacts": []}
         )
@@ -389,7 +391,9 @@ def attempts(project):
             if producer not in (run["id"], run.get("parent"))
         ]
         run["provenance"] = "recorded inputs" if run.get("inputs") else "inputs not recorded"
-    artifacts = read(root / ".yapnr/workspace/artifacts.json", {"artifacts": []})["artifacts"]
+    artifacts = read(
+        root / ".yapnr/workspace/artifacts.json", {"artifacts": []}, limit=32 * 1024 * 1024
+    )["artifacts"]
     by_hash = {artifact["sha256"]: artifact["id"] for artifact in artifacts}
     for run in runs:
         for ref in run.get("inputs", []) + run.get("outputs", []):

@@ -361,9 +361,19 @@ import { mountTraceability } from '/yapnr/traceability.js';
         entry.experimentsBrowser = mountExperiments(container, {
           project: key,
           open: openSource,
-          artifact: id => {
-            const item = state.data?.artifacts?.find(item => item.id === id);
-            if (item) showArtifact(item);
+          artifact: async id => {
+            try {
+              let item = state.data?.artifacts?.find(item => item.id === id);
+              if (!item) {
+                const data = await json('/yapnr/api/project/' + encodeURIComponent(key));
+                if (state.project !== key) return;
+                item = data.artifacts.find(item => item.id === id);
+              }
+              if (item) await showArtifact(item);
+              else say('Artifact is no longer indexed in this workspace.');
+            } catch (error) {
+              say(error.message);
+            }
           },
           select: run => {
             for (const id of ['board', 'schematic', 'three'])
@@ -2193,11 +2203,6 @@ import { mountTraceability } from '/yapnr/traceability.js';
     }
     if (data?.type === 'yapnr-search-results' && frame === state.searchTarget) {
       search.receive(data.queryId, data.results);
-      return;
-    }
-    if (data?.type === 'yapnr-experiment-selection' && frame === state.viewerFrames.experiments) {
-      for (const id of ['board', 'schematic', 'three'])
-        sendView(state.viewerFrames[id], 'yapnr-select-lane', { lane: data.lane });
       return;
     }
     if (data?.type === 'yapnr-view-error') return say('Viewer: ' + data.error);

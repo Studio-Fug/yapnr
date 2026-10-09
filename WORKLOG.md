@@ -606,3 +606,12 @@ prek pass. Packaged browser checks verify the native empty state and synthetic
 confirmation/approval/feedback gating without vendor access or paid turns.
 The RGB demo has no assembly package: standard two-layer vendor profiles are
 not yet supported; no unrelated stackup is substituted.
+
+### Chat delivery feedback
+
+The composer shows sending, confirmed delivery, waiting, working and reply cues,
+with a retained-draft notice when delivery cannot be confirmed. Independent
+activity polling stays responsive while history loads; stable accessible status
+uses the existing reduced-motion loader. All 292 regression targets, final web/
+privacy checks and all-file hooks pass. Packaged browser lifecycle checks use
+isolated synthetic responses with no paid turns or real message delivery.

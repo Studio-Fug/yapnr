@@ -1,5 +1,6 @@
 """Shared workspace HTTP integration, offline and without model turns."""
 
+import concurrent.futures
 import http.client
 import json
 import tempfile
@@ -74,6 +75,34 @@ class WebTest(unittest.TestCase):
         )
         response = connection.getresponse()
         return response.status, response.getheaders(), response.read()
+
+    def test_concurrent_startup_asset_burst(self):
+        count = 32
+        barrier = threading.Barrier(count)
+        paths = [
+            "workspace.js",
+            "dock.js",
+            "source-view.js",
+            "search-view.js",
+            "performance-view.js",
+            "experiments-view.js",
+            "traceability.js",
+            "workbench.css",
+        ]
+
+        def fetch(index):
+            barrier.wait(timeout=5)
+            connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+            try:
+                connection.request("GET", "/yapnr/" + paths[index % len(paths)])
+                response = connection.getresponse()
+                return response.status, len(response.read())
+            finally:
+                connection.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=count) as executor:
+            results = list(executor.map(fetch, range(count)))
+        self.assertTrue(all(status == 200 and size > 0 for status, size in results), results)
 
     def test_search_build_history_and_project_cloud_settings(self):
         (self.root / "main.ato").write_text("module Main:\n    bypass = new Capacitor\n")

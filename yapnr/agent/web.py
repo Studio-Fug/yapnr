@@ -120,6 +120,9 @@ class Recorder:
 
 
 class Server(ThreadingHTTPServer):
+    # HTTP/2 reverse proxies can open many upstream sockets for a cold asset burst.
+    request_queue_size = 128
+
     daemon_threads = True
 
     def __init__(

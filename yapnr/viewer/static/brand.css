@@ -232,3 +232,30 @@ body[data-embed='source'] .dk-head,
 body[data-embed='source'] .dk-grip {
   display: none !important;
 }
+
+body[data-embed='experiments'] #performance-controls {
+  display: none;
+}
+body[data-embed='performance'] .workspace {
+  display: none !important;
+}
+#performance-panel {
+  display: none;
+}
+body[data-embed='performance'] #performance-panel {
+  display: block;
+  padding: 16px;
+  height: 100dvh;
+  overflow: auto;
+  background: var(--yp-surface);
+  color: var(--yp-ink);
+}
+body[data-embed='performance'] button,
+body[data-embed='performance'] input {
+  background: var(--yp-surface);
+  color: var(--yp-ink);
+  border: 1px solid var(--yp-line);
+}
+body[data-embed='performance'] .muted {
+  color: var(--yp-muted);
+}

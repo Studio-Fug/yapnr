@@ -909,3 +909,55 @@ dialog::backdrop {
   border: 0;
   background: transparent;
 }
+
+#workspace-search {
+  position: fixed;
+  inset: 72px auto auto 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  width: min(680px, 92vw);
+  max-height: calc(100dvh - 100px);
+  overflow: auto;
+  z-index: 150;
+  background: var(--yp-surface);
+  color: var(--yp-ink);
+  border: 1px solid var(--yp-line);
+  box-shadow: 0 16px 48px var(--yp-scrim);
+  padding: 20px;
+}
+#workspace-search input {
+  width: 100%;
+}
+#workspace-search [data-results] {
+  display: grid;
+  gap: 6px;
+}
+#workspace-search [data-results] button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  text-align: left;
+  gap: 4px;
+}
+#workspace-search [data-results] small {
+  grid-column: 1 / -1;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.performance-view {
+  overflow: auto;
+}
+.native-performance {
+  height: 450px;
+  min-height: 240px;
+}
+.cloud-settings {
+  padding: 16px;
+}
+.cloud-settings form {
+  display: grid;
+  gap: 12px;
+}
+.cloud-settings label {
+  display: grid;
+  gap: 4px;
+}

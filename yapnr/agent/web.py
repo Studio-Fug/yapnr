@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
-from yapnr.agent import activity, design, harness, requirements, reviews, threads, workspace
+from yapnr.agent import activity, cloud, design, harness, requirements, reviews, threads, workspace
 from yapnr.agent.cli import opencode_environment
 from yapnr.agent.workflow import init, query
 
@@ -309,7 +309,8 @@ class Handler(BaseHTTPRequestHandler):
                     (WEB / Path(parsed.path).name).read_bytes(), "text/javascript"
                 )
             module = re.fullmatch(
-                r"/yapnr/(dock|dock-model|timing-view|source-view|adapters|experiments-view)\.js",
+                r"/yapnr/(dock|dock-model|timing-view|source-view|adapters|experiments-view|"
+                r"search-view|performance-view)\.js",
                 parsed.path,
             )
             if module:
@@ -392,6 +393,21 @@ class Handler(BaseHTTPRequestHandler):
             experiments = re.fullmatch(r"/yapnr/api/experiments/([a-z0-9-]+)", parsed.path)
             if experiments:
                 return self.json({"runs": design.experiments(self.server.project(experiments[1]))})
+            project_search = re.fullmatch(
+                r"/yapnr/api/(search|cloud|cloud-sdk)/([a-z0-9-]+)", parsed.path
+            )
+            if project_search:
+                from urllib.parse import parse_qs
+
+                action, name = project_search.groups()
+                root = self.server.project(name)
+                if action == "search":
+                    return self.json(
+                        {"results": design.search(root, parse_qs(parsed.query).get("q", [""])[0])}
+                    )
+                if action == "experiments":
+                    return self.json({"runs": design.experiments(root)})
+                return self.json(cloud.sdk(root) if action == "cloud-sdk" else cloud.read(root))
             source_file = re.fullmatch(r"/yapnr/api/source-file/([a-z0-9-]+)", parsed.path)
             if source_file:
                 from urllib.parse import parse_qs
@@ -492,7 +508,7 @@ class Handler(BaseHTTPRequestHandler):
         match = re.fullmatch(
             r"/yapnr/api/(scratchpad|annotation|review|thread|note|attach-note|main-thread|message|"
             r"harness-resume|harness-stop|approve|artifact-feedback|resolve-feedback|"
-            r"presence|source-update)/([a-z0-9-]+)",
+            r"presence|source-update|cloud)/([a-z0-9-]+)",
             urlsplit(self.path).path,
         )
         if match is None:
@@ -501,6 +517,9 @@ class Handler(BaseHTTPRequestHandler):
             data = self.payload()
             action, name = match.groups()
             root = self.server.project(name)
+
+            if action == "cloud":
+                return self.json(cloud.save(root, data["settings"], data["sha256"]))
 
             def remote(path, value=None):
                 return api(self.server.upstream, path, value)

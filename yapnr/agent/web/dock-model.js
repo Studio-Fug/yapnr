@@ -15,10 +15,10 @@ export function initialLayout() {
       schematic: { tabs: ['schematic'], active: 'schematic' },
       source: { tabs: ['source'], active: 'source' },
       left: {
-        tabs: ['source-browser', 'experiments', 'controls', 'exploration'],
+        tabs: ['source-browser', 'experiments', 'performance', 'controls', 'exploration'],
         active: 'source-browser',
       },
-      right: { tabs: ['ask', 'inspect', 'notes', 'timing', 'activity'], active: 'ask' },
+      right: { tabs: ['ask', 'notes', 'timing', 'activity'], active: 'ask' },
     },
     drawers: {
       left: { open: false, locked: false, width: 320 },

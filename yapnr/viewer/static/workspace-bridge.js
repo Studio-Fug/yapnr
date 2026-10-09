@@ -9,6 +9,7 @@
       'schematic',
       'three',
       'experiments',
+      'performance',
       'controls',
       'exploration',
       'timing',
@@ -24,6 +25,27 @@
     return;
   }
   document.body.dataset.embed = mode;
+  if (mode === 'performance') {
+    const panel = document.createElement('section');
+    panel.id = 'performance-panel';
+    const controls = document.getElementById('performance-controls');
+    if (controls) {
+      controls.open = true;
+      panel.append(controls);
+    }
+    document.querySelector('main').append(panel);
+  }
+  document.addEventListener(
+    'keydown',
+    event => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        event.stopPropagation();
+        post('yapnr-search-shortcut', {});
+      }
+    },
+    { capture: true }
+  );
   function post(type, data) {
     window.parent.postMessage({ type, ...data }, origin);
   }
@@ -105,6 +127,45 @@
   window.addEventListener('message', event => {
     if (event.source !== window.parent || event.origin !== origin) return;
     const data = event.data;
+    if (data?.type === 'yapnr-search' && typeof data.query === 'string') {
+      const q = data.query.trim().toLowerCase().slice(0, 200),
+        results = [],
+        seen = new Set();
+      const index = SRC()?.index?.(),
+        geometry = geo();
+      function add(selection, text) {
+        const name = selection.ref || selection.name,
+          key = selection.kind + ':' + name;
+        if (!name || seen.has(key) || results.length >= 100) return;
+        seen.add(key);
+        results.push({
+          kind: selection.kind,
+          ref: selection.ref,
+          name: selection.name,
+          text,
+          selection,
+          scope: scope(),
+        });
+      }
+      if (q) {
+        for (const part of geometry?.parts || []) {
+          const record = index?.components?.[part.ref] || {};
+          const text = [part.ref, record.type, record.part, record.instance, record.value]
+            .filter(Boolean)
+            .join(' · ');
+          if (text.toLowerCase().includes(q)) add({ kind: 'component', ref: part.ref }, text);
+        }
+        const names = new Set(Object.keys(index?.nets || {}));
+        for (const part of geometry?.parts || [])
+          for (const pad of part.pads || []) if (pad.net) names.add(pad.net);
+        for (const track of geometry?.tracks || []) if (track[0]) names.add(track[0]);
+        for (const name of [...names].sort())
+          if (String(name).toLowerCase().includes(q))
+            add({ kind: 'net', name }, SRC()?.netLabel?.(name) || name);
+      }
+      post('yapnr-search-results', { queryId: data.queryId, results });
+      return;
+    }
     if (data?.type === 'yapnr-pin-comparison') {
       api('/api/pin', {})
         .then(r =>
@@ -154,6 +215,7 @@
               ? { pads: [selected.ref + '.' + selected.pad] }
               : null;
       if (target) window.YapnrView?.highlight(target, { frame: !!data.reveal });
+      if (data.reveal) SRC()?.inspect?.(selected, { focus: false });
     }
     if (data?.type === 'yapnr-theme') {
       document.documentElement.dataset.theme = data.theme === 'dark' ? 'dark' : 'light';

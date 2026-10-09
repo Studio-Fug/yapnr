@@ -319,7 +319,16 @@ def parse(data: Mapping[str, Any], path: str = "<config>") -> Config:
 
 
 def config_path(explicit: Optional[str] = None) -> Path:
-    raw = explicit or os.environ.get(ENV_CONFIG) or DEFAULT_PATH
+    raw = explicit or os.environ.get(ENV_CONFIG)
+    if not raw:
+        for root in [Path.cwd(), *Path.cwd().parents]:
+            marker = root / ".yapnr"
+            if marker.is_dir():
+                project_config = marker / "workspace/cloud.toml"
+                if project_config.is_file():
+                    return project_config
+                break
+    raw = raw or DEFAULT_PATH
     return Path(os.path.expanduser(raw))
 
 

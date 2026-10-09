@@ -16,7 +16,7 @@
 <select id="project" aria-label="Project"></select><span id="stage"></span>
 <div class="layout-presets" role="group" aria-label="Workspace arrangement"><button id="conversation-layout">Conversation</button><button id="inspect-layout">Inspect</button></div>
 <button id="undo-layout" aria-label="Undo layout change">Undo layout</button>
-<button id="view-menu">Open view</button><button id="theme">Dark</button><button id="preferences">Preferences</button><button id="new-project">New project</button><button id="close-project">Close project</button>
+<button id="open-search" type="button">Search</button><button id="view-menu">Open view</button><button id="theme">Dark</button><button id="preferences">Preferences</button><button id="new-project">New project</button><button id="close-project">Close project</button>
 </header>
 <main id="shell" aria-label="Project workbench"></main>
 <div id="legacy-parking" hidden>
@@ -68,4 +68,10 @@
       </details>
     </dialog>
 
+<dialog id="workspace-search" aria-labelledby="search-heading">
+<button data-close type="button">Close</button><h2 id="search-heading">Search workspace</h2>
+<input aria-label="Find component, net or source text" placeholder="Refdes, net name, file or source text" autocomplete="off">
+<p role="status"></p><div data-results></div>
+<details><summary>Selected object</summary><div id="search-inspection" class="inspection"></div></details>
+</dialog>
 </body></html>

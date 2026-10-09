@@ -152,3 +152,36 @@ def experiments(project):
         except (OSError, ValueError):
             continue
     return runs
+
+
+def search(project, query):
+    query = str(query).strip().casefold()[:200]
+    if not query:
+        return []
+    data = snapshot(project)
+    results = []
+    for source in data["sources"]:
+        if query in source["path"].casefold():
+            results.append(
+                {
+                    "kind": "source",
+                    "file": source["path"],
+                    "line": 1,
+                    "text": source["path"],
+                    "sha256": source["sha256"],
+                }
+            )
+        for line, text in enumerate(source["text"].splitlines(), 1):
+            if query in text.casefold():
+                results.append(
+                    {
+                        "kind": "source",
+                        "file": source["path"],
+                        "line": line,
+                        "text": text.strip()[:240],
+                        "sha256": source["sha256"],
+                    }
+                )
+                if len(results) >= 100:
+                    return results
+    return results[:100]

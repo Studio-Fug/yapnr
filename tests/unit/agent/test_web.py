@@ -75,6 +75,26 @@ class WebTest(unittest.TestCase):
         response = connection.getresponse()
         return response.status, response.getheaders(), response.read()
 
+    def test_search_build_history_and_project_cloud_settings(self):
+        (self.root / "main.ato").write_text("module Main:\n    bypass = new Capacitor\n")
+        status, _, body = self.request("/yapnr/api/search/article?q=bypass")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["results"][0]["line"], 2)
+        report = self.root / "reports/build-01/result.json"
+        report.parent.mkdir(parents=True)
+        report.write_text('{"atopile":"0.15.8","returncode":1}')
+        status, _, body = self.request("/yapnr/api/experiments/article")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["runs"][0]["status"], "failed")
+        _, _, body = self.request("/yapnr/api/cloud/article")
+        original = json.loads(body)
+        payload = {"settings": {"local": {"workers": 2}}, "sha256": original["sha256"]}
+        self.assertEqual(self.request("/yapnr/api/cloud/article", payload, origin=False)[0], 400)
+        status, _, body = self.request("/yapnr/api/cloud/article", payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["scope"], "project")
+        self.assertEqual(self.request("/yapnr/api/cloud/article", payload)[0], 400)
+
     def test_brand_resources_presence_and_optimistic_source_edit(self):
         status, _, data = self.request("/yapnr/brand/fonts/SpaceGrotesk.woff2")
         self.assertEqual(status, 200)

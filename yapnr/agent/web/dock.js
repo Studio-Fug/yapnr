@@ -223,6 +223,14 @@ export class Workbench {
     }
     if (!location(this.layout, 'source-browser') && !this.layout.closed.includes('source-browser'))
       this.layout.panes.left.tabs.unshift('source-browser');
+    for (const pane of Object.values(this.layout.panes)) {
+      pane.tabs = pane.tabs.filter(id => id !== 'inspect');
+      if (pane.active === 'inspect') pane.active = pane.tabs[0] || null;
+    }
+    delete this.layout.bindings?.inspect;
+    this.layout.closed = this.layout.closed.filter(id => id !== 'inspect');
+    if (!location(this.layout, 'performance') && !this.layout.closed.includes('performance'))
+      this.layout.panes.left.tabs.push('performance');
     for (const entry of Object.values(this.layout.bindings || {}))
       if (!this.registry.has(entry.id)) this.register({ ...entry, type: 'missing' });
     this.render();

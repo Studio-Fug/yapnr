@@ -14,7 +14,7 @@ for(const edge of ['left','right','top','bottom'])test('split '+edge+' is one at
 });
 test('reorder and cross-drawer move retain tabs and active view',()=>{
  let l=transact(initialLayout(),{type:'move',tab:'controls',target:'left',index:0});
- assert.deepEqual(l.panes.left.tabs,['controls','source-browser','experiments','exploration']);l=transact(l,{type:'move',tab:'controls',target:'right',index:1});
+ assert.deepEqual(l.panes.left.tabs,['controls','source-browser','experiments','performance','exploration']);l=transact(l,{type:'move',tab:'controls',target:'right',index:1});
  assert.equal(l.panes.right.tabs[1],'controls');assert.equal(l.panes.right.active,'controls');assert.equal(l.drawers.right.open,true);
  assert.deepEqual(validate(JSON.parse(JSON.stringify(l))),l);
 });

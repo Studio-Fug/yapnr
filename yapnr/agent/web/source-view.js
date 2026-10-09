@@ -338,9 +338,10 @@ export function mountSource(container, { project, path, onOpen, onDirty, onAsk, 
       if (!disposed) paint();
     }
   }
-  update();
+  const ready = update();
   const timer = setInterval(update, 1000);
   return {
+    ready,
     discard: () => cancel.click(),
     dirty: () => dirty,
     dispose: () => {

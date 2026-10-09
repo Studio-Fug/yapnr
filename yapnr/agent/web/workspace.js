@@ -3,6 +3,8 @@ import { Workbench } from '/yapnr/dock.js';
 import { mountSource, mountSourceBrowser } from '/yapnr/source-view.js';
 import { mountTiming } from '/yapnr/timing-view.js';
 import { mountViewer, sendView } from '/yapnr/adapters.js';
+import { mountSearch } from '/yapnr/search-view.js';
+import { mountPerformance } from '/yapnr/performance-view.js';
 import { mountExperiments } from '/yapnr/experiments-view.js';
 import { mountTraceability } from '/yapnr/traceability.js';
 
@@ -97,10 +99,10 @@ import { mountTraceability } from '/yapnr/traceability.js';
     source: 'Sources',
     'source-browser': 'Source browser',
     experiments: 'Experiments',
+    performance: 'Performance',
     controls: 'View controls',
     exploration: 'Exploration',
     ask: 'Ask',
-    inspect: 'Inspect',
     notes: 'Notes',
     timing: 'Timing',
     activity: 'Activity',
@@ -143,6 +145,40 @@ import { mountTraceability } from '/yapnr/traceability.js';
       state.nativeViews[id] = entry;
     }
   }
+  const search = mountSearch($('workspace-search'), {
+    project: () => state.project,
+    report: say,
+    nativeQuery: (query, queryId) => {
+      const active = wb.layout.panes[wb.activeCentral]?.active;
+      const target = state.viewerFrames[active] || state.viewerFrames.board;
+      state.searchTarget = target;
+      sendView(target, 'yapnr-search', { query, queryId });
+    },
+    select: item => {
+      if (item.kind === 'source') return openSource(item.file, false, item.line);
+      const frame = state.searchTarget;
+      const id = Object.keys(state.viewerFrames).find(id => state.viewerFrames[id] === frame);
+      if (!id) return;
+      wb.open(id);
+      sendView(frame, 'yapnr-linked-selection', {
+        selection: item.selection,
+        scope: item.scope,
+        reveal: true,
+      });
+    },
+  });
+  $('open-search').onclick = () => search.shortcut();
+  addEventListener(
+    'keydown',
+    event => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        event.stopPropagation();
+        search.shortcut();
+      }
+    },
+    { capture: true }
+  );
   let presenceSession = '',
     presenceProject = '';
   const client = localStorage.getItem('yapnr.client') || crypto.randomUUID();
@@ -202,7 +238,17 @@ import { mountTraceability } from '/yapnr/traceability.js';
         },
       });
     }
-    if (['board', 'schematic', 'three', 'experiments', 'exploration', 'native-timing'].includes(id))
+    if (
+      [
+        'board',
+        'schematic',
+        'three',
+        'experiments',
+        'exploration',
+        'native-timing',
+        'performance',
+      ].includes(id)
+    )
       ensureViewer(id);
     if (id === 'controls') requestControls();
   }
@@ -281,6 +327,8 @@ import { mountTraceability } from '/yapnr/traceability.js';
     });
     ensureSource(id, path);
     wb.open(id, wb.layout.panes.source ? 'source' : undefined);
+    const sourceView = state.sourceViews[id];
+    sourceView.ready?.then(() => sourceView.reveal(line)).catch(error => say(error.message));
   }
   function requestControls() {
     const id =
@@ -295,6 +343,17 @@ import { mountTraceability } from '/yapnr/traceability.js';
     if (!entry) return;
     const mode = id === 'native-timing' ? 'timing' : id;
     let container = entry.element;
+    if (id === 'performance') {
+      if (entry.performanceProject !== state.project) {
+        entry.performanceView?.dispose();
+        entry.performanceView = mountPerformance(container, {
+          project: state.project,
+          report: say,
+        });
+        entry.performanceProject = state.project;
+      }
+      container = entry.performanceView.native;
+    }
     if (id === 'experiments') {
       const key = state.project;
       if (entry.experimentsProject !== key) {
@@ -317,7 +376,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
   }
   function mountProjectViews() {
     for (const id of ['board', 'schematic']) ensureViewer(id);
-    for (const id of ['three', 'experiments', 'exploration', 'native-timing'])
+    for (const id of ['three', 'experiments', 'exploration', 'native-timing', 'performance'])
       if (state.viewerFrames[id] || Object.values(wb.layout.panes).some(pane => pane.active === id))
         ensureViewer(id);
     ensureSource('source');
@@ -330,7 +389,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
         report: say,
       });
     }
-    const inspect = wb.registry.get('inspect').element;
+    const inspect = $('search-inspection');
     if (!inspect.childElementCount) {
       inspect.classList.add('inspection');
       inspect.append(
@@ -1919,7 +1978,9 @@ import { mountTraceability } from '/yapnr/traceability.js';
       wb.registry.get(id).project = null;
     }
     state.sourceViews = {};
-    for (const id of ['source', 'inspect']) wb.registry.get(id).element.replaceChildren();
+    wb.registry.get('source').element.replaceChildren();
+    $('search-inspection').replaceChildren();
+    search.reset();
     $('project').value = name;
     subscribe();
     wb.setProject(name);
@@ -2093,6 +2154,14 @@ import { mountTraceability } from '/yapnr/traceability.js';
     );
     if (!frame || event.origin !== new URL(frame.src).origin) return;
     const data = event.data;
+    if (data?.type === 'yapnr-search-shortcut') {
+      search.shortcut();
+      return;
+    }
+    if (data?.type === 'yapnr-search-results' && frame === state.searchTarget) {
+      search.receive(data.queryId, data.results);
+      return;
+    }
     if (data?.type === 'yapnr-experiment-selection' && frame === state.viewerFrames.experiments) {
       for (const id of ['board', 'schematic', 'three'])
         sendView(state.viewerFrames[id], 'yapnr-select-lane', { lane: data.lane });
@@ -2205,7 +2274,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
     $('selection-context').textContent = state.selection
       ? 'Context: ' + (state.selection.ref || state.selection.name || state.selection.kind)
       : '';
-    const inspect = wb.registry.get('inspect').element;
+    const inspect = $('search-inspection');
     inspect.replaceChildren(
       node('h3', state.selection?.ref || state.selection?.name || 'Selection'),
       node(

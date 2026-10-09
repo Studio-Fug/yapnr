@@ -64,6 +64,18 @@ class DesignTest(unittest.TestCase):
                 with self.assertRaises((ValueError, OSError)):
                     design.read_source(root, name)
 
+    def test_source_search_returns_exact_lines_and_excludes_dependency_sources(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "main.ato").write_text("module Main:\n    bypass = new Capacitor\n")
+            (root / ".ato").mkdir()
+            (root / ".ato/part.ato").write_text("bypass")
+            matches = design.search(root, "BYPASS")
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0]["line"], 2)
+            self.assertEqual(matches[0]["file"], "main.ato")
+            self.assertEqual(design.search(root, " "), [])
+
     def test_recorded_build_attempts_keep_failures_and_exclude_unrelated_reports(self):
         with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as outside:
             root = Path(folder)

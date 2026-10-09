@@ -586,3 +586,10 @@ Preserve experiment-tree scroll and focused row when selection or telemetry
 rebuilds the tree. Search changes deliberately start at the top; campaign groups
 remain collapsible. Busy-chat browser checks pass with isolated request capture,
 without a paid test turn.
+
+Validation: all 291 regression targets plus five final web/workflow/CLI/image/
+animation checks pass; all-file prek passes. Live packaged browser checks retain
+scroll at 220 px across selection and verify collapsed candidate groups and
+busy-turn delivery guards. Actual ngspice 42 decks execute in the workspace;
+repeat raw traces/report are byte-identical and recorded as simulation E000023.
+The configured shared-library/XSPICE paths resolve through the existing SI runner.

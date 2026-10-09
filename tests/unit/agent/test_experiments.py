@@ -74,6 +74,20 @@ class ExperimentTest(unittest.TestCase):
             self.assertEqual(pnr["dependencies"], [])
             self.assertEqual(pnr["inputs"][0]["verification"], "changed")
 
+    def test_identical_later_build_is_not_provenance_for_an_earlier_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "board.kicad_pcb").write_text("same bytes")
+            first = experiments.begin(root, "schematic", "First build")
+            produced = experiments.finish(root, first["id"], "passed", ["board.kicad_pcb"])
+            route = experiments.begin(root, "pnr", "Route", ["board.kicad_pcb"])
+            later = experiments.begin(root, "schematic", "Later build")
+            experiments.finish(root, later["id"], "passed", ["board.kicad_pcb"])
+            experiments.finish(root, route["id"], "passed")
+            run = next(run for run in experiments.attempts(root) if run["id"] == route["id"])
+            self.assertEqual([link["attempt"] for link in run["dependencies"]], [first["id"]])
+            self.assertEqual(run["inputs"][0]["artifact"], produced["outputs"][0]["artifact"])
+
     def test_growing_registry_preserves_records_beyond_report_read_limit(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

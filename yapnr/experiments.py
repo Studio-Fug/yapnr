@@ -221,6 +221,17 @@ def _paths(root):
     return paths
 
 
+def preceded(producer, consumer):
+    """Content identity cannot make a later producer an earlier run's input."""
+    end, start = producer.get("ended"), consumer.get("started")
+    if not isinstance(end, str) or not isinstance(start, str):
+        return True
+    try:
+        return datetime.fromisoformat(end) <= datetime.fromisoformat(start)
+    except (ValueError, TypeError):
+        return True
+
+
 def attempts(project):
     """Project legacy reports into typed attempts; links require content evidence."""
     root = Path(project).resolve()
@@ -376,6 +387,7 @@ def attempts(project):
         for artifact in run.get("outputs", []):
             if artifact.get("sha256") and artifact.get("verification") in ("observed", "verified"):
                 outputs.setdefault(artifact["sha256"], []).append((run["id"], artifact["path"]))
+    by_id = {run["id"]: run for run in runs}
     for run in runs:
         run["dependencies"] = [
             {
@@ -388,17 +400,31 @@ def attempts(project):
             for artifact in run.get("inputs", [])
             if artifact.get("verification") in ("verified", "observed")
             for producer, output in outputs.get(artifact.get("sha256"), [])
-            if producer not in (run["id"], run.get("parent"))
+            if producer not in (run["id"], run.get("parent")) and preceded(by_id[producer], run)
         ]
         run["provenance"] = "recorded inputs" if run.get("inputs") else "inputs not recorded"
     artifacts = read(
         root / ".yapnr/workspace/artifacts.json", {"artifacts": []}, limit=32 * 1024 * 1024
     )["artifacts"]
-    by_hash = {artifact["sha256"]: artifact["id"] for artifact in artifacts}
     for run in runs:
         for ref in run.get("inputs", []) + run.get("outputs", []):
-            if ref.get("sha256") in by_hash:
-                ref.setdefault("artifact", by_hash[ref["sha256"]])
+            producers = {
+                link["attempt"]
+                for link in run["dependencies"]
+                if link["sha256"] == ref.get("sha256")
+            }
+            candidates = [
+                artifact
+                for artifact in artifacts
+                if artifact["sha256"] == ref.get("sha256")
+                and (
+                    ref in run.get("outputs", [])
+                    or not artifact.get("metadata", {}).get("experiment")
+                    or artifact["metadata"]["experiment"] in producers
+                )
+            ]
+            if candidates:
+                ref.setdefault("artifact", candidates[-1]["id"])
     return runs[:500]
 
 

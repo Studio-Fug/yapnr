@@ -418,8 +418,9 @@ def build(options: BuildOptions, log=print) -> BuildResult:
         capture_errors = []
         if not options.offline:
             try:
-                directories = importer.part_dirs_under(
-                    work_project / parts.parts_dir_of(work_project)
+                selected_parts = work_project / parts.parts_dir_of(work_project)
+                directories = (
+                    importer.part_dirs_under(selected_parts) if selected_parts.is_dir() else []
                 )
                 if directories:
                     captured_cache = open_cache(article_cache, create=True)

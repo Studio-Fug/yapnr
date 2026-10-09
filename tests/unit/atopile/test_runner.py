@@ -185,6 +185,15 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(result.outputs, {})
         self.assertTrue((result.out / "ato.log").is_file())
 
+    def test_authoring_failure_without_selected_parts_has_no_capture_error(self):
+        (self.project / parts.LOCK_NAME).unlink()
+        (self.project / "fake.json").write_text(json.dumps({"exit": 3}))
+        result = self.build(offline=False)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.summary["native_returncode"], 3)
+        self.assertEqual(result.summary["part_capture_errors"], [])
+        self.assertFalse((self.project / ".yapnr/parts/cache").exists())
+
     def test_timeout_kills_the_process_tree(self):
         pid_file = self.root / "grandchild.pid"
         (self.project / "fake.json").write_text(json.dumps({"hang": str(pid_file)}))

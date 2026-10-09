@@ -34,6 +34,29 @@ OpenCode supplies sessions, provider authentication, model selection, streaming,
 tools, questions and permissions through its API; its web application is not
 embedded or overlaid.
 
+Background tools and reasoning roll up into a collapsed activity indicator per
+agent turn; expand it to inspect the preserved inputs, outputs and errors. The
+bottom workflow bar shows the controller's current stage, including review and
+rework. It is a stage indicator, not a time estimate or a completion percentage.
+
+Sending a directive in the main design thread arms a journaled continuation
+harness using that thread's selected model and agent. An idle runtime receives
+another turn until the controller reaches requirements/risk review, final PCB
+review (`complete`), or a blocked, exhausted or cancelled state. Native questions
+and permission requests also pause continuation. Automation never supplies user
+acceptance. A real review reply permits the agent to reconcile that decision and
+continue; focused inspection threads do not start the main design loop.
+
+Each explicit send/resume permits at most eight automatic continuation turns over
+30 minutes, with a ten-minute running-turn watchdog. Stop disables continuation
+and interrupts the active turn. Model/connection failures, uncertain delivery and
+budget exhaustion pause with a visible status; inspect the cause before using
+**Continue workflow**. Imported or moved workspaces require explicit resume.
+The harness records requests, interruptions and checkpoints in the workspace
+JSONL, preserves model selection, and avoids replaying uncertain paid requests.
+An expired tool call in an idle runtime is recorded as interrupted, preserving
+its input; it is never assigned an invented successful result.
+
 To reuse an existing OpenCode service, supply `--upstream URL`. Existing provider
 connections and sessions are retained. For a remote runtime, `--agent-projects`
 specifies its project mount path (default `/projects`); a locally launched runtime

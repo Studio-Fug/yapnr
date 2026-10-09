@@ -333,6 +333,26 @@ for focused chat, or keep it beside the board, schematic, 3D or shared document.
 OpenCode supplies sessions, provider authentication, model selection, streaming,
 tools, questions and permissions through its API; its web application is not
 embedded or overlaid.</p>
+<p>Background tools and reasoning roll up into a collapsed activity indicator per
+agent turn; expand it to inspect the preserved inputs, outputs and errors. The
+bottom workflow bar shows the controller’s current stage, including review and
+rework. It is a stage indicator, not a time estimate or a completion percentage.</p>
+<p>Sending a directive in the main design thread arms a journaled continuation
+harness using that thread’s selected model and agent. An idle runtime receives
+another turn until the controller reaches requirements/risk review, final PCB
+review (<code class="docutils literal notranslate"><span class="pre">complete</span></code>), or a blocked, exhausted or cancelled state. Native questions
+and permission requests also pause continuation. Automation never supplies user
+acceptance. A real review reply permits the agent to reconcile that decision and
+continue; focused inspection threads do not start the main design loop.</p>
+<p>Each explicit send/resume permits at most eight automatic continuation turns over
+30 minutes, with a ten-minute running-turn watchdog. Stop disables continuation
+and interrupts the active turn. Model/connection failures, uncertain delivery and
+budget exhaustion pause with a visible status; inspect the cause before using
+<strong>Continue workflow</strong>. Imported or moved workspaces require explicit resume.
+The harness records requests, interruptions and checkpoints in the workspace
+JSONL, preserves model selection, and avoids replaying uncertain paid requests.
+An expired tool call in an idle runtime is recorded as interrupted, preserving
+its input; it is never assigned an invented successful result.</p>
 <p>To reuse an existing OpenCode service, supply <code class="docutils literal notranslate"><span class="pre">--upstream</span> <span class="pre">URL</span></code>. Existing provider
 connections and sessions are retained. For a remote runtime, <code class="docutils literal notranslate"><span class="pre">--agent-projects</span></code>
 specifies its project mount path (default <code class="docutils literal notranslate"><span class="pre">/projects</span></code>); a locally launched runtime

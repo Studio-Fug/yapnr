@@ -36,7 +36,7 @@ class SupplierTest(unittest.TestCase):
                 "queries": [
                     {
                         "endpoint": "capacitors",
-                        "package": {"data": {"elements": ["0603"]}},
+                        "package": {"data": {"elements": [{"name": "C0603"}]}},
                         "capacitance": catalog.quantity(9e-8, 1.1e-7, "farad"),
                         "max_voltage": catalog.quantity(16, 50, "volt"),
                     }
@@ -54,6 +54,7 @@ class SupplierTest(unittest.TestCase):
         )
         self.assertNotIn("atopileapi", repr(read.call_args_list))
         self.assertIn("capacitance=1e-07", read.call_args_list[0].args[0])
+        self.assertIn("package=0603", read.call_args_list[0].args[0])
 
     def test_missing_voltage_or_tolerance_cannot_satisfy_constraint(self):
         for fields in ({"voltage_rating": None}, {"tolerance_fraction": None}):

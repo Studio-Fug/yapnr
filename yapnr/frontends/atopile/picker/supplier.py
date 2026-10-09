@@ -54,7 +54,7 @@ def discover(method, path, body, read):
         elif endpoint in FIELDS:
             filters = {}
             if len(packages) == 1:
-                filters["package"] = packages[0]
+                filters["package"] = catalog.normalize_package(packages[0])
             main = "resistance" if endpoint == "resistors" else "capacitance"
             bands = catalog.intervals(params.get(main))
             if bands and len(bands) == 1:

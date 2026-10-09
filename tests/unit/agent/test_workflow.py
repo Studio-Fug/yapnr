@@ -11,6 +11,37 @@ from yapnr.agent.cli import chat_command, initialize, instructions, provider_env
 
 
 class WorkflowTest(unittest.TestCase):
+    def test_installed_packages_get_narrow_read_access_and_existing_config_survives(self):
+        from types import SimpleNamespace
+
+        from yapnr.agent.cli import opencode_environment
+
+        def spec(name):
+            return SimpleNamespace(
+                origin="/opt/venv/lib/python3.11/site-packages/" + name + "/__init__.py"
+            )
+
+        with patch("importlib.util.find_spec", side_effect=spec), patch.dict(
+            "os.environ",
+            {
+                "OPENCODE_CONFIG_CONTENT": json.dumps(
+                    {"model": "fixture/selected", "permission": {"edit": "ask"}}
+                )
+            },
+        ):
+            config = json.loads(opencode_environment()["OPENCODE_CONFIG_CONTENT"])
+        self.assertEqual(config["model"], "fixture/selected")
+        self.assertEqual(config["permission"]["edit"]["*"], "ask")
+        self.assertEqual(
+            config["permission"]["edit"]["/opt/venv/lib/python3.11/site-packages/yapnr/*"], "deny"
+        )
+        self.assertEqual(
+            config["permission"]["external_directory"][
+                "/opt/venv/lib/python3.11/site-packages/rules_requirements/*"
+            ],
+            "allow",
+        )
+
     def test_endpoint_uses_environment_reference_without_storing_secret(self):
         args = Namespace(
             provider="opencode",

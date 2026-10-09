@@ -253,6 +253,14 @@ def index(project):
                 if (root / ".yapnr/workflow/state.json").is_file()
                 else None
             ),
+            "artifact_reviews": (
+                ".yapnr/workspace/reviews.json" if (folder / "reviews.json").is_file() else None
+            ),
+            "requirements_models": [
+                p.relative_to(root).as_posix()
+                for p in sorted((root / "requirements").rglob("*.y*ml"))
+                if p.is_file()
+            ],
             "requirements": {
                 key: name if (root / name).is_file() else None
                 for key, name in (

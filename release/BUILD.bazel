@@ -26,7 +26,10 @@ package(default_visibility = ["//visibility:public"])
 
 py_package(
     name = "yapnr_package",
-    packages = ["yapnr"],
+    packages = [
+        "python.rules_requirements",
+        "yapnr",
+    ],
     deps = [
         "//yapnr",
         "//yapnr/native:wheel_files",

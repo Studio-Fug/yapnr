@@ -16,6 +16,9 @@ class StateMachineTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         workflow.init(self.root, "Design a ring")
+        (
+            self.root / "requirements/model.yaml"
+        ).unlink()  # Retain explicit legacy Markdown migration coverage.
 
     def documents(self, text="Initial"):
         (self.root / "requirements/manifest.md").write_text(text + "\nREQ-1: native connectivity\n")

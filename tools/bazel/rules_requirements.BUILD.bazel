@@ -1,0 +1,12 @@
+"""Pinned pure Python requirements toolkit; reuse upstream without dev toolchains."""
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["LICENSE"])
+
+py_library(
+    name = "toolkit",
+    deps = ["//python:python"],
+)

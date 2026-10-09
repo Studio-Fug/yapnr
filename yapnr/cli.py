@@ -185,6 +185,8 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.set_defaults(func=_cmd_doctor)
 
     from yapnr.agent.cli import register as register_agent
+    from yapnr.agent.requirements import register as register_requirements
+    from yapnr.agent.reviews import register as register_review
     from yapnr.agent.web import register as register_web
     from yapnr.agent.workflow import register as register_workflow
     from yapnr.agent.workspace import register as register_workspace
@@ -197,6 +199,8 @@ def build_parser() -> argparse.ArgumentParser:
     register_agent(commands)
     register_workflow(commands)
     register_workspace(commands)
+    register_requirements(commands)
+    register_review(commands)
     register_web(commands)
     register_atopile(commands)
     register_picker(commands)

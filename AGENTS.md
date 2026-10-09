@@ -48,11 +48,15 @@ create permission. An explicitly requested change overrides its default policy.
 ## Engineering contract and risk analysis
 
 Create or resume one Git repository per article. Retain the requested feature and
-its source verbatim. In `requirements/manifest.md`, give every requirement a stable
-ID, measurable acceptance threshold, verification method, demanded evidence level,
-source and status. Record assumptions and unresolved choices. In
-`requirements/risks.md`, link each credible failure and consequence to a mitigation
-and the requirements implementing it. Update these records as evidence changes.
+its source verbatim. Maintain authoritative `rules_requirements` YAML models under
+`requirements/`: user needs,
+requirements, risks, mitigations and test methods are distinct linked entities. Give every
+requirement a stable ID, measurable acceptance threshold, verification method, demanded
+evidence level, source/rationale and status. Trace `satisfies`, `refines`, `mitigates`,
+`implemented_by` and `method` using the pinned model schema. Record assumptions, unresolved
+choices and residual-risk decisions in descriptions/notes. Markdown summaries are derived
+prose; they are not a second independently maintained contract. Update the YAML as evidence
+changes. `yapnr requirements query` populates the native traceability review browser.
 
 Produce both documents before schematic capture, part selection or design experiments.
 Present the requirements specification and risk analysis in the agent chat for the
@@ -72,14 +76,31 @@ Retain superseded artifacts as historical evidence rather than presenting them a
 current passes. Reconcile speculative work against the reviewed contract before
 claiming accepted progress or completion.
 
+Publish verification reports as workspace artifacts. Keep their actual test cases in
+`requirements/evidence/*.rr.yaml` (or JUnit XML), and link them to the model's
+`verified_by`/`validated_by` target and case selectors. Use
+`yapnr requirements link-evidence --record PATH --report-artifact ID --case CASE --target TARGET`
+to bind an existing result to a published report without changing its outcome. Stamp evidence
+with `requirements_sha256` and the tested `dut_sha256` from `yapnr requirements query`;
+retain engine/tool pins, seeds, input hashes and run provenance in the report. Publishing or
+linking a report never supplies a passing result. Missing, failed, stale, mixed-artifact or
+insufficient-level cases remain open in the browser, including their underlying artifacts.
+
+Request review with `yapnr review request --artifact ID` (repeat for a bundle), including the
+workflow stage and revision. The native workspace shows Approve and Review Feedback.
+Only a genuine user action approves a particular content revision. Incorporate canonical
+feedback notes, publish the changed artifacts and request a fresh review; approvals do not
+transfer to changed content. Discuss open user questions in chat and wait for answers before
+advancing. Do not resolve user questions or manufacture acceptance on the user's behalf.
+
 Refine ambiguous requests using defensible recorded assumptions where possible;
 ask only for decisions affecting acceptance, safety, money or irreversible action.
 Preserve acceptance history. Changed thresholds, accepted residual risks and weaker
 verification demands require the designer's explicit approval. Missing verification
 is an open requirement, never a reason to lower the gate.
 
-Use `rules_requirements` when the article needs its traceability/evidence machinery:
-pin the module revision, use its documented model schema and verification lock,
+Use the bundled, pinned `rules_requirements` model and traceability machinery.
+Use its documented model schema and verification lock,
 and run `rr validate`, `rr sets check`, `rr report` and `rr check-report` with an
 explicit gating policy. `rr report` defaults to `--fail-on none`; exit zero alone
 is not acceptance. Inspect the complete report and expected verification-set

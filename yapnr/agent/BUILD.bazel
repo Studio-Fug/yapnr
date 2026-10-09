@@ -9,18 +9,27 @@ genrule(
         "@threejs//:build/three.module.js",
         "@threejs//:examples/jsm/controls/OrbitControls.js",
         "@threejs//:LICENSE",
+        "@elkjs//:lib/elk.bundled.js",
+        "@elkjs//:LICENSE.md",
+        "//third_party/licenses:Apache-2.0.txt",
     ],
     outs = [
         "web/vendor/three.core.js",
         "web/vendor/three.module.js",
         "web/vendor/OrbitControls.js",
         "web/vendor/LICENSE",
+        "web/vendor/elk.bundled.js",
+        "web/vendor/elk-LICENSE.md",
+        "web/vendor/elk-Apache-2.0.txt",
     ],
     cmd = "mkdir -p $(RULEDIR)/web/vendor && " +
           "cp $(location @threejs//:build/three.core.js) $(RULEDIR)/web/vendor/three.core.js && " +
           "cp $(location @threejs//:build/three.module.js) $(RULEDIR)/web/vendor/three.module.js && " +
           "cp $(location @threejs//:examples/jsm/controls/OrbitControls.js) $(RULEDIR)/web/vendor/OrbitControls.js && " +
-          "cp $(location @threejs//:LICENSE) $(RULEDIR)/web/vendor/LICENSE",
+          "cp $(location @threejs//:LICENSE) $(RULEDIR)/web/vendor/LICENSE && " +
+          "cp $(location @elkjs//:lib/elk.bundled.js) $(RULEDIR)/web/vendor/elk.bundled.js && " +
+          "cp $(location @elkjs//:LICENSE.md) $(RULEDIR)/web/vendor/elk-LICENSE.md && " +
+          "cp $(location //third_party/licenses:Apache-2.0.txt) $(RULEDIR)/web/vendor/elk-Apache-2.0.txt",
 )
 
 genrule(
@@ -42,15 +51,20 @@ py_library(
     srcs = [
         "__init__.py",
         "cli.py",
+        "design.py",
         "harness.py",
+        "requirements.py",
+        "reviews.py",
         "threads.py",
         "web.py",
         "workflow.py",
         "workspace.py",
     ],
     data = [
+        "web/design.js",
         "web/index.html",
         "web/scene.html",
+        "web/traceability.js",
         "web/workspace.js",
         "workflow.json",
         ":instructions",
@@ -60,5 +74,6 @@ py_library(
     deps = [
         "//yapnr:package",
         "//yapnr/viewer:notes_store",
+        "@rules_requirements_toolkit//:toolkit",
     ],
 )

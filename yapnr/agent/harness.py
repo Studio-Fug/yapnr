@@ -1,23 +1,34 @@
-"""Bounded, journaled continuation of an explicitly started main design session."""
+"""Journaled continuation of a design session until a user checkpoint or pause."""
 
 import hashlib
+import http.client
 import threading
 import time
 import uuid
 from urllib.parse import quote
 
-from yapnr.agent import workspace
+from yapnr.agent import requirements, reviews, workspace
 from yapnr.agent.workflow import query
 
 CHECKPOINTS = {"requirements_review", "complete", "blocked", "exhausted", "cancelled"}
 INSTRUCTIONS = (
     "Follow the installed yapnr engineering workflow. Read `yapnr workflow query` before acting, "
-    "and advance with genuine evidence through `yapnr workflow next`. Produce requirements and "
-    "risk analysis first. Publish and present their review artifacts before recording the "
+    "and advance with genuine evidence through `yapnr workflow next`. Produce YAML requirements and "
+    "risk analysis first in requirements/*.yaml using rules_requirements schemas. Keep user needs, "
+    "requirements, risks, mitigations, methods and all their traces in that model. Markdown is "
+    "derived prose. Use `yapnr requirements query`; publish reports as artifacts, link actual "
+    "native requirements/evidence/*.rr.yaml cases with `yapnr requirements link-evidence`, "
+    "and preserve their actual results, levels and requirements/DUT stamps. Publish and present "
+    "their review artifacts before recording the "
     "requirements_review transition; the harness pauses there for the designer. Do not start "
     "speculative design past that checkpoint until the designer replies. Reconcile user "
     "refinements and invalidate affected evidence. Continue authorized bounded implementation "
-    "until the next user-review checkpoint. Completion pauses for PCB review before fabrication; "
+    "until the next user-review checkpoint. During schematic capture, write atopile sources in "
+    "the article and run bounded incremental builds/export after meaningful valid edits. Export "
+    "the actual current netlist as graph.json; if multiple exports exist, point "
+    ".yapnr/workspace/design.json at the active project-relative graph path. Keep last valid "
+    "exports on build failure and report the actual failure. Never invent schematic connectivity. "
+    " Completion pauses for PCB review before fabrication; "
     "never upload, order or pay. Harness messages are automation, not user approval. Inspect "
     "existing jobs and artifacts before retrying interrupted work; do not duplicate workers."
 )
@@ -83,12 +94,14 @@ class Manager:
                 "epoch": uuid.uuid4().hex,
                 "status": "running",
                 "continuations": 0,
-                "max_continuations": 8,
-                "deadline": self.clock() + 1800,
-                "turn_limit_seconds": 600,
                 "armed_checkpoint": query(root)["state"] + ":" + str(query(root)["revision"]),
                 "started": self.clock(),
                 "last_request": initial_request,
+                "armed_reviews": [
+                    r["artifact"]
+                    for r in reviews.state(root)["items"].values()
+                    if r["status"] in ("pending_review", "feedback_pending")
+                ],
             }
             self.write(root, value)
             workspace.record(root, {"source": "harness-armed", "harness": value})
@@ -119,20 +132,36 @@ class Manager:
             )
         return self.remote(path, data, method)
 
-    def review_artifacts(self, root, state):
+    def review_artifacts(self, root, state, revision=None):
+        published = []
         if state == "requirements_review":
-            for file, title in [
-                ("requirements/manifest.md", "Requirements specification"),
-                ("requirements/risks.md", "Risk analysis"),
-            ]:
+            models = requirements.files(root)
+            sources = (
+                [(p, "Requirements model: " + p) for p in models]
+                if models
+                else [
+                    ("requirements/manifest.md", "Requirements specification"),
+                    ("requirements/risks.md", "Risk analysis"),
+                ]
+            )
+            for file, title in sources:
                 if (root / file).is_file():
-                    workspace.publish(root, file, "document", title)
+                    published.append(workspace.publish(root, file, "document", title)["id"])
+        elif state == "complete":
+            registry = workspace.read_json(
+                root / ".yapnr/workspace/artifacts.json", {"artifacts": []}
+            )
+            published = [a["id"] for a in registry["artifacts"] if a["kind"] == "board"]
+        if published:
+            reviews.request(root, published, state, revision)
 
     def tick(self, name):
         with self.mutex(name):
             root = self.project(name)
             value = read(root)
             if not value.get("enabled"):
+                return
+            if self.clock() < value.get("retry_after", 0):
                 return
             epoch, session = value["epoch"], value["session"]
             if value.get("workspace_identity") != identity(root):
@@ -150,11 +179,36 @@ class Manager:
                 if any(item.get("sessionID") == session for item in requests):
                     self.update(root, epoch, status="waiting_" + resource)
                     return  # Preserve the native pending request, including its tool call.
+            if value.get("status") in ("waiting_question", "waiting_permission"):
+                value.update(started=self.clock())
+                self.update(
+                    root,
+                    epoch,
+                    started=value["started"],
+                )
+                workspace.record(
+                    root, {"source": "harness-user-request-answered", "session": session}
+                )
+            pending_reviews = [
+                r
+                for r in reviews.state(root)["items"].values()
+                if r["status"] in ("pending_review", "feedback_pending")
+            ]
+            if pending_reviews and workflow["state"] not in CHECKPOINTS:
+                if busy and any(
+                    r["artifact"] not in value.get("armed_reviews", []) for r in pending_reviews
+                ):
+                    self.request(root, "/session/" + session + "/abort" + suffix, {})
+                if not busy or any(
+                    r["artifact"] not in value.get("armed_reviews", []) for r in pending_reviews
+                ):
+                    self.update(root, epoch, status="waiting_artifact_review")
+                    return
             stage = workflow["state"]
             if stage in CHECKPOINTS:
                 checkpoint = stage + ":" + str(workflow["revision"])
                 if value.get("checkpoint") != checkpoint:
-                    self.review_artifacts(root, stage)
+                    self.review_artifacts(root, stage, workflow["revision"])
                     workspace.record(
                         root,
                         {
@@ -181,26 +235,12 @@ class Manager:
                 return
             self.update(root, epoch, checkpoint=None)
             now = self.clock()
-            if now >= value["deadline"] or (
-                not busy and value["continuations"] >= value["max_continuations"]
-            ):
-                if busy:
-                    self.request(root, "/session/" + session + "/abort" + suffix, {})
-                self.update(root, epoch, enabled=False, status="budget_reached")
-                workspace.record(root, {"source": "harness-budget-reached", "session": session})
-                return
             messages = self.remote("/session/" + session + "/message" + suffix, None, None)
             if busy:
                 self.idle[name] = 0
-                latest_user = next(
-                    (m for m in reversed(messages) if m["info"]["role"] == "user"), None
-                )
-                started = latest_user["info"]["time"]["created"] / 1000 if latest_user else now
-                if now - started > value["turn_limit_seconds"]:
-                    self.request(root, "/session/" + session + "/abort" + suffix, {})
-                    self.update(root, epoch, enabled=False, status="turn_timeout")
-                else:
-                    self.update(root, epoch, status="running")
+                # A healthy runtime may execute many tools in a single long turn.
+                # Its tools retain their own deadlines; elapsed turn time is not a stall.
+                self.update(root, epoch, status="running")
                 return
             self.idle[name] = self.idle.get(name, 0) + 1
             if self.idle[name] < 2:
@@ -211,7 +251,7 @@ class Manager:
                 for part in m.get("parts", [])
             }
             if value.get("last_request") and value["last_request"] not in request_ids:
-                self.update(root, epoch, enabled=False, status="delivery_uncertain")
+                self.update(root, epoch, status="delivery_uncertain")
                 return  # Never blindly replay a possibly accepted model request.
             last_user = next((m for m in reversed(messages) if m["info"]["role"] == "user"), None)
             last_assistant = next(
@@ -226,8 +266,28 @@ class Manager:
                     >= last_user["info"]["time"]["created"]
                 )
             ):
-                self.update(root, epoch, enabled=False, status="model_error")
-                return
+                error_id = last_assistant["info"]["id"]
+                if value.get("last_model_error") != error_id:
+                    delay = min(300, max(30, value.get("retry_delay", 15) * 2))
+                    self.update(
+                        root,
+                        epoch,
+                        status="model_error",
+                        last_model_error=error_id,
+                        retry_after=now + delay,
+                        retry_delay=delay,
+                    )
+                    workspace.record(
+                        root,
+                        {
+                            "source": "harness-model-retry",
+                            "session": session,
+                            "message": error_id,
+                            "delay_seconds": delay,
+                        },
+                    )
+                    return
+
             if last_user and not last_user["parts"]:
                 return
             # Repair only abandoned tool calls: runtime idle twice, no user request,
@@ -305,7 +365,7 @@ class Manager:
             try:
                 self.request(root, "/session/" + session + "/prompt_async" + suffix, request)
             except Exception:
-                self.update(root, epoch, enabled=False, status="delivery_uncertain")
+                self.update(root, epoch, status="delivery_uncertain")
                 raise
             self.update(root, epoch, status="running")
             self.idle[name] = 0
@@ -315,7 +375,13 @@ class Manager:
             for name in self.names():
                 try:
                     self.tick(name)
-                except (OSError, ValueError, KeyError, TypeError):
+                except (OSError, http.client.HTTPException, ValueError, KeyError, TypeError):
                     root = self.project(name)
                     value = read(root)
-                    self.update(root, value.get("epoch"), enabled=False, status="connection_error")
+                    if value.get("enabled"):
+                        self.update(
+                            root,
+                            value.get("epoch"),
+                            status="connection_error",
+                            retry_after=self.clock() + 30,
+                        )

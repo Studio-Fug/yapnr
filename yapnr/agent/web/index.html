@@ -575,8 +575,128 @@
           font-size: 9px;
         }
       }
+      .artifact-review {
+        border: 1px solid var(--accent);
+        padding: 14px;
+        margin-bottom: 18px;
+      }
+      .artifact-review textarea {
+        display: block;
+        width: 100%;
+        min-height: 75px;
+        margin: 12px 0;
+      }
+      .artifact-review button {
+        margin: 4px;
+      }
+      .approve-artifact {
+        background: #22594c;
+        border-color: var(--accent);
+      }
+      .review-note {
+        border-top: 1px solid var(--line);
+        padding-top: 10px;
+        margin-top: 10px;
+      }
+      .trace-heading h2 {
+        margin-top: 0;
+      }
+      .trace-toolbar {
+        display: flex;
+        gap: 8px;
+        margin: 15px 0;
+      }
+      .trace-toolbar input {
+        flex: 1;
+      }
+      .trace-split {
+        display: grid;
+        grid-template-columns: minmax(180px, 28%) 1fr;
+        gap: 18px;
+      }
+      .trace-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        max-height: 65vh;
+        overflow: auto;
+      }
+      .trace-list button {
+        text-align: left;
+      }
+      .trace-list small {
+        display: block;
+        color: var(--muted);
+        margin-top: 5px;
+      }
+      .trace-detail {
+        min-width: 0;
+      }
+      .trace-detail h3 {
+        margin-top: 0;
+      }
+      .trace-detail pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .trace-detail section {
+        border-top: 1px solid var(--line);
+        margin-top: 14px;
+        padding-top: 8px;
+      }
+      .trace-detail section button {
+        display: block;
+        margin: 5px 0;
+      }
+      .trace-verdict {
+        display: inline-block;
+        border: 1px solid var(--accent);
+        padding: 4px 8px;
+      }
+      .trace-gap,
+      .trace-issues {
+        color: #e3bc72;
+      }
+      .trace-evidence {
+        padding: 10px;
+        border: 1px solid var(--line);
+        margin: 8px 0;
+      }
+      .trace-graph {
+        margin-top: 20px;
+      }
+      .trace-viewport {
+        height: 420px;
+        background: #f9fafb;
+        color: #18202a;
+        touch-action: none;
+        overflow: hidden;
+      }
+      .trace-viewport svg {
+        width: 100%;
+        height: 100%;
+      }
+      .trace-graph summary {
+        padding: 10px;
+        cursor: pointer;
+      }
+      @media (max-width: 850px) {
+        .trace-split {
+          grid-template-columns: 1fr;
+        }
+        .trace-list {
+          max-height: 220px;
+        }
+      }
+      .live-design { display: grid; grid-template-columns: minmax(220px, 35%) minmax(0, 1fr); height: 100%; gap: 12px; padding: 12px; }
+      .live-design section { min-width: 0; overflow: auto; }
+      .live-design pre { white-space: pre; overflow: auto; font-size: 12px; line-height: 1.5; }
+      .live-design select { width: 100%; }
+      .live-schematic { height: calc(100% - 90px); min-height: 300px; overflow: auto; }
+      .live-schematic svg { width: 100%; min-height: 300px; }
+      @media (max-width: 900px) { .live-design { grid-template-columns: 1fr; grid-template-rows: minmax(200px, 40%) 1fr; } }
     </style>
-    <script defer src="/yapnr/workspace.js"></script>
+    <script type="module" src="/yapnr/workspace.js"></script>
   </head>
   <body>
     <header id="top">
@@ -591,6 +711,7 @@
         ><button data-tab="artifacts">Artifacts</button
         ><button data-tab="scratchpad">Design document</button
         ><button data-tab="threads">Notes & threads</button
+        ><button data-tab="requirements">Requirements & risks</button
         ><button data-tab="activity">Workflow</button>
       </nav>
       <h2>Conversations</h2>

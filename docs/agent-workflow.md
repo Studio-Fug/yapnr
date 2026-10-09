@@ -34,6 +34,42 @@ OpenCode supplies sessions, provider authentication, model selection, streaming,
 tools, questions and permissions through its API; its web application is not
 embedded or overlaid.
 
+The **Requirements & risks** panel is a native traceability browser populated
+from `rules_requirements` YAML under `requirements/`. It shows user needs,
+requirements, mitigations, risks and methods, validation issues, source locations,
+trace links and the live graph. The model's descriptions/notes carry measurable
+thresholds, sources, assumptions and residual-risk decisions. Markdown may be
+published as a derived explanation; editing it does not change a YAML contract.
+Existing Markdown-only workspaces retain their legacy controller contract until
+migrated to YAML; migration is a recorded requirements revision, never approval.
+
+Verification artifacts remain in the workspace sidebar and open directly from
+an entity's evidence cases. Publish the report first, keep actual results in
+`requirements/evidence/*.rr.yaml` or JUnit XML, and name those targets/cases in
+`verified_by`/`validated_by`. Bind a native case to its report with:
+
+```sh
+yapnr workspace publish --artifact reports/rf-sim.json --kind report --title "RF simulation"
+yapnr requirements link-evidence --record requirements/evidence/rf.rr.yaml \
+  --report-artifact ARTIFACT_ID --target record:rf --case rf::return-loss
+```
+
+`yapnr requirements query` prints the current `requirements_sha256` and, when
+available, `dut_sha256` stamps. Actual result records must carry those identities,
+provided rigor, result, run/seed/tool provenance and report artifact hash. The
+link command preserves the recorded outcome. Failed, missing, stale or weak
+cases never become verified because a report was published. The packaged toolkit
+needs no additional runtime download or compile step.
+
+Request artifact review with `yapnr review request --artifact ID` (repeat for a
+bundle), `--stage` and `--revision`. Requested reviews show **Approve** and
+**Review Feedback**. The latter is disabled without unresolved canonical notes.
+Add feedback or a question, send the feedback cycle to the agent, discuss questions
+in chat, then explicitly mark notes addressed. New artifacts need fresh approval
+and retain unresolved feedback from superseded revisions. Requirements approval
+accepts the complete unchanged revision through a controller receipt; board
+approval never orders or uploads fabrication files.
+
 Background tools and reasoning roll up into a collapsed activity indicator per
 agent turn; expand it to inspect the preserved inputs, outputs and errors. The
 bottom workflow bar shows the controller's current stage, including review and
@@ -47,11 +83,14 @@ and permission requests also pause continuation. Automation never supplies user
 acceptance. A real review reply permits the agent to reconcile that decision and
 continue; focused inspection threads do not start the main design loop.
 
-Each explicit send/resume permits at most eight automatic continuation turns over
-30 minutes, with a ten-minute running-turn watchdog. Stop disables continuation
-and interrupts the active turn. Model/connection failures, uncertain delivery and
-budget exhaustion pause with a visible status; inspect the cause before using
-**Continue workflow**. Imported or moved workspaces require explicit resume.
+Each explicit send/resume enables automatic continuation until a user-review
+checkpoint or an explicit pause. There is no elapsed-turn, wall-clock or
+continuation-count cutoff. Individual tools and solver workers retain their own
+timeouts and campaign budgets. Stop disables continuation
+and interrupts the active turn. Connection failures reconnect automatically;
+provider failures retry with backoff. Uncertain delivery waits for its recorded delivery marker without
+replaying a possibly accepted request. All have visible status. Imported or moved
+workspaces require explicit resume.
 The harness records requests, interruptions and checkpoints in the workspace
 JSONL, preserves model selection, and avoids replaying uncertain paid requests.
 An expired tool call in an idle runtime is recorded as interrupted, preserving
@@ -344,3 +383,17 @@ assembly acceptance. A physical bench requirement remains open until measurement
 On inability to progress, retain the best artifact, failed/open requirements,
 fixup report, attempted engine repairs and exact resume conditions. Emit `<DONE>`
 only after final verification of every accepted requirement on one exact revision.
+
+### Live schematic capture
+
+Entering the schematic stage opens the engineering workspace with a live atopile
+source pane. The browser polls article sources and completed netlist exports every
+second, retaining source selection and the last valid schematic during partial
+writes or build errors. The native schematic fallback draws generic component/pin
+symbols and actual exported net connectivity; an attached engineering viewer
+continues to provide its full schematic and PCB views alongside the sources.
+Run bounded incremental atopile builds after meaningful valid source edits and
+export the actual current `graph.json`. When multiple exports exist, declare the
+active project-relative path in `.yapnr/workspace/design.json` as
+`{"graph": "build/current/graph.json"}`. The view does not simulate connectivity
+from incomplete source text or claim a build succeeded merely because text changed.

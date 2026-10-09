@@ -1,4 +1,7 @@
 /* Workspace-native UI. OpenCode supplies the runtime API, never the page shell. */
+import { mountDesign } from '/yapnr/design.js';
+import { mountTraceability } from '/yapnr/traceability.js';
+
 (() => {
   const shadow = document;
   const $ = id => document.getElementById(id);
@@ -80,22 +83,11 @@
     $('body').replaceChildren();
     $('body').hidden = true;
     $('experiment').hidden = false;
-    const url = state.data?.experiment_url;
-    if (!url) {
-      $('experiment').replaceChildren(
-        node('p', 'No running experiment viewer is attached to this project.')
-      );
-      return;
-    }
-    const embedded = new URL(url, location.href);
-    embedded.searchParams.set('workspace', '1');
-    let frame = $('experiment').querySelector('iframe');
-    if (!frame || frame.src !== embedded.href) {
-      frame = node('iframe');
-      frame.src = embedded.href;
-      frame.title = `${state.project} experiment`;
-      frame.addEventListener('load', () => (frame.dataset.loaded = '1'));
-      $('experiment').replaceChildren(frame);
+    const key = state.project + ':' + (state.data?.experiment_url || '');
+    if (state.designKey !== key || !$('experiment').querySelector('.live-design')) {
+      state.disposeDesign?.();
+      state.designKey = key;
+      state.disposeDesign = mountDesign($('experiment'), state.project, state.data?.experiment_url);
     }
   }
   async function setMain(id) {
@@ -167,6 +159,21 @@
               data.workflow.speculative ? ' · pending acceptance' : ''
             }`;
       renderWorkflow(data.workflow, data.harness);
+      const reviewKey = project + ':' + data.workflow.revision;
+      if (data.workflow.state === 'requirements_review' && state.reviewNotification !== reviewKey) {
+        state.reviewNotification = reviewKey;
+        state.tab = 'requirements';
+        state.active = null;
+        render();
+      }
+
+      const captureKey = project + ':' + data.workflow.revision;
+      if (data.workflow.state === 'schematic' && state.captureNotification !== captureKey) {
+        state.captureNotification = captureKey;
+        state.active = null;
+        switchView('experiment');
+      }
+
       $('recording').textContent = `Recording: ${data.recording}`;
       renderSidebar();
       if (!state.dirty && state.tab === 'scratchpad' && !state.active) {
@@ -449,8 +456,8 @@
       body.append(card);
     }
   }
-  async function review(text, artifact) {
-    const id = session();
+  async function review(text, artifact, main = false, attachments = []) {
+    const id = main ? state.main[state.project] || session() : session();
     if (!id) {
       say('Open an existing project chat before sending a review request.');
       return;
@@ -462,12 +469,113 @@
         session: id,
         text,
         artifact,
+        attachments,
         model: { providerID, modelID },
       });
       say('Sent to the agent for review.');
     } catch (e) {
       say(e.message);
     }
+  }
+  function reviewControls(container, items) {
+    const entries = items
+      .map(item => ({ item, review: state.data.reviews?.items[item.id] }))
+      .filter(x => x.review && x.review.status !== 'superseded');
+    if (!entries.length) return;
+    const panel = node('section', undefined, 'artifact-review'),
+      open = entries.flatMap(x => x.review.unresolved || []);
+    panel.append(
+      node('h3', 'Review requested'),
+      node(
+        'p',
+        entries.map(x => `${x.item.title}: ${x.review.status.replaceAll('_', ' ')}`).join(' · ')
+      )
+    );
+    const approve = button('Approve', async () => {
+      try {
+        await json(endpoint('approve'), { artifacts: entries.map(x => x.item.id) });
+        await refresh();
+        render();
+        if (
+          state.data.workflow.state === 'schematic' &&
+          state.data.workflow.accepted_revision === state.data.workflow.revision &&
+          state.main[state.project]
+        )
+          await json(endpoint('harness-resume'), { session: state.main[state.project] });
+        say('Approved this content revision.');
+      } catch (e) {
+        say(e.message);
+      }
+    });
+    approve.className = 'approve-artifact';
+    approve.disabled = !!open.length || entries.every(x => x.review.status === 'approved');
+    panel.append(approve);
+    const feedback = button('Review Feedback', async () => {
+      const notes = open.map(n => `${n.id} (${n.kind}): ${n.body}`).join('\n\n');
+      await review(
+        `Review the feedback on artifact(s) ${entries
+          .map(x => x.item.id)
+          .join(
+            ', '
+          )}.\n\n${notes}\n\nDiscuss all user questions in chat before proceeding; do not infer answers or acceptance. Update the YAML requirements/risk model or affected artifact, reconcile dependent evidence through the controller, publish the changed artifact and request a fresh review. Do not mark user questions resolved or approvals on the user's behalf.`,
+        entries[0].item.id,
+        true,
+        entries.flatMap(x => x.review.annotations || [])
+      );
+    });
+    feedback.disabled = !open.length;
+    panel.append(feedback);
+    for (const { item, review: record } of entries) {
+      for (const note of record.feedback || []) {
+        const card = node('div', undefined, 'review-note');
+        card.append(
+          node('strong', `${note.id} · ${note.kind} · ${note.status}`),
+          node('p', note.body)
+        );
+        if ((record.unresolved || []).some(n => n.id === note.id))
+          card.append(
+            button('Mark addressed', async () => {
+              try {
+                await json(endpoint('resolve-feedback'), {
+                  artifact: item.id,
+                  note: note.id,
+                  revision: note.rev,
+                });
+                await refresh();
+                render();
+              } catch (e) {
+                say(e.message);
+              }
+            })
+          );
+        panel.append(card);
+      }
+    }
+    const input = node('textarea');
+    input.placeholder = 'Add feedback or a question about this review';
+    input.setAttribute('aria-label', input.placeholder);
+    const question = node('input');
+    question.type = 'checkbox';
+    const label = node('label', 'This is a question to discuss in chat');
+    label.prepend(question);
+    panel.append(
+      input,
+      label,
+      button('Add review note', async () => {
+        try {
+          await json(endpoint('artifact-feedback'), {
+            artifact: entries[0].item.id,
+            text: input.value,
+            question: question.checked,
+          });
+          await refresh();
+          render();
+        } catch (e) {
+          say(e.message);
+        }
+      })
+    );
+    container.append(panel);
   }
   function render() {
     const body = $('body');
@@ -479,6 +587,7 @@
       artifacts: 'Artifacts',
       scratchpad: 'Design document',
       activity: 'Workflow',
+      requirements: 'Requirements & risk review',
       experiment: 'Experiment',
     }[state.tab];
     if (state.tab === 'experiment') {
@@ -486,6 +595,37 @@
       return;
     }
     $('experiment').hidden = true;
+    if (state.tab === 'requirements') {
+      const article = state.project;
+      state.active = null;
+      body.append(node('p', 'Loading requirements model…'));
+      json(endpoint('requirements'))
+        .then(data => {
+          if (state.tab === 'requirements' && state.project === article) {
+            mountTraceability(body, data, {
+              openArtifact: showArtifact,
+              ask: text => {
+                $('prompt').value = text;
+                $('prompt').focus();
+              },
+              select: selection => {
+                state.selection = selection;
+                $('selection-context').textContent = selection.ref;
+              },
+            });
+            const pending = state.data.artifacts.filter(
+              a =>
+                state.data.reviews?.items[a.id]?.stage === 'requirements_review' &&
+                state.data.reviews.items[a.id].status !== 'superseded'
+            );
+            const controls = node('div');
+            reviewControls(controls, pending);
+            body.prepend(controls);
+          }
+        })
+        .catch(e => say(e.message));
+      return;
+    }
     if (state.tab === 'threads') {
       renderThreads(body);
       return;
@@ -557,7 +697,13 @@
       const card = node('div', undefined, 'card');
       card.append(
         button(item.title, () => showArtifact(item)),
-        node('div', `${item.kind} · ${item.id.slice(0, 12)}`, 'muted')
+        node(
+          'div',
+          `${item.kind} · ${
+            state.data.reviews?.items[item.id]?.status || 'draft'
+          } · ${item.id.slice(0, 12)}`,
+          'muted'
+        )
       );
       body.append(card);
     }
@@ -578,6 +724,7 @@
       node('h2', item.title),
       node('div', item.id, 'muted')
     );
+    reviewControls(body, [item]);
     const view = node('div', undefined, 'view');
     body.append(view);
     const actions = node('div', undefined, 'actions');
@@ -1012,11 +1159,12 @@
       budget_reached: 'Continuation budget reached',
       waiting_question: 'Awaiting your answer',
       waiting_permission: 'Awaiting permission',
-      delivery_uncertain: 'Delivery uncertain · review before retrying',
-      model_error: 'Model error · review before retrying',
+      waiting_artifact_review: 'Awaiting artifact review',
+      delivery_uncertain: 'Awaiting delivery confirmation',
+      model_error: 'Provider error · retrying automatically',
       stopped: 'Automation stopped',
       turn_timeout: 'Agent turn timed out',
-      connection_error: 'Agent connection error',
+      connection_error: 'Agent connection error · reconnecting',
       resume_required: 'Imported workspace · continuation requires confirmation',
     };
     const budget = statuses[harness?.status] ? ' · ' + statuses[harness.status] : '';
@@ -1338,6 +1486,8 @@
     $('messages').replaceChildren();
     $('requests').replaceChildren();
     $('body').replaceChildren();
+    state.disposeDesign?.();
+    state.designKey = null;
     $('experiment').replaceChildren();
     $('experiment').hidden = true;
     $('project').value = name;
@@ -1346,7 +1496,11 @@
     await refreshThreads();
     const chats = state.threads?.threads.filter(t => t.kind === 'opencode') || [];
     if (!state.main[name] && chats.length === 1) await setMain(chats[0].id);
-    state.tab = state.data?.experiment_url ? 'experiment' : 'artifacts';
+    state.tab = state.data?.workflow.state === 'requirements_review'
+      ? 'requirements'
+      : state.data?.workflow.state === 'schematic' || state.data?.experiment_url
+        ? 'experiment'
+        : 'artifacts';
     const id = chats.find(t => t.id === wanted)?.id || state.main[name] || chats[0]?.id;
     if (id) await selectSession(id);
     else {

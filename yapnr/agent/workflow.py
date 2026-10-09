@@ -35,6 +35,11 @@ def local_file(root, name):
 
 
 def contract(root):
+    from yapnr.agent.requirements import hashes
+
+    models = hashes(root)
+    if models:
+        return {"models": models}
     return {
         name: digest(local_file(root, "requirements/" + name + ".md").read_bytes())
         for name in ("manifest", "risks")
@@ -89,7 +94,7 @@ def init(project, directive=""):
             return load(folder)
         if not (root / ".git").exists():
             subprocess.run(["git", "init", str(root)], check=True, capture_output=True, timeout=30)
-        initialized = initialize(root, directive)
+        initialize(root, directive)
         state = {
             "schema": "yapnr-workflow-state-v1",
             "state": machine()["initial"],
@@ -97,10 +102,7 @@ def init(project, directive=""):
             "revision": 0,
             "contract": None,
             "accepted_revision": None,
-            "bootstrap_contract": {
-                name: value if "requirements/" + name + ".md" in initialized["created"] else None
-                for name, value in contract(root).items()
-            },
+            "bootstrap_contract": contract(root),
             "requirements": [],
             "artifacts": [],
             "history": [],
@@ -214,7 +216,22 @@ def next_state(project, event, evidence):
                 or current == state["contract"]
             ):
                 raise ValueError("A user revision needs a reviewer and changed contract documents")
-            if submitting:
+            if "models" in current:
+                from rules_requirements.model import read_model
+                from rules_requirements.validate import validate
+
+                model, _ = read_model([str(root / p) for p in current["models"]], root=str(root))
+                if not model.user_needs or not model.risks or not model.mitigations:
+                    raise ValueError(
+                        "Capture user needs, risks and linked mitigations in YAML before review"
+                    )
+                if set(ids) != set(model.requirements):
+                    raise ValueError("Receipt IDs must exactly match the YAML requirement IDs")
+                if any(i.severity == "error" for i in validate(model)):
+                    raise ValueError("Resolve YAML model validation errors before review")
+                if submitting and current == state["bootstrap_contract"]:
+                    raise ValueError("Replace the bootstrap YAML model before review")
+            elif submitting:
                 # Untouched bootstrap templates cannot count as a captured contract.
                 if (
                     b"No requirements are approved by this template."
@@ -222,7 +239,7 @@ def next_state(project, event, evidence):
                 ):
                     raise ValueError("Replace the bootstrap requirements template before review")
                 if any(
-                    current[name] == state["bootstrap_contract"][name]
+                    current[name] == state["bootstrap_contract"].get(name)
                     for name in ("manifest", "risks")
                 ):
                     raise ValueError("Write both requirements and risk analysis before review")
@@ -236,8 +253,12 @@ def next_state(project, event, evidence):
             if state["state"] in ("blocked", "exhausted", "cancelled"):
                 state["resume_state"] = "requirements_review"
                 target = state["state"]
-            for name in ("manifest", "risks"):
-                snapshot(folder, local_file(root, "requirements/" + name + ".md").read_bytes())
+            for name in (
+                current["models"]
+                if "models" in current
+                else ("requirements/manifest.md", "requirements/risks.md")
+            ):
+                snapshot(folder, local_file(root, name).read_bytes())
         elif event == "user-accepted-requirements-specification":
             if (
                 receipt["source"] != "user"

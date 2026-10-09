@@ -1,2 +1,4 @@
 # Internal Starlark helpers for this repository's own BUILD files. The
 # downstream ruleset for other repositories lives in //bazel (PR8).
+
+exports_files(["rules_requirements.BUILD.bazel"])

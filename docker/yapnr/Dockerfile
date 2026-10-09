@@ -221,5 +221,8 @@ USER 1000:1000
 WORKDIR /project
 # No HEALTHCHECK: it would mark every `run` or `doctor` container unhealthy. The viewer's
 # compose service defines its own (docs/containers.md). The viewer and its port arrive in PR4a.
+COPY docker/yapnr/opencode-permissions.json /etc/yapnr/opencode.json
+ENV OPENCODE_CONFIG=/etc/yapnr/opencode.json
+
 ENTRYPOINT ["/usr/bin/tini", "--", "yapnr"]
 CMD ["doctor"]

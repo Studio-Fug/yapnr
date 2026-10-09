@@ -91,6 +91,15 @@ class WheelTest(unittest.TestCase):
             "yapnr/agent/workspace.py",
             "yapnr/agent/threads.py",
             "yapnr/agent/web.py",
+            "yapnr/agent/requirements.py",
+            "yapnr/agent/design.py",
+            "yapnr/agent/web/design.js",
+            "yapnr/agent/web/vendor/elk.bundled.js",
+            "yapnr/agent/reviews.py",
+            "yapnr/agent/harness.py",
+            "yapnr/agent/web/traceability.js",
+            "rules_requirements/model.py",
+            f"{self.dist_info}/licenses/rules_requirements/LICENSE",
             "yapnr/agent/web/workspace.js",
             "yapnr/agent/web/index.html",
             "yapnr/agent/web/scene.html",
@@ -104,7 +113,15 @@ class WheelTest(unittest.TestCase):
             self.assertIn(name, self.names)
         # Only the package and its metadata: no tests, tools or repository files.
         for name in self.names:
-            self.assertTrue(name.startswith(("yapnr/", self.dist_info + "/")), name)
+            self.assertTrue(
+                name.startswith(("yapnr/", "rules_requirements/", self.dist_info + "/")), name
+            )
+
+    def test_bundled_requirements_cli_entrypoint(self):
+        self.assertIn(
+            "rr = rules_requirements.cli:main",
+            self.zip.read(f"{self.dist_info}/entry_points.txt").decode(),
+        )
 
     def test_rf_package(self):
         """yapnr.rf with its native library (where the loader looks beside the package) and

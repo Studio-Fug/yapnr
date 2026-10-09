@@ -15,7 +15,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
-from yapnr.agent import harness, threads, workspace
+from yapnr.agent import design, harness, requirements, reviews, threads, workspace
+from yapnr.agent.cli import opencode_environment
 from yapnr.agent.workflow import init, query
 
 WEB = Path(__file__).with_name("web")
@@ -263,6 +264,7 @@ class Handler(BaseHTTPRequestHandler):
             "experiment_url": experiment,
             "workflow": workflow,
             "harness": harness.read(root),
+            "reviews": reviews.state(root),
             "recording": self.server.recorders[name].status,
         }
 
@@ -301,10 +303,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_bytes(
                     (WEB / "index.html").read_bytes(), "text/html; charset=utf-8"
                 )
-            if parsed.path == "/yapnr/workspace.js":
-                return self.send_bytes((WEB / "workspace.js").read_bytes(), "text/javascript")
+            if parsed.path in ("/yapnr/workspace.js", "/yapnr/traceability.js", "/yapnr/design.js"):
+                return self.send_bytes(
+                    (WEB / Path(parsed.path).name).read_bytes(), "text/javascript"
+                )
             vendor = re.fullmatch(
-                r"/yapnr/vendor/(three\.core\.js|three\.module\.js|OrbitControls\.js|LICENSE)",
+                r"/yapnr/vendor/(three\.core\.js|three\.module\.js|OrbitControls\.js|"
+                r"elk\.bundled\.js|elk-LICENSE\.md|elk-Apache-2\.0\.txt|LICENSE)",
                 parsed.path,
             )
             if vendor:
@@ -336,6 +341,12 @@ class Handler(BaseHTTPRequestHandler):
             state = re.fullmatch(r"/yapnr/api/project/([a-z0-9-]+)", parsed.path)
             if state:
                 return self.json(self.project_state(state[1]))
+            design_route = re.fullmatch(r"/yapnr/api/design/([a-z0-9-]+)", parsed.path)
+            if design_route:
+                return self.json(design.snapshot(self.server.project(design_route[1])))
+            requirements_route = re.fullmatch(r"/yapnr/api/requirements/([a-z0-9-]+)", parsed.path)
+            if requirements_route:
+                return self.json(requirements.review(self.server.project(requirements_route[1])))
             listing = re.fullmatch(r"/yapnr/api/threads/([a-z0-9-]+)", parsed.path)
             if listing:
                 return self.json(self.thread_state(listing[1]))
@@ -414,7 +425,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
         match = re.fullmatch(
             r"/yapnr/api/(scratchpad|annotation|review|thread|note|attach-note|main-thread|message|"
-            r"harness-resume|harness-stop)/([a-z0-9-]+)",
+            r"harness-resume|harness-stop|approve|artifact-feedback|resolve-feedback)/([a-z0-9-]+)",
             urlsplit(self.path).path,
         )
         if match is None:
@@ -427,6 +438,18 @@ class Handler(BaseHTTPRequestHandler):
             def remote(path, value=None):
                 return api(self.server.upstream, path, value)
 
+            if action == "artifact-feedback":
+                return self.json(
+                    reviews.feedback(
+                        root, data["artifact"], data["text"], data.get("question", False)
+                    )
+                )
+            if action == "resolve-feedback":
+                return self.json(
+                    reviews.resolve(root, data["artifact"], data["note"], data["revision"])
+                )
+            if action == "approve":
+                return self.json(reviews.approve(root, data["artifacts"]))
             if action == "harness-stop":
                 self.server.harness.stop(name, data["session"])
                 threads.session_info(remote, name, data["session"], self.server.directory(name))
@@ -500,6 +523,12 @@ class Handler(BaseHTTPRequestHandler):
                         "note": data.get("note", ""),
                     },
                 )
+                reviews.feedback(
+                    root,
+                    data["artifact"],
+                    data.get("note") or "Review the annotated view",
+                    annotation=item["id"],
+                )
                 workspace.record(root, {"source": "user-annotation", "artifact": item})
                 return self.json(item)
             session = data["session"]
@@ -533,8 +562,13 @@ class Handler(BaseHTTPRequestHandler):
                 prompt["model"] = previous["model"]
             if previous.get("agent"):
                 prompt["agent"] = previous["agent"]
-            if data.get("artifact"):
-                item, path = self.artifact(root, data["artifact"])
+            attachments = ([data["artifact"]] if data.get("artifact") else []) + data.get(
+                "attachments", []
+            )
+            if len(attachments) > 8:
+                raise ValueError("Review attachment budget exceeded")
+            for identifier in dict.fromkeys(attachments):
+                item, path = self.artifact(root, identifier)
                 mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
                 prompt["parts"].append(
                     {
@@ -683,6 +717,7 @@ def run(args):
         child = subprocess.Popen(
             ["opencode", "serve", "--hostname", "127.0.0.1", "--port", str(args.port + 1)],
             cwd=args.projects,
+            env=opencode_environment(),
         )
         upstream = "http://localhost:" + str(args.port + 1)
     experiments = {}

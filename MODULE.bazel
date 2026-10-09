@@ -104,3 +104,14 @@ atopile = use_extension("//bazel/atopile:extensions.bzl", "atopile")
 use_repo(atopile, "yapnr_atopile")
 
 register_toolchains("@yapnr_atopile//:toolchain")
+
+# Requirements review shares the authoritative rules_requirements model,
+# trace/evidence semantics and SVG renderer. Pure stdlib; no extra toolchains.
+http_archive(
+    name = "rules_requirements_toolkit",
+    build_file = "//tools/bazel:rules_requirements.BUILD.bazel",
+    sha256 = "69cc1de7bbfabfb8025d44a8dbec7c349ddb09600976c679c58eaa2b92e2f938",
+    strip_prefix = "rules_requirements-aabecadd6e8710a11e99ccb366e63d858d92f6c6",
+    type = "tar.gz",
+    urls = ["https://codeload.github.com/Studio-Fug/rules_requirements/tar.gz/aabecadd6e8710a11e99ccb366e63d858d92f6c6"],
+)

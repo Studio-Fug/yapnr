@@ -15,6 +15,7 @@ class HarnessTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         workflow.init(self.root, "Synthetic design")
+        (self.root / "requirements/model.yaml").unlink()  # Legacy project coverage.
         self.now = 1000.0
         self.status = {}
         self.questions = []
@@ -116,16 +117,24 @@ class HarnessTest(unittest.TestCase):
             self.manager.tick("article")
             self.assertEqual(self.calls, [])
 
-    def test_stop_and_budgets_are_persistent_and_never_change_controller(self):
+    def test_stop_is_persistent_and_never_changes_controller(self):
         self.manager.stop("article", "ses_test")
+        self.now += 86400
         self.tick()
         self.assertEqual(self.calls, [])
-        self.manager.arm("article", "ses_test", {"providerID": "test", "modelID": "fixture"})
-        self.now += 1801
-        self.tick()
-        self.assertEqual(self.calls, [])
-        self.assertEqual(harness.read(self.root)["status"], "budget_reached")
+        self.assertEqual(harness.read(self.root)["status"], "stopped")
         self.assertEqual(workflow.query(self.root)["state"], "requirements_capture")
+
+    def test_long_busy_turn_is_not_aborted_even_with_legacy_limits(self):
+        value = harness.read(self.root)
+        value.update(deadline=1001, turn_limit_seconds=600, max_continuations=8)
+        self.manager.write(self.root, value)
+        self.now += 86400
+        self.status = {"ses_test": {"type": "busy"}}
+        self.tick()
+        self.assertEqual(self.calls, [])
+        self.assertTrue(harness.read(self.root)["enabled"])
+        self.assertEqual(harness.read(self.root)["status"], "running")
 
     def test_missing_delivery_marker_pauses_instead_of_repeating_paid_request(self):
         self.manager.arm(
@@ -167,17 +176,35 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(repaired["state"]["input"]["command"], "yapnr workflow query")
         self.assertNotIn("output", repaired["state"])
 
-    def test_last_allowed_turn_finishes_before_kick_budget_pauses(self):
+    def test_continuations_continue_past_old_time_and_turn_limits(self):
         value = harness.read(self.root)
-        value.update(continuations=8)
+        value.update(continuations=8, max_continuations=8, deadline=1001)
         self.manager.write(self.root, value)
-        self.status = {"ses_test": {"type": "busy"}}
-        self.manager.tick("article")
-        self.assertEqual(self.calls, [])
-        self.assertEqual(harness.read(self.root)["status"], "running")
-        self.status = {}
+        self.now += 86400
         self.tick()
-        self.assertEqual(harness.read(self.root)["status"], "budget_reached")
+        self.assertEqual(len([p for p, _, _ in self.calls if "/prompt_async" in p]), 1)
+        self.assertEqual(harness.read(self.root)["continuations"], 9)
+        self.assertTrue(harness.read(self.root)["enabled"])
+
+    def test_provider_error_retries_with_backoff_without_disabling_harness(self):
+        self.messages.append(
+            {
+                "info": {
+                    "id": "msg_failed",
+                    "role": "assistant",
+                    "time": {"created": 950000},
+                    "error": {"name": "APIError"},
+                },
+                "parts": [],
+            }
+        )
+        self.tick()
+        self.assertEqual(self.calls, [])
+        self.assertTrue(harness.read(self.root)["enabled"])
+        self.assertEqual(harness.read(self.root)["status"], "model_error")
+        self.now += 31
+        self.tick()
+        self.assertEqual(len([p for p, _, _ in self.calls if "/prompt_async" in p]), 1)
 
     def test_imported_workspace_requires_explicit_resume(self):
         value = harness.read(self.root)
@@ -186,6 +213,17 @@ class HarnessTest(unittest.TestCase):
         self.tick()
         self.assertEqual(self.calls, [])
         self.assertEqual(harness.read(self.root)["status"], "resume_required")
+
+    def test_answering_request_resumes_without_a_duplicate_turn(self):
+        self.permissions = [{"sessionID": "ses_test", "id": "per_fixture"}]
+        self.tick()
+        self.now += 1801
+        self.permissions = []
+        self.status = {"ses_test": {"type": "busy"}}
+        self.manager.tick("article")
+        self.assertEqual(self.calls, [])
+        self.assertEqual(harness.read(self.root)["status"], "running")
+        self.assertEqual(harness.read(self.root)["started"], self.now)
 
     def test_two_managers_share_claim_and_uncertain_post_does_not_retry(self):
         other = harness.Manager(

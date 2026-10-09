@@ -61,6 +61,13 @@ def initialize(project, directive=""):
         )
         + "\n",
     }
+    if not (root / "requirements/manifest.md").exists() and not list(
+        (root / "requirements").glob("*.y*ml")
+    ):
+        templates["requirements/model.yaml"] = (
+            "project:\n  name: New design\nuser_needs: []\nrequirements: []\n"
+            "risks: []\nmitigations: []\ntest_methods: []\n"
+        )
     for name, content in templates.items():
         target = root / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -70,6 +77,7 @@ def initialize(project, directive=""):
             created.append(name)
         except FileExistsError:
             pass
+    (root / "requirements/evidence").mkdir(parents=True, exist_ok=True)
     for folder in ("design", "constraints", "experiments", "reports", "evidence"):
         (root / folder).mkdir(exist_ok=True)
     with (installed / "events.jsonl").open("a", encoding="utf-8") as f:
@@ -113,12 +121,33 @@ def chat_command(provider, executable, context, directive, model=""):
     return command
 
 
+def opencode_environment():
+    """Read bundled dependency packages without asking for external-directory access."""
+    from importlib.util import find_spec
+
+    environment = os.environ.copy()
+    config = json.loads(environment.get("OPENCODE_CONFIG_CONTENT", "{}"))
+    for name in ("yapnr", "rules_requirements"):
+        spec = find_spec(name)
+        if not spec or not spec.origin or "site-packages" not in Path(spec.origin).parts:
+            continue  # A source checkout is governed by its project permissions.
+        pattern = str(Path(spec.origin).parent) + "/*"
+        permission = config.setdefault("permission", {})
+        for key, value in (("external_directory", "allow"), ("edit", "deny")):
+            current = permission.get(key, {})
+            if isinstance(current, str):
+                current = {"*": current}
+            permission[key] = {**current, pattern: value}
+    environment["OPENCODE_CONFIG_CONTENT"] = json.dumps(config)
+    return environment
+
+
 def provider_environment(args):
     """Configure a compatible API using an environment reference, never a stored key."""
     endpoint = getattr(args, "base_url", "")
     model = getattr(args, "model", "")
     if not endpoint:
-        return None, model
+        return (opencode_environment() if args.provider == "opencode" else None), model
     if args.provider != "opencode":
         raise ValueError("--base-url requires --provider opencode")
     url = urlsplit(endpoint)
@@ -148,8 +177,10 @@ def provider_environment(args):
             }
         }
     }
-    environment = os.environ.copy()
-    environment["OPENCODE_CONFIG_CONTENT"] = json.dumps(config)
+    environment = opencode_environment()
+    existing = json.loads(environment["OPENCODE_CONFIG_CONTENT"])
+    existing.setdefault("provider", {}).update(config["provider"])
+    environment["OPENCODE_CONFIG_CONTENT"] = json.dumps(existing)
     return environment, "yapnr_endpoint/" + model
 
 

@@ -801,6 +801,128 @@ and run report. Link the evidence in the requirements YAML with an accurate
 partial/verified status. A nominal behavioral plot does not satisfy requirements
 that also demand tolerance corners, supplier-device behavior or bench tests.</p>
 </section>
+<section id="turnkey-assembly-review-and-vendor-handoff">
+<h3>Turnkey assembly review and vendor handoff<a class="headerlink" href="#turnkey-assembly-review-and-vendor-handoff" title="Link to this heading">¶</a></h3>
+<p>Use the existing vendor-specific fabrication/assembly pipeline; do not create
+ad-hoc Gerber, BOM or placement exporters. Build an assembly bundle under the
+selected vendor’s fabrication profile, with locked manufacturer/supplier parts:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>fab<span class="w"> </span>build<span class="w"> </span>design/board.kicad_pcb<span class="w"> </span>--vendor<span class="w"> </span>jlcpcb<span class="w"> </span>--assembly<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--parts-lock<span class="w"> </span>design/parts.lock<span class="w"> </span>--out<span class="w"> </span>reports/fab
+<span class="c1"># DIR is the actual bundle directory returned by fab build.</span>
+yapnr<span class="w"> </span>order<span class="w"> </span>stage<span class="w"> </span>--bundle<span class="w"> </span>DIR<span class="w"> </span>--vendor<span class="w"> </span>jlcpcb<span class="w"> </span>--assembly<span class="w"> </span>--dry-run
+yapnr<span class="w"> </span>workspace<span class="w"> </span>assembly<span class="w"> </span>--bundle<span class="w"> </span>DIR<span class="w"> </span>--board<span class="w"> </span>design/board.kicad_pcb
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">pcbway</span></code> for the other vendor. Current standard profiles cover JLCPCB
+four/six-layer boards and PCBWay four-layer boards; the PCBWay two-layer RF
+profile is a different stackup. A qualified standard two-layer bundle requires a supported,
+verified fabrication profile; do not substitute
+an unrelated profile to bypass checks. Bundle and board paths passed to <code class="docutils literal notranslate"><span class="pre">workspace</span> <span class="pre">assembly</span></code> are project-relative. This command verifies the bundle and complete
+archive, publishes immutable download artifacts, and requests a content-bound
+package review in the native <strong>Manufacturing</strong> tab. The existing workflow state
+remains authoritative; manufacturing handoff is an artifact review stage and
+does not replace electrical/bench verification or infer design completion.</p>
+<p>Discuss unresolved risks and user questions. Review all BOM rows, part sourcing,
+DNP/consigned items, placement/polarity, assembly sides, stock, price and lead time.
+After explicit package approval, the user can download Gerbers/drills, BOM, CPL,
+instructions and the complete assembly archive and continue on the vendor’s
+assembly quote page. Changed board or requirement revisions invalidate handoff;
+rebuild and request a new review. Preserve any prototype-only verification limits.
+Package approval authorizes this local handoff, not an order or a payment.</p>
+<p>The user uploads the package, checks the vendor’s actual placement preview and
+part matching, confirms the quote and completes checkout. Archive the resulting
+quote/order receipt as a workspace artifact and link it into manufacturing
+traceability. Vendor substitutions or board edits require renewed engineering
+checks and package review. Agents do not upload, call vendor APIs, open vendor
+pages on the user’s behalf, order or pay.</p>
+<p>The Manufacturing tab also discovers already-published full package ZIPs under
+<code class="docutils literal notranslate"><span class="pre">manufacturing/</span></code>, native <code class="docutils literal notranslate"><span class="pre">*-bundle.zip</span></code> artifacts, or artifacts marked with
+<code class="docutils literal notranslate"><span class="pre">metadata.manufacturing_package:</span> <span class="pre">true</span></code>. Gerber-only archives remain downloads.
+It checks the immutable archive, manifest members and hashes, source board and
+requirements binding before enabling preparation. Users choose JLCPCB or PCBWay,
+quantity and finish in the GUI, inspect the BOM/CPL and published Gerber previews,
+and prepare supplier files locally without a model turn. Native checked bundles
+keep their recorded supplier/settings; rebuild to change those settings.</p>
+<p>Existing prototype exports can produce a <strong>prototype quote packet</strong>, clearly
+marked as unqualified for vendor DFM, component matching and rotations. This
+uses the existing vendor BOM/CPL exporters and preserves the original Gerbers;
+it does not manufacture a passing fabrication-profile check. Approval is for
+file handoff for quoting, with physical verification still open. Through-hole
+parts are separate by default; the user may request them in vendor assembly,
+subject to service and pricing confirmation in the actual quote.</p>
+<p>For new prototype exports, <code class="docutils literal notranslate"><span class="pre">manifest.json</span></code> uses schema
+<code class="docutils literal notranslate"><span class="pre">yapnr-prototype-manufacturing-v1</span></code>, <code class="docutils literal notranslate"><span class="pre">files</span></code> as a member-name-to-SHA256 map,
+<code class="docutils literal notranslate"><span class="pre">board_sha256</span></code>, <code class="docutils literal notranslate"><span class="pre">requirements_sha256</span></code> (SHA256 of the canonical workspace
+requirements hash map), and <code class="docutils literal notranslate"><span class="pre">assembly.full_bom</span></code>/<code class="docutils literal notranslate"><span class="pre">assembly.cpl</span></code> member paths.
+Include exactly one matching <code class="docutils literal notranslate"><span class="pre">cad/*.kicad_pcb</span></code>, <code class="docutils literal notranslate"><span class="pre">settings.json</span></code>,
+<code class="docutils literal notranslate"><span class="pre">checks/drc.json</span></code>, <code class="docutils literal notranslate"><span class="pre">README.md</span></code>, the complete BOM and placement CSV, and
+<code class="docutils literal notranslate"><span class="pre">fabrication/</span></code> exports. The complete BOM columns include Reference, Value,
+Manufacturer, MPN, LCSC, Footprint, Mount and Assembly. Publish the source
+board too. Published Gerber preview images in the same experiment are shown
+alongside the package. Legacy prototype packages remain discoverable.</p>
+</section>
+<section id="automatic-pcbway-file-attachment">
+<h3>Automatic PCBWay file attachment<a class="headerlink" href="#automatic-pcbway-file-attachment" title="Link to this heading">¶</a></h3>
+<p>For a newly prepared PCBWay packet, the reviewed downloads include a
+<strong>PCBWay upload package</strong>. It retains the checked Gerber bytes and converts the
+existing vendor BOM/CPL into the filenames/columns used by PCBWay’s official
+KiCad plugin. After approval, <strong>Upload files &amp; open PCBWay quote</strong> sends that
+archive to the official handoff endpoint and opens its returned quote link.
+This separate human click authorizes file transfer; preparing or approving
+files alone never uploads them. No account cookies or payment operations are
+used. Verify quantity, finish, assembly, part matching and rotations on the
+vendor page: this endpoint accepts geometry and files, not all order settings.
+The receipt records the exact artifact/hash. Duplicate uploads are guarded,
+confirmed uploads reuse their receipt, and failures never retry automatically.</p>
+<p>JLCPCB file attachment is unavailable without approved partner API access. Its
+button retains the manual quote/download flow rather than claiming files were
+attached. This is a vendor integration prerequisite, not an artifact approval.
+Agents continue to dry-run ordering and do not call upload endpoints in the
+engineering loop. Checkout remains the user’s action.</p>
+<p>Protocol references: <a class="reference external" href="https://github.com/pcbway/PCBWay-Plug-in-for-Kicad">PCBWay’s official KiCad plugin</a>
+and <a class="reference external" href="https://jlcpcb.com/help/article/jlcpcb-online-api-available-now">JLCPCB API access</a>.</p>
+</section>
+<section id="assembly-house-stock-and-quantity-checks">
+<h3>Assembly-house stock and quantity checks<a class="headerlink" href="#assembly-house-stock-and-quantity-checks" title="Link to this heading">¶</a></h3>
+<p>Capture the intended board quantity and assembly house during requirements/part
+selection. Check candidates before locking parts and the final BOM before handoff:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>picker<span class="w"> </span>availability<span class="w"> </span>--vendor<span class="w"> </span>jlcpcb<span class="w"> </span>--quantity<span class="w"> </span><span class="m">5</span><span class="w"> </span>--bom<span class="w"> </span>assembly/full-bom.csv<span class="w"> </span>-o<span class="w"> </span>reports/assembly-stock.json
+yapnr<span class="w"> </span>picker<span class="w"> </span>availability<span class="w"> </span>--vendor<span class="w"> </span>jlcpcb<span class="w"> </span>--quantity<span class="w"> </span><span class="m">20</span><span class="w"> </span>--lcsc<span class="w"> </span>C12345<span class="w"> </span>--mpn<span class="w"> </span>VERIFIED-MPN<span class="w"> </span>-o<span class="w"> </span>reports/candidate-stock.json
+yapnr<span class="w"> </span>picker<span class="w"> </span>availability<span class="w"> </span>--vendor<span class="w"> </span>jlcpcb<span class="w"> </span>--quantity<span class="w"> </span><span class="m">5</span><span class="w"> </span>--bom<span class="w"> </span>assembly/full-bom.csv<span class="w"> </span>--snapshot<span class="w"> </span>reports/assembly-stock.json
+</pre></div>
+</div>
+<p>For a single selection, quantity means total required units. For a BOM it means
+boards; repeated designators using one part are aggregated. Use a complete BOM
+with explicit MPN and LCSC identities; the minimal JLC vendor BOM omits MPNs and
+cannot verify identity by itself. PCBWay supplier CSVs with MPNs are also accepted.
+Through-hole/separate assembly is excluded unless <code class="docutils literal notranslate"><span class="pre">--include-through-hole</span></code> is set.
+Exit 2 means shortage, unknown or supplier confirmation required; it is not a pass.</p>
+<p>JLCPCB screening reads its public assembly catalog using the protocol documented
+by <a class="reference external" href="https://github.com/yaqwsx/jlcparts">jlcparts</a>. It compares demand to the smaller
+of listed stock and nonnegative available-to-order quantity, and screens against
+<code class="docutils literal notranslate"><span class="pre">max(demand</span> <span class="pre">+</span> <span class="pre">lossNumber,</span> <span class="pre">leastPatchNumber,</span> <span class="pre">minPurchaseNum)</span></code>. These are declared
+supplier fields, not an assertion that the public catalog reproduces every quote
+rule. The vendor quote must confirm actual allowances, options and stock.
+Incomplete rules, mismatched identities and network failures remain unknown.
+Saved reports contain time-stamped inventory fields, their digest, source and
+quantity; signed image links and temporary supplier credentials are discarded.
+Snapshot replay requires the same BOM, supplier and quantity and makes no network
+requests. Reproducibility preserves old facts; it does not make old stock current.</p>
+<p><code class="docutils literal notranslate"><span class="pre">required_quantity</span></code> in picker POST queries filters insufficient/unknown catalog
+stock before candidate truncation. This is a catalog hint filter, not assembly
+qualification. Do not reuse JLC/LCSC counts to qualify PCBWay. PCBWay
+<a class="reference external" href="https://www.pcbway.com/pcb_prototype/Electronic_Components.html">describes sourcing through multiple distributors</a>;
+without a verified inventory service its report explicitly requires supplier
+confirmation. No quote or order is created by an inventory check.</p>
+<p>In Manufacturing, <strong>Check assembly availability</strong> uses the selected package,
+supplier, quantity and through-hole choice. The table shows demand, listed and
+orderable stock, allowance/minimum screening and per-part reasons. Evidence is
+published as an artifact linked to the immutable source package and board/contract
+hashes. Changing settings selects different evidence; checks older than one hour
+are labeled historical and require refresh. The packet remains downloadable for
+supplier discussion even when sourcing is unresolved; file review is not approval
+to order unavailable parts.</p>
+</section>
 </section>
 </section>
 
@@ -877,6 +999,9 @@ that also demand tolerance corners, supplier-device behavior or bench tests.</p>
 <li><a class="reference internal" href="#engineering-workbench">Engineering workbench</a><ul>
 <li><a class="reference internal" href="#record-experiments-and-provenance">Record experiments and provenance</a></li>
 <li><a class="reference internal" href="#circuit-simulation">Circuit simulation</a></li>
+<li><a class="reference internal" href="#turnkey-assembly-review-and-vendor-handoff">Turnkey assembly review and vendor handoff</a></li>
+<li><a class="reference internal" href="#automatic-pcbway-file-attachment">Automatic PCBWay file attachment</a></li>
+<li><a class="reference internal" href="#assembly-house-stock-and-quantity-checks">Assembly-house stock and quantity checks</a></li>
 </ul>
 </li>
 </ul>

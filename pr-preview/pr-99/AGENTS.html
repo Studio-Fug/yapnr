@@ -416,7 +416,18 @@ Atopile authentication or call its hosted component service. Retain discovered
 responses, selected assets and locks in the article; replay with <code class="docutils literal notranslate"><span class="pre">--offline</span></code> or
 <code class="docutils literal notranslate"><span class="pre">--frozen</span></code>. Report public supplier failures as network/data failures, with no
 Atopile login remedy. Lock selected catalog parts and footprints. Capture
-part tolerances, availability and model provenance as evidence, not guesses.</p>
+part tolerances, availability and model provenance as evidence, not guesses.
+For turnkey assembly, record the selected assembly house and intended board
+quantity. Before locking selections, run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">picker</span> <span class="pre">availability</span></code> for the
+complete BOM or individual LCSC/MPN candidates at the required unit quantity.
+Aggregate repeated parts, include declared attrition/minimum quantities and retain
+the inventory report as evidence. A catalog <code class="docutils literal notranslate"><span class="pre">stock</span></code> field is only a discovery hint;
+use <code class="docutils literal notranslate"><span class="pre">required_quantity</span></code> in picker queries when demand is known. Shortage or unknown
+results require another verified selection or an explicit unresolved sourcing
+risk. Recheck the exact final BOM before vendor handoff. PCBWay requires its own
+sourcing confirmation; JLC/LCSC availability does not establish PCBWay stock.
+Inventory snapshots are historical evidence, not reservations. Changes in supplier,
+board quantity or BOM require a new check; never silently substitute parts.</p>
 <p>Record fabrication rules, placement intent, differential-pair coupling, total
 uncoupled-length limits, length matching, current capacity and reference planes in
 machine-consumable constraints. Do not reinterpret a total route limit as a per-run
@@ -537,8 +548,13 @@ views or recorded accepted events with the same viewport/configuration; label sy
 native evidence and never invent intermediate geometry or validation. If the feature has no
 meaningful visual behavior, explain why an animation is not applicable.</p></li>
 <li><p><strong>Ordering is staging only, and agents only dry-run it.</strong> Agents run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code> only
-with <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>. They never upload a file to a vendor or any third-party service, never call a
-vendor API, and never open a vendor page on a human’s behalf. Paying, confirming an order,
+with <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>. They never upload a file to a vendor or any third-party service, never call an
+ordering/upload/payment vendor API, and never open a vendor page on a human’s behalf.
+Read-only public catalog/inventory queries are permitted for sourcing checks;
+send only individual part identities, never a board, BOM file or conversation. The user-operated
+Manufacturing button may upload an explicitly approved PCBWay packet through
+its official plugin handoff, after a separate user click. Agents never click
+that button or invoke its upload endpoint during design or validation. Paying, confirming an order,
 accounts and terms belong to the human on the vendor’s page
 (<a class="reference internal" href="docs/fab-and-ordering.html"><span class="std std-doc">docs/fab-and-ordering.md</span></a>).</p></li>
 </ul>
@@ -597,6 +613,13 @@ and publish their plots inline with linked run reports. Mixed analog/digital
 coupling is allowed when its assumptions are explicit. See the circuit simulation
 section in <code class="docutils literal notranslate"><span class="pre">docs/agent-workflow.md</span></code>; behavioral surrogate models do not establish
 supplier-device or bench acceptance.</p>
+<p>For turnkey assembly, reuse <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">build</span> <span class="pre">--assembly</span></code> and
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">--dry-run</span></code>, then register the checked bundle with
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">workspace</span> <span class="pre">assembly</span> <span class="pre">--bundle</span> <span class="pre">DIR</span> <span class="pre">--board</span> <span class="pre">BOARD</span></code>. Present the native
+Manufacturing tab for package approval and human vendor handoff. Keep bench
+checks open until real evidence exists; never infer approval, upload files, open
+vendor pages, order or pay. See the turnkey assembly section of
+<code class="docutils literal notranslate"><span class="pre">docs/agent-workflow.md</span></code>.</p>
 </section>
 </section>
 </section>

@@ -493,6 +493,7 @@ turn the line by 180°, which reverses the order on the board.
 | `rot`      | Every member's rotation in the line's frame (0/90/180/270, default 0).                   |
 | `edge`     | `none` (default) or an edge: a soft pull of the whole line toward it.                    |
 | `reason`   | Free text for reports.                                                                   |
+| `allow_reorder` | Optional boolean, default false. Members may exchange line slots and combine a slot permutation with a common half-turn; spacing and pin identities stay fixed. |
 
 ```yaml
 line_group:
@@ -510,6 +511,16 @@ placement starts. A soft `group` pulls the whole line. Members stay on the top
 side and carry no plane-access intents. The line occupies the sides its members
 occupy: a line of SMD parts may sit above a bottom-side part, and a drilled
 member reserves both sides of the whole line.
+
+With `allow_reorder: true`, bounded swaps and common half-turns after placement prefer
+fewer straight-line differential-pair crossings, then less pad wirelength. A reversal
+combined with a half-turn can turn every member's pads toward the correct endpoint
+without exchanging its board slot. No candidate may introduce or worsen a hard
+placement finding. This is a placement proxy; routed finalists still decide
+quality. Lines carrying member satellites are currently left in their declared order.
+`PNR_LINE_REORDER=1` opts inferred series-resistor lines into this behavior; authored
+ordered lines are unchanged. The ladder runner enables `--line-reorder` by default;
+use `--no-line-reorder` (campaign `line_reorder = false`) to disable it.
 
 ### `region` — confine parts to an area (hard, or soft on request)
 
@@ -1008,6 +1019,29 @@ length_match:
   that leaves such a pair as legs or off the gap after one that does not, and routes up
   to two more candidates when every finalist leaves a connection open or such a pair
   flawed.
+
+
+  The regression runner enables `--pair-access` by default (`PNR_PAIR_ACCESS=1`, with
+  `board.route_pairs: coupled`) requires a coupled result. It first tries a shared
+  surface route, then jointly chooses legal through-via sites and a coupled trunk
+  on another permitted layer. Each endpoint can choose a different via orientation;
+  polarity is preserved and skew compensation measures the whole run, including
+  surface accesses and barrels. Longer coupled surface approaches can reach free
+  via sites without charging their coupled stretches as fanout. Existing copper,
+  pad keepaways, hole spacing and layer restrictions remain obstacles. Independent
+  fallback legs remain diagnostic copper and count as unresolved in placement
+  selection. A read-only saved-board coupling audit gates the runner alongside
+  native KiCad DRC. `PNR_PAIR_ACCESS_SECONDS` bounds each pair search (default 30);
+  timeout reports the stage and failed geometry checks rather than claiming that
+  congestion is proven. The initial implementation supports two terminals per
+  polarity and paired endpoint accesses, not arbitrary branches or mid-trunk
+  transitions. The two USB cases at seeds 0 and 1 pass under legacy fabrication:
+  all eight declared pair segments are coupled, uncoupled copper is at most
+  1.522 mm per leg against the unchanged 2 mm limit, and native DRC has no opens
+  or violations. The control also passes DRC, demonstrating why coupling needs
+  its own gate. Use `--no-pair-access` or campaign `pair_access = false` for the
+  independent-leg control. Wider ladder coverage beyond the two USB cases remains
+  to be measured.
 - **`length_match`** — a group of nets whose routed lengths must agree within
   `tolerance_mm` or `tolerance_ps` (not both); the quality pass reports the group
   **spread** and flags it if it exceeds the tolerance.
@@ -1070,6 +1104,25 @@ diff_pair:
   - { name: usb, p: USB_DP, n: USB_DM, width_mm: 0.2, gap_mm: 0.15, skew_ps: 2.0 }
 tuning: { gap_mm: 0.3, amplitude_max_mm: 1.0, style: serpentine }
 ```
+
+The regression runner enables free-space window search by default;
+`--no-tune-window-search` (campaign `tune_window_search = false`) disables it.
+Outside the runner, `PNR_TUNE_WINDOW_SEARCH=1`
+(`--tune-window-search`) searches off-center sites and split bumps in the coupled
+solver, including compact orthogonal serpentines, under the existing exact geometry
+and uncoupled-length checks.
+
+`tuning: { sequential: true, sequential_max_added_mm: 30 }`, or
+`PNR_TUNE_SEQUENTIAL=1` (`--tune-sequential`), enables transactional recovery across
+matched sets. It displaces nearby movable grid copper, then reconciles all sets;
+previously passing sets must remain passing. Search stops after eight accepted rounds,
+96 trials, or the total added-length limit (100 mm unless specified). Failed trials
+restore tracks, vias, grid routes and tuning records. Retained block copper, block
+ports and coupled routes without grid paths are not moved. Blockers with an explicit
+uncoupled-length contract are also left alone. Reports include moves, trials,
+immovable members, total added length and the stop reason. A profiling span named
+`length_tuning_sequential` measures the recovery. Sequential recovery remains
+opt-in and needs broader ladder A/B and native DRC validation before a default change.
 
 The quality report ships in the fab bundle as `quality.txt`. Its diff-pair /
 length-match checks are **advisory** by default (reported, not enforced); set

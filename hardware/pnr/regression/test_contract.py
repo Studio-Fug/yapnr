@@ -331,6 +331,16 @@ BOARD = """(kicad_pcb (version 20260206)
 
 
 class RunnerContract(unittest.TestCase):
+    def test_usb_recovery_defaults_on_and_can_be_disabled(self):
+        for key in ("pair_access", "line_reorder", "tune_window_search"):
+            with self.subTest(option=key):
+                flag = key.replace("_", "-")
+                self.assertTrue(getattr(parser().parse_args(["--out", "unused"]), key))
+                self.assertTrue(getattr(parser().parse_args(["--out", "unused", "--" + flag]), key))
+                self.assertFalse(
+                    getattr(parser().parse_args(["--out", "unused", "--no-" + flag]), key)
+                )
+
     def test_trace_is_opt_in(self):
         self.assertFalse(parser().parse_args(["--out", "x"]).trace)
         self.assertTrue(parser().parse_args(["--out", "x", "--trace"]).trace)

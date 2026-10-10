@@ -112,7 +112,7 @@ export function mountManufacturing(container, {project, approve, review, artifac
           panel.append(el('p', 'Supplier/settings are bound to this qualified package. Rebuild it to change them.'));
         }
         panel.append(field('Supplier', vendor), field('Requested PCB quantity', quantity), field('Requested finish', finish));
-        const throughHole = el('input'); throughHole.type = 'checkbox'; throughHole.checked = draft.throughHole;
+        const throughHole = el('input'); throughHole.type = 'checkbox'; throughHole.checked = candidate.kind !== 'qualified' && draft.throughHole;
         throughHole.onchange = () => {draft.throughHole = throughHole.checked; showStock();};
         if (candidate.kind !== 'qualified') panel.append(field('Request vendor through-hole assembly (e.g. headers), subject to quote confirmation', throughHole));
         panel.append(el('p', 'The vendor confirms available options, quantity, stock and price. Prototype files have pending DFM/rotation checks; review these on the vendor site. Separate THT/hand assembly is listed in the complete BOM and notes.'));

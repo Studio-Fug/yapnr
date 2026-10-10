@@ -53,7 +53,7 @@ RUN set -eux; \
     esac; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl zstd git; \
+    apt-get install -y --no-install-recommends ca-certificates curl zstd; \
     name="cpython-${PYTHON_VERSION}%2B${PBS_RELEASE}-${triple}-pgo%2Blto-full.tar.zst"; \
     curl -fsSL --retry 3 -o /tmp/pbs.tar.zst \
       "https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_RELEASE}/${name}"; \
@@ -73,11 +73,12 @@ ARG PBS_RELEASE
 
 USER root
 
+# Project initialization and the agent's source history need Git in the runtime.
 # General circuit simulation as well as the SI runner's shared-library backend.
 # Pin the Ubuntu package; retain its copyright/source metadata in the image.
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ngspice=42+ds-3build1; \
+    apt-get install -y --no-install-recommends git ngspice=42+ds-3build1; \
     rm -rf /var/lib/apt/lists/*; \
     mkdir -p /opt/yapnr/lib; \
     lib="$(dpkg -L libngspice0 | sed -n '/\/libngspice.so.0$/p')"; \

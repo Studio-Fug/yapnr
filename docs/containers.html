@@ -3,9 +3,9 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="The live viewer" href="viewer.html"><link rel="prev" title="yapnr documentation" href="index.html">
-        <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
-        <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Design a PCB with an agent" href="agent-workflow.html"><link rel="prev" title="yapnr documentation" href="index.html">
+        <link rel="prefetch" href="../static/yapnr-logo-primary-light.svg" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-primary-dark.svg" as="image">
 
     <link rel="shortcut icon" href="../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
         <title>Container images - yapnr documentation</title>
@@ -14,7 +14,8 @@
     <link rel="stylesheet" type="text/css" href="../static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=ad564152" />
+    <link rel="stylesheet" type="text/css" href="../static/fonts/fonts.css?v=eeaf125c" />
+    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=2fd37b7c" />
     
     
 
@@ -199,8 +200,8 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="../static/yapnr-logo-256.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-light.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="../static/yapnr-logo-primary-light.svg" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-primary-dark.svg" alt="Dark Logo"/>
   </div>
   
   
@@ -213,6 +214,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul class="current">
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agent-workflow.html">Design a PCB with an agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="frontends/atopile.html">The atopile toolchain</a></li>
 <li class="toctree-l1"><a class="reference internal" href="part-cache.html">The part cache</a></li>
@@ -253,7 +255,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../DEVELOPERS.html">Developing yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contributing to yapnr</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../WORKLOG.html">Worklog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../THIRD_PARTY.html">Third-party material</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../README.html">yapnr</a></li>
@@ -399,6 +401,13 @@ counts rebuilds of one KiCad version, and such a tag is never overwritten), plus
 <code class="docutils literal notranslate"><span class="pre">10.0.6</span></code> and <code class="docutils literal notranslate"><span class="pre">10.0</span></code>. <code class="docutils literal notranslate"><span class="pre">10.0.6-1-src</span></code> holds the source packages of that KiCad build (see
 <a class="reference internal" href="#licenses-and-source">Licenses and source</a>). The base is rebuilt under a new <code class="docutils literal notranslate"><span class="pre">N</span></code> for Ubuntu
 security updates (see <a class="reference internal" href="releases.html#maintaining-the-images"><span class="std std-ref">releases</span></a>).</p>
+</section>
+<section id="agent-directed-design">
+<h2>Agent-directed design<a class="headerlink" href="#agent-directed-design" title="Link to this heading">¶</a></h2>
+<p>Run <code class="docutils literal notranslate"><span class="pre">agent</span> <span class="pre">chat</span></code> in an interactive container to use the bundled Codex CLI.
+Engineering guidance ships in the wheel; see <a class="reference internal" href="agent-workflow.html"><span class="std std-doc">the workflow</span></a>
+for authentication, mounts, resource limits, resume and validation gates.
+The existing viewer Ask chat remains read-only.</p>
 </section>
 <section id="quick-start">
 <h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">¶</a></h2>
@@ -703,12 +712,12 @@ read-only root file system; and the notices, license texts and recorded Ubuntu s
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="viewer.html">
+          <a class="next-page" href="agent-workflow.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">The live viewer</div>
+                <div class="title">Design a PCB with an agent</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -755,6 +764,7 @@ read-only root file system; and the notices, license texts and recorded Ubuntu s
             <ul>
 <li><a class="reference internal" href="#">Container images</a><ul>
 <li><a class="reference internal" href="#tags">Tags</a></li>
+<li><a class="reference internal" href="#agent-directed-design">Agent-directed design</a></li>
 <li><a class="reference internal" href="#quick-start">Quick start</a><ul>
 <li><a class="reference internal" href="#working-on-a-project">Working on a project</a></li>
 <li><a class="reference internal" href="#the-viewer-planned-pr4a">The viewer (planned, PR4a)</a></li>

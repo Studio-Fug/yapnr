@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="yapnr" href="README.html"><link rel="prev" title="Worklog" href="WORKLOG.html">
-        <link rel="prefetch" href="static/yapnr-logo-256.png" as="image">
-        <link rel="prefetch" href="static/yapnr-logo-light.png" as="image">
+        <link rel="prefetch" href="static/yapnr-logo-primary-light.svg" as="image">
+        <link rel="prefetch" href="static/yapnr-logo-primary-dark.svg" as="image">
 
     <link rel="shortcut icon" href="static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
         <title>Third-party material - yapnr documentation</title>
@@ -14,7 +14,8 @@
     <link rel="stylesheet" type="text/css" href="static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="static/custom.css?v=ad564152" />
+    <link rel="stylesheet" type="text/css" href="static/fonts/fonts.css?v=eeaf125c" />
+    <link rel="stylesheet" type="text/css" href="static/custom.css?v=2fd37b7c" />
     
     
 
@@ -199,8 +200,8 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="docs/index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="static/yapnr-logo-256.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="static/yapnr-logo-light.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="static/yapnr-logo-primary-light.svg" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="static/yapnr-logo-primary-dark.svg" alt="Dark Logo"/>
   </div>
   
   
@@ -213,6 +214,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/agent-workflow.html">Design a PCB with an agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/frontends/atopile.html">The atopile toolchain</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
@@ -253,7 +255,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="DEVELOPERS.html">Developing yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="CONTRIBUTING.html">Contributing to yapnr</a></li>
-<li class="toctree-l1"><a class="reference internal" href="AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="WORKLOG.html">Worklog</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Third-party material</a></li>
 <li class="toctree-l1"><a class="reference internal" href="README.html">yapnr</a></li>
@@ -306,6 +308,21 @@ material that is, or will be, part of what yapnr ships or serves, with its licen
 brought in. Update it in the same change that adds, removes or upgrades such material.</p>
 <section id="shipped-or-served-with-yapnr">
 <h2>Shipped or served with yapnr<a class="headerlink" href="#shipped-or-served-with-yapnr" title="Link to this heading">¶</a></h2>
+<section id="rules-requirements">
+<h3>rules_requirements<a class="headerlink" href="#rules-requirements" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>What:</strong> the authoritative YAML model, validation, verification-set attribution,
+status rollups and trace graph renderer from Studio-Fug/rules_requirements,
+pinned to <code class="docutils literal notranslate"><span class="pre">aabecadd6e8710a11e99ccb366e63d858d92f6c6</span></code>.</p></li>
+<li><p><strong>License:</strong> AGPL-3.0-or-later; its vendored YAML parser retains the upstream
+MIT license. The wheel includes both license texts.</p></li>
+<li><p><strong>How:</strong> Bazel fetches the immutable source archive with a checked SHA-256
+(<code class="docutils literal notranslate"><span class="pre">&#64;rules_requirements_toolkit</span></code>). The pure Python toolkit is included in the
+packaged wheel, so requirements review does not need a runtime download or
+build. The native traceability surface uses its entity payloads and SVG;
+pan/zoom interaction is adapted from the upstream graph view with attribution.</p></li>
+</ul>
+</section>
 <section id="elkjs">
 <h3>elkjs<a class="headerlink" href="#elkjs" title="Link to this heading">¶</a></h3>
 <ul class="simple">
@@ -489,6 +506,34 @@ of the wheel or the container images.</p></li>
 <h2>Project assets<a class="headerlink" href="#project-assets" title="Link to this heading">¶</a></h2>
 <p>The yapnr logo, mark and favicons in <code class="docutils literal notranslate"><span class="pre">branding/</span></code> are project assets created for yapnr (see
 <a class="reference internal" href="docs/about-the-name.html"><span class="std std-doc">docs/about-the-name.md</span></a>); they are covered by the repository license.</p>
+<section id="interactive-codex-terminal">
+<h3>Interactive Codex terminal<a class="headerlink" href="#interactive-codex-terminal" title="Link to this heading">¶</a></h3>
+<p>The application image installs OpenAI Codex 0.161.0 native Linux binaries from
+the official npm architecture archives, checked against immutable SHA-512 pins
+in <code class="docutils literal notranslate"><span class="pre">docker/yapnr/codex.lock.json</span></code>. Source is
+<a class="reference external" href="https://github.com/openai/codex/tree/979011409de0a60b52f179721948e65531d26144">97901140</a>.
+Codex is Apache-2.0; its LICENSE/NOTICE and dependency notices are shipped in
+<code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/licenses/codex/</span></code>. The separate ripgrep and bubblewrap binaries
+retain their upstream licenses and source links there. Optional voice and bundled
+zsh runtimes are excluded. Claude Code is not redistributed. Credentials and
+provider accounts are supplied by the operator and are never part of the image.</p>
+</section>
+<section id="provider-neutral-interactive-terminal">
+<h3>Provider-neutral interactive terminal<a class="headerlink" href="#provider-neutral-interactive-terminal" title="Link to this heading">¶</a></h3>
+<p>OpenCode 1.18.35 is installed from official Linux release archives, checked against
+SHA-256 pins in <code class="docutils literal notranslate"><span class="pre">docker/yapnr/opencode.lock.json</span></code>. Its source is
+<a class="reference external" href="https://github.com/anomalyco/opencode/tree/53d1eabb61e21162157817bf677da0a4ad3332e3">53d1eabb</a>,
+licensed under MIT; the license is shipped in <code class="docutils literal notranslate"><span class="pre">licenses/opencode/</span></code>. Provider
+credentials are operator-supplied. Official Codex/Claude account authentication
+uses the respective official CLI rather than OpenCode’s provider adapters.</p>
+</section>
+</section>
+<section id="workbench-fonts">
+<h2>Workbench fonts<a class="headerlink" href="#workbench-fonts" title="Link to this heading">¶</a></h2>
+<p>The bundled Space Grotesk, IBM Plex Sans and IBM Plex Mono fonts are licensed
+under the SIL Open Font License 1.1. Original license files are included in
+<a class="reference internal" href="#yapnr/brand/fonts"><span class="xref myst">yapnr/brand/fonts</span></a>. The application serves WOFF2 conversions
+locally; it does not contact a font CDN.</p>
 </section>
 </section>
 
@@ -549,6 +594,7 @@ of the wheel or the container images.</p></li>
             <ul>
 <li><a class="reference internal" href="#">Third-party material</a><ul>
 <li><a class="reference internal" href="#shipped-or-served-with-yapnr">Shipped or served with yapnr</a><ul>
+<li><a class="reference internal" href="#rules-requirements">rules_requirements</a></li>
 <li><a class="reference internal" href="#elkjs">elkjs</a></li>
 <li><a class="reference internal" href="#three-js">three.js</a></li>
 <li><a class="reference internal" href="#shapely-and-geos">Shapely and GEOS</a></li>
@@ -559,7 +605,12 @@ of the wheel or the container images.</p></li>
 <li><a class="reference internal" href="#in-the-container-images">In the container images</a></li>
 <li><a class="reference internal" href="#referenced-not-included">Referenced, not included</a></li>
 <li><a class="reference internal" href="#in-the-repository-only">In the repository only</a></li>
-<li><a class="reference internal" href="#project-assets">Project assets</a></li>
+<li><a class="reference internal" href="#project-assets">Project assets</a><ul>
+<li><a class="reference internal" href="#interactive-codex-terminal">Interactive Codex terminal</a></li>
+<li><a class="reference internal" href="#provider-neutral-interactive-terminal">Provider-neutral interactive terminal</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#workbench-fonts">Workbench fonts</a></li>
 </ul>
 </li>
 </ul>

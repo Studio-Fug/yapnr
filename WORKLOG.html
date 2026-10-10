@@ -3,9 +3,9 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Third-party material" href="THIRD_PARTY.html"><link rel="prev" title="Rules for agents" href="AGENTS.html">
-        <link rel="prefetch" href="static/yapnr-logo-256.png" as="image">
-        <link rel="prefetch" href="static/yapnr-logo-light.png" as="image">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Third-party material" href="THIRD_PARTY.html"><link rel="prev" title="Prompt-to-PCB engineering with yapnr" href="AGENTS.html">
+        <link rel="prefetch" href="static/yapnr-logo-primary-light.svg" as="image">
+        <link rel="prefetch" href="static/yapnr-logo-primary-dark.svg" as="image">
 
     <link rel="shortcut icon" href="static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
         <title>Worklog - yapnr documentation</title>
@@ -14,7 +14,8 @@
     <link rel="stylesheet" type="text/css" href="static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="static/custom.css?v=ad564152" />
+    <link rel="stylesheet" type="text/css" href="static/fonts/fonts.css?v=eeaf125c" />
+    <link rel="stylesheet" type="text/css" href="static/custom.css?v=2fd37b7c" />
     
     
 
@@ -199,8 +200,8 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="docs/index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="static/yapnr-logo-256.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="static/yapnr-logo-light.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="static/yapnr-logo-primary-light.svg" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="static/yapnr-logo-primary-dark.svg" alt="Dark Logo"/>
   </div>
   
   
@@ -213,6 +214,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/agent-workflow.html">Design a PCB with an agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/frontends/atopile.html">The atopile toolchain</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
@@ -253,7 +255,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="DEVELOPERS.html">Developing yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="CONTRIBUTING.html">Contributing to yapnr</a></li>
-<li class="toctree-l1"><a class="reference internal" href="AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Worklog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="THIRD_PARTY.html">Third-party material</a></li>
 <li class="toctree-l1"><a class="reference internal" href="README.html">yapnr</a></li>
@@ -303,7 +305,7 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-07 (installed RF packaging and PyPI publishing). Previous status:
+<p>Last updated: 2026-10-10 (PR #99 merge preparation). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 <code class="docutils literal notranslate"><span class="pre">claude/radar-routing-engine-2</span></code>). Earlier the same day: RF round 2 with the native FDTD kernel
 on <code class="docutils literal notranslate"><span class="pre">claude/rf-topopt</span></code>, merged with <code class="docutils literal notranslate"><span class="pre">main</span></code>; the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the
@@ -316,6 +318,86 @@ board edges, the hierarchical ladder driver and their animations on
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul>
+<li><p><strong>PR #99 integration</strong>: the native engineering workbench, evidence-gated workflow,
+traceability/artifact review, recorded attempts, circuit simulation and manufacturing
+handoff are ready for final hosted validation. Corrected the dock transaction expectation
+for Manufacturing, moved Git into the final container runtime for project initialization,
+and cleared hidden through-hole selection when inspecting qualified packets. JavaScript
+transaction/syntax checks pass; full regressions and hosted image smoke are being rerun.
+Consolidated feature evidence is linked from the PR; older session entries live in Git.</p></li>
+<li><p><strong>Assembly inventory</strong>: quantity-aware catalog filtering and assembly-house checks
+publish replayable BOM/identity/quantity evidence. JLCPCB public inventory includes
+orderable stock and declared allowance/minimum screening; PCBWay explicitly needs
+its own supplier confirmation. Native Manufacturing exposes per-part shortages and
+historical checks. Network failure/unknown stock never passes sourcing.</p></li>
+<li><p><strong>Manufacturing GUI</strong>: approved PCBWay packets have an explicit human-clicked
+official-plugin file upload and quote handoff, with exact artifact receipts.
+JLCPCB automatic attachment awaits approved API access; manual handoff remains.</p></li>
+<li><p><strong>Manufacturing package discovery</strong>: published native/prototype packages are discovered automatically.
+Supplier, quantity, finish and optional through-hole service lead to local vendor-specific
+BOM/CPL preparation, previews, content-bound review and human downloads/quote handoff.
+Prototype vendor DFM/rotation and physical verification remain explicitly open.</p></li>
+<li><p><strong>On-demand parts</strong>: authoring CLI builds fetch missing component queries, retain response
+digests and selected assets/locks in the article, and replay offline/frozen. Operator
+our rules_atopile-derived picker matches public supplier facts without hosted
+Atopile calls, accounts or tokens. No shared catalog uploads or prepopulated local
+library are required. Typed discovery covers resistors/capacitors and explicit
+LCSC/MPN picks; network/data failures remain explicit.</p></li>
+<li><p><strong>Workspace search and Performance</strong>: Cmd/Ctrl-F opens a floating source/component/net
+search, including in embedded frames; repeated shortcuts preserve/clear queries.
+Inspect tab layouts migrate to the dialog. Performance holds native controls and
+validated project cloud settings with read-only SDK status and no job submission.</p></li>
+<li><p><strong>Recorded build attempts</strong>: Experiments lists archived schematic-build results, including
+failures before PnR, and opens their result JSON in read-only source tabs. Restored active
+tabs initialize on first drawer open. Embedded styling and saved theme apply before
+renderer scripts load, avoiding the legacy-theme flash. Live discovery is read-only
+and retains failed attempts. The workspace server accepts cold-start asset bursts
+without dropping concurrent proxy connections.</p></li>
+<li><p><strong>Experiments embed</strong>: workbench tabs own panel visibility; the native legacy drawer
+controller is bypassed in embeds. Experiment lane selections follow through to the live
+board/schematic/3D views while pinned comparisons remain independent.</p></li>
+<li><p><strong>Workbench follow-up</strong>: drawer open/dismiss motion respects reduced motion; startup no longer
+waits for provider discovery. Source syntax, import navigation and hash-scoped selected-text Ask
+context pass browser checks. A project directory tree starts in the left drawer.</p></li>
+<li><p><strong>Prompt-to-PCB agent workflow</strong>: owner-provided engineering workflow is now
+scoped into AGENTS.md; the installed wheel ships exact instructions and execution
+guide. <code class="docutils literal notranslate"><span class="pre">agent</span> <span class="pre">init</span></code> preserves contracts/checkpoints, <code class="docutils literal notranslate"><span class="pre">agent</span> <span class="pre">instructions</span></code> exposes
+guidance and <code class="docutils literal notranslate"><span class="pre">agent</span> <span class="pre">chat</span></code> opens an operator-owned interactive Codex/Claude terminal.
+The image includes checksum-pinned Codex and Git; no credentials or paid model
+sessions run in CI. Focused bootstrap/installed-wheel/container checks and hosted
+validation are in progress. Complete populated RF assembly acceptance remains #97,
+not satisfied by DUT-only packaging smoke.
+Review-first requirements/risk presentation, bounded speculative implementation,
+refinement-driven restarts and inline visual feedback are now explicit in both
+embedded guidance and the launcher prompt. <code class="docutils literal notranslate"><span class="pre">workflow</span> <span class="pre">init/query/next</span></code> implements
+a declarative, evidence-gated iteration controller with atomic state/history,
+immutable receipts, revision invalidation and acceptance/completion guards.
+Receipts remain assertions requiring genuine user decisions and authoritative
+validation reports; the controller does not authenticate them or sandbox agents.</p></li>
+<li><p><strong>Workspace-native browser UI</strong>: replaced the OpenCode overlay with one layout
+for projects, focused/main conversations, artifacts, engineering views and a
+resizable chat pane. Background activity collapses into one spinner/details group;
+the footer follows controller stages, including review and rework. The journaled
+main-thread harness continues idle agents with their selected model, stopping at
+genuine review checkpoints and native questions/permissions. Turn duration,
+elapsed session time and continuation counts never stop the design loop.
+Stop and explicit resume are persistent. Runtime logs remain exportable but are
+excluded from Git snapshots to prevent recursive chat-summary growth.
+YAML requirements/risk/trace models now populate a native browser using pinned
+rules_requirements semantics. Report artifacts link to owned verification cases;
+stale or corrupt evidence remains open. Content-bound artifact review carries
+canonical feedback/questions, explicit approval and a canned revision cycle.
+Bundled package inspection is allowed without repeated external-directory prompts.
+Schematic capture opens live atopile sources alongside a netlist-backed schematic,
+retaining the last valid export through incomplete writes and failed builds.
+OpenCode remains the headless provider/tool/session runtime.
+Canonical notes carry immutable focused transcripts into the main conversation
+without starting a model turn; shared document edits use revision checks.
+Pinned sandboxed three.js choices, rendered artifact markup, full conversation
+journaling and integrity-checked workspace archives are implemented. Browser
+checks distinguish synthetic review fixtures from actual engineering views.
+Solver regeneration remains unverified until a pinned replay recipe passes;
+image-build toolchain warming remains outstanding.</p></li>
 <li><p><strong>External RF packaging (#96)</strong>: collect every RF Bazel subpackage explicitly
 without numerical dependency closure in the wheel collector. Export/report,
 planar, Palace, coupons and order0 modules now ship, with the authoritative
@@ -776,7 +858,7 @@ nothing, and Adam’s <code class="docutils literal notranslate"><span class="pr
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Rules for agents</div>
+                <div class="title">Prompt-to-PCB engineering with yapnr</div>
                 
               </div>
             </a>

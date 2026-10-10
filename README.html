@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="prev" title="Third-party material" href="THIRD_PARTY.html">
-        <link rel="prefetch" href="static/yapnr-logo-256.png" as="image">
-        <link rel="prefetch" href="static/yapnr-logo-light.png" as="image">
+        <link rel="prefetch" href="static/yapnr-logo-primary-light.svg" as="image">
+        <link rel="prefetch" href="static/yapnr-logo-primary-dark.svg" as="image">
 
     <link rel="shortcut icon" href="static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
         <title>yapnr - yapnr documentation</title>
@@ -14,7 +14,8 @@
     <link rel="stylesheet" type="text/css" href="static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="static/custom.css?v=ad564152" />
+    <link rel="stylesheet" type="text/css" href="static/fonts/fonts.css?v=eeaf125c" />
+    <link rel="stylesheet" type="text/css" href="static/custom.css?v=2fd37b7c" />
     
     
 
@@ -199,8 +200,8 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="docs/index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="static/yapnr-logo-256.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="static/yapnr-logo-light.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="static/yapnr-logo-primary-light.svg" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="static/yapnr-logo-primary-dark.svg" alt="Dark Logo"/>
   </div>
   
   
@@ -213,6 +214,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/agent-workflow.html">Design a PCB with an agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/frontends/atopile.html">The atopile toolchain</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
@@ -253,7 +255,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="DEVELOPERS.html">Developing yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="CONTRIBUTING.html">Contributing to yapnr</a></li>
-<li class="toctree-l1"><a class="reference internal" href="AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="WORKLOG.html">Worklog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="THIRD_PARTY.html">Third-party material</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">yapnr</a></li>
@@ -301,8 +303,8 @@
         <article role="main" id="furo-main-content">
           <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="branding/yapnr-logo-light.png">
-    <img src="branding/yapnr-logo-256.png" alt="yapnr" width="256">
+    <source media="(prefers-color-scheme: dark)" srcset="yapnr/brand/assets/yapnr-logo-primary-dark.svg">
+    <img src="yapnr/brand/assets/yapnr-logo-primary-light.svg" alt="yapnr" width="256">
   </picture>
 </p>
 <p align="center">
@@ -400,6 +402,13 @@ Silicon, and <a class="reference internal" href="docs/releases.html"><span class
 (<code class="docutils literal notranslate"><span class="pre">AGPL-3.0-or-later</span></code>); see <a class="reference download internal" download="" href="downloads/9879d6db96fd29134fc802214163b95a/LICENSE"><span class="xref download myst">LICENSE</span></a>. Third-party material is listed in
 <a class="reference internal" href="THIRD_PARTY.html"><span class="std std-doc">THIRD_PARTY.md</span></a>.</p>
 </section>
+<section id="design-with-an-agent">
+<h2>Design with an agent<a class="headerlink" href="#design-with-an-agent" title="Link to this heading">¶</a></h2>
+<p>Ask your agent “Please use Studio-Fug/yapnr to design X” and have it read
+<a class="reference internal" href="AGENTS.html"><span class="std std-doc">AGENTS.md</span></a>. Start <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">agent</span> <span class="pre">chat</span></code> in an interactive container;
+<a class="reference internal" href="docs/agent-workflow.html"><span class="std std-doc">the execution guide</span></a> covers authentication, resource
+limits, resumption and the open assembly-validation gates.</p>
+</section>
 </section>
 
         </article>
@@ -454,6 +463,7 @@ Silicon, and <a class="reference internal" href="docs/releases.html"><span class
 <li><a class="reference internal" href="#quick-start">Quick start</a></li>
 <li><a class="reference internal" href="#container-image">Container image</a></li>
 <li><a class="reference internal" href="#license">License</a></li>
+<li><a class="reference internal" href="#design-with-an-agent">Design with an agent</a></li>
 </ul>
 </li>
 </ul>

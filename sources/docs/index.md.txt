@@ -78,6 +78,7 @@ any later version (`AGPL-3.0-or-later`). See [LICENSE](../LICENSE).
 :caption: Using yapnr
 
 containers
+agent-workflow
 viewer
 frontends/atopile
 part-cache

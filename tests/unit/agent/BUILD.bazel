@@ -1,6 +1,20 @@
+load("@rules_python//python:defs.bzl", "py_library")
 load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 
-yapnr_py_tests(deps = [
-    "//yapnr/agent",
-    "//yapnr/fab:testing",
-])
+py_library(
+    name = "manufacturing_package_fixture",
+    testonly = True,
+    srcs = ["test_manufacturing_packages.py"],
+    deps = [
+        "//yapnr/agent",
+        "//yapnr/fab:testing",
+    ],
+)
+
+yapnr_py_tests(
+    overrides = {"test_vendor_uploads": {"deps": [":manufacturing_package_fixture"]}},
+    deps = [
+        "//yapnr/agent",
+        "//yapnr/fab:testing",
+    ],
+)

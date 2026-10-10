@@ -84,6 +84,11 @@ def prepare(project, bundle, board, source_artifact=None):
         path = str(Path(bundle) / name)
         item = workspace.publish(root, path, "report", f"{vendor}: {label}")
         downloads.append({"label": label, "artifact": item["id"], "sha256": item["sha256"]})
+    from yapnr.agent import vendor_uploads
+
+    upload_archive = vendor_uploads.prepare(root, downloads, card)
+    if upload_archive:
+        downloads.append(upload_archive)
     release = {
         "schema": "yapnr-assembly-handoff-v1",
         "card": card,

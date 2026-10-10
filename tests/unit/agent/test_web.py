@@ -117,6 +117,20 @@ class WebTest(unittest.TestCase):
             self.assertEqual(status, 400)
             self.assertEqual(json.loads(body)["error"], "Source board changed")
 
+    def test_vendor_upload_is_an_explicit_origin_checked_action(self):
+        from yapnr.agent import vendor_uploads
+
+        with patch.object(
+            vendor_uploads, "upload", return_value={"redirect": "https://www.pcbway.com/"}
+        ) as upload:
+            payload = {"artifact": "a" * 64}
+            self.assertEqual(
+                self.request("/yapnr/api/vendor-upload/article", payload, origin=False)[0], 400
+            )
+            upload.assert_not_called()
+            self.assertEqual(self.request("/yapnr/api/vendor-upload/article", payload)[0], 200)
+            upload.assert_called_once()
+
     def test_concurrent_startup_asset_burst(self):
         count = 32
         barrier = threading.Barrier(count)

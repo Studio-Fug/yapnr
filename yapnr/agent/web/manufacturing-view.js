@@ -152,10 +152,35 @@ export function mountManufacturing(container, {project, approve, review, artifac
         panel.append(accept, feedback, el('h3', '4. Vendor quote & checkout'));
         const vendor = el('a', release.handoff_ready ? 'Open ' + card.vendor.title + ' quote' : 'Approve the file review to enable vendor handoff');
         if (release.handoff_ready) {vendor.href = release.vendor_page; vendor.target = '_blank'; vendor.rel = 'noopener noreferrer';} else vendor.setAttribute('aria-disabled', 'true');
+        if (card.vendor.id === 'pcbway' && release.downloads.some(d => d.label === 'PCBWay upload package')) {
+          const upload = el('button', 'Upload files & open PCBWay quote'); upload.className = 'primary'; upload.disabled = !release.handoff_ready;
+          upload.onclick = async () => {
+            upload.disabled = true; upload.textContent = 'Uploading approved files to PCBWay…';
+            const quote = window.open('about:blank', '_blank');
+            if (quote) {quote.opener = null; quote.document.body.textContent = 'Uploading approved manufacturing files to PCBWay…';}
+            try {
+              const response = await fetch('/yapnr/api/vendor-upload/' + encodeURIComponent(project), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({artifact: release.artifact})});
+              const result = await response.json();
+              if (!response.ok) throw Error(result.error || 'Vendor upload failed');
+              const url = new URL(result.redirect);
+              if (url.protocol !== 'https:' || !['pcbway.com', 'www.pcbway.com', 'member.pcbway.com'].includes(url.hostname) || url.username || url.password) throw Error('Untrusted vendor quote link');
+              if (quote) quote.location.href = url.href;
+              else {vendor.href = url.href; vendor.textContent = 'Open uploaded PCBWay quote';}
+              upload.textContent = 'Files uploaded · reopen PCBWay quote';
+            } catch (e) {quote?.close(); upload.textContent = 'Retry file upload & open PCBWay quote'; report(e.message);}
+            finally {upload.disabled = false;}
+          };
+          panel.append(upload, el('p', 'This button sends the reviewed Gerbers, BOM and placement file to PCBWay, then opens its quote. Verify quantity, finish, assembly and all pending checks there before checkout.'));
+          vendor.textContent = release.handoff_ready ? 'Open PCBWay manually instead' : vendor.textContent;
+        } else if (card.vendor.id === 'jlcpcb') {
+          panel.append(el('p', 'Automatic file attachment requires approved JLCPCB API access. This link opens the manual quote flow; upload the downloaded Gerbers, BOM and CPL there.'));
+        } else {
+          panel.append(el('p', 'Prepare a new PCBWay supplier packet to include its upload archive.'));
+        }
         panel.append(vendor);
         const instructions = el('ol');
         for (const text of ['Download Gerbers/drills and upload that ZIP on the vendor site.', 'Select PCB layers, dimensions, thickness, finish and quantity from this card; enable assembly.', 'Upload the supplier BOM and CPL separately. Check part matching, substitutions/stock, polarity and every rotation in the vendor preview. Confirm any requested through-hole service, or arrange the separate THT/hand assembly listed in the notes.', 'Resolve vendor DFM and review the quote and lead time before you complete checkout. Uploading and paying happen on the vendor site.']) instructions.append(el('li', text));
-        panel.append(instructions, el('p', 'This app does not upload, place an order or pay. Approval of prototype files does not qualify the design or close physical verification requirements.'));
+        panel.append(instructions, el('p', 'PCBWay files are uploaded only when you click its upload button. Checkout and payment remain on the vendor site. Approval of prototype files does not qualify the design or close physical verification requirements.'));
         const help = el('a', 'Official vendor upload instructions'); help.target = '_blank'; help.rel = 'noopener noreferrer';
         help.href = card.vendor.id === 'jlcpcb' ? 'https://jlcpcb.com/help/article/how-do-i-place-a-pcba-order' : 'https://www.pcbway.com/helpcenter/pcb_assembly_ordering/What_files_are_requested_for_assembly_production_.html';
         panel.append(help); container.append(panel);

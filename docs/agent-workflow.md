@@ -551,3 +551,26 @@ Include exactly one matching `cad/*.kicad_pcb`, `settings.json`,
 Manufacturer, MPN, LCSC, Footprint, Mount and Assembly. Publish the source
 board too. Published Gerber preview images in the same experiment are shown
 alongside the package. Legacy prototype packages remain discoverable.
+
+### Automatic PCBWay file attachment
+
+For a newly prepared PCBWay packet, the reviewed downloads include a
+**PCBWay upload package**. It retains the checked Gerber bytes and converts the
+existing vendor BOM/CPL into the filenames/columns used by PCBWay's official
+KiCad plugin. After approval, **Upload files & open PCBWay quote** sends that
+archive to the official handoff endpoint and opens its returned quote link.
+This separate human click authorizes file transfer; preparing or approving
+files alone never uploads them. No account cookies or payment operations are
+used. Verify quantity, finish, assembly, part matching and rotations on the
+vendor page: this endpoint accepts geometry and files, not all order settings.
+The receipt records the exact artifact/hash. Duplicate uploads are guarded,
+confirmed uploads reuse their receipt, and failures never retry automatically.
+
+JLCPCB file attachment is unavailable without approved partner API access. Its
+button retains the manual quote/download flow rather than claiming files were
+attached. This is a vendor integration prerequisite, not an artifact approval.
+Agents continue to dry-run ordering and do not call upload endpoints in the
+engineering loop. Checkout remains the user's action.
+
+Protocol references: [PCBWay's official KiCad plugin](https://github.com/pcbway/PCBWay-Plug-in-for-Kicad)
+and [JLCPCB API access](https://jlcpcb.com/help/article/jlcpcb-online-api-available-now).

@@ -245,7 +245,10 @@ engine automation was actually demonstrated. Empty queues are not completion.
   meaningful visual behavior, explain why an animation is not applicable.
 - **Ordering is staging only, and agents only dry-run it.** Agents run `yapnr order stage` only
   with `--dry-run`. They never upload a file to a vendor or any third-party service, never call a
-  vendor API, and never open a vendor page on a human's behalf. Paying, confirming an order,
+  vendor API, and never open a vendor page on a human's behalf. The user-operated
+  Manufacturing button may upload an explicitly approved PCBWay packet through
+  its official plugin handoff, after a separate user click. Agents never click
+  that button or invoke its upload endpoint during design or validation. Paying, confirming an order,
   accounts and terms belong to the human on the vendor's page
   ([docs/fab-and-ordering.md](docs/fab-and-ordering.md)).
 

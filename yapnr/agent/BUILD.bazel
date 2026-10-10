@@ -60,6 +60,7 @@ py_library(
         "requirements.py",
         "reviews.py",
         "threads.py",
+        "vendor_uploads.py",
         "web.py",
         "workflow.py",
         "workspace.py",

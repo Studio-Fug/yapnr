@@ -35,10 +35,17 @@ class ManufacturingTest(unittest.TestCase):
             ("gerbers.zip", "gerbers"),
         ]:
             (self.folder / name).write_text(data)
+        with zipfile.ZipFile(self.folder / "gerbers.zip", "w") as archive:
+            archive.writestr("demo.gtl", "synthetic Gerber fixture")
+        self.card["files"]["upload"]["sha256"] = workspace.file_sha(self.folder / "gerbers.zip")
+        (self.folder / "order-card.json").write_text(json.dumps(self.card))
         self.manifest = {
             "schema": "yapnr-fab-manifest-v1",
             "board": {"sha256": workspace.file_sha(self.root / "board.kicad_pcb")},
-            "gerber_zip": {"name": "gerbers.zip", "sha256": workspace.sha(b"gerbers")},
+            "gerber_zip": {
+                "name": "gerbers.zip",
+                "sha256": workspace.file_sha(self.folder / "gerbers.zip"),
+            },
             "files": [
                 {"name": p.name, "sha256": workspace.file_sha(p)} for p in self.folder.iterdir()
             ],

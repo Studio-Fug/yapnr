@@ -357,6 +357,11 @@ def prepare(project, identifier, vendor, quantity, finish, include_through_hole=
             metadata={"manufacturing_download": True, "source_artifact": identifier},
         )
         downloads.append({"label": label, "artifact": item["id"], "sha256": item["sha256"]})
+    from yapnr.agent import vendor_uploads
+
+    upload_archive = vendor_uploads.prepare(root, downloads, card)
+    if upload_archive:
+        downloads.append(upload_archive)
     release = {
         "schema": "yapnr-assembly-handoff-v1",
         "prototype": True,

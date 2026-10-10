@@ -16,7 +16,11 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
-- **Manufacturing GUI**: published native/prototype packages are discovered automatically.
+- **Manufacturing GUI**: approved PCBWay packets have an explicit human-clicked
+  official-plugin file upload and quote handoff, with exact artifact receipts.
+  JLCPCB automatic attachment awaits approved API access; manual handoff remains.
+
+- **Manufacturing package discovery**: published native/prototype packages are discovered automatically.
   Supplier, quantity, finish and optional through-hole service lead to local vendor-specific
   BOM/CPL preparation, previews, content-bound review and human downloads/quote handoff.
   Prototype vendor DFM/rotation and physical verification remain explicitly open.

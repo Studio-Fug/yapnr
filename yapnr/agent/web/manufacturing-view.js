@@ -38,6 +38,19 @@ function tableView(title, data) {
   table.append(body); wrap.append(table); details.append(summary, wrap);
   return details;
 }
+function availabilityView(panel, result, project) {
+  panel.append(el('h4', 'Assembly availability'), el('strong', result.fresh === false ? 'Historical stock check · refresh required' : result.all_available ? 'Quantity screening passed · supplier quote still required' : 'Sourcing blockers · resolve before ordering'));
+  panel.append(el('p', `${result.vendor.toUpperCase()} · ${result.quantity} boards · checked ${result.retrieved}`));
+  const priority = {shortage: 0, unknown: 1, quote_required: 1, available: 2};
+  const parts = [...result.results].sort((a, b) => priority[a.status] - priority[b.status]);
+  const blocked = parts.filter(p => p.status !== 'available').flatMap(p => p.refs);
+  if (blocked.length) panel.append(el('p', 'Unresolved parts: ' + blocked.join(', ')));
+  const rows = parts.map(p => [p.refs.join(', '), p.mpn, p.lcsc || '—', p.needed, p.listed_stock ?? 'Unknown', p.orderable_stock ?? 'Unknown', p.screening_required ?? 'Unknown', p.status.replaceAll('_', ' '), p.reason]);
+  const view = tableView('Part availability', {columns: ['Parts', 'MPN', 'LCSC', 'Board demand', 'Listed stock', 'Orderable stock', 'Screened demand', 'Status', 'Reason'], rows});
+  view.classList.add('assembly-availability');
+  view.querySelectorAll('tbody tr').forEach((row, index) => {if (parts[index].status === 'shortage') row.classList.add('assembly-shortage');});
+  view.open = true; panel.append(view, el('p', result.notice), link(project, result.artifact, 'Download inventory evidence'));
+}
 export function mountManufacturing(container, {project, approve, review, artifact, report, request} = {}) {
   let disposed = false, pending = false, key = '', preparing = false;
   const draft = {artifact: '', vendor: 'jlcpcb', quantity: 5, finish: '', throughHole: false};
@@ -100,19 +113,45 @@ export function mountManufacturing(container, {project, approve, review, artifac
         }
         panel.append(field('Supplier', vendor), field('Requested PCB quantity', quantity), field('Requested finish', finish));
         const throughHole = el('input'); throughHole.type = 'checkbox'; throughHole.checked = draft.throughHole;
-        throughHole.onchange = () => {draft.throughHole = throughHole.checked;};
+        throughHole.onchange = () => {draft.throughHole = throughHole.checked; showStock();};
         if (candidate.kind !== 'qualified') panel.append(field('Request vendor through-hole assembly (e.g. headers), subject to quote confirmation', throughHole));
         panel.append(el('p', 'The vendor confirms available options, quantity, stock and price. Prototype files have pending DFM/rotation checks; review these on the vendor site. Separate THT/hand assembly is listed in the complete BOM and notes.'));
+        const stockPanel = el('div');
+        const stock = el('button', 'Check assembly availability');
+        let checkingStock = false, stockResult = null;
+        const showStock = () => {
+          stockPanel.replaceChildren();
+          const result = stockResult && stockResult.vendor === vendor.value && stockResult.quantity === Number(quantity.value) && stockResult.include_through_hole === throughHole.checked ? stockResult : (candidate.availability || []).find(r => r.vendor === vendor.value && r.quantity === Number(quantity.value) && r.include_through_hole === throughHole.checked);
+          if (result) availabilityView(stockPanel, result, project);
+          else stockPanel.append(el('p', 'Assembly stock has not been checked for these settings. Catalog stock alone does not establish turnkey availability.'));
+          stock.disabled = checkingStock || !candidate.current || !quantity.checkValidity();
+        };
+        stock.onclick = async () => {
+          checkingStock = true; stock.disabled = true; stock.textContent = 'Checking assembly-house inventory…';
+          try {
+            const response = await fetch('/yapnr/api/assembly-availability/' + encodeURIComponent(project), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({artifact: candidate.artifact, vendor: vendor.value, quantity: Number(quantity.value), include_through_hole: throughHole.checked})});
+            const result = await response.json();
+            if (!response.ok) throw Error(result.error || 'Inventory check failed');
+            stockResult = {...result, fresh: true};
+          } catch (e) {report(e.message);}
+          finally {checkingStock = false; stock.textContent = 'Refresh assembly availability'; showStock();}
+        };
+        panel.append(stock, stockPanel); showStock();
         const prepare = el('button', 'Prepare supplier files for review');
         prepare.className = 'primary';
         const valid = () => {prepare.disabled = preparing || !candidate.current || candidate.drc_errors > 0 || candidate.unconnected > 0 || !finish.value || !quantity.checkValidity();};
-        vendor.onchange = () => {draft.vendor = vendor.value; valid();};
-        quantity.oninput = () => {draft.quantity = quantity.value; valid();};
+        vendor.onchange = () => {draft.vendor = vendor.value; valid(); showStock();};
+        quantity.oninput = () => {draft.quantity = quantity.value; valid(); showStock();};
         finish.onchange = () => {draft.finish = finish.value; valid();};
         prepare.onclick = async () => {
-          preparing = true; prepare.disabled = true; prepare.textContent = 'Preparing local review packet…';
+          const settings = {artifact: candidate.artifact, vendor: vendor.value, quantity: Number(quantity.value), finish: finish.value, include_through_hole: candidate.kind !== 'qualified' && throughHole.checked};
+          preparing = true; prepare.disabled = true; prepare.textContent = 'Checking inventory & preparing review packet…';
           try {
-            const response = await fetch('/yapnr/api/assembly-package/' + encodeURIComponent(project), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({artifact: candidate.artifact, vendor: vendor.value, quantity: Number(quantity.value), finish: finish.value, include_through_hole: candidate.kind !== 'qualified' && throughHole.checked})});
+            const inventory = await fetch('/yapnr/api/assembly-availability/' + encodeURIComponent(project), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(settings)});
+            const inventoryResult = await inventory.json();
+            if (!inventory.ok) throw Error(inventoryResult.error || 'Inventory check could not be recorded');
+            stockResult = {...inventoryResult, fresh: true}; showStock();
+            const response = await fetch('/yapnr/api/assembly-package/' + encodeURIComponent(project), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(settings)});
             if (!response.ok) throw Error((await response.json()).error || 'Package preparation failed');
             key = '';
           } catch (e) { report(e.message); }

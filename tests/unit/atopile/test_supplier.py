@@ -81,6 +81,14 @@ class SupplierTest(unittest.TestCase):
         self.assertEqual([part["lcsc"] for part in response["components"]], [990000001])
         self.assertEqual(read.call_count, 2)
 
+    def test_required_quantity_filters_before_identity_fetch_and_candidate_limit(self):
+        read = Mock(side_effect=[{"capacitors": [{**ROW, "lcsc": 123, "stock": 1}, ROW]}, IDENTITY])
+        body = supplier.encoded({"queries": [{"endpoint": "capacitors", "required_quantity": 5}]})
+        response = supplier.discover("POST", "/v0/query", body, read)
+        self.assertEqual([p["lcsc"] for p in response["results"][0]["components"]], [ROW["lcsc"]])
+        self.assertEqual(read.call_count, 2)
+        self.assertIn(str(ROW["lcsc"]), read.call_args_list[1].args[0])
+
     def test_unsupported_type_is_explicit_without_network(self):
         read = Mock(side_effect=AssertionError("Network forbidden"))
         with self.assertRaisesRegex(ValueError, "explicit LCSC/MPN"):

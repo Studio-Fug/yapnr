@@ -40,6 +40,7 @@ def discover(method, path, body, read):
         return data
 
     def query(params):
+        catalog.stock_filter([], params)  # Validate demand before any network lookup.
         endpoint = params.get("endpoint")
         packages = catalog.strings(params.get("package"))
         if "lcsc" in params:
@@ -112,6 +113,12 @@ def discover(method, path, body, read):
                 for name, bounds in constraints.items()
             ):
                 continue
+            required = params.get("required_quantity")
+            if required is not None:
+                if type(required) is not int or not 1 <= required <= 10000000:
+                    raise ValueError("required_quantity must be a positive integer up to 10000000")
+                if type(row.get("stock")) is not int or row["stock"] < required:
+                    continue
             candidates.append((row, values))
         candidates.sort(key=lambda item: (not bool(item[0].get("is_basic")), item[0]["lcsc"]))
         parts = []

@@ -574,3 +574,49 @@ engineering loop. Checkout remains the user's action.
 
 Protocol references: [PCBWay's official KiCad plugin](https://github.com/pcbway/PCBWay-Plug-in-for-Kicad)
 and [JLCPCB API access](https://jlcpcb.com/help/article/jlcpcb-online-api-available-now).
+
+### Assembly-house stock and quantity checks
+
+Capture the intended board quantity and assembly house during requirements/part
+selection. Check candidates before locking parts and the final BOM before handoff:
+
+```sh
+yapnr picker availability --vendor jlcpcb --quantity 5 --bom assembly/full-bom.csv -o reports/assembly-stock.json
+yapnr picker availability --vendor jlcpcb --quantity 20 --lcsc C12345 --mpn VERIFIED-MPN -o reports/candidate-stock.json
+yapnr picker availability --vendor jlcpcb --quantity 5 --bom assembly/full-bom.csv --snapshot reports/assembly-stock.json
+```
+
+For a single selection, quantity means total required units. For a BOM it means
+boards; repeated designators using one part are aggregated. Use a complete BOM
+with explicit MPN and LCSC identities; the minimal JLC vendor BOM omits MPNs and
+cannot verify identity by itself. PCBWay supplier CSVs with MPNs are also accepted.
+Through-hole/separate assembly is excluded unless `--include-through-hole` is set.
+Exit 2 means shortage, unknown or supplier confirmation required; it is not a pass.
+
+JLCPCB screening reads its public assembly catalog using the protocol documented
+by [jlcparts](https://github.com/yaqwsx/jlcparts). It compares demand to the smaller
+of listed stock and nonnegative available-to-order quantity, and screens against
+`max(demand + lossNumber, leastPatchNumber, minPurchaseNum)`. These are declared
+supplier fields, not an assertion that the public catalog reproduces every quote
+rule. The vendor quote must confirm actual allowances, options and stock.
+Incomplete rules, mismatched identities and network failures remain unknown.
+Saved reports contain time-stamped inventory fields, their digest, source and
+quantity; signed image links and temporary supplier credentials are discarded.
+Snapshot replay requires the same BOM, supplier and quantity and makes no network
+requests. Reproducibility preserves old facts; it does not make old stock current.
+
+`required_quantity` in picker POST queries filters insufficient/unknown catalog
+stock before candidate truncation. This is a catalog hint filter, not assembly
+qualification. Do not reuse JLC/LCSC counts to qualify PCBWay. PCBWay
+[describes sourcing through multiple distributors](https://www.pcbway.com/pcb_prototype/Electronic_Components.html);
+without a verified inventory service its report explicitly requires supplier
+confirmation. No quote or order is created by an inventory check.
+
+In Manufacturing, **Check assembly availability** uses the selected package,
+supplier, quantity and through-hole choice. The table shows demand, listed and
+orderable stock, allowance/minimum screening and per-part reasons. Evidence is
+published as an artifact linked to the immutable source package and board/contract
+hashes. Changing settings selects different evidence; checks older than one hour
+are labeled historical and require refresh. The packet remains downloadable for
+supplier discussion even when sourcing is unresolved; file review is not approval
+to order unavailable parts.

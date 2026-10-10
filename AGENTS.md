@@ -120,6 +120,17 @@ responses, selected assets and locks in the article; replay with `--offline` or
 `--frozen`. Report public supplier failures as network/data failures, with no
 Atopile login remedy. Lock selected catalog parts and footprints. Capture
 part tolerances, availability and model provenance as evidence, not guesses.
+For turnkey assembly, record the selected assembly house and intended board
+quantity. Before locking selections, run `yapnr picker availability` for the
+complete BOM or individual LCSC/MPN candidates at the required unit quantity.
+Aggregate repeated parts, include declared attrition/minimum quantities and retain
+the inventory report as evidence. A catalog `stock` field is only a discovery hint;
+use `required_quantity` in picker queries when demand is known. Shortage or unknown
+results require another verified selection or an explicit unresolved sourcing
+risk. Recheck the exact final BOM before vendor handoff. PCBWay requires its own
+sourcing confirmation; JLC/LCSC availability does not establish PCBWay stock.
+Inventory snapshots are historical evidence, not reservations. Changes in supplier,
+board quantity or BOM require a new check; never silently substitute parts.
 
 Record fabrication rules, placement intent, differential-pair coupling, total
 uncoupled-length limits, length matching, current capacity and reference planes in
@@ -244,8 +255,10 @@ engine automation was actually demonstrated. Empty queues are not completion.
   native evidence and never invent intermediate geometry or validation. If the feature has no
   meaningful visual behavior, explain why an animation is not applicable.
 - **Ordering is staging only, and agents only dry-run it.** Agents run `yapnr order stage` only
-  with `--dry-run`. They never upload a file to a vendor or any third-party service, never call a
-  vendor API, and never open a vendor page on a human's behalf. The user-operated
+  with `--dry-run`. They never upload a file to a vendor or any third-party service, never call an
+  ordering/upload/payment vendor API, and never open a vendor page on a human's behalf.
+  Read-only public catalog/inventory queries are permitted for sourcing checks;
+  send only individual part identities, never a board, BOM file or conversation. The user-operated
   Manufacturing button may upload an explicitly approved PCBWay packet through
   its official plugin handoff, after a separate user click. Agents never click
   that button or invoke its upload endpoint during design or validation. Paying, confirming an order,

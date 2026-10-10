@@ -16,6 +16,12 @@ board edges, the hierarchical ladder driver and their animations on
 
 ## In progress
 
+- **Assembly inventory**: quantity-aware catalog filtering and assembly-house checks
+  publish replayable BOM/identity/quantity evidence. JLCPCB public inventory includes
+  orderable stock and declared allowance/minimum screening; PCBWay explicitly needs
+  its own supplier confirmation. Native Manufacturing exposes per-part shortages and
+  historical checks. Network failure/unknown stock never passes sourcing.
+
 - **Manufacturing GUI**: approved PCBWay packets have an explicit human-clicked
   official-plugin file upload and quote handoff, with exact artifact receipts.
   JLCPCB automatic attachment awaits approved API access; manual handoff remains.

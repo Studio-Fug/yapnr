@@ -1078,3 +1078,6 @@ dialog::backdrop {
 .assembly-table-scroll { overflow: auto; max-height: 400px; }
 .assembly-table-scroll table { border-collapse: collapse; font-size: 12px; }
 .assembly-table-scroll th, .assembly-table-scroll td { padding: 6px 8px; border-bottom: 1px solid var(--yp-line); white-space: nowrap; text-align: left; }
+
+.assembly-availability .assembly-shortage { color: var(--yp-danger); font-weight: 600; }
+.assembly-availability td:last-child { white-space: normal; min-width: 220px; max-width: 350px; }

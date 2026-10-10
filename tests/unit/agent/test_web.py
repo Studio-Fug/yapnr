@@ -117,6 +117,23 @@ class WebTest(unittest.TestCase):
             self.assertEqual(status, 400)
             self.assertEqual(json.loads(body)["error"], "Source board changed")
 
+    def test_assembly_availability_requires_origin_and_dispatches_quantity(self):
+        from yapnr.agent import assembly_availability
+
+        payload = {"artifact": "fixture", "vendor": "jlcpcb", "quantity": 5}
+        with patch.object(
+            assembly_availability, "check", return_value={"all_available": False}
+        ) as check:
+            self.assertEqual(
+                self.request("/yapnr/api/assembly-availability/article", payload, origin=False)[0],
+                400,
+            )
+            check.assert_not_called()
+            status, _, data = self.request("/yapnr/api/assembly-availability/article", payload)
+            self.assertEqual(status, 200)
+            self.assertFalse(json.loads(data)["all_available"])
+            check.assert_called_once_with(self.root, "fixture", "jlcpcb", 5, False)
+
     def test_vendor_upload_is_an_explicit_origin_checked_action(self):
         from yapnr.agent import vendor_uploads
 

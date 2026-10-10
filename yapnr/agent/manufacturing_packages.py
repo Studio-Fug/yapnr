@@ -164,6 +164,7 @@ def candidates(project):
                     "current": requirement_current and any(b["current"] for b in boards),
                     "drc_errors": errors,
                     "unconnected": opens,
+                    "availability": availability_reports(root, item["id"]),
                     "bom": table(data[full_bom]),
                     "cpl": table(data[placement]),
                     "notes": data["README.md"].decode(),
@@ -406,3 +407,9 @@ def prepare(project, identifier, vendor, quantity, finish, include_through_hole=
         },
     )
     return item
+
+
+def availability_reports(root, identifier):
+    from yapnr.agent import assembly_availability
+
+    return assembly_availability.reports(root, identifier)

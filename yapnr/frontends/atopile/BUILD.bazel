@@ -21,6 +21,7 @@ py_library(
     srcs = [
         "__init__.py",
         "picker/__init__.py",
+        "picker/availability.py",
         "picker/catalog.py",
         "picker/discovery.py",
         "picker/server.py",

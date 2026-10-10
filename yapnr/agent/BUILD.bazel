@@ -51,6 +51,7 @@ py_library(
     srcs = [
         "__init__.py",
         "activity.py",
+        "assembly_availability.py",
         "cli.py",
         "cloud.py",
         "design.py",
@@ -92,6 +93,7 @@ py_library(
         "//yapnr:package",
         "//yapnr/exp",
         "//yapnr/fab",
+        "//yapnr/frontends/atopile:picker",
         "//yapnr/order",
         "//yapnr/viewer:notes_store",
         "@rules_requirements_toolkit//:toolkit",

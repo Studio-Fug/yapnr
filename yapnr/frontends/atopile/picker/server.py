@@ -2,8 +2,9 @@
 
 atopile 0.15.8 resolves parameterised parts (a ``Resistor`` with a ``resistance`` and a
 ``package``) and explicit picks (``lcsc_id``, ``mpn``) by asking a components service. This
-service answers from local catalogs (``catalog.py``), so ``ato build`` never reaches the hosted
-one. The footprints of a picked part come from the project's parts directory, which the runner
+service answers from local catalogs (``catalog.py``); an optional parent resolver captures
+missing supplier facts while the child continues to use loopback only. The footprints of a
+picked part come from the project's parts directory, which the runner
 fills from the part cache; the atopile hook makes ``ato`` use them (``hook/``).
 
 The wire protocol is atopile 0.15.8's (``faebryk/libs/picker/api/api.py``)::
@@ -119,6 +120,7 @@ class _Handler(BaseHTTPRequestHandler):
     server_version = "yapnr-picker/1"
     catalog: catalog_mod.Catalog
     on_request: Optional[Callable[[Dict[str, Any]], None]] = None
+    resolve = None
 
     def _reply(self, status: int, obj: Dict[str, Any]) -> None:
         body = json.dumps(obj).encode()
@@ -143,6 +145,11 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             body = self.rfile.read(length)
         status, obj = api_response(self.catalog, method, self.path, body)
+        if self.resolve is not None:
+            try:
+                status, obj = self.resolve(method, self.path, body, (status, obj))
+            except (OSError, ValueError):
+                status, obj = 502, {"detail": "Component snapshot could not be read or written"}
         if self.on_request is not None:
             try:
                 parsed = json.loads(body) if body else None
@@ -173,12 +180,17 @@ class PickerServer:
         host: str = "127.0.0.1",
         port: int = 0,
         on_request: Optional[Callable[[Dict[str, Any]], None]] = None,
+        resolve=None,
     ):
         host = loopback_host(host)
         handler = type(
             "Handler",
             (_Handler,),
-            {"catalog": catalog_mod.Catalog(catalogs), "on_request": staticmethod(on_request)},
+            {
+                "catalog": catalog_mod.Catalog(catalogs),
+                "on_request": staticmethod(on_request),
+                "resolve": staticmethod(resolve),
+            },
         )
         server_class = ThreadingHTTPServer
         if ":" in host:

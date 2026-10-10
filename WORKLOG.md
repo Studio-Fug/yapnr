@@ -3,7 +3,7 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-07 (installed RF packaging and PyPI publishing). Previous status:
+Last updated: 2026-10-10 (PR #99 merge preparation). Previous status:
 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
 `claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
 on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
@@ -15,6 +15,97 @@ board edges, the hierarchical ladder driver and their animations on
 `claude/animations-groups-hier`.
 
 ## In progress
+
+- **PR #99 integration**: the native engineering workbench, evidence-gated workflow,
+  traceability/artifact review, recorded attempts, circuit simulation and manufacturing
+  handoff are ready for final hosted validation. Corrected the dock transaction expectation
+  for Manufacturing, moved Git into the final container runtime for project initialization,
+  and cleared hidden through-hole selection when inspecting qualified packets. JavaScript
+  transaction/syntax checks pass; full regressions and hosted image smoke are being rerun.
+  Consolidated feature evidence is linked from the PR; older session entries live in Git.
+
+- **Assembly inventory**: quantity-aware catalog filtering and assembly-house checks
+  publish replayable BOM/identity/quantity evidence. JLCPCB public inventory includes
+  orderable stock and declared allowance/minimum screening; PCBWay explicitly needs
+  its own supplier confirmation. Native Manufacturing exposes per-part shortages and
+  historical checks. Network failure/unknown stock never passes sourcing.
+
+- **Manufacturing GUI**: approved PCBWay packets have an explicit human-clicked
+  official-plugin file upload and quote handoff, with exact artifact receipts.
+  JLCPCB automatic attachment awaits approved API access; manual handoff remains.
+
+- **Manufacturing package discovery**: published native/prototype packages are discovered automatically.
+  Supplier, quantity, finish and optional through-hole service lead to local vendor-specific
+  BOM/CPL preparation, previews, content-bound review and human downloads/quote handoff.
+  Prototype vendor DFM/rotation and physical verification remain explicitly open.
+
+- **On-demand parts**: authoring CLI builds fetch missing component queries, retain response
+  digests and selected assets/locks in the article, and replay offline/frozen. Operator
+  our rules_atopile-derived picker matches public supplier facts without hosted
+  Atopile calls, accounts or tokens. No shared catalog uploads or prepopulated local
+  library are required. Typed discovery covers resistors/capacitors and explicit
+  LCSC/MPN picks; network/data failures remain explicit.
+
+- **Workspace search and Performance**: Cmd/Ctrl-F opens a floating source/component/net
+  search, including in embedded frames; repeated shortcuts preserve/clear queries.
+  Inspect tab layouts migrate to the dialog. Performance holds native controls and
+  validated project cloud settings with read-only SDK status and no job submission.
+
+- **Recorded build attempts**: Experiments lists archived schematic-build results, including
+  failures before PnR, and opens their result JSON in read-only source tabs. Restored active
+  tabs initialize on first drawer open. Embedded styling and saved theme apply before
+  renderer scripts load, avoiding the legacy-theme flash. Live discovery is read-only
+  and retains failed attempts. The workspace server accepts cold-start asset bursts
+  without dropping concurrent proxy connections.
+
+- **Experiments embed**: workbench tabs own panel visibility; the native legacy drawer
+  controller is bypassed in embeds. Experiment lane selections follow through to the live
+  board/schematic/3D views while pinned comparisons remain independent.
+
+- **Workbench follow-up**: drawer open/dismiss motion respects reduced motion; startup no longer
+  waits for provider discovery. Source syntax, import navigation and hash-scoped selected-text Ask
+  context pass browser checks. A project directory tree starts in the left drawer.
+
+- **Prompt-to-PCB agent workflow**: owner-provided engineering workflow is now
+  scoped into AGENTS.md; the installed wheel ships exact instructions and execution
+  guide. `agent init` preserves contracts/checkpoints, `agent instructions` exposes
+  guidance and `agent chat` opens an operator-owned interactive Codex/Claude terminal.
+  The image includes checksum-pinned Codex and Git; no credentials or paid model
+  sessions run in CI. Focused bootstrap/installed-wheel/container checks and hosted
+  validation are in progress. Complete populated RF assembly acceptance remains #97,
+  not satisfied by DUT-only packaging smoke.
+  Review-first requirements/risk presentation, bounded speculative implementation,
+  refinement-driven restarts and inline visual feedback are now explicit in both
+  embedded guidance and the launcher prompt. `workflow init/query/next` implements
+  a declarative, evidence-gated iteration controller with atomic state/history,
+  immutable receipts, revision invalidation and acceptance/completion guards.
+  Receipts remain assertions requiring genuine user decisions and authoritative
+  validation reports; the controller does not authenticate them or sandbox agents.
+
+- **Workspace-native browser UI**: replaced the OpenCode overlay with one layout
+  for projects, focused/main conversations, artifacts, engineering views and a
+  resizable chat pane. Background activity collapses into one spinner/details group;
+  the footer follows controller stages, including review and rework. The journaled
+  main-thread harness continues idle agents with their selected model, stopping at
+  genuine review checkpoints and native questions/permissions. Turn duration,
+  elapsed session time and continuation counts never stop the design loop.
+  Stop and explicit resume are persistent. Runtime logs remain exportable but are
+  excluded from Git snapshots to prevent recursive chat-summary growth.
+  YAML requirements/risk/trace models now populate a native browser using pinned
+  rules_requirements semantics. Report artifacts link to owned verification cases;
+  stale or corrupt evidence remains open. Content-bound artifact review carries
+  canonical feedback/questions, explicit approval and a canned revision cycle.
+  Bundled package inspection is allowed without repeated external-directory prompts.
+  Schematic capture opens live atopile sources alongside a netlist-backed schematic,
+  retaining the last valid export through incomplete writes and failed builds.
+  OpenCode remains the headless provider/tool/session runtime.
+  Canonical notes carry immutable focused transcripts into the main conversation
+  without starting a model turn; shared document edits use revision checks.
+  Pinned sandboxed three.js choices, rendered artifact markup, full conversation
+  journaling and integrity-checked workspace archives are implemented. Browser
+  checks distinguish synthetic review fixtures from actual engineering views.
+  Solver regeneration remains unverified until a pinned replay recipe passes;
+  image-build toolchain warming remains outstanding.
 
 - **External RF packaging (#96)**: collect every RF Bazel subpackage explicitly
   without numerical dependency closure in the wheel collector. Export/report,

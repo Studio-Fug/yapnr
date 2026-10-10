@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="branding/yapnr-logo-light.png">
-    <img src="branding/yapnr-logo-256.png" alt="yapnr" width="256">
+    <source media="(prefers-color-scheme: dark)" srcset="yapnr/brand/assets/yapnr-logo-primary-dark.svg">
+    <img src="yapnr/brand/assets/yapnr-logo-primary-light.svg" alt="yapnr" width="256">
   </picture>
 </p>
 
@@ -111,3 +111,10 @@ Silicon, and [docs/releases.md](docs/releases.md) for versioning and releases.
 Copyright (C) 2026 Kevin Balke. Licensed under the GNU Affero General Public License v3.0 or later
 (`AGPL-3.0-or-later`); see [LICENSE](LICENSE). Third-party material is listed in
 [THIRD_PARTY.md](THIRD_PARTY.md).
+
+## Design with an agent
+
+Ask your agent “Please use Studio-Fug/yapnr to design X” and have it read
+[AGENTS.md](AGENTS.md). Start `yapnr agent chat` in an interactive container;
+[the execution guide](docs/agent-workflow.md) covers authentication, resource
+limits, resumption and the open assembly-validation gates.

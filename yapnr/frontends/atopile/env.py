@@ -63,6 +63,7 @@ def build_env(
             "PYTHONPATH": str(HOOK_DIR),
             "PYTHONNOUSERSITE": "1",
             "PYTHONUTF8": "1",
+            "PYTHONHASHSEED": "0",
             "PYTHONUNBUFFERED": "1",
             "COLUMNS": "160",
             "NO_COLOR": "1",

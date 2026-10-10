@@ -281,6 +281,14 @@ class Design:
                     "is_atomic_part.manufacturer"
                 )
                 d["prefix"] = traits.get("has_designator_prefix.prefix")
+                d["part_links"] = {}
+                for key, value in traits.items():
+                    field = key.rsplit(".", 1)[-1].lower()
+                    if field in ("datasheet", "datasheet_url", "octopart_url", "easyeda_url"):
+                        if isinstance(value, str) and value.startswith(("https://", "http://")):
+                            d["part_links"][
+                                "datasheet_url" if field == "datasheet" else field
+                            ] = value
 
     def lookup(self, name, frm):
         f = self.files.get(frm)
@@ -1164,6 +1172,14 @@ def build_index(src, graph, rules=None, entry=None):
             part=it["type"],
             mpn=it["d"].get("mpn"),
             manufacturer=it["d"].get("manufacturer"),
+            part_links={
+                **it["d"].get("part_links", {}),
+                **{
+                    key: c[key]
+                    for key in ("datasheet_url", "octopart_url", "easyeda_url")
+                    if isinstance(c.get(key), str) and c[key].startswith(("https://", "http://"))
+                },
+            },
             passive=is_passive(c["ref"]),
             doc=doc,
             comments=list(dict.fromkeys(cm)),

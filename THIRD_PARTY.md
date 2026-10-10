@@ -6,6 +6,19 @@ brought in. Update it in the same change that adds, removes or upgrades such mat
 
 ## Shipped or served with yapnr
 
+### rules_requirements
+
+- **What:** the authoritative YAML model, validation, verification-set attribution,
+  status rollups and trace graph renderer from Studio-Fug/rules_requirements,
+  pinned to `aabecadd6e8710a11e99ccb366e63d858d92f6c6`.
+- **License:** AGPL-3.0-or-later; its vendored YAML parser retains the upstream
+  MIT license. The wheel includes both license texts.
+- **How:** Bazel fetches the immutable source archive with a checked SHA-256
+  (`@rules_requirements_toolkit`). The pure Python toolkit is included in the
+  packaged wheel, so requirements review does not need a runtime download or
+  build. The native traceability surface uses its entity payloads and SVG;
+  pan/zoom interaction is adapted from the upstream graph view with attribution.
+
 ### elkjs
 
 - **What:** [elkjs](https://github.com/kieler/elkjs) 0.9.3 (`lib/elk.bundled.js`), the graph
@@ -175,3 +188,31 @@ image, and this file is at `/usr/share/doc/yapnr/THIRD_PARTY.md`.
 
 The yapnr logo, mark and favicons in `branding/` are project assets created for yapnr (see
 [docs/about-the-name.md](docs/about-the-name.md)); they are covered by the repository license.
+
+### Interactive Codex terminal
+
+The application image installs OpenAI Codex 0.161.0 native Linux binaries from
+the official npm architecture archives, checked against immutable SHA-512 pins
+in `docker/yapnr/codex.lock.json`. Source is
+[97901140](https://github.com/openai/codex/tree/979011409de0a60b52f179721948e65531d26144).
+Codex is Apache-2.0; its LICENSE/NOTICE and dependency notices are shipped in
+`/usr/share/doc/yapnr/licenses/codex/`. The separate ripgrep and bubblewrap binaries
+retain their upstream licenses and source links there. Optional voice and bundled
+zsh runtimes are excluded. Claude Code is not redistributed. Credentials and
+provider accounts are supplied by the operator and are never part of the image.
+
+### Provider-neutral interactive terminal
+
+OpenCode 1.18.35 is installed from official Linux release archives, checked against
+SHA-256 pins in `docker/yapnr/opencode.lock.json`. Its source is
+[53d1eabb](https://github.com/anomalyco/opencode/tree/53d1eabb61e21162157817bf677da0a4ad3332e3),
+licensed under MIT; the license is shipped in `licenses/opencode/`. Provider
+credentials are operator-supplied. Official Codex/Claude account authentication
+uses the respective official CLI rather than OpenCode's provider adapters.
+
+## Workbench fonts
+
+The bundled Space Grotesk, IBM Plex Sans and IBM Plex Mono fonts are licensed
+under the SIL Open Font License 1.1. Original license files are included in
+[yapnr/brand/fonts](yapnr/brand/fonts). The application serves WOFF2 conversions
+locally; it does not contact a font CDN.

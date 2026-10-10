@@ -36,6 +36,20 @@ DIST = {src: "dist/" + src[len("static/"):] for src in STATIC}
 
 DIST.update({src: "dist/" + dest for src, dest in THIRD_PARTY.items()})
 
+DIST.update({"//yapnr/brand:" + brand_file: "dist/brand/" + brand_file for brand_file in [
+    "tokens.css",
+    "assets/yapnr-favicon.svg",
+    "assets/yapnr-mark-light.svg",
+    "assets/yapnr-mark-dark.svg",
+    "fonts/fonts.css",
+    "fonts/SpaceGrotesk.woff2",
+    "fonts/IBMPlexSans.woff2",
+    "fonts/IBMPlexMono.woff2",
+    "fonts/spacegrotesk-OFL.txt",
+    "fonts/ibmplexsans-OFL.txt",
+    "fonts/ibmplexmono-OFL.txt",
+]})
+
 genrule(
     name = "dist",
     srcs = DIST.keys(),
@@ -56,12 +70,24 @@ filegroup(
 )
 
 py_library(
+    name = "notes_store",
+    srcs = [
+        "__init__.py",
+        "notes/__init__.py",
+        "notes/store.py",
+    ],
+)
+
+py_library(
     name = "viewer",
     srcs = glob(
         ["**/*.py"],
         exclude = [
             "kicad_scripts/**",
             "testing.py",
+            "notes/__init__.py",
+            "notes/store.py",
+            "__init__.py",
         ],
     ),
     data = [
@@ -71,6 +97,7 @@ py_library(
         ":kicad_scripts",
     ],
     deps = [
+        ":notes_store",
         "//hardware/pnr",
         "//hardware/pnr:pnr_hier",
         "//hardware/pnr:pnr_place",

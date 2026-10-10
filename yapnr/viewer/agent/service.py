@@ -38,6 +38,7 @@ import time
 import uuid
 from pathlib import Path
 
+from yapnr.events import record as record_workspace_event
 from yapnr.viewer import runtime as viewer_runtime
 from yapnr.viewer.agent.spend import SpendMeter
 from yapnr.viewer.agent.web_guard import MAX_URL as WEB_MAX_URL  # noqa: F401 (re-exported)
@@ -446,6 +447,7 @@ class AgentService:
         rules=None,
         engine_runtime=None,
         meter=None,
+        workspace_dir=None,
     ):
         """notes: a notes_store.NotesStore (shared with the server's /api/notes) or its directory;
         None = no notes tools. web: --agent-web, default off (requests may still turn it off per
@@ -459,6 +461,7 @@ class AgentService:
         # The CLI by name on PATH (shutil.which) or by path; never a machine default.
         self.claude = shutil.which(str(claude_bin)) or str(claude_bin)
         self.cwd = Path(cwd).resolve()
+        self.workspace_dir = Path(workspace_dir).resolve() if workspace_dir else None
         self.source = source
         self.state_fn = state_fn
         self.event_fn = event_fn
@@ -1456,6 +1459,11 @@ class AgentService:
                     view = view[os.write(fd, view) :]
             finally:
                 os.close(fd)
+            if self.workspace_dir:
+                record_workspace_event(
+                    self.workspace_dir,
+                    {"source": "focused-agent-turn", "session": row["session"], "turn": row},
+                )
         except OSError:
             pass
 
@@ -1618,6 +1626,17 @@ class AgentService:
             if req["session"] and self.ctx_hash.get(sid) == h:
                 ctx = "[Viewer context]\n(unchanged since the previous message)\n[/Viewer context]"
             prompt = ctx + "\n\nQuestion:\n" + req["message"]
+            if self.workspace_dir:
+                record_workspace_event(
+                    self.workspace_dir,
+                    {
+                        "source": "focused-agent-request",
+                        "session": sid,
+                        "turn": turn_no,
+                        "request": req,
+                        "prompt": prompt,
+                    },
+                )
             rec["prompt_chars"] = len(prompt)
             resume = req["session"] is not None
             mcp = self.mcp_config(sid, turn_no, req["ctx"]) if notes else None
@@ -1702,6 +1721,16 @@ class AgentService:
                     continue
                 if not isinstance(ev, dict):
                     continue
+                if self.workspace_dir:
+                    record_workspace_event(
+                        self.workspace_dir,
+                        {
+                            "source": "focused-agent-event",
+                            "session": sid,
+                            "turn": turn_no,
+                            "event": ev,
+                        },
+                    )
                 events = tr.feed(ev)
                 if tr.init and not rec.get("init"):
                     rec["init"] = tr.init

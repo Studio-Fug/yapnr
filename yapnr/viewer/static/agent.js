@@ -256,5 +256,12 @@ function build(){
 function openAsk(){let K=window.YapnrDock;if(!K)return;K.tab('ask');if(G.ui)setTimeout(()=>G.ui.ta.focus(),0)}
 window.YapnrAgent={enabled:()=>!absent(),offText:'The assistant is off on this server (start the viewer with --agent on).',addContext,removeContext,context:()=>G.ctx.slice(),ask(text){openAsk();return send(text)},open:openAsk,cancel,newConversation,status:()=>G.status,markdown:md,
  chip:itemChip,label:ctxLabel,show:showItem,key:ctxKey,draft,session:()=>G.session,busy:()=>G.busy,web:()=>!!(webAvail()&&G.web),history:openHistory,load:loadConversation,sources:mdSources,titleOf};
+// The embedding workspace can reopen a focused thread; it cannot send a paid turn.
+window.addEventListener('message',event=>{
+ if(window.parent===window||event.source!==window.parent||event.data?.type!=='yapnr-open-thread')return;
+ let origin;try{origin=new URL(document.referrer).origin}catch(e){return}
+ if(event.origin!==origin||!/^([0-9a-f]{8}-)([0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(event.data.session)||G.busy)return;
+ openAsk();loadConversation(event.data.session);
+});
 if(window.YapnrDock)build();else D.addEventListener('DOMContentLoaded',()=>window.YapnrDock?build():console.warn('agent.js: window.YapnrDock missing (load source.js before agent.js)'));
 })();

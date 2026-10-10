@@ -109,6 +109,27 @@ class RunnerTest(unittest.TestCase):
         with mock.patch.dict(os.environ, self.env):
             return runner.build(options, log=lambda _text: None)
 
+    def test_authoring_captures_parts_for_a_self_contained_offline_build(self):
+        authored = self.build(offline=False)
+        self.assertTrue(authored.ok, authored.summary)
+        self.assertEqual(authored.summary["part_capture_errors"], [])
+        self.assertTrue((self.project / ".yapnr/parts/cache").is_dir())
+        self.assertTrue((self.project / "elec/src/parts" / testing.SYNTHETIC_PART).is_dir())
+        options = runner.BuildOptions(
+            project=self.project,
+            out=self.root / "replayed",
+            cache=str(self.root / "unavailable-operator-cache"),
+            kicad_cli=str(self.cli),
+            timeout=60,
+            work_root=self.root / "work",
+            offline=True,
+        )
+        with mock.patch.dict(os.environ, self.env):
+            replayed = runner.build(options, log=lambda _text: None)
+        self.assertTrue(replayed.ok, replayed.summary)
+        self.assertEqual(replayed.summary["parts"], authored.summary["parts"])
+        self.assertEqual(replayed.input_id, authored.input_id)
+
     def test_build_copies_named_outputs_only(self):
         result = self.build(keep_work=True)
         self.assertTrue(result.ok)
@@ -163,6 +184,15 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertEqual(result.outputs, {})
         self.assertTrue((result.out / "ato.log").is_file())
+
+    def test_authoring_failure_without_selected_parts_has_no_capture_error(self):
+        (self.project / parts.LOCK_NAME).unlink()
+        (self.project / "fake.json").write_text(json.dumps({"exit": 3}))
+        result = self.build(offline=False)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.summary["native_returncode"], 3)
+        self.assertEqual(result.summary["part_capture_errors"], [])
+        self.assertFalse((self.project / ".yapnr/parts/cache").exists())
 
     def test_timeout_kills_the_process_tree(self):
         pid_file = self.root / "grandchild.pid"

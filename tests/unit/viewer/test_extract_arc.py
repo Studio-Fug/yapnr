@@ -35,6 +35,23 @@ class OlderArc:
 
 
 class ArcSweepTest(unittest.TestCase):
+    def test_missing_outline_uses_display_bounds_without_claiming_a_board_outline(self):
+        class Box:
+            def GetWidth(self):
+                return 68000000
+
+            def GetHeight(self):
+                return 8000000
+
+        class Board:
+            def ComputeBoundingBox(self, include_edges):
+                self.include_edges = include_edges
+                return Box()
+
+        board = Board()
+        self.assertEqual(load_extract().display_bounds(board, None), (68.0, 8.0, False))
+        self.assertFalse(board.include_edges)
+
     def test_kicad10_get_angle(self):
         self.assertAlmostEqual(load_extract().arc_sweep(Kicad10Arc()), -math.pi / 2)
 

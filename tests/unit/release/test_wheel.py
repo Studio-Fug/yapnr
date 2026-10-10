@@ -79,11 +79,49 @@ class WheelTest(unittest.TestCase):
         self.assertIn("Root-Is-Purelib: false", wheel)
 
     def test_package_files(self):
-        for name in ["yapnr/__init__.py", "yapnr/__main__.py", "yapnr/cli.py"]:
+        for name in [
+            "yapnr/__init__.py",
+            "yapnr/__main__.py",
+            "yapnr/cli.py",
+            "yapnr/agent/cli.py",
+            "yapnr/agent/AGENTS.md",
+            "yapnr/agent/workflow.md",
+            "yapnr/agent/workflow.py",
+            "yapnr/agent/workflow.json",
+            "yapnr/agent/workspace.py",
+            "yapnr/agent/threads.py",
+            "yapnr/agent/web.py",
+            "yapnr/agent/requirements.py",
+            "yapnr/agent/design.py",
+            "yapnr/agent/web/design.js",
+            "yapnr/agent/web/vendor/elk.bundled.js",
+            "yapnr/agent/reviews.py",
+            "yapnr/agent/harness.py",
+            "yapnr/agent/web/traceability.js",
+            "rules_requirements/model.py",
+            f"{self.dist_info}/licenses/rules_requirements/LICENSE",
+            "yapnr/agent/web/workspace.js",
+            "yapnr/agent/web/index.html",
+            "yapnr/agent/web/scene.html",
+            "yapnr/agent/web/vendor/three.module.js",
+            "yapnr/agent/web/vendor/three.core.js",
+            "yapnr/agent/web/vendor/OrbitControls.js",
+            "yapnr/agent/web/vendor/LICENSE",
+            "yapnr/viewer/notes/store.py",
+            "yapnr/events.py",
+        ]:
             self.assertIn(name, self.names)
         # Only the package and its metadata: no tests, tools or repository files.
         for name in self.names:
-            self.assertTrue(name.startswith(("yapnr/", self.dist_info + "/")), name)
+            self.assertTrue(
+                name.startswith(("yapnr/", "rules_requirements/", self.dist_info + "/")), name
+            )
+
+    def test_bundled_requirements_cli_entrypoint(self):
+        self.assertIn(
+            "rr = rules_requirements.cli:main",
+            self.zip.read(f"{self.dist_info}/entry_points.txt").decode(),
+        )
 
     def test_rf_package(self):
         """yapnr.rf with its native library (where the loader looks beside the package) and
@@ -145,6 +183,14 @@ class WheelTest(unittest.TestCase):
             python = os.path.join(env_root, "bin", "python")
             env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
             env["YAPNR_RF_REQUIRE_NATIVE"] = "1"
+            for name in (
+                "OPENBLAS_NUM_THREADS",
+                "OMP_NUM_THREADS",
+                "MKL_NUM_THREADS",
+                "VECLIB_MAXIMUM_THREADS",
+                "YAPNR_RF_THREADS",
+            ):
+                env[name] = "1"
             subprocess.run(
                 [python, "-I", "-m", "ensurepip"],
                 cwd=root,
@@ -174,6 +220,13 @@ class WheelTest(unittest.TestCase):
             shutil.copyfile(smoke, copied)
             probe = (
                 "import pathlib,runpy,yapnr; "
+                "from yapnr.agent.cli import initialize,instructions; "
+                "from yapnr.agent.workflow import init,query; "
+                "assert '<DONE>' in instructions(); "
+                "initialize('article', 'Design X'); "
+                "init('article', 'Design X'); "
+                "assert query('article')['state'] == 'requirements_capture'; "
+                "assert pathlib.Path('article/requirements/manifest.md').exists(); "
                 "assert pathlib.Path(yapnr.__file__).resolve().is_relative_to(pathlib.Path('env').resolve()); "
                 "runpy.run_path('smoke.py', run_name='__main__')"
             )

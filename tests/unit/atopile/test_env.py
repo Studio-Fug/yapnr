@@ -43,6 +43,7 @@ class BuildEnvTest(unittest.TestCase):
         child = env.build_env(self.work, PICKER)
         expected = {
             "CI": "1",
+            "PYTHONHASHSEED": "0",
             "ATO_NON_INTERACTIVE": "1",
             "FBRK_TELEMETRY": "0",
             "YAPNR_ATO_HOOK": "1",

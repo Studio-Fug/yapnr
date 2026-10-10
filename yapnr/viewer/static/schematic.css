@@ -37,7 +37,7 @@ body:not(.sch-nolegend) #sch-legend-toggle{background:#26453f;border-color:#9ee6
 #sch-legend .lg.ind{padding-left:17px;grid-template-columns:10px 1fr}
 #sch-legend .lg i{width:12px;height:12px;border-radius:3px;margin-top:1px;opacity:.9}
 #sch-legend .lg.ind i{width:10px;height:10px;opacity:.6}
-#sch-legend .lg i.dash{background-image:repeating-linear-gradient(90deg,transparent 0 3px,#101b20 3px 5px)!important}
+#sch-legend .lg i.dash{background-image:none!important;border-bottom:2px dashed #101b20}
 #sch-legend .lg span{overflow-wrap:anywhere}
 #sch-legend .lg em{grid-column:2;color:#8fa4ad;font-size:10px;font-style:normal}
 #sch-legend details{margin-top:10px}#sch-legend details p{white-space:pre-line;overflow-wrap:anywhere}

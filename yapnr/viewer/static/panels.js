@@ -12,6 +12,8 @@
 // the Inspect dock's own collapse) instead of closing outright, and either panel can dock to the
 // left or right edge of an overlay drawer, independent of the other.
 (function(){
+// Embedded views are ordinary workbench tabs; the parent owns their drawers.
+if(window.parent!==window&&new URLSearchParams(location.search).get('workspace')==='1')return;
 const D=document,store={get(k,d){try{let v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const KEY='yapnr-panels-v1',wide=()=>innerWidth>900,pref=store.get(KEY,{});
 const lanesEl=D.getElementById('lanes-panel'),exploreEl=D.getElementById('explore-panel');

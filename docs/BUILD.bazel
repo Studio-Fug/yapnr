@@ -40,3 +40,8 @@ exports_files([
     "examples/cloud.toml.example",
     "examples/gloss-groups-chaser.json",
 ])
+
+exports_files(
+    ["agent-workflow.md"],
+    visibility = ["//visibility:public"],
+)

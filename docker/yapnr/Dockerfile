@@ -73,6 +73,23 @@ ARG PBS_RELEASE
 
 USER root
 
+# Project initialization and the agent's source history need Git in the runtime.
+# General circuit simulation as well as the SI runner's shared-library backend.
+# Pin the Ubuntu package; retain its copyright/source metadata in the image.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends git ngspice=42+ds-3build1; \
+    rm -rf /var/lib/apt/lists/*; \
+    mkdir -p /opt/yapnr/lib; \
+    lib="$(dpkg -L libngspice0 | sed -n '/\/libngspice.so.0$/p')"; \
+    test -f "${lib}"; \
+    ln -s "${lib}" /opt/yapnr/lib/libngspice.so; \
+    ln -s "$(dirname "${lib}")/ngspice" /opt/yapnr/lib/ngspice; \
+    test -f /opt/yapnr/lib/ngspice/analog.cm; \
+    ngspice --version
+ENV PNR_NGSPICE_LIB=/opt/yapnr/lib/libngspice.so \
+    PNR_NGSPICE_CODEMODELS=/opt/yapnr/lib/ngspice
+
 # The runtime: exactly the pins (and hashes) of requirements.lock, per architecture. On amd64
 # torch is the CPU-only build from the PyTorch index (--torch-backend=cpu); PyPI's arm64 torch
 # wheel is CPU-only already. Headers and tests of torch are not needed at run time. uv runs as
@@ -145,6 +162,23 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
       echo "files above in the image user's HOME are not the user's" >&2; exit 1; \
     fi
 
+# Interactive agent runtime, immutable upstream version and archive integrity.
+# No credentials, npm resolver, Node or paid session at build time.
+RUN --mount=type=bind,source=docker/yapnr,target=/tmp/yapnr-agent \
+    set -eu; \
+    /opt/venv/bin/python /tmp/yapnr-agent/install_codex.py "${TARGETARCH}" /opt/codex; \
+    /opt/venv/bin/python /tmp/yapnr-agent/install_opencode.py "${TARGETARCH}" /usr/local/bin/opencode; \
+    ln -s /opt/codex/bin/codex /usr/local/bin/codex; \
+    ln -s /opt/codex/codex-path/rg /usr/local/bin/rg; \
+    codex --version; \
+    opencode --version; \
+    rm -rf /tmp/opencode; \
+    mkdir -p /usr/share/doc/yapnr/licenses/codex; \
+    cp /tmp/yapnr-agent/codex.lock.json /usr/share/doc/yapnr/codex.lock.json; \
+    cp /tmp/yapnr-agent/opencode.lock.json /usr/share/doc/yapnr/opencode.lock.json; \
+    echo 'OpenCode 1.18.35: https://github.com/anomalyco/opencode/tree/53d1eabb61e21162157817bf677da0a4ad3332e3; MIT; licenses/opencode/' >> /usr/share/doc/yapnr/SOURCES; \
+    echo 'OpenAI Codex 0.161.0: https://github.com/openai/codex/tree/979011409de0a60b52f179721948e65531d26144; Apache-2.0; embedded dependency notices in licenses/codex/' >> /usr/share/doc/yapnr/SOURCES
+
 COPY --chmod=0755 docker/yapnr/yapnr.sh /usr/local/bin/yapnr
 COPY LICENSE THIRD_PARTY.md /usr/share/doc/yapnr/
 COPY third_party/image-licenses/ /usr/share/doc/yapnr/licenses/
@@ -182,6 +216,8 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
 
 ENV VIRTUAL_ENV=/opt/venv \
     PATH=/usr/local/bin:/opt/venv/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
+    YAPNR_PYTHON=/opt/venv/bin/python \
+    YAPNR_KICAD_FOOTPRINTS=/usr/share/kicad/footprints \
     PYTHONUNBUFFERED=1 \
     YAPNR_SOURCE_REVISION=${VCS_REF}
 
@@ -202,5 +238,8 @@ USER 1000:1000
 WORKDIR /project
 # No HEALTHCHECK: it would mark every `run` or `doctor` container unhealthy. The viewer's
 # compose service defines its own (docs/containers.md). The viewer and its port arrive in PR4a.
+COPY docker/yapnr/opencode-permissions.json /etc/yapnr/opencode.json
+ENV OPENCODE_CONFIG=/etc/yapnr/opencode.json
+
 ENTRYPOINT ["/usr/bin/tini", "--", "yapnr"]
 CMD ["doctor"]

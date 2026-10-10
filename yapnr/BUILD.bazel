@@ -18,6 +18,7 @@ py_library(
     # The `atopile`, `picker`, `part-cache`, `exp`, `fab` and `order` commands (imported when the
     # parser is built).
     deps = [
+        "//yapnr/agent",
         "//yapnr/exp",
         "//yapnr/fab",
         "//yapnr/frontends/atopile",
@@ -35,6 +36,8 @@ py_library(
     name = "package",
     srcs = [
         "__init__.py",
+        "events.py",
+        "experiments.py",
         "frontends/__init__.py",
     ],
     imports = [".."],

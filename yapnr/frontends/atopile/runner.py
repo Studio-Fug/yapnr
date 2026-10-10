@@ -1,12 +1,12 @@
-"""``yapnr atopile build``: one bounded, isolated, offline ``ato build`` (replaces ato_build.sh and
+"""``yapnr atopile build``: one bounded, isolated ``ato build`` (replaces ato_build.sh and
 rules_atopile's actions).
 
 For each build the runner:
 
 1. finds the atopile environment (``toolchain.discover``) and the headless KiCad (``kicad``);
-2. copies the project into a fresh work directory (the source tree is never written, except by
-   ``--update-layout``, which copies the new layout back); with ``--files-from`` (the Bazel
-   rule's declared inputs) only the listed files;
+2. copies the project into a fresh work directory (offline builds leave sources untouched;
+   authoring captures selected parts, and ``--update-layout`` copies the new layout back);
+   with ``--files-from`` (the Bazel rule's declared inputs) only the listed files;
 3. writes every part of the project's parts lock into the copy, verified against the part cache;
 4. writes the stock KiCad footprint libraries the sources reference into the build's
    ``fp-lib-table`` (atopile 0.15.8 resolves ``Library:Footprint`` only there);
@@ -44,11 +44,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
+from yapnr import experiments as experiment_records
 from yapnr.frontends.atopile import env as env_mod
 from yapnr.frontends.atopile import kicad, outline, parts, proc, toolchain
 from yapnr.frontends.atopile.picker import catalog as catalog_mod
+from yapnr.frontends.atopile.picker.discovery import RELATIVE as DISCOVERY_PATH
+from yapnr.frontends.atopile.picker.discovery import (
+    Discovery,
+)
+from yapnr.frontends.atopile.picker.discovery import encoded as discovery_encoded
 from yapnr.frontends.atopile.picker.server import PickerServer
-from yapnr.partcache.client import PartCache, open_cache
+from yapnr.partcache import importer
+from yapnr.partcache.client import CacheError, PartCache, open_cache
 
 DEFAULT_TARGETS = ("build-design", "bom", "variable-report", "power-tree", "pinout")
 # Targets a build may name. Not `default`/`all` (they pull in datasheet downloads), not
@@ -167,6 +174,8 @@ def _copy_project(source: Path, dest: Path, files: Optional[Sequence[str]] = Non
         skip = [n for n in names if n in COPY_IGNORE]
         if Path(directory) == source:
             skip += [n for n in names if n in COPY_IGNORE_TOP]
+        if Path(directory) == source / ".yapnr":
+            skip += [n for n in names if n in ("workspace", "workflow")]
         return skip
 
     shutil.copytree(source, dest, ignore=ignore, symlinks=False)
@@ -292,10 +301,55 @@ def _catalogs(
 
 def build(options: BuildOptions, log=print) -> BuildResult:
     project = Path(options.project).resolve()
+    root = experiment_records.workspace_root(project)
+    inputs = sorted(
+        path
+        for path in project.rglob("*.ato")
+        if not any(
+            part in COPY_IGNORE + (".ato", ".yapnr") for part in path.relative_to(project).parts
+        )
+    )[:256]
+    inputs += [path for path in (project / "ato.yaml", project / parts.LOCK_NAME) if path.is_file()]
+    attempt = experiment_records.begin(
+        root,
+        "schematic",
+        "Atopile · " + options.build,
+        inputs,
+        {"build": options.build, "targets": list(options.targets), "offline": options.offline},
+    )
+    try:
+        result = _build(options, log)
+    except BaseException as error:
+        experiment_records.finish(
+            root,
+            attempt["id"],
+            "cancelled" if isinstance(error, KeyboardInterrupt) else "failed",
+            summary={"error_type": type(error).__name__},
+        )
+        raise
+    outputs = [
+        path
+        for path in result.out.iterdir()
+        if path.is_file() and path.resolve().is_relative_to(root)
+    ]
+    experiment_records.finish(
+        root,
+        attempt["id"],
+        "timed out" if result.timed_out else "passed" if result.ok else "failed",
+        outputs,
+        {"returncode": result.returncode, "input_id": result.input_id},
+    )
+    return result
+
+
+def _build(options: BuildOptions, log=print) -> BuildResult:
+    project = Path(options.project).resolve()
     if not (project / "ato.yaml").is_file():
         raise BuildError(f"{project} has no ato.yaml")
     build_name = _check_build_name(options.build)
     targets = _check_targets(options.targets)
+    if options.frozen and not options.offline:
+        raise BuildError("Frozen builds must use captured offline parts; remove --online")
     if options.stock_footprints not in ("referenced", "all", "none"):
         raise BuildError("--stock-footprints must be referenced, all or none")
     out = Path(options.out or Path("yapnr-out") / project.name / build_name).resolve()
@@ -315,7 +369,11 @@ def build(options: BuildOptions, log=print) -> BuildResult:
             log(f"atopile: {err}")
 
     lock = parts.load(project)
-    cache = open_cache(options.cache) if (lock and lock["parts"]) or options.cache else None
+    article_cache = _inside(project, ".yapnr/parts/cache", "captured part cache")
+    # Captured article inputs take precedence over an operator cache, which may not
+    # contain parts selected in a later authoring build.
+    cache_location = str(article_cache) if article_cache.is_dir() else options.cache
+    cache = open_cache(cache_location) if (lock and lock["parts"]) or cache_location else None
 
     work_root = Path(options.work_root) if options.work_root else None
     if work_root is not None:
@@ -363,7 +421,11 @@ def build(options: BuildOptions, log=print) -> BuildResult:
         for target in ALWAYS_EXCLUDED:
             cmd += ["-x", target]
         cmd.append("--frozen" if options.frozen else "--no-frozen")
-        with PickerServer(docs, on_request=requests.append) as picker:
+        try:
+            discovery = Discovery(project, online=not options.offline)
+        except (OSError, ValueError, KeyError) as error:
+            raise BuildError("Cannot read captured component queries: " + str(error)) from error
+        with PickerServer(docs, on_request=requests.append, resolve=discovery.answer) as picker:
             child_env = env_mod.build_env(
                 work,
                 picker.url,
@@ -398,7 +460,58 @@ def build(options: BuildOptions, log=print) -> BuildResult:
                 shutil.copy2(path, dest)
                 hashes[name] = _sha256(dest)
             copied[name] = dest.name
-        for name in ("ato.log", "hook.jsonl", "catalog.json"):
+        native_returncode = code
+        # Export newly discovered facts through the same catalog schema used by our picker.
+        docs.extend(
+            document
+            for entry in discovery.document["queries"].values()
+            for document in entry["catalogs"]
+        )
+        merged_parts = list(catalog_mod.Catalog(docs).parts)
+        catalog_snapshot.write_text(
+            catalog_mod.dump(
+                {
+                    "schema": catalog_mod.SCHEMA,
+                    "provenance": {"source": "yapnr atopile build (merged)"},
+                    "parts": merged_parts,
+                }
+            ),
+            encoding="utf-8",
+        )
+        capture_errors = []
+        if not options.offline:
+            try:
+                selected_parts = work_project / parts.parts_dir_of(work_project)
+                directories = (
+                    importer.part_dirs_under(selected_parts) if selected_parts.is_dir() else []
+                )
+                if directories:
+                    captured_cache = open_cache(article_cache, create=True)
+                    importer.import_part_dirs(
+                        captured_cache, directories, "yapnr on-demand component discovery"
+                    )
+                    captured_lock = parts.lock_directory(work_project, cache=captured_cache)
+                    wanted = {entry.get("lcsc") for entry in captured_lock["parts"]}
+                    for document in docs:
+                        selected_catalog = {
+                            **document,
+                            "parts": [part for part in document["parts"] if part["lcsc"] in wanted],
+                        }
+                        if selected_catalog["parts"]:
+                            importer.import_catalog(captured_cache, selected_catalog)
+                    parts.materialize_lock(
+                        project, captured_lock, captured_cache, replace=options.replace_parts
+                    )
+                    (project / parts.LOCK_NAME).write_text(
+                        parts.dump(captured_lock), encoding="utf-8"
+                    )
+                    lock = captured_lock
+            except (OSError, ValueError, CacheError, importer.ImportFailed) as error:
+                capture_errors.append("Selected part inputs could not be captured: " + str(error))
+                code = code or 1
+        discovery_snapshot = logs / "discovery.json"
+        discovery_snapshot.write_bytes(discovery_encoded(discovery.document))
+        for name in ("ato.log", "hook.jsonl", "catalog.json", "discovery.json"):
             if (logs / name).is_file():
                 shutil.copy2(logs / name, out / name)
         events = []
@@ -411,6 +524,8 @@ def build(options: BuildOptions, log=print) -> BuildResult:
             "build": build_name,
             "targets": targets,
             "returncode": code,
+            "native_returncode": native_returncode,
+            "part_capture_errors": capture_errors,
             "timed_out": timed_out,
             "seconds": round(time.monotonic() - started, 1),
             "outputs": copied,
@@ -420,7 +535,23 @@ def build(options: BuildOptions, log=print) -> BuildResult:
             "parts_lock": _sha256(project / parts.LOCK_NAME) if lock else None,
             "parts": [e["name"] for e in lock["parts"]] if lock else [],
             "catalog_sha256": _sha256(catalog_snapshot),
-            "catalog_parts": sum(len(d["parts"]) for d in docs),
+            "catalog_parts": len(
+                {p["lcsc"] for d in docs for p in d["parts"]}
+                | {
+                    "C" + str(p["lcsc"])
+                    for entry in discovery.document["queries"].values()
+                    for batch in entry["response"].get("results", [entry["response"]])
+                    for p in batch.get("components", [])
+                }
+            ),
+            "component_discovery": {
+                "snapshot": DISCOVERY_PATH,
+                "sha256": _sha256(discovery_snapshot),
+                "remote_requests": discovery.remote_queries,
+                "replayed_requests": discovery.replayed_queries,
+                "failures": discovery.failures,
+                "offline": options.offline,
+            },
             "stock_footprint_libraries": stock,
             "kicad_cli": kicad.version(kicad_cli) if kicad_cli else None,
             "picker_requests": [

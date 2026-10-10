@@ -1,0 +1,14 @@
+{
+  "version": "1.18.35",
+  "source": "https://github.com/anomalyco/opencode/tree/53d1eabb61e21162157817bf677da0a4ad3332e3",
+  "platforms": {
+    "arm64": {
+      "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.35/opencode-linux-arm64.tar.gz",
+      "sha256": "f7f2ba59ee8aa94d388f9696575a32d20e71c2ee48def9f80fc693a60fec6c72"
+    },
+    "amd64": {
+      "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.35/opencode-linux-x64-baseline.tar.gz",
+      "sha256": "90c97d4a24d36437bce36f27195c9cd2e0b70ed037a04d1c6a6740eb246c2a73"
+    }
+  }
+}

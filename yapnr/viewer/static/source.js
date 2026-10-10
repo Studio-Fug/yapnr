@@ -252,7 +252,8 @@ function moreRows(list,n,fn,cols,label){let out=list.slice(0,n).map(fn);if(list.
 function actions(item,extra){let hl=item.kind==='component'?{refs:[item.ref]}:item.kind==='net'?{nets:[item.name]}:item.kind==='pad'?{pads:[item.ref+'.'+item.pad]}:{refs:item.refs||[],nets:item.nets||[]};
  return h('div',{class:'dk-actions'},h('button',{type:'button',onclick:()=>highlight(hl)},'Show on board'),extra,h('span',{class:'dk-sp'}),noteBtn(item),h('button',{type:'button',class:'dk-ask ask-entry',onclick:()=>askAbout(item)},'Ask about this'))}
 const noteBtn=item=>NT()&&NT().available?.()!==false?h('button',{type:'button',class:'dk-note',title:'New note about this (you can edit targets, kind and status before saving)',onclick:()=>NT().newNote({targets:[JSON.parse(JSON.stringify(item))]})},'Add note'):null;
-function askAbout(item){let a=AG();if(!a){alert('The Ask panel (agent.js) is not loaded.');return}if(a.enabled?.()===false){DOCK.tab('ask');return}a.addContext(item);a.open?a.open():DOCK.tab('ask')}
+function workspaceSelection(item,type='yapnr-selection'){if(window.parent===window)return false;try{const origin=new URL(document.referrer).origin;window.parent.postMessage({type,selection:item,record:item?.kind==='component'?comp(item.ref):item?.kind==='net'?net(item.name):null,scope:{board_sha256:V()?.boardSha?.()||null,layout_sha256:(phase==='live'?lane():lane()?.frames?.[Number(phase)])?.layout_sha256||null,lane:V()?.lane?.(),phase:V()?.phase?.(),source_revision:'unknown'}},origin);return true}catch{return false}}
+function askAbout(item){if(workspaceSelection(item,'yapnr-ask-selection'))return;let a=AG();if(!a){alert('The Ask panel (agent.js) is not loaded.');return}if(a.enabled?.()===false){DOCK.tab('ask');return}a.addContext(item);a.open?a.open():DOCK.tab('ask')}
 function currentsTable(list){if(!list.length)return null;return h('table',{class:'dk-tab'},h('thead',null,h('tr',null,['Target','Pads','RMS','Peak','Scope',''].map(x=>h('th',null,x)))),
  h('tbody',null,list.map(c=>h('tr',null,h('td',{class:'mono'},c.target||''),h('td',{class:'mono'},(c.pads||[]).join(', ')),h('td',null,c.rms_current_a!=null?c.rms_current_a+' A':'—'),h('td',null,c.peak_current_a!=null?c.peak_current_a+' A':'—'),h('td',null,c.scope||''),h('td',null,c.file?h('button',{class:'dk-lnk',title:(c.file+':'+c.line),onclick:()=>open(c.file,c.line,c.line)},'L'+c.line):'')))))}
 function boardInfo(o){if(!o||typeof o!=='object')return null;let b=[],f=v=>typeof v==='number'?(Math.abs(v)>=100?v.toFixed(0):+v.toFixed(2)):v,xy=o.xy||o.position;
@@ -262,6 +263,14 @@ function boardInfo(o){if(!o||typeof o!=='object')return null;let b=[],f=v=>typeo
 function componentCurrents(c){if(c.currents)return c.currents;let out=[],seen=new Set();for(let p of Object.values(c.pins||{}))for(let x of net(p.net)?.currents||[]){let k=x.file+':'+x.line;if(x.ref===c.ref&&!seen.has(k)){seen.add(k);out.push(x)}}return out}
 function badges(...b){return h('div',{class:'dk-badges'},b.filter(Boolean).map(([t,cls,tip])=>h('span',{class:'dk-badge '+(cls||''),title:tip||null},t)))}
 function aiBox(llm){if(!llm||!(llm.summary||llm.label))return null;return h('div',{class:'dk-ai',title:llm.generated_at?'Generated '+llm.generated_at+' · not verified':'Not verified'},h('div',{class:'dk-ai-h'},'AI summary · '+(llm.model||'model')),llm.label?h('b',null,llm.label):null,llm.summary?h('p',null,llm.summary):null)}
+function partLinks(c){
+ let links=c.part_links||{},out=[];
+ for(let [key,label] of [['octopart_url','Octopart'],['easyeda_url','EasyEDA'],['datasheet_url','Datasheet']]){
+  let url;try{url=new URL(links[key]||c[key]);if(!['https:','http:'].includes(url.protocol)||url.username||url.password)continue}catch(e){continue}
+  out.push(h('a',{href:url.href,target:'_blank',rel:'noopener noreferrer',class:'dk-lnk'},label));
+ }
+ return sec('Part references',out.length?h('div',{class:'dk-row'},out):h('p',{class:'dk-muted'},'Source-page and datasheet URLs have not been recorded for this part.'));
+}
 function rInspect(item){
  let x=IX(),body=[];const hd=(t,sub,tip)=>h('div',{class:'insp-h'},h('div',{class:'insp-t',title:tip||null},t),sub?h('div',{class:'insp-sub'},sub):null);
  if(item.kind==='component'){let c=comp(item.ref);
@@ -270,6 +279,7 @@ function rInspect(item){
   body.push(hd([item.ref,h('span',{class:'insp-ty'},c.type||c.part||'')],c.instance||c.address),badges(c.part&&c.part!==c.type?[c.part,'mono','Package component (part file)']:null));
   if(doc)body.push(h('p',{class:'insp-doc'},rich(doc)));body.push(boardInfo(V()?.componentInfo?.(item.ref)));
   body.push(actions(item,c.file?h('button',{type:'button',onclick:()=>showComponent(item.ref)},'Source'):null));
+  body.push(partLinks(c));
   if(c.file)body.push(sec('Defined at',loc(c.file,c.line,c.line,c.text)));
   if(c.chain?.length>1)body.push(sec('Instantiated via',h('div',{class:'dk-chain'},c.chain.map((e,i)=>h('button',{class:'dk-crumb',title:(e.text||'').trim()+'\n'+e.file+':'+e.line,onclick:()=>open(e.file,e.line,e.line)},i?h('i',null,'›'):null,e.address.split('.').pop()||e.address,(t=>t?h('em',null,t):null)(/new\s+(\w+)/.exec(e.text||'')?.[1]||e.module))))));
   if(c.statements?.length)body.push(sec('Statements · '+c.statements.length,more(c.statements,10,s=>loc(s.file,s.line,s.line,s.text))));
@@ -315,11 +325,11 @@ function emptyInspect(){IB.body.replaceChildren(h('div',{class:'dk-empty'},h('b'
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 // focus: true = show the Inspect tab (opening the dock); undefined = show it only if the dock is open and not on Ask; false = badge only.
 function inspect(item,opt={}){
- if(!item){S.item=null;emptyInspect();return}
+ if(!item){S.item=null;workspaceSelection(null);emptyInspect();return}
  let f=opt.focus,show=()=>{if(f===true||(f===undefined&&DOCK.isOpen()&&DOCK.current()!=='ask'))DOCK.tab('inspect');else if(DOCK.current()!=='inspect'||!DOCK.isOpen())DOCK.badge('inspect',true)};
  if(S.item&&same(S.item,item)&&!opt.force){show();return}
  if(S.item&&!opt.nohist){S.ihist.push(S.item);if(S.ihist.length>30)S.ihist.shift()}btnIBack.disabled=!S.ihist.length;
- S.item=item;IB.body.replaceChildren(...withNotes(item));IB.body.scrollTop=0;show();
+ S.item=item;workspaceSelection(item);IB.body.replaceChildren(...withNotes(item));IB.body.scrollTop=0;show();
  if(!S.idx&&!S.err)load().then(()=>{if(S.item===item)IB.body.replaceChildren(...withNotes(item))}).catch(()=>{})}
 // notes.js: a 'Notes · N' section right after the action row, re-rendered (scroll kept) only when this item's notes change
 const noteSig=it=>(NT()?.forItem?.(it)||[]).map(n=>n.id+':'+n.status+':'+n.updated+':'+n.title).join('|');

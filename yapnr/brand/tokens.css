@@ -1,0 +1,56 @@
+/* yapnr brand kit v1 — proposed shared foundation. */
+:root, [data-theme="light"] {
+  --yp-canvas: #f3f5ef;
+  --yp-surface: #ffffff;
+  --yp-raised: #e9eee6;
+  --yp-hover: #e2e9de;
+  --yp-ink: #17241b;
+  --yp-muted: #556452;
+  --yp-line: #c5cec0;
+  --yp-control: #81907d;
+  --yp-brand: #024823;
+  --yp-action: #024823;
+  --yp-on-action: #ffffff;
+  --yp-selected: #e1eadc;
+  --yp-gold: #ba9015;
+  --yp-gold-ink: #795b08;
+  --yp-success: #24623d;
+  --yp-warning: #795b08;
+  --yp-danger: #a43735;
+  --yp-info: #235f82;
+  --yp-provisional: #77518b;
+  --yp-glass: rgba(250,252,247,.90);
+  --yp-scrim: rgba(17,24,20,.24);
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --yp-canvas: #111814;
+  --yp-surface: #18221b;
+  --yp-raised: #222e25;
+  --yp-hover: #2b3b2e;
+  --yp-ink: #edf3e9;
+  --yp-muted: #a9b7a5;
+  --yp-line: #3d4e3e;
+  --yp-control: #748770;
+  --yp-brand: #ddeee0;
+  --yp-action: #ddeee0;
+  --yp-on-action: #024823;
+  --yp-selected: #293d2b;
+  --yp-gold: #ba9015;
+  --yp-gold-ink: #e4c879;
+  --yp-success: #a6d7ae;
+  --yp-warning: #e4c879;
+  --yp-danger: #ffaaa1;
+  --yp-info: #9bc8e2;
+  --yp-provisional: #cfb4e4;
+  --yp-glass: rgba(24,34,27,.90);
+  --yp-scrim: rgba(0,0,0,.40);
+  color-scheme: dark;
+}
+:root { --yp-radius: 0px; --yp-blur: 18px; --yp-elevation-1: 0 1px 2px rgba(0,0,0,.12); --yp-elevation-2: 0 8px 24px rgba(0,0,0,.18); --yp-elevation-3: 0 24px 64px rgba(0,0,0,.24); --yp-fast:120ms; --yp-standard:180ms; --yp-ui:"Space Grotesk",sans-serif; --yp-body:"IBM Plex Sans",sans-serif; --yp-mono:"IBM Plex Mono",monospace; }
+:focus-visible { outline:2px solid var(--yp-brand); outline-offset:3px; }
+.yp-glass { background:var(--yp-glass); backdrop-filter:blur(var(--yp-blur)); -webkit-backdrop-filter:blur(var(--yp-blur)); border:1px solid var(--yp-line); border-radius:0; box-shadow:var(--yp-elevation-2); }
+@supports not (backdrop-filter:blur(1px)) { .yp-glass {background:var(--yp-surface);} }
+@media(prefers-reduced-transparency:reduce) { .yp-glass {background:var(--yp-surface);backdrop-filter:none;} }
+[data-reduce-transparency="true"] .yp-glass {background:var(--yp-surface);backdrop-filter:none;}
+@media(prefers-reduced-motion:reduce) {*,*::before,*::after {animation:none!important;transition:none!important;scroll-behavior:auto!important;} }

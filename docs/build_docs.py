@@ -53,10 +53,18 @@ ROOT_DOCUMENTS = [
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 
 STATIC_ASSETS = {
-    "branding/yapnr-logo-256.png": "yapnr-logo-256.png",
-    "branding/yapnr-logo-light.png": "yapnr-logo-light.png",
-    "branding/favicon/yapnr-favicon.svg": "yapnr-favicon.svg",
+    "yapnr/brand/assets/yapnr-logo-primary-light.svg": "yapnr-logo-primary-light.svg",
+    "yapnr/brand/assets/yapnr-logo-primary-dark.svg": "yapnr-logo-primary-dark.svg",
+    "yapnr/brand/assets/yapnr-favicon.svg": "yapnr-favicon.svg",
+    "yapnr/brand/fonts/fonts.css": "fonts/fonts.css",
 }
+STATIC_ASSETS.update(
+    {
+        "yapnr/brand/fonts/" + name: "fonts/" + name
+        for name in ("SpaceGrotesk.woff2", "IBMPlexSans.woff2", "IBMPlexMono.woff2")
+    }
+)
+
 
 _REDIRECT = """<!DOCTYPE html>
 <html lang="en">
@@ -95,6 +103,10 @@ def _stage(ws: Path, stage: Path) -> None:
     # 2. Theme assets from branding/.
     for src, name in STATIC_ASSETS.items():
         _copy(ws / src, stage / "_static" / name)
+
+    shutil.copytree(
+        ws / "yapnr" / "brand", stage / "_extra" / "yapnr" / "brand", dirs_exist_ok=True
+    )
 
     # 3. Top-level documents.
     for name in ROOT_DOCUMENTS:

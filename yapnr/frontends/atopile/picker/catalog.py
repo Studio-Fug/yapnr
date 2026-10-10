@@ -507,14 +507,16 @@ class Catalog:
                     distance = abs(part["params"][main] - (lo + hi) / 2)
             return (0 if part["basic"] else 1, distance, lcsc_number(part["lcsc"]))
 
-        return [component(p) for p in sorted(matches, key=rank)]
+        return stock_filter([component(p) for p in sorted(matches, key=rank)], params)
 
     def answer(self, query: Dict[str, Any]) -> List[Dict[str, Any]]:
         """One entry of ``POST /v0/query``: an LCSC, a manufacturer part or a type query."""
         if "lcsc" in query:
-            return self.by_lcsc(query["lcsc"])
+            return stock_filter(self.by_lcsc(query["lcsc"]), query)
         if query.get("part_number"):
-            return self.by_mfr(query.get("manufacturer_name") or "", query["part_number"])
+            return stock_filter(
+                self.by_mfr(query.get("manufacturer_name") or "", query["part_number"]), query
+            )
         endpoint = query.get("endpoint")
         return self.query(endpoint, query) if isinstance(endpoint, str) else []
 
@@ -529,3 +531,13 @@ def _inside(band: Optional[Tuple[float, float]], bounds: Sequence[Tuple[float, f
     lo, hi = band
     eps = 1e-9 * max(1.0, abs(lo), abs(hi))
     return any(b_lo - eps <= lo and hi <= b_hi + eps for b_lo, b_hi in bounds)
+
+
+def stock_filter(components, query):
+    """Optional catalog screening; live assembly evidence is a separate check."""
+    required = query.get("required_quantity")
+    if required is None:
+        return components
+    if type(required) is not int or not 1 <= required <= 10000000:
+        raise ValueError("required_quantity must be a positive integer up to 10000000")
+    return [part for part in components if part["stock"] >= required]

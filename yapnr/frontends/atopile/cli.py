@@ -87,7 +87,7 @@ def _cmd_build(args: argparse.Namespace) -> int:
         stock_footprints=args.stock_footprints,
         kicad_cli=args.kicad_cli,
         replace_parts=args.replace_parts,
-        offline=not args.online,
+        offline=getattr(args, "offline", False) or args.frozen,
         files=_read_list(args.files_from) if args.files_from else None,
     )
     try:
@@ -161,7 +161,9 @@ def register_atopile(commands: "argparse._SubParsersAction") -> None:
     info.add_argument("--root", help="environments directory, as given to setup --root")
     info.set_defaults(func=_cmd_info)
 
-    build = sub.add_parser("build", help="build an atopile project offline, in isolation")
+    build = sub.add_parser(
+        "build", help="build in isolation; discover missing selections unless --offline or --frozen"
+    )
     build.add_argument("project", help="the directory holding ato.yaml")
     build.add_argument("--build", "-b", default="default", help="the ato.yaml build")
     build.add_argument("--target", "-t", action="append", help="build target (repeatable)")
@@ -186,10 +188,12 @@ def register_atopile(commands: "argparse._SubParsersAction") -> None:
         "--files-from",
         help="copy only these files of the project (one path per line, relative to it)",
     )
-    build.add_argument(
-        "--online",
-        action="store_true",
-        help="let atopile fetch parts that are not locked from EasyEDA (not reproducible)",
+    network = build.add_mutually_exclusive_group()
+    network.add_argument(
+        "--online", action="store_true", help="discover missing parts (authoring default)"
+    )
+    network.add_argument(
+        "--offline", action="store_true", help="use only captured component queries and local parts"
     )
     build.set_defaults(func=_cmd_build)
 
@@ -253,9 +257,46 @@ def _cmd_catalog_validate(args: argparse.Namespace) -> int:
     return status
 
 
+def _cmd_availability(args: argparse.Namespace) -> int:
+    from yapnr.frontends.atopile.picker import availability
+
+    try:
+        if args.bom:
+            parts = availability.bom_parts(Path(args.bom).read_bytes(), args.include_through_hole)
+        else:
+            if not args.mpn:
+                raise ValueError("--mpn is required with --lcsc")
+            parts = [{"lcsc": args.lcsc, "mpn": args.mpn, "refs": ["selection"], "per_board": 1}]
+        snapshot = json.loads(Path(args.snapshot).read_bytes()) if args.snapshot else None
+        report = availability.check(parts, args.vendor, args.quantity, snapshot=snapshot)
+        payload = availability.encoded(report).decode()
+        if args.output:
+            Path(args.output).write_text(payload, encoding="utf-8")
+        print(payload, end="")
+        return 0 if report["all_available"] else 2
+    except (ValueError, OSError, KeyError, TypeError) as error:
+        return _err(str(error))
+
+
 def register_picker(commands: "argparse._SubParsersAction") -> None:
     top = commands.add_parser("picker", help="the offline atopile part picker and its catalogs")
     sub = top.add_subparsers(dest="picker_command", metavar="<command>", required=True)
+
+    stock = sub.add_parser(
+        "availability", help="check assembly-house quantities; exit 2 for shortage/unknown"
+    )
+    inputs = stock.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--bom", help="complete or supplier CSV BOM")
+    inputs.add_argument("--lcsc", help="single selection's LCSC identity")
+    stock.add_argument("--mpn", help="required manufacturer part number for a single selection")
+    stock.add_argument("--vendor", choices=("jlcpcb", "pcbway"), required=True)
+    stock.add_argument(
+        "--quantity", type=int, required=True, help="boards, or units for a single selection"
+    )
+    stock.add_argument("--include-through-hole", action="store_true")
+    stock.add_argument("--snapshot", help="replay this captured report without network access")
+    stock.add_argument("-o", "--output", help="save inventory facts and quantity evidence")
+    stock.set_defaults(func=_cmd_availability)
 
     serve = sub.add_parser("serve", help="serve catalogs on the loopback interface")
     serve.add_argument("--catalog", action="append", default=[], help="catalog file")

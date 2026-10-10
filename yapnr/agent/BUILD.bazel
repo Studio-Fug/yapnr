@@ -1,0 +1,101 @@
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+genrule(
+    name = "web_vendor",
+    srcs = [
+        "@threejs//:build/three.core.js",
+        "@threejs//:build/three.module.js",
+        "@threejs//:examples/jsm/controls/OrbitControls.js",
+        "@threejs//:LICENSE",
+        "@elkjs//:lib/elk.bundled.js",
+        "@elkjs//:LICENSE.md",
+        "//third_party/licenses:Apache-2.0.txt",
+    ],
+    outs = [
+        "web/vendor/three.core.js",
+        "web/vendor/three.module.js",
+        "web/vendor/OrbitControls.js",
+        "web/vendor/LICENSE",
+        "web/vendor/elk.bundled.js",
+        "web/vendor/elk-LICENSE.md",
+        "web/vendor/elk-Apache-2.0.txt",
+    ],
+    cmd = "mkdir -p $(RULEDIR)/web/vendor && " +
+          "cp $(location @threejs//:build/three.core.js) $(RULEDIR)/web/vendor/three.core.js && " +
+          "cp $(location @threejs//:build/three.module.js) $(RULEDIR)/web/vendor/three.module.js && " +
+          "cp $(location @threejs//:examples/jsm/controls/OrbitControls.js) $(RULEDIR)/web/vendor/OrbitControls.js && " +
+          "cp $(location @threejs//:LICENSE) $(RULEDIR)/web/vendor/LICENSE && " +
+          "cp $(location @elkjs//:lib/elk.bundled.js) $(RULEDIR)/web/vendor/elk.bundled.js && " +
+          "cp $(location @elkjs//:LICENSE.md) $(RULEDIR)/web/vendor/elk-LICENSE.md && " +
+          "cp $(location //third_party/licenses:Apache-2.0.txt) $(RULEDIR)/web/vendor/elk-Apache-2.0.txt",
+)
+
+genrule(
+    name = "instructions",
+    srcs = ["//:AGENTS.md"],
+    outs = ["AGENTS.md"],
+    cmd = "cp $(location //:AGENTS.md) $@",
+)
+
+genrule(
+    name = "workflow",
+    srcs = ["//docs:agent-workflow.md"],
+    outs = ["workflow.md"],
+    cmd = "cp $(location //docs:agent-workflow.md) $@",
+)
+
+py_library(
+    name = "agent",
+    srcs = [
+        "__init__.py",
+        "activity.py",
+        "assembly_availability.py",
+        "cli.py",
+        "cloud.py",
+        "design.py",
+        "harness.py",
+        "manufacturing.py",
+        "manufacturing_packages.py",
+        "requirements.py",
+        "reviews.py",
+        "threads.py",
+        "vendor_uploads.py",
+        "web.py",
+        "workflow.py",
+        "workspace.py",
+    ],
+    data = [
+        "web/adapters.js",
+        "web/content.css",
+        "web/design.js",
+        "web/dock.js",
+        "web/dock-model.js",
+        "web/experiments-view.js",
+        "web/index.html",
+        "web/manufacturing-view.js",
+        "web/performance-view.js",
+        "web/scene.html",
+        "web/search-view.js",
+        "web/source-view.js",
+        "web/timing-view.js",
+        "web/traceability.js",
+        "web/workbench.css",
+        "web/workspace.js",
+        "workflow.json",
+        ":instructions",
+        ":web_vendor",
+        ":workflow",
+        "//yapnr/brand:assets",
+    ],
+    deps = [
+        "//yapnr:package",
+        "//yapnr/exp",
+        "//yapnr/fab",
+        "//yapnr/frontends/atopile:picker",
+        "//yapnr/order",
+        "//yapnr/viewer:notes_store",
+        "@rules_requirements_toolkit//:toolkit",
+    ],
+)

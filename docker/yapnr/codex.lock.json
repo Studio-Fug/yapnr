@@ -1,0 +1,16 @@
+{
+  "arm64": {
+    "version": "0.161.0",
+    "source_revision": "979011409de0a60b52f179721948e65531d26144",
+    "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.161.0-linux-arm64.tgz",
+    "integrity": "sha512-SBu0n4C1Pby9rGKUNA02yHEg/ScbECgiTIiKiKhbYWiUWqGPV1hY0Br7joEntbz0dyNzSWqNPD8uOqxcOry/Fg==",
+    "triplet": "aarch64-unknown-linux-musl"
+  },
+  "amd64": {
+    "version": "0.161.0",
+    "source_revision": "979011409de0a60b52f179721948e65531d26144",
+    "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.161.0-linux-x64.tgz",
+    "integrity": "sha512-AVkNzeJWyCHHPyg5vxD8UE6aFsYaOwq0/x6mtmkOKy6LdjvsyxLr7Q7UULlk+Ma3+PnrN8uIxG2/XGPQ936hgA==",
+    "triplet": "x86_64-unknown-linux-musl"
+  }
+}

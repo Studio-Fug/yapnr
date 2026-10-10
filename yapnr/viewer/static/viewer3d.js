@@ -159,7 +159,7 @@ function build(){let g=S.geo,t0=performance.now();S.built=g?t0:0;clearTimeout(S.
  if(bb.n){let m=meshOf(bb,new T.MeshStandardMaterial({vertexColors:true,side:T.DoubleSide,metalness:.4,roughness:.45}),'barrels',null,1);m.geometry.computeVertexNormals();G.barrels.add(m)}
  // board slab (until the GLB body arrives) and part boxes
  const M=S.mats||={slab:new T.MeshStandardMaterial({color:0x2c4a36,roughness:.8,metalness:0}),box:new T.MeshStandardMaterial({color:0x56666e,roughness:.7,metalness:.1}),nomodel:new T.MeshStandardMaterial({color:0x8fa3ad,roughness:.7,metalness:.1,transparent:true,opacity:.3,depthWrite:false}),edge:new T.LineBasicMaterial({color:0x9db3bd})};  // shared across rebuilds
- let slab=new T.Mesh(new T.BoxGeometry(g.width,g.height,S.body.z1-S.body.z0),M.slab);slab.position.set(g.width/2,g.height/2,(S.body.z0+S.body.z1)/2);slab.userData={slab:true};G.body.add(slab);
+ if(g.outline_present!==false){let slab=new T.Mesh(new T.BoxGeometry(g.width,g.height,S.body.z1-S.body.z0),M.slab);slab.position.set(g.width/2,g.height/2,(S.body.z0+S.body.z1)/2);slab.userData={slab:true};G.body.add(slab)}
  const boxMat=M.box,edgeMat=M.edge;
  for(let part of g.parts||[]){let b=componentBounds(part);if(!b)continue;let smd=new Set((part.pads||[]).filter(p=>p.layers?.length===1).map(p=>p.layers[0])),bottom=smd.has('B.Cu')&&!smd.has('F.Cu');
   let w=Math.max(.2,b[2]-b[0]),d=Math.max(.2,b[3]-b[1]),h=Math.min(1.6,Math.max(.4,.3+.22*Math.min(w,d))),geo=new T.BoxGeometry(w,d,h),m=new T.Mesh(geo,boxMat),e=new T.LineSegments(new T.EdgesGeometry(geo),edgeMat),grp=new T.Group();

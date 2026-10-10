@@ -91,10 +91,31 @@ class WebTest(unittest.TestCase):
     def test_native_manufacturing_empty_state_and_module(self):
         status, _, data = self.request("/yapnr/api/manufacturing/article")
         self.assertEqual(status, 200)
-        self.assertEqual(json.loads(data), {"releases": []})
+        self.assertEqual(json.loads(data), {"releases": [], "candidates": []})
         status, _, data = self.request("/yapnr/manufacturing-view.js")
         self.assertEqual(status, 200)
         self.assertIn(b"mountManufacturing", data)
+
+    def test_native_package_preparation_requires_origin_and_reports_actionable_errors(self):
+        from yapnr.agent import manufacturing_packages
+
+        payload = {"artifact": "a" * 64, "vendor": "jlcpcb", "quantity": 5, "finish": "ENIG"}
+        with patch.object(
+            manufacturing_packages, "prepare", return_value={"id": "b" * 64}
+        ) as prepare:
+            self.assertEqual(
+                self.request("/yapnr/api/assembly-package/article", payload, origin=False)[0], 400
+            )
+            prepare.assert_not_called()
+            status, _, body = self.request("/yapnr/api/assembly-package/article", payload)
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(body)["id"], "b" * 64)
+        with patch.object(
+            manufacturing_packages, "prepare", side_effect=ValueError("Source board changed")
+        ):
+            status, _, body = self.request("/yapnr/api/assembly-package/article", payload)
+            self.assertEqual(status, 400)
+            self.assertEqual(json.loads(body)["error"], "Source board changed")
 
     def test_concurrent_startup_asset_burst(self):
         count = 32

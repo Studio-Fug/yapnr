@@ -1067,3 +1067,14 @@ dialog::backdrop {
 .message-delivery { display: flex; align-items: center; gap: 8px; padding: 10px 0; font-size: 13px; color: var(--yp-ink); }
 .message-delivery[hidden] { display: none; }
 .message-delivery[data-phase="uncertain"] { font-weight: 600; }
+
+.assembly-stages { padding-left: 20px; color: var(--yp-muted); }
+.assembly-release > label { display: grid; gap: 6px; }
+.assembly-release > label:has(input[type="checkbox"]) { display: block; }
+.assembly-release select, .assembly-release input[type="number"] { max-width: 100%; width: 100%; }
+.assembly-release details { margin: 14px 0; }
+.assembly-release details > pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.assembly-release details img { width: 100%; cursor: pointer; }
+.assembly-table-scroll { overflow: auto; max-height: 400px; }
+.assembly-table-scroll table { border-collapse: collapse; font-size: 12px; }
+.assembly-table-scroll th, .assembly-table-scroll td { padding: 6px 8px; border-bottom: 1px solid var(--yp-line); white-space: nowrap; text-align: left; }

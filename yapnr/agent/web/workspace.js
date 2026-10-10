@@ -365,6 +365,7 @@ import { mountTraceability } from '/yapnr/traceability.js';
         entry.manufacturingView?.dispose();
         entry.manufacturingView = mountManufacturing(container, {
           project: state.project,
+          request: () => review('Prepare and publish a local manufacturing prototype package for the current reviewed board, including hashed manifest, CAD, Gerbers/drills, complete BOM, supplier placement, native DRC report and explicit outstanding vendor/physical checks. Do not upload or order. Published prototype packages appear automatically in Manufacturing; leave supplier, finish and quantity for the user to select there.'),
           approve: async artifact => { await json(endpoint('approve'), {artifacts: [artifact]}); await refresh(); },
           artifact: async id => {
             await refresh();

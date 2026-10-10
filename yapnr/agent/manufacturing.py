@@ -8,7 +8,7 @@ from yapnr.agent import requirements, reviews, workflow, workspace
 from yapnr.order import stage, vendors
 
 
-def prepare(project, bundle, board):
+def prepare(project, bundle, board, source_artifact=None):
     root = Path(project).resolve()
     directory = root / bundle
     manifest_file = workspace.relative_file(root, str(Path(bundle) / "manifest.json"))
@@ -95,6 +95,9 @@ def prepare(project, bundle, board):
         "purpose": "Package review and manual vendor handoff; no upload, order or payment",
         "open_verification": "Physical and other outstanding requirement checks remain open.",
     }
+    if source_artifact:
+        release["source_artifact"] = source_artifact
+        release["source_sha256"] = reviews.artifact(root, source_artifact)["sha256"]
     path = "reports/manufacturing/" + vendor + "-handoff.json"
     workspace.atomic(root / path, workspace.encoded(release))
     item = workspace.publish(
@@ -142,6 +145,9 @@ def state(project):
                 == data["board"]["sha256"]
                 and requirements.hashes(root) == data["contract"]
             )
+            if data.get("source_artifact"):
+                original = reviews.artifact(root, data["source_artifact"])
+                current = current and original["sha256"] == data["source_sha256"]
             for download in data["downloads"]:
                 artifact = reviews.artifact(root, download["artifact"])
                 current = current and artifact["sha256"] == download["sha256"]
@@ -157,4 +163,6 @@ def state(project):
                 "handoff_ready": current and record.get("status") == "approved",
             }
         )
-    return {"releases": releases}
+    from yapnr.agent import manufacturing_packages
+
+    return {"releases": releases, "candidates": manufacturing_packages.candidates(root)}

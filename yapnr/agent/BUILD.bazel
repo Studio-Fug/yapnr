@@ -56,6 +56,7 @@ py_library(
         "design.py",
         "harness.py",
         "manufacturing.py",
+        "manufacturing_packages.py",
         "requirements.py",
         "reviews.py",
         "threads.py",
@@ -89,6 +90,7 @@ py_library(
     deps = [
         "//yapnr:package",
         "//yapnr/exp",
+        "//yapnr/fab",
         "//yapnr/order",
         "//yapnr/viewer:notes_store",
         "@rules_requirements_toolkit//:toolkit",

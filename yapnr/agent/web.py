@@ -544,7 +544,7 @@ class Handler(BaseHTTPRequestHandler):
         match = re.fullmatch(
             r"/yapnr/api/(scratchpad|annotation|review|thread|note|attach-note|main-thread|message|"
             r"harness-resume|harness-stop|approve|artifact-feedback|resolve-feedback|"
-            r"presence|source-update|cloud)/([a-z0-9-]+)",
+            r"presence|source-update|cloud|assembly-package)/([a-z0-9-]+)",
             urlsplit(self.path).path,
         )
         if match is None:
@@ -553,6 +553,23 @@ class Handler(BaseHTTPRequestHandler):
             data = self.payload()
             action, name = match.groups()
             root = self.server.project(name)
+
+            if action == "assembly-package":
+                from yapnr.agent import manufacturing_packages
+
+                try:
+                    return self.json(
+                        manufacturing_packages.prepare(
+                            root,
+                            data["artifact"],
+                            data["vendor"],
+                            data["quantity"],
+                            data["finish"],
+                            data.get("include_through_hole", False),
+                        )
+                    )
+                except ValueError as error:
+                    return self.json({"error": str(error)}, 400)
 
             if action == "cloud":
                 return self.json(cloud.save(root, data["settings"], data["sha256"]))

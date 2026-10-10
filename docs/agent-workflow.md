@@ -500,8 +500,8 @@ yapnr workspace assembly --bundle DIR --board design/board.kicad_pcb
 
 Use `pcbway` for the other vendor. Current standard profiles cover JLCPCB
 four/six-layer boards and PCBWay four-layer boards; the PCBWay two-layer RF
-profile is a different stackup. A standard two-layer board requires a supported,
-verified fabrication profile before preparing a package; do not substitute
+profile is a different stackup. A qualified standard two-layer bundle requires a supported,
+verified fabrication profile; do not substitute
 an unrelated profile to bypass checks. Bundle and board paths passed to `workspace
 assembly` are project-relative. This command verifies the bundle and complete
 archive, publishes immutable download artifacts, and requests a content-bound
@@ -523,3 +523,31 @@ quote/order receipt as a workspace artifact and link it into manufacturing
 traceability. Vendor substitutions or board edits require renewed engineering
 checks and package review. Agents do not upload, call vendor APIs, open vendor
 pages on the user's behalf, order or pay.
+
+The Manufacturing tab also discovers already-published full package ZIPs under
+`manufacturing/`, native `*-bundle.zip` artifacts, or artifacts marked with
+`metadata.manufacturing_package: true`. Gerber-only archives remain downloads.
+It checks the immutable archive, manifest members and hashes, source board and
+requirements binding before enabling preparation. Users choose JLCPCB or PCBWay,
+quantity and finish in the GUI, inspect the BOM/CPL and published Gerber previews,
+and prepare supplier files locally without a model turn. Native checked bundles
+keep their recorded supplier/settings; rebuild to change those settings.
+
+Existing prototype exports can produce a **prototype quote packet**, clearly
+marked as unqualified for vendor DFM, component matching and rotations. This
+uses the existing vendor BOM/CPL exporters and preserves the original Gerbers;
+it does not manufacture a passing fabrication-profile check. Approval is for
+file handoff for quoting, with physical verification still open. Through-hole
+parts are separate by default; the user may request them in vendor assembly,
+subject to service and pricing confirmation in the actual quote.
+
+For new prototype exports, `manifest.json` uses schema
+`yapnr-prototype-manufacturing-v1`, `files` as a member-name-to-SHA256 map,
+`board_sha256`, `requirements_sha256` (SHA256 of the canonical workspace
+requirements hash map), and `assembly.full_bom`/`assembly.cpl` member paths.
+Include exactly one matching `cad/*.kicad_pcb`, `settings.json`,
+`checks/drc.json`, `README.md`, the complete BOM and placement CSV, and
+`fabrication/` exports. The complete BOM columns include Reference, Value,
+Manufacturer, MPN, LCSC, Footprint, Mount and Assembly. Publish the source
+board too. Published Gerber preview images in the same experiment are shown
+alongside the package. Legacy prototype packages remain discoverable.

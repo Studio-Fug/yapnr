@@ -3,26 +3,20 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-10 (PR #99 merge preparation). Previous status:
-2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
-`claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
-on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
-engine's fixes for them on `claude/gap-fixes`, with `claude/gap-constraints` merged; the gloss
-port's review fixes on `claude/gloss-port`. Before that, 2026-10-02: fab outputs and staged
-ordering, F2, F1 and O1, on `claude/fab-order`. Before that, 2026-09-30: PR4, #10, the ladder
-animations, the atopile toolchain and the privacy-scan trailer rule merged; line groups, hard
-board edges, the hierarchical ladder driver and their animations on
-`claude/animations-groups-hier`.
+Last updated: 2026-10-11 (USB paired-routing integration validation).
+PR #99 merged into main at `5d1a07c1`; its engineering workbench and manufacturing
+follow-ups are available. PR #94 is rebased on that revision.
 
 ## In progress
 
-- **PR #99 integration**: the native engineering workbench, evidence-gated workflow,
-  traceability/artifact review, recorded attempts, circuit simulation and manufacturing
-  handoff are ready for final hosted validation. Corrected the dock transaction expectation
-  for Manufacturing, moved Git into the final container runtime for project initialization,
-  and cleared hidden through-hole selection when inspecting qualified packets. JavaScript
-  transaction/syntax checks pass; full regressions and hosted image smoke are being rerun.
-  Consolidated feature evidence is linked from the PR; older session entries live in Git.
+- **PR #94 integration**: corrected compact recovery's offset-courtyard geometry.
+  Fresh Linux A/B passes all 12 USB cells under control, prior-paired and integrated
+  defaults; both local integrated header reruns pass native gates. Total uncoupled
+  length remains 2 mm. Validation receipt preserves all baseline/repaired attempts,
+  root/candidate seeds, selected starts, settings, pins and saved-board hashes.
+  Accepted native header snapshots illustrate recovered placement. Full repository
+  checks and hosted validation gate landing; wider board/topology coverage remains
+  open. Bounded search acceptance does not require every root seed to pass.
 
 - **Assembly inventory**: quantity-aware catalog filtering and assembly-house checks
   publish replayable BOM/identity/quantity evidence. JLCPCB public inventory includes
@@ -134,6 +128,39 @@ board edges, the hierarchical ladder driver and their animations on
   The integrated native dovetail example is clean with nonzero interlock; vias increase in
   that one pair. Final-head versus main dovetail and quad-bank campaigns remain pending under
   the approved total budget. See [validation status](docs/design/hull-nest-validation.md).
+
+- **USB matching recovery**: default-on runner reorderable line slots with joint common
+  half-turns, off-center/split meander windows, bounded transactional grid-route
+  reconciliation, and a saved-copper free-space adapter gated by cold native DRC.
+  Final two-case/two-seed A/B: baseline 2/4, free-space windows 3/4, corrected line
+  search 4/4, line search plus sequential recovery 4/4. Every passing finalist has
+  zero native DRC violations/opens and legal placement. Exact original MCU board
+  also passes without moving foreign copper. The reviewed resistor-facing gap was
+  reproduced and fixed: a joint half-turn/order reversal keeps both board slots and
+  saves 7.30 mm pad HPWL; cloud saved resistors are both at 0 degrees. All 288 Bazel
+  tests and all pre-commit hooks pass. Broader ladder validation remains necessary
+  for wider coverage. General coupled-route pushing remains unfinished.
+
+- **Joint differential-pair access**: required coupled routing enabled by default
+  in the regression runner, with `--no-pair-access` for the control,
+  joint through-via site/orientation selection, bounded shared-surface/alternate-layer
+  search, whole-run length/delay compensation and a saved-copper coupling gate.
+  Two USB cases at seeds 0 and 1: control 4/4 and coupled arm 4/4 native-clean;
+  all eight declared pair segments in the coupled arm pass coupling, with at most
+  1.522 mm uncoupled copper per leg against the unchanged 2 mm limit. Independent
+  legs count as unresolved for placement selection. Branched pairs and mid-trunk
+  transitions remain unsupported; wider ladder validation remains to be measured.
+  All 298 rebased Bazel tests and pre-commit hooks pass; new audit/tuning stages map into
+  the existing live timing vocabulary.
+  Rebased bare-default A/B (line/window options off): control 2/4, strict default
+  0/4; three default boards are native-clean but fail saved-copper coupling,
+  and header seed 0 also fails an open/skew gate. The default remains enabled by
+  explicit designer request. The designer subsequently requested enabling line
+  reordering and window search alongside paired access, matching the 4/4 arm;
+  all three runner options now default on with explicit opt-outs. Sequential
+  recovery remains opt-in. PR #94 includes both placement and routing changes.
+  Linux CI's whole-tree privacy test hit its 60s small-test timeout without a
+  finding; classify that test as medium (bounded 300s), preserving every check.
 
 - **Route-then-compact and hull packing** (PR #86, branch `claude/route-compact`; design
   [docs/design/route-compact.md](docs/design/route-compact.md)). `PNR_ROUTE_COMPACT`

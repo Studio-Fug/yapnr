@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
-        <link rel="prefetch" href="../../static/yapnr-logo-256.png" as="image">
-        <link rel="prefetch" href="../../static/yapnr-logo-light.png" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-primary-light.svg" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-primary-dark.svg" as="image">
 
     <link rel="shortcut icon" href="../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
         <title>Coupled USB routing and matching recovery - yapnr documentation</title>
@@ -14,7 +14,8 @@
     <link rel="stylesheet" type="text/css" href="../../static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../../static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=ad564152" />
+    <link rel="stylesheet" type="text/css" href="../../static/fonts/fonts.css?v=eeaf125c" />
+    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=2fd37b7c" />
     
     
 
@@ -199,8 +200,8 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-256.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-primary-light.svg" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-primary-dark.svg" alt="Dark Logo"/>
   </div>
   
   
@@ -213,6 +214,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../agent-workflow.html">Design a PCB with an agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../frontends/atopile.html">The atopile toolchain</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../part-cache.html">The part cache</a></li>
@@ -253,7 +255,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../DEVELOPERS.html">Developing yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../CONTRIBUTING.html">Contributing to yapnr</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../WORKLOG.html">Worklog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../THIRD_PARTY.html">Third-party material</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../README.html">yapnr</a></li>
@@ -358,6 +360,41 @@ python<span class="w"> </span>tools/animate_pair_access.py<span class="w"> </spa
 <p>Each directory must also contain its accepted regression <code class="docutils literal notranslate"><span class="pre">result.json</span></code>; the
 renderer refuses failed or non-clean results.</p>
 </section>
+<section id="integrated-default-validation">
+<h2>Integrated-default validation<a class="headerlink" href="#integrated-default-validation" title="Link to this heading">¶</a></h2>
+<p>After rebasing onto the engineering-workbench main revision, a fresh Linux matrix
+passed control 4/4, prior-paired 4/4 and integrated 2/4. The integrated header
+failures exposed a recovery geometry bug: relaxing compact placement discarded
+the actual offset courtyard of the pin-one-origin header, replacing its 19 mm
+body with a 38 mm symmetric envelope. Recovery therefore rejected a header that
+actually fit, before it could route the new placement.</p>
+<p>Recovery now retains enabled courtyard geometry while relaxing the other compact
+policies. Explicit courtyard ablation remains respected. A regression checks
+that the real header fits a 24 mm board and the symmetric approximation fails.
+With this correction, campaign <code class="docutils literal notranslate"><span class="pre">20261011-ladder-be611d</span></code> passed all twelve Linux
+cells: control, prior-paired and integrated, both USB cases, roots 0 and 1. Both
+local integrated header reruns also passed. Each paired saved board has zero
+native opens/violations and passes coupling and matching; the total uncoupled
+limit remains 2 mm per leg across the whole route. Integrated header recovery
+converged in round 2, with maximum uncoupled copper 1.882 mm.</p>
+<p><img alt="Accepted header states under prior and integrated placement defaults" src="../../images/usb-pair-integrated-native.gif" /></p>
+<p>Both frames are accepted coupled boards at header root seed 1, using the same
+viewport and fabrication rules. The integrated frame includes recovered
+placement. They are final snapshots, without invented intermediate geometry.</p>
+<p>The acceptance unit is a bounded design search. A root seed may explore a branch
+that fails; the campaign may try its predeclared additional roots/candidates
+until a fully qualified board is found or the budget is exhausted. Passing every
+root is not a universal requirement. This regression matrix happens to pass
+every repaired cell. Retain failures, the mechanically selected winner and its
+root/candidate seeds rather than choosing a successful branch by hand.</p>
+<p>The <a class="reference internal" href="#usb-pair-integration-validation.json"><span class="xref myst">validation receipt</span></a> records all 24
+baseline/repaired attempts, candidate seeds, selected starts, commands, budgets,
+source/image pins, exact saved-board hashes and native/electrical results.
+The header root 1 selected <code class="docutils literal notranslate"><span class="pre">start-03</span></code> (candidate seed 314188) before feedback
+recovery. Seeds alone are insufficient for byte-identical reproduction:
+wall-clock-bounded searches also depend on execution speed. Preserve exact input
+artifacts and tool/settings provenance along with the accepted output.</p>
+</section>
 <section id="scope">
 <h2>Scope<a class="headerlink" href="#scope" title="Link to this heading">¶</a></h2>
 <p>The initial joint-access implementation supports two terminals per polarity and
@@ -407,6 +444,7 @@ beyond the two USB cases remains to be expanded.</p>
             <ul>
 <li><a class="reference internal" href="#">Coupled USB routing and matching recovery</a><ul>
 <li><a class="reference internal" href="#native-before-after-evidence">Native before/after evidence</a></li>
+<li><a class="reference internal" href="#integrated-default-validation">Integrated-default validation</a></li>
 <li><a class="reference internal" href="#scope">Scope</a></li>
 </ul>
 </li>

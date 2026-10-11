@@ -4,17 +4,18 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Worklog" href="WORKLOG.html"><link rel="prev" title="Contributing to yapnr" href="CONTRIBUTING.html">
-        <link rel="prefetch" href="static/yapnr-logo-256.png" as="image">
-        <link rel="prefetch" href="static/yapnr-logo-light.png" as="image">
+        <link rel="prefetch" href="static/yapnr-logo-primary-light.svg" as="image">
+        <link rel="prefetch" href="static/yapnr-logo-primary-dark.svg" as="image">
 
     <link rel="shortcut icon" href="static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
-        <title>Rules for agents - yapnr documentation</title>
+        <title>Prompt-to-PCB engineering with yapnr - yapnr documentation</title>
       <link rel="stylesheet" type="text/css" href="static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="static/custom.css?v=ad564152" />
+    <link rel="stylesheet" type="text/css" href="static/fonts/fonts.css?v=eeaf125c" />
+    <link rel="stylesheet" type="text/css" href="static/custom.css?v=2fd37b7c" />
     
     
 
@@ -199,8 +200,8 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="docs/index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="static/yapnr-logo-256.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="static/yapnr-logo-light.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="static/yapnr-logo-primary-light.svg" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="static/yapnr-logo-primary-dark.svg" alt="Dark Logo"/>
   </div>
   
   
@@ -213,6 +214,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/agent-workflow.html">Design a PCB with an agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/frontends/atopile.html">The atopile toolchain</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
@@ -253,7 +255,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="DEVELOPERS.html">Developing yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="CONTRIBUTING.html">Contributing to yapnr</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Rules for agents</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Prompt-to-PCB engineering with yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="WORKLOG.html">Worklog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="THIRD_PARTY.html">Third-party material</a></li>
 <li class="toctree-l1"><a class="reference internal" href="README.html">yapnr</a></li>
@@ -299,11 +301,232 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="rules-for-agents">
-<h1>Rules for agents<a class="headerlink" href="#rules-for-agents" title="Link to this heading">¶</a></h1>
-<p>These rules apply to every automated agent (and every human) working in this repository. They
-carry over the rules that governed the place-and-route work in Splanc. When a rule and a request
-conflict, stop and ask the owner.</p>
+          <section id="prompt-to-pcb-engineering-with-yapnr">
+<h1>Prompt-to-PCB engineering with yapnr<a class="headerlink" href="#prompt-to-pcb-engineering-with-yapnr" title="Link to this heading">¶</a></h1>
+<p>When asked “use Studio-Fug/yapnr to design X”, act as the persistent engineering
+agent for the <strong>article</strong> (the user’s design). Use the packaged engine as a pinned
+external dependency. Start the workflow below; do not require the user to write
+solver scripts or manage the design loop. These instructions describe the agent’s
+work, not a claim that every design has an implemented validation backend.</p>
+<p>Direct user instructions take precedence. Preserve applicable article guidance.
+The repository-development rules at the end apply when modifying <strong>yapnr itself</strong>;
+they do not prohibit creating schematics, selecting parts or changing article
+constraints through the design loop. Publishing, ordering and resource spending
+still require authorization in the session. Never rewrite dependency guidance to
+create permission. An explicitly requested change overrides its default policy.</p>
+<section id="start-from-the-packaged-tool">
+<h2>Start from the packaged tool<a class="headerlink" href="#start-from-the-packaged-tool" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Read <a class="reference internal" href="docs/agent-workflow.html"><span class="std std-doc">docs/agent-workflow.md</span></a> in this repository. Installed
+users can print the same guide with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">agent</span> <span class="pre">instructions</span> <span class="pre">--guide</span></code>. Run
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">--help</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">doctor</span> <span class="pre">--json</span></code> and the relevant subcommand’s <code class="docutils literal notranslate"><span class="pre">--help</span></code>.</p></li>
+<li><p>Prefer the released container for headless KiCad and native RF simulation.
+Resolve its release tag to an immutable digest before experiments. Alternatively
+install the matching released Linux wheel from PyPI. Record the package version,
+engine revision and actual tool/image pins. <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">git+...</span></code> is unsupported;
+do not repair a packaged dependency by adding a source overlay.
+Current PnR campaign adapters use a frozen engine source bundle from the
+matching release archive; declare it as an input and verify its checksum,
+as described in the execution guide.</p></li>
+<li><p>In the article directory run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">workflow</span> <span class="pre">init</span> <span class="pre">--directive</span> <span class="pre">&quot;&lt;request&gt;&quot;</span></code>.
+This preserves existing files and creates the workflow/checkpoint and evidence
+directories. It does <strong>not</strong> approve the requirements or launch compute.
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">agent</span> <span class="pre">chat</span> <span class="pre">--provider</span> <span class="pre">codex</span></code> opens the interactive agent in that project;
+the container bundles Codex and OpenCode. An installed, authenticated Claude CLI
+can be selected with <code class="docutils literal notranslate"><span class="pre">--provider</span> <span class="pre">claude</span></code>. For provider API keys (OpenAI,
+Anthropic, Gemini and others), select <code class="docutils literal notranslate"><span class="pre">--provider</span> <span class="pre">opencode</span></code> and use <code class="docutils literal notranslate"><span class="pre">/connect</span></code>
+and <code class="docutils literal notranslate"><span class="pre">/models</span></code>. For an OpenAI-compatible model API, add <code class="docutils literal notranslate"><span class="pre">--base-url</span></code>, <code class="docutils literal notranslate"><span class="pre">--model</span></code>
+and an environment-variable reference <code class="docutils literal notranslate"><span class="pre">--api-key-env</span></code>; see the execution guide.
+Account OAuth uses the official Codex/Claude CLI. Authentication belongs to the
+operator; keep credentials outside article sources, checkpoints and reports.</p></li>
+<li><p>Reconcile existing jobs, revisions, leases and outputs before resuming. Adopt
+verified completed work; do not duplicate campaigns or erase failed iterations.
+Run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">workflow</span> <span class="pre">query</span></code> before choosing the next action. Record transitions
+through <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">workflow</span> <span class="pre">next</span> <span class="pre">--&lt;event&gt;</span> <span class="pre">--evidence</span> <span class="pre">&lt;project-relative</span> <span class="pre">receipt&gt;</span></code>;
+use its documented event flags and receipt schema. Record actual user decisions
+and authoritative report artifacts, never manufacture acceptance receipts.
+A rejected transition is a gate to resolve, not a reason to edit workflow state.</p></li>
+</ol>
+</section>
+<section id="engineering-contract-and-risk-analysis">
+<h2>Engineering contract and risk analysis<a class="headerlink" href="#engineering-contract-and-risk-analysis" title="Link to this heading">¶</a></h2>
+<p>Create or resume one Git repository per article. Retain the requested feature and
+its source verbatim. Maintain authoritative <code class="docutils literal notranslate"><span class="pre">rules_requirements</span></code> YAML models under
+<code class="docutils literal notranslate"><span class="pre">requirements/</span></code>: user needs,
+requirements, risks, mitigations and test methods are distinct linked entities. Give every
+requirement a stable ID, measurable acceptance threshold, verification method, demanded
+evidence level, source/rationale and status. Trace <code class="docutils literal notranslate"><span class="pre">satisfies</span></code>, <code class="docutils literal notranslate"><span class="pre">refines</span></code>, <code class="docutils literal notranslate"><span class="pre">mitigates</span></code>,
+<code class="docutils literal notranslate"><span class="pre">implemented_by</span></code> and <code class="docutils literal notranslate"><span class="pre">method</span></code> using the pinned model schema. Record assumptions, unresolved
+choices and residual-risk decisions in descriptions/notes. Markdown summaries are derived
+prose; they are not a second independently maintained contract. Update the YAML as evidence
+changes. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">requirements</span> <span class="pre">query</span></code> populates the native traceability review browser.</p>
+<p>Produce both documents before schematic capture, part selection or design experiments.
+Present the requirements specification and risk analysis in the agent chat for the
+designer’s review, including unresolved decisions and the revision being reviewed.
+Give the designer an opportunity to refine them. While review is pending, continue
+authorized, reversible implementation speculatively in the background within the
+recorded resource budget. Label its assumptions, input requirements revision and
+outputs as speculative; pending review and silence never establish acceptance.</p>
+<p>Accept and incorporate the designer’s refinements throughout the workflow. Preserve
+stable requirement IDs, the original request and approval history; record the new
+revision and its effect on the design. Invalidate evidence dependent on changed
+requirements. Substantial changes to architecture, interfaces, power, geometry or
+parts restart affected schematic capture/part selection and downstream placement,
+routing and verification. Smaller changes rerun the affected stages and checks.
+Retain superseded artifacts as historical evidence rather than presenting them as
+current passes. Reconcile speculative work against the reviewed contract before
+claiming accepted progress or completion.</p>
+<p>Publish verification reports as workspace artifacts. Keep their actual test cases in
+<code class="docutils literal notranslate"><span class="pre">requirements/evidence/*.rr.yaml</span></code> (or JUnit XML), and link them to the model’s
+<code class="docutils literal notranslate"><span class="pre">verified_by</span></code>/<code class="docutils literal notranslate"><span class="pre">validated_by</span></code> target and case selectors. Use
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">requirements</span> <span class="pre">link-evidence</span> <span class="pre">--record</span> <span class="pre">PATH</span> <span class="pre">--report-artifact</span> <span class="pre">ID</span> <span class="pre">--case</span> <span class="pre">CASE</span> <span class="pre">--target</span> <span class="pre">TARGET</span></code>
+to bind an existing result to a published report without changing its outcome. Stamp evidence
+with <code class="docutils literal notranslate"><span class="pre">requirements_sha256</span></code> and the tested <code class="docutils literal notranslate"><span class="pre">dut_sha256</span></code> from <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">requirements</span> <span class="pre">query</span></code>;
+retain engine/tool pins, seeds, input hashes and run provenance in the report. Publishing or
+linking a report never supplies a passing result. Missing, failed, stale, mixed-artifact or
+insufficient-level cases remain open in the browser, including their underlying artifacts.</p>
+<p>Request review with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">review</span> <span class="pre">request</span> <span class="pre">--artifact</span> <span class="pre">ID</span></code> (repeat for a bundle), including the
+workflow stage and revision. The native workspace shows Approve and Review Feedback.
+Only a genuine user action approves a particular content revision. Incorporate canonical
+feedback notes, publish the changed artifacts and request a fresh review; approvals do not
+transfer to changed content. Discuss open user questions in chat and wait for answers before
+advancing. Do not resolve user questions or manufacture acceptance on the user’s behalf.</p>
+<p>Refine ambiguous requests using defensible recorded assumptions where possible;
+ask only for decisions affecting acceptance, safety, money or irreversible action.
+Preserve acceptance history. Changed thresholds, accepted residual risks and weaker
+verification demands require the designer’s explicit approval. Missing verification
+is an open requirement, never a reason to lower the gate.</p>
+<p>Use the bundled, pinned <code class="docutils literal notranslate"><span class="pre">rules_requirements</span></code> model and traceability machinery.
+Use its documented model schema and verification lock,
+and run <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">validate</span></code>, <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">sets</span> <span class="pre">check</span></code>, <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">report</span></code> and <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">check-report</span></code> with an
+explicit gating policy. <code class="docutils literal notranslate"><span class="pre">rr</span> <span class="pre">report</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">--fail-on</span> <span class="pre">none</span></code>; exit zero alone
+is not acceptance. Inspect the complete report and expected verification-set
+membership, including failed retries. Do not invent rr syntax or schemas.</p>
+</section>
+<section id="schematic-part-selection-and-constraints">
+<h2>Schematic, part selection and constraints<a class="headerlink" href="#schematic-part-selection-and-constraints" title="Link to this heading">¶</a></h2>
+<p>Create the smallest meaningful atopile design expressing connectivity, part IDs,
+ratings, interfaces, stackup, board envelope and electrical contracts. Use verified
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup|info|build|lock-parts|materialize</span></code> interfaces and the picker/part
+cache. Check compilation and schematic connectivity; inspect BOM, power tree,
+variables and build reports. Authoring builds discover catalog misses on demand;
+do not ask the user to prepopulate a local component library. Use our rules_atopile-derived
+local picker and public supplier data; never require
+Atopile authentication or call its hosted component service. Retain discovered
+responses, selected assets and locks in the article; replay with <code class="docutils literal notranslate"><span class="pre">--offline</span></code> or
+<code class="docutils literal notranslate"><span class="pre">--frozen</span></code>. Report public supplier failures as network/data failures, with no
+Atopile login remedy. Lock selected catalog parts and footprints. Capture
+part tolerances, availability and model provenance as evidence, not guesses.
+For turnkey assembly, record the selected assembly house and intended board
+quantity. Before locking selections, run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">picker</span> <span class="pre">availability</span></code> for the
+complete BOM or individual LCSC/MPN candidates at the required unit quantity.
+Aggregate repeated parts, include declared attrition/minimum quantities and retain
+the inventory report as evidence. A catalog <code class="docutils literal notranslate"><span class="pre">stock</span></code> field is only a discovery hint;
+use <code class="docutils literal notranslate"><span class="pre">required_quantity</span></code> in picker queries when demand is known. Shortage or unknown
+results require another verified selection or an explicit unresolved sourcing
+risk. Recheck the exact final BOM before vendor handoff. PCBWay requires its own
+sourcing confirmation; JLC/LCSC availability does not establish PCBWay stock.
+Inventory snapshots are historical evidence, not reservations. Changes in supplier,
+board quantity or BOM require a new check; never silently substitute parts.</p>
+<p>Record fabrication rules, placement intent, differential-pair coupling, total
+uncoupled-length limits, length matching, current capacity and reference planes in
+machine-consumable constraints. Do not reinterpret a total route limit as a per-run
+allowance. Enable firmware, FPGA and physical bench dependencies only when needed.
+Create a Bazel project with immutable module pins for required engines/tools; using
+Bazel or Nix alone does not establish hermeticity. Name ambient/network boundaries.</p>
+</section>
+<section id="bounded-design-experiment-verification-loop">
+<h2>Bounded design / experiment / verification loop<a class="headerlink" href="#bounded-design-experiment-verification-loop" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Freeze article commit and dirty patch hash, requirements/constraints hashes,
+parts/catalog/dependency locks, engine revision and toolchain pins.</p></li>
+<li><p>Propose an article patch based on observed failures. Run verified experiment
+interfaces: <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">plan</span></code>, then <code class="docutils literal notranslate"><span class="pre">submit/status/logs/fetch/live/cancel</span></code>. Start
+local unless a cloud budget is authorized. Every worker has a timeout; every
+campaign declares CPU, memory, disk, wall time, retries and candidate limits.
+Engine candidate/seed selection is mechanical. Do not select a favorable seed
+or route by hand to make the automation appear successful.</p></li>
+<li><p>Save immutable inputs, exact output hashes, commands, flags, seeds, budgets,
+actual tool versions and measured outcomes under <code class="docutils literal notranslate"><span class="pre">experiments/</span></code> and <code class="docutils literal notranslate"><span class="pre">reports/</span></code>.
+Semantic hashes supplement exact SHA-256s; they never replace them.</p></li>
+<li><p>Judge the <strong>exact final artifact</strong>: full intended connectivity, native headless
+KiCad DRC and every electrical/physical/functional requirement at its demanded
+rigor. Include post-routing modifications in final verification. Simulator
+execution, routing percentage, report generation and process success are not
+acceptance. A native <code class="docutils literal notranslate"><span class="pre">_DONE</span></code> marker can represent failure or timeout.</p></li>
+<li><p>Continue with a useful bounded patch/experiment. Detect repeated identical
+input/failure combinations. Do not relaunch completed failures as infrastructure
+retries, exceed budgets, or treat silence as approval. Checkpoint after each
+material step in <code class="docutils literal notranslate"><span class="pre">.yapnr/agent/checkpoint.json</span></code> and append timestamped events.</p></li>
+</ol>
+<p>There is no generic <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">design-study</span></code> or <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">vnv</span></code> command. Use the documented
+campaign adapters and validation APIs. Check capability before selecting a solver.
+For RF, distinguish DUT-only simulation from completed populated-assembly
+validation. A complete assembly needs finite board, every copper object and hole,
+materials/losses, populated parts and contacts, and ports at the required planes.
+Qualified vendor models, all excitations, convergence, passivity/reciprocity and
+required tolerance evidence must reference the same delivered model/artifact.
+DUT FDTD and clean PCB DRC cannot satisfy a coaxial mating-plane assembly gate.
+Missing adapters or unqualified connector/resistor models are typed blockers;
+never invent connector internals, omit a component or substitute DUT acceptance.</p>
+</section>
+<section id="escalation-and-completion">
+<h2>Escalation and completion<a class="headerlink" href="#escalation-and-completion" title="Link to this heading">¶</a></h2>
+<p>When progress stops, write <code class="docutils literal notranslate"><span class="pre">reports/fixup.md</span></code>: failing artifact/requirements,
+evidence, attempted changes, remaining hypotheses, permissions and smallest remedy.
+Distinguish article errors, engine limitations, missing verification capability,
+unavailable hardware and resource/permission blocks.</p>
+<p>Default article policy is engine-generated placement/routing. Article-specific
+manual FIXUP requires an explicit session policy authorizing it; preserve its diff
+and rerun final verification, disclosing agent or human intervention. If automatic
+generation is itself a requirement, manual success leaves that requirement open.
+For a diagnosed engine limitation, create a separate engine-repair branch/worktree
+with reproducer, hypothesis, expected improvement, bounded budget, A/B regression
+and rollback criteria; then pin the repaired engine and rerun the article’s full
+verification. Do not modify the engine inside the article’s dependency install.</p>
+<p>Keep status, revision, failed/open requirements, budgets and next action visible.
+Use actual event-backed board views/animations. Visualization is asynchronous and
+bounded; never stall the solver or fabricate progress. If no new frame exists,
+show waiting or the last frame’s age. Random visual sampling cannot select winners.
+Deliver visual milestones inline in the active agent chat, including OpenCode:
+attach browser-readable renders of requirements alternatives, schematic capture,
+placement, routing and validation findings as those artifacts become available.
+Use supported attachment/render interfaces and verify that the images load; a
+container-local path or an external viewer link alone does not satisfy inline
+feedback. Distinguish conceptual illustrations from actual CAD and validation
+evidence. Preserve artifact hashes and revision labels alongside the renders.</p>
+<p>Schematic milestones use the existing viewer schematic layout, its actual build
+graph and selected symbol libraries. Publish a readable screenshot with artifact
+metadata <code class="docutils literal notranslate"><span class="pre">workspace_view:</span> <span class="pre">schematic</span></code> and the graph hash, then attach it inline;
+the card links to the Schematic tab. Do not substitute component lists, footprint
+plots or hand-built net-label sheets for the schematic renderer.</p>
+<p>When requirements choices benefit from visual comparison, provide labeled visual
+alternatives in the selection flow. Small three.js programs may illustrate geometry
+and allow interaction when the host supports inline interactive views. Keep scenes
+bounded, free of credentials and clearly labeled as concepts. If that host lacks
+interactive embedding, attach rendered alternatives inline and disclose the
+limitation; do not claim an external page is an inline interactive selection.
+The requested random back-buffer viewer is not assumed to exist; use supported
+<code class="docutils literal notranslate"><span class="pre">exp</span> <span class="pre">live</span></code> telemetry and label unavailable visualization as such.</p>
+<p>At task start and replanning, identify independent work as a dependency graph with
+inputs, owner, mutation scope, budget, deliverable and integration prerequisites.
+Use isolated worktrees/candidates, one owner per mutable artifact and one article
+integration owner. Delegate only where the host/session permits; queue otherwise.
+Bound shared concurrency and spending. Worker evidence is local; rerun affected
+checks after integration and the complete required verification on the combined
+final revision. Never union green reports from different board revisions.</p>
+<p>Operational status is <code class="docutils literal notranslate"><span class="pre">success</span></code>, <code class="docutils literal notranslate"><span class="pre">blocked</span></code>, <code class="docutils literal notranslate"><span class="pre">exhausted</span></code> or <code class="docutils literal notranslate"><span class="pre">cancelled</span></code>, recorded in
+the workflow checkpoint (these are workflow fields, not new rr ontology entities).
+Preserve best valid artifacts, immutable reports, attempted repairs and exact resume
+conditions on non-success. Stop requests and permission blocks survive restart.
+Emit <code class="docutils literal notranslate"><span class="pre">&lt;DONE&gt;</span></code> only when <strong>every accepted requirement passes on the exact delivered
+article</strong>. Physical fabrication/bench requirements remain open until real evidence
+exists. Report completion path (<code class="docutils literal notranslate"><span class="pre">automatic</span></code>, <code class="docutils literal notranslate"><span class="pre">agent_fixup</span></code>, <code class="docutils literal notranslate"><span class="pre">human_fixup</span></code>) and whether
+engine automation was actually demonstrated. Empty queues are not completion.</p>
+</section>
+<section id="developing-yapnr-itself">
+<h2>Developing yapnr itself<a class="headerlink" href="#developing-yapnr-itself" title="Link to this heading">¶</a></h2>
+</section>
 <section id="engineering-rules">
 <h2>Engineering rules<a class="headerlink" href="#engineering-rules" title="Link to this heading">¶</a></h2>
 <ul class="simple">
@@ -313,7 +536,9 @@ successive-halving machinery, never by hand.</p></li>
 <li><p><strong>Nothing in the loop may be GUI-bound.</strong> No <code class="docutils literal notranslate"><span class="pre">wx.App</span></code>, no KiCad GUI, and no <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code> from the
 stock macOS application bundle (every call registers a Dock icon). Use the headless copy described
 in <a class="reference internal" href="DEVELOPERS.html#kicad"><span class="std std-ref">DEVELOPERS.md</span></a>. Never start <code class="docutils literal notranslate"><span class="pre">/Applications/KiCad/...</span></code> binaries directly.</p></li>
-<li><p><strong>Every worker is time-bounded.</strong> A subprocess without a timeout is a bug.</p></li>
+<li><p><strong>Every worker is time-bounded.</strong> A subprocess without a timeout is a bug.
+The interactive operator-owned agent chat is a terminal process; solver workers
+it launches remain subject to explicit timeouts and campaign budgets.</p></li>
 <li><p><strong>Native KiCad DRC is the judge.</strong> Never suppress DRC findings, relax rules or delete nets to
 claim completion. Electrical contracts are never relaxed without the designer.</p></li>
 <li><p><strong>New engine behaviour lands behind a default-off flag,</strong> with a measured A/B result in the commit
@@ -323,8 +548,13 @@ views or recorded accepted events with the same viewport/configuration; label sy
 native evidence and never invent intermediate geometry or validation. If the feature has no
 meaningful visual behavior, explain why an animation is not applicable.</p></li>
 <li><p><strong>Ordering is staging only, and agents only dry-run it.</strong> Agents run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code> only
-with <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>. They never upload a file to a vendor or any third-party service, never call a
-vendor API, and never open a vendor page on a human’s behalf. Paying, confirming an order,
+with <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>. They never upload a file to a vendor or any third-party service, never call an
+ordering/upload/payment vendor API, and never open a vendor page on a human’s behalf.
+Read-only public catalog/inventory queries are permitted for sourcing checks;
+send only individual part identities, never a board, BOM file or conversation. The user-operated
+Manufacturing button may upload an explicitly approved PCBWay packet through
+its official plugin handoff, after a separate user click. Agents never click
+that button or invoke its upload endpoint during design or validation. Paying, confirming an order,
 accounts and terms belong to the human on the vendor’s page
 (<a class="reference internal" href="docs/fab-and-ordering.html"><span class="std std-doc">docs/fab-and-ordering.md</span></a>).</p></li>
 </ul>
@@ -359,6 +589,38 @@ operations, and report it rather than competing.</p></li>
 internal disk (see <a class="reference internal" href="DEVELOPERS.html#bazel"><span class="std std-ref">DEVELOPERS.md</span></a>). Check free disk space first.</p></li>
 <li><p>Install tools into a private virtualenv or with <code class="docutils literal notranslate"><span class="pre">uv</span></code>/<code class="docutils literal notranslate"><span class="pre">pipx</span></code>; never into the system Python.</p></li>
 </ul>
+<section id="record-experiments-and-provenance">
+<h3>Record experiments and provenance<a class="headerlink" href="#record-experiments-and-provenance" title="Link to this heading">¶</a></h3>
+<p>Treat each discovery, part-picking, schematic, PnR, simulation, and validation
+attempt as an experiment, including failures. Atopile builds record themselves.
+For other tools, start a record before running the tool:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;{&quot;seed&quot;:0}\n&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>simulation-settings.json
+yapnr<span class="w"> </span>experiment<span class="w"> </span>start<span class="w"> </span>--project<span class="w"> </span>.<span class="w"> </span>--kind<span class="w"> </span>simulation<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;RF validation&quot;</span><span class="w"> </span>--input<span class="w"> </span>design.kicad_pcb<span class="w"> </span>--parameters<span class="w"> </span>simulation-settings.json
+yapnr<span class="w"> </span>experiment<span class="w"> </span>finish<span class="w"> </span>E000001<span class="w"> </span>--project<span class="w"> </span>.<span class="w"> </span>--status<span class="w"> </span>passed<span class="w"> </span>--output<span class="w"> </span>simulation-report.json
+yapnr<span class="w"> </span>experiment<span class="w"> </span>list<span class="w"> </span>--project<span class="w"> </span>.
+</pre></div>
+</div>
+<p>Use the ID returned by <code class="docutils literal notranslate"><span class="pre">start</span></code>, the actual terminal status, all consumed inputs,
+and generated evidence. Record seeds and tool settings in parameters. The workspace
+manages immutable input/output objects and publishes output artifacts. Experiments
+shows typed attempts and upstream/downstream links established by matching content
+hashes; missing historical input evidence remains explicitly unknown. Do not claim
+provenance from filenames alone. The workspace manifest indexes the attempt registry.</p>
+<p>For circuit verification, use the container’s pinned <code class="docutils literal notranslate"><span class="pre">ngspice</span></code> command and its
+shared-library/XSPICE tooling. Build and retain SPICE decks and device-model
+provenance in the workspace; run the actual models, export voltage/current traces,
+and publish their plots inline with linked run reports. Mixed analog/digital
+coupling is allowed when its assumptions are explicit. See the circuit simulation
+section in <code class="docutils literal notranslate"><span class="pre">docs/agent-workflow.md</span></code>; behavioral surrogate models do not establish
+supplier-device or bench acceptance.</p>
+<p>For turnkey assembly, reuse <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">build</span> <span class="pre">--assembly</span></code> and
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">--dry-run</span></code>, then register the checked bundle with
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">workspace</span> <span class="pre">assembly</span> <span class="pre">--bundle</span> <span class="pre">DIR</span> <span class="pre">--board</span> <span class="pre">BOARD</span></code>. Present the native
+Manufacturing tab for package approval and human vendor handoff. Keep bench
+checks open until real evidence exists; never infer approval, upload files, open
+vendor pages, order or pay. See the turnkey assembly section of
+<code class="docutils literal notranslate"><span class="pre">docs/agent-workflow.md</span></code>.</p>
+</section>
 </section>
 </section>
 
@@ -417,10 +679,19 @@ internal disk (see <a class="reference internal" href="DEVELOPERS.html#bazel"><s
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Rules for agents</a><ul>
+<li><a class="reference internal" href="#">Prompt-to-PCB engineering with yapnr</a><ul>
+<li><a class="reference internal" href="#start-from-the-packaged-tool">Start from the packaged tool</a></li>
+<li><a class="reference internal" href="#engineering-contract-and-risk-analysis">Engineering contract and risk analysis</a></li>
+<li><a class="reference internal" href="#schematic-part-selection-and-constraints">Schematic, part selection and constraints</a></li>
+<li><a class="reference internal" href="#bounded-design-experiment-verification-loop">Bounded design / experiment / verification loop</a></li>
+<li><a class="reference internal" href="#escalation-and-completion">Escalation and completion</a></li>
+<li><a class="reference internal" href="#developing-yapnr-itself">Developing yapnr itself</a></li>
 <li><a class="reference internal" href="#engineering-rules">Engineering rules</a></li>
 <li><a class="reference internal" href="#repository-rules">Repository rules</a></li>
-<li><a class="reference internal" href="#shared-machines">Shared machines</a></li>
+<li><a class="reference internal" href="#shared-machines">Shared machines</a><ul>
+<li><a class="reference internal" href="#record-experiments-and-provenance">Record experiments and provenance</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

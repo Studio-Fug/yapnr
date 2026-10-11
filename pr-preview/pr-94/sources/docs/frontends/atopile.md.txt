@@ -1,24 +1,25 @@
 # The atopile toolchain
 
-yapnr builds [atopile](https://github.com/atopile/atopile) projects itself, without Nix and
-without any hosted service: `yapnr atopile setup` installs a hash-pinned atopile environment, and
-`yapnr atopile build` runs one bounded, isolated, offline `ato build` in it. The parts a build
-needs come from a [part cache](../part-cache.md), never from this repository or from EasyEDA at
-build time; the offline part picker answers atopile's part queries from the cache's catalog.
+yapnr builds [atopile](https://github.com/atopile/atopile) projects itself without Nix.
+`yapnr atopile setup` installs a hash-pinned environment; the released container
+prewarms it. Authoring builds discover missing part candidates on demand and retain
+selected assets in the article. Users do not need a prepopulated local library.
+`--offline` and `--frozen` use captured inputs without discovery network requests.
+The Python runner API remains offline by default for hermetic integrations.
 
 This replaces Splanc's `hardware/tools/ato_build.sh`, rules_atopile's Bazel actions and its Nix
 packaging (the three `patches/rules_atopile-*.patch` and the patched `atopile.nix`).
 
-| Command                                | What                                                  |
-| -------------------------------------- | ----------------------------------------------------- |
-| `yapnr atopile setup`                  | create the pinned atopile environment (needs `uv`)    |
-| `yapnr atopile info`                   | the environment and headless KiCad a build would use  |
-| `yapnr atopile build <project>`        | build a project (offline, isolated, time-bounded)     |
-| `yapnr atopile lock-parts <project>`   | write the project's parts lock (optionally upload)    |
-| `yapnr atopile materialize <project>`  | write the locked parts into the project's own tree    |
-| `yapnr picker serve --catalog F`       | the offline components API, on the loopback interface |
-| `yapnr picker catalog import/validate` | convert or check picker catalogs                      |
-| `yapnr part-cache ...`                 | the part cache ([its page](../part-cache.md))         |
+| Command                                | What                                                    |
+| -------------------------------------- | ------------------------------------------------------- |
+| `yapnr atopile setup`                  | create the pinned atopile environment (needs `uv`)      |
+| `yapnr atopile info`                   | the environment and headless KiCad a build would use    |
+| `yapnr atopile build <project>`        | build with on-demand selection (isolated, time-bounded) |
+| `yapnr atopile lock-parts <project>`   | write the project's parts lock (optionally upload)      |
+| `yapnr atopile materialize <project>`  | write the locked parts into the project's own tree      |
+| `yapnr picker serve --catalog F`       | the offline components API, on the loopback interface   |
+| `yapnr picker catalog import/validate` | convert or check picker catalogs                        |
+| `yapnr part-cache ...`                 | the part cache ([its page](../part-cache.md))           |
 
 ## Setting up atopile
 
@@ -127,13 +128,15 @@ For each build the runner:
    `manufacturing/` and `yapnr-out/`, any `.git` or `__pycache__`, or atopile's caches;
    `.ato/modules` is kept). With `--files-from LIST` it copies exactly the files the list names
    (paths relative to the project; the Bazel rule passes its declared inputs). The source tree is
-   never written; `--update-layout` copies the new layout back, and nothing else does;
+   untouched in offline mode; authoring captures selected assets and their lock, while
+   `--update-layout` copies the new layout back;
 2. writes every part of the project's parts lock (`yapnr-parts.lock.json`) into the copy, each file
    checked against the cache's sha256. A part directory already in the tree with other content is
    an error (`--replace-parts` overwrites it);
 3. writes the stock KiCad footprint libraries that the sources reference into the build's
    `fp-lib-table` (below);
-4. starts the offline picker on the loopback interface, answering from the catalog entries of the
+4. starts the loopback picker, answering from local inputs first; authoring can fetch missing
+   queries from the pinned component service and record its exact responses. It also uses the
    locked parts and any `--catalog` files;
 5. runs `python -m atopile build -b <build> -t ... -x default -x datasheets -x
 collect-manufacturing -v` with the [allowlisted environment](#the-build-environment) and a
@@ -175,9 +178,42 @@ the project's parts, and anything the hook refused. Its **input id** is the sha2
 with every UUID replaced by the nil UUID: atopile stamps fresh UUIDs on each build, and two builds
 of the same sources give the same input id.
 
-`--online` lets atopile download a picked part that is not in the project from EasyEDA (as
-`ato create part` does). Such a build depends on a third-party service and is not reproducible;
-use it only while authoring.
+### On-demand selection and captured replay
+
+Authoring is the CLI default; `--online` remains an explicit alias. A catalog miss
+fetches public supplier facts for our local catalog matcher. Successful responses are
+hashed and retained in `.yapnr/parts/discovery.json`; every build report includes
+`discovery.json`, its digest, lookup/replay counts and explicit service failures.
+This captures the service's electrical attributes without inventing ratings.
+Selected symbol/footprint/model files are imported into the article's own
+`.yapnr/parts/cache`, materialized into its parts tree and content-locked. No shared
+catalog uploads occur. These files travel with a workspace archive. Captured
+article inputs take precedence over an operator cache, so replay does not depend
+on that cache containing parts selected in a later authoring build.
+
+The rules_atopile-derived local picker is the only component picker. It fetches
+public jlcsearch supplier facts and EasyEDA identity metadata on demand; it never
+calls the hosted Atopile API or reads an Atopile account/token. The existing hook
+provides a loopback-only placeholder where native Atopile expects authentication.
+No Atopile login is required. Raw supplier replies, their URLs and hashes, and
+converted catalogs are retained with each captured query. Public network/service
+failures are explicit, with no login remedy. Geometry continues through native
+EasyEDA import and is captured into the article for subsequent offline builds.
+
+Discovery supports typed resistor/capacitor requests and explicit LCSC/MPN picks.
+Other parameterized types need an explicit selection or a verified imported catalog.
+Supplier searches return at most 100 rows; up to eight matching identities are
+resolved per query. A search miss is bounded discovery, not proof that no matching
+part exists. Unknown ratings are not inferred from prose. Overload voltage is not
+substituted for a resistor's continuous working-voltage rating.
+
+Use `--offline` or `--frozen` for replay. Frozen CLI builds disable discovery;
+the runner rejects an explicit online/frozen combination. Captured successful
+queries replay without contacting the service, with response/request hashes
+checked. New constraints can require another authoring query. Initial discovery
+still depends on live vendor data; capture alone does not validate a part's ratings
+or prove that an entire board passes its engineering contract. Build Python hash
+ordering is fixed with `PYTHONHASHSEED=0`.
 
 ### Designators and the layout
 
@@ -224,7 +260,7 @@ atopile's modules as they are imported and changes no file of the environment:
 - **Parts from the project.** A picked LCSC id whose atomic part is in the project's parts
   directory (`supplier_partno="C..."`) is attached from there instead of being downloaded from
   EasyEDA. That is how a pick is served from the part cache.
-- **Offline.** EasyEDA is never contacted (unless `--online`); a pick that would need it fails and
+- **Offline/frozen mode.** EasyEDA is never contacted; a pick that would need it fails and
   names the missing part. Nor is a git repository: atopile installs missing dependencies at the
   start of every build, cloning `git` ones; offline, the clone is refused and the build fails
   naming the dependency (install it into `.ato/modules` first). Registry dependencies fail on

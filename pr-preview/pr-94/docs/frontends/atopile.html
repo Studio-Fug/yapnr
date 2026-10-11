@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="The part cache" href="../part-cache.html"><link rel="prev" title="The live viewer" href="../viewer.html">
-        <link rel="prefetch" href="../../static/yapnr-logo-256.png" as="image">
-        <link rel="prefetch" href="../../static/yapnr-logo-light.png" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-primary-light.svg" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-primary-dark.svg" as="image">
 
     <link rel="shortcut icon" href="../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
         <title>The atopile toolchain - yapnr documentation</title>
@@ -14,7 +14,8 @@
     <link rel="stylesheet" type="text/css" href="../../static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../../static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=ad564152" />
+    <link rel="stylesheet" type="text/css" href="../../static/fonts/fonts.css?v=eeaf125c" />
+    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=2fd37b7c" />
     
     
 
@@ -199,8 +200,8 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-256.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-primary-light.svg" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-primary-dark.svg" alt="Dark Logo"/>
   </div>
   
   
@@ -213,6 +214,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../agent-workflow.html">Design a PCB with an agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../viewer.html">The live viewer</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">The atopile toolchain</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../part-cache.html">The part cache</a></li>
@@ -253,7 +255,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../DEVELOPERS.html">Developing yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../CONTRIBUTING.html">Contributing to yapnr</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Prompt-to-PCB engineering with yapnr</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../WORKLOG.html">Worklog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../THIRD_PARTY.html">Third-party material</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../README.html">yapnr</a></li>
@@ -301,11 +303,12 @@
         <article role="main" id="furo-main-content">
           <section id="the-atopile-toolchain">
 <h1>The atopile toolchain<a class="headerlink" href="#the-atopile-toolchain" title="Link to this heading">¶</a></h1>
-<p>yapnr builds <a class="reference external" href="https://github.com/atopile/atopile">atopile</a> projects itself, without Nix and
-without any hosted service: <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup</span></code> installs a hash-pinned atopile environment, and
-<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">build</span></code> runs one bounded, isolated, offline <code class="docutils literal notranslate"><span class="pre">ato</span> <span class="pre">build</span></code> in it. The parts a build
-needs come from a <a class="reference internal" href="../part-cache.html"><span class="std std-doc">part cache</span></a>, never from this repository or from EasyEDA at
-build time; the offline part picker answers atopile’s part queries from the cache’s catalog.</p>
+<p>yapnr builds <a class="reference external" href="https://github.com/atopile/atopile">atopile</a> projects itself without Nix.
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup</span></code> installs a hash-pinned environment; the released container
+prewarms it. Authoring builds discover missing part candidates on demand and retain
+selected assets in the article. Users do not need a prepopulated local library.
+<code class="docutils literal notranslate"><span class="pre">--offline</span></code> and <code class="docutils literal notranslate"><span class="pre">--frozen</span></code> use captured inputs without discovery network requests.
+The Python runner API remains offline by default for hermetic integrations.</p>
 <p>This replaces Splanc’s <code class="docutils literal notranslate"><span class="pre">hardware/tools/ato_build.sh</span></code>, rules_atopile’s Bazel actions and its Nix
 packaging (the three <code class="docutils literal notranslate"><span class="pre">patches/rules_atopile-*.patch</span></code> and the patched <code class="docutils literal notranslate"><span class="pre">atopile.nix</span></code>).</p>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -323,7 +326,7 @@ packaging (the three <code class="docutils literal notranslate"><span class="pre
 <td><p>the environment and headless KiCad a build would use</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">build</span> <span class="pre">&lt;project&gt;</span></code></p></td>
-<td><p>build a project (offline, isolated, time-bounded)</p></td>
+<td><p>build with on-demand selection (isolated, time-bounded)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">lock-parts</span> <span class="pre">&lt;project&gt;</span></code></p></td>
 <td><p>write the project’s parts lock (optionally upload)</p></td>
@@ -464,13 +467,15 @@ yapnr<span class="w"> </span>atopile<span class="w"> </span>build<span class="w"
 <code class="docutils literal notranslate"><span class="pre">manufacturing/</span></code> and <code class="docutils literal notranslate"><span class="pre">yapnr-out/</span></code>, any <code class="docutils literal notranslate"><span class="pre">.git</span></code> or <code class="docutils literal notranslate"><span class="pre">__pycache__</span></code>, or atopile’s caches;
 <code class="docutils literal notranslate"><span class="pre">.ato/modules</span></code> is kept). With <code class="docutils literal notranslate"><span class="pre">--files-from</span> <span class="pre">LIST</span></code> it copies exactly the files the list names
 (paths relative to the project; the Bazel rule passes its declared inputs). The source tree is
-never written; <code class="docutils literal notranslate"><span class="pre">--update-layout</span></code> copies the new layout back, and nothing else does;</p></li>
+untouched in offline mode; authoring captures selected assets and their lock, while
+<code class="docutils literal notranslate"><span class="pre">--update-layout</span></code> copies the new layout back;</p></li>
 <li><p>writes every part of the project’s parts lock (<code class="docutils literal notranslate"><span class="pre">yapnr-parts.lock.json</span></code>) into the copy, each file
 checked against the cache’s sha256. A part directory already in the tree with other content is
 an error (<code class="docutils literal notranslate"><span class="pre">--replace-parts</span></code> overwrites it);</p></li>
 <li><p>writes the stock KiCad footprint libraries that the sources reference into the build’s
 <code class="docutils literal notranslate"><span class="pre">fp-lib-table</span></code> (below);</p></li>
-<li><p>starts the offline picker on the loopback interface, answering from the catalog entries of the
+<li><p>starts the loopback picker, answering from local inputs first; authoring can fetch missing
+queries from the pinned component service and record its exact responses. It also uses the
 locked parts and any <code class="docutils literal notranslate"><span class="pre">--catalog</span></code> files;</p></li>
 <li><p>runs <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">atopile</span> <span class="pre">build</span> <span class="pre">-b</span> <span class="pre">&lt;build&gt;</span> <span class="pre">-t</span> <span class="pre">...</span> <span class="pre">-x</span> <span class="pre">default</span> <span class="pre">-x</span> <span class="pre">datasheets</span> <span class="pre">-x</span> <span class="pre">collect-manufacturing</span> <span class="pre">-v</span></code> with the <a class="reference internal" href="#the-build-environment">allowlisted environment</a> and a
 deadline (<code class="docutils literal notranslate"><span class="pre">--timeout</span></code>, default 1800 s). On the deadline the whole process tree is stopped and
@@ -527,9 +532,40 @@ picker served, the KiCad version, every request the picker answered, the LCSC id
 the project’s parts, and anything the hook refused. Its <strong>input id</strong> is the sha256 of the board
 with every UUID replaced by the nil UUID: atopile stamps fresh UUIDs on each build, and two builds
 of the same sources give the same input id.</p>
-<p><code class="docutils literal notranslate"><span class="pre">--online</span></code> lets atopile download a picked part that is not in the project from EasyEDA (as
-<code class="docutils literal notranslate"><span class="pre">ato</span> <span class="pre">create</span> <span class="pre">part</span></code> does). Such a build depends on a third-party service and is not reproducible;
-use it only while authoring.</p>
+<section id="on-demand-selection-and-captured-replay">
+<h3>On-demand selection and captured replay<a class="headerlink" href="#on-demand-selection-and-captured-replay" title="Link to this heading">¶</a></h3>
+<p>Authoring is the CLI default; <code class="docutils literal notranslate"><span class="pre">--online</span></code> remains an explicit alias. A catalog miss
+fetches public supplier facts for our local catalog matcher. Successful responses are
+hashed and retained in <code class="docutils literal notranslate"><span class="pre">.yapnr/parts/discovery.json</span></code>; every build report includes
+<code class="docutils literal notranslate"><span class="pre">discovery.json</span></code>, its digest, lookup/replay counts and explicit service failures.
+This captures the service’s electrical attributes without inventing ratings.
+Selected symbol/footprint/model files are imported into the article’s own
+<code class="docutils literal notranslate"><span class="pre">.yapnr/parts/cache</span></code>, materialized into its parts tree and content-locked. No shared
+catalog uploads occur. These files travel with a workspace archive. Captured
+article inputs take precedence over an operator cache, so replay does not depend
+on that cache containing parts selected in a later authoring build.</p>
+<p>The rules_atopile-derived local picker is the only component picker. It fetches
+public jlcsearch supplier facts and EasyEDA identity metadata on demand; it never
+calls the hosted Atopile API or reads an Atopile account/token. The existing hook
+provides a loopback-only placeholder where native Atopile expects authentication.
+No Atopile login is required. Raw supplier replies, their URLs and hashes, and
+converted catalogs are retained with each captured query. Public network/service
+failures are explicit, with no login remedy. Geometry continues through native
+EasyEDA import and is captured into the article for subsequent offline builds.</p>
+<p>Discovery supports typed resistor/capacitor requests and explicit LCSC/MPN picks.
+Other parameterized types need an explicit selection or a verified imported catalog.
+Supplier searches return at most 100 rows; up to eight matching identities are
+resolved per query. A search miss is bounded discovery, not proof that no matching
+part exists. Unknown ratings are not inferred from prose. Overload voltage is not
+substituted for a resistor’s continuous working-voltage rating.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--offline</span></code> or <code class="docutils literal notranslate"><span class="pre">--frozen</span></code> for replay. Frozen CLI builds disable discovery;
+the runner rejects an explicit online/frozen combination. Captured successful
+queries replay without contacting the service, with response/request hashes
+checked. New constraints can require another authoring query. Initial discovery
+still depends on live vendor data; capture alone does not validate a part’s ratings
+or prove that an entire board passes its engineering contract. Build Python hash
+ordering is fixed with <code class="docutils literal notranslate"><span class="pre">PYTHONHASHSEED=0</span></code>.</p>
+</section>
 <section id="designators-and-the-layout">
 <h3>Designators and the layout<a class="headerlink" href="#designators-and-the-layout" title="Link to this heading">¶</a></h3>
 <p>atopile updates an existing layout (by default <code class="docutils literal notranslate"><span class="pre">elec/layout/&lt;build&gt;/&lt;build&gt;.kicad_pcb</span></code>) instead of
@@ -599,7 +635,7 @@ global sign-in state, which its telemetry and agent clients read.</p></li>
 <li><p><strong>Parts from the project.</strong> A picked LCSC id whose atomic part is in the project’s parts
 directory (<code class="docutils literal notranslate"><span class="pre">supplier_partno=&quot;C...&quot;</span></code>) is attached from there instead of being downloaded from
 EasyEDA. That is how a pick is served from the part cache.</p></li>
-<li><p><strong>Offline.</strong> EasyEDA is never contacted (unless <code class="docutils literal notranslate"><span class="pre">--online</span></code>); a pick that would need it fails and
+<li><p><strong>Offline/frozen mode.</strong> EasyEDA is never contacted; a pick that would need it fails and
 names the missing part. Nor is a git repository: atopile installs missing dependencies at the
 start of every build, cloning <code class="docutils literal notranslate"><span class="pre">git</span></code> ones; offline, the clone is refused and the build fails
 naming the dependency (install it into <code class="docutils literal notranslate"><span class="pre">.ato/modules</span></code> first). Registry dependencies fail on
@@ -900,6 +936,7 @@ macro (A8).</p></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#building">Building</a><ul>
+<li><a class="reference internal" href="#on-demand-selection-and-captured-replay">On-demand selection and captured replay</a></li>
 <li><a class="reference internal" href="#designators-and-the-layout">Designators and the layout</a></li>
 <li><a class="reference internal" href="#the-build-environment">The build environment</a></li>
 <li><a class="reference internal" href="#the-hook">The hook</a></li>

@@ -29,3 +29,6 @@ article table.docutils {
   display: block;
   overflow-x: auto;
 }
+
+/* Bundled brand-kit typography; no font network dependency. */
+body{font-family:"IBM Plex Sans",sans-serif}h1,h2,h3,h4,.sidebar{font-family:"Space Grotesk",sans-serif}code,pre{font-family:"IBM Plex Mono",monospace}*{border-radius:0!important}

@@ -79,9 +79,15 @@ import sys
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+from pnr import copper_clearance
 from pnr import length_model as lm
+from pnr.copper_clearance import CopperIndex as CopperIndex
+from pnr.copper_clearance import _seg_dist as _seg_dist
 
 from .grid import Cell, RouteGrid
+
+# Compatibility for geometry callers; the implementation is shared with native matching.
+_seg_poly_dist = copper_clearance._seg_poly_dist
 
 SQRT2 = math.sqrt(2.0)
 STYLES = ("auto", "trombone", "serpentine", "accordion")
@@ -135,12 +141,22 @@ def match_sets(rules: Optional[dict]) -> List[MatchSet]:
     for dp in (rules or {}).get("diff_pairs") or []:
         if dp.get("skew_ps") is not None:
             out.append(
-                MatchSet(dp["name"], "diff_pair", (dp["p"], dp["n"]), float(dp["skew_ps"]), "ps")
+                MatchSet(
+                    dp["name"],
+                    "diff_pair",
+                    (dp["p"], dp["n"]),
+                    float(dp["skew_ps"]),
+                    "ps",
+                )
             )
         else:
             out.append(
                 MatchSet(
-                    dp["name"], "diff_pair", (dp["p"], dp["n"]), float(dp.get("skew_mm", 0.5)), "mm"
+                    dp["name"],
+                    "diff_pair",
+                    (dp["p"], dp["n"]),
+                    float(dp.get("skew_mm", 0.5)),
+                    "mm",
                 )
             )
     for group in (rules or {}).get("length_match") or []:
@@ -149,12 +165,22 @@ def match_sets(rules: Optional[dict]) -> List[MatchSet]:
             continue
         if group.get("tolerance_ps") is not None:
             out.append(
-                MatchSet(group["name"], "length_match", nets, float(group["tolerance_ps"]), "ps")
+                MatchSet(
+                    group["name"],
+                    "length_match",
+                    nets,
+                    float(group["tolerance_ps"]),
+                    "ps",
+                )
             )
         else:
             out.append(
                 MatchSet(
-                    group["name"], "length_match", nets, float(group.get("tolerance_mm", 1.0)), "mm"
+                    group["name"],
+                    "length_match",
+                    nets,
+                    float(group.get("tolerance_mm", 1.0)),
+                    "mm",
                 )
             )
     return out
@@ -237,105 +263,6 @@ def residual_target(budget: float, margin: float) -> float:
 
 
 # ------------------------------------------------------------------ exact clearance
-
-
-def _seg_dist(a, b, c, d) -> float:
-    """Minimum distance between segments ab and cd (mm)."""
-
-    def point_seg(p, s0, s1):
-        vx, vy = s1[0] - s0[0], s1[1] - s0[1]
-        ll = vx * vx + vy * vy
-        if ll <= 0:
-            return math.dist(p, s0)
-        t = max(0.0, min(1.0, ((p[0] - s0[0]) * vx + (p[1] - s0[1]) * vy) / ll))
-        return math.dist(p, (s0[0] + t * vx, s0[1] + t * vy))
-
-    def cross(o, p, q):
-        return (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
-
-    d1, d2 = cross(c, d, a), cross(c, d, b)
-    d3, d4 = cross(a, b, c), cross(a, b, d)
-    if ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0)) and d1 and d2 and d3 and d4:
-        return 0.0
-    return min(point_seg(a, c, d), point_seg(b, c, d), point_seg(c, a, b), point_seg(d, a, b))
-
-
-def _seg_poly_dist(a, b, poly) -> float:
-    if lm._inside_convex(poly, a) or lm._inside_convex(poly, b):
-        return 0.0
-    n = len(poly)
-    return min(_seg_dist(a, b, poly[k], poly[(k + 1) % n]) for k in range(n))
-
-
-class CopperIndex:
-    """Other nets' copper in millimetres, bucketed for distance queries."""
-
-    def __init__(self, bucket: float = 1.0):
-        self.bucket = bucket
-        self.items: Dict[Tuple[int, int], List[tuple]] = {}
-
-    def _cells(self, x0, y0, x1, y1):
-        b = self.bucket
-        for i in range(math.floor(x0 / b), math.floor(x1 / b) + 1):
-            for j in range(math.floor(y0 / b), math.floor(y1 / b) + 1):
-                yield (i, j)
-
-    def add(self, item, box):
-        for key in self._cells(*box):
-            self.items.setdefault(key, []).append(item)
-
-    def add_track(self, net, layer, a, b, half):
-        box = (
-            min(a[0], b[0]) - half,
-            min(a[1], b[1]) - half,
-            max(a[0], b[0]) + half,
-            max(a[1], b[1]) + half,
-        )
-        self.add(("track", net, layer, a, b, half), box)
-
-    def add_via(self, net, centre, radius):
-        x, y = centre
-        self.add(
-            ("via", net, None, centre, radius), (x - radius, y - radius, x + radius, y + radius)
-        )
-
-    def add_pad(self, net, layers, outline):
-        xs = [p[0] for p in outline]
-        ys = [p[1] for p in outline]
-        self.add(("pad", net, layers, outline), (min(xs), min(ys), max(xs), max(ys)))
-
-    def clear(self, net, layer, a, b, half, clearance_of) -> bool:
-        """True when segment ab of ``net`` (half width ``half``) on ``layer`` keeps
-        ``clearance_of(other_net)`` from every other net's copper."""
-        reach = half + 1.0
-        box = (
-            min(a[0], b[0]) - reach,
-            min(a[1], b[1]) - reach,
-            max(a[0], b[0]) + reach,
-            max(a[1], b[1]) + reach,
-        )
-        seen = set()
-        for key in self._cells(*box):
-            for item in self.items.get(key, ()):
-                if id(item) in seen or item[1] == net:
-                    continue
-                seen.add(id(item))
-                need = clearance_of(item[1]) - 1e-6
-                kind = item[0]
-                if kind == "track":
-                    if item[2] != layer:
-                        continue
-                    if _seg_dist(a, b, item[3], item[4]) < half + item[5] + need:
-                        return False
-                elif kind == "via":
-                    if _seg_dist(a, b, item[3], item[3]) < half + item[4] + need:
-                        return False
-                else:
-                    if "*" not in item[2] and layer not in item[2]:
-                        continue
-                    if _seg_poly_dist(a, b, item[3]) < half + need:
-                        return False
-        return True
 
 
 # ------------------------------------------------------------------ grid paths
@@ -569,6 +496,7 @@ class SetReport:
     # A pair: its P leg's track length beside the N leg, and in all (mm).
     coupled_mm: Optional[float] = None
     p_track_mm: Optional[float] = None
+    sequential: Optional[dict] = None
 
     def to_json(self) -> dict:
         return dict(
@@ -585,6 +513,7 @@ class SetReport:
                 else {}
             ),
             status=self.status,
+            **({"sequential": self.sequential} if self.sequential is not None else {}),
             **({"rerouted": list(self.rerouted)} if self.rerouted else {}),
             **({"spaced": list(self.spaced)} if self.spaced else {}),
             **({"reverted": True} if self.reverted else {}),
@@ -705,6 +634,19 @@ class Tuner:
         self.routed: Set[str] = set()
         self.tunable: Set[str] = set()
         self.present: Set[str] = set()
+        sequential = (rules.get("tuning") or {}).get("sequential") or os.environ.get(
+            "PNR_TUNE_SEQUENTIAL"
+        ) == "1"
+        self.sequence_cap = (
+            float((rules.get("tuning") or {}).get("sequential_max_added_mm", 100.0))
+            if sequential
+            else None
+        )
+        self.initial_lengths: Dict[str, float] = {}
+        if self.sequence_cap is not None and (
+            not math.isfinite(self.sequence_cap) or self.sequence_cap <= 0
+        ):
+            raise ValueError("sequential_max_added_mm must be finite and positive")
 
     # -- helpers -------------------------------------------------------------
 
@@ -713,7 +655,9 @@ class Tuner:
 
     def clearance_of(self, net: str, other: str) -> float:
         return max(
-            self.clearance, self.class_clearance.get(net, 0.0), self.class_clearance.get(other, 0.0)
+            self.clearance,
+            self.class_clearance.get(net, 0.0),
+            self.class_clearance.get(other, 0.0),
         )
 
     def net_tracks(self, net: str) -> List[tuple]:
@@ -784,6 +728,7 @@ class Tuner:
         self.index = self.copper_index()
         self.owner = self._owner_map() if self.routed else {}
         self.tuned = {}
+        self.initial_lengths = {n: self.measure(n).total_mm for n in self.present}
 
     # -- grid tuning -------------------------------------------------------------
 
@@ -849,7 +794,12 @@ class Tuner:
         return out
 
     def tune_member(
-        self, net: str, need: float, unit: str, shape: Shape, limit_mm: Optional[float] = None
+        self,
+        net: str,
+        need: float,
+        unit: str,
+        shape: Shape,
+        limit_mm: Optional[float] = None,
     ) -> Tuple[float, int, int, Optional[float]]:
         """Add ``need`` (mm or ps) to ``net``, at most ``limit_mm`` of track. Returns
         (added mm, bumps, mitres, meander gap edge to edge in mm)."""
@@ -922,7 +872,9 @@ class Tuner:
                     prev = base
                     while h < shape.amp_cap:
                         c = Cell(
-                            base.layer, base.i + side * (h + 1) * ni, base.j + side * (h + 1) * nj
+                            base.layer,
+                            base.i + side * (h + 1) * ni,
+                            base.j + side * (h + 1) * nj,
                         )
                         if not legal(c, r) or not corners_ok(prev, c):
                             break
@@ -937,7 +889,10 @@ class Tuner:
             for r, run in enumerate(runs):
                 for side in (1, -1):
                     for k in range(1, len(run) - 1 - w):
-                        amax = min(amp_max, min(heights[(r, side, u)] for u in range(k, k + w + 1)))
+                        amax = min(
+                            amp_max,
+                            min(heights[(r, side, u)] for u in range(k, k + w + 1)),
+                        )
                         if amax >= shape.amp_min:
                             centre = abs(k + w / 2 - (len(run) - 1) / 2)
                             candidates.append((-amax, centre, r, k, side, amax))
@@ -1226,7 +1181,11 @@ class Tuner:
         )
         grid_keys = {
             frozenset(
-                (lm._key(grid.center_of(*a)), lm._key(grid.center_of(*b)), grid.layers[layer])
+                (
+                    lm._key(grid.center_of(*a)),
+                    lm._key(grid.center_of(*b)),
+                    grid.layers[layer],
+                )
             )
             for layer, a, b in rn.segments
         }
@@ -1244,7 +1203,11 @@ class Tuner:
             for v in self.board.vias
             if not (v[0] == net and lm._key((float(v[1]), float(v[2]))) in via_keys)
         ] + vias
-        rn.cells, rn.segments, rn.vias = list(new.cells), list(new.segments), list(new.vias)
+        rn.cells, rn.segments, rn.vias = (
+            list(new.cells),
+            list(new.segments),
+            list(new.vias),
+        )
         return undo
 
     def _undo(self, net: str, undo) -> None:
@@ -1313,7 +1276,10 @@ class Tuner:
                 for i, j in other.vias:
                     copper.update(Cell(la, i, j) for la in range(grid.nlayers))
             route = self._search(
-                net, access, copper - own, {c: REROUTE_FOOTPRINT_COST for c in foreign - own}
+                net,
+                access,
+                copper - own,
+                {c: REROUTE_FOOTPRINT_COST for c in foreign - own},
             )
         if route is None:
             return False
@@ -1372,7 +1338,12 @@ class Tuner:
                 if route is None:
                     continue
                 fp = _footprint(
-                    grid, route.cells, self.via_keepout, halo, edges=route.edges, net=net
+                    grid,
+                    route.cells,
+                    self.via_keepout,
+                    halo,
+                    edges=route.edges,
+                    net=net,
                 )
                 if (fp & foreign) - (old_fp & foreign):
                     continue
@@ -1471,6 +1442,14 @@ class Tuner:
                 limit = None
                 if shape.max_added_mm is not None:
                     limit = shape.max_added_mm - self.tuned.get(net, [0.0])[0]
+                    if limit < 2 * self.grid.pitch * shape.amp_min - 1e-9:
+                        continue
+                if self.sequence_cap is not None:
+                    remaining_cap = self.sequence_cap - sum(
+                        max(0, self.measure(n).total_mm - v)
+                        for n, v in self.initial_lengths.items()
+                    )
+                    limit = remaining_cap if limit is None else min(limit, remaining_cap)
                     if limit < 2 * self.grid.pitch * shape.amp_min - 1e-9:
                         continue
                 added, bumps, mitres, gap = self.tune_member(net, aim, s.unit, shape, limit)
@@ -1579,7 +1558,8 @@ class Tuner:
             length = self.measure(net)
             added, bumps, mitres, gap = self.tuned.get(net, (0.0, 0, 0, None))
             layers = sorted(
-                {t[0] for t in self.net_tracks(net)}, key=lambda name: lm._kicad_layer_id(name)
+                {t[0] for t in self.net_tracks(net)},
+                key=lambda name: lm._kicad_layer_id(name),
             )
             report.members.append(
                 MemberReport(
@@ -1609,7 +1589,9 @@ class Tuner:
             gap = self.pair_gap.get(s.name) or self.clearance
             reach = (self.width(p) + self.width(n)) / 2 + gap + COUPLED_TOL_MM
             report.coupled_mm, report.p_track_mm = coupled_length(
-                [t[:3] for t in self.net_tracks(p)], [t[:3] for t in self.net_tracks(n)], reach
+                [t[:3] for t in self.net_tracks(p)],
+                [t[:3] for t in self.net_tracks(n)],
+                reach,
             )
 
     def run(self) -> List[SetReport]:
@@ -1621,9 +1603,221 @@ class Tuner:
         for k in order:
             if self._tune_set(k, reports, matched):
                 matched.append(k)
+        if (self.rules.get("tuning") or {}).get("sequential") or os.environ.get(
+            "PNR_TUNE_SEQUENTIAL"
+        ) == "1":
+            from pnr.profile import span
+
+            with span("length_tuning_sequential"):
+                self.sequential_recovery(reports, order)
         for s, report in zip(self.sets, reports):
             self._finish(s, report)
         return reports
+
+    def sequential_recovery(self, reports, order):
+        """Move a nearby matched route, then reconcile every set transactionally.
+
+        Eight accepted rounds and 96 trials bound search; a cumulative added-length
+        cap bounds the feedback between sets. Retained block copper is never moved.
+        Coupled geometry without grid cells is explicitly reported as immovable by
+        this recovery, rather than silently being treated as congestion.
+        """
+        from .maze import RoutedNet
+
+        cap = float((self.rules.get("tuning") or {}).get("sequential_max_added_mm", 100.0))
+        if not math.isfinite(cap) or cap <= 0:
+            raise ValueError("sequential_max_added_mm must be finite and positive")
+        baseline = self.initial_lengths
+
+        def objective():
+            excess = [
+                max(0, self.spread(s.nets, s.unit)[1] - s.budget) / s.budget
+                for s in self.sets
+                if all(n in self.present for n in s.nets)
+                and not any(n in self.ports for n in s.nets)
+            ]
+            return sum(e > 1e-8 for e in excess), round(sum(excess), 8)
+
+        def added():
+            return sum(max(0, self.measure(n).total_mm - v) for n, v in baseline.items())
+
+        protected = [
+            k
+            for k in order
+            if reports[k].status not in ("partial", "unrouted")
+            and not self._over_budget(self.sets[k], reports[k])
+        ]
+        info = dict(
+            trials=0,
+            accepted_moves=[],
+            max_added_mm=cap,
+            added_mm=0.0,
+            stop_reason="no_improving_move",
+            immovable_members=sorted(self.present - self.tunable),
+        )
+        for _ in range(8):
+            before = objective()
+            if before[0] == 0:
+                info["stop_reason"] = "converged"
+                break
+            accepted = False
+            best_state, best_value, best_net = None, before, None
+            failed = [
+                k
+                for k in order
+                if reports[k].status not in ("partial", "unrouted")
+                and self._over_budget(self.sets[k], reports[k])
+            ]
+            targets = {
+                min(
+                    self.sets[k].nets,
+                    key=lambda n: self.value(self.measure(n), self.sets[k].unit),
+                )
+                for k in failed
+            }
+            # Only matched foreign nets close to a short member's copper; never
+            # arbitrary board nets, source locks, block ports, or retained copper.
+            nearby = []
+            constrained = {
+                n
+                for p in self.rules.get("diff_pairs") or []
+                if p.get("max_uncoupled_mm") is not None
+                for n in (p["p"], p["n"])
+            }
+            for net in sorted(self.tunable - targets - self.ports):
+                if net in constrained or self.fixed_tracks.get(net) or self.fixed_vias.get(net):
+                    continue
+                dist = min(
+                    (
+                        _seg_dist(a, b, c, d)
+                        for layer, a, b, _w in self.net_tracks(net)
+                        for target in targets
+                        for la, c, d, _width in self.net_tracks(target)
+                        if la == layer
+                    ),
+                    default=float("inf"),
+                )
+                if dist <= 4 * self.grid.pitch + self.clearance:
+                    nearby.append((dist, net))
+            for _distance, net in sorted(nearby)[:8]:
+                rn = self.board.result.nets[net]
+                shape = shape_rules(self.rules, self.grid.pitch, self.width(net), self.clearance)
+                runs = straight_runs(rn, self._breaking(net, rn))
+                for run in sorted(runs, key=len, reverse=True)[:4]:
+                    width = len(run) - 3
+                    if width < shape.gap:
+                        continue
+                    for amp in dict.fromkeys(
+                        (shape.amp_min, min(2, shape.amp_cap), min(4, shape.amp_cap))
+                    ):
+                        for side in (-1, 1):
+                            if info["trials"] >= 96:
+                                info["stop_reason"] = "trial_limit"
+                                break
+                            info["trials"] += 1
+                            path = bump_path(run, [Bump(0, 1, side, amp, width)])
+                            delta = path_cells_mm(path, self.grid.pitch) - path_cells_mm(
+                                run, self.grid.pitch
+                            )
+                            if added() + delta > cap + 1e-9:
+                                info["stop_reason"] = "added_length_limit"
+                                continue
+                            if (
+                                shape.max_added_mm is not None
+                                and self.tuned.get(net, [0])[0] + delta > shape.max_added_mm + 1e-9
+                            ):
+                                continue
+                            foreign = {c for c, names in self.owner.items() if names - {net}}
+                            trial = RoutedNet(
+                                net,
+                                cells=path,
+                                segments=[
+                                    (a.layer, (a.i, a.j), (b.i, b.j))
+                                    for a, b in zip(path, path[1:])
+                                ],
+                            )
+                            fp = net_footprint(
+                                self.grid,
+                                net,
+                                trial,
+                                self.via_keepout,
+                                self.net_halo.get(net, 0),
+                            )
+                            if fp & foreign or not all(
+                                self.grid.in_bounds(c.i, c.j)
+                                and self.grid.passable(c.layer, c.i, c.j, net)
+                                for c in fp
+                            ):
+                                continue
+                            # Also forbid approaching a different part of this net.
+                            old = RoutedNet(
+                                net,
+                                cells=run,
+                                segments=[
+                                    (a.layer, (a.i, a.j), (b.i, b.j)) for a, b in zip(run, run[1:])
+                                ],
+                            )
+                            old_fp = net_footprint(
+                                self.grid,
+                                net,
+                                old,
+                                self.via_keepout,
+                                self.net_halo.get(net, 0),
+                            )
+                            if (fp - old_fp) & (set(rn.cells) - set(run)):
+                                continue
+                            if not self._path_clear(net, run, path, self.index):
+                                continue
+                            state = self._state(reports[failed[0]])
+                            self._apply(net, run, path)
+                            record = self.tuned.setdefault(net, [0.0, 0, 0, None])
+                            record[0] += delta
+                            record[1] += 1
+                            self.index = self.copper_index()
+                            for _settle in range(4):
+                                for k in order:
+                                    s = self.sets[k]
+                                    if reports[k].status not in ("partial", "unrouted"):
+                                        self.tune_passes(s, reports[k])
+                                if objective()[0] == 0 or added() > cap:
+                                    break
+                            okay = (
+                                added() <= cap + 1e-9
+                                and objective() < before
+                                and all(
+                                    not self._over_budget(self.sets[k], reports[k])
+                                    for k in protected
+                                )
+                            )
+                            if okay and objective() < best_value:
+                                best_state = self._state(reports[failed[0]])
+                                best_value, best_net = objective(), net
+                            self._restore(state, reports[failed[0]])
+                        if info["trials"] >= 96:
+                            break
+                    if info["trials"] >= 96:
+                        break
+                if info["trials"] >= 96:
+                    break
+            if best_state is not None:
+                self._restore(best_state, reports[failed[0]])
+                info["accepted_moves"].append(best_net)
+                accepted = True
+                protected = [
+                    k
+                    for k in order
+                    if reports[k].status not in ("partial", "unrouted")
+                    and not self._over_budget(self.sets[k], reports[k])
+                ]
+            if not accepted:
+                break
+        else:
+            info["stop_reason"] = "iteration_limit"
+        if objective()[0] == 0:
+            info["stop_reason"] = "converged"
+        info["added_mm"] = round(added(), 6)
+        for report in reports:
+            report.sequential = dict(info)
 
 
 def tune_board(

@@ -523,13 +523,13 @@ legs go. It never turns a part a hard rotation holds, nor without `orient`.
 (`pnr.route.feedback`) a round that leaves a signal net unrouted, or a declared pair or group
 outside its budget, is not converged. Every later round runs with compact placement switched off
 (`pnr.compact_flags.relaxed`, read by every part's call site) at the board's own spread, and the
-first of them takes the initial pool again at the run's seed: it is the first round of the run
-without compact, byte for byte (checked on `09-mcu-usb-31-rel` seed 0: `placed.json` and
-`routes.json` identical). So a board that routes without compact in one round routes with it in
-two, and keeps the compact layout wherever that routes. A board that does not place without
-compact (the pin-1-origin header's envelope) keeps its best compact round
-(`termination: relaxed_placement_failed`). `pnr-report.json` records the switch (`relaxed`:
-the round, the spread, why).
+first of them takes the initial pool again at the run's seed. Recovery retains enabled
+`COURTYARD` geometry: relaxing the packing policy must not replace a pin-1-origin header's
+actual footprint with its larger origin-symmetric envelope. Explicit `COURTYARD` ablations
+still apply. Earlier recovery switched every compact part off; its byte-for-byte comparison
+to the noncompact run predates this correction. If the recovery pool genuinely has no legal
+placement, the best compact round remains (`termination: relaxed_placement_failed`).
+`pnr-report.json` records the switch (`relaxed`: the round, the spread, why).
 
 **Rejected on the way** (A/B on GCP, the 8 rungs with the lane's options, seeds 0 to 3):
 

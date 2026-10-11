@@ -3,26 +3,20 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-10 (PR #99 merge preparation). Previous status:
-2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
-`claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
-on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
-engine's fixes for them on `claude/gap-fixes`, with `claude/gap-constraints` merged; the gloss
-port's review fixes on `claude/gloss-port`. Before that, 2026-10-02: fab outputs and staged
-ordering, F2, F1 and O1, on `claude/fab-order`. Before that, 2026-09-30: PR4, #10, the ladder
-animations, the atopile toolchain and the privacy-scan trailer rule merged; line groups, hard
-board edges, the hierarchical ladder driver and their animations on
-`claude/animations-groups-hier`.
+Last updated: 2026-10-11 (USB paired-routing integration validation).
+PR #99 merged into main at `5d1a07c1`; its engineering workbench and manufacturing
+follow-ups are available. PR #94 is rebased on that revision.
 
 ## In progress
 
-- **PR #99 integration**: the native engineering workbench, evidence-gated workflow,
-  traceability/artifact review, recorded attempts, circuit simulation and manufacturing
-  handoff are ready for final hosted validation. Corrected the dock transaction expectation
-  for Manufacturing, moved Git into the final container runtime for project initialization,
-  and cleared hidden through-hole selection when inspecting qualified packets. JavaScript
-  transaction/syntax checks pass; full regressions and hosted image smoke are being rerun.
-  Consolidated feature evidence is linked from the PR; older session entries live in Git.
+- **PR #94 integration**: corrected compact recovery's offset-courtyard geometry.
+  Fresh Linux A/B passes all 12 USB cells under control, prior-paired and integrated
+  defaults; both local integrated header reruns pass native gates. Total uncoupled
+  length remains 2 mm. Validation receipt preserves all baseline/repaired attempts,
+  root/candidate seeds, selected starts, settings, pins and saved-board hashes.
+  Accepted native header snapshots illustrate recovered placement. Full repository
+  checks and hosted validation gate landing; wider board/topology coverage remains
+  open. Bounded search acceptance does not require every root seed to pass.
 
 - **Assembly inventory**: quantity-aware catalog filtering and assembly-house checks
   publish replayable BOM/identity/quantity evidence. JLCPCB public inventory includes

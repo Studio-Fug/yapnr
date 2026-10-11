@@ -673,9 +673,33 @@ class RelaxTest(unittest.TestCase):
         with flags(**ON):
             with compact_flags.relaxed():
                 self.assertFalse(compact_flags.enabled())
-                self.assertFalse(any(compact_flags.enabled(p) for p in PARTS))
+                self.assertEqual([p for p in PARTS if compact_flags.enabled(p)], ["COURTYARD"])
                 self.assertEqual(legalize_flags.active(), {})  # WIRE, TURN, SATELLITES too
             self.assertTrue(compact_flags.enabled("GP"))
+
+    def test_relax_retains_pin_one_origin_header_geometry_and_ablation(self):
+        from pnr import compact_flags
+        from pnr.place.geometry import courtyard_rect
+        from pnr.place.legalize import LegalizationError, legalize
+
+        header = part("J1", (38.0, 3.0), pos=(1.0, 5.0), body=(-1.0, -1.5, 18.0, 1.5))
+        g = board([header], 24.0, 12.0)
+        with flags(**ON), compact_flags.relaxed():
+            self.assertEqual(courtyard_rect(header).w, 19.0)
+            legalize(g, 24.0, 12.0, fixed={}, keepouts=[], clearance=0.2, spread=1.1)
+            self.assertFalse(compact_flags.enabled("GP"))
+        with flags(**dict(ON, PNR_COMPACT_COURTYARD="0")), compact_flags.relaxed():
+            self.assertEqual(courtyard_rect(header).w, 38.0)
+            with self.assertRaises(LegalizationError):
+                legalize(
+                    board([header], 24.0, 12.0),
+                    24.0,
+                    12.0,
+                    fixed={},
+                    keepouts=[],
+                    clearance=0.2,
+                    spread=1.1,
+                )
 
     def loop(self, outcomes, env, use_pool=False, pool_fails_off=False):
         """Run the place-route loop with a fake placer and router: round r routes with

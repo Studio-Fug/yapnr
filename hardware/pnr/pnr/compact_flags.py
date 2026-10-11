@@ -41,9 +41,9 @@ same question as the placer without importing torch or numpy.
     compact as far as the board routes: in the place-route loop
     (:func:`pnr.route.feedback.route_and_place`) a round that leaves a signal net
     unrouted, or a declared pair or group outside its budget, is not converged, and every
-    later round runs with compact placement switched off (:func:`relaxed`): the first of
-    them is the run without compact (the same initial pool at the same seed and spread),
-    so a board that routes without compact in one round routes with it in two.
+    later round runs with compact placement switched off (:func:`relaxed`), retaining
+    the real offset courtyard geometry. The first takes the same initial pool at the
+    same seed with the board's normal spread.
 
 An explicit ``PNR_LEGALIZE_HPWL``, ``PNR_LEGALIZE_REORIENT`` or ``PNR_LINE_SATELLITES``
 (``0`` included) wins over its part. ``PNR_COMPACT_<PART>=0`` drops one part (an ablation). ``PNR_SHRINK=1`` (the flat
@@ -75,7 +75,12 @@ _relaxed = False  # relaxed(): compact placement switched off for a RELAX round
 
 def enabled(part=None) -> bool:
     """True with ``PNR_COMPACT=1`` (and, for ``part``, unless ``PNR_COMPACT_<PART>=0``)."""
-    if os.environ.get("PNR_COMPACT") != "1" or _relaxed:
+    if os.environ.get("PNR_COMPACT") != "1":
+        return False
+    # Relax the packing/search policy, not the footprint's coordinate frame. A
+    # pin-1-origin header fits by its actual courtyard but its doubled symmetric
+    # envelope may exceed the entire board, preventing every recovery start.
+    if _relaxed and part != "COURTYARD":
         return False
     if part is None:
         return True
@@ -86,9 +91,11 @@ def enabled(part=None) -> bool:
 
 @contextlib.contextmanager
 def relaxed():
-    """Within the block :func:`enabled` says False for compact placement and every part
-    (the ``RELAX`` rounds of the place-route loop: a compact round did not route, so the
-    next ones run as without compact). :func:`settings` (the router key) is read outside."""
+    """Disable compact policies while retaining enabled offset courtyard geometry.
+
+    Explicit COURTYARD ablations remain respected. Native acceptance is unchanged;
+    :func:`settings` (the router key) is read outside this recovery context.
+    """
     global _relaxed
     before = _relaxed
     _relaxed = True

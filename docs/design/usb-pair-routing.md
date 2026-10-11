@@ -66,6 +66,46 @@ python tools/animate_pair_access.py \
 Each directory must also contain its accepted regression `result.json`; the
 renderer refuses failed or non-clean results.
 
+## Integrated-default validation
+
+After rebasing onto the engineering-workbench main revision, a fresh Linux matrix
+passed control 4/4, prior-paired 4/4 and integrated 2/4. The integrated header
+failures exposed a recovery geometry bug: relaxing compact placement discarded
+the actual offset courtyard of the pin-one-origin header, replacing its 19 mm
+body with a 38 mm symmetric envelope. Recovery therefore rejected a header that
+actually fit, before it could route the new placement.
+
+Recovery now retains enabled courtyard geometry while relaxing the other compact
+policies. Explicit courtyard ablation remains respected. A regression checks
+that the real header fits a 24 mm board and the symmetric approximation fails.
+With this correction, campaign `20261011-ladder-be611d` passed all twelve Linux
+cells: control, prior-paired and integrated, both USB cases, roots 0 and 1. Both
+local integrated header reruns also passed. Each paired saved board has zero
+native opens/violations and passes coupling and matching; the total uncoupled
+limit remains 2 mm per leg across the whole route. Integrated header recovery
+converged in round 2, with maximum uncoupled copper 1.882 mm.
+
+![Accepted header states under prior and integrated placement defaults](../feature-animations/usb-pair-integrated-native.gif)
+
+Both frames are accepted coupled boards at header root seed 1, using the same
+viewport and fabrication rules. The integrated frame includes recovered
+placement. They are final snapshots, without invented intermediate geometry.
+
+The acceptance unit is a bounded design search. A root seed may explore a branch
+that fails; the campaign may try its predeclared additional roots/candidates
+until a fully qualified board is found or the budget is exhausted. Passing every
+root is not a universal requirement. This regression matrix happens to pass
+every repaired cell. Retain failures, the mechanically selected winner and its
+root/candidate seeds rather than choosing a successful branch by hand.
+
+The [validation receipt](usb-pair-integration-validation.json) records all 24
+baseline/repaired attempts, candidate seeds, selected starts, commands, budgets,
+source/image pins, exact saved-board hashes and native/electrical results.
+The header root 1 selected `start-03` (candidate seed 314188) before feedback
+recovery. Seeds alone are insufficient for byte-identical reproduction:
+wall-clock-bounded searches also depend on execution speed. Preserve exact input
+artifacts and tool/settings provenance along with the accepted output.
+
 ## Scope
 
 The initial joint-access implementation supports two terminals per polarity and

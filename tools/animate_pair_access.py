@@ -18,6 +18,12 @@ def main():
     parser.add_argument("--before-dir", type=Path, required=True)
     parser.add_argument("--after-dir", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--before-title", default="Before · independent matched legs")
+    parser.add_argument("--after-title", default="After · coupled paths and paired via access")
+    parser.add_argument(
+        "--caption",
+        default="Native accepted copper · legacy MCU USB · seed 1 · DRC: 0 opens / 0 violations",
+    )
     args = parser.parse_args()
     import matplotlib
 
@@ -47,7 +53,7 @@ def main():
     frames = []
     for data, title in zip(
         snapshots,
-        ("Before · independent matched legs", "After · coupled paths and paired via access"),
+        (args.before_title, args.after_title),
     ):
         fig, axes = plt.subplots(1, 2, figsize=(12, 6))
         fig.subplots_adjust(left=0.06, right=0.98, bottom=0.15, top=0.80, wspace=0.12)
@@ -102,7 +108,7 @@ def main():
         fig.text(
             0.5,
             0.87,
-            "Native accepted copper · legacy MCU USB · seed 1 · DRC: 0 opens / 0 violations",
+            args.caption,
             ha="center",
         )
         fig.text(

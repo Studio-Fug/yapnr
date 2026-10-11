@@ -1,0 +1,3466 @@
+{
+  "schema": "usb-pair-integration-validation-v1",
+  "engine_base_revision": "39aa3768ea3fcb33539ef9ee8129c93125cb18b1",
+  "main_base_revision": "5d1a07c1d110ee72a7aea0a7cc3fea1558613dcf",
+  "validated_runtime_sha256": {
+    "hardware/pnr/pnr/compact_flags.py": "bf9852296ce944b7919396cbe87d4bd0b439d7cac91adc80395438b40c8a3673"
+  },
+  "acceptance": "Each supported design/configuration must yield an exact saved board passing native and electrical gates within its declared candidate/time budget. Individual seed failures are retained evidence, not an automatic design failure. This matrix exceeded that gate by passing all twelve repaired cells.",
+  "determinism": "Seeded candidate generation; wall-clock-bounded searches can vary with execution speed. Reproduction requires exact input artifacts, full seeds/settings, pinned tools/image and equivalent budgets; seeds alone do not guarantee byte-identical boards.",
+  "selection": "No manual choice or routing; initial pool and recovery select placements mechanically. Seeds 0 and 1 are predeclared regression roots, not cherry-picked winning roots.",
+  "successful_roots": {
+    "09-mcu-usb-31-header": [0, 1],
+    "09-mcu-usb-31-mc": [0, 1]
+  },
+  "native_animation": {
+    "path": "docs/feature-animations/usb-pair-integrated-native.gif",
+    "sha256": "5091aed7a02b35483deddecf76bba4f172decf09897e68bf19726c7aef9a7037",
+    "frames": "Prior-paired and integrated header seed 1, two accepted final snapshots; no interpolated geometry."
+  },
+  "attempts": [
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "control",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 134.8386922,
+      "initial_pool": {
+        "selected": "start-06",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 0,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104729,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209458,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314187,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418916,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523645,
+            "status": "legal"
+          },
+          {
+            "id": "start-06",
+            "seed": 628374,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-07",
+            "seed": 733103,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--no-pair-access"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "c22d7558a2f858638ba24ae2db379aecd5c4404bc91e545dfef4b1047914fc43",
+        "routed.kicad_pcb": "29708a24f58fca52de59310c59af934982614f575b4cac57f91b2242fa48a4f1",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "4b2b2e2e153958753ecc970ee88ab7397f52ed9aee332498ed2c4b86c42d72b9",
+        "drc.json": "6450abe3e2b045a1b876c01dd0aff088393d29ca2a53f5c719f540e2c50f5173",
+        "pnr-report.json": "b174f016f58cddc611d8a8f58334144b265d9a9420d158174ea73d5bec9b1558"
+      },
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_PAIR_ACCESS": "0",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "control",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 175.949628883,
+      "initial_pool": {
+        "selected": "start-03",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 1,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104730,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209459,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314188,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418917,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523646,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-06",
+            "seed": 628375,
+            "status": "legal"
+          },
+          {
+            "id": "start-07",
+            "seed": 733104,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--no-pair-access"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "68a31b722c8a94bf7137023e185423a6c32ab69a5e284d0efd6841bfa4492866",
+        "routed.kicad_pcb": "0bb54c1700dace8549c86912950a338de64c741ae70c9308aab9e8c5d9343af0",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "76eb12188ab38300324f8ce51c63d56bb9d16d5f9eea6e58a3c17246240ee800",
+        "drc.json": "472619c9ed52a99fd5427f5b4406eb6e50c6cc276392e16cb6e2cbaf0d394fee",
+        "pnr-report.json": "c1fab00c5f6422ba9352f2eb008e4d22ff9415e1030dc2ade60a6dc2ecce8639"
+      },
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_PAIR_ACCESS": "0",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "control",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 258.142056556,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--no-pair-access"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "b38c2a5f4a80748b0c8bede785bf5e68ed3a41498df2bbcfe66144257f598ab0",
+        "routed.kicad_pcb": "5bd1f05bc32ed1f967f958d971b1751c55b5eda013a9d781f16ae4be2ce96f71",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "9b5c6a148c3d07d34e963548bdd3fdee233009b8a963668696f51b709a7f440d",
+        "drc.json": "5e74fd1631f2eac9f6ffb69517115ed2a7760758d63019f439bdbd6800233337",
+        "pnr-report.json": "08c1fc97fdcba7973e47bae02db5f5edc508a3db26c0ab1cd8b6b827490e31e1"
+      },
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_PAIR_ACCESS": "0",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "control",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 219.74408456400002,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--no-pair-access"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "5b68af292cffa7ddef3b0ba664ea15b6da35c567332d5f93f5cb6749ce235ecd",
+        "routed.kicad_pcb": "710cb27de03013f4e70875e399f07b923e8e9c8c45687d5d3f031fffaefef576",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "32f9af4fc6798f6ed8e1fa701d6c32a06b7d8497abae4a6cebaf0daddac493aa",
+        "drc.json": "4c50e4cc50eaf97030a96aead9638713f6740eaa4aa4a36d9936c0a4b087ec5a",
+        "pnr-report.json": "260048c6a1ab0f101eff9ad30da2b68238347d63e4f654fa84f03323b12f9ec2"
+      },
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_PAIR_ACCESS": "0",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "prior-paired",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 182.460989305,
+      "initial_pool": {
+        "selected": "start-06",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 0,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104729,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209458,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314187,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418916,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523645,
+            "status": "legal"
+          },
+          {
+            "id": "start-06",
+            "seed": 628374,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-07",
+            "seed": 733103,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--no-legalize-keep",
+        "--no-detail-place",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "053cf9dea67d5a7292bb3783236944a53647334795462b06327d88e398510125",
+        "routed.kicad_pcb": "b1743269dd4527302c059883d050ea6eb12f7943e3b606fa2331e325bcca558e",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "edd7fe19eba77dc182d9cfc19fabf2cb4aa662401a011ff7cbf12c2c6f883305",
+        "drc.json": "ae7b6634ba90844c623dfff4462db28f307ebfea29424f44427a9bd3ed195dac",
+        "pnr-report.json": "ae1920c19609b6ebf9eef3e69203fbcee5d180d8abf8fc9b5df81034fc614015"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000036,
+            "USB_DN": 1.5040000000000036
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 28.977369,
+            "USB_DN": 28.977369
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.5790000000000204,
+            "D_N": 1.5790000000000204
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 22.517944,
+            "D_N": 22.517944
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_LEGALIZE_KEEP": "0",
+        "PNR_DETAIL_PLACE": "0",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "prior-paired",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 181.380608176,
+      "initial_pool": {
+        "selected": "start-03",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 1,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104730,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209459,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314188,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418917,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523646,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-06",
+            "seed": 628375,
+            "status": "legal"
+          },
+          {
+            "id": "start-07",
+            "seed": 733104,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--no-legalize-keep",
+        "--no-detail-place",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "47d61d83f096ed45ae2d7239eae1a006fc3a6b49a7a6186dc44e06622e439426",
+        "routed.kicad_pcb": "79ee67b0044c462e23258f197bfa8084ca4e7e00b47de6449903e9a376b8817c",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "aa09d4fb3b382438b45cd288730aec25629acf5ef48afac77a11684e2d5872ba",
+        "drc.json": "e90e8a3747a1a980b0c9374b957cf9226c80b916366a45b3f972b8b6b80c8cc0",
+        "pnr-report.json": "b824a8974d2a48faea53cd0c434e0a02c0f06b73b98a5e3819909de906a4ce3a"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000036,
+            "USB_DN": 1.5040000000000036
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 36.747039,
+            "USB_DN": 36.747039
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.5790000000000204,
+            "D_N": 1.600578764359137
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 26.896326,
+            "D_N": 26.906518
+          },
+          "skew_mm": 0.010191999999999979,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_LEGALIZE_KEEP": "0",
+        "PNR_DETAIL_PLACE": "0",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "prior-paired",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 208.612767218,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--no-legalize-keep",
+        "--no-detail-place",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "47be0e5e1d8f1e0a91ade3268af996dead2246c4e8b96e82fe096c7c437ca628",
+        "routed.kicad_pcb": "46027f43aef61c7c8a4e71eb43a1f0561cf0d2b65da5c18fdca2bb882d5fbddb",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "7642465a17418a074026b891c7b965994183aa5e8c6a58b286ee8be725e7657d",
+        "drc.json": "eb0a4a2cd88c8f610a701cecdec474226ebf5490485dc7a51ec7fe25dc9a3933",
+        "pnr-report.json": "ea291b889eb9d72a38d49ae2a911b7de016755705ea8a267430fd8707b9b5756"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 0.9799999999999986,
+            "USB_DN": 0.9799999999999986
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 8.716884,
+            "USB_DN": 8.74587
+          },
+          "skew_mm": 0.028985999999999734,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.2124011537017776,
+            "D_N": 1.175750617615382
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 7.193173,
+            "D_N": 6.654286
+          },
+          "skew_mm": 0.5388869999999999,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_LEGALIZE_KEEP": "0",
+        "PNR_DETAIL_PLACE": "0",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "prior-paired",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 245.39592366800002,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--no-legalize-keep",
+        "--no-detail-place",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "bf018e64e3bfd6fc13fd3c9520466a94c3b229b92cc6d05907dc9e960f904b9f",
+        "routed.kicad_pcb": "72c5e5756d6b40b592bd7bd7c11c61d9ca5b5bd8c6c8dd0aaa021668ffe88078",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "443b6a1275c5edb7ed8804f938030d7d71003335eff3dad9e54fa994324ac0b1",
+        "drc.json": "44245cf2dfbb3f80ba2b93559df68e75e0e3bafeb0b95f0a8e9396ddad4f3732",
+        "pnr-report.json": "50a2eaecd4c763a1f2e2402caa82874abe490767cf66efd101fee134cb07e8c4"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000033,
+            "USB_DN": 1.5040000000000033
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 13.250719,
+            "USB_DN": 13.250719
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.175750617615382,
+            "D_N": 1.2124011537017776
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 8.779286,
+            "D_N": 9.318173
+          },
+          "skew_mm": 0.538886999999999,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_LEGALIZE_KEEP": "0",
+        "PNR_DETAIL_PLACE": "0",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "integrated",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 0,
+      "passed": false,
+      "opens": 1,
+      "violations": {},
+      "reasons": ["incomplete_pnr", "native_unconnected_items"],
+      "best_round": 1,
+      "elapsed_seconds": 372.388713251,
+      "initial_pool": {
+        "selected": "start-04",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 0,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104729,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209458,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-03",
+            "seed": 314187,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418916,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-05",
+            "seed": 523645,
+            "status": "legal"
+          },
+          {
+            "id": "start-06",
+            "seed": 628374,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-07",
+            "seed": 733103,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "9e4d79fb62720e1967fb546768b1217b0aaf4c74f74331a05362dc870ee04aba",
+        "routed.kicad_pcb": "e2cafb7886b99359dad06d84174fc12eab6914356d1f2f95114344065a343414",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "7258618d5859ff3af233971ac63bf0174d7d28548a6d58ae426e99515e4306f2",
+        "drc.json": "962238f7bbb737c553bf440cde926bcf896d45280defcfa0661b28a9c53dd1b8",
+        "pnr-report.json": "818a9e641d81ca99b489af23341715cf06728356b4ec2195dd32ede617bbc82e"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 0.9799999999999989,
+            "USB_DN": 0.9799999999999989
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 9.49587,
+            "USB_DN": 9.49587
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.5839895436912839,
+            "D_N": 1.5839895436912779
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 19.023882,
+            "D_N": 19.023882
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "integrated",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 1,
+      "passed": false,
+      "opens": 0,
+      "violations": {},
+      "reasons": ["incomplete_pnr", "pair_not_coupled"],
+      "best_round": 1,
+      "elapsed_seconds": 358.657996957,
+      "initial_pool": {
+        "selected": "start-03",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 1,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104730,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209459,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-03",
+            "seed": 314188,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418917,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-05",
+            "seed": 523646,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-06",
+            "seed": 628375,
+            "status": "legal"
+          },
+          {
+            "id": "start-07",
+            "seed": 733104,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "7cf64a8a363f69cf4764c28e10e9813b50fd145b4f0045b55abe13091b5b61af",
+        "routed.kicad_pcb": "3bf6424daa76a3cb08363426d1824e3704ba120a6329097c8338e2bd9eb8325e",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "3f87f21aa21c5cc005a48888d4e8614087c5499e0d9b39fa59cb7462eeb03358",
+        "drc.json": "8f9e5d8e9e3806842d729a9a5fbfa9a340f7ca2c48a9fae7d1b66f716c7a995b",
+        "pnr-report.json": "1891d227ef7e8fddfcd571fb9ef73dafad043a47d0ffe6980fa3d79cbe589760"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000036,
+            "USB_DN": 1.5040000000000036
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 36.093485,
+            "USB_DN": 36.093485
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": false,
+          "uncoupled_mm": {
+            "D_P": 15.93186470969764,
+            "D_N": 15.835670631985082
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 18.906926,
+            "D_N": 18.799532
+          },
+          "skew_mm": 0.10739399999999932,
+          "reason": "uncoupled_budget"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "integrated",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 177.78844102699998,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "b8e0352a4b692c543ee028f97da71097fc9a3e191dd3b8e3118335445c9f5784",
+        "routed.kicad_pcb": "549aab7d1e9a9ebd61b5158a9f5f7a6cbdc713a7dc7825487cafe99b662f3047",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "1693944c682a2bf6b0490aede8a4e4381182018711aa82971633b71972d27ea1",
+        "drc.json": "c475c90c60764f9a8e728e72629c985cd47c3db8b91ff143f0ba523daececd21",
+        "pnr-report.json": "890b827910bc9215942e6e73acd84ee947e400c4c4a76dbfe25423e3576b2c30"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000033,
+            "USB_DN": 1.5040000000000033
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 14.861074,
+            "USB_DN": 14.861074
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.2124011537017776,
+            "D_N": 1.175750617615382
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 7.617311,
+            "D_N": 7.078424
+          },
+          "skew_mm": 0.5388869999999999,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "baseline",
+      "campaign": "20261011-ladder-20b48d",
+      "configuration": "integrated",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 225.26518236999993,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "3fb6a9ce1ffeba5dd49b3d0d2e9dda3b9d66694aaf4fafa0e04fd235f355ed76",
+      "artifacts": {
+        "source.kicad_pcb": "e880ce58dc6f2d3d0c6670e7662aa8664c23c629299ad8571eff6b46de5beeff",
+        "routed.kicad_pcb": "459dccb86e104088aa1726ce966b9d72b692671aa5942bd078873e9b067a8fcd",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "e1580a0dbd208649212061ba2c2abdafb4eca95fd8d52c75a9f2f28d203fa638",
+        "drc.json": "d7814a7f065affcfe7d25241ff812c678652a078b10da32f0c8a46f302e02a5c",
+        "pnr-report.json": "5abd9195a32a5ce505faf07e8343468021e0546046b8c6110daf08be17d1199e"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.0249746135029596,
+            "USB_DN": 1.124974613502961
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 4.734674,
+            "USB_DN": 4.834674
+          },
+          "skew_mm": 0.09999999999999964,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.583989543691282,
+            "D_N": 1.5839895436912808
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 7.697789,
+            "D_N": 7.697789
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "7fa0942cfe88704d834ba25147ff1ec45a2581d0ed599ac048a7eb53804de3a0",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "control",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 134.271374928,
+      "initial_pool": {
+        "selected": "start-06",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 0,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104729,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209458,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314187,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418916,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523645,
+            "status": "legal"
+          },
+          {
+            "id": "start-06",
+            "seed": 628374,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-07",
+            "seed": 733103,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--no-pair-access"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "0a3127ab503ab1a1df53732f3c81cfe9bc592adc296c0be3c678722438a6cf1d",
+        "routed.kicad_pcb": "4edfdbe636b7809f9dbadda1473ca5c63226e87336114bbf6576051c845ed668",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "ec28745e3f9daaf1aa4d2817267c643e30074d881318338ea380eec2cc54f203",
+        "drc.json": "9b608a0c0b629bfcb12679a3071871cb593287ea1f4778aa60f5d1a30b08fea0",
+        "pnr-report.json": "178e028dc348ece586cba521e416d11cda55678669e8f0ebf8f41e48897e0687"
+      },
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_PAIR_ACCESS": "0",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "control",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 179.67389541999998,
+      "initial_pool": {
+        "selected": "start-03",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 1,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104730,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209459,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314188,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418917,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523646,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-06",
+            "seed": 628375,
+            "status": "legal"
+          },
+          {
+            "id": "start-07",
+            "seed": 733104,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--no-pair-access"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "7ab3051fd054c4caf79027c2f395429acf228b3e5640b834b52411272e4b2ac8",
+        "routed.kicad_pcb": "b6d4cd9d4d9e92477c99de841ce45a59082b4c60e02c41f1dff51641c9512463",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "0b9ae7f648adb16ed90c8fd523cd23c242924b95ab35cfcfae285e14e6e1a926",
+        "drc.json": "9b89416292e76755a9f71e52ea72901238cc8b066f487df6e35654bd4fe883d0",
+        "pnr-report.json": "11ebc0d4f289a6f9720be82b8bba740699c33afc01061dc48245faccdbec98be"
+      },
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_PAIR_ACCESS": "0",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "control",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 194.271944194,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--no-pair-access"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "e0530b4ec11b5e924576533a23bf6cf32a92e817f0aea324d0998cfb0a7901cd",
+        "routed.kicad_pcb": "f91c45d94b12b12f168317ecc4f9225bb532a59bcd6a5bb05de4cc0126f20013",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "b3c91153d0de8849eda191d1b49d1258fcd9d6e406b12cc94245baa0a3278b7b",
+        "drc.json": "f265bcec500301642afb17956beb54250a3c7d638f3a11deff4fd93c8fc62f30",
+        "pnr-report.json": "5b25298f7d2df980e5823c7f4f2be49692e91d375c5846a6be4abaac740605c4"
+      },
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_PAIR_ACCESS": "0",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "control",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 155.90145169599998,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--no-pair-access"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "68ba5ecef065bb7aab064bc627f2ca0a8b0e2cfe7fa08800cd1841b2f3256d8f",
+        "routed.kicad_pcb": "882f0aafce221fb47b6e82cad8a4df43fdb2f517eb18e2236a64a05261fb7418",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "26efde9bc95780de5dd610ea50a21413c7dd24cbf6875d78d1f63a63f8f19d72",
+        "drc.json": "cf2760a338ec37f406227c10cda0af8f7ca6e263641c36ed0f0a48e2de61042f",
+        "pnr-report.json": "f6194513859e884b0cc89ec4272da1601731c26d6e65af776af78ea0ee21fc7d"
+      },
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_PAIR_ACCESS": "0",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "prior-paired",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 174.82761861699998,
+      "initial_pool": {
+        "selected": "start-06",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 0,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104729,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209458,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314187,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418916,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523645,
+            "status": "legal"
+          },
+          {
+            "id": "start-06",
+            "seed": 628374,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-07",
+            "seed": 733103,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--no-legalize-keep",
+        "--no-detail-place",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "a5d309b3987781d4f59a52fb33aec4c46e88b63c46a04629e81c743f022e1996",
+        "routed.kicad_pcb": "87a1dbc6d8e8904b96ddfee12b57d59a07222fbfb6a0f72153e27033f59eb730",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "92fba409ee9f9103e67671e38f2f8bc7471b2d7a858f3aefbfa5952af5bddff0",
+        "drc.json": "bacd750baaf61653f8cda10b962085dfce6c250d38283c7e3bab47c1fc8d1de7",
+        "pnr-report.json": "af3de1beb5b0ef71cee4c55132778f19eb5621375365448b879c555af6f1bdad"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000036,
+            "USB_DN": 1.5040000000000036
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 28.977369,
+            "USB_DN": 28.977369
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.5790000000000204,
+            "D_N": 1.5790000000000204
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 22.517944,
+            "D_N": 22.517944
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_LEGALIZE_KEEP": "0",
+        "PNR_DETAIL_PLACE": "0",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "prior-paired",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 175.85813979099999,
+      "initial_pool": {
+        "selected": "start-03",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 1,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104730,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209459,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314188,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418917,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523646,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-06",
+            "seed": 628375,
+            "status": "legal"
+          },
+          {
+            "id": "start-07",
+            "seed": 733104,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--no-legalize-keep",
+        "--no-detail-place",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "e3061fdcedc3615620b8e5fb6d09db3b5da5096b98392f14fc2e56f6e59c8dbd",
+        "routed.kicad_pcb": "4ca979a0f3e07d4a00810814577d5ea6aa1eeee79989364232cb36c4e327ee93",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "4337dead715d8629678ab4ba69bca0643ab460c3d6dea7bfb92081d1399846ad",
+        "drc.json": "fadaff1499d28693de3137d5ca68aa3cecf246e8cce1d264f5e8b509a44e04e0",
+        "pnr-report.json": "ca0c9b9ca3eef8f91297ea426a88ab2ba2d95abba90276cf4b996026de5f87c0"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000036,
+            "USB_DN": 1.5040000000000036
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 36.747039,
+            "USB_DN": 36.747039
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.5790000000000204,
+            "D_N": 1.600578764359137
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 26.896326,
+            "D_N": 26.906518
+          },
+          "skew_mm": 0.010191999999999979,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_LEGALIZE_KEEP": "0",
+        "PNR_DETAIL_PLACE": "0",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "prior-paired",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 212.37549700700004,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--no-legalize-keep",
+        "--no-detail-place",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "cadf7771b7b4ea528a671cba5cfb59ac11c81fc8549f41360057c3caafd17d7a",
+        "routed.kicad_pcb": "7ce96dee1ee04cdfd36701412bafafb01e6f5157ead05359a74a16b3f47471e1",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "224bf790430cb4c030ea0285f37b67b42678339208f667e5234755d17713096a",
+        "drc.json": "50e5b1ed5d2610c50735ed07cd455c9619b3c3b0358abb62d3daf308ba00b85e",
+        "pnr-report.json": "a3428f14315342d0e3157a441710490d33a8b042b84f65a108fac84416a7ba59"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 0.9799999999999986,
+            "USB_DN": 0.9799999999999986
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 8.716884,
+            "USB_DN": 8.74587
+          },
+          "skew_mm": 0.028985999999999734,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.2124011537017776,
+            "D_N": 1.175750617615382
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 7.193173,
+            "D_N": 6.654286
+          },
+          "skew_mm": 0.5388869999999999,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_LEGALIZE_KEEP": "0",
+        "PNR_DETAIL_PLACE": "0",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "prior-paired",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 250.91716564900003,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--no-legalize-keep",
+        "--no-detail-place",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "050667ff23711097c699322eae16b916993d25bc3eea66f93e60bd529b2e7f83",
+        "routed.kicad_pcb": "dd28983483a5381286e4bdb250a38f985aaf416064ad78d50168a7c0364836f3",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "34e383fb683ea1412a4a6b03b7bf06f003b2a0355b4bfd568e7fa8e032f8d31a",
+        "drc.json": "a513e93fe94d15633e7ead5f713776f7e2668fae79bcf36b8f1dad196d645d46",
+        "pnr-report.json": "700fca90fd948148e3d3ffd49a84d77f595f189c95a5c25389bdaa41c54f924c"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000033,
+            "USB_DN": 1.5040000000000033
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 13.250719,
+            "USB_DN": 13.250719
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.175750617615382,
+            "D_N": 1.2124011537017776
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 8.779286,
+            "D_N": 9.318173
+          },
+          "skew_mm": 0.538886999999999,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_LEGALIZE_KEEP": "0",
+        "PNR_DETAIL_PLACE": "0",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "integrated",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 2,
+      "elapsed_seconds": 528.782663235,
+      "initial_pool": {
+        "selected": "start-06",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 0,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104729,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209458,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314187,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418916,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523645,
+            "status": "legal"
+          },
+          {
+            "id": "start-06",
+            "seed": 628374,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-07",
+            "seed": 733103,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "d138e8e125c8532b464cace73d25a41c763c0728db702e2f1c044a86288d53db",
+        "routed.kicad_pcb": "c6ad84d79b4085b52414e17b7d0b566a4a5cecd51b8c9bb16dc94ec489df5a91",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "4da36c8f3f43f943acbd3875e0e30864d658ebdbf8d47da389c593615fee7c05",
+        "drc.json": "1e86c6c77c9526b956b31cc80ae0c112e84ccfe92d610e187e9514f6018e8aaa",
+        "pnr-report.json": "9c52e3c66b7ad7251b6d4ee251de5f91b0c62d003ce5161c9941cd0842cdc183"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000036,
+            "USB_DN": 1.8818560927947643
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 21.760754000000002,
+            "USB_DN": 21.859849
+          },
+          "skew_mm": 0.09909499999999838,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.5839895436912836,
+            "D_N": 1.583989543691282
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 9.947789,
+            "D_N": 9.947789
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "integrated",
+      "case": "09-mcu-usb-31-header",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 2,
+      "elapsed_seconds": 552.957026529,
+      "initial_pool": {
+        "selected": "start-03",
+        "candidates": [
+          {
+            "id": "start-00",
+            "seed": 1,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-01",
+            "seed": 104730,
+            "status": "legal"
+          },
+          {
+            "id": "start-02",
+            "seed": 209459,
+            "status": "legal"
+          },
+          {
+            "id": "start-03",
+            "seed": 314188,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-04",
+            "seed": 418917,
+            "status": "legal"
+          },
+          {
+            "id": "start-05",
+            "seed": 523646,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-06",
+            "seed": 628375,
+            "status": "routed_finalist"
+          },
+          {
+            "id": "start-07",
+            "seed": 733104,
+            "status": "legal"
+          }
+        ]
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-header",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "304da5c68098d4ec7c11ca17f5e92248f2b6369622d3a8fdfb9facbb49b23181",
+        "routed.kicad_pcb": "c21e285c04192e635bdd622bcb5a20a0dbf3bc0538dc22d711c69fae0e4faac9",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "5718c55bf76d02d2161096868b245abb8b1daa55503415a0ccd2b7ecd785f21c",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "abf6a1c3e48f6775880886ca6a589773ba33bdfeb583e001ad2ffa40dc31d9a6",
+        "drc.json": "bea2ac015190f249db61a7499a7f52adb5e63791bc322bc9655fa2cf291a8e3d",
+        "pnr-report.json": "6cc3f7986fc9e6350cd8be0c28ede996020024c0d977738c5c361030c3f36849"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000036,
+            "USB_DN": 1.5040000000000036
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 38.341708999999994,
+            "USB_DN": 38.341708999999994
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.5790000000000204,
+            "D_N": 1.5790000000000204
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 27.582535999999998,
+            "D_N": 27.582535999999998
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "integrated",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 0,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 222.789707648,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "0",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "3e7dcb0ef425baa0a0a8315234ac087c5d575269af5892c363bc2c7daf1f2f17",
+        "routed.kicad_pcb": "97e401ccd8df25e467b764b18cdfbcd8490d17c999c66e7fc2db6e7867460e4b",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "8643d65ae75000dc6d674418964e4225beb8308362f084f54ae26baca89428c6",
+        "drc.json": "74c956fa479ad9986ccfb3febd3b0219a0de87ac0bfbc233dd5279742f2b47db",
+        "pnr-report.json": "654806e59ca6cd59ffa2dfc9e94312566a9ddc2c8f2a1b75b94dc36c70f5529a"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.5040000000000033,
+            "USB_DN": 1.5040000000000033
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 14.861074,
+            "USB_DN": 14.861074
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.2124011537017776,
+            "D_N": 1.175750617615382
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 7.617311,
+            "D_N": 7.078424
+          },
+          "skew_mm": 0.5388869999999999,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    },
+    {
+      "revision": "repaired",
+      "campaign": "20261011-ladder-be611d",
+      "configuration": "integrated",
+      "case": "09-mcu-usb-31-mc",
+      "root_seed": 1,
+      "passed": true,
+      "opens": 0,
+      "violations": {},
+      "reasons": [],
+      "best_round": 1,
+      "elapsed_seconds": 253.093432885,
+      "initial_pool": {
+        "selected": null,
+        "candidates": []
+      },
+      "command": [
+        "${PYTHON}",
+        "src/hardware/pnr/regression/run.py",
+        "--repo",
+        "src",
+        "--out",
+        "out/run",
+        "--python",
+        "${PYTHON}",
+        "--kicad-python",
+        "${KICAD_PYTHON}",
+        "--kicad-cli",
+        "${KICAD_CLI}",
+        "--library",
+        "${FOOTPRINTS}",
+        "--case",
+        "09-mcu-usb-31-mc",
+        "--seed",
+        "1",
+        "--rounds",
+        "4",
+        "--timeout",
+        "1200",
+        "--fab-profile",
+        "legacy",
+        "--hard",
+        "--compact",
+        "--gloss",
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3"
+      ],
+      "settings": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "resources": {
+        "cpus": 1,
+        "disk_gb": 2,
+        "max_wall_s": 2400,
+        "memory_gb": 3
+      },
+      "image": "ghcr.io/studio-fug/yapnr@sha256:85dbc2710ebaafd497e4de8a3034894f76da2a30736d9a20fb712e2de720d2ac",
+      "source_bundle_sha256": "98a7faac097b8cc998bd4b8325a7912e8936dff688c3858c03ab246faf6de176",
+      "artifacts": {
+        "source.kicad_pcb": "9f88a732c0df5892146bd238e04e9d5812272ad8ee0500ab556c012cecca0936",
+        "routed.kicad_pcb": "c81da2f09dc63395bb5a5cf1f3194eef41f625954bb0a709a4ef33d46936771e",
+        "routed.kicad_pro": "0c9465c9faec8883f2f963faf7d028f90678f1facf797aba726e9ff97fdfd83d",
+        "routed.kicad_dru": "7f57ebe947d3d879f2bbb26f2549117492246e4c12320570a3b39884fa722458",
+        "design.json": "a5588d9e4925c1e54a52d93e0f02db8bdbdf6c79ebf64c9580151ecacb831f95",
+        "rules.json": "7b27393ed416c7fd5a99ff4a9d5b2a4be528d3d1ec0df2e042e0bc1ed2cca7f5",
+        "result.json": "0d925b1f98c90d0f6277f44722179405ff7991228d0561969751d08f9a3428c6",
+        "drc.json": "1976125fc910b6a5ad705cc0ca901dd28a1621d43564953d9dd97ff8dac5a06c",
+        "pnr-report.json": "26c73a28ec1258e44a63d79e4f974e6a002b84f3974c60e8323b8f01e669993d"
+      },
+      "pairs": [
+        {
+          "name": "usb",
+          "passed": true,
+          "uncoupled_mm": {
+            "USB_DP": 1.0249746135029596,
+            "USB_DN": 1.124974613502961
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "USB_DP": 4.734674,
+            "USB_DN": 4.834674
+          },
+          "skew_mm": 0.09999999999999964,
+          "reason": "coupled"
+        },
+        {
+          "name": "usb_mcu",
+          "passed": true,
+          "uncoupled_mm": {
+            "D_P": 1.583989543691282,
+            "D_N": 1.5839895436912808
+          },
+          "max_uncoupled_mm": 2.0,
+          "lengths_mm": {
+            "D_P": 7.697789,
+            "D_N": 7.697789
+          },
+          "skew_mm": 0.0,
+          "reason": "coupled"
+        }
+      ],
+      "effective_pnr_settings": {
+        "PNR_LOCAL_PRESSURE": "1",
+        "PNR_MAZE_KERNEL": "native",
+        "PNR_FORCE_ROUTE_PAIRS_FOR_DIFF_PAIRS": "1",
+        "PNR_LINE_REORDER": "1",
+        "PNR_PAIR_ACCESS": "1",
+        "PNR_TUNE_WINDOW_SEARCH": "1",
+        "PNR_COMPACT": "1",
+        "PNR_FAB_PROFILE": "legacy",
+        "PNR_INITIAL_POOL": "1",
+        "PNR_INITIAL_STARTS": "8",
+        "PNR_INITIAL_FINALISTS": "3",
+        "PNR_INITIAL_PROXY_BUDGET": "8"
+      },
+      "native_maze": {
+        "library": "libpnr_maze.so",
+        "source": "prebuilt",
+        "origin": "wheel",
+        "sha256": "8a96f98b306b5accc553ebabac2e880dbc952d4b8283e23b1923070a048058e6"
+      },
+      "pnr_sources_sha256": "999aba17fd2c4e8d26eba1937c8d5d576f60dd7477a71a9b656c4662bee3b296",
+      "tool_versions": {
+        "kicad-version.txt": "10.0.6",
+        "python-version.txt": "Jinja2==3.1.6\nMarkupSafe==3.0.3\nPyYAML==6.0.3\nfilelock==3.32.3\nfsspec==2026.7.0\nmpmath==1.3.0\nnetworkx==3.6.1\nnumpy==1.26.4\nshapely==2.1.2\nsympy==1.14.0\ntorch==2.3.1+cpu\ntyping_extensions==4.15.0\nyapnr==0.1.0rc2.dev1+g5d1a07c"
+      }
+    }
+  ]
+}

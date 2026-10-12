@@ -96,6 +96,70 @@ class Objective(unittest.TestCase):
 
             self.assertEqual(load(root)["attempts"][0]["status"], "cancelled")
 
+    def test_unlimited_run_steps_past_horizon_and_waits_without_timeout(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            engine = root / "engine"
+            write(engine / "pnr.py", {})
+            lab = PlacementLab(root, engine)
+            write(lab.root / "sources/demo.json", {"graph": {"components": []}})
+            process = MagicMock()
+            process.poll.return_value = None
+            with patch(
+                "yapnr.viewer.services.placement_lab.subprocess.Popen", return_value=process
+            ), patch("yapnr.viewer.services.placement_lab.threading.Thread"):
+                result = lab.command(
+                    dict(action="start", source="demo", iterations=2, paused=True, run_forever=True)
+                )
+            folder = lab.folder(result["id"])
+            request = json.loads((folder / "request.json").read_text())
+            self.assertIsNone(request["timeout_seconds"])
+            self.assertTrue(request["run_forever"])
+            write(folder / "status.json", dict(state="paused", step=7, control_revision=0))
+            edit = lab.command(
+                dict(
+                    action="annealing",
+                    id=result["id"],
+                    expect_revision=0,
+                    annealing=dict(mode="hold", temperature=1.5),
+                )
+            )
+            self.assertEqual(edit["control"]["annealing"]["start_step"], 7)
+            self.assertTrue(edit["control"]["paused"])
+            with self.assertRaisesRegex(ValueError, "Stale"):
+                lab.command(dict(action="step", id=result["id"], expect_revision=0))
+            write(folder / "status.json", dict(state="paused", step=7, control_revision=1))
+            advanced = lab.command(dict(action="step", id=result["id"], expect_revision=1, count=3))
+            self.assertEqual(advanced["control"]["step_until"], 10)
+            lab.command(dict(action="stop", id=result["id"]))
+            process.wait.return_value = -15
+            lab._wait(process, folder)
+            process.wait.assert_called_once_with(timeout=None)
+            self.assertEqual(json.loads((folder / "status.json").read_text())["step"], 7)
+
+    def test_rotation_schedules_validate_and_hold_the_endpoint(self):
+        from yapnr.viewer.services.placement_annealing import parse, temperature
+
+        schedule = parse(
+            dict(mode="schedule", start_temperature=2, end_temperature=0.2, steps=3), start_step=20
+        )
+        self.assertEqual(temperature(schedule, 20), 2)
+        self.assertAlmostEqual(temperature(schedule, 21), 1.1)
+        self.assertAlmostEqual(temperature(schedule, 22), 0.2)
+        self.assertAlmostEqual(temperature(schedule, 100000), 0.2)
+        self.assertEqual(temperature(parse(dict(mode="hold", temperature=1.5)), 100000), 1.5)
+        for bad in (
+            False,
+            {},
+            dict(mode="hold", temperature=0),
+            dict(mode="hold", temperature=True),
+            dict(mode="hold", temperature=float("nan")),
+            dict(mode="hold", temperature=11),
+            dict(mode="schedule", start_temperature=2, end_temperature=0.2, steps=0),
+        ):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                parse(bad)
+
     def test_missing_worker_is_interrupted_not_running_forever(self):
         with tempfile.TemporaryDirectory() as td:
             lab = PlacementLab(td, td)

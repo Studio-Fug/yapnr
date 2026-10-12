@@ -45,13 +45,35 @@ retried automatically. `wait` polls for at most 60 seconds; expiry does **not** 
 run. Poll again or continue other work. Without state/revision options it waits for any
 terminal state, including failure. Inspect `status.state`, `legal` and `violations`;
 a completed placement is not a routed or electrically qualified board. The separate
-600-second worker budget still applies, including paused time.
+600-second worker budget applies to bounded runs, including paused time.
+Opt into unlimited interactive optimization with `start --run-forever`; this removes
+both the iteration cap and wall-time deadline. Stop retains frames without legalization.
 
 `history` returns actual control/frame events from `iterations.jsonl`, a byte `cursor`,
 and `more`. Pass the returned cursor to the next call; partial concurrently written
 records are retained for the next poll. Nothing is synthesized. `run` includes the
 latest frame, request, control and review index. `evidence RUN NAME` retrieves a named
 JSON document and exact content hash; available names are returned by `status`.
+
+## Unlimited runs and rotation control
+
+```sh
+yapnr placement start converter --run-forever --paused
+yapnr placement annealing "$RUN" '{"mode":"hold","temperature":1.5}'
+yapnr placement annealing "$RUN" '{"mode":"schedule","start_temperature":2,"end_temperature":0.2,"steps":800}' --expect-revision 3
+```
+
+Start also accepts `--annealing` with the same JSON object. Python/HTTP use
+`run_forever=True` and an `annealing` object on `start`, or action `annealing`
+with `id`, `annealing` and optional `expect_revision` for live changes. Temperatures
+are finite and between 0.05 and 10; schedule steps range from 1 to 1,000,000.
+The server records the current iteration as `start_step` when applying a schedule.
+Its endpoint is held after that horizon. Pause and Adam state are preserved.
+`status.rotation_temperature` is the next update's temperature; history includes
+actual evaluation temperatures and consumed schedules. A schedule replay must retain
+these control events. The `iterations` setting is the default annealing horizon
+when starting through the API without an explicit schedule; it is not a stopping
+limit in unlimited mode. Worker crashes/server interruptions still end a run.
 
 ## Inspect, compare, render and discuss
 

@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id),fmt=(n,d=2)=>Number.isFinite(n)?n.toFixed(d):'—';
-let current=null,run=null,index=null,compareRun=null,other=null,catalog=null,requestSerial=0,notes=[],zoom=1,pan=[0,0],selectedAlternative=null,catalogKey=null,stepping=false,objectiveBase=null,surface=null,surfaceRotation=0,surfaceSerial=0,surfaceKey=null;
+let current=null,run=null,index=null,compareRun=null,other=null,catalog=null,requestSerial=0,notes=[],zoom=1,pan=[0,0],selectedAlternative=null,catalogKey=null,stepping=false,objectiveBase=null,annealingBase=null,surface=null,surfaceRotation=0,surfaceSerial=0,surfaceKey=null;
 const drafts=new Map(),initialQuery=new URLSearchParams(location.search);
 function updateLink(){if(!current)return;const q=new URLSearchParams({run:current});if(index!==null)q.set('step',index);if(compareRun)q.set('compare',compareRun);if(surfaceKey){q.set('surface',surfaceKey);q.set('rotation',surfaceRotation);}history.replaceState(null,'','?'+q);}
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json();if(!r.ok)throw Error(d.error||r.statusText);return d;}
@@ -9,11 +9,11 @@ function phase(d){return 'legalization:'+d.decision_sha256;}
 function remember(){if(run?.decision)drafts.set(phase(run.decision),$('comment').value);}
 function option(select,value,text){select.add(new Option(text,value));}
 async function refreshCatalog(){const incoming=await api('/api/placement-lab'),key=JSON.stringify([incoming,current]);if(key===catalogKey)return;catalogKey=key;catalog=incoming;const source=$('source'),prev=source.value;source.replaceChildren();for(const s of catalog.sources)option(source,s.id,s.title);source.value=prev||catalog.sources[0]?.id||'';if(!$('expression').value)$('expression').value=catalog.default_expression;$('terms').textContent='Terms: '+catalog.terms.join(', ');const list=$('runs');list.replaceChildren();for(const r of catalog.runs){const b=document.createElement('button');b.textContent=(r.title||r.id)+' · '+r.state+' · seed '+(r.seed??'—');b.classList.toggle('selected',r.id===current);b.onclick=()=>selectRun(r.id);list.append(b);}const c=$('compare'),old=c.value;c.replaceChildren(new Option('None',''));for(const r of catalog.runs)if(r.id!==current)option(c,r.id,(r.title||r.id)+' · '+r.id);c.value=old;if(!current&&catalog.runs.length)await selectRun(new URLSearchParams(location.search).get('run')||catalog.runs[0].id);}
-async function selectRun(id){remember();surface=null;surfaceSerial++;$('surface-status').textContent='Select a component and evaluate its surface.';current=id;objectiveBase=null;surfaceKey=null;index=null;selectedAlternative=null;other=null;zoom=1;pan=[0,0];history.replaceState(null,'','?run='+encodeURIComponent(id));await load();await refreshCatalog();if(run?.request.source)$('source').value=run.request.source;}
+async function selectRun(id){remember();surface=null;surfaceSerial++;$('surface-status').textContent='Select a component and evaluate its surface.';current=id;objectiveBase=null;annealingBase=null;surfaceKey=null;index=null;selectedAlternative=null;other=null;zoom=1;pan=[0,0];history.replaceState(null,'','?run='+encodeURIComponent(id));await load();await refreshCatalog();if(run?.request.source)$('source').value=run.request.source;}
 async function load(){if(!current)return;const token=++requestSerial,id=current,step=index;try{const result=await api('/api/placement-lab/run?id='+encodeURIComponent(id)+(step===null?'':'&step='+step));if(token!==requestSerial||id!==current)return;run=result;render();if(compareRun){const base=await api('/api/placement-lab/run?id='+encodeURIComponent(compareRun));if(token!==requestSerial)return;const ref=run.decision?.ref;const i=base.review?.decisions.findIndex(d=>d.ref===ref)??-1;other=i<0?base:await api('/api/placement-lab/run?id='+encodeURIComponent(compareRun)+'&step='+i);if(token===requestSerial)drawAll();}}catch(e){error(e);}}
-function render(){syncObjective();const s=run.status,d=run.decision;$('applied').textContent='Active objective: '+(s.expression||run.request.expression||'recorded engine configuration');$('title').textContent=(s.title||run.id)+' · '+run.id;$('state').textContent=s.state+' · '+(s.step??0)+' / '+(s.iterations??run.request.iterations??'—')+' iterations · objective rev '+(s.control_revision??'—')+' · last evaluated loss '+fmt(s.loss)+' · '+(s.message||'');$('progress').value=(s.step||0)/(s.iterations||1);const active=['running','paused','legalizing'].includes(s.state);$('pause').disabled=s.state!=='running';$('resume').disabled=s.state!=='paused';$('stop').disabled=!active;const steps=$('step');steps.replaceChildren(new Option('Live / final placement',''));for(let i=0;i<(run.review?.decisions.length||0);i++){const r=run.review.decisions[i];option(steps,String(i),(i+1)+' · '+(r.ref||'component'));}steps.value=index===null?'':String(index);$('prev').disabled=index===null||index===0;$('next').disabled=!run.review?.decisions.length||index===run.review.decisions.length-1;$('scope').textContent=d?d.scope:run.frame?.scope||'Recorded placement, not a qualified board';$('decision-title').textContent=d?'Decision '+(index+1)+' · '+d.ref:'Decision review';$('metrics').replaceChildren();$('costs').replaceChildren();$('nearest').textContent='Select a legalization decision to inspect each move.';$('alternative').replaceChildren(new Option('Chosen only',''));$('alternative-info').textContent='';$('save').disabled=!d;if(!d)$('saved').textContent='';
+function render(){syncObjective();const s=run.status,d=run.decision;$('applied').textContent='Active objective: '+(s.expression||run.request.expression||'recorded engine configuration');$('title').textContent=(s.title||run.id)+' · '+run.id;$('state').textContent=s.state+' · '+(s.step??0)+' / '+(run.request.run_forever?'∞':(s.iterations??run.request.iterations??'—'))+' iterations · objective rev '+(s.control_revision??'—')+' · last evaluated loss '+fmt(s.loss)+' · '+(s.message||'');if(run.request.run_forever){$('progress').removeAttribute('value');$('progress').setAttribute('aria-label','Run until stopped · '+(s.step||0)+' iterations');}else{$('progress').value=(s.step||0)/(s.iterations||1);$('progress').setAttribute('aria-label','Iteration progress');}const active=['running','paused','legalizing'].includes(s.state);$('pause').disabled=s.state!=='running';$('resume').disabled=s.state!=='paused';$('stop').disabled=!active;const steps=$('step');steps.replaceChildren(new Option('Live / final placement',''));for(let i=0;i<(run.review?.decisions.length||0);i++){const r=run.review.decisions[i];option(steps,String(i),(i+1)+' · '+(r.ref||'component'));}steps.value=index===null?'':String(index);$('prev').disabled=index===null||index===0;$('next').disabled=!run.review?.decisions.length||index===run.review.decisions.length-1;$('scope').textContent=d?d.scope:run.frame?.scope||'Recorded placement, not a qualified board';$('decision-title').textContent=d?'Decision '+(index+1)+' · '+d.ref:'Decision review';$('metrics').replaceChildren();$('costs').replaceChildren();$('nearest').textContent='Select a legalization decision to inspect each move.';$('alternative').replaceChildren(new Option('Chosen only',''));$('alternative-info').textContent='';$('save').disabled=!d;if(!d)$('saved').textContent='';
 if(d){const origin=d.original_position||d.target,dist=Math.hypot(d.position[0]-origin[0],d.position[1]-origin[1]),near=d.nearest,parts=[['Translation',fmt(dist)+' mm'],['Rotation',fmt(d.original_rotation,0)+'° → '+fmt(d.rotation,0)+'°'],['Placed neighbors',String(d.stationary_neighbors.length)]];for(const [k,v] of parts){const p=document.createElement('div');p.textContent=k+': '+v;$('metrics').append(p);}for(const term of d.terms){const tr=document.createElement('tr');for(const v of [term.key.replaceAll('_',' '),fmt(term.weighted,3)]){const td=document.createElement('td');td.textContent=v;tr.append(td);}$('costs').append(tr);}$('nearest').textContent=near?fmt(Math.sqrt(near.terms.displacement))+' mm to target at '+near.rotation+'°; cost '+fmt(near.total)+' versus chosen '+fmt(d.total)+'.':'No candidate field captured.';for(let i=0;i<d.alternatives.length;i++){const a=d.alternatives[i];option($('alternative'),String(i),a.position.map(v=>fmt(v)).join(', ')+' · '+a.rotation+'° · cost '+fmt(a.total));}$('alternative').value=selectedAlternative===null?'':String(selectedAlternative);const key=phase(d);if($('comment').dataset.key!==key){$('comment').value=drafts.get(key)||'';$('comment').dataset.key=key;$('saved').textContent='';}showAlternative();}
-$('provenance').textContent=JSON.stringify({request:run.request,decision_sha256:d?.decision_sha256,motion:run.review?.motion,backtracks:run.review?.backtracks,violations:s.violations},null,2);const netSelect=$('airwire-net'),netValue=netSelect.value,netRows=run.airwires?.nets||[],netKey=JSON.stringify(netRows.map(n=>[n.name,fmt(n.length_mm)]));if(netSelect.dataset.key!==netKey){netSelect.dataset.key=netKey;netSelect.replaceChildren(new Option('All nets',''));for(const n of netRows)option(netSelect,n.name,n.name+' · '+fmt(n.length_mm)+' mm');netSelect.value=netRows.some(n=>n.name===netValue)?netValue:'';}const refs=(run.frame?.graph||run.review?.graph)?.components?.map(c=>c.ref)||[],refSelect=$('surface-ref'),refKey=JSON.stringify(refs);if(refSelect.dataset.key!==refKey){const previous=refSelect.value;refSelect.dataset.key=refKey;refSelect.replaceChildren();for(const ref of refs)option(refSelect,ref,ref);if(refs.includes(previous))refSelect.value=previous;}syncObjective();renderNotes();drawAll();}
+$('provenance').textContent=JSON.stringify({request:run.request,decision_sha256:d?.decision_sha256,motion:run.review?.motion,backtracks:run.review?.backtracks,violations:s.violations},null,2);const netSelect=$('airwire-net'),netValue=netSelect.value,netRows=run.airwires?.nets||[],netKey=JSON.stringify(netRows.map(n=>[n.name,fmt(n.length_mm)]));if(netSelect.dataset.key!==netKey){netSelect.dataset.key=netKey;netSelect.replaceChildren(new Option('All nets',''));for(const n of netRows)option(netSelect,n.name,n.name+' · '+fmt(n.length_mm)+' mm');netSelect.value=netRows.some(n=>n.name===netValue)?netValue:'';}const refs=(run.frame?.graph||run.review?.graph)?.components?.map(c=>c.ref)||[],refSelect=$('surface-ref'),refKey=JSON.stringify(refs);if(refSelect.dataset.key!==refKey){const previous=refSelect.value;refSelect.dataset.key=refKey;refSelect.replaceChildren();for(const ref of refs)option(refSelect,ref,ref);if(refs.includes(previous))refSelect.value=previous;}syncObjective();syncAnnealing();renderNotes();drawAll();}
 function showAlternative(){const a=run?.decision?.alternatives[selectedAlternative];$('alternative-info').textContent=a?JSON.stringify(a.terms):'';}
 function renderNotes(){const box=$('notes');box.replaceChildren();if(!run?.decision)return;for(const n of notes.filter(n=>n.provenance?.phase===phase(run.decision))){const el=document.createElement('div');el.className='note';const h=document.createElement('strong');h.textContent=n.id+' · '+n.author+' · '+n.title;const b=document.createElement('div');b.textContent=n.body;el.append(h,b);for(const c of n.comments||[]){const reply=document.createElement('p');reply.textContent=c.author+': '+c.text;el.append(reply);}box.append(el);}}
 async function fetchNotes(){try{const d=await api('/api/notes');notes=d.notes||[];renderNotes();}catch(e){$('saved').textContent='Notes unavailable: '+e.message;}}
@@ -26,11 +26,11 @@ function syncObjective(){
  const s=run.status,control=run.control,desired=control?.expression||s.expression||run.request.expression||catalog?.default_expression||'';
  if(objectiveBase===null||$('expression').value===objectiveBase)$('expression').value=desired;
  objectiveBase=desired;
- const dirty=objectiveDirty(),pending=control&&s.control_revision!==control.revision,tunable=['running','paused'].includes(s.state),remaining=s.step<(s.iterations??run.request.iterations);
+ const dirty=objectiveDirty(),pending=control&&s.control_revision!==control.revision,tunable=['running','paused'].includes(s.state),remaining=run.request.run_forever||s.step<(s.iterations??run.request.iterations);
  $('apply').disabled=stepping||!tunable||!dirty||pending;
  $('optimizer-step').disabled=stepping||s.state!=='paused'||pending||!remaining;
- $('optimizer-step').textContent=dirty?'Apply & step':'Step';
- $('optimizer-step').title=dirty?'Apply the edited objective, then perform one optimizer update':'Perform one optimizer update with the applied objective';
+ $('optimizer-step').textContent=(dirty||annealingDirty())?'Apply & step':'Step';
+ $('optimizer-step').title=(dirty||annealingDirty())?'Apply edited objective and rotation settings, then perform one optimizer update':'Perform one optimizer update with the applied objective';
  $('objective-status').textContent=!tunable?'Run ended or legalizing. This expression will be used for a new run.':pending?'Waiting for worker acknowledgment…':dirty?'Unapplied edits — Apply objective or Apply & step.':'Applied · revision '+s.control_revision+' · '+(s.state==='paused'?'paused at iteration '+s.step:'running');
  for(const id of ['start','pause','resume','stop'])if(stepping)$(id).disabled=true;
  if(!stepping)$('start').disabled=false;
@@ -50,7 +50,7 @@ async function waitForObjective(id,revision,expression){
 }
 async function command(action){
  if(stepping)return;
- const id=current,expression=$('expression').value,dirty=objectiveDirty();
+ const id=current,expression=$('expression').value,dirty=objectiveDirty(),rotationDirty=annealingDirty(),annealingDraft=readAnnealing();
  let revision=run?.control?.revision;
  stepping=true;if(run)render();
  try{
@@ -65,14 +65,53 @@ async function command(action){
    $('command').textContent='Objective applied · revision '+revision+' · iteration '+run.status.step+'.';
    if(action==='apply'){await load();return;}
   }
+  if(action==='step'&&rotationDirty){
+   const applied=await api('/api/placement-lab',{action:'annealing',id,annealing:annealingDraft,expect_revision:revision});
+   revision=applied.control.revision;
+   $('command').textContent='Rotation settings queued; waiting for acknowledgment…';
+   const acknowledged=await waitForObjective(id,revision,applied.control.expression);
+   if(current!==id)throw Error('Selected run changed; no optimizer step was sent.');
+   run=acknowledged;
+  }
   const body={action,id};
-  if(action==='start')Object.assign(body,{expression,source:$('source').value,seed:Number($('seed').value),iterations:Number($('iterations').value),paused:$('start-paused').checked});
+  if(action==='start')Object.assign(body,{expression,source:$('source').value,seed:Number($('seed').value),iterations:Number($('iterations').value),annealing:readAnnealing(),run_forever:$('run-forever').checked,paused:$('start-paused').checked});
   else body.expect_revision=revision;
+  if(action==='annealing')body.annealing=readAnnealing();
   const r=await api('/api/placement-lab',body);
-  $('command').textContent=action==='step'?'One step requested with the acknowledged objective.':action+' requested';
+  if(action==='annealing'){
+   $('command').textContent='Rotation settings queued; waiting for acknowledgment…';
+   await waitForObjective(id,r.control.revision,r.control.expression);
+   $('command').textContent='Rotation settings applied.';
+  }
+  if(action!=='annealing')$('command').textContent=action==='step'?'One step requested with the acknowledged objective.':action+' requested';
   if(action==='start')await selectRun(r.id);else if(current===id)await load();
  }catch(e){error(e);}finally{stepping=false;if(run)render();}
 }
+function annealingDirty(){return annealingBase!==null&&JSON.stringify(readAnnealing())!==annealingBase;}
+function readAnnealing(){
+ return $('anneal-mode').value==='hold'?{mode:'hold',temperature:Number($('rotation-temperature').value)}:{mode:'schedule',start_temperature:Number($('anneal-start').value),end_temperature:Number($('anneal-end').value),steps:Number($('anneal-steps').value)};
+}
+function syncAnnealing(){
+ const settings=run.control?.annealing||run.status.annealing||run.request.annealing||{mode:'schedule',start_temperature:2,end_temperature:.2,steps:run.request.iterations||400};
+ const desired=settings.mode==='hold'?{mode:'hold',temperature:settings.temperature}:{mode:'schedule',start_temperature:settings.start_temperature,end_temperature:settings.end_temperature,steps:settings.steps},key=JSON.stringify(desired);
+ if(annealingBase===null||JSON.stringify(readAnnealing())===annealingBase){
+  $('anneal-mode').value=desired.mode;
+  if(desired.mode==='hold')$('rotation-temperature').value=desired.temperature;
+  else{$('anneal-start').value=desired.start_temperature;$('anneal-end').value=desired.end_temperature;$('anneal-steps').value=desired.steps;}
+ }
+ annealingBase=JSON.stringify(desired);
+ const dirty=JSON.stringify(readAnnealing())!==key,pending=run.control&&run.status.control_revision!==run.control.revision;
+ $('anneal-apply').disabled=stepping||!['paused','running'].includes(run.status.state)||pending||(!dirty&&desired.mode==='hold');
+ $('anneal-schedule').hidden=$('anneal-mode').value==='hold';$('anneal-hold').hidden=$('anneal-mode').value!=='hold';
+ $('anneal-status').textContent=(dirty?'Unapplied rotation settings. ':pending?'Waiting for acknowledgment. ':'')+'Next update temperature: '+fmt(run.status.rotation_temperature,3)+(run.status.annealing?.mode==='schedule'?' · schedule starts at iteration '+run.status.annealing.start_step:'');
+}
+for(const id of ['anneal-mode','anneal-start','anneal-end','anneal-steps','rotation-temperature'])$(id).oninput=()=>{if(run){syncAnnealing();syncObjective();}};
+$('anneal-apply').onclick=()=>command('annealing');
+$('run-forever').onchange=()=>{
+ const forever=$('run-forever').checked;
+ $('iterations').disabled=forever;
+ $('run-mode-info').textContent=forever?'No iteration or time limit, including while paused. Rotation controls set the annealing schedule. Stop retains snapshots; it does not legalize.':'Bounded run: up to the selected iterations and 600 seconds, including pauses.';
+};
 $('expression').oninput=()=>{if(run)syncObjective();};
 $('optimizer-step').onclick=()=>command('step');$('airwires').onchange=$('airwire-net').onchange=drawAll;
 for(const a of ['start','apply','pause','resume','stop'])$(a).onclick=()=>command(a);

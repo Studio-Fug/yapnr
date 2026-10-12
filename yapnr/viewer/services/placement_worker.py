@@ -7,11 +7,14 @@ import sys
 import time
 from pathlib import Path
 
+from .placement_annealing import parse as parse_annealing
+from .placement_annealing import temperature
 from .placement_lab import digest, write
 from .placement_objective import parse
 
 
 def main(folder):
+    parent_pid = int(os.environ.get("YAPNR_PLACEMENT_PARENT_PID", os.getppid()))
     engine = Path(os.environ["PNR_COST_RUNTIME"])
     sys.path.insert(0, str(engine))
     import platform
@@ -57,17 +60,21 @@ def main(folder):
     revision = None
     expression = request["expression"]
     weights = parse(expression)
+    annealing = request.get("annealing") or parse_annealing(steps=request["iterations"])
     start = time.monotonic()
     trace = (folder / "iterations.jsonl").open("a")
 
     def control(step):
-        nonlocal revision, weights, expression
+        nonlocal revision, weights, expression, annealing
         while True:
+            if parent_pid <= 1 or os.getppid() != parent_pid:
+                raise InterruptedError("Placement server exited; saved frames retained")
             c = json.loads((folder / "control.json").read_text())
             if c["stop"]:
                 raise InterruptedError("Stopped by user; saved frames retained")
             if c["revision"] != revision:
                 weights = parse(c["expression"])
+                annealing = c.get("annealing", annealing)
                 expression, revision = c["expression"], c["revision"]
                 trace.write(
                     json.dumps(
@@ -77,6 +84,7 @@ def main(folder):
                             revision=revision,
                             expression=expression,
                             weights=weights,
+                            annealing=annealing,
                             paused=c["paused"],
                             step_until=c.get("step_until"),
                         )
@@ -84,15 +92,21 @@ def main(folder):
                     + "\n"
                 )
                 trace.flush()
-            paused = c["paused"] or step >= c.get("step_until", request["iterations"] + 1)
+            paused = c["paused"] or ("step_until" in c and step >= c["step_until"])
             status.update(
                 state="paused" if paused else "running",
                 step=step,
                 control_revision=revision,
                 expression=expression,
+                annealing=annealing,
+                rotation_temperature=temperature(annealing, step),
             )
             if not paused:
-                return weights
+                return dict(
+                    weights,
+                    temperature=temperature(annealing, step),
+                    next_temperature=temperature(annealing, step + 1),
+                )
             write(folder / "status.json", status)
             time.sleep(0.15)
 
@@ -121,6 +135,7 @@ def main(folder):
             step=step,
             loss=loss,
             revision=revision,
+            rotation_temperature=status["rotation_temperature"],
             positions=positions,
             rotation_probabilities=probabilities,
         )
@@ -177,6 +192,7 @@ def main(folder):
             progress=progress,
             initialized=initial_snapshot,
             updated=updated,
+            run_forever=request.get("run_forever", False),
             **weights
         )
         cont = copy.deepcopy(graph)

@@ -32,7 +32,18 @@ ACTIONS = {
     "source": (("source",), ()),
     "register-source": (("document",), ()),
     "validate-objective": (("expression",), ()),
-    "start": (("source",), ("seed", "iterations", "frame_delay_ms", "expression", "paused")),
+    "start": (
+        ("source",),
+        (
+            "seed",
+            "iterations",
+            "frame_delay_ms",
+            "expression",
+            "paused",
+            "run_forever",
+            "annealing",
+        ),
+    ),
     "status": (("id",), ()),
     "run": (("id",), ()),
     "surface": (("id", "ref", "expression"), ("pitch",)),
@@ -46,6 +57,7 @@ ACTIONS = {
     "step": (("id",), ("expect_revision", "count")),
     "stop": (("id",), ("expect_revision",)),
     "apply": (("id", "expression"), ("expect_revision",)),
+    "annealing": (("id", "annealing"), ("expect_revision",)),
     "compare": (("id", "other"), ()),
     "history": (("id",), ("cursor", "limit")),
     "evidence": (("id", "name"), ()),
@@ -66,6 +78,19 @@ def schema():
             terms=list(TERMS),
             syntax="nonnegative weighted sums; +, *, parentheses; source_constraints exactly once",
         ),
+        annealing=dict(
+            modes={
+                "hold": {"mode": "hold", "temperature": 1.0},
+                "schedule": {
+                    "mode": "schedule",
+                    "start_temperature": 2.0,
+                    "end_temperature": 0.2,
+                    "steps": 400,
+                },
+            },
+            temperature_range=[0.05, 10],
+            schedule="Applying a schedule restarts it from the recorded current iteration; final temperature is held",
+        ),
         surface=dict(
             terms=sorted(NAMES),
             rotations=[0, 90, 180, 270],
@@ -77,6 +102,7 @@ def schema():
             components=500,
             iterations=5000,
             worker_seconds=600,
+            run_forever="Opt-in: no iteration or wall-time limit; iterations is the annealing horizon",
             history_page=100,
         ),
         evidence=list(EVIDENCE),
@@ -142,7 +168,7 @@ class PlacementAPI:
                     # write() uses insertion order; normalize to the hashed canonical order.
                     write(path, json.loads(raw))
             return dict(id=ident, sha256=sha, title=doc.get("title", ident))
-        if action in ("start", "apply", "pause", "resume", "step", "stop"):
+        if action in ("start", "apply", "annealing", "pause", "resume", "step", "stop"):
             result = lab.command(b)
             result["view"] = self.link(result["id"])
             return result

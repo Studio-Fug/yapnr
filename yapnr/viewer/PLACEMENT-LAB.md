@@ -23,8 +23,12 @@ New runs start paused at iteration zero by default (uncheck the option to run fr
 The board shows the post-update positions; loss is explicitly the last evaluated
 (pre-update) loss. At the last iteration, **Resume** proceeds to legalization.
 **Pause** preserves the optimizer state; **Resume** continues it. **Stop** retains saved
-frames. A single worker uses one Torch thread, at most 5,000 iterations and 600 seconds
-per run, including pauses. Interrupted and timed-out runs remain in the experiment list.
+frames. A single worker uses one Torch thread. Bounded runs allow at most 5,000
+iterations and 600 seconds, including pauses. Enable **Run until stopped** when
+starting a run to remove both limits. It continues beyond the annealing horizon,
+retaining the same Adam state; pause and stepping remain available indefinitely.
+Stop saves the current frames without running legalization. Interrupted and
+timed-out runs remain in the experiment list.
 
 The DSL accepts nonnegative weighted sums of existing terms, parentheses, `+` and `*`:
 
@@ -57,6 +61,35 @@ Actual browser captures: an unsent weight edit, the acknowledged change at the s
 iteration, then one optimizer update. No interpolated placement frames. A two-update
 run with wirelength weights 8 then 3 exactly matches an uninterrupted replay of that
 schedule, including the rotation probabilities.
+
+## Rotation annealing
+
+The **Rotation annealing** controls work before starting a run and during a live
+run, including while paused:
+
+- **Hold temperature** uses a fixed temperature (0.05–10).
+- **Anneal over iterations** transitions linearly from the chosen start temperature
+  to the end temperature over the chosen number of iterations (1–1,000,000), then
+  holds the endpoint. Defaults are 2.0 to 0.2 over 400 iterations.
+- **Apply rotation settings** acknowledges the change without stepping or
+  unpausing. **Apply & step** also applies unsent rotation edits before advancing.
+  Applying a schedule restarts it from the current iteration, even when
+  its values are unchanged. This allows reheating and cooling again.
+
+Higher temperature makes the distribution over the four rotations softer; lower
+values make it sharper. This is not a random-rotation rate. Positions, learned
+rotation logits and Adam momentum are preserved. The displayed temperature is for
+the next update; saved board frames retain their last evaluated rotation mixture.
+The iteration history records each schedule and actual evaluation temperature for
+replay. These lab controls do not enable new production search defaults.
+
+![Hold, reheat and cool an unlimited placement run](../../docs/design/assets/mini-pad-locality/rotation-annealing.gif)
+
+Actual browser captures at iterations 5, 6 and 11: hold at 1.5, restart a schedule
+at 3.0, then reach and retain 0.3. The original three-iteration stopping setting is
+ignored in unlimited mode. All eleven updates exactly match an uninterrupted replay
+of the recorded temperature schedule; the initial three match the previous finite
+engine's poses and rotation probabilities.
 
 ## Sequential legalization review
 

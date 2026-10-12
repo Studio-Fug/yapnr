@@ -61,6 +61,11 @@ class PlacementAPITest(unittest.TestCase):
         parser = argparse.ArgumentParser()
         register(parser.add_subparsers())
         cases = [
+            (
+                ["annealing", "demo", '{"mode":"hold","temperature":1.5}'],
+                "annealing",
+                dict(id="demo", annealing={"mode": "hold", "temperature": 1.5}),
+            ),
             (["step", "demo", "--count", "3"], "step", dict(id="demo", count=3)),
             (
                 ["surface", "demo", "--ref", "C1", "--expression", "2*wirelength", "--pitch", "2"],

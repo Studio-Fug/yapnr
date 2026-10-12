@@ -49,6 +49,7 @@ offsets. Without the flag every term is computed exactly as before.
 
 from __future__ import annotations
 
+import itertools
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -209,6 +210,7 @@ def global_place(
     progress=None,
     initialized=None,
     updated=None,
+    run_forever: bool = False,
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
     pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
@@ -251,10 +253,16 @@ def global_place(
     the legalizer's slots, the optional channel term, the overlap weight ramped and a fresh
     positions-only Adam with a decaying step (:mod:`pnr.place.gp_polish`).
 
+    ``run_forever`` is an opt-in interactive mode: ``iters`` sets the annealing
+    horizon, then temperature stays at 0.2 and the same optimizer continues until
+    the control callback interrupts it. Finite production runs are unchanged.
+
     Returns ``({ref: (x, y)}, {ref: angle_deg})`` for every component (angle is
     the arg-max of the relaxed rotation distribution, a legal 0/90/180/270), and
     with ``return_sides`` a third map ``{ref: side}`` (free parts snapped at
     ``q > 0.5``, every other part its current side)."""
+    if run_forever and (control is None or polish is not None):
+        raise ValueError("run_forever requires an interactive control and does not support polish")
     torch.manual_seed(seed)
     comps = graph.components
     n = len(comps)
@@ -513,7 +521,8 @@ def global_place(
         # Observe the real seeded state before any control wait, loss or Adam update.
         initialized(full_pos().detach().tolist(), rot_probs(2.0).detach().tolist())
 
-    for step in range(iters + extra):
+    for step in itertools.count() if run_forever else range(iters + extra):
+        tuning = {}
         if control is not None:
             tuning = control(step)
             w_wire = tuning.get("w_wire", w_wire)
@@ -523,7 +532,7 @@ def global_place(
             w_keep = tuning.get("w_keep", w_keep)
             w_plane = tuning.get("w_plane", w_plane)
             w_plane_sep = tuning.get("w_plane_sep", w_plane_sep)
-        if step >= iters:
+        if not run_forever and step >= iters:
             # Polish: turns and sides frozen, the legalizer's slots, a decaying step.
             if frozen is None:
                 frozen = _freeze(
@@ -543,7 +552,8 @@ def global_place(
             pos = full_pos()
             p = frozen["p"]
         else:
-            temp = 2.0 - (2.0 - 0.2) * (step / max(1, iters - 1))  # anneal 2.0 -> 0.2
+            temp = 2.0 - (2.0 - 0.2) * min(1.0, step / max(1, iters - 1))  # anneal 2.0 -> 0.2
+            temp = tuning.get("temperature", temp)
             opt.zero_grad()
             pos = full_pos()
             p = rot_probs(temp)  # (n, 4)
@@ -743,6 +753,7 @@ def global_place(
         opt.step()
         if updated is not None:
             next_temp = 2.0 - 1.8 * min(1.0, (step + 1) / max(1, iters - 1))
+            next_temp = tuning.get("next_temperature", next_temp)
             next_p = frozen["p"] if frozen is not None else rot_probs(next_temp)
             updated(step + 1, full_pos().detach().tolist(), next_p.detach().tolist())
 

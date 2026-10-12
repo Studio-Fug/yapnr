@@ -12,15 +12,15 @@ function harness({draft=edited,conflict=false,invalid=false,lag=0}={}){
  $('expression').value=draft;
  const run={id:'trial',control:{revision:4,expression:initial},status:{state:'paused',step:3,iterations:20,control_revision:4,expression:initial},request:{expression:initial},frame:{step:3}};
  let acknowledged=0;
- const context=vm.createContext({$,current:'trial',run,objectiveBase:initial,stepping:false,catalog:null,surface:null,Date,Promise,encodeURIComponent,
+ const context=vm.createContext({$,current:'trial',run,objectiveBase:initial,annealingBase:null,stepping:false,catalog:null,surface:null,Date,Promise,encodeURIComponent,fmt:n=>String(n),
   setTimeout:fn=>{fn();},render:()=>{},load:async()=>{},selectRun:async()=>{},error:e=>{$('command').textContent=e.message;},
   api:async(path,body)=>{
-   if(body){calls.push(body);if(body.action==='apply'){
+   if(body){calls.push(body);if(['apply','annealing'].includes(body.action)){
     if(invalid)throw Error('Invalid expression');
-    return {control:{revision:5}};
+    return {control:{revision:5,expression:body.action==='apply'?edited:initial}};
    }return {};}
    acknowledged++;
-   return {...run,control:{revision:conflict?6:5,expression:edited},status:{...run.status,control_revision:acknowledged>lag?5:4,expression:acknowledged>lag?edited:initial}};
+   return {...run,control:{revision:conflict?6:5,expression:edited},status:{...run.status,control_revision:acknowledged>lag?5:4,expression:acknowledged>lag&&calls[0]?.action==='apply'?edited:initial}};
   }});
  vm.runInContext(controls,context);
  return {context,$,calls,run,execute:()=>vm.runInContext("command('step')",context)};
@@ -60,4 +60,28 @@ test('objective changes invalidate the heatmap without changing the placement st
  assert.equal(vm.runInContext('surfaceIsCurrent()',h.context),true);
  h.run.status.expression=edited;
  assert.equal(vm.runInContext('surfaceIsCurrent()',h.context),false);
+});
+
+test('unlimited runs can keep stepping past the original iteration setting',()=>{
+ const h=harness({draft:initial});h.run.status.step=99;h.run.request.run_forever=true;
+ vm.runInContext('syncObjective()',h.context);
+ assert.equal(h.$('optimizer-step').disabled,false);
+ h.run.request.run_forever=false;vm.runInContext('syncObjective()',h.context);
+ assert.equal(h.$('optimizer-step').disabled,true);
+});
+test('rotation controls preserve drafts, ignore JSON key order, and allow reheating',()=>{
+ const h=harness();h.context.annealingBase=null;
+ h.run.control.annealing={steps:20,end_temperature:0.2,start_temperature:2,mode:'schedule',start_step:0};
+ vm.runInContext('syncAnnealing()',h.context);
+ assert.equal(h.$('anneal-start').value,2);assert.equal(h.$('anneal-apply').disabled,false);
+ h.$('anneal-start').value='3';vm.runInContext('syncAnnealing()',h.context);
+ assert.equal(h.$('anneal-start').value,'3');assert.match(h.$('anneal-status').textContent,/Unapplied/);
+});
+
+test('Step also applies edited rotation settings before advancing',async()=>{
+ const h=harness({draft:initial});h.context.annealingBase=JSON.stringify({mode:'hold',temperature:1});
+ h.$('anneal-mode').value='hold';h.$('rotation-temperature').value='2';
+ await h.execute();
+ assert.deepEqual(h.calls.map(c=>c.action),['annealing','step']);
+ assert.equal(h.calls[0].annealing.temperature,2);assert.equal(h.calls[1].expect_revision,5);
 });

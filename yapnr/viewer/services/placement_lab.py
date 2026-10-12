@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import threading
@@ -12,6 +13,7 @@ from pathlib import Path
 from yapnr import experiments
 from yapnr.viewer import runtime
 
+from .placement_annealing import parse as parse_annealing
 from .placement_objective import DEFAULT, TERMS, parse
 
 
@@ -198,9 +200,12 @@ class PlacementLab:
                     or not 1 <= iterations <= 5000
                 ):
                     raise ValueError("Seed must be 0..2³¹−1; iterations 1..5000")
+                annealing = parse_annealing(body.get("annealing"), steps=iterations)
                 delay = body.get("frame_delay_ms", 30)
                 if type(delay) is not int or not 0 <= delay <= 200:
                     raise ValueError("Display pacing must be 0..200 ms")
+                if type(body.get("run_forever", False)) is not bool:
+                    raise ValueError("run_forever must be a boolean")
                 if type(body.get("paused", False)) is not bool:
                     raise ValueError("paused must be a boolean")
                 if self.engine is None:
@@ -215,12 +220,14 @@ class PlacementLab:
                     seed=seed,
                     iterations=iterations,
                     frame_delay_ms=delay,
+                    annealing=annealing,
                     engine_sources={
                         str(p.relative_to(self.engine)): digest(p)
                         for p in self.engine.rglob("*.py")
                     },
                     engine_mode="single-start global placement; authored constraints retained",
-                    timeout_seconds=600,
+                    run_forever=body.get("run_forever", False),
+                    timeout_seconds=None if body.get("run_forever", False) else 600,
                 )
                 if len(doc.get("graph", {}).get("components", [])) > 500:
                     raise ValueError("Local lab supports at most 500 components per experiment")
@@ -238,6 +245,7 @@ class PlacementLab:
                     folder / "control.json",
                     dict(
                         expression=request["expression"],
+                        annealing=annealing,
                         paused=body.get("paused", False),
                         stop=False,
                         revision=0,
@@ -250,6 +258,7 @@ class PlacementLab:
                         title=doc.get("title", source),
                         step=0,
                         iterations=iterations,
+                        run_forever=request["run_forever"],
                         seed=seed,
                     ),
                 )
@@ -266,6 +275,7 @@ class PlacementLab:
                 env = {k: v for k, v in env.items() if not k.startswith("PNR_")}
                 env["PNR_COST_RUNTIME"] = str(folder / "engine")
                 env["PYTHONHASHSEED"] = "0"
+                env["YAPNR_PLACEMENT_PARENT_PID"] = str(os.getpid())
                 log = (folder / "worker.log").open("w")
                 self.process = subprocess.Popen(
                     runtime.module_command("yapnr.viewer.services.placement_worker", str(folder)),
@@ -292,6 +302,13 @@ class PlacementLab:
             if action == "apply":
                 parse(body.get("expression"))
                 control["expression"] = body["expression"]
+            elif action == "annealing":
+                status = json.loads((folder / "status.json").read_text())
+                if status.get("state") not in ("running", "paused"):
+                    raise ValueError("Rotation controls require an optimizing or paused run")
+                control["annealing"] = parse_annealing(
+                    body.get("annealing"), start_step=status["step"]
+                )
             elif action in ("pause", "resume"):
                 control["paused"] = action == "pause"
                 control.pop("step_until", None)
@@ -307,8 +324,9 @@ class PlacementLab:
                     raise ValueError(
                         "Wait for the worker to acknowledge a paused state before stepping"
                     )
-                limit = json.loads((folder / "request.json").read_text())["iterations"]
-                if status["step"] + count > limit:
+                request = json.loads((folder / "request.json").read_text())
+                limit = request["iterations"]
+                if not request.get("run_forever", False) and status["step"] + count > limit:
                     raise ValueError(
                         "Step exceeds remaining optimizer iterations; resume to legalize"
                     )
@@ -325,17 +343,17 @@ class PlacementLab:
 
     def _wait(self, process, folder):
         try:
-            code = process.wait(timeout=600)
+            request = json.loads((folder / "request.json").read_text())
+            code = process.wait(timeout=None if request.get("run_forever", False) else 600)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
-            write(
-                folder / "status.json",
-                dict(
-                    state="timed_out",
-                    message="600-second local experiment budget reached; saved frames retained",
-                ),
+            state = json.loads((folder / "status.json").read_text())
+            state.update(
+                state="timed_out",
+                message="600-second local experiment budget reached; saved frames retained",
             )
+            write(folder / "status.json", state)
             self._finish_experiment(folder)
             return
         state = json.loads((folder / "status.json").read_text())

@@ -75,8 +75,8 @@ class PlacementClient:
         return self.call("decision", id=run, **({"ref": ref} if ref else {"step": step}))
 
     def control(self, run, action, **parameters):
-        if action not in {"pause", "resume", "step", "apply", "stop"}:
-            raise PlacementError("Choose pause, resume, step, apply or stop")
+        if action not in {"pause", "resume", "step", "apply", "annealing", "stop"}:
+            raise PlacementError("Choose pause, resume, step, apply, annealing or stop")
         return self.call(action, id=run, **parameters)
 
     def wait(self, run, *, seconds=20, state=None, revision=None):
@@ -129,8 +129,14 @@ def register(commands):
     start.add_argument("source")
     start.add_argument("--seed", type=int, default=0)
     start.add_argument("--iterations", type=int, default=400)
+    start.add_argument(
+        "--run-forever",
+        action="store_true",
+        help="no iteration or wall-time limit; --iterations sets the annealing horizon",
+    )
     start.add_argument("--frame-delay-ms", type=int, default=30)
     start.add_argument("--expression")
+    start.add_argument("--annealing", type=json.loads, help="JSON hold or schedule settings")
     start.add_argument("--paused", action="store_true", help="pause before iteration zero")
     for name in (
         "run",
@@ -147,6 +153,7 @@ def register(commands):
         "resume",
         "step",
         "apply",
+        "annealing",
         "stop",
         "wait",
         "link",
@@ -170,8 +177,10 @@ def register(commands):
             p.add_argument("--body", required=True)
         if name == "notes":
             p.add_argument("--ref")
-        if name in ("pause", "resume", "step", "apply", "stop"):
+        if name in ("pause", "resume", "step", "apply", "annealing", "stop"):
             p.add_argument("--expect-revision", type=int, help="reject stale concurrent edits")
+        if name == "annealing":
+            p.add_argument("annealing", type=json.loads, help="JSON hold or schedule settings")
         if name == "step":
             p.add_argument("--count", type=int, default=1)
         if name == "surface":
@@ -225,6 +234,8 @@ def _run(args):
                 "source",
                 "seed",
                 "iterations",
+                "run_forever",
+                "annealing",
                 "frame_delay_ms",
                 "expression",
                 "paused",

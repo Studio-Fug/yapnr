@@ -9,6 +9,13 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
+- **Unlimited interactive placement and rotation controls**: opt-in Run until stopped
+  removes the lab iteration and wall-time caps while preserving pause/step/Adam state.
+  Live fixed temperatures and restartable start/end/duration schedules are exposed in
+  UI, HTTP, Python and CLI. Schedules and actual evaluation temperatures are recorded
+  for replay. Eleven real updates exactly match schedule replay; the initial three
+  exactly match the prior finite engine. Finite production defaults remain unchanged.
+
 - **Live objective stepping**: a dedicated editor displays draft, pending and applied
   states. Apply retains the paused iteration; Apply & step waits for the worker's
   acknowledgment and uses revision guards before advancing once. Polling preserves

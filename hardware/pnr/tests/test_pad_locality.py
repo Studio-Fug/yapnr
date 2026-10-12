@@ -154,6 +154,44 @@ class Locality(unittest.TestCase):
         with self.assertRaises(ValueError):
             audit(g, cons, {("C9", "1", "U5"): float("nan")})
 
+    def test_unlimited_mode_preserves_finite_prefix_and_continues_with_live_temperature(self):
+        g, c = fixture()
+        finite, streamed = [], []
+        with patch.dict(os.environ, {"PNR_PAD_LOCALITY": "1", "PNR_COST_CAPTURE_DIR": ""}):
+            global_place(
+                g,
+                c,
+                20,
+                20,
+                seed=12,
+                iters=3,
+                updated=lambda step, pos, p: finite.append((step, pos, p)),
+            )
+
+            def control(step):
+                if step == 8:
+                    raise InterruptedError("test stop")
+                return {} if step < 3 else dict(temperature=1.5, next_temperature=1.5)
+
+            with self.assertRaisesRegex(InterruptedError, "test stop"):
+                global_place(
+                    g,
+                    c,
+                    20,
+                    20,
+                    seed=12,
+                    iters=3,
+                    run_forever=True,
+                    control=control,
+                    updated=lambda step, pos, p: streamed.append((step, pos, p)),
+                )
+            self.assertEqual(finite, streamed[:3])
+            self.assertEqual(len(streamed), 8)
+            self.assertNotEqual(streamed[2][1], streamed[-1][1])
+            self.assertTrue(all(0 <= q <= 1 for row in streamed[-1][2] for q in row))
+            with self.assertRaises(ValueError):
+                global_place(g, c, 20, 20, iters=3, run_forever=True)
+
     def test_live_objective_schedule_is_reproducible_and_callbacks_do_not_move_parts(self):
         g, c = fixture()
         with patch.dict(os.environ, {"PNR_PAD_LOCALITY": "1", "PNR_COST_CAPTURE_DIR": ""}):

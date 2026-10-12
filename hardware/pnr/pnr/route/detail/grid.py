@@ -961,6 +961,25 @@ class RouteGrid:
                     g.access[key] = Cell(own, *g.cell_of(r.cx, r.cy))
         # Keep routed copper its edge clearance away from the board outline.
         g.block_edge_inset(clearance + g.via_radius)
+        poly = graph.outline.polygon if graph.outline else []
+        if poly and (
+            len(poly) != 4
+            or {tuple(p) for p in poly} != {(0, 0), (width, 0), (width, height), (0, height)}
+        ):
+            from pnr.board_edge import grid_edge_masks
+
+            edges = {
+                "items": [dict(kind="line", a=a, b=b) for a, b in zip(poly, poly[1:] + poly[:1])]
+            }
+            outside, distance = grid_edge_masks(g, edges)
+            # A conservative cell-radius allowance keeps diagonal steps across a
+            # notch from crossing an edge between otherwise legal cell centres.
+            allowance = g.pitch * math.sqrt(2) / 2
+            tracks = outside | (distance < clearance + track_width / 2 + allowance)
+            vias = outside | (distance < clearance + via_radius + allowance)
+            for la in range(g.nlayers):
+                g.blocked[la] |= tracks
+                g.via_blocked[la] |= vias
         return g
 
     # -- net access points ---------------------------------------------------

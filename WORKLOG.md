@@ -3,20 +3,63 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-11 (USB paired-routing integration validation).
+Last updated: 2026-10-12 (validator-first hierarchy, outline and power-loop repair).
 PR #99 merged into main at `5d1a07c1`; its engineering workbench and manufacturing
-follow-ups are available. PR #94 is rebased on that revision.
+follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `e6e3fb64`.
 
 ## In progress
 
-- **PR #94 integration**: corrected compact recovery's offset-courtyard geometry.
-  Fresh Linux A/B passes all 12 USB cells under control, prior-paired and integrated
-  defaults; both local integrated header reruns pass native gates. Total uncoupled
-  length remains 2 mm. Validation receipt preserves all baseline/repaired attempts,
-  root/candidate seeds, selected starts, settings, pins and saved-board hashes.
-  Accepted native header snapshots illustrate recovered placement. Full repository
-  checks and hosted validation gate landing; wider board/topology coverage remains
-  open. Bounded search acceptance does not require every root seed to pass.
+- **Mini validator/engine repair**: source-relation preflight catches hierarchy
+  anchor loss before synthesis; native polygons constrain placement, routing and
+  writeback; independent power coverage requires every capacitor branch. Copper
+  extraction distinguishes fill islands and actual plated-pad contacts. A separate
+  conservative per-branch DC current screen detects connected return constrictions;
+  unknown models and electrical failures cannot qualify hierarchical completion.
+  Default-off partition/outline/branch candidates and recorded equal-budget placement
+  comparisons are described in `docs/design/mini-validator-repair.md`. Both seeds
+  improve for PD and converter, with legal placements. Full routed-board, AC and
+  thermal qualification remain open; this is not a new completed Mini PCB.
+  Native converter opens improve 16 to 9, subwidth tracks 34 to 31. A stricter
+  shared-power channel candidate improves PD versus branch-only placement but
+  regresses the converter; keep it opt-in. No tested module meets all electrical
+  gates. The scenario suite covers these failures, including the unjustified
+  assumed-pour exemption in the saved C53 channel.
+  Validation: all 301 Bazel targets pass; the scenario target has 29 cases, with
+  both native KiCad cases also passing under the headless interpreter.
+
+- **Viewer airwires**: native connected copper groups replace the all-pad tree.
+  Only missing minimum-distance anchor links remain (9 converter / 6 PD, matching
+  native DRC). Missing native connectivity disables the overlay. Added cache,
+  connected-net, minimum-link and coincident-layer regressions, plus CI coverage
+  for viewer JavaScript checks. Actual-board before/after animations and layer
+  sheets accompany `docs/design/mini-validator-repair.md`.
+
+- **Viewer copper layers**: native extraction now carries the complete enabled copper
+  stack, including empty planes. Both PCB and 3D use that stack; vertical controls
+  put each layer name before its checkbox. Copper visibility covers inner-layer
+  tracks, zones, vias and hit testing. Legacy caches upgrade when native inputs
+  remain available; geometry-only archives retain a best-effort fallback.
+
+- **Hierarchical module constraints**: temporary module boards now omit parent-board
+  mounting-hole coordinates, matching the compiled sub-board rules. Parent-board
+  fastener constraints remain intact. A regression covers both scopes; real native
+  module candidates now pass the previously failing constraint compilation and DRC.
+  Full-board hierarchical assembly and electrical qualification remain in progress.
+- **Native checkpoint continuation** (in progress, opt-in): retained-board and
+  search-history checkpoints bridge bounded refinement workers. Completed stale
+  sweeps and exhausted repair budgets can establish a sampled plateau; timeouts,
+  worker errors and campaign resource limits remain distinct. Native DRC and
+  electrical gates remain unchanged. Real-board continuation has accepted new
+  connections; full routing and electrical qualification remain open.
+- **Checkpoint visibility**: switching lanes discards stale poll responses.
+  Initial-placement signal drafts have inspectable geometry and explicitly show
+  deferred nets and pending native DRC. Draft copper is visually distinguished
+  from accepted native checkpoints. Focused race, geometry and checkpoint tests
+  pass; all 300 repository tests and all-file hooks pass.
+- **PR #94 integration**: all 12 fresh Linux cells pass native/electrical gates;
+  all local tests and hosted checks passed before landing. The validation receipt
+  retains baseline failures, root/candidate seeds and exact saved-board hashes.
+  Total uncoupled length remains 2 mm. Wider topology coverage remains open.
 
 - **Assembly inventory**: quantity-aware catalog filtering and assembly-house checks
   publish replayable BOM/identity/quantity evidence. JLCPCB public inventory includes

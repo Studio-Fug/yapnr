@@ -16,14 +16,14 @@ body[data-view="3d-sch"] #sch-legend{position:absolute;top:44px;right:8px;bottom
 #v3-explode-l.on{border-color:#9ee6d1;color:#dff7ef}
 #v3-explode{width:110px;accent-color:#9ee6d1}
 /* top is set from the toolbar's height when it opens (the bar wraps in a half-width pane) */
-#v3-layers{position:absolute;top:44px;right:10px;z-index:3;background:#101b20f2;border:1px solid #2f4149;border-radius:6px;padding:6px 10px 10px 12px;display:flex;flex-direction:column;gap:3px;font-size:11.5px;min-width:150px;max-width:calc(100% - 20px);max-height:calc(100% - 110px);overflow:auto;box-shadow:0 6px 18px #0008}
+#v3-layers{color:#cddbd8;position:absolute;top:44px;right:10px;z-index:3;background:#101b20f2;border:1px solid #2f4149;border-radius:6px;padding:6px 10px 10px 12px;display:flex;flex-direction:column;gap:3px;font-size:11.5px;min-width:150px;max-width:calc(100% - 20px);max-height:calc(100% - 110px);overflow:auto;box-shadow:0 6px 18px #0008}
 #v3-layers .v3-lh{display:flex;align-items:center;justify-content:space-between;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#a7bdc8;padding-bottom:2px;border-bottom:1px solid #2f4149;margin-bottom:2px}
 #v3-layers .v3-x{background:none;border:0;color:#a7bdc8;font-size:16px;line-height:1;padding:2px 4px;margin-right:-4px}
 #v3-layers .v3-x:hover{color:#fff}
 #v3-layers b{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#7f97a2;margin-top:6px}
-#v3-layers label{display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;margin:0;padding:2px 0;line-height:1.3}
-#v3-layers input{margin:0}
-#v3-layers .v3-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#v3-layers label{display:flex;flex:1;justify-content:space-between;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;margin:0;padding:2px 0;line-height:1.3}
+#v3-layers input{margin:0;flex:none}
+#v3-layers .v3-row{display:grid;grid-template-columns:minmax(105px,1fr) 34px;align-items:center;gap:10px}
 #v3-layers .v3-solo{font-size:10px;padding:1px 6px;border-radius:4px;color:#a7bdc8;background:#1d2b33}
 #v3-layers .v3-solo.on{background:#9ee6d1;color:#102b25;border-color:#9ee6d1}
 #v3-foot{position:absolute;left:12px;right:12px;bottom:12px;z-index:2;display:flex;flex-wrap:wrap-reverse;align-items:flex-end;justify-content:space-between;gap:6px;pointer-events:none}

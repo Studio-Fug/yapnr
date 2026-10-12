@@ -53,7 +53,10 @@ def read(p):
 
 
 def save(p, value):
-    Path(p).write_text(json.dumps(value, indent=2) + "\n")
+    p = Path(p)
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp.write_text(json.dumps(value, indent=2) + "\n")
+    tmp.replace(p)
 
 
 def copy_lib_table(source, folder):
@@ -1006,6 +1009,15 @@ def controller(argv=None, nested=False):
     ap.add_argument("--search-seconds", type=float, default=20)
     ap.add_argument("--seconds", type=float, default=1200)
     ap.add_argument(
+        "--resume-search", type=Path, help="Continue a hash-bound native search checkpoint"
+    )
+    ap.add_argument(
+        "--plateau-cycles",
+        type=int,
+        default=0,
+        help="Opt-in completed stale sweeps before sampled plateau (0 disables)",
+    )
+    ap.add_argument(
         "--worker",
         choices=[
             "prepare",
@@ -1030,6 +1042,15 @@ def controller(argv=None, nested=False):
 
     if a.worker:
         return native_worker(a)
+    resume = read(a.resume_search) if a.resume_search else {}
+    if resume:
+        from pnr.native_continue import validate_checkpoint
+
+        validate_checkpoint(resume, a.board, a.rules, a.constraints)
+        if a.early_pairs:
+            ap.error("resume-search continues refinement; do not repeat early-pairs")
+    if a.plateau_cycles < 0:
+        ap.error("plateau-cycles must be nonnegative")
     a.repo = a.repo.resolve()
     os.chdir(a.repo)
     if not all([a.constraints, a.out_dir, a.kicad_python, a.kicad_cli]):
@@ -1130,12 +1151,14 @@ def controller(argv=None, nested=False):
     started = phase_clock.started
     events = []
     rounds = []
-    history = {}
-    tried = set()
+    history = resume.get("component_scores", {})
+    tried = {tuple(v) for v in resume.get("tried", [])}
     seq = 0
-    failure_history = {}
-    job_attempts = {}
-    job_budget_hints = {}
+    failure_history = resume.get("failure_history", {})
+    job_attempts = {tuple(k): v for k, v in resume.get("job_attempts", [])}
+    job_budget_hints = {tuple(k): v for k, v in resume.get("job_budget_hints", [])}
+    stale_cycles = resume.get("stale_cycles", 0)
+    completed_cycles = resume.get("completed_cycles", 0)
     electrical_repair_attempts = set()
     from pnr.plane_leaf_repair import RepairBudget
 
@@ -1639,7 +1662,7 @@ def controller(argv=None, nested=False):
         )
         phase("06-signals", current)
     current = bank_consolidation(current, "06b-power-bank-consolidation")
-    if os.environ.get("PNR_GLOSS") == "1":
+    if os.environ.get("PNR_GLOSS") == "1" and not resume:
         current = gloss_pass(current, "06g-gloss")
     started = phase_clock.begin_refinement()
     # PNR_COMPACT parts and legalizer switches (None: all off, nothing is stamped)
@@ -1649,19 +1672,47 @@ def controller(argv=None, nested=False):
     before = drc(current)
     initial = before
     inv = worker("inspect", current, a.out_dir / "initial")
-    original = inv["footprint_poses"]
+    original = resume.get("original_poses", inv["footprint_poses"])
 
-    def record(reason="running"):
-        coverage = open_net_coverage(before, inv["item_nets"])
+    def record(reason="running", checkpoint_board=None, checkpoint_report=None):
+        # route_sweep owns its transaction until the sweep returns. Persist its latest
+        # accepted board immediately, rather than the outer loop's older baseline.
+        saved_board = checkpoint_board or current
+        saved_report = checkpoint_report or before
+        nonlocal stale_cycles
+        if len(saved_report["unconnected_items"]) < len(before["unconnected_items"]):
+            stale_cycles = 0
+        if a.plateau_cycles or a.resume_search:
+            from pnr.native_continue import checkpoint
+
+            save(
+                a.out_dir / "resume.json",
+                checkpoint(
+                    saved_board,
+                    a.rules,
+                    a.constraints,
+                    component_scores=history,
+                    tried=sorted(tried),
+                    failure_history=failure_history,
+                    job_attempts=sorted(job_attempts.items()),
+                    job_budget_hints=sorted(job_budget_hints.items()),
+                    original_poses=original,
+                    stale_cycles=stale_cycles,
+                    completed_cycles=completed_cycles,
+                    termination=reason,
+                    opens=len(saved_report["unconnected_items"]),
+                ),
+            )
+        coverage = open_net_coverage(saved_report, inv["item_nets"])
         save(
             a.out_dir / "progress.json",
             dict(
                 source=str(a.board.resolve()),
                 source_sha256=hashlib.sha256(a.board.read_bytes()).hexdigest(),
-                best=str(current),
-                best_sha256=hashlib.sha256(current.read_bytes()).hexdigest(),
+                best=str(saved_board),
+                best_sha256=hashlib.sha256(saved_board.read_bytes()).hexdigest(),
                 initial_opens=len(initial["unconnected_items"]),
-                opens=len(before["unconnected_items"]),
+                opens=len(saved_report["unconnected_items"]),
                 rounds=rounds,
                 events=events,
                 component_scores=history,
@@ -1689,6 +1740,13 @@ def controller(argv=None, nested=False):
             # the router key's compact field (pnr.feedback.signals reads it from progress.json)
             progress = read(a.out_dir / "progress.json")
             progress["compact_key"] = compact_key
+            save(a.out_dir / "progress.json", progress)
+
+        from pnr.repair_flags import key as repair_key
+
+        if repair_key() is not None:
+            progress = read(a.out_dir / "progress.json")
+            progress["repair_key"] = repair_key()
             save(a.out_dir / "progress.json", progress)
 
     portal_trials = set()
@@ -1866,7 +1924,7 @@ def controller(argv=None, nested=False):
                     for t in queue
                     if route_job_key(t) not in {route_job_key(c) for c in committed}
                 ]
-                record()
+                record(checkpoint_board=trial_current, checkpoint_report=report)
         for target in queue[: a.route_attempts]:
             emit(
                 "route_start",
@@ -2439,7 +2497,8 @@ def controller(argv=None, nested=False):
                 )
             event["opens"] = len(report["unconnected_items"])
             events.append(event)
-            record()
+            if not placement_trial:
+                record(checkpoint_board=trial_current, checkpoint_report=report)
             emit(
                 "route_result",
                 board=trial_current,
@@ -2472,6 +2531,7 @@ def controller(argv=None, nested=False):
         )
 
     reason = "cycle_limit"
+    record()
     for cycle in range(1, a.cycles + 1):
         if time.monotonic() - started >= a.seconds:
             reason = "time_budget"
@@ -2610,12 +2670,25 @@ def controller(argv=None, nested=False):
             f"{len(before['unconnected_items'])} native opens; {entry['placement_accepted']} retained moves",
         )
         entry["after"] = len(before["unconnected_items"])
+        # A partial/time-limited sweep never contributes a plateau observation.
+        if time.monotonic() - started < a.seconds:
+            completed_cycles += 1
+            stale_cycles = 0 if entry["after"] < entry["before"] else stale_cycles + 1
         record()
         if time.monotonic() - started >= a.seconds:
             reason = "time_budget"
             break
         if not before["unconnected_items"]:
             reason = "zero_native_opens"
+            break
+        if (
+            a.plateau_cycles
+            and stale_cycles >= a.plateau_cycles
+            and repair_strategies_exhausted(
+                inv["targets"], job_attempts, a.only_mode, a.search_seconds
+            )
+        ):
+            reason = "sampled_plateau"
             break
         # A failed sweep is not convergence. Exhaust the distinct legal move set
         # or the explicit cycle/time budget; retain native blocker history.

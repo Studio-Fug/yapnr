@@ -836,6 +836,25 @@ class SpecTest(unittest.TestCase):
         self.assertNotIn("fanout", block_constraints_doc(doc, ["a.u1"], 10, 10))
         self.assertEqual(doc["fanout"][0]["bottom_sites"]["parts"], ["C1", "C2"])  # unchanged
 
+    def test_subboard_does_not_inherit_parent_mounting_coordinates(self):
+        from pnr.constraints import compile_constraints, compile_routing_rules
+        from pnr.hier.blocks import block_constraints_doc
+
+        hole = dict(name="MH1", at=[25, 25], drill_mm=2, clearance_diameter_mm=5)
+        doc = {
+            "schema": "v0",
+            "board": {"outline": {"w": 30, "h": 30}},
+            "mounting_hole": [hole],
+        }
+        local = block_constraints_doc(doc, ["board.module.r"], 3, 3, refs=["R1"])
+        self.assertEqual(compile_constraints(local, ["R1"]).mounting_holes, [])
+        self.assertEqual(doc["mounting_hole"], [hole])
+        parent = compile_constraints(doc, ["R1"])
+        self.assertEqual(parent.mounting_holes[0]["at"], [25, 25])
+        self.assertEqual(
+            compile_routing_rules(parent, ["GND"])["mounting_holes"], parent.mounting_holes
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

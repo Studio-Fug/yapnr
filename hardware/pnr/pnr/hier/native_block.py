@@ -170,7 +170,7 @@ def evaluate(
         rec.update(
             {k: e[k] for k in ("si_layout_failures", "si_design_failures", "si_errors") if k in e}
         )
-        if os.environ.get("PNR_POWER_FIRST") == "1":
+        if os.environ.get("PNR_POWER_FIRST") == "1" or os.environ.get("PNR_POWER_BRANCHES") == "1":
             # Routed power-path quality: one KiCad read of the final board, checked
             # against the final DRC. A failed analysis leaves hot_loops_open unset,
             # which ranks as worst (never helps a layout).
@@ -182,6 +182,8 @@ def evaluate(
                 pq = dict(valid=False, error=repr(error), hot_loops_open=None)
             (round_dir / "power-quality.json").write_text(json.dumps(pq, indent=1))
             rec.update(power_quality=pq, hot_loops_open=pq.get("hot_loops_open"))
+            if os.environ.get("PNR_POWER_BRANCHES") == "1":
+                rec["power_loop_failures"] = (pq.get("loop_copper") or {}).get("failure_count")
     else:
         rec["status"] = "failed"
         rec["log_tail"] = (round_dir / "run.log").read_text()[-1500:]

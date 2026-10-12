@@ -68,15 +68,27 @@ def _board_frame(board) -> Tuple[_Frame, Optional[BoardOutline]]:
     frame = _Frame(box.GetLeft(), box.GetBottom())
     outline = None
     if have_outline:
+        import os
+
+        polygon = [
+            frame.point(edges.GetLeft(), edges.GetBottom()),
+            frame.point(edges.GetRight(), edges.GetBottom()),
+            frame.point(edges.GetRight(), edges.GetTop()),
+            frame.point(edges.GetLeft(), edges.GetTop()),
+        ]
+        if os.environ.get("PNR_NATIVE_OUTLINE") == "1":
+            if contour.OutlineCount() != 1 or contour.HoleCount(0):
+                raise ValueError("native outline requires one closed contour without cutouts")
+            chain = contour.COutline(0)
+            polygon = [
+                frame.point(chain.CPoint(i).x, chain.CPoint(i).y) for i in range(chain.PointCount())
+            ]
+            if len(polygon) < 3:
+                raise ValueError("native outline has no closed polygon")
         outline = BoardOutline(
             width=_mm(edges.GetWidth()),
             height=_mm(edges.GetHeight()),
-            polygon=[
-                frame.point(edges.GetLeft(), edges.GetBottom()),
-                frame.point(edges.GetRight(), edges.GetBottom()),
-                frame.point(edges.GetRight(), edges.GetTop()),
-                frame.point(edges.GetLeft(), edges.GetTop()),
-            ],
+            polygon=polygon,
         )
     # touch pcbnew so linters don't flag the import as unused on some versions
     _ = pcbnew.F_Cu

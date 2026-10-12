@@ -688,6 +688,7 @@ def solve(
         resistivity_ohm_mm=model["rho"],
         h_mm=h,
         plating_mm=plating_mm,
+        copper_delta_t_c=copper_oz_delta_t_c,
         nodes=int(model["n"]),
         edges=int(len(i)),
         residual=res,
@@ -875,7 +876,8 @@ def _warnings(report, budget_mohm, budget_mv) -> List[Dict]:
                     statement="%s carries %.3f A/mm at (%.3f, %.3f) (%s)"
                     % (la, d["a_per_mm"], d["at"][0], d["at"][1], d["kind"]),
                     consequence="above the %.3f A/mm of an IPC-2221 trace carrying the whole "
-                    "%.3g A (10 C rise): a local neck" % (d["ipc_a_per_mm"], report["current_a"]),
+                    "%.3g A (%.3g C rise): a local neck"
+                    % (d["ipc_a_per_mm"], report["current_a"], report.get("copper_delta_t_c", 10)),
                 )
             )
     if report["status"] == "fail":

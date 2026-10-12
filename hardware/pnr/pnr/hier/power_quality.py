@@ -17,8 +17,9 @@ KiCad reports inside a zone's fill). From it:
   length x t_outer/t_inner + vias x board thickness); an open link counts 3x its
   straight pad-group gap. Plane legs count their straight length.
 
-Only ``hot_loops_open`` is a ranking key (:func:`pnr.hier.synth_native.rank_key`);
-the rest is recorded until routed outcomes show it predicts something.
+``hot_loops_open`` is a ranking key (:func:`pnr.hier.synth_native.rank_key`).
+PNR_POWER_BRANCHES adds independent coverage and per-leg copper screening;
+missing coverage is unqualified, and copper-screen failures also rank candidates.
 Module level is stdlib only: the dump runs under KiCad's interpreter.
 """
 
@@ -63,10 +64,11 @@ def dump_main(src, dst):
         tracks=[],
         vias=[],
         zones=[],
+        contact_errors=[],
         copper_layers=[b.GetLayerName(l) for l in b.GetEnabledLayers().CuStack()],
     )
 
-    def zone_hits(net, pt, layers=None):
+    def zone_hits(net, pt, layers=None, pad=None):
         hits = []
         for zi, z in enumerate(zones):
             if z.GetNetname() != net:
@@ -75,10 +77,29 @@ def dump_main(src, dst):
                 if layers is not None and lid not in layers:
                     continue
                 try:
-                    if z.HitTestFilledArea(lid, pt, 0):
-                        hits.append([zi, b.GetLayerName(lid)])
-                except Exception:
-                    pass
+                    poly = z.GetFilledPolysList(lid)
+                    contact = None
+                    if pad is not None:
+                        contact = pcbnew.SHAPE_POLY_SET()
+                        try:
+                            pad.TransformShapeToPolygon(contact, lid, 0, 1000, pcbnew.ERROR_INSIDE)
+                        except TypeError:
+                            pad.TransformShapeToPolygon(
+                                contact, lid, 0, 1000, pcbnew.ERROR_INSIDE, False
+                            )
+                    # One zone may contain disconnected fill islands. A plated
+                    # pad can touch a thermal spoke away from its drilled centre.
+                    for island in range(poly.OutlineCount()):
+                        if contact is None:
+                            touches = poly.Contains(pt, island)
+                        else:
+                            overlap = poly.UnitSet(island)
+                            overlap.BooleanIntersection(contact)
+                            touches = overlap.Area() > 0
+                        if touches:
+                            hits.append([zi, b.GetLayerName(lid), island])
+                except Exception as exc:
+                    out["contact_errors"].append(str(exc))
         return hits
 
     pads = []
@@ -109,7 +130,7 @@ def dump_main(src, dst):
                     bbox=[mm(bb.GetX()), mm(bb.GetY()), mm(bb.GetRight()), mm(bb.GetBottom())],
                     smd=smd,
                     layers=[b.GetLayerName(l) for l in lids],
-                    zone_hits=zone_hits(pad.GetNetname(), q, None if not smd else lids),
+                    zone_hits=zone_hits(pad.GetNetname(), q, lids, pad),
                 )
             )
 
@@ -333,16 +354,8 @@ class Copper:
         for k, v in zip(vnode, vias):
             for hit in v.get("zone_hits", []):
                 hubs.setdefault(self._zone_key(net, hit), []).append(k)
-        zone_layers = {}
-        for z in dump.get("zones", []):
-            if z["net"] == net and (z.get("filled_area_mm2") or 0) > 0:
-                zone_layers.setdefault(z["layer"], []).append(
-                    self._zone_key(net, [z["index"], z["layer"]] if "index" in z else z["layer"])
-                )
         for pi, p in enumerate(pads):
             keys = [self._zone_key(net, hit) for hit in p.get("zone_hits", [])]
-            if not p.get("smd"):
-                keys += [k for l in p["layers"] for k in zone_layers.get(l, [])]
             for key in dict.fromkeys(keys):
                 hubs.setdefault(key, []).append(pnode[pi])
         for members in hubs.values():
@@ -351,7 +364,7 @@ class Copper:
 
     @staticmethod
     def _zone_key(net, hit):
-        return ("zone", net, hit) if isinstance(hit, str) else ("zone", net, hit[0], hit[1])
+        return ("zone", net, hit) if isinstance(hit, str) else ("zone", net, *hit)
 
     def islands(self):
         """Connected copper groups that contain at least one pad."""
@@ -436,6 +449,8 @@ def analyse(dump, roles, rules, drc=None):
         }
         check = dict(unconnected=unconnected, drc=reported, mismatch=mismatch)
         valid = not mismatch
+    if dump.get("contact_errors"):
+        valid = False
     xy = {}
     for p in dump["pads"]:
         xy.setdefault((p["ref"], p["name"]), []).append((p["x"], p["y"]))
@@ -549,9 +564,18 @@ def analyse(dump, roles, rules, drc=None):
     connected = [v for v in per_net.values() if v["ratio"] is not None]
     if not valid:
         hot_open = hot_links
+    from pnr.hier.power_coverage import check as check_coverage
+
+    coverage = check_coverage(roles, loops, connectivity_valid=valid and drc is not None)
+    if os.environ.get("PNR_POWER_BRANCHES") == "1" and not coverage["coverage_complete"]:
+        # Existing native/repeat rankers propagate None as worst. An omitted
+        # branch or absent DRC must never beat a measured open loop with zero.
+        hot_open = None
     return dict(
         schema="pnr-power-quality-routed-v1",
         valid=valid,
+        coverage=coverage,
+        qualified=False,
         self_check=check,
         hot_loops_open=hot_open,
         hot_loop_links=hot_links,
@@ -612,10 +636,14 @@ def evaluate(round_dir, graph, rules, *, dump=None):
     dump = dump if dump is not None else read_board(board)
     drc = json.loads(drc_path.read_text()) if drc_path else None
     out = analyse(dump, roles, rules, drc)
-    if drc is None:
-        out.update(
-            valid=False, hot_loops_open=out["hot_loop_links"], self_check="no DRC report found"
+    if os.environ.get("PNR_POWER_BRANCHES") == "1":
+        from pnr.power_loop import evaluate as screen_copper
+
+        out["loop_copper"] = screen_copper(
+            board, roles, rules, ki_py=KI_PY, out_dir=round_dir / "power-loop"
         )
+    if drc is None:
+        out.update(valid=False, hot_loops_open=None, self_check="no DRC report found")
     out["board"] = str(board)
     return out
 

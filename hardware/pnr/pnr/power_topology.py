@@ -313,6 +313,10 @@ def derive(graph, constraints, rules, *, block_of=None):
             continue
         # Parallel parts share a class; at top level only within one block.
         key = (frozenset(carrying[c.ref]), (block_of or {}).get(c.ref))
+        # Keep every parallel branch in the cycle basis and placement objective.
+        # Identical net sets do not make devices electrically interchangeable.
+        if os.environ.get("PNR_POWER_BRANCHES") == "1":
+            key += (c.ref,)
         if key not in class_of:
             class_of[key] = len(classes)
             classes.append(dict(members=[], nets=by_net(key[0])))

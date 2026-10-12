@@ -156,6 +156,11 @@ def from_graph(g):
         parts.append(dict(ref=c["ref"], xy=c["pos"], pads=pads))
     return dict(
         frame="mm-y-up",
+        **(
+            {"copper_layers": [row["name"] for row in g["stack"]["layers"]]}
+            if (g.get("stack") or {}).get("layers")
+            else {}
+        ),
         width=g["outline"]["width"],
         height=g["outline"]["height"],
         parts=parts,
@@ -683,7 +688,27 @@ class Viewer:
             if time.time() - self.last_sweep > 600:
                 self.last_sweep = time.time()
                 sweep_tmp(folder)
-            if not f.exists():
+            cached = None
+            if f.exists():
+                # Older servers may still be writing this shared cache in place.
+                for attempt in range(40):
+                    try:
+                        cached = json.loads(f.read_text())
+                        break
+                    except ValueError:
+                        if attempt == 39:
+                            raise
+                        time.sleep(0.25)
+            # Upgrade old native caches: occupied copper alone cannot identify empty planes.
+            # Keep portable, geometry-only archives readable when their native board is absent.
+            stale = (
+                cached is not None
+                and ("copper_layers" not in cached or "airwires" not in cached)
+                and Path(event["board"]).is_file()
+                and self.toolchain.python()[0] is not None
+                and hashlib.sha256(Path(event["board"]).read_bytes()).hexdigest() == sha
+            )
+            if cached is None or stale:
                 tmp = folder / (sha + "." + uuid.uuid4().hex + ".tmp")
                 try:
                     with (folder / (sha + ".log")).open("w") as log:
@@ -711,7 +736,13 @@ class Viewer:
         except GeometryUnavailable as ex:
             if "layout" not in e:
                 return None, str(ex)
-        return (from_graph(e["layout"]) if "layout" in e else None), None
+        if "layout" in e:
+            geo = from_graph(e["layout"])
+            if e.get("data", {}).get("provisional"):
+                geo["provisional"] = True
+                geo["tracks"] = e["data"].get("screening_tracks", [])
+            return geo, None
+        return None, None
 
     # ------------------------------------------------------------------ ingest
     def ingest(self):
@@ -757,22 +788,32 @@ class Viewer:
                 with self.lock:
                     self.state["errors"].append(dict(file=f.name, error=notice))
             layout_sha = None
-            if e["kind"] == "placement_cost_capture":
+            if e["kind"] == "placement_cost_capture" or (
+                e["kind"] == "candidate_complete"
+                and e.get("data", {}).get("provisional")
+                and "layout" in e
+            ):
+                screening = e["kind"] == "candidate_complete"
                 layout_sha = hashlib.sha256(
-                    json.dumps(e["layout"], sort_keys=True, separators=(",", ":")).encode()
+                    json.dumps(
+                        geo if screening else e["layout"], sort_keys=True, separators=(",", ":")
+                    ).encode()
                 ).hexdigest()
                 self.cache[layout_sha] = geo
                 write_json_atomic(self.root / "geometry" / (layout_sha + ".json"), geo)
                 frame = dict(
-                    name=e["data"]["phase"] + " · recorded placement cost",
-                    kind="placement-cost",
+                    name=e["data"]["phase"]
+                    + (
+                        " · unvalidated signal draft" if screening else " · recorded placement cost"
+                    ),
+                    kind="signal-screening" if screening else "placement-cost",
                     layout_sha256=layout_sha,
                     event_id=e["id"],
                     opens=None,
                     violations=None,
                     label_source="data.phase",
                     metric_sources={},
-                    cost_capture=e["data"]["cost_capture"],
+                    cost_capture=e["data"].get("cost_capture"),
                 )
             with self.lock:
                 self.apply_event(e, frame, geo, layout_sha)

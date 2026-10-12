@@ -873,6 +873,10 @@ class PourChannels:
 
     def poured(self, a, b):
         """Trunk nets both parts carry: realised as a pour across the gap between them."""
+        if os.environ.get("PNR_POWER_CHANNELS") == "1":
+            # Shared net identity is not evidence of an adequate filled path.
+            # Reserve its escape/current corridor until native copper proves it.
+            return set()
         return self.trunk.get(a, set()) & self.trunk.get(b, set())
 
     def penalty(self, comp, others, xs, ys):

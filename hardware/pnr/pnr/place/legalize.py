@@ -38,6 +38,7 @@ cheapest outcome. Parts on a matched-length net (``wire_exempt``) keep the plain
 
 from __future__ import annotations
 
+import copy
 import math
 import os
 from typing import Dict, List, Optional, Tuple
@@ -199,6 +200,32 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
         resolve_hard_rotations,
     )
     from .regions import legalize_kwargs
+
+    # Reuse the exact region legalizer for concave board edges. The mask covers
+    # complete bodies, so the notch between two support ears cannot become a slot.
+    poly = graph.outline.polygon if graph.outline else []
+    if poly and (
+        len(poly) != 4
+        or {tuple(p) for p in poly}
+        != {
+            (0, 0),
+            (graph.outline.width, 0),
+            (graph.outline.width, graph.outline.height),
+            (0, graph.outline.height),
+        }
+    ):
+        from pnr.constraints import Constraint, Enforcement
+
+        constraints = copy.deepcopy(constraints)
+        constraints.constraints.append(
+            Constraint(
+                kind="region",
+                refs=tuple(c.ref for c in graph.components if c.ref not in poses),
+                enforcement=Enforcement.HARD,
+                params={"areas": [{"polygon": poly}]},
+                name="native board outline",
+            )
+        )
 
     out = dict(
         fixed=poses,
@@ -2269,6 +2296,9 @@ def refine_channels(
     """
     placed = BoardGraph.from_json(graph.to_json())
     targets = {c.ref: tuple(c.pos) for c in graph.components}
+    from .metrics import outline_contains
+
+    contains = outline_contains(graph, width, height)
     limits = group_limits or {}
     g = grid_mm
     for _ in range(passes):
@@ -2309,6 +2339,11 @@ def refine_channels(
             candidate = ((col + bw / 2) * g, (row + bh / 2) * g)
             if shift is not None:
                 candidate = (candidate[0] - shift[0], candidate[1] - shift[1])
+            saved, comp.pos = comp.pos, candidate
+            on_board = contains(courtyard_rect(comp))
+            comp.pos = saved
+            if not on_board:
+                continue
             if comp.reserves:
                 from .pair_landing import enabled as landing_enabled
 

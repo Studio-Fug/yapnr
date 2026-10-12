@@ -218,6 +218,9 @@ def main(argv=None):
 
     graph, constraints, rules = _load(a.inputs, a.constraints)
     blocks = extract_blocks(graph, constraints)
+    from pnr.hier.partition import validate_partition
+
+    validate_partition(blocks, constraints)
     templates = {}
     for b in blocks:
         templates.setdefault(b.template, []).append(b)

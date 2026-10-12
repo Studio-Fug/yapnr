@@ -337,6 +337,15 @@ def humanize(lane: dict, classified: Optional[dict] = None) -> str:
     classified = classified or classify(lane)
     state = classified["state"]
     opens, violations = _unconnected_count(lane), _violation_count(lane)
+    screening = lane.get("last_candidate") or {}
+    if screening.get("provisional") and state in ("done", "failed"):
+        missing = screening.get("missing_connections")
+        bits = [f"{int(missing)} signal gaps"] if isinstance(missing, (int, float)) else []
+        deferred = screening.get("deferred_nets")
+        if isinstance(deferred, list):
+            bits.append(f"{len(deferred)} deferred nets")
+        bits.append("native DRC pending")
+        return "Screening: " + ", ".join(bits)
 
     if state == "queued":
         return "Queued"

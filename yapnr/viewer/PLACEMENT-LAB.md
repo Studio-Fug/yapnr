@@ -6,6 +6,10 @@ placement experiment, not a route, electrical acceptance, or replacement for the
 production power-first multi-start campaign. Recorded power-first A/B cases can be
 reviewed in the same workspace, with their mode and seeds retained.
 
+For agent control, use the [versioned HTTP/Python/JSON CLI API](PLACEMENT-API.md):
+`yapnr placement schema` discovers its operations. Agents can drive runs, inspect
+individual decisions, render actual geometry and discuss canonical notes without a browser.
+
 ## Live objective
 
 Choose an input, seed, and iteration budget, then **Start new run**. Edit the expression

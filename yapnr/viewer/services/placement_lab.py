@@ -150,6 +150,8 @@ class PlacementLab:
         out = dict(
             id=ident, status=status, request=json.loads((folder / "request.json").read_text())
         )
+        if (folder / "control.json").exists():
+            out["control"] = json.loads((folder / "control.json").read_text())
         if (folder / "frame.json").exists():
             out["frame"] = json.loads((folder / "frame.json").read_text())
         if (folder / "review.json").exists():
@@ -187,6 +189,10 @@ class PlacementLab:
                 delay = body.get("frame_delay_ms", 30)
                 if type(delay) is not int or not 0 <= delay <= 200:
                     raise ValueError("Display pacing must be 0..200 ms")
+                if type(body.get("paused", False)) is not bool:
+                    raise ValueError("paused must be a boolean")
+                if self.engine is None:
+                    raise ValueError("Placement engine runtime is not configured")
                 ident = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
                 folder = self.folder(ident)
                 request = dict(
@@ -218,7 +224,12 @@ class PlacementLab:
                 write(folder / "request.json", request)
                 write(
                     folder / "control.json",
-                    dict(expression=request["expression"], paused=False, stop=False, revision=0),
+                    dict(
+                        expression=request["expression"],
+                        paused=body.get("paused", False),
+                        stop=False,
+                        revision=0,
+                    ),
                 )
                 write(
                     folder / "status.json",
@@ -261,6 +272,11 @@ class PlacementLab:
             if ident != self.active or self.process is None or self.process.poll() is not None:
                 raise ValueError("This run is no longer active; start a reproducible new run")
             control = json.loads((folder / "control.json").read_text())
+            if "expect_revision" in body and (
+                type(body["expect_revision"]) is not int
+                or body["expect_revision"] != control["revision"]
+            ):
+                raise ValueError("Stale control revision; read status before changing this run")
             if action == "apply":
                 parse(body.get("expression"))
                 control["expression"] = body["expression"]

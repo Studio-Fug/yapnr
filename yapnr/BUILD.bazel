@@ -13,6 +13,7 @@ py_library(
         "__main__.py",
         "cli.py",
         "frontends/__init__.py",
+        "placement.py",
     ],
     imports = [".."],
     # The `atopile`, `picker`, `part-cache`, `exp`, `fab` and `order` commands (imported when the

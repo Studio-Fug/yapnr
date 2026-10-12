@@ -1189,6 +1189,10 @@ class Handler(BaseHTTPRequestHandler):
         q = self.query()
         try:
             lab = self.viewer.placement_lab
+            if path.endswith("/v1"):
+                from yapnr.viewer.services.placement_api import schema
+
+                return self.send(schema())
             return self.send(
                 lab.get(q.get("id", [""])[0], q.get("step", [None])[0])
                 if path.endswith("/run")
@@ -1457,7 +1461,10 @@ class Handler(BaseHTTPRequestHandler):
         # rejected too (other POSTs allow it).
         if self.path == "/api/agent/chat" and origin not in v.origins():
             return self.send({"error": "origin required for the assistant"}, 403)
-        if self.path == "/api/placement-lab" and origin not in v.origins():
+        if (
+            self.path in ("/api/placement-lab", "/api/placement-lab/v1")
+            and origin not in v.origins()
+        ):
             return self.send({"error": "origin required for placement runs"}, 403)
         notes_path = self.path == "/api/notes" or self.path.startswith("/api/notes/")
         if notes_path and origin not in v.origins():
@@ -1479,6 +1486,10 @@ class Handler(BaseHTTPRequestHandler):
                 if v.agent_service is None:
                     return self.agent_disabled()
                 return self.send(v.agent_service.cancel(body.get("session")))
+            if self.path == "/api/placement-lab/v1":
+                from yapnr.viewer.services.placement_api import PlacementAPI
+
+                return self.send(PlacementAPI(v.placement_lab, v.notes).call(body))
             if self.path == "/api/placement-lab":
                 return self.send(v.placement_lab.command(body))
             if self.path == "/api/controls":
@@ -1555,8 +1566,8 @@ class Handler(BaseHTTPRequestHandler):
         """POST /api/notes (create), /api/notes/<id> (fields, comment, expect_rev) and
         /api/notes/<id>/delete.
 
-        Always a user actor: the assistant writes only through its MCP server, so nothing here can
-        act as the agent (or set its provenance).
+        Always a user actor. Agent writes use separate MCP/placement API handlers that force an
+        agent actor and derive provenance; callers cannot choose their authority here.
         """
         from yapnr.viewer.notes.store import NoteConflict, NoteNotFound
 
@@ -1621,6 +1632,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 GET_ROUTES = {
+    "/api/placement-lab/v1": Handler.get_placement_lab,
     "/api/placement-lab": Handler.get_placement_lab,
     "/api/placement-lab/run": Handler.get_placement_lab,
     "/api/about": Handler.get_about,

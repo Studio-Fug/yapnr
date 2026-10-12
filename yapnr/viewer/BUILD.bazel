@@ -92,6 +92,7 @@ py_library(
     ),
     data = [
         "COSTS.md",
+        "PLACEMENT-API.md",
         "PLACEMENT-LAB.md",
         "README.md",
         ":dist",

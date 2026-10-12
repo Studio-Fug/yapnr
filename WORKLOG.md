@@ -9,6 +9,16 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
+- **Placement lab agent API**: versioned HTTP contract, stdlib Python client and
+  `yapnr placement` JSON CLI share the live lab service and canonical notes. Agents
+  can register inputs, start paused, edit/pause/resume/stop, poll consumed revisions,
+  inspect every decision, compare movement, page actual history, fetch evidence and
+  export SVG geometry. Notes/replies remain agent-authored; no approval authority.
+  Real API validation completed a 40-step PD run with 22 legalizer decisions and
+  43 history events; stale-edit rejection, browser discovery/notes and stop verified.
+  All 304 Bazel targets pass. See `yapnr/viewer/PLACEMENT-API.md`. This changes
+  control/review interfaces, not placement acceptance or the engine objective.
+
 - **Placement laboratory / pad-locality investigation**: live single-start objective
   expression editing, pause/resume, frozen inputs/engine, JSONL iteration history,
   and per-decision legalization review with canonical comments. Power-first A/B

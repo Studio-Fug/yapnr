@@ -58,8 +58,11 @@ class Objective(unittest.TestCase):
             with patch(
                 "yapnr.viewer.services.placement_lab.subprocess.Popen", return_value=process
             ), patch("yapnr.viewer.services.placement_lab.threading.Thread"):
-                result = lab.command({"action": "start", "source": "demo", "iterations": 20})
+                result = lab.command(
+                    {"action": "start", "source": "demo", "iterations": 20, "paused": True}
+                )
             folder = lab.folder(result["id"])
+            self.assertTrue(json.loads((folder / "control.json").read_text())["paused"])
             before = (folder / "engine/pnr.py").read_bytes()
             write(engine / "pnr.py", {"original": False})
             self.assertEqual((folder / "engine/pnr.py").read_bytes(), before)

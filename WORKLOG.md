@@ -9,6 +9,20 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
+- **Cost surface exploration**: component selection, separate safe arithmetic DSL,
+  four cardinal rotations with a common scale, per-rotation minima, frozen-frame
+  provenance and discovery artifacts. Uses engine rigid-pose terms; other parts
+  retain displayed rotations, not soft mixtures. Surface edits do not alter the run.
+  Four-rotation fields checked against the rigid engine loss; browser rotation/net
+  filters and saved field links verified. All 306 Bazel targets pass.
+
+- **Single-step and minimum-span airwires**: UI/API steps retain optimizer state and
+  pause after the requested updates; post-update frames agree with iteration counts.
+  Default-on per-net Euclidean spanning trees use displayed pad centers, including
+  repeated logical-pad alternatives, with net filtering, totals and SVG export.
+  These are geometric aids, not routed connectivity or the smooth objective.
+  Actual 1+1+2 stepped updates exactly reproduce four uninterrupted updates.
+
 - **Iteration-zero review**: paused starts now show the actual seeded solver poses
   before any loss evaluation or update. `initial.json` and a typed initialization
   history record preserve those poses and rotation probabilities. The observational

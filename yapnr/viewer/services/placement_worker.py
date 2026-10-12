@@ -78,18 +78,20 @@ def main(folder):
                             expression=expression,
                             weights=weights,
                             paused=c["paused"],
+                            step_until=c.get("step_until"),
                         )
                     )
                     + "\n"
                 )
                 trace.flush()
+            paused = c["paused"] or step >= c.get("step_until", request["iterations"] + 1)
             status.update(
-                state="paused" if c["paused"] else "running",
+                state="paused" if paused else "running",
                 step=step,
                 control_revision=revision,
                 expression=expression,
             )
-            if not c["paused"]:
+            if not paused:
                 return weights
             write(folder / "status.json", status)
             time.sleep(0.15)
@@ -114,11 +116,8 @@ def main(folder):
         trace.flush()
 
     def progress(step, positions, probabilities, loss):
-        frame = copy.deepcopy(graph)
-        for comp, point, p in zip(frame.components, positions, probabilities):
-            comp.pos = point
-            comp.rot = 90 * max(range(4), key=lambda i: p[i])
         record = dict(
+            kind="objective_evaluation",
             step=step,
             loss=loss,
             revision=revision,
@@ -127,12 +126,33 @@ def main(folder):
         )
         trace.write(json.dumps(record, separators=(",", ":")) + "\n")
         trace.flush()
+        status["loss"] = loss
+
+    def updated(step, positions, probabilities):
+        frame = copy.deepcopy(graph)
+        for comp, point, p in zip(frame.components, positions, probabilities):
+            comp.pos = point
+            comp.rot = 90 * max(range(4), key=lambda i: p[i])
+        trace.write(
+            json.dumps(
+                dict(
+                    kind="optimizer_update",
+                    step=step,
+                    revision=revision,
+                    positions=positions,
+                    rotation_probabilities=probabilities,
+                )
+            )
+            + "\n"
+        )
+        trace.flush()
         write(
             folder / "frame.json",
             dict(
                 graph=json.loads(frame.to_json()),
                 step=step,
-                loss=loss,
+                completed_iterations=step,
+                last_evaluated_loss=status.get("loss"),
                 revision=revision,
                 scope=(
                     "Continuous optimization; overlapping bodies permitted; "
@@ -140,7 +160,7 @@ def main(folder):
                 ),
             ),
         )
-        status.update(step=step + 1, loss=loss, elapsed_seconds=time.monotonic() - start)
+        status.update(step=step, elapsed_seconds=time.monotonic() - start)
         write(folder / "status.json", status)
         if request["frame_delay_ms"]:
             time.sleep(request["frame_delay_ms"] / 1000)
@@ -156,6 +176,7 @@ def main(folder):
             control=control,
             progress=progress,
             initialized=initial_snapshot,
+            updated=updated,
             **weights
         )
         cont = copy.deepcopy(graph)

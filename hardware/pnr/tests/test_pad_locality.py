@@ -160,6 +160,7 @@ class Locality(unittest.TestCase):
             plain = global_place(g, c, 20, 20, seed=12, iters=20)
             observed = []
             initial = []
+            updates = []
             controls = []
 
             def observe_control(step):
@@ -175,6 +176,7 @@ class Locality(unittest.TestCase):
                 seed=12,
                 iters=20,
                 initialized=lambda pos, p: initial.append((pos, p)),
+                updated=lambda step, pos, p: updates.append((step, pos, p)),
                 control=observe_control,
                 progress=lambda step, pos, p, loss: observed.append((step, loss, pos, p)),
             )
@@ -182,6 +184,13 @@ class Locality(unittest.TestCase):
             self.assertEqual(len(observed), 20)
             self.assertEqual(controls, list(range(20)))
             self.assertEqual(initial[0], (observed[0][2], observed[0][3]))
+            self.assertEqual([u[0] for u in updates], list(range(1, 21)))
+            for update, evaluation in zip(updates, observed[1:]):
+                self.assertEqual(update[1:], evaluation[2:])
+            self.assertEqual(
+                {comp.ref: tuple(pos) for comp, pos in zip(g.components, updates[-1][1])},
+                plain[0],
+            )
 
             def schedule(step):
                 return {"w_locality": 4 if step < 8 else 20}

@@ -10,6 +10,7 @@ from yapnr.placement import VERSION
 
 from .placement_lab import checked, digest, write
 from .placement_objective import DEFAULT, TERMS, parse
+from .placement_surface_expression import NAMES
 
 EVIDENCE = (
     "request.json",
@@ -34,11 +35,15 @@ ACTIONS = {
     "start": (("source",), ("seed", "iterations", "frame_delay_ms", "expression", "paused")),
     "status": (("id",), ()),
     "run": (("id",), ()),
+    "surface": (("id", "ref", "expression"), ("pitch",)),
+    "surface-result": (("id", "key"), ()),
+    "surface-render": (("id", "key"), ("rotation",)),
     "decisions": (("id",), ()),
     "decision": (("id",), ("step", "ref")),
-    "render": (("id",), ("step", "ref", "alternative")),
+    "render": (("id",), ("step", "ref", "alternative", "airwires")),
     "pause": (("id",), ("expect_revision",)),
     "resume": (("id",), ("expect_revision",)),
+    "step": (("id",), ("expect_revision", "count")),
     "stop": (("id",), ("expect_revision",)),
     "apply": (("id", "expression"), ("expect_revision",)),
     "compare": (("id", "other"), ()),
@@ -60,6 +65,12 @@ def schema():
             default=DEFAULT,
             terms=list(TERMS),
             syntax="nonnegative weighted sums; +, *, parentheses; source_constraints exactly once",
+        ),
+        surface=dict(
+            terms=sorted(NAMES),
+            rotations=[0, 90, 180, 270],
+            scope="Rigid displayed poses; absolute board cost; separate from live objective edits",
+            functions=["abs", "sqrt", "log1p", "min", "max"],
         ),
         limits=dict(
             request_bytes=1000000,
@@ -131,7 +142,7 @@ class PlacementAPI:
                     # write() uses insertion order; normalize to the hashed canonical order.
                     write(path, json.loads(raw))
             return dict(id=ident, sha256=sha, title=doc.get("title", ident))
-        if action in ("start", "apply", "pause", "resume", "stop"):
+        if action in ("start", "apply", "pause", "resume", "step", "stop"):
             result = lab.command(b)
             result["view"] = self.link(result["id"])
             return result
@@ -139,6 +150,27 @@ class PlacementAPI:
         folder = lab.folder(ident)
         if not (folder / "status.json").is_file():
             raise ValueError("Unknown placement run")
+        if action == "surface":
+            return lab.surfaces.request(b)
+        if action == "surface-result":
+            return lab.surfaces.result(ident, b["key"])
+        if action == "surface-render":
+            from .placement_render import render
+
+            result = lab.surfaces.result(ident, b["key"])
+            if result["status"] != "ready":
+                raise ValueError("Wait for the surface before rendering")
+            rotation = b.get("rotation", 0)
+            if type(rotation) is not int or rotation not in (0, 90, 180, 270):
+                raise ValueError("Choose a cardinal rotation")
+            source = json.loads((folder / "surfaces" / b["key"] / "request.json").read_text())
+            svg = render(source["frame"]["graph"], surface=result["report"], rotation=rotation)
+            return dict(
+                media_type="image/svg+xml",
+                svg=svg,
+                sha256=hashlib.sha256(svg.encode()).hexdigest(),
+                surface_sha256=result["sha256"],
+            )
         if action == "history":
             return self.history(folder, b.get("cursor", 0), b.get("limit", 25))
         if action == "evidence":
@@ -164,7 +196,9 @@ class PlacementAPI:
                 graph = run.get("frame", {}).get("graph") or run.get("review", {}).get("graph")
                 if not graph:
                     raise ValueError("No placement frame yet")
-            svg = render(graph, d, alt)
+            if "airwires" in b and type(b["airwires"]) is not bool:
+                raise ValueError("airwires must be boolean")
+            svg = render(graph, d, alt, airwires=b.get("airwires", True))
             return dict(
                 media_type="image/svg+xml",
                 svg=svg,

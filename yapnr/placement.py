@@ -75,8 +75,8 @@ class PlacementClient:
         return self.call("decision", id=run, **({"ref": ref} if ref else {"step": step}))
 
     def control(self, run, action, **parameters):
-        if action not in {"pause", "resume", "apply", "stop"}:
-            raise PlacementError("Choose pause, resume, apply or stop")
+        if action not in {"pause", "resume", "step", "apply", "stop"}:
+            raise PlacementError("Choose pause, resume, step, apply or stop")
         return self.call(action, id=run, **parameters)
 
     def wait(self, run, *, seconds=20, state=None, revision=None):
@@ -145,11 +145,15 @@ def register(commands):
         "reply",
         "pause",
         "resume",
+        "step",
         "apply",
         "stop",
         "wait",
         "link",
         "compare",
+        "surface",
+        "surface-result",
+        "surface-render",
     ):
         p = sub.add_parser(name)
         p.add_argument("id", help="run id")
@@ -166,8 +170,18 @@ def register(commands):
             p.add_argument("--body", required=True)
         if name == "notes":
             p.add_argument("--ref")
-        if name in ("pause", "resume", "apply", "stop"):
+        if name in ("pause", "resume", "step", "apply", "stop"):
             p.add_argument("--expect-revision", type=int, help="reject stale concurrent edits")
+        if name == "step":
+            p.add_argument("--count", type=int, default=1)
+        if name == "surface":
+            p.add_argument("--ref", required=True)
+            p.add_argument("--expression", default="objective")
+            p.add_argument("--pitch", type=float, default=1.5)
+        if name in ("surface-result", "surface-render"):
+            p.add_argument("key")
+        if name == "surface-render":
+            p.add_argument("--rotation", type=int, default=0, choices=[0, 90, 180, 270])
         if name == "apply":
             p.add_argument("expression")
         if name == "history":
@@ -204,6 +218,10 @@ def _run(args):
             if k
             in {
                 "id",
+                "count",
+                "pitch",
+                "rotation",
+                "key",
                 "source",
                 "seed",
                 "iterations",

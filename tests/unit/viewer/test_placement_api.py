@@ -57,6 +57,25 @@ def capture(lab, ident, distance=2):
 
 
 class PlacementAPITest(unittest.TestCase):
+    def test_cli_forwards_step_count_and_surface_parameters(self):
+        parser = argparse.ArgumentParser()
+        register(parser.add_subparsers())
+        cases = [
+            (["step", "demo", "--count", "3"], "step", dict(id="demo", count=3)),
+            (
+                ["surface", "demo", "--ref", "C1", "--expression", "2*wirelength", "--pitch", "2"],
+                "surface",
+                dict(id="demo", ref="C1", expression="2*wirelength", pitch=2.0),
+            ),
+        ]
+        for command, action, fields in cases:
+            args = parser.parse_args(["placement", "--url", "http://localhost", *command])
+            with patch(
+                "yapnr.placement.PlacementClient.call", return_value={}
+            ) as call, contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(args.func(args), 0)
+                call.assert_called_once_with(action, **fields)
+
     def test_decision_notes_are_hash_bound_and_never_user_authored_or_approved(self):
         with tempfile.TemporaryDirectory() as td:
             lab = PlacementLab(td, td)

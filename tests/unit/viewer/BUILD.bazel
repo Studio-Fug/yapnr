@@ -16,6 +16,7 @@ yapnr_py_tests(
             "size": "medium",
         },
         "test_finished_campaign": {"size": "medium"},
+        "test_placement_surfaces": {"size": "medium"},
         "test_placement_api": {"size": "medium"},
         "test_schematic": {"size": "medium"},
         "test_server": {"size": "medium"},

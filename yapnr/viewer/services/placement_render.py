@@ -2,8 +2,10 @@
 
 from html import escape
 
+from .placement_airwires import spans
 
-def render(graph, decision=None, alternative=None):
+
+def render(graph, decision=None, alternative=None, airwires=True, surface=None, rotation=0):
     outline = graph.get("outline", {})
     width, height = float(outline.get("width", 30)), float(outline.get("height", 30))
     margin = max(width, height) * 0.07
@@ -20,6 +22,31 @@ def render(graph, decision=None, alternative=None):
     svg.append(
         f'<polygon points="{points}" fill="none" stroke="#49614f" stroke-width="{font*.15}"/>'
     )
+    if surface:
+        field = next(f for f in surface["fields"] if f["rotation"] == rotation)
+        extent = surface["maximum"] - surface["minimum"]
+        pitch = surface["pitch_mm"]
+        for i, value in enumerate(field["values"]):
+            t = (value - surface["minimum"]) / extent if extent else 0.5
+            x = field["origin"][0] + i % field["nx"] * pitch - pitch / 2
+            y = field["origin"][1] + i // field["nx"] * pitch + pitch / 2
+            svg.append(
+                f'<rect x="{x}" y="{-y}" width="{pitch}" height="{pitch}" '
+                f'fill="hsl({210-170*t},75%,50%)" opacity=".48"/>'
+            )
+        caption = f'{surface["ref"]} · {rotation}° · {surface["expression"]} · iteration {surface["frame_step"]}'
+        svg.append(f'<text x="0" y="{-height-font}">{escape(caption)}</text>')
+
+    if airwires:
+        for net in spans(graph, decision)["nets"]:
+            for edge in net["edges"]:
+                x, y = edge["start"]
+                u, v = edge["end"]
+                svg.append(
+                    f'<path d="M{x},{-y} L{u},{-v}" stroke="#78b5c4" '
+                    f'stroke-opacity=".5" stroke-width="{font*.10}">'
+                    f'<title>{escape(net["name"])} · {edge["length_mm"]:.3f} mm</title></path>'
+                )
 
     def part(c, pos, rot, color, opacity=1, dashed=False):
         x, y = map(float, pos)
@@ -55,6 +82,9 @@ def render(graph, decision=None, alternative=None):
             part(c, decision["position"], decision["rotation"], "#b1eb73")
             if alternative:
                 part(c, alternative["position"], alternative["rotation"], "#c49aec", dashed=True)
+        elif surface and c["ref"] == surface["ref"]:
+            part(c, c["pos"], c.get("rot", 0), "#f1ba63")
+            part(c, c["pos"], rotation, "#c49aec", dashed=True)
         else:
             part(
                 c,
@@ -63,7 +93,17 @@ def render(graph, decision=None, alternative=None):
                 "#9baea0",
                 1 if placed is None or c["ref"] in placed else 0.2,
             )
-    svg.append(
-        f'<text x="0" y="{margin}">Amber: original · Green: chosen · Purple: alternative</text></g></svg>'
-    )
+    legend = "Amber: original · Green: chosen · Purple: alternative"
+    if surface:
+        legend = f'Blue: lower · Amber: higher · shared scale {surface["minimum"]:.2f}–{surface["maximum"]:.2f}'
+        x, y = field["best_position"]
+        svg.append(
+            f'<path d="M{x-font},{-y} H{x+font} M{x},{-y-font} V{-y+font}" '
+            f'stroke="#b1eb73" stroke-width="{font*.2}"/>'
+        )
+        svg.append(
+            f'<text x="0" y="{margin+font*1.5}">Rigid-pose slice · '
+            "Green cross: sampled minimum · no legality claim</text>"
+        )
+    svg.append(f'<text x="0" y="{margin}">{legend}</text></g></svg>')
     return "\n".join(svg)

@@ -91,6 +91,9 @@ class PlacementLab:
         self.lock = threading.RLock()
         self.process = None
         self.active = None
+        from .placement_surfaces import Surfaces
+
+        self.surfaces = Surfaces(self)
 
     def folder(self, ident):
         if not isinstance(ident, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", ident):
@@ -162,6 +165,15 @@ class PlacementLab:
                 if not 0 <= index < len(review["decisions"]):
                     raise ValueError("Decision out of range")
                 out["decision"] = decision(folder, review["decisions"][index])
+        from .placement_airwires import spans
+
+        graph = (
+            out.get("decision", {}).get("graph")
+            or out.get("frame", {}).get("graph")
+            or out.get("review", {}).get("graph")
+        )
+        if graph:
+            out["airwires"] = spans(graph, out.get("decision"))
         return out
 
     def command(self, body):
@@ -282,6 +294,25 @@ class PlacementLab:
                 control["expression"] = body["expression"]
             elif action in ("pause", "resume"):
                 control["paused"] = action == "pause"
+                control.pop("step_until", None)
+            elif action == "step":
+                status = json.loads((folder / "status.json").read_text())
+                count = body.get("count", 1)
+                if type(count) is not int or not 1 <= count <= 100:
+                    raise ValueError("Step count must be an integer from 1 to 100")
+                if (
+                    status.get("state") != "paused"
+                    or status.get("control_revision") != control["revision"]
+                ):
+                    raise ValueError(
+                        "Wait for the worker to acknowledge a paused state before stepping"
+                    )
+                limit = json.loads((folder / "request.json").read_text())["iterations"]
+                if status["step"] + count > limit:
+                    raise ValueError(
+                        "Step exceeds remaining optimizer iterations; resume to legalize"
+                    )
+                control.update(paused=False, step_until=status["step"] + count)
             elif action == "stop":
                 control["stop"] = True
             else:

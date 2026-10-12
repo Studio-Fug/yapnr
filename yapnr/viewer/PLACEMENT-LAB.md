@@ -14,6 +14,10 @@ individual decisions, render actual geometry and discuss canonical notes without
 
 Choose an input, seed, and iteration budget, then **Start new run**. Edit the expression
 and press **Apply live** to change weights at the next optimizer iteration boundary.
+New runs start paused at iteration zero by default (uncheck the option to run freely).
+**Step** performs exactly one optimizer update and pauses again, retaining Adam state.
+The board shows the post-update positions; loss is explicitly the last evaluated
+(pre-update) loss. At the last iteration, **Resume** proceeds to legalization.
 **Pause** preserves the optimizer state; **Resume** continues it. **Stop** retains saved
 frames. A single worker uses one Torch thread, at most 5,000 iterations and 600 seconds
 per run, including pauses. Interrupted and timed-out runs remain in the experiment list.
@@ -86,3 +90,50 @@ rather than its centroid or a high-fanout net bounding box. Shared rails and a b
 hierarchy group alone do not establish ownership. Explicit pad groups and private
 connections can establish it. Duplicate pad shapes remain alternatives. Independent
 proximity reports without engineering thresholds remain **unqualified**.
+
+## Minimum-span airwires
+
+The enabled-by-default overlay computes a Euclidean minimum spanning tree per net
+from the displayed rotated pad centers. Select a net to isolate it and see its
+total span; all nets, including rails, are included. Repeated physical pads of one
+logical terminal use the closest endpoint. Missing pins are reported, never invented.
+Trees update after each optimizer step and follow the chosen pose in decision review.
+They do not represent routed copper, obstacle-aware paths, or the optimizer’s smooth
+wirelength loss. Soft rotation mixtures can produce different objective geometry
+from these displayed cardinal rotations. SVG exports include the same overlay.
+
+## Four-rotation cost surfaces
+
+Select a component in the right panel or click its footprint, enter a **Surface
+expression**, and press **Evaluate surface**. Flip between **0° / 90° / 180° / 270°**
+without recomputing. Blue means lower cost, amber higher; all four maps share a
+color scale. The sampled minimum and its location are shown for each rotation.
+Use a 0.5–5 mm pitch, at most 1,600 samples per rotation. One read-only worker
+has a 60-second budget. Requests and results are recorded as discovery experiments.
+
+`objective` applies the active live weights; other named terms expose their raw
+whole-board values. `source_constraints` retains authored rule weights and matching.
+The surface expression supports finite numbers, named terms, `+ - * / **`,
+parentheses, `abs`, `sqrt`, `log1p`, `min`, and `max`; powers are limited to 0–4.
+It does not execute Python. Non-finite results are rejected. Examples:
+
+```text
+spread_overlap
+wirelength + 8*pad_locality
+objective - 0.5*wirelength
+max(outline, 10*keepout)
+```
+
+Surface edits are read-only. To tune the optimizer, change the left-hand **Objective
+expression** and **Apply live**; its stricter nonnegative linear DSL preserves
+source constraints. Heatmaps use the frozen frame's other components at their
+**displayed cardinal rotations**, not their soft rotation mixtures. They evaluate
+absolute whole-board cost; shared costs are not divided into misleading local shares.
+They are sampled counterfactual slices, not legal sites or native DRC. Fixed parts'
+fields are hypothetical. Moving the optimizer makes a surface stale and hides it
+until evaluated again. The request pins geometry, weights and frozen engine sources.
+
+![C9 rigid-pose cost slices at four cardinal rotations](../../docs/design/assets/mini-pad-locality/c9-four-rotation-surface.gif)
+
+The animation switches four computed slices of one frozen seed-zero initial
+converter placement. It is a rotation comparison, not an optimizer trajectory.

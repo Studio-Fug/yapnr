@@ -114,3 +114,46 @@ Successful replies have `{schema: "yapnr-placement-api-v1", result: ...}`. Inval
 requests return an HTTP error and `{error: ...}`. Unknown action arguments are rejected.
 The CLI's `schema` action exposes required/optional fields, terms, limits and evidence
 names. Both browser and agent use one lab service, worker and notes store.
+
+## Single-step and topology
+
+From an acknowledged paused state, `yapnr placement step RUN --count 1` performs
+one optimizer update and pauses again. Counts range from 1 to 100 and may not
+exceed the remaining iteration budget. Use `--expect-revision` to guard edits.
+Wait for `paused` **and the returned revision** before issuing another step; an old
+paused response is not acknowledgement. `resume` clears the step limit; at the
+iteration budget it continues into legalization. A pending or running step is rejected.
+
+```python
+result = client.control(run_id, "step", count=1, expect_revision=revision)
+client.wait(run_id, state="paused", revision=result["control"]["revision"])
+```
+
+`run.airwires` contains per-net minimum spanning trees, pad endpoints, lengths in
+mm and any missing pins. These are geometric spans at the displayed rotations,
+not routing or loss values. `render` includes them by default; pass `airwires=false`
+to omit them. History distinguishes `objective_evaluation` (before an update) from
+`optimizer_update` (after it); initialization remains step zero.
+
+## Cost surfaces
+
+`surface` takes `id`, `ref`, `expression` (e.g. `objective` or `8*pad_locality`),
+and optional `pitch` in mm. It returns a cache key and `pending`/`ready` status.
+Poll `surface-result` with `id` and `key`; ready responses include all four
+cardinal fields, their sampled minima and a shared color range. The report and
+request are registered as a discovery experiment under the placement attempt.
+
+```sh
+yapnr placement surface RUN --ref C1 --expression 'wirelength + 8*pad_locality'
+yapnr placement surface-result RUN KEY
+```
+
+The Python equivalent is `client.call("surface", id=run_id, ref="C1",
+expression="objective", pitch=1.5)`. This is independent from optimizer control.
+The report names the frozen frame and rigid-pose scope; it is not the historical
+soft-mixture loss. See [surface semantics and limits](PLACEMENT-LAB.md#four-rotation-cost-surfaces).
+
+`surface-render` takes the same run/key and optional `rotation` (0, 90, 180, 270)
+and returns SVG from that frozen frame, with its surface hash. The CLI is
+`yapnr placement surface-render RUN KEY --rotation 90`. Browser links retain
+`surface=KEY&rotation=90` to restore the selected field without recomputation.

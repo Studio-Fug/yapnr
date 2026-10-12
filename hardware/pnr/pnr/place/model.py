@@ -208,6 +208,7 @@ def global_place(
     control=None,
     progress=None,
     initialized=None,
+    updated=None,
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
     pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
@@ -740,6 +741,10 @@ def global_place(
             progress(step, pos.detach().tolist(), p.detach().tolist(), float(loss.detach()))
         loss.backward()
         opt.step()
+        if updated is not None:
+            next_temp = 2.0 - 1.8 * min(1.0, (step + 1) / max(1, iters - 1))
+            next_p = frozen["p"] if frozen is not None else rot_probs(next_temp)
+            updated(step + 1, full_pos().detach().tolist(), next_p.detach().tolist())
 
     pos = full_pos().detach()
     p = rot_probs(0.2).detach()

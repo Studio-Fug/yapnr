@@ -63,6 +63,16 @@ class Objective(unittest.TestCase):
                 )
             folder = lab.folder(result["id"])
             self.assertTrue(json.loads((folder / "control.json").read_text())["paused"])
+            write(folder / "status.json", dict(state="paused", step=0, control_revision=0))
+            for count in (0, 101, True, 1.5, 21):
+                with self.assertRaises(ValueError):
+                    lab.command(dict(action="step", id=result["id"], count=count))
+            advanced = lab.command(dict(action="step", id=result["id"]))
+            self.assertEqual(advanced["control"]["step_until"], 1)
+            with self.assertRaisesRegex(ValueError, "acknowledge"):
+                lab.command(dict(action="step", id=result["id"]))
+            lab.command(dict(action="resume", id=result["id"]))
+            self.assertNotIn("step_until", json.loads((folder / "control.json").read_text()))
             before = (folder / "engine/pnr.py").read_bytes()
             write(engine / "pnr.py", {"original": False})
             self.assertEqual((folder / "engine/pnr.py").read_bytes(), before)

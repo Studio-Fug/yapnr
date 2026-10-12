@@ -13,7 +13,11 @@ individual decisions, render actual geometry and discuss canonical notes without
 ## Live objective
 
 Choose an input, seed, and iteration budget, then **Start new run**. Edit the expression
-and press **Apply live** to change weights at the next optimizer iteration boundary.
+in **Live objective** and press **Apply objective** to change weights at the next
+optimizer iteration boundary, without advancing a paused run. The applied revision
+is shown after the worker acknowledges it. If you edit while paused, **Step** becomes
+**Apply & step**: it waits for that acknowledgment, then advances exactly once.
+Invalid expressions or conflicting changes from another client prevent the step.
 New runs start paused at iteration zero by default (uncheck the option to run freely).
 **Step** performs exactly one optimizer update and pauses again, retaining Adam state.
 The board shows the post-update positions; loss is explicitly the last evaluated
@@ -46,6 +50,13 @@ were consumed. A replay must apply that iteration schedule to the frozen engine;
 alone is insufficient after live edits. Timing and UI pacing are not optimizer inputs.
 The browser shows the acknowledged objective revision rather than inferring application
 from the button click.
+
+![Live objective editing while paused, then one update](../../docs/design/assets/mini-pad-locality/live-objective-stepping.gif)
+
+Actual browser captures: an unsent weight edit, the acknowledged change at the same
+iteration, then one optimizer update. No interpolated placement frames. A two-update
+run with wirelength weights 8 then 3 exactly matches an uninterrupted replay of that
+schedule, including the rotation probabilities.
 
 ## Sequential legalization review
 
@@ -125,7 +136,7 @@ max(outline, 10*keepout)
 ```
 
 Surface edits are read-only. To tune the optimizer, change the left-hand **Objective
-expression** and **Apply live**; its stricter nonnegative linear DSL preserves
+expression** and **Apply objective**; its stricter nonnegative linear DSL preserves
 source constraints. Heatmaps use the frozen frame's other components at their
 **displayed cardinal rotations**, not their soft rotation mixtures. They evaluate
 absolute whole-board cost; shared costs are not divided into misleading local shares.
@@ -137,3 +148,6 @@ until evaluated again. The request pins geometry, weights and frozen engine sour
 
 The animation switches four computed slices of one frozen seed-zero initial
 converter placement. It is a rotation comparison, not an optimizer trajectory.
+
+Changing the applied objective also marks existing heatmaps stale, even when the
+placement has not moved. Evaluate again to see the updated weights.

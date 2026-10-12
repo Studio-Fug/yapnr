@@ -9,6 +9,13 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
+- **Live objective stepping**: a dedicated editor displays draft, pending and applied
+  states. Apply retains the paused iteration; Apply & step waits for the worker's
+  acknowledgment and uses revision guards before advancing once. Polling preserves
+  unsent edits; objective changes invalidate old heatmaps. Browser validation with
+  wirelength weights 8 then 3 exactly reproduces an uninterrupted two-update replay,
+  including rotation probabilities. No engine behavior or defaults changed.
+
 - **Cost surface exploration**: component selection, separate safe arithmetic DSL,
   four cardinal rotations with a common scale, per-rotation minima, frozen-frame
   provenance and discovery artifacts. Uses engine rigid-pose terms; other parts

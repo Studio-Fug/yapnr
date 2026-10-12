@@ -203,6 +203,10 @@ def global_place(
     w_plane: float = 0.05,
     w_plane_sep: float = 0.35,
     w_match: float = 1.0,
+    w_wire: float = 1.0,
+    w_locality: float = 4.0,
+    control=None,
+    progress=None,
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
     pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
@@ -401,6 +405,10 @@ def global_place(
     net_pin_idx = [[pin_key[p] for p in net.pins if p in pin_key] for net in graph.nets]
     net_pin_idx = [pins for pins in net_pin_idx if len(pins) >= 2]
     pairs = pair_tensors(pair_weights, pin_key)
+    from .pad_locality import Cost, anchor_index
+    from .pad_locality import enabled as locality_enabled
+
+    locality = Cost(graph, constraints) if locality_enabled() else None
     match_sets = matched_pin_sets(graph, constraints, pin_key)
     batched_wl = None
     if os.environ.get("PNR_BATCHED_WIRELENGTH") == "1":
@@ -437,7 +445,7 @@ def global_place(
                 edge_terms.append((idx[ref], axis, edge, con.weight or 1.0))
 
     # Grouping (soft): pull members within radius of the anchor.
-    group_terms: List[Tuple[List[int], int, float, float]] = []
+    group_terms: List[Tuple[List[int], int, float, float, Optional[int]]] = []
     for con in constraints.constraints:
         if con.kind != "group":
             continue
@@ -447,7 +455,17 @@ def global_place(
         members = [idx[r] for r in con.refs if r in idx and r != anchor]
         if members:
             group_terms.append(
-                (members, idx[anchor], float(con.params.get("radius_mm") or 5.0), con.weight or 1.0)
+                (
+                    members,
+                    idx[anchor],
+                    float(con.params.get("radius_mm") or 5.0),
+                    con.weight or 1.0,
+                    (
+                        anchor_index(graph, anchor, con.params.get("anchor_pad"))
+                        if locality is not None
+                        else None
+                    ),
+                )
             )
 
     # Regions and aligns (pnr.place.regions): None unless the design declares one,
@@ -490,6 +508,15 @@ def global_place(
     frozen = None
 
     for step in range(iters + extra):
+        if control is not None:
+            tuning = control(step)
+            w_wire = tuning.get("w_wire", w_wire)
+            w_locality = tuning.get("w_locality", w_locality)
+            w_spread = tuning.get("w_spread", w_spread)
+            w_bound = tuning.get("w_bound", w_bound)
+            w_keep = tuning.get("w_keep", w_keep)
+            w_plane = tuning.get("w_plane", w_plane)
+            w_plane_sep = tuning.get("w_plane_sep", w_plane_sep)
         if step >= iters:
             # Polish: turns and sides frozen, the legalizer's slots, a decaying step.
             if frozen is None:
@@ -587,7 +614,7 @@ def global_place(
         if frozen is not None:
             bound = slot_bound(pos, frozen, width, height, movable_f)
 
-        loss = wl + w_spread * overlap + w_bound * bound
+        loss = w_wire * wl + w_spread * overlap + w_bound * bound
         if bodies is not None and dovetail > 0.0 and frozen is None:
             # PNR_HULL_DOVETAIL: pack the hull bodies, so a notch takes a neighbour.
             loss = loss + dovetail * gp_pack(bodies, pos, p, gamma)
@@ -609,6 +636,8 @@ def global_place(
                     )
                 ).sum()
             )
+        if locality is not None:
+            loss = loss + w_locality * locality.torch(torch.stack((pin_x, pin_y), dim=-1))
         if match_sets and w_match > 0.0:
             loss = loss + w_match * length_mismatch(match_sets, pin_x, pin_y, gamma)
 
@@ -644,9 +673,14 @@ def global_place(
                 target = (height if axis == 1 else width) - extent
             loss = loss + weight * (body[i, axis] - target) ** 2
 
-        for members, anchor, radius, weight in group_terms:
+        for members, anchor, radius, weight, anchor_pin in group_terms:
             m = torch.tensor(members, dtype=torch.long)
-            d = torch.linalg.vector_norm(pos[m] - pos[anchor], dim=1)
+            target = (
+                pos[anchor]
+                if anchor_pin is None
+                else torch.stack((pin_x[anchor_pin], pin_y[anchor_pin]))
+            )
+            d = torch.linalg.vector_norm(pos[m] - target, dim=1)
             loss = loss + weight * (torch.clamp(d - radius, min=0.0) ** 2).sum()
 
         if related is not None:
@@ -680,6 +714,8 @@ def global_place(
                 exp_half.detach().tolist(),
                 float(loss.detach()),
                 dict(
+                    w_wire=w_wire,
+                    w_locality=w_locality,
                     gamma=gamma,
                     spread=spread,
                     w_spread=w_spread,
@@ -695,6 +731,8 @@ def global_place(
             )
         if tracer is not None and tracer.due(step):
             tracer.snapshot(step, pos, p)
+        if progress is not None:
+            progress(step, pos.detach().tolist(), p.detach().tolist(), float(loss.detach()))
         loss.backward()
         opt.step()
 

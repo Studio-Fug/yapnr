@@ -9,6 +9,18 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
+- **Placement laboratory / pad-locality investigation**: live single-start objective
+  expression editing, pause/resume, frozen inputs/engine, JSONL iteration history,
+  and per-decision legalization review with canonical comments. Power-first A/B
+  captures cover converter and PD, both seeds. `PNR_PAD_LOCALITY` remains default-off:
+  distances improve, but translation regresses in three of four comparisons and
+  power placement scores regress in all four. Do not promote this candidate or
+  claim C9 fixed. A live 1,000-step run with a weight change at step 841 replayed
+  exactly. All 303 Bazel targets and 18 JavaScript cases pass. See
+  `docs/design/pad-locality-lab.md` and `yapnr/viewer/PLACEMENT-LAB.md`.
+  Next: tune continuous placement to avoid the later legalizer displacements,
+  protect the unchanged power objective, then run native routing/electrical A/B.
+
 - **Mini validator/engine repair**: source-relation preflight catches hierarchy
   anchor loss before synthesis; native polygons constrain placement, routing and
   writeback; independent power coverage requires every capacitor branch. Copper

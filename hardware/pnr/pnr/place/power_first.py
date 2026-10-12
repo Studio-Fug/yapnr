@@ -558,6 +558,10 @@ class StagedPlacer:
                                 con.weight or 1.0,
                             )
                         )
+        from .pad_locality import Cost, anchor_index
+        from .pad_locality import enabled as locality_enabled
+
+        self.locality = Cost(graph, constraints) if locality_enabled() else None
         self.groups = []
         for con in constraints.constraints:
             if con.kind != "group" or con.params.get("anchor") not in idx:
@@ -572,6 +576,11 @@ class StagedPlacer:
                         idx[con.params["anchor"]],
                         radius - margin,
                         con.weight or 1.0,
+                        (
+                            anchor_index(graph, con.params["anchor"], con.params.get("anchor_pad"))
+                            if self.locality is not None
+                            else None
+                        ),
                     )
                 )
         keep = keepout_rects(graph, constraints, poses)
@@ -656,12 +665,21 @@ class StagedPlacer:
         bound = (bound * self.movable).sum(-1)
         rho = RHO_RAMP[0] + (RHO_RAMP[1] - RHO_RAMP[0]) * frac
         group = torch.zeros_like(J)
-        for members, anchor, reach, weight in self.groups:
-            d = torch.linalg.vector_norm(pos[:, members] - pos[:, anchor : anchor + 1], dim=-1)
+        for members, anchor, reach, weight, anchor_pin in self.groups:
+            target = (
+                pos[:, anchor : anchor + 1]
+                if anchor_pin is None
+                else xy[:, anchor_pin : anchor_pin + 1]
+            )
+            d = torch.linalg.vector_norm(pos[:, members] - target, dim=-1)
             group = group + weight * (torch.clamp(d - reach, min=0.0) ** 2).sum(-1)
         loss = (
             J + guard + w_ov * overlap + w["w_bound"] * W * bound + w["w_group"] * W * rho * group
         )
+        if self.locality is not None and stage == 3:
+            from .pad_locality import WEIGHT
+
+            loss = loss + W * WEIGHT * self.locality.torch(xy)
         if self.pairs is not None:
             from .model import PAIR_EPS2
 
@@ -1086,6 +1104,8 @@ def staged_place(
             continuous={c.ref: [c.pos[0], c.pos[1], c.rot] for c in cont.components},
         )
         try:
+            from .pad_locality import legalize_kwargs as locality_kwargs
+
             out["placed"] = legalize(
                 cont,
                 width,
@@ -1106,6 +1126,7 @@ def staged_place(
                 **({} if pad_edge is None else dict(pad_edge=pad_edge)),
                 **({} if not margins else dict(margins=margins)),
                 **legal_options.legalize_kwargs(constraints, graph),
+                **locality_kwargs(cont, constraints),
             )
         except LegalizationError as exc:
             out["error"] = exc

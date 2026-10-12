@@ -315,6 +315,9 @@ class Viewer:
 
     def _init_cost(self):
         from yapnr.viewer.services.cost import CostService
+        from yapnr.viewer.services.placement_lab import PlacementLab
+
+        self.placement_lab = PlacementLab(self.root, self.runtime, self.cfg.capture_root)
 
         self.cost_service = CostService(
             self.root,
@@ -1107,6 +1110,7 @@ class Viewer:
 
     # ------------------------------------------------------------------ lifecycle
     def stop(self, signum, frame):
+        self.placement_lab.close()
         # Kill a running KiCad extractor and drop its temporary file (a SIGKILLed viewer leaves
         # them to the next sweep).
         for proc, tmp in list(self.extracting.items()):
@@ -1180,6 +1184,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_about(self, path):
         return self.send(self.viewer.about())
+
+    def get_placement_lab(self, path):
+        q = self.query()
+        try:
+            lab = self.viewer.placement_lab
+            return self.send(
+                lab.get(q.get("id", [""])[0], q.get("step", [None])[0])
+                if path.endswith("/run")
+                else lab.catalog()
+            )
+        except (ValueError, KeyError, TypeError, FileNotFoundError) as exc:
+            return self.send(dict(error=str(exc)), 400)
 
     def get_component_cost(self, path):
         q = self.query()
@@ -1441,6 +1457,8 @@ class Handler(BaseHTTPRequestHandler):
         # rejected too (other POSTs allow it).
         if self.path == "/api/agent/chat" and origin not in v.origins():
             return self.send({"error": "origin required for the assistant"}, 403)
+        if self.path == "/api/placement-lab" and origin not in v.origins():
+            return self.send({"error": "origin required for placement runs"}, 403)
         notes_path = self.path == "/api/notes" or self.path.startswith("/api/notes/")
         if notes_path and origin not in v.origins():
             return self.send({"error": "origin required for notes"}, 403)
@@ -1461,6 +1479,8 @@ class Handler(BaseHTTPRequestHandler):
                 if v.agent_service is None:
                     return self.agent_disabled()
                 return self.send(v.agent_service.cancel(body.get("session")))
+            if self.path == "/api/placement-lab":
+                return self.send(v.placement_lab.command(body))
             if self.path == "/api/controls":
                 return self.post_controls(body)
             if self.path == "/api/pin":
@@ -1601,6 +1621,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 GET_ROUTES = {
+    "/api/placement-lab": Handler.get_placement_lab,
+    "/api/placement-lab/run": Handler.get_placement_lab,
     "/api/about": Handler.get_about,
     "/api/component-cost": Handler.get_component_cost,
     "/api/schematic": Handler.get_schematic,

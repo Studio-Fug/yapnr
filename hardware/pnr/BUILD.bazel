@@ -3181,3 +3181,13 @@ py_test(
     main = "tests/test_native_match.py",
     deps = [":pnr", ":pnr_detail"],
 )
+
+py_test(
+    name = "pad_locality_test",
+    size = "small",
+    srcs = ["tests/test_pad_locality.py"],
+    data = ["testdata/power_topology/converter.json"],
+    imports = ["."],
+    main = "tests/test_pad_locality.py",
+    deps = [":pnr", ":pnr_place", requirement("numpy"), requirement("torch")],
+)

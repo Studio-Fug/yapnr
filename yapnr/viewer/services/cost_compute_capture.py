@@ -22,6 +22,8 @@ OPTIMIZER_FIELD_SCOPE = (
     "Actual optimizer soft-state field; rotation mixtures and other components held fixed"
 )
 TERM_LABELS = {
+    "pad_locality": "Pad locality",
+    "soft_rules": "Authored soft rules",
     "target_displacement": "Distance to continuous target",
     "channel_shortage": "Surface escape shortage",
     "local_capacitor_loop": "Local capacitor loop",
@@ -70,6 +72,9 @@ def global_objective(d, g, ref):
         inflation=d["inflation"],
         effective_offsets=d["effective_offsets"],
         effective_half=d["effective_half"],
+        roles=d.get("roles"),
+        pf_state=d.get("pf_state"),
+        **({"effective_shift": d["effective_shift"]} if "effective_shift" in d else {}),
     )
     report = m.report()
     report["component"] = report["components"][ref]
@@ -182,6 +187,7 @@ def main(argv):
     raw = record.read_bytes()
     assert sha256(raw) == req["capture"]["sha256"]
     d = json.loads(raw)
+    os.environ["PNR_PAD_LOCALITY"] = d.get("features", {}).get("PNR_PAD_LOCALITY", "0")
     assert (
         d.get("runtime_sources", {}).get("cost_inspect.py") == model_sha
     ), "Recorded cost model does not match replay runtime"

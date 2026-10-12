@@ -9,6 +9,7 @@ def key():
         "PNR_NATIVE_OUTLINE",
         "PNR_POWER_BRANCHES",
         "PNR_POWER_CHANNELS",
+        "PNR_PAD_LOCALITY",
     )
     enabled = [name for name in flags if os.environ.get(name) == "1"]
     return ",".join(enabled) or None

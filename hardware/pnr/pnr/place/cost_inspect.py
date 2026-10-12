@@ -49,7 +49,15 @@ LABELS = (
 )
 UNITS = ("mm", "mm²", "mm²", "mm²", "mm²", "mm²", "mm²", "mm²", "mm", "mm", "mm", "mm", "mm")
 DEFAULTS = dict(
-    gamma=1.0, spread=1.0, w_spread=1.0, w_bound=20.0, w_keep=40.0, w_plane=0.05, w_plane_sep=0.35
+    w_wire=1.0,
+    w_locality=4.0,
+    gamma=1.0,
+    spread=1.0,
+    w_spread=1.0,
+    w_bound=20.0,
+    w_keep=40.0,
+    w_plane=0.05,
+    w_plane_sep=0.35,
 )
 # Power-first terms (indices 9..12) exist only when ``roles`` is given: then the
 # objective is the final (stage-3) staged loss of pnr.place.power_first, i.e.
@@ -157,6 +165,10 @@ class Objective:
         self.clearance = placement_clearance(constraints)
         self.width, self.height = outline_size(graph, constraints)
         self.keepouts = keepout_rects(graph, constraints, self.fixed)
+        from .pad_locality import Cost, anchor_index
+        from .pad_locality import enabled as locality_enabled
+
+        self.locality = Cost(graph, constraints) if locality_enabled() else None
         self.cap = []
         self.edges = []
         self.groups = []
@@ -175,6 +187,13 @@ class Objective:
                                 anchor,
                                 float(con.params.get("radius_mm") or 5.0),
                                 con.weight or 1.0,
+                                (
+                                    anchor_index(
+                                        graph, con.params["anchor"], con.params.get("anchor_pad")
+                                    )
+                                    if self.locality is not None
+                                    else None
+                                ),
                             )
                         )
             if con.kind == "capacitor_loop":
@@ -192,6 +211,8 @@ class Objective:
         self.term_keys = list(TERMS[: self.nterms]) + (
             [k for k, _, _ in RELATED_TERMS] if self.related else []
         )
+        if self.locality is not None:
+            self.term_keys.append("pad_locality")
         self.nall = len(self.term_keys)
 
     def _related(self):
@@ -238,6 +259,7 @@ class Objective:
         """Final-stage staged loss factors; without pf_state the stage-3 end values are used and the guard is 0."""
         from pnr.constraints import Enforcement
 
+        from .pad_locality import anchor_index
         from .power_first import (
             EPS,
             GAP_EPS2,
@@ -276,7 +298,21 @@ class Objective:
                 for ref in con.refs:
                     if ref in self.index and self.index[ref] != anchor:
                         self.pf_groups.append(
-                            (self.index[ref], anchor, radius - margin, con.weight or 1.0)
+                            (
+                                self.index[ref],
+                                anchor,
+                                radius - margin,
+                                con.weight or 1.0,
+                                (
+                                    anchor_index(
+                                        self.graph,
+                                        con.params["anchor"],
+                                        con.params.get("anchor_pad"),
+                                    )
+                                    if self.locality is not None
+                                    else None
+                                ),
+                            )
                         )
 
     def evaluate(self, positions=None):
@@ -310,7 +346,7 @@ class Objective:
         for net in self.nets:
             lo, hi = bbox(net["pins"])
             if pf is None:
-                add(0, (hi - lo).sum(1), net["owners"])
+                add(0, (hi - lo).sum(1), net["owners"], self.cfg["w_wire"])
             if net["plane"]:
                 boxes.append((lo, hi, net["owners"]))
                 add(3, np.prod(hi - lo, axis=1), net["owners"], self.cfg["w_plane"])
@@ -372,10 +408,17 @@ class Objective:
                 else (self.height if axis else self.width) - extent
             )
             add(5, (body[:, i, axis] - target) ** 2, [i], weight)
-        for i, j, radius, weight in self.groups if pf is None else self.pf_groups:
+        for i, j, radius, weight, anchor_pin in self.groups if pf is None else self.pf_groups:
             add(
                 6,
-                np.maximum(np.linalg.norm(pos[:, i] - pos[:, j], axis=1) - radius, 0) ** 2,
+                np.maximum(
+                    np.linalg.norm(
+                        pos[:, i] - (pos[:, j] if anchor_pin is None else pp[:, anchor_pin]), axis=1
+                    )
+                    - radius,
+                    0,
+                )
+                ** 2,
                 [i, j],
                 weight * (1.0 if pf is None else pf["group"]),
             )
@@ -402,6 +445,21 @@ class Objective:
                 anchors = pos[:, who, data] + offsets[None]
                 spread = ((anchors - anchors.mean(1, keepdims=True)) ** 2).sum(1)
                 add(self.nterms + 1, spread, who, weight)
+        if self.locality is not None:
+            from .pad_locality import WEIGHT
+
+            weight = (
+                WEIGHT * float(self.roles["W"])
+                if self.roles is not None
+                else self.cfg["w_locality"]
+            )
+            for relation, value in self.locality.numpy_terms(pp):
+                add(
+                    self.nall - 1,
+                    value,
+                    [self.index[relation["member"]], self.index[relation["anchor"]]],
+                    weight,
+                )
         return raw, weighted
 
     def report(self):
@@ -409,7 +467,7 @@ class Objective:
         components = {}
         for i, ref in enumerate(self.refs):
             weights = [
-                [1.0],
+                [self.cfg["w_wire"]],
                 [self.cfg["w_spread"]],
                 [self.cfg["w_bound"]],
                 [self.cfg["w_plane"]],
@@ -441,6 +499,20 @@ class Objective:
                 weights += extra
                 labels += [label for _, label, _ in RELATED_TERMS]
                 units += [unit for _, _, unit in RELATED_TERMS]
+            if self.locality is not None:
+                from .pad_locality import WEIGHT
+
+                weights.append(
+                    [
+                        (
+                            WEIGHT * float(self.roles["W"])
+                            if self.roles is not None
+                            else self.cfg["w_locality"]
+                        )
+                    ]
+                )
+                labels.append("Local terminal-to-pin distance")
+                units.append("mm")
             terms = [
                 dict(
                     key=k,

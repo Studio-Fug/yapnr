@@ -761,6 +761,7 @@ def legalize(
     margins: Optional[Dict[str, float]] = None,
     wire_weight: Optional[float] = None,
     wire_exempt=frozenset(),
+    locality=None,
     keep: Optional[bool] = None,
     _attempt: int = 0,
 ) -> BoardGraph:
@@ -1230,6 +1231,8 @@ def legalize(
             cost += side_weight * float(side_cost(placed))
         if wired(comp):  # PNR_LEGALIZE_HPWL
             cost += wire_weight * float(wire_cost(comp, neighbors, movable, x, y, wire_skip))
+        if locality is not None:
+            cost += float(locality(comp, neighbors, x, y))
         return cost
 
     aid = None
@@ -1826,7 +1829,7 @@ def legalize(
                                     (
                                         xx,
                                         yy,
-                                        (xx - comp.pos[0]) ** 2 + (yy - comp.pos[1]) ** 2,
+                                        (xx - target[0]) ** 2 + (yy - target[1]) ** 2,
                                         ch,
                                         np.zeros(xx.shape),
                                     )
@@ -1860,6 +1863,33 @@ def legalize(
                                     captured_fields.get(_turn), xs, ys, wire
                                 )
                             return value + wire_weight * wire
+
+                    if capturing or locality is not None:
+                        # Retain every additive term, without changing candidate selection.
+                        bound = None
+
+                        def candidate_cost(xs, ys, _base=candidate_cost, _turn=rotation):
+                            value = 0.0 if _base is None else _base(xs, ys)
+                            local = 0.0 if locality is None else locality(comp, neighbors, xs, ys)
+                            if capturing and np.asarray(xs).ndim:
+                                soft = (
+                                    0.0
+                                    if rules is None
+                                    else rules.soft_cost(
+                                        comp, {q.ref: q for q in neighbors}, xs, ys
+                                    )
+                                )
+                                soft = 0.0 if soft is None else soft
+                                array = captured_fields.get(_turn)
+                                if array is not None and len(array) == np.asarray(xs).size:
+                                    captured_fields[_turn] = np.column_stack(
+                                        (
+                                            array,
+                                            np.broadcast_to(local, np.asarray(xs).shape),
+                                            np.broadcast_to(soft, np.asarray(xs).shape),
+                                        )
+                                    )
+                            return value + local
 
                     if snap:
                         # PNR_LEGALIZE_KEEP anchor: the nearest slot; a cost capture still
@@ -2015,7 +2045,11 @@ def legalize(
                 radius *= RING_GROWTH
 
         # PNR_LEGALIZE_HPWL chooses the turn with the slot; otherwise the first turn that fits.
-        run_search = search_scored if wired(comp) else search
+        run_search = (
+            search_scored
+            if wired(comp) or (locality is not None and comp.ref in locality.refs)
+            else search
+        )
         anchored = False
         if comp.ref in anchoring:
             # PNR_LEGALIZE_KEEP: the slot at the (pushed) global pose, at the global turn; else
@@ -2121,7 +2155,8 @@ def legalize(
                 )
             raise LegalizationError(f"{comp.ref}: {error}") from error
         if capturing:
-            target = comp.pos
+            original_position = comp.pos
+            target = target_of(comp)
             position = ((c + bw / 2) * g, (r + bh / 2) * g)
             if body_shift(comp) is not None:  # offset courtyard: the pose, not the slot
                 position = slot_pose(comp, r, c, bw, bh)
@@ -2136,6 +2171,37 @@ def legalize(
                 dict(
                     ref=comp.ref,
                     target=target,
+                    original_position=original_position,
+                    original_rotation=original_rotation,
+                    placement_context=dict(
+                        clearance_mm=clearance,
+                        keepouts=[vars(k) for k in keepouts],
+                        group_limits=limits_for(comp.ref),
+                        edge_box=edge_box(comp),
+                    ),
+                    extra_terms=[
+                        dict(
+                            key="pad_locality",
+                            raw=(
+                                0.0
+                                if locality is None
+                                else float(locality(comp, neighbors, *position))
+                            ),
+                            weight=1.0,
+                        ),
+                        dict(
+                            key="soft_rules",
+                            raw=(
+                                0.0
+                                if rules is None
+                                else float(
+                                    rules.soft_cost(comp, {q.ref: q for q in neighbors}, *position)
+                                    or 0.0
+                                )
+                            ),
+                            weight=1.0,
+                        ),
+                    ],
                     position=position,
                     rotation=comp.rot,
                     neighbors=[n.ref for n in neighbors],
@@ -2249,6 +2315,10 @@ def legalize(
                     v["chosen"],
                     g,
                     channel_weight,
+                    original_position=v["original_position"],
+                    original_rotation=v["original_rotation"],
+                    placement_context=v["placement_context"],
+                    extra_terms=v["extra_terms"],
                     # PNR_LEGALIZE_HPWL: the wirelength term of a part it acted on.
                     **({} if len(v["chosen"]) < 4 else dict(wire_weight=wire_weight)),
                 )
@@ -2266,6 +2336,8 @@ def legalize(
                 hard_group_edges=list(group_edges),
                 hard_rotations=rotations,
                 backtracks=backtracks,
+                motion=record,
+                input_graph=json.loads(graph.to_json()),
                 scope="Actual per-component sequential legalizer decisions; each field retains its own previously occupied neighbors",
             ),
         )

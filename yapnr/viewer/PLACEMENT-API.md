@@ -20,6 +20,10 @@ yapnr placement validate-objective 'wirelength + 2*spread_overlap + source_const
 yapnr placement start converter --seed 0 --iterations 400 --paused
 ```
 
+A paused start publishes `initial.json` and the visible seeded initial frame before
+any optimizer update. Its history record has `kind: initialization` and
+`completed_iterations: 0`; it is not an iteration or an evaluated placement.
+
 Use the returned run `id` as `RUN` below. Run IDs are opaque strings. Read `status`
 before making changes; `control.revision` is the last **requested** revision, while
 `status.control_revision` is the last revision **consumed** by the optimizer.

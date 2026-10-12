@@ -159,6 +159,14 @@ class Locality(unittest.TestCase):
         with patch.dict(os.environ, {"PNR_PAD_LOCALITY": "1", "PNR_COST_CAPTURE_DIR": ""}):
             plain = global_place(g, c, 20, 20, seed=12, iters=20)
             observed = []
+            initial = []
+            controls = []
+
+            def observe_control(step):
+                self.assertEqual(len(initial), 1)
+                controls.append(step)
+                return {}
+
             observed_result = global_place(
                 g,
                 c,
@@ -166,11 +174,14 @@ class Locality(unittest.TestCase):
                 20,
                 seed=12,
                 iters=20,
-                control=lambda step: {},
-                progress=lambda step, pos, p, loss: observed.append((step, loss)),
+                initialized=lambda pos, p: initial.append((pos, p)),
+                control=observe_control,
+                progress=lambda step, pos, p, loss: observed.append((step, loss, pos, p)),
             )
             self.assertEqual(plain, observed_result)
             self.assertEqual(len(observed), 20)
+            self.assertEqual(controls, list(range(20)))
+            self.assertEqual(initial[0], (observed[0][2], observed[0][3]))
 
             def schedule(step):
                 return {"w_locality": 4 if step < 8 else 20}

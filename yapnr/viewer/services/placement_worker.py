@@ -94,6 +94,25 @@ def main(folder):
             write(folder / "status.json", status)
             time.sleep(0.15)
 
+    def initial_snapshot(positions, probabilities):
+        frame = copy.deepcopy(graph)
+        for comp, point, p in zip(frame.components, positions, probabilities):
+            comp.pos = point
+            comp.rot = 90 * max(range(4), key=lambda i: p[i])
+        initial = dict(
+            kind="initialization",
+            step=0,
+            completed_iterations=0,
+            graph=json.loads(frame.to_json()),
+            positions=positions,
+            rotation_probabilities=probabilities,
+            scope="Seeded initial placement; zero optimizer updates; shown rotations are argmax of soft mixture",
+        )
+        write(folder / "initial.json", initial)
+        write(folder / "frame.json", initial)
+        trace.write(json.dumps({k: v for k, v in initial.items() if k != "graph"}) + "\n")
+        trace.flush()
+
     def progress(step, positions, probabilities, loss):
         frame = copy.deepcopy(graph)
         for comp, point, p in zip(frame.components, positions, probabilities):
@@ -136,6 +155,7 @@ def main(folder):
             iters=request["iterations"],
             control=control,
             progress=progress,
+            initialized=initial_snapshot,
             **weights
         )
         cont = copy.deepcopy(graph)

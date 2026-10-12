@@ -17,6 +17,7 @@ EVIDENCE = (
     "runtime.json",
     "status.json",
     "control.json",
+    "initial.json",
     "frame.json",
     "continuous.json",
     "placed.json",

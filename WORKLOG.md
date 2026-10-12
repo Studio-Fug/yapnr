@@ -9,6 +9,11 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
+- **Iteration-zero review**: paused starts now show the actual seeded solver poses
+  before any loss evaluation or update. `initial.json` and a typed initialization
+  history record preserve those poses and rotation probabilities. The observational
+  callback leaves the final solver result unchanged.
+
 - **Placement lab agent API**: versioned HTTP contract, stdlib Python client and
   `yapnr placement` JSON CLI share the live lab service and canonical notes. Agents
   can register inputs, start paused, edit/pause/resume/stop, poll consumed revisions,

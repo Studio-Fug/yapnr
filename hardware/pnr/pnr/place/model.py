@@ -207,6 +207,7 @@ def global_place(
     w_locality: float = 4.0,
     control=None,
     progress=None,
+    initialized=None,
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
     pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
@@ -506,6 +507,10 @@ def global_place(
     # None unless PNR_TRACE_DIR is set (pnr.trace); the polish iterations are traced too.
     tracer = placement_tracer(comps, iters + extra)
     frozen = None
+
+    if initialized is not None:
+        # Observe the real seeded state before any control wait, loss or Adam update.
+        initialized(full_pos().detach().tolist(), rot_probs(2.0).detach().tolist())
 
     for step in range(iters + extra):
         if control is not None:

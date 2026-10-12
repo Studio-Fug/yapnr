@@ -342,6 +342,7 @@ class PlacementLab:
                 "status.json",
                 "runtime.json",
                 "iterations.jsonl",
+                "initial.json",
                 "continuous.json",
                 "placed.json",
                 "review.json",

@@ -9,6 +9,21 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
+- **SMPS closure investigation**: default-off constraint-derived placement cost,
+  copper-only pad ingest, compact current-sized source collectors and native
+  array fit. All 310
+  Bazel targets pass; native collector regressions pass at all four rotations.
+  Six of eight two-cell prototype placements pass nine geometric SMPS checks and
+  legality, but the routed first seed has 12 opens; the best corrected routed
+  candidate still has five opens. Neither qualifies. Exact-board ripple,
+  stability and thermal evidence remain missing. See
+  [measured scope and native animation](docs/design/smps-closure.md).
+  Coupled feasibility traced to hard internal group radii and symmetric array
+  reserves: softening only those heuristics yields six legal full placements
+  passing all nine geometry checks. Two distinct cores are routing under native
+  array checks, with all current/clearance/SMPS gates unchanged. Do not repeat
+  frozen failures or call placement passes full qualification.
+
 - **SMPS validator**: ten guidance-derived check types, 28 provisional Mini profile
   requirements, native filled-plane coverage, explicit track paths, and exact-board
   ripple/stability/thermal evidence gates. Fourteen fault-injection tests pass.

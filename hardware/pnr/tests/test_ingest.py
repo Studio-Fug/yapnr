@@ -32,6 +32,44 @@ def _frozen_graph() -> BoardGraph:
 
 @unittest.skipUnless(importlib.util.find_spec("pcbnew"), "requires native KiCad")
 class BodyAttributeTest(unittest.TestCase):
+    def test_paste_apertures_are_not_copper_but_drills_remain(self):
+        from unittest.mock import patch
+
+        import pcbnew as k
+
+        from pnr.ingest import _component, _Frame
+
+        board = k.BOARD()
+        fp = k.FOOTPRINT(board)
+        board.Add(fp)
+        fp.SetPosition(k.VECTOR2I(10000000, 10000000))
+        for name, layer, hole in [
+            ("1", k.F_Cu, False),
+            ("paste", k.F_Paste, False),
+            ("hole", k.F_Mask, True),
+        ]:
+            p = k.PAD(fp)
+            p.SetNumber(name)
+            p.SetSize(k.VECTOR2I(500000, 500000))
+            p.SetShape(k.PAD_SHAPE_CIRCLE)
+            p.SetAttribute(k.PAD_ATTRIB_NPTH if hole else k.PAD_ATTRIB_SMD)
+            if hole:
+                p.SetDrillSize(k.VECTOR2I(300000, 300000))
+            else:
+                p.SetDrillSize(k.VECTOR2I(0, 0))
+            layers = k.LSET()
+            layers.AddLayer(layer)
+            p.SetLayerSet(layers)
+            fp.Add(p)
+            p.SetPosition(fp.GetPosition())
+        with patch.dict(os.environ, {"PNR_INGEST_COPPER_PADS": "0"}):
+            self.assertEqual(len(_component(fp, _Frame(0, 0)).pads), 3)
+        with patch.dict(os.environ, {"PNR_INGEST_COPPER_PADS": "1"}):
+            pads = _component(fp, _Frame(0, 0)).pads
+            self.assertEqual(len(pads), 2)
+            self.assertTrue(any(p.name == "1" for p in pads))
+            self.assertTrue(any(p.drill_size == (0.3, 0.3) for p in pads))
+
     def test_native_smd_attribute_is_preserved(self):
         import pcbnew
 

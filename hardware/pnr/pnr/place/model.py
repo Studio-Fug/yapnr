@@ -419,6 +419,9 @@ def global_place(
     from .pad_locality import enabled as locality_enabled
 
     locality = Cost(graph, constraints) if locality_enabled() else None
+    from . import smps_cost
+
+    smps = smps_cost.Cost(graph, constraints) if smps_cost.enabled() else None
     match_sets = matched_pin_sets(graph, constraints, pin_key)
     batched_wl = None
     if os.environ.get("PNR_BATCHED_WIRELENGTH") == "1":
@@ -659,6 +662,8 @@ def global_place(
             )
         if locality is not None:
             loss = loss + w_locality * locality.torch(torch.stack((pin_x, pin_y), dim=-1))
+        if smps is not None:
+            loss = loss + smps_cost.WEIGHT * smps.torch(torch.stack((pin_x, pin_y), dim=-1))
         if match_sets and w_match > 0.0:
             loss = loss + w_match * length_mismatch(match_sets, pin_x, pin_y, gamma)
 

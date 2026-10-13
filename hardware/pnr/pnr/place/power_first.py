@@ -562,6 +562,9 @@ class StagedPlacer:
         from .pad_locality import enabled as locality_enabled
 
         self.locality = Cost(graph, constraints) if locality_enabled() else None
+        from . import smps_cost
+
+        self.smps = smps_cost.Cost(graph, constraints) if smps_cost.enabled() else None
         self.groups = []
         for con in constraints.constraints:
             from pnr.placement_banks import enabled as banks_enabled
@@ -684,6 +687,10 @@ class StagedPlacer:
             from .pad_locality import WEIGHT
 
             loss = loss + W * WEIGHT * self.locality.torch(xy)
+        if self.smps is not None:
+            from .smps_cost import WEIGHT as SMPS_WEIGHT
+
+            loss = loss + SMPS_WEIGHT * self.smps.torch(xy)
         if self.pairs is not None:
             from .model import PAIR_EPS2
 

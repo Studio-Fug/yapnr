@@ -1,9 +1,11 @@
 """Regression: source intent survives ref renumbering and scales with current."""
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace as NS
+from unittest.mock import patch
 
 from pnr.plane_intent import read_annotations, resolve, size_array
 
@@ -76,6 +78,15 @@ class IntentTests(unittest.TestCase):
         self.assertEqual(c.courtyard, first)
         reserve_array_space(g, [dict(intent, rms_current_a=10, peak_current_a=20)], FAB, 0.2)
         self.assertGreater(max(c.courtyard), max(first))
+
+        # Native-fit mode defers occupancy to actual bank construction, but
+        # malformed/unbuildable current-sized plans still fail at placement.
+        c.courtyard = (2, 3)
+        with patch.dict(os.environ, PNR_PLANE_ACCESS_NATIVE_FIT="1"):
+            reserve_array_space(g, [intent], FAB, 0.2)
+            self.assertEqual(c.courtyard, (2, 3))
+            with self.assertRaisesRegex(ValueError, "source span"):
+                reserve_array_space(g, [dict(intent, max_array_span_mm=0.1)], FAB, 0.2)
 
     def test_missing_process_data_fails_closed(self):
         with self.assertRaises(KeyError):

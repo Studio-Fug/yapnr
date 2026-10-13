@@ -218,6 +218,11 @@ class Objective:
         )
         if self.locality is not None:
             self.term_keys.append("pad_locality")
+        from . import smps_cost
+
+        self.smps = smps_cost.Cost(graph, constraints) if smps_cost.enabled() else None
+        if self.smps is not None:
+            self.term_keys.append("smps_geometry")
         self.nall = len(self.term_keys)
 
     def _related(self):
@@ -464,10 +469,20 @@ class Objective:
             )
             for relation, value in self.locality.numpy_terms(pp):
                 add(
-                    self.nall - 1,
+                    self.term_keys.index("pad_locality"),
                     value,
                     [self.index[relation["member"]], self.index[relation["anchor"]]],
                     weight,
+                )
+        if self.smps is not None:
+            from .smps_cost import WEIGHT
+
+            for row, value in self.smps.terms(pp):
+                add(
+                    self.term_keys.index("smps_geometry"),
+                    value,
+                    [self.index[r] for r in row["refs"]],
+                    WEIGHT,
                 )
         return raw, weighted
 
@@ -522,6 +537,12 @@ class Objective:
                 )
                 labels.append("Local terminal-to-pin distance")
                 units.append("mm")
+            if self.smps is not None:
+                from .smps_cost import WEIGHT
+
+                weights.append([WEIGHT])
+                labels.append("SMPS terminal and loop debt")
+                units.append("normalized debt²")
             terms = [
                 dict(
                     key=k,

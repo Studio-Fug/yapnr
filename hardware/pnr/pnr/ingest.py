@@ -18,6 +18,7 @@ and is unit-testable without KiCad. Run this module under that interpreter:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from typing import List, Optional, Tuple
 
@@ -287,6 +288,14 @@ def _rule_areas(fp, frame: _Frame, pos, rot: float, bottom: bool) -> List[dict]:
     return out
 
 
+def _routing_pad(pad):
+    """Opt-in: paste/mask-only apertures are not routing terminals; retain holes."""
+    if os.environ.get("PNR_INGEST_COPPER_PADS") != "1":
+        return True
+    drill = pad.GetDrillSize()
+    return bool(list(pad.GetLayerSet().CuStack()) or drill.x or drill.y)
+
+
 def _component(fp, frame: _Frame) -> Component:
     import pcbnew
 
@@ -329,7 +338,7 @@ def _component(fp, frame: _Frame) -> Component:
     local_fp = pcbnew.FOOTPRINT(fp)
     local_fp.SetOrientationDegrees(0)
     origin = local_fp.GetPosition()
-    items = list(local_fp.Pads()) + [
+    items = [pad for pad in local_fp.Pads() if _routing_pad(pad)] + [
         item
         for item in local_fp.GraphicalItems()
         if item.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS)
@@ -354,6 +363,8 @@ def _component(fp, frame: _Frame) -> Component:
 
     pads: List[Pad] = []
     for pad in fp.Pads():
+        if not _routing_pad(pad):
+            continue
         # Pad centre in the footprint's unrotated local frame. KiCad 9 renamed
         # the old GetPos0(); GetFPRelativePosition() is the current accessor.
         get_rel = getattr(pad, "GetFPRelativePosition", None) or pad.GetPos0
@@ -671,6 +682,8 @@ def build_graph(board, name: Optional[str] = None) -> BoardGraph:
     for fp in board.GetFootprints():
         ref = fp.GetReference()
         for pad in fp.Pads():
+            if not _routing_pad(pad):
+                continue
             code = pad.GetNetCode()
             if code == 0:
                 continue

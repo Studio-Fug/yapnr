@@ -214,7 +214,12 @@ class Slots:
 
 
 def legalize_kwargs(graph, constraints):
-    return {"locality": Slots(graph, constraints)} if enabled() else {}
+    slot = Slots(graph, constraints) if enabled() else None
+    from . import smps_cost
+
+    if smps_cost.enabled():
+        slot = smps_cost.Slots(graph, constraints, slot)
+    return {"locality": slot} if slot is not None else {}
 
 
 def anchor_index(graph, ref, pad):

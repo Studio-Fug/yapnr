@@ -3229,3 +3229,11 @@ py_test(
     main = "tests/test_smps.py",
     deps = [":pnr", ":pnr_hier"],
 )
+
+py_test(
+    name = "smps_placement_test",
+    size = "small",
+    srcs = ["tests/test_smps_placement.py"],
+    main = "tests/test_smps_placement.py",
+    deps = [":pnr", ":pnr_place", requirement("numpy"), requirement("torch")],
+)

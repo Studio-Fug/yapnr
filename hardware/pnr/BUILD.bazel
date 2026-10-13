@@ -2607,7 +2607,9 @@ py_test(
 # Opt-in hard edge alignment: parser, legalizer band, violations, unchanged soft path.
 py_test(
     name = "edge_hard_test",
-    size = "small",
+    # Multi-seed/cardinal placement takes 41 s locally and 60 s on shared CI;
+    # keep all default repairs and give the complete integration test 300 s.
+    size = "medium",
     srcs = ["tests/test_edge_hard.py"],
     imports = ["."],
     main = "tests/test_edge_hard.py",
@@ -2639,7 +2641,10 @@ py_test(
 # macros (line groups, blocks), the checks, and an unchanged path without them.
 py_test(
     name = "region_align_test",
-    size = "medium",
+    # Full multi-seed placement with default repairs takes 174 s on the development
+    # Mac and exceeds medium's 300 s on shared ARM64 CI. Preserve every seed,
+    # iteration and repair; large gives this integration suite 900 s.
+    size = "large",
     srcs = ["tests/test_region_align.py"],
     # pnr.feedback is not in :pnr yet (PR3b); the feedback-children test imports it from source.
     data = glob(["pnr/**/*.py"]),

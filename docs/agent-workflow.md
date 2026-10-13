@@ -620,3 +620,24 @@ hashes. Changing settings selects different evidence; checks older than one hour
 are labeled historical and require refresh. The packet remains downloadable for
 supplier discussion even when sourcing is unresolved; file review is not approval
 to order unavailable parts.
+
+## Algorithm feedback resolution
+
+Use `yapnr feedback` for review-tool feedback about engine behavior. The parent
+owns the acceptance criteria and worked failing baseline. `plan` snapshots the
+validator/input files and executes that baseline. `dispatch` produces a separate
+worker task. The worker returns a PR and committed before/after visuals; `submit`
+records its exact head. `verify` independently fetches that PR head, checks out a
+clean isolated repository and executes every pinned criterion. Only this all-pass
+transition marks feedback addressed. Failed criteria are included in the next
+worker task. `run --worker-command JSON_ARGV --max-attempts N --timeout SECONDS`
+executes that delegation/retry loop only when explicitly authorized.
+
+Query current revisions with `yapnr feedback query`. `pause`, `resume`, `clarify`,
+`answer` and `recover` use revision guards. Changes to feedback, parent input files
+or PR heads revoke closure. Legacy “tested” review replies remain unverified.
+Native DRC/electrical claims require actual native checks in the plan; a synthetic
+worked example cannot satisfy them. The guide at `docs/feedback-resolution.md`
+contains exact plan/submission schemas, the adapter contract and reproducible
+partial-fix versus full-fix examples. These instructions also apply when working
+from the container: the CLI is packaged; use the pinned source guide for examples.

@@ -173,6 +173,20 @@ DUT FDTD and clean PCB DRC cannot satisfy a coaxial mating-plane assembly gate.
 Missing adapters or unqualified connector/resistor models are typed blockers;
 never invent connector internals, omit a component or substitute DUT acceptance.
 
+## Resolving algorithm feedback
+
+Use `yapnr feedback query` to reconcile open review items. Follow the executable
+[parent/worker protocol](docs/feedback-resolution.md): lock parent-authored
+criteria, validator files and a worked failing baseline; dispatch a separate
+implementation worker; obtain its PR with exact-commit before/after visuals; then
+independently run `yapnr feedback verify`. Retry with the recorded failed criteria
+until all checks pass or a real clarification, pause or resource budget stops work.
+Neither a worker report, human agreement nor a legacy “tested” response closes an
+item. Changed feedback, pinned inputs or PR heads invalidate its closure. Do not
+weaken the acceptance plan to make an implementation pass. Recording feedback
+never authorizes paid model calls; `yapnr feedback run` requires explicit execution
+authorization and a bounded worker adapter. See the guide for the exact schemas.
+
 ## Escalation and completion
 
 When progress stops, write `reports/fixup.md`: failing artifact/requirements,

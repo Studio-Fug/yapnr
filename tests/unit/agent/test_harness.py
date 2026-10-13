@@ -65,6 +65,24 @@ class HarnessTest(unittest.TestCase):
         self.manager.tick("article")
         self.manager.tick("article")
 
+    def test_open_feedback_continues_past_generic_complete_but_pause_stops(self):
+        from yapnr.feedback import Feedback
+
+        store = Feedback(self.root)
+        item = store.add("Resolve component access", identity="access")
+        state = workflow.query(self.root)
+        state.update(state="complete", revision=1)
+        with patch.object(harness, "query", return_value=state):
+            self.tick()
+        posts = [d for p, d, _ in self.calls if "/prompt_async" in p]
+        self.assertEqual(len(posts), 1)
+        self.assertIn("access", posts[0]["parts"][0]["text"])
+        store.control("access", item["revision"], "pause")
+        self.calls.clear()
+        self.tick()
+        self.assertEqual(self.calls, [])
+        self.assertEqual(harness.read(self.root)["status"], "waiting_feedback")
+
     def test_idle_continues_once_with_same_model_and_audited_synthetic_message(self):
         self.tick()
         posts = [d for p, d, _ in self.calls if "/prompt_async" in p]

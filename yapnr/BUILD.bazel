@@ -39,6 +39,7 @@ py_library(
         "__init__.py",
         "events.py",
         "experiments.py",
+        "feedback.py",
         "frontends/__init__.py",
     ],
     imports = [".."],

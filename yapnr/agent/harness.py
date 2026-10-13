@@ -2,6 +2,7 @@
 
 import hashlib
 import http.client
+import json
 import threading
 import time
 import uuid
@@ -172,6 +173,18 @@ class Manager:
             if info.get("directory") != self.directory(name):
                 raise ValueError("Harness session belongs to another project")
             workflow = query(root)
+            from yapnr.feedback import Feedback
+
+            pending_feedback = [
+                item for item in Feedback(root).query()["items"] if item["state"] != "addressed"
+            ]
+            if any(
+                item.get("paused") or item["state"] in ("clarification", "exhausted")
+                for item in pending_feedback
+            ):
+                self.update(root, epoch, status="waiting_feedback")
+                return
+
             statuses = self.remote("/session/status" + suffix, None, None)
             busy = statuses.get(session, {}).get("type", "idle") != "idle"
             for resource in ("question", "permission"):
@@ -205,7 +218,7 @@ class Manager:
                     self.update(root, epoch, status="waiting_artifact_review")
                     return
             stage = workflow["state"]
-            if stage in CHECKPOINTS:
+            if stage in CHECKPOINTS and (stage != "complete" or not pending_feedback):
                 checkpoint = stage + ":" + str(workflow["revision"])
                 if value.get("checkpoint") != checkpoint:
                     self.review_artifacts(root, stage, workflow["revision"])
@@ -358,7 +371,24 @@ class Manager:
                         "text": "Workflow harness continuation. Continue from the recorded state "
                         + stage
                         + " to the next genuine user-review checkpoint. "
-                        + INSTRUCTIONS,
+                        + INSTRUCTIONS
+                        + (
+                            " Pending algorithm feedback: "
+                            + json.dumps(
+                                [
+                                    {
+                                        "id": item["id"],
+                                        "state": item["state"],
+                                        "next_action": item["next_action"],
+                                    }
+                                    for item in pending_feedback
+                                ]
+                            )
+                            + ". Follow `yapnr feedback` parent/worker protocol; "
+                            "implementation or human agreement cannot close these items."
+                            if pending_feedback
+                            else ""
+                        ),
                     }
                 ],
             }

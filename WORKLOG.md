@@ -3,11 +3,18 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-13 (PR #100 default activation and native regression comparison).
+Last updated: 2026-10-13 (evidence-gated feedback resolution).
 PR #99 merged into main at `5d1a07c1`; its engineering workbench and manufacturing
 follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `e6e3fb64`.
 
 ## In progress
+
+- **Feedback resolution**: durable review migration, parent-pinned validators and
+  worked baseline, separate worker dispatch, exact-PR-head independent execution,
+  retry/budget/pause handling, manifest evidence and review UI. Synthetic R5/R6/Q1
+  examples distinguish a partial fix from a full pass; they make no native routing
+  claim. Affected unit tests pass; parent independent acceptance and full Bazel
+  validation are in progress. See [protocol and receipts](docs/feedback-resolution.md).
 
 - **PR #100 default activation**: all thirteen new Boolean repairs enabled with
   explicit opt-outs; alternating contextual search and diverse portfolios selected.

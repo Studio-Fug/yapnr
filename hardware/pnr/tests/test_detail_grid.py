@@ -261,6 +261,32 @@ class WideCopperRecordedLaterTest(unittest.TestCase):
     item's own extent, once :meth:`RouteGrid.reserve_wide_pad_clearance` runs
     again, as :func:`pnr.route.detail.maze.route` does before routing."""
 
+    def test_medium_width_track_clears_diagonal_fanout_tail(self):
+        from pnr.route.detail.joint_escape import _occupied
+
+        for layer in (0, 1):
+            g = RouteGrid(3, 3, 0.25, clearance=0.1, track_width=0.1)
+            g.net_widths = {"SIGNAL": 0.1, "POWER": 0.25}
+            g.reserve_wide_pad_clearance()
+            self.assertNotIn("POWER", g.wide_pad_net)
+            a, b = (1.15, 1.225), (0.375, 1.625)
+            for cell in _occupied(g, [(layer, a, b, 0.1)], [], 1):
+                g.pad_net[cell] = "SIGNAL"
+            # The old centre-only halo admits a rail just 0.04 mm from the
+            # diagonal tail; its width is below track+pitch but above track.
+            cell = g.cell_of(0.875, 1.125)
+            self.assertTrue(g.passable(layer, *cell, "POWER"))
+            g.escape_segments.append((layer, "SIGNAL", a, b))
+            g.reserve_wide_pad_clearance()
+            self.assertNotIn("SIGNAL", g.wide_pad_net)
+            self.assertFalse(g.passable(layer, *cell, "POWER"))
+            self.assertTrue(g.passable(1 - layer, *cell, "POWER"))
+            for la, start, end in _free_edges(g, "POWER"):
+                if la == layer:
+                    self.assertGreaterEqual(
+                        _segment_distance(start, end, a, b), 0.05 + 0.1 + 0.125 - 1e-9
+                    )
+
     def test_pad_added_after_the_tables(self):
         from pnr.route.detail.grid import Rect
         from pnr.route.detail.maze import route
@@ -284,7 +310,7 @@ class WideCopperRecordedLaterTest(unittest.TestCase):
 
         for seed in range(6):
             rng = random.Random(seed)
-            width = rng.choice((0.525, 0.9))
+            width = rng.choice((0.275, 0.4, 0.5, 0.525, 0.9))
             g = RouteGrid(6, 6, 0.25, clearance=0.2, track_width=0.25, via_radius=0.3)
             g.net_widths = {"W": width, "E": rng.choice((0.25, 0.4))}
             g.reserve_wide_pad_clearance()

@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,9 +26,9 @@ class EnergyNativeTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.env = dict(
             os.environ,
-            PYTHONPATH=os.pathsep.join(
-                [str(HERE.parent), str(HERE), str(HERE.parents[2])] + sys.path
-            ),
+            # KiCad can embed a different Python version. Share source roots,
+            # never the controller's standard-library or site-package paths.
+            PYTHONPATH=os.pathsep.join([str(HERE.parent), str(HERE), str(HERE.parents[2])]),
         )
         subprocess.run(
             [KP, str(HERE / "gloss_fixture.py"), str(self.root / "input")],

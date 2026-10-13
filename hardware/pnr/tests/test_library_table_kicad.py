@@ -6,6 +6,7 @@ DRC clears the ``lib_footprint_issues`` violation it raises without one."""
 
 import importlib.util
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -14,6 +15,7 @@ from pathlib import Path
 from pnr.library_table import extract_footprints, library_table
 
 NATIVE = importlib.util.find_spec("pcbnew") is not None
+CLI = os.environ.get("PNR_KICAD_CLI", "kicad-cli")
 
 
 def _board(tmp):
@@ -84,7 +86,7 @@ class ExtractFootprintsTest(unittest.TestCase):
             drc_before = tmp / "before.json"
             subprocess.run(
                 [
-                    "kicad-cli",
+                    CLI,
                     "pcb",
                     "drc",
                     "--severity-all",
@@ -96,6 +98,7 @@ class ExtractFootprintsTest(unittest.TestCase):
                 ],
                 check=False,
                 capture_output=True,
+                timeout=120,
             )
             before = json.loads(drc_before.read_text())
             before_types = {v["type"] for v in before.get("violations", [])}
@@ -105,7 +108,7 @@ class ExtractFootprintsTest(unittest.TestCase):
             drc_after = tmp / "after.json"
             subprocess.run(
                 [
-                    "kicad-cli",
+                    CLI,
                     "pcb",
                     "drc",
                     "--severity-all",
@@ -117,6 +120,7 @@ class ExtractFootprintsTest(unittest.TestCase):
                 ],
                 check=False,
                 capture_output=True,
+                timeout=120,
             )
             after = json.loads(drc_after.read_text())
             after_types = {v["type"] for v in after.get("violations", [])}

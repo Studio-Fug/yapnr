@@ -1,0 +1,21 @@
+{
+  "case": "12-soc-bga-113",
+  "seed": 0,
+  "runtime_revision": "57fb816f4743de9d50d017ff7a01b6df4b4286c1",
+  "native_board_sha256": "3b9bd8d0880b244e8a33b44c37bf9c76956c7f5fe5e41f1246ee9774f4348329",
+  "crop_bounds_mm": {
+    "x_min": 57.5,
+    "y_min": 54.8,
+    "x_max": 60.4,
+    "y_max": 57.5
+  },
+  "layer": "F.Cu",
+  "scope": "Actual saved native board track and via geometry only; pads, zones and courtyards omitted.",
+  "finding": {
+    "nets": ["RMII_MDIO", "3V3A"],
+    "track_widths_mm": [0.1, 0.25],
+    "native_clearance_measured_mm": 0.04,
+    "native_clearance_required_mm": 0.1
+  },
+  "caption_limit": "Before-only debugging evidence. Corrected engine prevents this clearance failure but leaves RMII_MDIO unrouted in the bounded SoC run; no after-route qualification claimed."
+}

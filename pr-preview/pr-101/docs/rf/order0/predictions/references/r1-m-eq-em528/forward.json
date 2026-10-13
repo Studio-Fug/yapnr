@@ -1,0 +1,22 @@
+{
+ "schema": "yapnr-rf-forward/1",
+ "spec": "r1-osh-m-m-eq-em528",
+ "spec_sha256": "dd95213e35834942a596abac4efa3bdce33b844bcec5d314b49280e5b79e71dd",
+ "copper_mm": [
+  [
+   0.0,
+   9.0,
+   -0.35,
+   0.35
+  ],
+  [
+   9.0,
+   9.4,
+   -6.0,
+   6.0
+  ]
+ ],
+ "pixels": 4440,
+ "what": "R1 on M-eq-em528",
+ "substrate": "M-eq-em528"
+}

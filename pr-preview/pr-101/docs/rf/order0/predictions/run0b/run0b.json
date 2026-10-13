@@ -1,0 +1,43 @@
+{
+  "schema": "yapnr-order0-run0b/1",
+  "lines": {
+    "line": {
+      "width_mm": 0.4,
+      "coupon_family": "M",
+      "solver_db_per_cm_5ghz": 0.11711,
+      "coupon_db_per_cm_5ghz": 0.13147,
+      "delta_db_per_cm_band": [-0.00235, 0.03074]
+    },
+    "arm": {
+      "width_mm": 0.7,
+      "coupon_family": "M1.4",
+      "solver_db_per_cm_5ghz": 0.10939,
+      "coupon_db_per_cm_5ghz": 0.13187,
+      "delta_db_per_cm_band": [0.00564, 0.03903]
+    }
+  },
+  "r1": {
+    "path_mm": [
+      ["arm", 9.2],
+      ["line", 6.0]
+    ],
+    "correction_db_band": [-0.0544, -0.0038],
+    "worst_s21_raw_db": -3.2391,
+    "worst_s21_corrected_db": -3.2851,
+    "worst_s11_db": -21.341,
+    "ratio_check": {
+      "method": "the dissipated fraction scaled by alpha_coupon/alpha_solver of the 0.40 mm line",
+      "correction_db_band": [-0.0523, 0.004],
+      "worst_s21_corrected_db": -3.2831
+    }
+  },
+  "ratio_5ghz": {
+    "line": 1.1226,
+    "arm": 1.2055
+  },
+  "d_o0_11": {
+    "rule": "keep -3.4 dB if the corrected R1 clears it by >= 0.1 dB, else -3.5 dB",
+    "criterion_db": -3.4,
+    "offset_db": 0.054
+  }
+}

@@ -1,0 +1,298 @@
+{
+ "rows": [
+  {
+   "id": "d1-base",
+   "ok": false,
+   "levels": [
+    "coarse",
+    "fine",
+    "finer"
+   ],
+   "levels_ok": {
+    "coarse": false,
+    "fine": false,
+    "finer": false
+   },
+   "worst": {
+    "coarse": {
+     "|S11| max dB": -9.4404,
+     "|S21| min dB": -3.7885,
+     "|S31| min dB": -3.7885,
+     "passivity": 0.026
+    },
+    "fine": {
+     "|S11| max dB": -9.6176,
+     "|S21| min dB": -3.774,
+     "|S31| min dB": -3.774,
+     "||S21|-|S31|| dB": 0.0,
+     "passivity": 0.0265
+    },
+    "finer": {
+     "|S11| max dB": -9.6721,
+     "|S21| min dB": -3.7752,
+     "|S31| min dB": -3.7752,
+     "||S21|-|S31|| dB": 0.0,
+     "passivity": 0.0276
+    }
+   },
+   "failed": {
+    "coarse": [
+     "|S11| max dB",
+     "|S21| min dB",
+     "|S31| min dB"
+    ],
+    "fine": [
+     "|S11| max dB",
+     "|S21| min dB",
+     "|S31| min dB"
+    ],
+    "finer": [
+     "|S11| max dB",
+     "|S21| min dB",
+     "|S31| min dB"
+    ]
+   },
+   "margin_db": -5.3824,
+   "repaired_pixels": 98,
+   "pixels": 18000,
+   "drc_ok": true,
+   "footprint": {
+    "ports_joined": true,
+    "net_tie_groups": [
+     "1, 2, 3"
+    ],
+    "islands": 13,
+    "islands_without_port": 12
+   },
+   "export_ok": true,
+   "iterations": 64,
+   "stop_reason": "schedule",
+   "export_iteration": 20,
+   "t_binary_exported": 1.0841911508724478,
+   "wall_s": {
+    "coarse": 129.0,
+    "fine": 1051.7,
+    "finer": 4892.5,
+    "design": 924.8
+   },
+   "result_sha256": "9246f0e81cb52dad64d8d00e225857c023010bc9557364abda5a8f23b9934a1a"
+  },
+  {
+   "id": "d1-robust",
+   "ok": false,
+   "levels": [
+    "coarse",
+    "fine",
+    "finer"
+   ],
+   "levels_ok": {
+    "coarse": false,
+    "fine": false,
+    "finer": false
+   },
+   "worst": {
+    "coarse": {
+     "|S11| max dB": -2.2418,
+     "|S21| min dB": -7.311,
+     "|S31| min dB": -7.311,
+     "passivity": 0.0222
+    },
+    "fine": {
+     "|S11| max dB": -2.2707,
+     "|S21| min dB": -7.2816,
+     "|S31| min dB": -7.2816,
+     "||S21|-|S31|| dB": 0.0,
+     "passivity": 0.0228
+    },
+    "finer": {
+     "|S11| max dB": -2.2826,
+     "|S21| min dB": -7.2713,
+     "|S31| min dB": -7.2713,
+     "||S21|-|S31|| dB": 0.0,
+     "passivity": 0.0234
+    }
+   },
+   "failed": {
+    "coarse": [
+     "|S11| max dB",
+     "|S21| min dB",
+     "|S31| min dB"
+    ],
+    "fine": [
+     "|S11| max dB",
+     "|S21| min dB",
+     "|S31| min dB"
+    ],
+    "finer": [
+     "|S11| max dB",
+     "|S21| min dB",
+     "|S31| min dB"
+    ]
+   },
+   "margin_db": -12.7293,
+   "repaired_pixels": 266,
+   "pixels": 18000,
+   "drc_ok": true,
+   "footprint": {
+    "ports_joined": true,
+    "net_tie_groups": [
+     "1, 2, 3"
+    ],
+    "islands": 7,
+    "islands_without_port": 6
+   },
+   "export_ok": true,
+   "iterations": 70,
+   "stop_reason": "schedule",
+   "export_iteration": 65,
+   "t_binary_exported": 4.096298335560261,
+   "wall_s": {
+    "coarse": 113.6,
+    "fine": 974.6,
+    "finer": 4530.0,
+    "design": 3264.7
+   },
+   "result_sha256": "887012414f47f68fcdd267f3c94f6a58ddf4263b430809e8ff049bbb4322e89f"
+  },
+  {
+   "id": "d1-star",
+   "ok": true,
+   "levels": [
+    "coarse",
+    "fine",
+    "finer"
+   ],
+   "levels_ok": {
+    "coarse": true,
+    "fine": true,
+    "finer": true
+   },
+   "worst": {
+    "coarse": {
+     "|S11| max dB": -20.6994,
+     "|S21| min dB": -3.2446,
+     "|S31| min dB": -3.2446,
+     "passivity": 0.0346
+    },
+    "fine": {
+     "|S11| max dB": -20.8659,
+     "|S21| min dB": -3.2449,
+     "|S31| min dB": -3.2449,
+     "||S21|-|S31|| dB": 0.0,
+     "passivity": 0.0344
+    },
+    "finer": {
+     "|S11| max dB": -20.8988,
+     "|S21| min dB": -3.251,
+     "|S31| min dB": -3.251,
+     "||S21|-|S31|| dB": 0.0,
+     "passivity": 0.0355
+    }
+   },
+   "failed": {},
+   "margin_db": 0.299,
+   "repaired_pixels": 30,
+   "pixels": 18000,
+   "drc_ok": true,
+   "footprint": {
+    "ports_joined": true,
+    "net_tie_groups": [
+     "1, 2, 3"
+    ],
+    "islands": 15,
+    "islands_without_port": 14
+   },
+   "export_ok": true,
+   "iterations": 70,
+   "stop_reason": "schedule",
+   "export_iteration": 50,
+   "t_binary_exported": -0.04907087403228265,
+   "wall_s": {
+    "coarse": 102.8,
+    "fine": 790.8,
+    "finer": 3998.8,
+    "design": 4655.7
+   },
+   "result_sha256": "ad20e64315e6fabac19285ae1782c1471d381c56cc6a71d176190f3d85c7a5d7"
+  },
+  {
+   "id": "d1-sched",
+   "ok": false,
+   "levels": [
+    "coarse",
+    "fine",
+    "finer"
+   ],
+   "levels_ok": {
+    "coarse": false,
+    "fine": false,
+    "finer": false
+   },
+   "worst": {
+    "coarse": {
+     "|S11| max dB": -9.4404,
+     "|S21| min dB": -3.7885,
+     "|S31| min dB": -3.7885,
+     "passivity": 0.026
+    },
+    "fine": {
+     "|S11| max dB": -9.6176,
+     "|S21| min dB": -3.774,
+     "|S31| min dB": -3.774,
+     "||S21|-|S31|| dB": 0.0,
+     "passivity": 0.0265
+    },
+    "finer": {
+     "|S11| max dB": -9.6721,
+     "|S21| min dB": -3.7752,
+     "|S31| min dB": -3.7752,
+     "||S21|-|S31|| dB": 0.0,
+     "passivity": 0.0276
+    }
+   },
+   "failed": {
+    "coarse": [
+     "|S11| max dB",
+     "|S21| min dB",
+     "|S31| min dB"
+    ],
+    "fine": [
+     "|S11| max dB",
+     "|S21| min dB",
+     "|S31| min dB"
+    ],
+    "finer": [
+     "|S11| max dB",
+     "|S21| min dB",
+     "|S31| min dB"
+    ]
+   },
+   "margin_db": -5.3824,
+   "repaired_pixels": 98,
+   "pixels": 18000,
+   "drc_ok": true,
+   "footprint": {
+    "ports_joined": true,
+    "net_tie_groups": [
+     "1, 2, 3"
+    ],
+    "islands": 13,
+    "islands_without_port": 12
+   },
+   "export_ok": true,
+   "iterations": 75,
+   "stop_reason": "schedule",
+   "export_iteration": 20,
+   "t_binary_exported": 1.0841911508724478,
+   "wall_s": {
+    "coarse": 113.9,
+    "fine": 963.4,
+    "finer": 4666.1,
+    "design": 1336.6
+   },
+   "result_sha256": "4ea2dbef8621d3ffbd35c630cf636cd7dfe9a771786c2fbe5b1f88409d51b812"
+  }
+ ],
+ "shipped": "d1-star",
+ "why": "largest worst-case fine/finer margin 0.299 dB"
+}

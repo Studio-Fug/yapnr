@@ -1,0 +1,8 @@
+{
+ "schema": "yapnr-rf-forward/1",
+ "spec": "divider-osh-w-star-sched-w-eq-em528-fwd",
+ "spec_sha256": "93e0f3d123ef5b798d862bf4c4a94fe7c0b8a7d67cfc294c964d704fa89c1cb5",
+ "from_run": "d2-star-sched",
+ "substrate": "W-eq-em528",
+ "wide": true
+}

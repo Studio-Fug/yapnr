@@ -95,6 +95,8 @@ POLISH_STEPS = 200
 COMPACT_WIRE_WEIGHT = 4.0
 
 FLAGS = (
+    "PNR_LEGALIZE_SHOVE",
+    "PNR_PLACEMENT_BANKS",
     "PNR_GP_POLISH",
     "PNR_GP_CHANNELS",
     "PNR_POOL_SOURCE_CLAMP",
@@ -236,6 +238,9 @@ def pool_relocation_screen() -> bool:
 def active() -> dict:
     """The active switches and their values, for provenance and the trace (empty when off)."""
     out = {}
+    for name in ("LEGALIZE_SHOVE", "PLACEMENT_BANKS"):
+        if os.environ.get("PNR_" + name) == "1":
+            out[name] = True
     if gp_polish():
         out["GP_POLISH"] = POLISH_STEPS
     if gp_channels() is not None:

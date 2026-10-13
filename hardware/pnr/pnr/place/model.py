@@ -456,8 +456,13 @@ def global_place(
 
     # Grouping (soft): pull members within radius of the anchor.
     group_terms: List[Tuple[List[int], int, float, float, Optional[int]]] = []
+    from pnr import placement_banks
+
+    placement_banks.members(graph, constraints)
     for con in constraints.constraints:
         if con.kind != "group":
+            continue
+        if con.params.get("placement_bank") and not placement_banks.enabled():
             continue
         anchor = con.params.get("anchor")
         if anchor not in idx:

@@ -126,7 +126,47 @@ def draw_layout(tier, rng, ratio=None):
 
 
 def hierarchical_place(
-    graph, constraints, rules, library, seed, iters=600, pair_weights=None, geometry_of=None
+    graph,
+    constraints,
+    rules,
+    library,
+    seed,
+    iters=600,
+    pair_weights=None,
+    geometry_of=None,
+    *,
+    layout_search=None,
+):
+    """Place hierarchy; optional contextual variant search is default off.
+
+    ``layout_search`` is a LayoutSearch configuration; otherwise the
+    PNR_HIER_LAYOUT_SEARCH environment setting selects experimental methods.
+    """
+    from pnr.hier.layout_search import LayoutSearch, search
+
+    config = layout_search or LayoutSearch.from_env()
+    if config.method == "off":
+        return _hierarchical_place(
+            graph, constraints, rules, library, seed, iters, pair_weights, geometry_of
+        )
+    return search(
+        graph, constraints, rules, library, seed, iters, pair_weights, geometry_of, config
+    )
+
+
+def _hierarchical_place(
+    graph,
+    constraints,
+    rules,
+    library,
+    seed,
+    iters=600,
+    pair_weights=None,
+    geometry_of=None,
+    *,
+    selection=None,
+    warm=None,
+    frozen=False,
 ):
     """Return (flat placed graph, placement report, choice record).
 
@@ -152,6 +192,10 @@ def hierarchical_place(
         tier = library[members[0].name]
         rank, rec = draw_layout(tier, rng)
         for b in members:
+            if selection is not None:
+                tier = library[b.name]
+                rank = selection[b.name]
+                rec = tier[rank]
             sub, _, _ = instance_board(
                 source, constraints, rules, b, rec["layout"], rec["width"], rec["height"]
             )
@@ -195,22 +239,56 @@ def hierarchical_place(
 
     # Tracing only: snapshots and the legalization order name the block members.
     with _trace.pose_expansion(plan.trace_rows):
-        placed_macro, report = place(
-            mgraph,
-            mcon,
-            seed=seed,
-            iters=iters,
-            orient=True,
-            spread=1.0,
-            channel_rules=mrules,
-            pair_weights=macro_pair_weights(pair_weights, plan),
-        )
+        if warm is not None:
+            from pnr.place.geometry import set_component_side
+
+            for c in mgraph.components:
+                x, y, rot, side = warm[c.ref]
+                c.pos, c.rot = (x, y), rot
+                set_component_side(c, side)
+        if frozen:
+            from pnr.place.geometry import outline_size
+            from pnr.place.metrics import hpwl
+            from pnr.place.placer import _finish
+
+            width, height = outline_size(mgraph, mcon)
+            placed_macro, report = _finish(mgraph, mgraph, mcon, width, height, hpwl(mgraph))
+        else:
+            placed_macro, report = place(
+                mgraph,
+                mcon,
+                seed=seed,
+                iters=iters,
+                orient=True,
+                spread=1.0,
+                channel_rules=mrules,
+                pair_weights=macro_pair_weights(pair_weights, plan),
+                **(
+                    dict(
+                        initial_positions={r: (p[0], p[1]) for r, p in warm.items()},
+                        initial_rotations={r: p[2] for r, p in warm.items()},
+                        initial_sides={r: p[3] for r, p in warm.items()},
+                    )
+                    if warm is not None
+                    else {}
+                ),
+            )
     flat = plan.expand(placed_macro, source)
     macros = {
         m: dict(block=v["block"], width=v["width"], height=v["height"])
         for m, v in plan.macros.items()
     }
     out = dict(blocks=choice, macro_legal=report.legal, macros=macros)
+    if selection is not None:
+        from pnr.hier.layout_search import record_id
+        from pnr.place.metrics import hard_violations
+
+        out["macro_clearance_violations"] = hard_violations(
+            placed_macro, mcon, clearance=mcon.board.default_clearance_mm
+        )
+        out["macro_poses"] = {c.ref: [*c.pos, c.rot, c.side] for c in placed_macro.components}
+        for b in blocks:
+            out["blocks"][b.name]["layout_sha256"] = record_id(library[b.name][selection[b.name]])
     if shaped:
         by_ref = {c.ref: c for c in placed_macro.components}
         for m, v in plan.macros.items():

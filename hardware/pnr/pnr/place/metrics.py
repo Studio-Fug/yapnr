@@ -186,6 +186,9 @@ def hard_violations(
     graph: BoardGraph, constraints: CompiledConstraints, clearance: float = 0.0
 ) -> Dict[str, List]:
     """All hard-constraint / legality violations, keyed by kind (empty = legal)."""
+    from pnr.placement_banks import activate
+
+    constraints = activate(constraints)
     width, height = outline_size(graph, constraints)
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)

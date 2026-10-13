@@ -9,8 +9,11 @@ import math
 
 def spans(graph, decision=None):
     pads = {}
+    moves = {m["ref"]: m for m in (decision or {}).get("moves", [])}
     for c in graph.get("components", []):
         pos, rot = c["pos"], c.get("rot", 0)
+        if c["ref"] in moves:
+            pos, rot = moves[c["ref"]]["after"], moves[c["ref"]]["rotation"]
         if decision and c["ref"] == decision["ref"]:
             pos, rot = decision["position"], decision["rotation"]
         angle = math.radians(rot)

@@ -155,6 +155,9 @@ def place(
     box (``COURTYARD``). Under power-first placement every part but ``WIRE`` and ``TURN``
     applies (:func:`pnr.place.power_first.staged_place`).
     """
+    from pnr.placement_banks import activate
+
+    constraints = activate(constraints)
     spread = compact.spread(spread)  # PNR_COMPACT GP: 1.0 (unchanged otherwise)
     if any(c.kind == "line_group" for c in constraints.constraints):
         # Line groups (pnr.place.line_group): each group is one rigid macro here.

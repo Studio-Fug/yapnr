@@ -179,3 +179,19 @@ soft-mixture loss. See [surface semantics and limits](PLACEMENT-LAB.md#four-rota
 and returns SVG from that frozen frame, with its surface hash. The CLI is
 `yapnr placement surface-render RUN KEY --rotation 90`. Browser links retain
 `surface=KEY&rotation=90` to restore the selected field without recomputation.
+
+## Experimental legalization repair
+
+`start` accepts optional booleans `shove`, `placement_banks` and `legalize_only`
+(default false), also available as CLI switches `--shove`, `--placement-banks`,
+`--legalize-only`. Legalization-only replay consumes the registered source's poses
+without optimizer updates; it rejects `paused` and `run_forever`. Bank membership
+and diameter are authored in the source constraints, never guessed from net names.
+See [the design](../../docs/design/placement-shove-and-banks.md) for the bounded
+search, cost definition, validation, A/B results and limitations.
+
+A shove decision carries `transaction_kind: shove`, `moves` (all before/after
+poses), `before_terms` and `after_terms`. Its cost covers the whole placement.
+Use the decision **step** to identify later repairs of a reference that already
+has an earlier packing decision. Rendering and airwires include every moved
+component. Canonical notes remain attached to the immutable decision hash.

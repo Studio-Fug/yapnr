@@ -272,6 +272,7 @@ class CompiledConstraints:
     # reports (``ir_drop:``), pnr.power_spec; empty when not declared.
     plane_partitions: List[Dict] = field(default_factory=list)
     ir_drop: List[Dict] = field(default_factory=list)
+    smps_checks: List[Dict] = field(default_factory=list)
     # Outer-layer pours whose pads count as connected after the refill (``pour:``,
     # pnr.power_spec / pnr.pour); empty when not declared.
     pours: List[Dict] = field(default_factory=list)
@@ -568,6 +569,7 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             else {}
         ),
         **({"ir_drop": [dict(e) for e in compiled.ir_drop]} if compiled.ir_drop else {}),
+        **({"smps_checks": compiled.smps_checks} if compiled.smps_checks else {}),
         # Declared only (pnr.pour): outer-layer pours whose pads the router leaves to them.
         **(
             {"pours": [dict(e) for e in compiled.pours]} if getattr(compiled, "pours", None) else {}
@@ -1352,6 +1354,7 @@ def compile_constraints(
         "side_pref",
         "side",
         "group",
+        "placement_bank",
         "line_group",
         "region",
         "align",
@@ -1365,6 +1368,7 @@ def compile_constraints(
         "fanout",
         "plane_partition",
         "ir_drop",
+        "smps_checks",
         "pour",
     }
     for key in doc:
@@ -1604,6 +1608,10 @@ def compile_constraints(
             )
         )
 
+    from pnr.placement_banks import compile_banks
+
+    constraints.extend(compile_banks(doc.get("placement_bank"), known_refs))
+
     # line_group: HARD — ordered members held in one rigid line (pnr.place.line_group).
     constraints.extend(_parse_line_groups(doc.get("line_group"), known_refs, board, constraints))
 
@@ -1822,6 +1830,12 @@ def compile_constraints(
         except PowerSpecError as error:
             raise ConstraintError(str(error)) from None
 
+    from pnr.smps import parse_checks
+
+    try:
+        smps_checks = parse_checks(doc.get("smps_checks"))
+    except ValueError as error:
+        raise ConstraintError(str(error)) from None
     return CompiledConstraints(
         board=board,
         constraints=constraints,
@@ -1841,6 +1855,7 @@ def compile_constraints(
         routing=_parse_routing(doc.get("board") or {}),
         plane_partitions=partitions,
         ir_drop=ir_drop,
+        smps_checks=smps_checks,
         pours=pours,
     )
 

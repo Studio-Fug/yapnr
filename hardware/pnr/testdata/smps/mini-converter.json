@@ -1,0 +1,398 @@
+{
+  "smps_checks": [
+    {
+      "id": "SMPS-IN-LOOP",
+      "kind": "loop_geometry",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Input commutation loop terminal envelope; placement screen.",
+      "provisional": true,
+      "terminals": [
+        "C15:1",
+        "Q1:5",
+        "Q1:1",
+        "Q2:5",
+        "Q2:1",
+        "C15:2"
+      ],
+      "max_perimeter_mm": 30,
+      "max_area_mm2": 45
+    },
+    {
+      "id": "SMPS-OUT-LOOP",
+      "kind": "loop_geometry",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Output commutation loop terminal envelope; placement screen.",
+      "provisional": true,
+      "terminals": [
+        "U5:11",
+        "C24:1",
+        "C24:2",
+        "U5:24"
+      ],
+      "max_perimeter_mm": 12,
+      "max_area_mm2": 8
+    },
+    {
+      "id": "SMPS-IN-POS",
+      "kind": "pad_distance",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+      "provisional": true,
+      "terminals": [
+        "C15:1",
+        "Q1:5"
+      ],
+      "max_mm": 3
+    },
+    {
+      "id": "SMPS-IN-RETURN",
+      "kind": "pad_distance",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+      "provisional": true,
+      "terminals": [
+        "C15:2",
+        "Q2:1"
+      ],
+      "max_mm": 3
+    },
+    {
+      "id": "SMPS-OUT-POS",
+      "kind": "pad_distance",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+      "provisional": true,
+      "terminals": [
+        "C24:1",
+        "U5:11"
+      ],
+      "max_mm": 3
+    },
+    {
+      "id": "SMPS-OUT-RETURN",
+      "kind": "pad_distance",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+      "provisional": true,
+      "terminals": [
+        "C24:2",
+        "U5:24"
+      ],
+      "max_mm": 3
+    },
+    {
+      "id": "SMPS-VCC-POS",
+      "kind": "pad_distance",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+      "provisional": true,
+      "terminals": [
+        "C25:1",
+        "U5:19"
+      ],
+      "max_mm": 3
+    },
+    {
+      "id": "SMPS-BOOT1",
+      "kind": "pad_distance",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+      "provisional": true,
+      "terminals": [
+        "C8:1",
+        "U5:22"
+      ],
+      "max_mm": 3
+    },
+    {
+      "id": "SMPS-BOOT2",
+      "kind": "pad_distance",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+      "provisional": true,
+      "terminals": [
+        "C9:1",
+        "U5:20"
+      ],
+      "max_mm": 3
+    },
+    {
+      "id": "SMPS-GATE-H",
+      "kind": "route_path",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Bound routed connection length and layer transitions; plane paths require extraction.",
+      "provisional": true,
+      "terminals": [
+        "U5:2",
+        "Q1:4"
+      ],
+      "max_length_mm": 8,
+      "max_vias": 0
+    },
+    {
+      "id": "SMPS-GATE-L",
+      "kind": "route_path",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Bound routed connection length and layer transitions; plane paths require extraction.",
+      "provisional": true,
+      "terminals": [
+        "U5:1",
+        "Q2:4"
+      ],
+      "max_length_mm": 8,
+      "max_vias": 0
+    },
+    {
+      "id": "SMPS-INDUCTOR-IN",
+      "kind": "route_path",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Bound routed connection length and layer transitions; plane paths require extraction.",
+      "provisional": true,
+      "terminals": [
+        "Q1:1",
+        "L2:1"
+      ],
+      "max_length_mm": 8,
+      "max_vias": 0
+    },
+    {
+      "id": "SMPS-INDUCTOR-OUT",
+      "kind": "route_path",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Bound routed connection length and layer transitions; plane paths require extraction.",
+      "provisional": true,
+      "terminals": [
+        "L2:2",
+        "U5:21"
+      ],
+      "max_length_mm": 8,
+      "max_vias": 0
+    },
+    {
+      "id": "SMPS-CAP-RETURN",
+      "kind": "route_path",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Bound routed connection length and layer transitions; plane paths require extraction.",
+      "provisional": true,
+      "terminals": [
+        "C15:2",
+        "Q2:1"
+      ],
+      "max_length_mm": 5,
+      "max_vias": 0
+    },
+    {
+      "id": "SMPS-OUT-CAP-RETURN",
+      "kind": "route_path",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Bound routed connection length and layer transitions; plane paths require extraction.",
+      "provisional": true,
+      "terminals": [
+        "C24:2",
+        "U5:24"
+      ],
+      "max_length_mm": 5,
+      "max_vias": 0
+    },
+    {
+      "id": "SMPS-SW1",
+      "kind": "net_geometry",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Limit exposed switching-node routing extent while retaining power width.",
+      "provisional": true,
+      "net": "board.converter-1",
+      "max_length_mm": 15,
+      "max_bbox_area_mm2": 40,
+      "max_vias": 0
+    },
+    {
+      "id": "SMPS-SW2",
+      "kind": "net_geometry",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Limit exposed switching-node routing extent while retaining power width.",
+      "provisional": true,
+      "net": "board.converter-2",
+      "max_length_mm": 15,
+      "max_bbox_area_mm2": 40,
+      "max_vias": 0
+    },
+    {
+      "id": "SMPS-SENSITIVE",
+      "kind": "separation",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Keep switching copper away from feedback and compensation; no assumed shielding credit.",
+      "provisional": true,
+      "nets": [
+        "board.converter-FB",
+        "COMP"
+      ],
+      "aggressors": [
+        "board.converter-1",
+        "board.converter-2"
+      ],
+      "min_mm": 0.5
+    },
+    {
+      "id": "SMPS-SENSE-PAIR",
+      "kind": "paired_routes",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Current-sense routes travel together with matching local direction.",
+      "provisional": true,
+      "paths": [
+        [
+          "U5:12",
+          "R13:1"
+        ],
+        [
+          "U5:13",
+          "R13:2"
+        ]
+      ],
+      "max_gap_mm": 1,
+      "max_skew_mm": 2,
+      "max_angle_deg": 30
+    },
+    {
+      "id": "SMPS-SENSE-KELVIN",
+      "kind": "kelvin",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Sense source-side shunt voltage without traversing other power terminals.",
+      "provisional": true,
+      "terminals": [
+        "U5:12",
+        "R13:1"
+      ],
+      "power_terminals": [
+        "U5:11",
+        "U5:26",
+        "C16:1",
+        "C17:1",
+        "C18:1",
+        "C19:1",
+        "C20:1",
+        "C21:1",
+        "C22:1",
+        "C23:1",
+        "C24:1"
+      ]
+    },
+    {
+      "id": "SMPS-PGND-COVERAGE",
+      "kind": "reference_plane",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Require filled power ground beneath the input switching cell.",
+      "provisional": true,
+      "terminals": [
+        "C15:1",
+        "Q1:5",
+        "Q2:1"
+      ],
+      "net": "lv",
+      "layer": "In1.Cu",
+      "margin_mm": 0.5,
+      "max_uncovered_mm2": 1
+    },
+    {
+      "id": "SMPS-PGND-VIAS",
+      "kind": "via_array",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Local ground via presence and layer reach; thermal/ampacity qualification is separate.",
+      "provisional": true,
+      "terminals": [
+        "U5:9",
+        "U5:24"
+      ],
+      "net": "lv",
+      "layers": [
+        "F.Cu",
+        "In1.Cu"
+      ],
+      "radius_mm": 2,
+      "min_count": 2
+    },
+    {
+      "id": "SMPS-DROP",
+      "kind": "evidence",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Provisional research budget; requires exact-board model/measurement and operating-corner coverage.",
+      "provisional": true,
+      "metric": "load_drop",
+      "unit": "mV",
+      "corners": [
+        "5V-full-load",
+        "12V-full-load"
+      ],
+      "max_value": 100
+    },
+    {
+      "id": "SMPS-RIPPLE",
+      "kind": "evidence",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Provisional research budget; requires exact-board model/measurement and operating-corner coverage.",
+      "provisional": true,
+      "metric": "output_ripple",
+      "unit": "mVpp",
+      "corners": [
+        "5V-full-load",
+        "12V-full-load"
+      ],
+      "max_value": 100
+    },
+    {
+      "id": "SMPS-STABILITY",
+      "kind": "evidence",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Provisional research budget; requires exact-board model/measurement and operating-corner coverage.",
+      "provisional": true,
+      "metric": "phase_margin",
+      "unit": "deg",
+      "corners": [
+        "5V-full-load",
+        "12V-full-load"
+      ],
+      "min_value": 45
+    },
+    {
+      "id": "SMPS-GAIN-MARGIN",
+      "kind": "evidence",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Provisional research budget; requires exact-board model/measurement and operating-corner coverage.",
+      "provisional": true,
+      "metric": "gain_margin",
+      "unit": "dB",
+      "corners": [
+        "5V-full-load",
+        "12V-full-load"
+      ],
+      "min_value": 10
+    },
+    {
+      "id": "SMPS-GROUND-ERROR",
+      "kind": "evidence",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Provisional research budget; requires exact-board model/measurement and operating-corner coverage.",
+      "provisional": true,
+      "metric": "shared_return_error",
+      "unit": "mV",
+      "corners": [
+        "5V-full-load",
+        "12V-full-load"
+      ],
+      "max_value": 5
+    },
+    {
+      "id": "SMPS-THERMAL",
+      "kind": "evidence",
+      "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+      "rationale": "Provisional research budget; requires exact-board model/measurement and operating-corner coverage.",
+      "provisional": true,
+      "metric": "junction_temperature",
+      "unit": "degC",
+      "corners": [
+        "5V-full-load",
+        "12V-full-load"
+      ],
+      "max_value": 125
+    }
+  ]
+}

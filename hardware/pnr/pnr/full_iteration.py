@@ -27,6 +27,16 @@ def objective(drc, entries, electrical):
     ]
 
 
+def smps_side_fields(audit, rules):
+    """Missing declared-check reports are unknown; no declared checks are N/A."""
+    report = audit.get("smps_layout") or {}
+    default = None if rules.get("smps_checks") else 0
+    return dict(
+        smps_layout_failures=report.get("failure_count", default),
+        smps_layout_unqualified=report.get("unqualified_count", default),
+    )
+
+
 def si_side_fields(board, rules, work, sources, inventory):
     """PNR_SI=1: simulate the final board's @pnr-si requirements; evaluation side fields.
 
@@ -344,6 +354,8 @@ def main():
         final=last,
         feedback=str((p / "feedback.json").resolve()),
     )
+    if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+        result.update(smps_side_fields(audit, json.loads(rules.read_text())))
     from pnr.si import enabled as si_enabled
 
     if si_enabled():

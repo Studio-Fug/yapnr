@@ -191,6 +191,9 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
     ``regions``/``aligns`` for a ``region`` or ``align``), so every other design
     calls the legalizer exactly as before; so do the ``legalize:`` options
     (:func:`pnr.place.legal_options.legalize_kwargs`)."""
+    from pnr.placement_banks import activate
+
+    constraints = activate(constraints)
     from . import legal_options
     from .geometry import (
         hard_edge_bands,
@@ -234,6 +237,10 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
         group_edges=hard_group_edges(constraints),
         rotations=resolve_hard_rotations(constraints),
     )
+    from .shove import enabled as shove_enabled
+
+    if shove_enabled():
+        out["shove_constraints"] = constraints
     if pad_edge is not None:
         out["pad_edge"] = pad_edge
     bands = hard_edge_bands(constraints)
@@ -763,6 +770,7 @@ def legalize(
     wire_exempt=frozenset(),
     locality=None,
     keep: Optional[bool] = None,
+    shove_constraints=None,
     _attempt: int = 0,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
@@ -2263,10 +2271,37 @@ def legalize(
     from .motion import motion as motion_of
     from .motion import summary as motion_summary
 
+    shove_records = []
+    if shove_constraints is not None:
+        from pnr.placement_banks import members as bank_members
+
+        from .shove import repair
+
+        shove_records = repair(
+            placed,
+            graph,
+            shove_constraints,
+            grid=g,
+            clearance=clearance,
+            spread=spread,
+            inflation=inflation,
+            margins=margins,
+            pad_edge=pad_edge,
+            locality=locality,
+            channels=channel_model,
+            channel_weight=channel_weight,
+            allow_rotation=allow_rotation,
+            banks=bank_members(placed, shove_constraints),
+        )
+
     # The motion from the global poses (the input graph), and the triage (PNR_LEGALIZE_KEEP).
     record = motion_of(graph, placed, [c.ref for c in placed.components if c.ref not in fixed])
     held = sorted(ref for ref, pose in anchors.items() if tuple(by_ref[ref].pos) == tuple(pose))
     record["keep"] = keeping
+    if shove_constraints is not None:
+        record["shove"] = dict(
+            transactions=len(shove_records), moved=sum(len(v["moves"]) for v in shove_records)
+        )
     if keeping:
         from .keep import REASONS
 
@@ -2321,6 +2356,30 @@ def legalize(
                     extra_terms=v["extra_terms"],
                     # PNR_LEGALIZE_HPWL: the wirelength term of a part it acted on.
                     **({} if len(v["chosen"]) < 4 else dict(wire_weight=wire_weight)),
+                )
+            )
+        for transaction in shove_records:
+            records.append(
+                save(
+                    "legalizer-decision",
+                    dict(
+                        transaction,
+                        transaction_kind="shove",
+                        stationary_neighbors=[
+                            c.ref
+                            for c in placed.components
+                            if c.ref not in {m["ref"] for m in transaction["moves"]}
+                        ],
+                        grid_mm=g,
+                        candidate_fields=[],
+                        placement_constraints={},
+                        terms=[
+                            dict(key=k, raw=v, weight=1.0, weighted=v)
+                            for k, v in transaction["after_terms"].items()
+                        ],
+                        total=sum(transaction["after_terms"].values()),
+                        scope="Atomic shove repair of the completed legal placement; all moved parts and whole-board cost recorded",
+                    ),
                 )
             )
         save(

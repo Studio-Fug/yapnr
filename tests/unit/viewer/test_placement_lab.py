@@ -53,6 +53,14 @@ class Objective(unittest.TestCase):
             write(engine / "pnr.py", {"original": True})
             lab = PlacementLab(root, engine)
             write(lab.root / "sources/demo.json", {"title": "Demo", "graph": {"components": []}})
+            for opts in (
+                dict(shove="yes"),
+                dict(placement_banks=1),
+                dict(legalize_only=True, paused=True),
+                dict(legalize_only=True, run_forever=True),
+            ):
+                with self.assertRaises(ValueError):
+                    lab.command(dict(action="start", source="demo", **opts))
             process = MagicMock()
             process.poll.return_value = None
             with patch(

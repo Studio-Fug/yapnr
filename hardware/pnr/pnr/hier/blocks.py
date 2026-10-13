@@ -232,6 +232,13 @@ def sub_board(
     )
     r["mounting_holes"] = []
     present = {n.name for n in sub.nets}
+    if r.get("smps_checks"):
+        from pnr.smps import scope_checks
+
+        local, deferred = scope_checks(r["smps_checks"], inside, present)
+        r["smps_checks"] = local
+        r["smps_deferred_checks"] = deferred
+        con.smps_checks = copy.deepcopy(local)
 
     def chain_inside(d):
         # Terminal/auxiliary endpoints are "REF.pin"; a chain leaving the block

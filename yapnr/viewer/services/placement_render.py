@@ -70,8 +70,18 @@ def render(graph, decision=None, alternative=None, airwires=True, surface=None, 
         )
 
     placed = set(decision.get("stationary_neighbors", [])) if decision else None
+    moves = {m["ref"]: m for m in (decision or {}).get("moves", [])}
     for c in graph.get("components", []):
-        if decision and c["ref"] == decision["ref"]:
+        if c["ref"] in moves:
+            move = moves[c["ref"]]
+            part(c, move["before"], move["before_rotation"], "#f1ba63", dashed=True)
+            part(c, move["after"], move["rotation"], "#b1eb73")
+            x, y = move["before"]
+            u, v = move["after"]
+            svg.append(
+                f'<path d="M{x},{-y} L{u},{-v}" stroke="#f1ba63" stroke-width="{font*.12}"/>'
+            )
+        elif decision and c["ref"] == decision["ref"]:
             part(
                 c,
                 decision.get("original_position", decision["target"]),

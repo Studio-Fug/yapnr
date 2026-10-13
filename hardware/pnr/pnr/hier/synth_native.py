@@ -296,6 +296,10 @@ def _native(inputs, constraints_path, rec, names, out, seconds, workers, repo, r
             out["power_loop_failures"] = (
                 sum(counts) if ok and all(x is not None for x in counts) else None
             )
+    if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+        for field in ("smps_layout_failures", "smps_layout_unqualified"):
+            values = [r.get(field) for r in results]
+            out[field] = sum(values) if ok and all(x is not None for x in values) else None
     if _si():
         # Instances sum like the objective; any instance without an SI result (no
         # report, crashed analysis) leaves the layout unproven (None ranks worst).
@@ -413,6 +417,8 @@ def rank_key(r, band=None):
     if not o:
         return (math.inf,)
     si = (_num(r.get("si_layout_failures")),) if _si() else ()
+    if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+        si = (_num(r.get("smps_layout_failures")), _num(r.get("smps_layout_unqualified"))) + si
     if os.environ.get("PNR_POWER_BRANCHES") == "1":
         si = (_num(r.get("power_loop_failures")),) + si
     if _rank_used():
@@ -473,6 +479,10 @@ def rank_key(r, band=None):
 
 
 def is_complete(r):
+    if os.environ.get("PNR_SMPS_LAYOUT") == "1" and any(
+        r.get(field) != 0 for field in ("smps_layout_failures", "smps_layout_unqualified")
+    ):
+        return False
     o = r.get("objective")
     if os.environ.get("PNR_POWER_BRANCHES") == "1":
         return bool(
@@ -531,6 +541,12 @@ def aggregate(runs):
             summary["hot_loops_open"] = r.get("hot_loops_open")
             if "power_loop_failures" in r:
                 summary["power_loop_failures"] = r["power_loop_failures"]
+    if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+        for field in ("smps_layout_failures", "smps_layout_unqualified"):
+            values = [r.get(field) for r in runs]
+            out[field] = max(values) if all(x is not None for x in values) else None
+            for summary, r in zip(out["runs"], runs):
+                summary[field] = r.get(field)
     if _si():
         # SI layout failures keep the worst repeat, like the other guard terms.
         si = [r.get("si_layout_failures") for r in runs]

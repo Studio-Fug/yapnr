@@ -9,6 +9,32 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
+- **SMPS validator**: ten guidance-derived check types, 28 provisional Mini profile
+  requirements, native filled-plane coverage, explicit track paths, and exact-board
+  ripple/stability/thermal evidence gates. Fourteen fault-injection tests pass.
+  Unknowns cannot qualify candidates. Full AC/thermal extraction is not implemented.
+  See [coverage and limits](docs/design/smps-validation.md).
+
+- **Contextual hierarchical layouts**: default-off independent, frozen, alternating
+  and paired variants with optional geometric diversity. Four synthetic cases,
+  six arms and three seeds: 72/72 legal. Parent relaxation helps capacitor banks;
+  diverse shortlists help crowded libraries; paired swaps add no benefit here.
+  Native A/B of the shove legalizer has 17 → 19 opens and 47 → 32 subwidth tracks:
+  mixed evidence, not a routing win. Power-first improves both converter seed scores,
+  while bank compactness is mixed. See [study](docs/design/contextual-block-layouts.md).
+
+- **Experimental placement shove and capacitor banks**: default-off transactional
+  repair revisits the completed packer's decisions, recording every affected pose
+  and whole-board cost. Same frozen 33-part converter: total motion 46.911 → 37.199 mm,
+  max 9.633 → 3.578 mm, turns 2 → 0, hard placement checks pass; R7 unchanged.
+  Authored bank subgroups add global compactness, a checked pairwise diameter and
+  collective external shove. Separate fresh global A/B: output bank 20.08 → 9.00 mm,
+  but other displacement/rotation problems remain; neither routed arm qualifies.
+  UI/API/CLI expose both flags and legalization-only replay; accepted transactions
+  retain canonical annotation support. The global overlap-gradient investigation
+  confirms cancellation in symmetric contact chains; its live formula is unchanged.
+  See [design and evidence](docs/design/placement-shove-and-banks.md).
+
 - **Unlimited interactive placement and rotation controls**: opt-in Run until stopped
   removes the lab iteration and wall-time caps while preserving pause/step/Adam state.
   Live fixed temperatures and restartable start/end/duration schedules are exposed in

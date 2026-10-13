@@ -155,6 +155,18 @@ class PlacementLab:
         out = dict(
             id=ident, status=status, request=json.loads((folder / "request.json").read_text())
         )
+        if out["request"].get("placement_banks"):
+            source = json.loads((folder / "input.json").read_text())
+            banks = {}
+            for con in source["constraints"]["constraints"]:
+                params = con.get("params", {})
+                if params.get("placement_bank"):
+                    banks[params["placement_bank"]] = dict(
+                        name=params["placement_bank"],
+                        members=params["bank_members"],
+                        parent=params.get("parent"),
+                    )
+            out["banks"] = list(banks.values())
         if (folder / "control.json").exists():
             out["control"] = json.loads((folder / "control.json").read_text())
         if (folder / "frame.json").exists():
@@ -208,6 +220,11 @@ class PlacementLab:
                     raise ValueError("run_forever must be a boolean")
                 if type(body.get("paused", False)) is not bool:
                     raise ValueError("paused must be a boolean")
+                for option in ("shove", "placement_banks", "legalize_only"):
+                    if type(body.get(option, False)) is not bool:
+                        raise ValueError(option + " must be a boolean")
+                if body.get("legalize_only") and (body.get("paused") or body.get("run_forever")):
+                    raise ValueError("Legalization-only replay cannot pause or run forever")
                 if self.engine is None:
                     raise ValueError("Placement engine runtime is not configured")
                 ident = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
@@ -220,6 +237,9 @@ class PlacementLab:
                     seed=seed,
                     iterations=iterations,
                     frame_delay_ms=delay,
+                    shove=body.get("shove", False),
+                    placement_banks=body.get("placement_banks", False),
+                    legalize_only=body.get("legalize_only", False),
                     annealing=annealing,
                     engine_sources={
                         str(p.relative_to(self.engine)): digest(p)

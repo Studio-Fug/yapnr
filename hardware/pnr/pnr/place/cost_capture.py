@@ -74,13 +74,27 @@ def save(kind, payload):
                 for name in ("power_first.py", "../power_topology.py")
             }
         )
+    if os.environ.get("PNR_LEGALIZE_SHOVE") == "1" or os.environ.get("PNR_PLACEMENT_BANKS") == "1":
+        sources.update(
+            {
+                name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
+                for name in ("shove.py", "../placement_banks.py")
+            }
+        )
     raw = json.dumps(
         dict(
             schema="pnr-placement-cost-capture-v1",
             kind=kind,
             phase_context=phase_context(),
             runtime_sources=sources,
-            features={"PNR_PAD_LOCALITY": os.environ.get("PNR_PAD_LOCALITY", "0")},
+            features={
+                "PNR_PAD_LOCALITY": os.environ.get("PNR_PAD_LOCALITY", "0"),
+                **{
+                    key: "1"
+                    for key in ("PNR_LEGALIZE_SHOVE", "PNR_PLACEMENT_BANKS")
+                    if os.environ.get(key) == "1"
+                },
+            },
             **payload,
         ),
         separators=(",", ":"),

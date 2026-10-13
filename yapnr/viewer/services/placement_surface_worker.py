@@ -27,6 +27,7 @@ def compute(request):
 
     torch.set_num_threads(1)
     os.environ["PNR_PAD_LOCALITY"] = "1"
+    os.environ["PNR_PLACEMENT_BANKS"] = "1" if request.get("placement_banks") else "0"
     graph = BoardGraph.from_json(json.dumps(request["frame"]["graph"]))
     cons = constraints(request["source"]["constraints"])
     weights = parse(request["objective_expression"])

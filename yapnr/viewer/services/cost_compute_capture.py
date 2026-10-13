@@ -187,6 +187,7 @@ def main(argv):
     raw = record.read_bytes()
     assert sha256(raw) == req["capture"]["sha256"]
     d = json.loads(raw)
+    os.environ["PNR_PLACEMENT_BANKS"] = d.get("features", {}).get("PNR_PLACEMENT_BANKS", "0")
     os.environ["PNR_PAD_LOCALITY"] = d.get("features", {}).get("PNR_PAD_LOCALITY", "0")
     assert (
         d.get("runtime_sources", {}).get("cost_inspect.py") == model_sha

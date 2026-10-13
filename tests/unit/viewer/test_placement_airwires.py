@@ -50,6 +50,10 @@ class Airwires(unittest.TestCase):
         self.assertEqual(tree["nets"][0]["edges"][0]["start"], [9, 0])
         decision = dict(ref="B", position=[12, 0], rotation=90)
         self.assertEqual(spans(graph, decision)["length_mm"], 3)
+        decision["moves"] = [
+            dict(ref="A", before=[0, 0], before_rotation=0, after=[2, 0], rotation=0)
+        ]
+        self.assertEqual(spans(graph, decision)["length_mm"], 1)
 
 
 if __name__ == "__main__":

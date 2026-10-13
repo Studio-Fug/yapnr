@@ -56,6 +56,8 @@ def main(folder):
     cons = constraints(source["constraints"])
     width, height = outline_size(graph, cons)
     os.environ.update(PNR_PAD_LOCALITY="1", PNR_COST_CAPTURE_DIR=str(folder / "captures"))
+    os.environ["PNR_LEGALIZE_SHOVE"] = "1" if request.get("shove") else "0"
+    os.environ["PNR_PLACEMENT_BANKS"] = "1" if request.get("placement_banks") else "0"
     status = json.loads((folder / "status.json").read_text())
     revision = None
     expression = request["expression"]
@@ -181,25 +183,29 @@ def main(folder):
             time.sleep(request["frame_delay_ms"] / 1000)
 
     try:
-        xy, turns = global_place(
-            graph,
-            cons,
-            width,
-            height,
-            seed=request["seed"],
-            iters=request["iterations"],
-            control=control,
-            progress=progress,
-            initialized=initial_snapshot,
-            updated=updated,
-            run_forever=request.get("run_forever", False),
-            **weights
-        )
+        if request.get("legalize_only"):
+            xy = {c.ref: c.pos for c in graph.components}
+            turns = {c.ref: c.rot for c in graph.components}
+        else:
+            xy, turns = global_place(
+                graph,
+                cons,
+                width,
+                height,
+                seed=request["seed"],
+                iters=request["iterations"],
+                control=control,
+                progress=progress,
+                initialized=initial_snapshot,
+                updated=updated,
+                run_forever=request.get("run_forever", False),
+                **weights
+            )
         cont = copy.deepcopy(graph)
         for comp in cont.components:
             comp.pos, comp.rot = xy[comp.ref], turns[comp.ref]
         write(folder / "continuous.json", json.loads(cont.to_json()))
-        control(request["iterations"])
+        control(0 if request.get("legalize_only") else request["iterations"])
         status.update(state="legalizing")
         write(folder / "status.json", status)
         from pnr.constraints import compile_routing_rules
@@ -234,6 +240,7 @@ def main(folder):
         violations = hard_violations(placed, cons)
         status.update(
             state="complete",
+            elapsed_seconds=time.monotonic() - start,
             legal=not any(violations.values()),
             violations=violations,
             decisions=len(review["decisions"]),
@@ -244,7 +251,7 @@ def main(folder):
             folder / "frame.json",
             dict(
                 graph=json.loads(placed.to_json()),
-                step=request["iterations"],
+                step=0 if request.get("legalize_only") else request["iterations"],
                 scope="Legalized placement; native copper unchecked",
             ),
         )

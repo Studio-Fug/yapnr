@@ -168,7 +168,17 @@ def evaluate(
         # PNR_SI=1 side fields (present only when the flag produced them); si_layout_failures
         # is a rank key with PNR_SI=1 (pnr.hier.synth_native.rank_key), the others are recorded only.
         rec.update(
-            {k: e[k] for k in ("si_layout_failures", "si_design_failures", "si_errors") if k in e}
+            {
+                k: e[k]
+                for k in (
+                    "si_layout_failures",
+                    "si_design_failures",
+                    "si_errors",
+                    "smps_layout_failures",
+                    "smps_layout_unqualified",
+                )
+                if k in e
+            }
         )
         if os.environ.get("PNR_POWER_FIRST") == "1" or os.environ.get("PNR_POWER_BRANCHES") == "1":
             # Routed power-path quality: one KiCad read of the final board, checked

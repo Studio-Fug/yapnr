@@ -1,0 +1,17 @@
+{
+  "scope": "Actual synthetic placements; no interpolation or electrical qualification",
+  "seed": 0,
+  "cases": ["bank_shapes", "crowded_library"],
+  "frames": 5,
+  "font": "Menlo.ttc",
+  "inputs": {
+    "bank_shapes/control": "d181c696ee5dd2e91ca06773ca45a8002405fead7b4d8b1b0af24cf7b9dfa522",
+    "bank_shapes/diverse": "775c0022ddccfafcf1d215e41bd03af461a6b52d2aa6aa0691319812c63fda39",
+    "crowded_library/control": "bf97bc66538bcdd20ca7d128e22ce0983e1759cd8849b0f064d556ee96fcb990",
+    "crowded_library/diverse": "0746c76370a41a76a6312d968f06114bb72f6711bafcc07e5e04aa8f1f564f03"
+  },
+  "images": {
+    "layout-choice.png": "3068fe2608c9f3aab01a695b78aa1fd2e29d88c59dfed8477ea3e4a1b9c8dd1e",
+    "layout-choice.gif": "a599c06f76052f2e7801685ca2fb200d0d4d2eccd7eb691277c97abd1477ba31"
+  }
+}

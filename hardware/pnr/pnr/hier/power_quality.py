@@ -52,13 +52,21 @@ def dump_main(src, dst):
     """Dump pads, tracks, vias and zones of a routed board to JSON (KiCad python only)."""
     import pcbnew
 
+    b = pcbnew.LoadBoard(str(src))
+    out = dump_board(b)
+    out["board"] = str(src)
+    Path(dst).write_text(json.dumps(out, indent=1))
+
+
+def dump_board(b):
+    """Native copper snapshot of an already loaded board (no filesystem mutation)."""
+    import pcbnew
+
     def mm(v):
         return pcbnew.ToMM(v)
 
-    b = pcbnew.LoadBoard(str(src))
     zones = [z for z in b.Zones() if not z.GetIsRuleArea()]
     out = dict(
-        board=str(src),
         footprints=[],
         pads=[],
         tracks=[],
@@ -188,7 +196,7 @@ def dump_main(src, dst):
             out["zones"].append(
                 dict(index=zi, net=z.GetNetname(), layer=b.GetLayerName(lid), filled_area_mm2=area)
             )
-    Path(dst).write_text(json.dumps(out))
+    return out
 
 
 def read_board(board, *, timeout=180, ki_py=None):
@@ -242,7 +250,7 @@ def _seg_rect(a, b, r):
 class Copper:
     """Copper connectivity of one net; edges carry (length, cost, via hop)."""
 
-    def __init__(self, dump, net, *, layer_factor=None, via_cost=0.0):
+    def __init__(self, dump, net, *, layer_factor=None, via_cost=0.0, exact_pad_contacts=False):
         layers = dump.get("copper_layers") or ["F.Cu", "B.Cu"]
         order = {l: i for i, l in enumerate(layers)}
         factor = layer_factor or {}
@@ -271,6 +279,8 @@ class Copper:
             pnode.append(k)
             self.pads.setdefault((p["ref"], p["name"]), []).append(k)
         for i, p in enumerate(pads):
+            if exact_pad_contacts:
+                continue
             for j in range(i + 1, len(pads)):
                 q = pads[j]
                 if p["ref"] != q["ref"] or not set(p["layers"]) & set(q["layers"]):
@@ -323,6 +333,8 @@ class Copper:
                             )
                         )
             for pi, p in enumerate(pads):
+                if exact_pad_contacts:
+                    continue
                 if t["layer"] not in p["layers"] or _seg_rect(a, b, p["bbox"]) > hw + TOL:
                     continue
                 u, xy, _ = _project(a, b, (p["x"], p["y"]))

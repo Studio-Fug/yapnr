@@ -134,6 +134,15 @@ def register(commands):
         action="store_true",
         help="no iteration or wall-time limit; --iterations sets the annealing horizon",
     )
+    start.add_argument(
+        "--shove", action="store_true", help="experimental transactional placement shove"
+    )
+    start.add_argument(
+        "--placement-banks", action="store_true", help="enable authored capacitor banks"
+    )
+    start.add_argument(
+        "--legalize-only", action="store_true", help="replay legalization of the source poses"
+    )
     start.add_argument("--frame-delay-ms", type=int, default=30)
     start.add_argument("--expression")
     start.add_argument("--annealing", type=json.loads, help="JSON hold or schedule settings")
@@ -235,6 +244,9 @@ def _run(args):
                 "seed",
                 "iterations",
                 "run_forever",
+                "shove",
+                "placement_banks",
+                "legalize_only",
                 "annealing",
                 "frame_delay_ms",
                 "expression",

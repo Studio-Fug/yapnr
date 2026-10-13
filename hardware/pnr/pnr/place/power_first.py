@@ -564,6 +564,10 @@ class StagedPlacer:
         self.locality = Cost(graph, constraints) if locality_enabled() else None
         self.groups = []
         for con in constraints.constraints:
+            from pnr.placement_banks import enabled as banks_enabled
+
+            if con.params.get("placement_bank") and not banks_enabled():
+                continue
             if con.kind != "group" or con.params.get("anchor") not in idx:
                 continue
             members = [idx[r] for r in con.refs if r in idx and r != con.params["anchor"]]

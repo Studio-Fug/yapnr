@@ -166,6 +166,9 @@ filegroup(
         "pnr/ir_drop.py",
         "pnr/ir_extract.py",
         "pnr/power_spec.py",
+        "pnr/smps.py",
+        "pnr/hier/__init__.py",
+        "pnr/hier/power_quality.py",
         "pnr/plane_partition.py",
         # The plane_quality check's judge (plain Python; numpy only in the engine's half).
         "pnr/plane_quality.py",
@@ -2479,6 +2482,15 @@ py_test(
 # PNR_LEGALIZE_KEEP (on by default): displacement-minimizing legalization, the triage and the
 # order-preserving push (pnr.place.keep), and the motion record (pnr.place.motion).
 py_test(
+    name = "legalize_shove_test",
+    size = "small",
+    srcs = ["tests/test_legalize_shove.py"],
+    imports = ["."],
+    main = "tests/test_legalize_shove.py",
+    deps = [":pnr", ":pnr_place", requirement("numpy")],
+)
+
+py_test(
     name = "legalize_keep_test",
     size = "small",
     srcs = ["tests/test_legalize_keep.py"],
@@ -3190,4 +3202,26 @@ py_test(
     imports = ["."],
     main = "tests/test_pad_locality.py",
     deps = [":pnr", ":pnr_place", requirement("numpy"), requirement("torch")],
+)
+
+# Contextual choice of independently placed block instances.
+py_test(
+    name = "layout_search_test",
+    size = "medium",
+    srcs = [
+        "tests/test_layout_search.py",
+        "regression/layout_choice_cases.py",
+    ],
+    imports = [".", "regression"],
+    main = "tests/test_layout_search.py",
+    deps = [":pnr", ":pnr_hier", ":pnr_place", ":pnr_detail", ":pnr_route"],
+)
+
+py_test(
+    name = "smps_test",
+    size = "small",
+    srcs = ["tests/test_smps.py"],
+    imports = ["."],
+    main = "tests/test_smps.py",
+    deps = [":pnr", ":pnr_hier"],
 )

@@ -68,6 +68,7 @@ class Surfaces:
             ref=b["ref"],
             pitch=pitch,
             expression=b["expression"],
+            placement_banks=request.get("placement_banks", False),
             objective_expression=status.get("expression", request["expression"]),
             evaluator_sha256=digest(Path(__file__).with_name("placement_surface_worker.py")),
             expression_sha256=digest(Path(__file__).with_name("placement_surface_expression.py")),

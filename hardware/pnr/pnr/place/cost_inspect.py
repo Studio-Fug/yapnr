@@ -172,7 +172,12 @@ class Objective:
         self.cap = []
         self.edges = []
         self.groups = []
+        from pnr import placement_banks
+
+        placement_banks.members(graph, constraints)
         for con in constraints.constraints:
+            if con.params.get("placement_bank") and not placement_banks.enabled():
+                continue
             if con.kind == "edge_align":
                 for ref in con.refs:
                     if ref in self.index:
@@ -291,6 +296,10 @@ class Objective:
         )
         self.pf_groups = []
         for con in self.constraints.constraints:
+            from pnr import placement_banks
+
+            if con.params.get("placement_bank") and not placement_banks.enabled():
+                continue
             if con.kind == "group" and con.params.get("anchor") in self.index:
                 anchor = self.index[con.params["anchor"]]
                 radius = float(con.params.get("radius_mm") or 5.0)

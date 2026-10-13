@@ -313,13 +313,17 @@ follow-ups are available. PR #94 merged as <code class="docutils literal notrans
 <ul>
 <li><p><strong>PR #100 default activation</strong>: all thirteen new Boolean repairs enabled with
 explicit opt-outs; alternating contextual search and diverse portfolios selected.
-All 310 Bazel targets and all-file hooks pass on <code class="docutils literal notranslate"><span class="pre">26170f97</span></code>. Main and candidate
-pass all 41 scheduled native cases each: 16 ladder, five showcase and 20 hard
-runs. Ladder copper/vias fall 9.1%/16.9%; hard copper/vias fall 4.9%/3.9%.
-Measured stage time rises 18.1%/9.9% respectively. Native collectors at four
-rotations and all 27 browser tests pass. Layer and contact reviews are complete;
-final platform CI and a separate reduced-budget manual SoC comparison remain.
-Keep those outcomes distinct from scheduled passes. See
+Runtime <code class="docutils literal notranslate"><span class="pre">c50ffdfc</span></code> passes all 310 regular Bazel targets locally and on Linux/macOS
+CI, native CI ladder and dual-architecture packaging. Main and final candidate
+pass 41 scheduled native cases each: 16 ladder, five showcase and 20 hard runs.
+Aggregate copper/vias fall 5.9%/6.4%; measured stage time falls 7.7% on the shared
+host. Native layer/contact reviews include fresh changed/representative boards
+and explicitly proven reuse of unchanged geometry. RF nightly passes 24 cached
+targets per platform. Supplemental native checks: 118 pass, one explicit
+PyTorch-dependent skip; two cross-interpreter/headless test-harness defects
+fixed. Final combined checks and landing remain. The separate reduced-budget SoC still fails: the repair
+removes unsafe clearance violations but leaves 41 opens and eight skew findings.
+No full SMPS qualification is claimed. See
 <a class="reference internal" href="docs/design/pr100-defaults.html"><span class="std std-doc">activation and validation</span></a>.</p></li>
 <li><p><strong>SMPS closure investigation</strong>: constraint-derived placement cost,
 copper-only pad ingest, compact current-sized source collectors and native

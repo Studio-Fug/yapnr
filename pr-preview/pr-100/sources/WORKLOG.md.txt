@@ -11,13 +11,17 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 - **PR #100 default activation**: all thirteen new Boolean repairs enabled with
   explicit opt-outs; alternating contextual search and diverse portfolios selected.
-  All 310 Bazel targets and all-file hooks pass on `26170f97`. Main and candidate
-  pass all 41 scheduled native cases each: 16 ladder, five showcase and 20 hard
-  runs. Ladder copper/vias fall 9.1%/16.9%; hard copper/vias fall 4.9%/3.9%.
-  Measured stage time rises 18.1%/9.9% respectively. Native collectors at four
-  rotations and all 27 browser tests pass. Layer and contact reviews are complete;
-  final platform CI and a separate reduced-budget manual SoC comparison remain.
-  Keep those outcomes distinct from scheduled passes. See
+  Runtime `c50ffdfc` passes all 310 regular Bazel targets locally and on Linux/macOS
+  CI, native CI ladder and dual-architecture packaging. Main and final candidate
+  pass 41 scheduled native cases each: 16 ladder, five showcase and 20 hard runs.
+  Aggregate copper/vias fall 5.9%/6.4%; measured stage time falls 7.7% on the shared
+  host. Native layer/contact reviews include fresh changed/representative boards
+  and explicitly proven reuse of unchanged geometry. RF nightly passes 24 cached
+  targets per platform. Supplemental native checks: 118 pass, one explicit
+  PyTorch-dependent skip; two cross-interpreter/headless test-harness defects
+  fixed. Final combined checks and landing remain. The separate reduced-budget SoC still fails: the repair
+  removes unsafe clearance violations but leaves 41 opens and eight skew findings.
+  No full SMPS qualification is claimed. See
   [activation and validation](docs/design/pr100-defaults.md).
 
 - **SMPS closure investigation**: constraint-derived placement cost,

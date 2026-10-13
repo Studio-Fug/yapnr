@@ -3,22 +3,22 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-12 (validator-first hierarchy, outline and power-loop repair).
+Last updated: 2026-10-13 (PR #100 default activation and native regression comparison).
 PR #99 merged into main at `5d1a07c1`; its engineering workbench and manufacturing
 follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `e6e3fb64`.
 
 ## In progress
 
-- **PR #100 default activation**: all new engine repairs enabled with explicit
-  opt-outs; alternating contextual layout search and diverse portfolios selected.
-  Full combined native regression validation is in progress. The 310-target unit
-  suite passes; the final hierarchy-spacing correction has 23 passing focused tests
-  and is being checked again in the complete suite. Main and initial default-enabled
-  native ladders pass all eight cases at seeds 0 and 1. Main showcases pass 5/5. Transactional shove
-  caches cut a representative placement from 19.64 to 3.84 seconds with identical
-  decisions and final geometry. Native collectors and all 27 browser tests pass.
-  Do not merge until final combined tests, routing comparison and CI finish.
-  See [activation and validation](docs/design/pr100-defaults.md).
+- **PR #100 default activation**: all thirteen new Boolean repairs enabled with
+  explicit opt-outs; alternating contextual search and diverse portfolios selected.
+  All 310 Bazel targets and all-file hooks pass on `26170f97`. Main and candidate
+  pass all 41 scheduled native cases each: 16 ladder, five showcase and 20 hard
+  runs. Ladder copper/vias fall 9.1%/16.9%; hard copper/vias fall 4.9%/3.9%.
+  Measured stage time rises 18.1%/9.9% respectively. Native collectors at four
+  rotations and all 27 browser tests pass. Layer and contact reviews are complete;
+  final platform CI and a separate reduced-budget manual SoC comparison remain.
+  Keep those outcomes distinct from scheduled passes. See
+  [activation and validation](docs/design/pr100-defaults.md).
 
 - **SMPS closure investigation**: constraint-derived placement cost,
   copper-only pad ingest, compact current-sized source collectors and native

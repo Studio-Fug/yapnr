@@ -360,7 +360,7 @@ still require routing and electrical validation.</p>
 </section>
 <section id="laboratory-and-evidence">
 <h2>Laboratory and evidence<a class="headerlink" href="#laboratory-and-evidence" title="Link to this heading">¶</a></h2>
-<p>The lab exposes <strong>Experimental shove repair</strong>, <strong>Authored capacitor banks</strong>, and
+<p>The lab exposes <strong>Shove repair</strong>, <strong>Authored capacitor banks</strong>, and
 <strong>Legalize source poses only</strong> on new runs. The latter consumes the registered
 source’s exact poses, performs zero optimizer updates, and supports isolated
 legalization A/B replay. It cannot run paused or indefinitely.</p>
@@ -370,7 +370,8 @@ aggregate before/after cost decomposition. Amber outlines and green placements
 show every affected component, and airwires use every accepted pose. Notes attach
 to the transaction’s content hash, as they do for individual packing decisions.
 The Python/HTTP/CLI APIs expose <code class="docutils literal notranslate"><span class="pre">shove</span></code>, <code class="docutils literal notranslate"><span class="pre">placement_banks</span></code> and <code class="docutils literal notranslate"><span class="pre">legalize_only</span></code> on
-<code class="docutils literal notranslate"><span class="pre">start</span></code>; CLI equivalents are <code class="docutils literal notranslate"><span class="pre">--shove</span></code>, <code class="docutils literal notranslate"><span class="pre">--placement-banks</span></code>, <code class="docutils literal notranslate"><span class="pre">--legalize-only</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">start</span></code>; CLI equivalents are <code class="docutils literal notranslate"><span class="pre">--shove</span></code>, <code class="docutils literal notranslate"><span class="pre">--placement-banks</span></code>, <code class="docutils literal notranslate"><span class="pre">--legalize-only</span></code>.
+Shove and banks default on; <code class="docutils literal notranslate"><span class="pre">--no-shove</span></code> and <code class="docutils literal notranslate"><span class="pre">--no-placement-banks</span></code> opt out.</p>
 </section>
 <section id="initial-measured-replay">
 <h2>Initial measured replay<a class="headerlink" href="#initial-measured-replay" title="Link to this heading">¶</a></h2>
@@ -423,7 +424,8 @@ The Python/HTTP/CLI APIs expose <code class="docutils literal notranslate"><span
 <p>The candidate accepted 31 transactions. All hard placement checks passed; R7 did
 not improve. The new search took about 34.5 seconds versus 0.4 seconds for packing
 alone on this run. This is placement evidence, not native copper DRC or electrical
-qualification. The experimental flags remain off by default.</p>
+qualification. These flags were off by default for this initial study; their
+current activation and combined validation are recorded in the defaults report.</p>
 <p>A separate seed-0, 400-iteration global A/B used the same fixed objective and
 source poses. Enabling the authored output bank reduced its final pairwise span
 from 20.08 mm to the declared 9.00 mm; the input bank ended at 2.92 mm within its

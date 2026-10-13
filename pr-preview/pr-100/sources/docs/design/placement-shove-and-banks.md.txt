@@ -68,7 +68,7 @@ still require routing and electrical validation.
 
 ## Laboratory and evidence
 
-The lab exposes **Experimental shove repair**, **Authored capacitor banks**, and
+The lab exposes **Shove repair**, **Authored capacitor banks**, and
 **Legalize source poses only** on new runs. The latter consumes the registered
 source's exact poses, performs zero optimizer updates, and supports isolated
 legalization A/B replay. It cannot run paused or indefinitely.
@@ -80,6 +80,7 @@ show every affected component, and airwires use every accepted pose. Notes attac
 to the transaction's content hash, as they do for individual packing decisions.
 The Python/HTTP/CLI APIs expose `shove`, `placement_banks` and `legalize_only` on
 `start`; CLI equivalents are `--shove`, `--placement-banks`, `--legalize-only`.
+Shove and banks default on; `--no-shove` and `--no-placement-banks` opt out.
 
 ## Initial measured replay
 
@@ -100,7 +101,8 @@ A 33-part converter was re-legalized from the same frozen continuous placement,
 The candidate accepted 31 transactions. All hard placement checks passed; R7 did
 not improve. The new search took about 34.5 seconds versus 0.4 seconds for packing
 alone on this run. This is placement evidence, not native copper DRC or electrical
-qualification. The experimental flags remain off by default.
+qualification. These flags were off by default for this initial study; their
+current activation and combined validation are recorded in the defaults report.
 
 A separate seed-0, 400-iteration global A/B used the same fixed objective and
 source poses. Enabling the authored output bank reduced its final pairwise span

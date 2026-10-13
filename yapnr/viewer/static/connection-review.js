@@ -54,7 +54,7 @@
     $('resolution').hidden = !item;
     if (!item) return;
     text('resolution-state', `${item.paused ? 'Paused · ' : ''}${item.state} · revision ${item.revision}`);
-    text('resolution-next', item.invalidation || item.next_action);
+    text('resolution-next', item.invalidation || (item.state === 'clarification' ? item.question+' · '+item.next_action : item.next_action));
     $('resolution-criteria').replaceChildren();
     const checks = item.verification?.checks || [];
     const historical = ["stale", "implementing", "ready", "needs_plan"].includes(item.state);
@@ -85,6 +85,18 @@
     $('resolution-pause').hidden = item.state === 'addressed';
     $('resolution-pause').textContent = item.paused ? 'Resume resolution' : 'Pause resolution';
   }
+  let resolutionPolling = false;
+  setInterval(async () => {
+    if (resolutionPolling || document.hidden || !current?.resolution) return;
+    const id = current.resolution.id; resolutionPolling = true;
+    try {
+      const item = await request('/api/feedback/v1?id='+encodeURIComponent(id));
+      if (current?.resolution?.id === id && item.revision >= current.resolution.revision) {
+        current.resolution = item; resolution(current);
+      }
+    } catch (error) { text('error', 'Resolution status unavailable: '+error.message); }
+    finally { resolutionPolling = false; }
+  }, 5000);
   $('resolution-pause').onclick = async () => {
     if (!current?.resolution) return;
     try {

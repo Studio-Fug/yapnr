@@ -13,9 +13,9 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
   worked baseline, separate worker dispatch, exact-PR-head independent execution,
   retry/budget/pause handling, manifest evidence and review UI. Synthetic R5/R6/Q1
   examples distinguish a partial fix from a full pass; they make no native routing
-  claim. Seventeen affected unit tests and 27 independent parent acceptance
-  checks pass, including stale-head, partial-fix, pause, concurrency and replay
-  cases. Pre-commit checks pass. Full Bazel validation is in progress; local
+  claim. Forty-four focused tests pass, including the 27 parent-authored
+  acceptance cases now retained in the regression suite: stale-head, partial-fix,
+  pause, concurrency and replay. Pre-commit checks pass. Full Bazel validation is in progress; local
   runfile footprint exceeded the available build volume. See [protocol and receipts](docs/feedback-resolution.md).
 
 - **PR #100 default activation**: all thirteen new Boolean repairs enabled with

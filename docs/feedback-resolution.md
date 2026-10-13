@@ -129,11 +129,12 @@ an item with the legacy connection-review `respond` operation.
 ```sh
 yapnr feedback run --project . --id gate-access \
   --worker repair-agent \
-  --worker-command '["python3", "agent-adapter.py", "{bundle}"]' \
+  --worker-command '["agent-feedback-worker", "{bundle}"]' \
   --max-attempts 3 --timeout 1800
 ```
 
-This command explicitly authorizes local worker execution. The adapter receives a
+Install your `agent-feedback-worker` adapter on `PATH` (or pass its absolute argv
+path). This command explicitly authorizes local worker execution. The adapter receives a
 fresh copied bundle as its working directory. It must launch a **separate** agent
 or implementation worker, let that worker prepare its PR, and write
 `submission.json` into the bundle before returning zero. Use an installed,
@@ -169,7 +170,8 @@ itself requires explicit CLI authorization; saving a note never launches it.
 
 The connection-review page displays the exact lifecycle state, each criterion's
 failed/missing/passed result, implementation PR, checked visual artifacts and
-attempt history. Its Pause button records a durable pause. Legacy “tested” notes
+attempt history. The selected item refreshes its state automatically while work
+is running. Its Pause button records a durable pause. Legacy “tested” notes
 remain visibly unverified. Human review decisions retain their original meaning.
 
 `GET /api/feedback/v1` queries items. Same-origin `POST /api/feedback/v1` supports

@@ -13,6 +13,10 @@ py_library(
 
 yapnr_py_tests(
     overrides = {
+        "test_feedback_acceptance": {
+            "data": glob(["fixtures/feedback/**"]),
+            "size": "medium",
+        },
         "test_vendor_uploads": {"deps": [":manufacturing_package_fixture"]},
         "test_assembly_availability": {"deps": [":manufacturing_package_fixture"]},
     },

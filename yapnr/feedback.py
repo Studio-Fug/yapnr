@@ -422,6 +422,17 @@ class Feedback:
                 attempt=attempt,
                 plan=item["plan"],
                 previous_failures=item.get("verification"),
+                submission_template={
+                    "attempt": attempt["id"],
+                    "pr": "https://github.com/OWNER/REPO/pull/NUMBER",
+                    "head": "FULL_COMMIT_ID",
+                    "outputs": {
+                        check["id"]: "COMMITTED_CANDIDATE_PATH"
+                        for check in item["plan"]["definition"]["checks"]
+                    },
+                    "before_visual": item["plan"]["definition"]["before_visual"],
+                    "after_visual": "COMMITTED_AFTER_VISUAL_PATH",
+                },
                 instructions=(
                     "Implement every criterion. Return a real PR and committed "
                     "before/after visuals. Do not edit the parent validator. "
@@ -443,8 +454,10 @@ class Feedback:
         (target / "TASK.md").write_text(
             "# Delegated feedback implementation\n\nRead task.json and the pinned validator files. "
             "Implement all criteria in a separate checkout, create a PR with committed before/after "
-            "visuals in its description, and write submission.json using the documented receipt "
-            "schema. Include this attempt ID. The parent independently verifies the exact PR head.\n"
+            "visuals in its description, and write submission.json using task.json's "
+            "submission_template. Candidate and visual paths must be committed. Link both "
+            "visuals in the PR description with exact-commit GitHub URLs. Include this "
+            "attempt ID. The parent independently verifies the exact PR head.\n"
         )
         return target
 

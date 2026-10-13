@@ -141,6 +141,8 @@ class FeedbackTest(unittest.TestCase):
         item = self.store.dispatch("example", item["revision"], "second-worker")
         bundle = json.loads(self.store.object(item["attempts"][-1]["bundle_sha256"]))
         self.assertEqual(bundle["previous_failures"]["checks"][0]["cases"][1]["id"], "R6")
+        self.assertEqual(bundle["submission_template"]["attempt"], item["attempts"][-1]["id"])
+        self.assertEqual(set(bundle["submission_template"]["outputs"]), {"placement"})
         with self.assertRaises(Conflict):
             self.store.dispatch("example", item["revision"], "duplicate")
 

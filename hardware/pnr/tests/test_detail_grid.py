@@ -287,6 +287,23 @@ class WideCopperRecordedLaterTest(unittest.TestCase):
                         _segment_distance(start, end, a, b), 0.05 + 0.1 + 0.125 - 1e-9
                     )
 
+    def test_coarse_grid_escape_halo_never_has_negative_radius(self):
+        from pnr.route.detail.joint_escape import _occupied
+
+        for pitch in (0.25, 0.5, 1.0):
+            g = RouteGrid(4, 4, pitch, clearance=0.1, track_width=0.1)
+            g.net_widths = {"SIGNAL": 0.1, "POWER": 0.15}
+            a, b = (1.90476, 2.11954), (2.75318, 2.05084)
+            for cell in _occupied(g, [(0, a, b, 0.1)], [], 1):
+                g.pad_net[cell] = "SIGNAL"
+            g.escape_segments.append((0, "SIGNAL", a, b))
+            g.reserve_wide_pad_clearance()
+            for la, start, end in _free_edges(g, "POWER"):
+                if la == 0:
+                    self.assertGreaterEqual(
+                        _segment_distance(start, end, a, b), 0.05 + 0.1 + 0.075 - 1e-9
+                    )
+
     def test_pad_added_after_the_tables(self):
         from pnr.route.detail.grid import Rect
         from pnr.route.detail.maze import route

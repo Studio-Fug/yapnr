@@ -791,7 +791,10 @@ class RouteGrid:
                 return mark
 
             def grow(owner, extent):
-                return extent + max(own, clearance(owner)) + core - half
+                # A coarse grid may supply more than the required half-cell
+                # margin. Still reserve touched cells; negative capsule radii
+                # invert their bounds and can leave diagonal crossings open.
+                return max(0.0, extent + max(own, clearance(owner)) + core - half)
 
             for layer, owner, r in self.pad_rectangles[pads:]:
                 keep = self.pad_keepaways.get((layer, owner, r))

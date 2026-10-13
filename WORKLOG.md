@@ -3,20 +3,178 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-11 (USB paired-routing integration validation).
+Last updated: 2026-10-13 (PR #100 default activation and native regression comparison).
 PR #99 merged into main at `5d1a07c1`; its engineering workbench and manufacturing
-follow-ups are available. PR #94 is rebased on that revision.
+follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `e6e3fb64`.
 
 ## In progress
 
-- **PR #94 integration**: corrected compact recovery's offset-courtyard geometry.
-  Fresh Linux A/B passes all 12 USB cells under control, prior-paired and integrated
-  defaults; both local integrated header reruns pass native gates. Total uncoupled
-  length remains 2 mm. Validation receipt preserves all baseline/repaired attempts,
-  root/candidate seeds, selected starts, settings, pins and saved-board hashes.
-  Accepted native header snapshots illustrate recovered placement. Full repository
-  checks and hosted validation gate landing; wider board/topology coverage remains
-  open. Bounded search acceptance does not require every root seed to pass.
+- **PR #100 default activation**: all thirteen new Boolean repairs enabled with
+  explicit opt-outs; alternating contextual search and diverse portfolios selected.
+  Runtime `c50ffdfc` passes all 310 regular Bazel targets locally and on Linux/macOS
+  CI, native CI ladder and dual-architecture packaging. Main and final candidate
+  pass 41 scheduled native cases each: 16 ladder, five showcase and 20 hard runs.
+  Aggregate copper/vias fall 5.9%/6.4%; measured stage time falls 7.7% on the shared
+  host. Native layer/contact reviews include fresh changed/representative boards
+  and explicitly proven reuse of unchanged geometry. RF nightly passes 24 cached
+  targets per platform. Supplemental native checks: 118 pass, one explicit
+  PyTorch-dependent skip; two cross-interpreter/headless test-harness defects
+  fixed. Final combined checks and landing remain. The separate reduced-budget SoC still fails: the repair
+  removes unsafe clearance violations but leaves 41 opens and eight skew findings.
+  No full SMPS qualification is claimed. See
+  [activation and validation](docs/design/pr100-defaults.md).
+
+- **SMPS closure investigation**: constraint-derived placement cost,
+  copper-only pad ingest, compact current-sized source collectors and native
+  array fit. All 310
+  Bazel targets pass; native collector regressions pass at all four rotations.
+  Six of eight two-cell prototype placements pass nine geometric SMPS checks and
+  legality, but the routed first seed has 12 opens; the best corrected routed
+  candidate still has five opens. Neither qualifies. Exact-board ripple,
+  stability and thermal evidence remain missing. See
+  [measured scope and native animation](docs/design/smps-closure.md).
+  Coupled feasibility traced to hard internal group radii and symmetric array
+  reserves: softening only those heuristics yields six legal full placements
+  passing all nine geometry checks. Two distinct cores finish with 9/12 opens,
+  zero geometric DRC violations, 9/8 SMPS failures and 8/9 unknowns. All six
+  generated layouts fail at least one native zero-via gate-length check. An
+  isolated controller also has no current-sized SW2 access under the full source
+  envelope. Next: pad-obstacle-aware gate placement and evidence-based controller
+  terminal access/current assignment. Do not repeat frozen routing failures or
+  call placement passes full qualification.
+
+- **SMPS validator**: ten guidance-derived check types, 28 provisional Mini profile
+  requirements, native filled-plane coverage, explicit track paths, and exact-board
+  ripple/stability/thermal evidence gates. Fourteen fault-injection tests pass.
+  Unknowns cannot qualify candidates. Full AC/thermal extraction is not implemented.
+  See [coverage and limits](docs/design/smps-validation.md).
+
+- **Contextual hierarchical layouts**: independent, frozen, alternating
+  and paired variants with optional geometric diversity. Four synthetic cases,
+  six arms and three seeds: 72/72 legal. Parent relaxation helps capacitor banks;
+  diverse shortlists help crowded libraries; paired swaps add no benefit here.
+  Native A/B of the shove legalizer has 17 → 19 opens and 47 → 32 subwidth tracks:
+  mixed evidence, not a routing win. Power-first improves both converter seed scores,
+  while bank compactness is mixed. See [study](docs/design/contextual-block-layouts.md).
+
+- **Placement shove and capacitor banks**: transactional
+  repair revisits the completed packer's decisions, recording every affected pose
+  and whole-board cost. Same frozen 33-part converter: total motion 46.911 → 37.199 mm,
+  max 9.633 → 3.578 mm, turns 2 → 0, hard placement checks pass; R7 unchanged.
+  Authored bank subgroups add global compactness, a checked pairwise diameter and
+  collective external shove. Separate fresh global A/B: output bank 20.08 → 9.00 mm,
+  but other displacement/rotation problems remain; neither routed arm qualifies.
+  UI/API/CLI expose both flags and legalization-only replay; accepted transactions
+  retain canonical annotation support. The global overlap-gradient investigation
+  confirms cancellation in symmetric contact chains; its live formula is unchanged.
+  See [design and evidence](docs/design/placement-shove-and-banks.md).
+
+- **Unlimited interactive placement and rotation controls**: opt-in Run until stopped
+  removes the lab iteration and wall-time caps while preserving pause/step/Adam state.
+  Live fixed temperatures and restartable start/end/duration schedules are exposed in
+  UI, HTTP, Python and CLI. Schedules and actual evaluation temperatures are recorded
+  for replay. Eleven real updates exactly match schedule replay; the initial three
+  exactly match the prior finite engine. Finite production defaults remain unchanged.
+
+- **Live objective stepping**: a dedicated editor displays draft, pending and applied
+  states. Apply retains the paused iteration; Apply & step waits for the worker's
+  acknowledgment and uses revision guards before advancing once. Polling preserves
+  unsent edits; objective changes invalidate old heatmaps. Browser validation with
+  wirelength weights 8 then 3 exactly reproduces an uninterrupted two-update replay,
+  including rotation probabilities. No engine behavior or defaults changed.
+
+- **Cost surface exploration**: component selection, separate safe arithmetic DSL,
+  four cardinal rotations with a common scale, per-rotation minima, frozen-frame
+  provenance and discovery artifacts. Uses engine rigid-pose terms; other parts
+  retain displayed rotations, not soft mixtures. Surface edits do not alter the run.
+  Four-rotation fields checked against the rigid engine loss; browser rotation/net
+  filters and saved field links verified. All 306 Bazel targets pass.
+
+- **Single-step and minimum-span airwires**: UI/API steps retain optimizer state and
+  pause after the requested updates; post-update frames agree with iteration counts.
+  Default-on per-net Euclidean spanning trees use displayed pad centers, including
+  repeated logical-pad alternatives, with net filtering, totals and SVG export.
+  These are geometric aids, not routed connectivity or the smooth objective.
+  Actual 1+1+2 stepped updates exactly reproduce four uninterrupted updates.
+
+- **Iteration-zero review**: paused starts now show the actual seeded solver poses
+  before any loss evaluation or update. `initial.json` and a typed initialization
+  history record preserve those poses and rotation probabilities. The observational
+  callback leaves the final solver result unchanged.
+
+- **Placement lab agent API**: versioned HTTP contract, stdlib Python client and
+  `yapnr placement` JSON CLI share the live lab service and canonical notes. Agents
+  can register inputs, start paused, edit/pause/resume/stop, poll consumed revisions,
+  inspect every decision, compare movement, page actual history, fetch evidence and
+  export SVG geometry. Notes/replies remain agent-authored; no approval authority.
+  Real API validation completed a 40-step PD run with 22 legalizer decisions and
+  43 history events; stale-edit rejection, browser discovery/notes and stop verified.
+  All 304 Bazel targets pass. See `yapnr/viewer/PLACEMENT-API.md`. This changes
+  control/review interfaces, not placement acceptance or the engine objective.
+
+- **Placement laboratory / pad-locality investigation**: live single-start objective
+  expression editing, pause/resume, frozen inputs/engine, JSONL iteration history,
+  and per-decision legalization review with canonical comments. Power-first A/B
+  captures cover converter and PD, both seeds. `PNR_PAD_LOCALITY` remains default-off:
+  distances improve, but translation regresses in three of four comparisons and
+  power placement scores regress in all four. Do not promote this candidate or
+  claim C9 fixed. A live 1,000-step run with a weight change at step 841 replayed
+  exactly. All 303 Bazel targets and 18 JavaScript cases pass. See
+  `docs/design/pad-locality-lab.md` and `yapnr/viewer/PLACEMENT-LAB.md`.
+  Next: tune continuous placement to avoid the later legalizer displacements,
+  protect the unchanged power objective, then run native routing/electrical A/B.
+
+- **Mini validator/engine repair**: source-relation preflight catches hierarchy
+  anchor loss before synthesis; native polygons constrain placement, routing and
+  writeback; independent power coverage requires every capacitor branch. Copper
+  extraction distinguishes fill islands and actual plated-pad contacts. A separate
+  conservative per-branch DC current screen detects connected return constrictions;
+  unknown models and electrical failures cannot qualify hierarchical completion.
+  Default-off partition/outline/branch candidates and recorded equal-budget placement
+  comparisons are described in `docs/design/mini-validator-repair.md`. Both seeds
+  improve for PD and converter, with legal placements. Full routed-board, AC and
+  thermal qualification remain open; this is not a new completed Mini PCB.
+  Native converter opens improve 16 to 9, subwidth tracks 34 to 31. A stricter
+  shared-power channel candidate improves PD versus branch-only placement but
+  regresses the converter; keep it opt-in. No tested module meets all electrical
+  gates. The scenario suite covers these failures, including the unjustified
+  assumed-pour exemption in the saved C53 channel.
+  Validation: all 301 Bazel targets pass; the scenario target has 29 cases, with
+  both native KiCad cases also passing under the headless interpreter.
+
+- **Viewer airwires**: native connected copper groups replace the all-pad tree.
+  Only missing minimum-distance anchor links remain (9 converter / 6 PD, matching
+  native DRC). Missing native connectivity disables the overlay. Added cache,
+  connected-net, minimum-link and coincident-layer regressions, plus CI coverage
+  for viewer JavaScript checks. Actual-board before/after animations and layer
+  sheets accompany `docs/design/mini-validator-repair.md`.
+
+- **Viewer copper layers**: native extraction now carries the complete enabled copper
+  stack, including empty planes. Both PCB and 3D use that stack; vertical controls
+  put each layer name before its checkbox. Copper visibility covers inner-layer
+  tracks, zones, vias and hit testing. Legacy caches upgrade when native inputs
+  remain available; geometry-only archives retain a best-effort fallback.
+
+- **Hierarchical module constraints**: temporary module boards now omit parent-board
+  mounting-hole coordinates, matching the compiled sub-board rules. Parent-board
+  fastener constraints remain intact. A regression covers both scopes; real native
+  module candidates now pass the previously failing constraint compilation and DRC.
+  Full-board hierarchical assembly and electrical qualification remain in progress.
+- **Native checkpoint continuation** (in progress, opt-in): retained-board and
+  search-history checkpoints bridge bounded refinement workers. Completed stale
+  sweeps and exhausted repair budgets can establish a sampled plateau; timeouts,
+  worker errors and campaign resource limits remain distinct. Native DRC and
+  electrical gates remain unchanged. Real-board continuation has accepted new
+  connections; full routing and electrical qualification remain open.
+- **Checkpoint visibility**: switching lanes discards stale poll responses.
+  Initial-placement signal drafts have inspectable geometry and explicitly show
+  deferred nets and pending native DRC. Draft copper is visually distinguished
+  from accepted native checkpoints. Focused race, geometry and checkpoint tests
+  pass; all 300 repository tests and all-file hooks pass.
+- **PR #94 integration**: all 12 fresh Linux cells pass native/electrical gates;
+  all local tests and hosted checks passed before landing. The validation receipt
+  retains baseline failures, root/candidate seeds and exact saved-board hashes.
+  Total uncoupled length remains 2 mm. Wider topology coverage remains open.
 
 - **Assembly inventory**: quantity-aware catalog filtering and assembly-house checks
   publish replayable BOM/identity/quantity evidence. JLCPCB public inventory includes

@@ -908,7 +908,10 @@ class CostInspectTest(unittest.TestCase):
         graph.component("U1").pos = (12.0, 10.0)  # courtyard x 8.255..15.745
         graph.component("U2").pos = (30.0, 12.0)
         objective = Objective(graph, cc)
-        self.assertEqual(objective.term_keys, list(TERMS[:BASE_TERMS]) + ["region", "alignment"])
+        self.assertEqual(
+            objective.term_keys,
+            list(TERMS[:BASE_TERMS]) + ["region", "alignment", "pad_locality", "smps_geometry"],
+        )
         report = objective.report()
         u1 = {t["key"]: t for t in report["components"]["U1"]["terms"]}
         u2 = {t["key"]: t for t in report["components"]["U2"]["terms"]}
@@ -919,7 +922,10 @@ class CostInspectTest(unittest.TestCase):
             self.assertAlmostEqual(terms["alignment"]["raw_share"], 1.0)
             self.assertAlmostEqual(terms["alignment"]["weighted"], 20.0)
         plain = compile_constraints(doc(), graph.refs)
-        self.assertEqual(Objective(graph, plain).term_keys, list(TERMS[:BASE_TERMS]))
+        self.assertEqual(
+            Objective(graph, plain).term_keys,
+            list(TERMS[:BASE_TERMS]) + ["pad_locality", "smps_geometry"],
+        )
 
 
 class PoolStartTest(unittest.TestCase):
@@ -1168,7 +1174,15 @@ class UnchangedTest(unittest.TestCase):
         kwargs = legalize_constraint_kwargs(graph, cc, poses)
         self.assertEqual(
             sorted(kwargs),
-            ["edge_bands", "fixed", "group_edges", "group_limits", "keepouts", "rotations"],
+            [
+                "edge_bands",
+                "fixed",
+                "group_edges",
+                "group_limits",
+                "keepouts",
+                "rotations",
+                "shove_constraints",
+            ],
         )
         real = legalize_module.legalize
         calls = []

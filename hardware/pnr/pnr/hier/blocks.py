@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import copy
 import math
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -121,6 +122,11 @@ def extract_blocks(graph: BoardGraph, constraints: CompiledConstraints) -> List[
             )
         )
 
+    if os.environ.get("PNR_HIER_SAFE_PARTITION", "1") == "1":
+        from pnr.hier.partition import close_partition
+
+        blocks = close_partition(blocks, constraints, interface)
+
     net_pins: Dict[str, List[Tuple[str, str]]] = {n.name: list(n.pins) for n in graph.nets}
     for b in blocks:
         inside = set(b.refs)
@@ -177,6 +183,9 @@ def sub_board(
     ``rules['block_ports']`` so callers can score port accessibility. Board-level
     constraints that reference parts outside the block are dropped.
     """
+    from pnr.hier.partition import validate_partition
+
+    validate_partition([block], constraints)
     inside = set(block.refs)
     sub = BoardGraph(
         name=graph.name + ":" + block.name, stack=local_record(copy.deepcopy(graph.stack))
@@ -223,6 +232,13 @@ def sub_board(
     )
     r["mounting_holes"] = []
     present = {n.name for n in sub.nets}
+    if r.get("smps_checks"):
+        from pnr.smps import scope_checks
+
+        local, deferred = scope_checks(r["smps_checks"], inside, present)
+        r["smps_checks"] = local
+        r["smps_deferred_checks"] = deferred
+        con.smps_checks = copy.deepcopy(local)
 
     def chain_inside(d):
         # Terminal/auxiliary endpoints are "REF.pin"; a chain leaving the block
@@ -318,6 +334,9 @@ def block_constraints_doc(doc: dict, addresses, width: float, height: float, ref
 
     out = copy.deepcopy(doc)
     out.setdefault("board", {})["outline"] = {"w": float(width), "h": float(height)}
+    # Fasteners are in the parent board's coordinate frame. As in sub_board(),
+    # reserve them at top-level placement, not on the module's temporary board.
+    out.pop("mounting_hole", None)
     out.pop("row", None)
     out.pop("line_group", None)
     # Board-coordinate regions and alignments apply to the placed block macro.

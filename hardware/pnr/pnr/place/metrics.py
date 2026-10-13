@@ -115,11 +115,24 @@ def outside_outline(graph: BoardGraph, width: float, height: float, exclude=()) 
     are skipped — their protrusion past the outline is by design, not a
     violation."""
     ex = set(exclude)
-    return [
-        c.ref
-        for c in graph.components
-        if c.ref not in ex and not courtyard_rect(c).inside(width, height)
-    ]
+    contains = outline_contains(graph, width, height)
+    return [c.ref for c in graph.components if c.ref not in ex and not contains(courtyard_rect(c))]
+
+
+def outline_contains(graph, width, height):
+    """One exact predicate shared by final checks and incremental moves."""
+    poly = graph.outline.polygon if graph.outline else []
+    if poly and (
+        len(poly) != 4
+        or {tuple(p) for p in poly} != {(0, 0), (width, 0), (width, height), (0, height)}
+    ):
+        from .regions import Area
+
+        area = Area([("polygon", poly)])
+        return lambda r: r.inside(width, height) and area.contains(
+            (r.left, r.bottom, r.right, r.top)
+        )
+    return lambda r: r.inside(width, height)
 
 
 def pad_edge_violations(
@@ -173,6 +186,9 @@ def hard_violations(
     graph: BoardGraph, constraints: CompiledConstraints, clearance: float = 0.0
 ) -> Dict[str, List]:
     """All hard-constraint / legality violations, keyed by kind (empty = legal)."""
+    from pnr.placement_banks import activate
+
+    constraints = activate(constraints)
     width, height = outline_size(graph, constraints)
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
@@ -258,6 +274,7 @@ def part_rules(graph, constraints, *, clearance=0.0, pad_edge=None):
     pad_edges = hard_pad_group_edges(constraints)  # anchor_pad hard groups
 
     related = declared(constraints)
+    contains = outline_contains(graph, width, height)
 
     def ok(comp):
         if (
@@ -270,7 +287,7 @@ def part_rules(graph, constraints, *, clearance=0.0, pad_edge=None):
         if comp.ref in poses and any(abs(a - b) > 1e-3 for a, b in zip(comp.pos, poses[comp.ref])):
             return False
         rect = courtyard_rect(comp)
-        if comp.ref not in locked and not rect.inside(width, height):
+        if comp.ref not in locked and not contains(rect):
             return False
         if pad_edge is not None and comp.ref not in locked and comp.ref not in poses:
             from .legalize import pad_edge_box

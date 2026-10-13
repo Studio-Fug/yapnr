@@ -1,5 +1,8 @@
 # Component placement cost inspection
 
+For live objective editing and decision-by-decision comments, open the
+[placement laboratory](PLACEMENT-LAB.md).
+
 Select a recorded global or legalizer phase, then click a pad or use Jump to component.
 `PNR_COST_CAPTURE_DIR` records the phases alongside normal `PNR_LIVE_DIR` events.
 
@@ -72,8 +75,10 @@ pixel; hover reports the exact chosen site and total. Grey means no evaluated le
 pixel, not a prediction that routing is impossible. The chosen orientation may differ from the field
 orientation selected for comparison.
 
-The production model currently has no capacitor-role constraints; its local capacitor-loop row is
-zero. This exposes missing policy rather than pretending the experimental capacitor placement
+The legacy local capacitor-loop row is zero. Experimental `PNR_PAD_LOCALITY=1`
+adds a separate pad-locality row; captures also retain authored soft-rule and optional
+wirelength contributions. This exposes missing policy rather than pretending the
+experimental capacitor placement
 objective is integrated. Fixed components have global objective shares but no sequential legalizer
 decision score.
 

@@ -155,6 +155,9 @@ def place(
     box (``COURTYARD``). Under power-first placement every part but ``WIRE`` and ``TURN``
     applies (:func:`pnr.place.power_first.staged_place`).
     """
+    from pnr.placement_banks import activate
+
+    constraints = activate(constraints)
     spread = compact.spread(spread)  # PNR_COMPACT GP: 1.0 (unchanged otherwise)
     if any(c.kind == "line_group" for c in constraints.constraints):
         # Line groups (pnr.place.line_group): each group is one rigid macro here.
@@ -373,6 +376,8 @@ def place(
     channels = ChannelModel(cont, routing_rules, **_channel_kwargs(routing_rules))
     # 2. Legalization (snap to a non-overlapping, in-outline layout).
     with profile_span("place_legalize"):
+        from .pad_locality import legalize_kwargs as locality_kwargs
+
         placed = legalize(
             cont,
             width,
@@ -404,6 +409,7 @@ def place(
             **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
             # PNR_LEGALIZE_HPWL: the wirelength term and the four-turn search (not matched parts).
             **_wire_kwargs(cont, constraints),
+            **locality_kwargs(cont, constraints),
         )
     legal_record = getattr(placed, "legal_motion", None)
     if related:

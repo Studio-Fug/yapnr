@@ -196,7 +196,9 @@ def build_parser() -> argparse.ArgumentParser:
     from yapnr.frontends.atopile.cli import register_atopile, register_picker
     from yapnr.order.cli import register as register_order
     from yapnr.partcache.cli import register as register_part_cache
+    from yapnr.placement import register as register_placement
 
+    register_placement(commands)
     register_experiments(commands)
     register_agent(commands)
     register_workflow(commands)

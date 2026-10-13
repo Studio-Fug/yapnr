@@ -518,7 +518,17 @@ def _native_one(
         # PNR_SI=1 side fields (present only when the flag produced them); si_layout_failures
         # is a rank key with PNR_SI=1 (_rank_key), the others are recorded only.
         record.update(
-            {k: e[k] for k in ("si_layout_failures", "si_design_failures", "si_errors") if k in e}
+            {
+                k: e[k]
+                for k in (
+                    "si_layout_failures",
+                    "si_design_failures",
+                    "si_errors",
+                    "smps_layout_failures",
+                    "smps_layout_unqualified",
+                )
+                if k in e
+            }
         )
         prog = round_dir / "electrical/native-loop/progress.json"
         if prog.exists():
@@ -608,6 +618,17 @@ def _rank_key(stage):
                 (o[0], o[5], o[4], o[2], o[1], o[3], r["id"]) if o else (math.inf,) * 6 + (r["id"],)
             )
 
+    if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1":
+
+        def smps_key(r, base=key):
+            k = base(r)
+            values = tuple(
+                math.inf if r.get(f) is None else r[f]
+                for f in ("smps_layout_failures", "smps_layout_unqualified")
+            )
+            return k[:2] + values + k[2:]
+
+        key = smps_key
     from pnr.compact_flags import enabled as compact_enabled
 
     if compact_enabled("RANK"):

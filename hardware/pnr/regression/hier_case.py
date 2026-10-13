@@ -909,6 +909,8 @@ def run(root, seed):
                 )
             except LegalizationError as error:
                 record.update(legal=False, error=str(error))
+                if hasattr(error, "layout_search_trials"):
+                    record["layout_search_trials"] = error.layout_search_trials
                 trace.note(status="illegal")
                 continue
             if placement.get("hulls"):  # PNR_MACRO_HULL: the shapes route-compact slides

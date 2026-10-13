@@ -1,13 +1,55 @@
 """Regression: three connected pads get one deliberate bank, never per-pad banks."""
 
 import importlib.util
+import os
 import unittest
+from unittest.mock import patch
 
 from test_plane_access_intent import FAB
 
 
 @unittest.skipUnless(importlib.util.find_spec("pcbnew"), "requires native KiCad")
 class PowerArrayTests(unittest.TestCase):
+    def test_compact_bus_clears_adjacent_gate_without_narrowing(self):
+        import pcbnew as k
+
+        from pnr.plane_access import replace_power_array
+
+        for rotation in (0, 90, 180, 270):
+            with self.subTest(rotation=rotation):
+                b, f, intent, net = self.fixture()
+                for i, p in enumerate(sorted(f.Pads(), key=lambda p: p.GetNumber())):
+                    p.SetPosition(k.VECTOR2I(round((5 - 1.905 + 1.27 * i) * 1e6), 7800000))
+                    p.SetSize(k.VECTOR2I(700000, 700000))
+                gate_net = k.NETINFO_ITEM(b, "gate")
+                b.Add(gate_net)
+                gate = k.PAD(f)
+                gate.SetNumber("4")
+                gate.SetPosition(k.VECTOR2I(6905000, 7800000))
+                gate.SetSize(k.VECTOR2I(700000, 700000))
+                gate.SetShape(k.PAD_SHAPE_RECT)
+                gate.SetAttribute(k.PAD_ATTRIB_SMD)
+                layers = k.LSET()
+                layers.AddLayer(k.F_Cu)
+                gate.SetLayerSet(layers)
+                gate.SetNetCode(gate_net.GetNetCode())
+                f.Add(gate)
+                f.SetOrientationDegrees(rotation)
+                fab = dict(FAB, via_diameter_mm=0.45, min_via_plating_um=18)
+                with patch.dict(os.environ, PNR_PLANE_ACCESS_COMPACT_BUS="0"):
+                    with self.assertRaisesRegex(ValueError, "foreign copper"):
+                        replace_power_array(b, intent, fab)
+                self.assertEqual(len(list(b.GetTracks())), 0)
+                with patch.dict(os.environ, PNR_PLANE_ACCESS_COMPACT_BUS="1"):
+                    result = replace_power_array(b, intent, fab)
+                    self.assertEqual(result["count"], 3)
+                    self.assertEqual(result["bus_width_mm"], 1.5)
+                    self.assertLessEqual(result["per_via_loss_w"], fab["via_barrel_loss_budget_w"])
+                    self.assertLessEqual(result["peak_drop_v"], fab["via_array_peak_drop_v"])
+                    before = len(list(b.GetTracks()))
+                    replace_power_array(b, intent, fab)
+                    self.assertEqual(len(list(b.GetTracks())), before)
+
     def fixture(self):
         import pcbnew
 

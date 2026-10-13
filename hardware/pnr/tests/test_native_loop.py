@@ -18,6 +18,31 @@ from pnr.native_loop import (
 
 
 class NativeLoopTest(unittest.TestCase):
+    def test_continuation_binds_saved_copper_and_rules(self):
+        from pnr.native_continue import checkpoint, validate_checkpoint
+
+        with tempfile.TemporaryDirectory() as tmp:
+            board, rules, constraints = [
+                Path(tmp) / n for n in ("board.kicad_pcb", "rules.json", "constraints.yaml")
+            ]
+            for p in (board, rules, constraints, board.with_suffix(".kicad_pro")):
+                p.write_text("original")
+            state = checkpoint(board, rules, constraints, job_attempts=[[["pair", "usb"], 5]])
+            state = json.loads(json.dumps(state))
+            validate_checkpoint(state, board, rules, constraints)
+            self.assertEqual(state["job_attempts"][0][1], 5)
+            board.with_suffix(".kicad_pro").write_text("changed rules")
+            with self.assertRaisesRegex(ValueError, "input changed"):
+                validate_checkpoint(state, board, rules, constraints)
+
+    def test_worker_deadline_is_never_a_plateau(self):
+        from pnr.native_continue import decision
+
+        for reason in ("running", "time_budget", "cycle_limit"):
+            self.assertEqual(decision(dict(termination=reason)), "continue")
+        self.assertEqual(decision(dict(termination="sampled_plateau")), "sampled_plateau")
+        self.assertEqual(decision(dict(termination="sampled_plateau"), timed_out=True), "continue")
+
     def test_small_placement_budget_visits_distinct_blockers(self):
         from pnr.native_loop import diverse_placement_trials
 

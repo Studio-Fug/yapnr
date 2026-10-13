@@ -12,7 +12,7 @@ import unittest
 import yaml
 
 from pnr.constraints import compile_constraints
-from pnr.graph import BoardGraph
+from pnr.graph import BoardGraph, BoardOutline
 from pnr.route.feedback import route_and_place
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -24,6 +24,8 @@ def _load():
         graph = BoardGraph.from_json(fh.read())
     with open(os.path.join(FIXTURE, "constraints.yaml"), encoding="utf-8") as fh:
         constraints = compile_constraints(yaml.safe_load(fh), graph.refs)
+    # Explicitly reframe the synthetic assembly row for this placement-only fixture.
+    graph.outline = BoardOutline(constraints.board.width, constraints.board.height)
     return graph, constraints
 
 

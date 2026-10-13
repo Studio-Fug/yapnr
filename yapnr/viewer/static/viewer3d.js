@@ -60,14 +60,14 @@ function sstatus(msg,kind,btn){status(staleText()+msg+(S.stale?'':' · copper an
 let toastT=0;function toast3(msg){let el=$('v3-toast');el.textContent=msg;el.style.bottom=($('v3-foot').offsetHeight+20)+'px';el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{el.hidden=true},2600)}
 function layersPanel(){let el=$('v3-layers');el.replaceChildren();
  let top=D.createElement('div'),x=D.createElement('button');top.className='v3-lh';top.append('Layers');x.className='v3-x';x.textContent='×';x.title='Close (Esc)';x.onclick=()=>panel(false);top.append(x);el.append(top);
- const row=(label,on,set,color,title,extra)=>{let l=D.createElement('label'),i=D.createElement('input');i.type='checkbox';i.checked=on;i.onchange=()=>{set(i.checked);savePrefs();vis();draw()};l.append(i,' '+label);if(color)l.style.color=color;if(title)l.title=title;
-  if(extra){let w=D.createElement('div');w.className='v3-row';w.append(l,extra);el.append(w)}else el.append(l);return i};
+ const row=(label,on,set,color,title,extra)=>{let l=D.createElement('label'),i=D.createElement('input');i.type='checkbox';i.checked=on;i.onchange=()=>{set(i.checked);savePrefs();vis();draw()};l.append(label,i);if(color)l.style.color=color;if(title)l.title=title;
+  let w=D.createElement('div');w.className='v3-row';w.append(l);if(extra)w.append(extra);el.append(w);return i};
  const head=t=>{let h=D.createElement('b');h.textContent=t;el.append(h)};
  head('Board');row('Board body',P.board,v=>P.board=v);row('Silkscreen',P.silk,v=>P.silk=v);row('Soldermask',P.mask,v=>P.mask=v,null,'KiCad soldermask faces (cover the copper, as on the real board)');
  head('Components');row('3D models',P.models,v=>P.models=v,null,'KiCad footprint models from the GLB export');row('Part boxes',P.boxes,v=>P.boxes=v,null,'Boxes from the pads: parts without a 3D model, or all parts while the models are off or exporting');
- head('Copper');for(let L of S.stack){let b=D.createElement('button'),on=S.solo===L;b.className='v3-solo'+(on?' on':'');b.textContent=on?'all':'only';
+ head('Copper · '+S.stack.length+' layers');for(let L of S.stack){let b=D.createElement('button'),on=S.solo===L;b.className='v3-solo'+(on?' on':'');b.textContent=on?'all':'only';
   b.title=on?'Show all layers again':`Only ${L}: hides the other copper layers, the board, parts, silkscreen and via barrels (inner-layer routing at a glance)`;b.onclick=e=>{e.preventDefault();solo(on?null:L)};
-  row(L,!P.off[L],v=>{if(v)delete P.off[L];else P.off[L]=true},colors[L]||'#c9d3d8',null,b)}
+  row(L,!P.off[L],v=>{if(v)delete P.off[L];else P.off[L]=true},layerColor(L),null,b)}
  row('Zones',P.zones,v=>P.zones=v);row('Vias',P.vias,v=>P.vias=v);
  S.badgeBox=row('Note badges',N3()?.badges?.()!==false,v=>N3()?.badges?.(v),null,'Same switch as the PCB layer controls')}
 function solo(L){S.solo=L&&S.stack.includes(L)?L:null;layersPanel();vis();draw()}
@@ -121,8 +121,7 @@ function pxAll(){for(let g of [G.top,G.bottom])for(let o of g?.children||[])if(o
 
 // ------------------------------------------------------------------ geometry -> copper meshes
 const C=hex=>new T.Color(hex);
-function stackOf(g){let s=new Set();for(let t of g.tracks||[])s.add(t[1]);for(let z of g.zones||[])s.add(z.layer);
- return ['F.Cu',...[...s].filter(n=>/^In\d+\.Cu$/.test(n)).sort(natural),'B.Cu']}
+function stackOf(g){return copperStack(g)}
 function z0Of(L){let n=S.stack.length,i=S.stack.indexOf(L),{z0,z1}=S.body;return i===0?z1+CU:i===n-1?z0-CU:z1-(z1-z0)*i/(n-1)}
 function Bld(){return {p:[],c:[],i:[],n:0,items:[]}}
 function push(b,x,y,z,col){b.p.push(x,y,z);b.c.push(col.r,col.g,col.b);return b.n++}
@@ -141,9 +140,10 @@ function build(){let g=S.geo,t0=performance.now();S.built=g?t0:0;clearTimeout(S.
  for(let o of [...G.body.children])if(o.userData.slab){G.body.remove(o);o.geometry.dispose()}
  S.layers.clear();S.boxes.clear();
  if(!g){S.stack=[];S.panelKey=null;layersPanel();status(!laneId?'Waiting for experiment events…':V()?.boardSha?.()?'Loading the board geometry…':'No board checkpoint for this lane yet (placement probes only so far).');draw();return}
+ if(!V()?.boardSha?.())status(g.provisional?'Signal screening preview · unvalidated draft; deferred nets are not routed.':'Placement preview · native KiCad board not generated yet.');
  S.stack=stackOf(g);if(S.stack.join()!==S.panelKey){S.panelKey=S.stack.join();layersPanel()}  // live rebuilds leave an open panel alone
  const padCol=C('#cdd2be'),viaCol=C('#b3c1c9');
- for(let [i,L] of S.stack.entries()){let sg=i===S.stack.length-1?-1:1,base=C(colors[L]||'#c9a27a'),zc=base.clone().multiplyScalar(.5),grp=new T.Group(),bz=Bld(),bc=Bld(),bv=Bld();grp.userData={own:false,layer:L};
+ for(let [i,L] of S.stack.entries()){let sg=i===S.stack.length-1?-1:1,base=C(g.provisional?'#d39af6':colors[L]||'#c9a27a'),zc=base.clone().multiplyScalar(.5),grp=new T.Group(),bz=Bld(),bc=Bld(),bv=Bld();grp.userData={own:false,layer:L};
   for(let z of g.zones||[])if(z.layer===L&&z.paths?.length)item(bz,{kind:'zone',net:z.net,obj:z,bb:bbox(z.paths[0])},()=>polyInto(bz,z.paths[0],z.paths.slice(1),ZOFF.zone*sg,zc));
   for(let t of g.tracks||[])if(t[1]===L)item(bc,{kind:'track',net:t[0],obj:t,bb:[Math.min(t[2][0],t[3][0])-t[4]/2,Math.min(t[2][1],t[3][1])-t[4]/2,Math.max(t[2][0],t[3][0])+t[4]/2,Math.max(t[2][1],t[3][1])+t[4]/2]},()=>segInto(bc,t[2],t[3],t[4],ZOFF.track*sg,base));
   for(let part of g.parts||[])for(let p of part.pads||[])if(p.layers?.includes(L)){let it={kind:'pad',ref:part.ref,pad:p.number,net:p.net,obj:p,part};
@@ -180,7 +180,7 @@ function grid(items,g){let nx=Math.max(1,Math.ceil(g.width/CELL)),ny=Math.max(1,
 // lane's live checkpoint changes every few minutes: auto-export it at most every LIVE_GAP per lane (the pane offers
 // "Export now" meanwhile), and keep the previous GLB for the parts that did not move until the new one is ready.
 async function request3d(retry,enqueue){let my=++S.req,sha=S.sha;clearTimeout(S.pollT);
- if(!sha){S.status=null;detach();if(S.geo)status('This checkpoint has no native KiCad board (placement preview): copper and part boxes only.');return}  // no geometry: build() said why
+ if(!sha){S.status=null;detach();if(S.geo)status(S.geo.provisional?'Signal screening preview · unvalidated draft; deferred nets are not routed.':'Placement preview · native KiCad board not generated yet.');return}  // no geometry: build() said why
  let r;try{r=await api(`/api/3d?lane=${encodeURIComponent(laneId||'')}&phase=${encodeURIComponent(phase)}&sha=${sha}`+(retry?'&retry=1':enqueue||S.enq===sha?'':'&peek=1'))}
  catch(e){if(my===S.req){status('3D export status failed: '+e.message,'err');S.pollT=setTimeout(()=>S.visible&&my===S.req&&request3d(),6000)}return}
  if(my!==S.req)return;S.status=r;

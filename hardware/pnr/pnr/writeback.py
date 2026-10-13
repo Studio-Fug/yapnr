@@ -20,6 +20,8 @@ sane sheet. This inverts :class:`pnr.ingest._Frame`.
 from __future__ import annotations
 
 import argparse
+import math
+import os
 import re
 import sys
 from typing import Dict, List, Optional
@@ -1942,6 +1944,27 @@ def writeback(
     import pcbnew
 
     board = pcbnew.LoadBoard(in_pcb)
+    strict_outline = (
+        os.environ.get("PNR_NATIVE_OUTLINE", "1") == "1"
+        and graph.outline is not None
+        and bool(graph.outline.polygon)
+    )
+    if strict_outline:
+        from pnr.ingest import _board_frame
+
+        _, source_outline = _board_frame(board)
+        wanted = list(graph.outline.polygon)
+        actual = list(source_outline.polygon) if source_outline else []
+        # Same bounds do not imply the same board: reject a filled-in notch or
+        # another contour before writing any output. Start vertex and winding
+        # are serialization details, so accept either cyclic orientation.
+        same = len(actual) == len(wanted) and any(
+            all(math.dist(p, seq[(i + offset) % len(seq)]) <= 1e-6 for i, p in enumerate(wanted))
+            for seq in (actual, actual[::-1])
+            for offset in range(len(seq))
+        )
+        if not same:
+            raise ValueError("native outline cannot be preserved: source and graph contours differ")
     # The source board's declared copper stack (pnr.stack), read before any layer
     # is retyped below; None keeps the legacy plane handling.
     stack = record = None
@@ -2063,11 +2086,15 @@ def writeback(
     kept = None
     from pnr.board_edge import keep_outline, kept_outline_text
 
-    if keep_outline(rules):
+    if strict_outline or keep_outline(rules):
         # board.keep_outline / board.edge: exact: the source's own Edge.Cuts (arcs,
         # stroke) moved to this frame, when it frames the placement region.
         kept = kept_outline_text(text, width, height)
         if kept is None:
+            if strict_outline:
+                raise ValueError(
+                    "native outline cannot be preserved in the requested placement frame"
+                )
             sys.stderr.write(
                 "writeback: warning: keep_outline: the source outline does not frame the "
                 "%.3f x %.3f mm placement region; the rectangle is stamped\n" % (width, height)

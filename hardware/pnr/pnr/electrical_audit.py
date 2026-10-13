@@ -190,6 +190,19 @@ def audit_board(board, rules, board_text=""):
     )
     import os
 
+    if rules.get("smps_checks"):
+        if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1":
+            from pnr.smps import native_audit
+
+            result["smps_layout"] = native_audit(board, rules, board_text)
+        else:
+            result["smps_layout"] = dict(
+                status="unqualified",
+                failure_count=0,
+                unqualified_count=len(rules["smps_checks"]),
+                reason="Declared SMPS checks require PNR_SMPS_LAYOUT=1",
+                qualified=False,
+            )
     if os.environ.get("PNR_SHOVE") == "1":
         # Report only: sub-width power copper not justified by a terminal contract
         # of its net or a short pad neck (a declared leaf/branch is not a defect).

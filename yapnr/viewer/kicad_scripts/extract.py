@@ -11,6 +11,75 @@ import math
 import sys
 
 
+def minimum_airwires(groups):
+    """Minimum spanning tree of disconnected groups, using their copper anchors.
+
+    Connected copper is already contracted into one vertex by native KiCad.
+    Deterministic Prim selection includes only missing links, never an MST of
+    all pads (which would redraw connections already supplied by copper).
+    """
+    if len(groups) < 2:
+        return []
+    groups = [sorted(set(tuple(p) for p in group)) for group in groups]
+    remaining = set(range(1, len(groups)))
+    best = {}
+    result = []
+    current = 0
+    while remaining:
+        for i in sorted(remaining):
+            candidate = min(
+                ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2, a, b)
+                for a in groups[current]
+                for b in groups[i]
+            )
+            if i not in best or candidate < best[i]:
+                best[i] = candidate
+        current = min(remaining, key=lambda i: (best[i], i))
+        _, a, b = best[current]
+        result.append([list(a), list(b)])
+        remaining.remove(current)
+    return result
+
+
+def airwires_of(board, xy):
+    """Native copper connectivity, including vias and actual filled zone islands.
+
+    KiCad's RN_NET edges are opaque in SWIG. Use its transitive connectivity to
+    contract pad-bearing islands, then minimize links between pad/via centres
+    and track endpoints. This is an anchor-distance guide, not a route or a DRC
+    result. Never infer connectivity from overlapping XY positions or net names.
+    """
+    connectivity = board.GetConnectivity()
+    connectivity.Build(board)
+    groups = {}
+    seen = set()
+    pads = sorted(
+        (p for f in board.GetFootprints() for p in f.Pads() if p.GetNetCode() > 0),
+        key=lambda p: p.m_Uuid.AsString(),
+    )
+    for pad in pads:
+        if pad.m_Uuid.AsString() in seen:
+            continue
+        items = [pad] + list(connectivity.GetConnectedItems(pad))
+        anchors = set()
+        for item in items:
+            if item.GetNetCode() != pad.GetNetCode():
+                continue
+            kind = item.GetClass()
+            if kind == "PAD":
+                seen.add(item.m_Uuid.AsString())
+            if kind in ("PAD", "PCB_VIA"):
+                anchors.add(tuple(xy(item.GetPosition())))
+            elif kind in ("PCB_TRACK", "PCB_ARC"):
+                anchors.update((tuple(xy(item.GetStart())), tuple(xy(item.GetEnd()))))
+        groups.setdefault(pad.GetNetname(), []).append(anchors)
+    return [
+        dict(net=net, a=a, b=b)
+        for net, islands in sorted(groups.items())
+        for a, b in minimum_airwires(islands)
+    ]
+
+
 def arc_sweep(t):
     """An arc track's signed sweep in radians, start to end.
 
@@ -29,13 +98,27 @@ def display_bounds(board, outline):
     return box.GetWidth() / 1e6, box.GetHeight() / 1e6, False
 
 
+def copper_layers(k, board):
+    """Enabled copper in physical order, including layers with no geometry."""
+    return [k.BOARD.GetStandardLayerName(layer) for layer in board.GetEnabledLayers().CuStack()]
+
+
 def tracks_and_vias(k, b, xy):
     tracks = []
     vias = []
     for t in b.GetTracks():
         if t.GetClass() == "PCB_VIA":
             vias.append(
-                dict(net=t.GetNetname(), xy=xy(t.GetPosition()), diameter=t.GetWidth(k.F_Cu) / 1e6)
+                dict(
+                    net=t.GetNetname(),
+                    xy=xy(t.GetPosition()),
+                    diameter=t.GetWidth(k.F_Cu) / 1e6,
+                    layers=[
+                        k.BOARD.GetStandardLayerName(layer)
+                        for layer in b.GetEnabledLayers().CuStack()
+                        if t.IsOnLayer(layer)
+                    ],
+                )
             )
             continue
         if t.GetClass() == "PCB_ARC":
@@ -56,7 +139,15 @@ def tracks_and_vias(k, b, xy):
         else:
             pts = [xy(t.GetStart()), xy(t.GetEnd())]
         for a, c in zip(pts, pts[1:]):
-            tracks.append([t.GetNetname(), t.GetLayerName(), a, c, t.GetWidth() / 1e6])
+            tracks.append(
+                [
+                    t.GetNetname(),
+                    k.BOARD.GetStandardLayerName(t.GetLayer()),
+                    a,
+                    c,
+                    t.GetWidth() / 1e6,
+                ]
+            )
     return tracks, vias
 
 
@@ -142,6 +233,7 @@ def main(argv):
     tracks, vias = tracks_and_vias(k, b, xy)
     doc = dict(
         frame="mm-y-up",
+        copper_layers=copper_layers(k, b),
         width=width,
         height=height,
         outline_present=outline_present,
@@ -149,6 +241,7 @@ def main(argv):
         tracks=tracks,
         vias=vias,
         zones=zones_of(k, b, xy),
+        airwires=airwires_of(b, xy),
     )
     with open(argv[2], "w") as out:
         json.dump(doc, out)

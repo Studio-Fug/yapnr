@@ -28,10 +28,11 @@ COMPACT = ("PNR_COMPACT", "PNR_SHRINK")
 @contextlib.contextmanager
 def flags(**values):
     """Every legalizer, polish and compact switch unset, then ``values`` set."""
-    keys = legalize_flags.FLAGS + COMPACT
+    keys = legalize_flags.FLAGS + COMPACT + ("PNR_PAD_LOCALITY",)
     saved = {k: os.environ.get(k) for k in keys}
     for k in keys:
         os.environ.pop(k, None)
+    os.environ.update(PNR_LEGALIZE_SHOVE="0", PNR_PLACEMENT_BANKS="0", PNR_PAD_LOCALITY="0")
     os.environ.update(values)
     try:
         yield

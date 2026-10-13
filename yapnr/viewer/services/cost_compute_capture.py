@@ -22,6 +22,10 @@ OPTIMIZER_FIELD_SCOPE = (
     "Actual optimizer soft-state field; rotation mixtures and other components held fixed"
 )
 TERM_LABELS = {
+    "pad_locality": "Pad locality",
+    "rotation_change": "Rotation change",
+    "source_constraints": "Source constraints",
+    "soft_rules": "Authored soft rules",
     "target_displacement": "Distance to continuous target",
     "channel_shortage": "Surface escape shortage",
     "local_capacitor_loop": "Local capacitor loop",
@@ -70,6 +74,9 @@ def global_objective(d, g, ref):
         inflation=d["inflation"],
         effective_offsets=d["effective_offsets"],
         effective_half=d["effective_half"],
+        roles=d.get("roles"),
+        pf_state=d.get("pf_state"),
+        **({"effective_shift": d["effective_shift"]} if "effective_shift" in d else {}),
     )
     report = m.report()
     report["component"] = report["components"][ref]
@@ -111,7 +118,7 @@ def legalizer_decision(d, record, comp, ref):
         raw = p.read_bytes()
         assert sha256(raw) == item["sha256"]
         v = json.loads(raw)
-        if v["ref"] == ref:
+        if v["ref"] == ref or any(m["ref"] == ref for m in v.get("moves", [])):
             matches.append(v)
     if not matches:
         return dict(
@@ -129,8 +136,35 @@ def legalizer_decision(d, record, comp, ref):
             board_total=None,
             scope=HELD_SCOPE,
         )
-    assert len(matches) == 1
-    v = matches[0]
+    # Decisions are recorded in execution order. A shove can move the same
+    # part repeatedly, or move a neighbor whose own slot decision came earlier.
+    v = matches[-1]
+    if v.get("transaction_kind") == "shove":
+        move = next(m for m in v["moves"] if m["ref"] == ref)
+        return dict(
+            component=dict(
+                ref=ref,
+                position=move["after"],
+                rotation=move["rotation"],
+                side=comp.side,
+                fixed=False,
+                terms=[],
+                total=None,
+            ),
+            field=None,
+            recorded_fields=[],
+            board_total=v["total"],
+            scope=v["scope"],
+            field_scope="Atomic transaction; no independently scored part field",
+            decision_context=dict(
+                transaction_kind="shove",
+                moves=v["moves"],
+                before_terms=v["before_terms"],
+                after_terms=v["after_terms"],
+                total=v["total"],
+                decisions_for_component=len(matches),
+            ),
+        )
     recorded_fields = []
     for f in v["candidate_fields"]:
         p = Path(f["path"])
@@ -182,6 +216,9 @@ def main(argv):
     raw = record.read_bytes()
     assert sha256(raw) == req["capture"]["sha256"]
     d = json.loads(raw)
+    os.environ["PNR_PLACEMENT_BANKS"] = d.get("features", {}).get("PNR_PLACEMENT_BANKS", "0")
+    os.environ["PNR_SMPS_PLACEMENT"] = d.get("features", {}).get("PNR_SMPS_PLACEMENT", "0")
+    os.environ["PNR_PAD_LOCALITY"] = d.get("features", {}).get("PNR_PAD_LOCALITY", "0")
     assert (
         d.get("runtime_sources", {}).get("cost_inspect.py") == model_sha
     ), "Recorded cost model does not match replay runtime"

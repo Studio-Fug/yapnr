@@ -17,8 +17,26 @@ let settleTimer=null,gestureCache=null,gestureCacheDirty=true,renderDeferred=fal
 // *both* a full render() and every gesture fastFrame() -- runs them last, so they stay live during
 // a pan/pinch/zoom instead of only reappearing once the gesture settles and a full render() fires.
 let overlayHooks=[];
-const colors={'F.Cu':'#e89a73','In1.Cu':'#aa9de9','In2.Cu':'#dfbd62','B.Cu':'#6eb6e5'},layers=new Set(Object.keys(colors));
-for(const [l,col] of Object.entries(colors)){let lab=document.createElement('label'),inp=document.createElement('input');inp.type='checkbox';inp.checked=true;inp.onchange=()=>{inp.checked?layers.add(l):layers.delete(l);render()};lab.append(inp,document.createTextNode(l));lab.style.color=col;$('layers').append(lab)}
+const colors={'F.Cu':'#e89a73','In1.Cu':'#aa9de9','In2.Cu':'#dfbd62','In3.Cu':'#73d1b1','In4.Cu':'#e58eae','B.Cu':'#6eb6e5'},layers=new Set(),layerChoices=new Map();
+let layerListKey=null;
+// The native stack includes empty planes. Geometry-only legacy previews can only identify
+// layers carrying tracks/zones; never infer a stack from through-hole pad masks (all Cu IDs).
+function copperStack(g){
+ if(g?.copper_layers?.length)return g.copper_layers;
+ let names=new Set(['F.Cu','B.Cu']);for(let t of g?.tracks||[])names.add(t[1]);for(let z of g?.zones||[])names.add(z.layer);
+ return [...names].filter(n=>/^(F|B|In\d+)\.Cu$/.test(n)).sort((a,b)=>{let rank=n=>n==='F.Cu'?0:n==='B.Cu'?1000:parseInt(n.slice(2));return rank(a)-rank(b)});
+}
+function layerColor(l){return colors[l]||'#b8c8a0'}
+function syncLayers(g,selected){
+ let stack=g?copperStack(g):[],key=JSON.stringify(stack);
+ if(selected!==undefined){let on=new Set(selected);for(let l of stack)layerChoices.set(l,on.has(l));layerListKey=null;}
+ if(key===layerListKey)return;layerListKey=key;layers.clear();
+ let rows=stack.map(l=>{if(!layerChoices.has(l))layerChoices.set(l,true);if(layerChoices.get(l))layers.add(l);
+  let lab=document.createElement('label'),name=document.createElement('span'),inp=document.createElement('input');name.textContent=l;inp.type='checkbox';inp.checked=layers.has(l);
+  inp.onchange=()=>{layerChoices.set(l,inp.checked);inp.checked?layers.add(l):layers.delete(l);render()};lab.append(name,inp);lab.style.color=layerColor(l);return lab;});
+ $('layers').replaceChildren(...rows);
+}
+function viaVisible(v){return (v.layers||[...layers]).some(l=>layers.has(l))}
 const display=()=>pinned||state, lane=()=>display()?.lanes[laneId], geo=()=>phase==='live'?lane()?.geometry:phaseGeo;
 const point=(x,y)=>[(x-view.x)/view.scale,(view.y-y)/view.scale];
 const screen=p=>[view.x+p[0]*view.scale,view.y-p[1]*view.scale];
@@ -100,7 +118,7 @@ function paintBoard(c,v,w,h,g,dpr){
  const scr=p=>[v.x+p[0]*v.scale,v.y-p[1]*v.scale];
  const ln=(a,b,color,width=1,dash=[],round=false)=>{c.lineCap=round?'round':'butt';c.lineJoin=round?'round':'miter';c.strokeStyle=color;c.lineWidth=width;c.setLineDash(dash);c.beginPath();c.moveTo(...scr(a));c.lineTo(...scr(b));c.stroke();c.setLineDash([])};
  let step=v.scale<7?5:1;c.lineWidth=.4;for(let x=0;x<=g.width;x+=step)ln([x,0],[x,g.height],'#23343c',.4);for(let y=0;y<=g.height;y+=step)ln([0,y],[g.width,y],'#23343c',.4);
- for(let z of g.zones||[]){if(!layers.has(z.layer))continue;c.fillStyle=colors[z.layer]+'25';c.beginPath();for(let path of z.paths){path.forEach((p,i)=>i?c.lineTo(...scr(p)):c.moveTo(...scr(p)));c.closePath()}c.fill('evenodd')}
+ for(let z of g.zones||[]){if(!layers.has(z.layer))continue;c.fillStyle=layerColor(z.layer)+'25';c.beginPath();for(let path of z.paths){path.forEach((p,i)=>i?c.lineTo(...scr(p)):c.moveTo(...scr(p)));c.closePath()}c.fill('evenodd')}
  // Viewport (world/board mm) rect, padded by one grid cell so nothing just outside pops in late.
  let idx=gridFor(g),corners=[[0,0],[w,0],[0,h],[w,h]].map(p=>[(p[0]-v.x)/v.scale,(v.y-p[1])/v.scale]);
  let xs=corners.map(p=>p[0]),ys=corners.map(p=>p[1]),pad=idx.cell+idx.maxHalfW;
@@ -114,14 +132,14 @@ function paintBoard(c,v,w,h,g,dpr){
   ?{vias:g.vias.map((_,i)=>i),tracks:g.tracks.map((_,i)=>i)}
   :gridCandidates(idx,vx0,vy0,vx1,vy1);
  let previous=phase==='live'?lane()?.previous:null,old=new Set((previous?.tracks||[]).map(key)),now=new Set((g.tracks||[]).map(key)),changesOn=$('changes').checked;
- for(let i of cand.tracks){let t=g.tracks[i];if(!layers.has(t[1]))continue;let col=changesOn&&previous&&!old.has(key(t))?'#62ffad':(colors[t[1]]||'#aaa');ln(t[2],t[3],col,Math.max(.6,t[4]*v.scale),[],true)}
+ for(let i of cand.tracks){let t=g.tracks[i];if(!layers.has(t[1]))continue;let col=g.provisional?'#d39af6':changesOn&&previous&&!old.has(key(t))?'#62ffad':layerColor(t[1]);ln(t[2],t[3],col,Math.max(.6,t[4]*v.scale),g.provisional?[4,2]:[],true)}
  // Diff/draft overlays are opt-in and bounded by the previous checkpoint's own track count, not
  // the current viewport, so they are left uncull (they are also drawn against a *different*
  // geometry object -- `previous` -- which has no grid of its own here).
- if(changesOn&&previous)for(let t of previous.tracks||[])if(!now.has(key(t)))ln(t[2],t[3],'#ff566b',Math.max(.6,t[4]*v.scale),[4,3],true);
- if(phase==='live')for(let ts of Object.values(lane()?.draft||{}))for(let t of ts)ln(t[2],t[3],'#d39af6',Math.max(.6,t[4]*v.scale),[4,2],true);
+ if(changesOn&&previous)for(let t of previous.tracks||[])if(layers.has(t[1])&&!now.has(key(t)))ln(t[2],t[3],'#ff566b',Math.max(.6,t[4]*v.scale),[4,3],true);
+ if(phase==='live')for(let ts of Object.values(lane()?.draft||{}))for(let t of ts)if(layers.has(t[1]))ln(t[2],t[3],'#d39af6',Math.max(.6,t[4]*v.scale),[4,2],true);
  let full=[],dot=[],cellDot=new Map();
- for(let i of cand.vias){let via=g.vias[i],d=via.diameter*v.scale;if(d>=1.5)full.push(via);else if(d>=.5)dot.push(via);else{let [cx,cy]=idx.cellOf(via.xy[0],via.xy[1]),ck=idx.key(cx,cy);if(!cellDot.has(ck))cellDot.set(ck,via)}}
+ for(let i of cand.vias){let via=g.vias[i];if(!viaVisible(via))continue;let d=via.diameter*v.scale;if(d>=1.5)full.push(via);else if(d>=.5)dot.push(via);else{let [cx,cy]=idx.cellOf(via.xy[0],via.xy[1]),ck=idx.key(cx,cy);if(!cellDot.has(ck))cellDot.set(ck,via)}}
  if(full.length||dot.length||cellDot.size){
   c.save();c.setTransform(v.scale*dpr,0,0,-v.scale*dpr,v.x*dpr,v.y*dpr);
   if(full.length){let outer=new Path2D(),hole=new Path2D();for(let via of full){let [x,y]=via.xy,r=via.diameter/2,rh=via.diameter/5;outer.moveTo(x+r,y);outer.arc(x,y,r,0,Math.PI*2);hole.moveTo(x+rh,y);hole.arc(x,y,rh,0,Math.PI*2)}c.fillStyle='#b3c1c9';c.fill(outer);c.fillStyle='#15252c';c.fill(hole)}
@@ -135,7 +153,8 @@ function paintBoard(c,v,w,h,g,dpr){
 // ------------------------------------------------------------------ dynamic overlay (every frame)
 function renderOverlay(g){
  if(phase==='live'&&lane()?.target){let target=lane().target,loc=id=>{let i=id.lastIndexOf('.'),part=g.parts.find(p=>p.ref===id.slice(0,i));return part?.pads.find(p=>p.number===id.slice(i+1))?.xy},a=loc(target.source),b=loc(target.target);if(a&&b){line(a,b,'#ffde68',2,[7,4]);for(let p of [a,b]){ctx.strokeStyle='#ffde68';ctx.lineWidth=2;ctx.beginPath();ctx.arc(...screen(p),8,0,7);ctx.stroke()}ctx.fillStyle='#ffde68';ctx.fillText('Routing '+target.net,...screen(a));}}
- if($('air').checked){let nets={};for(let p of (g.parts||[]).flatMap(c=>c.pads)){if(p.net)(nets[p.net]??=[]).push(p.xy)}for(let ps of Object.values(nets)){let rest=ps.slice(1),tree=[ps[0]];while(rest.length){let best=[Infinity,0,null];rest.forEach((p,i)=>tree.forEach(q=>{let d=Math.hypot(p[0]-q[0],p[1]-q[1]);if(d<best[0])best=[d,i,q]}));let p=rest.splice(best[1],1)[0];line(p,best[2],'#8da4ba55',.6,[2,4]);tree.push(p)}}}
+ $('air').disabled=!Array.isArray(g.airwires);$('air').parentElement.title=$('air').disabled?'Native connectivity unavailable for this checkpoint':'Shortest links between disconnected copper anchors';
+ if($('air').checked){for(const wire of g.airwires||[]){line(wire.a,wire.b,'#ffdc73cc',1,[3,4]);if(Math.hypot(wire.a[0]-wire.b[0],wire.a[1]-wire.b[1])<.001)circle(wire.a,4,'#ffdc73cc');}}
  let search=display()?.search[String(lane()?.iteration)]||{},probes=search.probes||Object.values(display()?.lanes[`r${String(lane()?.iteration).padStart(2,'0')}/search`]?.costs||{});
  if($('costs').checked)for(let probe of probes){let costs=probe.candidates.map(p=>p.cost),min=Math.min(...costs),max=Math.max(...costs);for(let p of probe.candidates){let t=(p.cost-min)/(max-min||1);circle(p.position,2,`hsla(${150-t*150},75%,65%,.65)`)} }
  for(let m of (preview?.moves||lane()?.moves||[])){line(m.original,m.position,'#fff07d',2,[5,3]);circle(m.position,5,'#fff07d');ctx.fillStyle='#fff07d';ctx.fillText(m.ref,...screen(m.position))}
@@ -151,7 +170,7 @@ function paintFull(){
  if(settleTimer!==null){clearTimeout(settleTimer);settleTimer=null}
  if(frameQ){cancelAnimationFrame(frameQ);frameQ=0} // a queued gesture frame would only blit over this full-quality one
  renderDeferred=false;
- let [c,w,h]=resize(canvas),g=geo();
+ let [c,w,h]=resize(canvas),g=geo();syncLayers(g);
  if(!g){c.clearRect(0,0,w,h);c.fillStyle='#0e1713';c.fillRect(0,0,w,h);c.fillStyle='#8fa7b3';c.fillText('Waiting for native placement…',30,40);gestureCache=null;gestureCacheDirty=true;renderSearch();return}
  if(pendingComponentRef){let requested=pendingComponentRef;pendingComponentRef=null;jumpToComponent(requested);return;}
  refreshComponentOptions(g);
@@ -280,7 +299,7 @@ async function restoreDraft(){if(draftRestored||!state?.run)return;draftRestored
   let selected=body.view,entry=recovered.lanes[selected.lane];if(!entry)throw Error('draft lane is missing');
   let geometry=selected.phase==='live'?null:await api('/api/geometry/'+(entry.frames[Number(selected.phase)].board_sha256||entry.frames[Number(selected.phase)].layout_sha256));
   pinned=recovered;pinId=body.pin_id;laneId=selected.lane;phase=selected.phase;phaseGeo=geometry;annotations=body.annotations||[];$('note').value=body.note||'';draftRevision=body.draft_revision||0;view={...selected.viewport};fitted=true;
-  layers.clear();for(let l of selected.layers||Object.keys(colors))layers.add(l);for(let [i,l] of Object.keys(colors).entries())$('layers').children[i].children[0].checked=layers.has(l);
+  syncLayers(geo(),selected.layers||copperStack(geo()));
   for(let id of ['changes','labels','air','costs'])$(id).checked=selected[id];$('pause').textContent='Resume live';updateControls();render();$('saved').textContent='Recovered annotation draft on its original pinned board.';
  }catch(e){$('saved').textContent='Draft recovery failed: '+e.message+' · browser backup retained.';}}
 $('note').oninput=()=>{annotationChanged();pin().catch(e=>{$('saved').textContent='Cannot pin annotation: '+e.message;});};
@@ -337,7 +356,11 @@ $('space').onclick=e=>{let r=$('space').getBoundingClientRect(),p=spaceHits.find
 window.onresize=render;
 // A poll that lands mid-gesture leaves revision alone (no sidebar rebuild, no render while a finger is
 // down); the next poll, after the release, picks the change up.
-async function poll(){try{let fresh=await api('/api/state?since='+revision+'&run='+encodeURIComponent(state?.run||'')+(laneId?'&lane='+encodeURIComponent(laneId):''));if(!fresh.unchanged)state=fresh;await restoreDraft();showControls();$('health').textContent=state.errors.length?'TELEMETRY ERROR · '+state.errors.at(-1).error:`● LOCAL LIVE · ${state.revision} events`;$('health').style.color=state.errors.length?'#ff9292':'#9ee6d1';if(!pinned&&revision!==state.revision&&!gestureActive()){revision=state.revision;updateControls();render();if(!fitted&&geo())fit()}}catch(e){$('health').textContent='DISCONNECTED · '+e.message}setTimeout(poll,1200)}poll();
+async function poll(){let requestedLane=laneId;try{let fresh=await api('/api/state?since='+revision+'&run='+encodeURIComponent(state?.run||'')+(requestedLane?'&lane='+encodeURIComponent(requestedLane):''));
+ // Geometry is included only for the requested lane. A response that started before a
+ // selection must not mark the new lane up to date and leave it permanently blank.
+ if(requestedLane!==laneId){revision=-1;setTimeout(poll,0);return}
+ if(!fresh.unchanged)state=fresh;await restoreDraft();showControls();$('health').textContent=state.errors.length?'TELEMETRY ERROR · '+state.errors.at(-1).error:`● LOCAL LIVE · ${state.revision} events`;$('health').style.color=state.errors.length?'#ff9292':'#9ee6d1';if(!pinned&&revision!==state.revision&&!gestureActive()){revision=state.revision;updateControls();render();if(!fitted&&geo())fit()}}catch(e){$('health').textContent='DISCONNECTED · '+e.message}setTimeout(poll,1200)}poll();
 
 const controlKeys=['route_workers','candidate_workers','samples','k','n'];let controlRevision=null,controlMessage=null;
 function showControls(){let requested=state?.controls;if(!requested)return;
@@ -402,8 +425,8 @@ function boardHit(q){let g=geo();if(!g)return null;let tol=2/view.scale,vis=p=>p
  // Sorted back to original array order so "first match wins" (two tracks/vias both covering q,
  // e.g. a crossing) picks the exact same one a full linear scan would have.
  for(let i of [...cand.tracks].sort((a,b)=>a-b)){let t=g.tracks[i];if(!t[0]||!layers.has(t[1]))continue;let a=t[2],b=t[3],dx=b[0]-a[0],dy=b[1]-a[1],f=Math.max(0,Math.min(1,((q[0]-a[0])*dx+(q[1]-a[1])*dy)/(dx*dx+dy*dy||1)));if(Math.hypot(q[0]-a[0]-f*dx,q[1]-a[1]-f*dy)<tol+t[4]/2)return {kind:'track',net:t[0],obj:t}}
- for(let i of [...cand.vias].sort((a,b)=>a-b)){let v=g.vias[i];if(v.net&&Math.hypot(q[0]-v.xy[0],q[1]-v.xy[1])<v.diameter/2+tol)return {kind:'via',net:v.net,obj:v}}
- for(let l of ['F.Cu','B.Cu','In1.Cu','In2.Cu'])if(layers.has(l))for(let z of g.zones||[])if(z.layer===l&&z.net&&z.paths.filter(path=>inPoly(q,path)).length%2)return {kind:'zone',net:z.net,obj:z};
+ for(let i of [...cand.vias].sort((a,b)=>a-b)){let v=g.vias[i];if(viaVisible(v)&&v.net&&Math.hypot(q[0]-v.xy[0],q[1]-v.xy[1])<v.diameter/2+tol)return {kind:'via',net:v.net,obj:v}}
+ for(let l of copperStack(g))if(layers.has(l))for(let z of g.zones||[])if(z.layer===l&&z.net&&z.paths.filter(path=>inPoly(q,path)).length%2)return {kind:'zone',net:z.net,obj:z};
  return null}
 function hoverText(h){if(!h)return '';let o=h.obj;
  if(h.kind==='pad')return `${h.ref}.${h.pad} · ${h.net||'no net'}\n`+hoverExtra(h.net,pinName(h.ref,h.pad))+`${o.layers.join(', ')} · pad ${o.size.join(' × ')} mm`;

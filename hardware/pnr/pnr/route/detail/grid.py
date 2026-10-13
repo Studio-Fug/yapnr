@@ -679,6 +679,11 @@ class RouteGrid:
         neighbour). Nets of the same width (and clearance) share one table; a
         board without such a net gets none.
 
+        Escape stubs reserve cell centres at the baseline track width, rather
+        than every cell touched by a pad halo. They do not provide the extra
+        half-pitch margin assumed above: once stubs exist, every wider track
+        needs its own table, even below ``track + pitch``.
+
         The table covers the other static copper a route must clear in the same
         way, each at its own extent: escape stubs (``½stub + clearance + ½width
         - ½pitch`` from the stub, every cell its capsule touches), escape vias
@@ -712,7 +717,8 @@ class RouteGrid:
         wanted: Dict[str, tuple] = {}
         for net, width in sorted(self.net_widths.items()):
             own = clearance(net)
-            if own + 0.5 * width - half <= base + 1e-9:
+            escape_wider = bool(self.escape_segments) and own + 0.5 * width > base + 1e-9
+            if own + 0.5 * width - half <= base + 1e-9 and not escape_wider:
                 continue
             wanted[net] = (width, own)
         via_wanted: Dict[str, tuple] = {}
@@ -785,7 +791,10 @@ class RouteGrid:
                 return mark
 
             def grow(owner, extent):
-                return extent + max(own, clearance(owner)) + core - half
+                # A coarse grid may supply more than the required half-cell
+                # margin. Still reserve touched cells; negative capsule radii
+                # invert their bounds and can leave diagonal crossings open.
+                return max(0.0, extent + max(own, clearance(owner)) + core - half)
 
             for layer, owner, r in self.pad_rectangles[pads:]:
                 keep = self.pad_keepaways.get((layer, owner, r))
@@ -961,6 +970,25 @@ class RouteGrid:
                     g.access[key] = Cell(own, *g.cell_of(r.cx, r.cy))
         # Keep routed copper its edge clearance away from the board outline.
         g.block_edge_inset(clearance + g.via_radius)
+        poly = graph.outline.polygon if graph.outline else []
+        if poly and (
+            len(poly) != 4
+            or {tuple(p) for p in poly} != {(0, 0), (width, 0), (width, height), (0, height)}
+        ):
+            from pnr.board_edge import grid_edge_masks
+
+            edges = {
+                "items": [dict(kind="line", a=a, b=b) for a, b in zip(poly, poly[1:] + poly[:1])]
+            }
+            outside, distance = grid_edge_masks(g, edges)
+            # A conservative cell-radius allowance keeps diagonal steps across a
+            # notch from crossing an edge between otherwise legal cell centres.
+            allowance = g.pitch * math.sqrt(2) / 2
+            tracks = outside | (distance < clearance + track_width / 2 + allowance)
+            vias = outside | (distance < clearance + via_radius + allowance)
+            for la in range(g.nlayers):
+                g.blocked[la] |= tracks
+                g.via_blocked[la] |= vias
         return g
 
     # -- net access points ---------------------------------------------------

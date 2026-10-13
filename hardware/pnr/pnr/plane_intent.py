@@ -150,6 +150,18 @@ def reserve_array_space(graph, intents, fab, edge_clearance_mm):
     The normal envelope includes bus copper, via barrels and board clearance;
     its symmetric courtyard keeps the reservation valid at every cardinal pose.
     """
+    if os.environ.get("PNR_PLANE_ACCESS_NATIVE_FIT", "1") == "1":
+        # Experimental late feasibility: a symmetric body reservation excludes
+        # even legal same-net pad connections to the bank. The native generator
+        # must still construct the complete current-sized bank and reject every
+        # copper/hole/edge/keepout conflict before routing. A placement alone
+        # cannot qualify this mode.
+        for intent in intents:
+            if intent["kind"] == "power_array":
+                comp = graph.component(intent["ref"])
+                pads = [p for p in comp.pads if p.name in intent["pads"]]
+                array_geometry([(p.offset, p.size) for p in pads], (0, 0), intent, fab)
+        return
     for intent in intents:
         if intent["kind"] != "power_array":
             continue
@@ -238,11 +250,16 @@ def array_geometry(pads, center, intent, fab, offset_mm=0.0):
     def point(a, z):
         return (a * ux + z * vx, a * uy + z * vy)
 
-    tracks = [
-        (point(bus, min(low, min(positions))), point(bus, max(high, max(positions))), bus_width)
-    ]
+    compact = os.environ.get("PNR_PLANE_ACCESS_COMPACT_BUS", "1") == "1"
+    # Collect pad feeds at the via bank. A full-width bus extending to the
+    # outermost source-pad centre can encroach on the adjacent gate pad.
+    # Shortening its span retains current sizing; each pad feed meets the bus.
+    bus_low = min(positions) if compact else min(low, min(positions))
+    bus_high = max(positions) if compact else max(high, max(positions))
+    tracks = [(point(bus, bus_low), point(bus, bus_high), bus_width)]
     tracks += [
-        (p, point(bus, z), max(feed_width, min(size))) for (p, size), z in zip(pads, projections)
+        (p, point(bus, min(max(z, bus_low), bus_high)), max(feed_width, min(size)))
+        for (p, size), z in zip(pads, projections)
     ]
     tracks += [(point(bus, z), point(via_axis, z), feed_width) for z in positions]
     return dict(

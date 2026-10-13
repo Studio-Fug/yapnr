@@ -232,3 +232,36 @@ merges to `main` (informational until v0.1.0).
 `.github/workflows/release.yaml` runs on release tags (and as a dry run on demand): CI at the tag,
 the images with the release tags, and the GitHub release. See
 [docs/releases.md](docs/releases.md#what-the-workflows-do).
+
+## Continuing native refinement
+
+Native refinement can opt into `--plateau-cycles N` to write `resume.json` beside
+`progress.json`. The checkpoint binds the retained board, project/rule files and
+constraints by SHA-256, and retains route attempts, placement history and the
+original movement bounds. `--resume-search CHECKPOINT` continues that search;
+do not combine it with `--early-pairs` or alter the frozen runtime or inputs.
+
+`//hardware/pnr:native_continue` supervises consecutive bounded refinement workers:
+
+```sh
+bazel run --config=lowmem //hardware/pnr:native_continue -- \
+  --checkpoint RUN/resume.json --out-dir CONTINUATION \
+  --chunk-seconds 1200 --total-seconds 21600 --plateau-cycles 6 -- \
+  --repo ENGINE --kicad-python KICAD_PYTHON --kicad-cli KICAD_CLI
+```
+
+Pass the original electrical/annotation settings after `--` as well. Record the
+engine/tool pins, seeds and complete invocation with the article. This is an
+opt-in developer interface, not an automatic full-design qualification command.
+Time-bounded search can produce different paths under different machine loads;
+input hashes and seeds alone do not establish byte-identical regeneration.
+
+A `PAUSE` file in the continuation directory stops at the next worker boundary.
+Remove it and rerun the same invocation to resume a paused controller. Concurrent
+controllers are refused. After an interrupted controller, reconcile the recorded
+worker before starting another attempt; terminal journals are never overwritten.
+Workers save each retained transaction so their last accepted board survives a
+timeout. Sampled plateau requires completed stale sweeps and exhausted route-repair
+budgets; a partial sweep contributes no plateau observation. Worker errors, disk
+limits and the declared campaign time budget remain separate terminal reasons.
+Zero native opens still requires final DRC, electrical and physical qualification.

@@ -282,6 +282,12 @@ engine automation was actually demonstrated. Empty queues are not completion.
   `prek run --all-files`.
 - Do not push, merge, publish or open pull requests unless the owner asked for it.
 
+For collaborative placement tuning, use `yapnr placement` against the designer's
+running viewer. Read [the placement API](yapnr/viewer/PLACEMENT-API.md), discover its
+contract with `yapnr placement schema`, and use revision guards for live edits.
+This API exposes actual runs, decisions, evidence, renders and agent-authored notes;
+it cannot approve artifacts or substitute placement results for native validation.
+
 ## Shared machines
 
 The development Mac also runs long place-and-route experiments. On it:

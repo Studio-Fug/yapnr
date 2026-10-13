@@ -255,6 +255,8 @@ class GlossLoopTest(unittest.TestCase):
                     "protected_open_nets",
                     "electrical_modes_enabled",
                     "budgets",
+                    "compact_key",
+                    "repair_key",
                 ]
             ),
         )
@@ -311,7 +313,8 @@ class GlossLoopTest(unittest.TestCase):
             dekink = signals.current_key("native", 900)
         self.assertEqual(on["gloss"], gloss.settings_key(gloss.settings({})))
         self.assertNotEqual(on["gloss"], dekink["gloss"])
-        self.assertIn("|gloss=%s|%s|2" % (on["gloss"], on["code"]), signals.key_string(on))
+        self.assertIn("|gloss=%s|" % on["gloss"], signals.key_string(on))
+        self.assertTrue(signals.key_string(on).endswith("|%s|2" % on["code"]))
         self.assertNotEqual(signals.key_string(on), signals.key_string(dekink))
         # a groups file is keyed by its content, not its path
         a, b = self.root / "a.json", self.root / "b" / "a.json"

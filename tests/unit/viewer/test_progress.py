@@ -253,6 +253,20 @@ class HumanizeTest(unittest.TestCase):
 
 
 class ClassifyLaneTest(unittest.TestCase):
+    def test_provisional_signal_gaps_are_not_native_opens(self):
+        lane = dict(
+            status="complete",
+            kind="candidate_complete",
+            last_candidate=dict(
+                provisional=True, missing_connections=6, deferred_nets=["P", "N", "power"]
+            ),
+        )
+        self.assertEqual(
+            humanize(lane), "Screening: 6 signal gaps, 3 deferred nets, native DRC pending"
+        )
+        lane["last_candidate"]["missing_connections"] = 0
+        self.assertNotIn("all connected", humanize(lane))
+
     def test_attaches_status_text_and_progress_and_is_pure(self):
         lane = dict(
             id="a", status="start", kind="candidate_start", phase="initial-placement signals"

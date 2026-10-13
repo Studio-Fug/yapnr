@@ -59,7 +59,14 @@ def save(kind, payload):
         return None
     sources = {
         name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-        for name in ("model.py", "legalize.py", "cost_inspect.py", "cost_capture.py")
+        for name in (
+            "model.py",
+            "legalize.py",
+            "cost_inspect.py",
+            "cost_capture.py",
+            "pad_locality.py",
+            "smps_cost.py",
+        )
     }
     if os.environ.get("PNR_POWER_FIRST") == "1":
         sources.update(
@@ -68,12 +75,31 @@ def save(kind, payload):
                 for name in ("power_first.py", "../power_topology.py")
             }
         )
+    if (
+        os.environ.get("PNR_LEGALIZE_SHOVE", "1") == "1"
+        or os.environ.get("PNR_PLACEMENT_BANKS", "1") == "1"
+    ):
+        sources.update(
+            {
+                name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
+                for name in ("shove.py", "../placement_banks.py")
+            }
+        )
     raw = json.dumps(
         dict(
             schema="pnr-placement-cost-capture-v1",
             kind=kind,
             phase_context=phase_context(),
             runtime_sources=sources,
+            features={
+                "PNR_SMPS_PLACEMENT": os.environ.get("PNR_SMPS_PLACEMENT", "1"),
+                "PNR_PAD_LOCALITY": os.environ.get("PNR_PAD_LOCALITY", "1"),
+                **{
+                    key: "1"
+                    for key in ("PNR_LEGALIZE_SHOVE", "PNR_PLACEMENT_BANKS")
+                    if os.environ.get(key, "1") == "1"
+                },
+            },
             **payload,
         ),
         separators=(",", ":"),
@@ -181,6 +207,10 @@ def legalizer_decision(
     channel_weight,
     local_details=(),
     wire_weight=None,
+    original_position=None,
+    original_rotation=None,
+    extra_terms=(),
+    placement_context=None,
 ):
     """Store actual evaluated legal candidates/terms before another part is placed.
 
@@ -208,7 +238,8 @@ def legalizer_decision(
                 path=str(dest.resolve()),
                 sha256=hashlib.sha256(dest.read_bytes()).hexdigest(),
                 columns=["x", "y", "target_distance_squared", "channel_raw", "local_loop_weighted"]
-                + (["wire_raw"] if array.ndim == 2 and array.shape[1] == 6 else []),
+                + (["wire_raw"] if wire_weight is not None else [])
+                + [t["key"] + "_weighted" for t in extra_terms],
                 count=len(array),
             )
         )
@@ -241,12 +272,16 @@ def legalizer_decision(
                 weighted=wire_weight * chosen[3],
             )
         )
+    terms += [dict(t, weighted=t["raw"] * t["weight"]) for t in extra_terms]
     return save(
         "legalizer-decision",
         dict(
             graph=json.loads(graph.to_json()),
             ref=ref,
             target=list(target),
+            original_position=list(original_position or target),
+            placement_constraints=placement_context or {},
+            original_rotation=rotation if original_rotation is None else original_rotation,
             position=list(position),
             rotation=rotation,
             stationary_neighbors=[c.ref for c in neighbors],

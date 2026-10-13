@@ -341,6 +341,20 @@ def outline_size(graph: BoardGraph, constraints: CompiledConstraints) -> Tuple[f
     board's bounding box."""
     b = constraints.board
     if b.width and b.height:
+        import os
+
+        if (
+            os.environ.get("PNR_NATIVE_OUTLINE", "1") == "1"
+            and graph.outline
+            and graph.outline.polygon
+            and (
+                abs(float(b.width) - graph.outline.width) > 1e-6
+                or abs(float(b.height) - graph.outline.height) > 1e-6
+            )
+        ):
+            raise ValueError(
+                "native outline and constraint dimensions disagree; rebase the source constraints"
+            )
         return (float(b.width), float(b.height))
     if graph.outline:
         return (graph.outline.width, graph.outline.height)

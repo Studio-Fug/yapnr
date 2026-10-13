@@ -13,6 +13,7 @@ from pnr.place import place
 
 
 class Capture(unittest.TestCase):
+    @patch.dict(os.environ, PNR_LEGALIZE_SHOVE="0")
     def test_capture_does_not_change_placement_and_reconciles_objectives(self):
         g, cc = fixture()
         kw = dict(seed=17, iters=80)
@@ -56,12 +57,16 @@ class Capture(unittest.TestCase):
             actual, _ = place(g, cc, **kw)
             self.assertEqual(actual.to_json(), base.to_json())
             docs = [json.loads(p.read_text()) for p in Path(td).glob("*.json")]
-            d = next(d for d in docs if d["kind"] == "legalizer-decision")
+            d = next(
+                d
+                for d in docs
+                if d["kind"] == "legalizer-decision" and not d.get("transaction_kind")
+            )
             keys = [t["key"] for t in d["terms"]]
-            self.assertEqual(keys[-1], "wirelength")
+            self.assertIn("wirelength", keys)
             self.assertAlmostEqual(d["total"], sum(t["weighted"] for t in d["terms"]), places=8)
             field = next(f for f in d["candidate_fields"] if f["rotation"] == d["rotation"])
-            self.assertEqual(field["columns"][-1], "wire_raw")
+            self.assertEqual(field["columns"][5], "wire_raw")
             v = np.load(field["path"])["values"]
             i = np.argmin(((v[:, :2] - d["position"]) ** 2).sum(1))
             self.assertAlmostEqual(

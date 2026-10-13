@@ -94,7 +94,10 @@ class LiveViewerEndToEndTest(unittest.TestCase):
                 def ingested():
                     with urllib.request.urlopen(base + "/api/state", timeout=5) as resp:
                         payload = json.load(resp)
-                    return payload if payload.get("revision") else None
+                    lane = payload.get("lanes", {}).get("live/tiny", {})
+                    # Ingestion publishes each event separately: wait for the
+                    # terminal route event rather than the first revision.
+                    return payload if lane.get("last_route") else None
 
                 payload = wait_for(ingested)
                 lane = payload["lanes"]["live/tiny"]  # one lane per task, by its candidate

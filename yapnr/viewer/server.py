@@ -156,6 +156,11 @@ def from_graph(g):
         parts.append(dict(ref=c["ref"], xy=c["pos"], pads=pads))
     return dict(
         frame="mm-y-up",
+        **(
+            {"copper_layers": [row["name"] for row in g["stack"]["layers"]]}
+            if (g.get("stack") or {}).get("layers")
+            else {}
+        ),
         width=g["outline"]["width"],
         height=g["outline"]["height"],
         parts=parts,
@@ -310,6 +315,9 @@ class Viewer:
 
     def _init_cost(self):
         from yapnr.viewer.services.cost import CostService
+        from yapnr.viewer.services.placement_lab import PlacementLab
+
+        self.placement_lab = PlacementLab(self.root, self.runtime, self.cfg.capture_root)
 
         self.cost_service = CostService(
             self.root,
@@ -683,7 +691,27 @@ class Viewer:
             if time.time() - self.last_sweep > 600:
                 self.last_sweep = time.time()
                 sweep_tmp(folder)
-            if not f.exists():
+            cached = None
+            if f.exists():
+                # Older servers may still be writing this shared cache in place.
+                for attempt in range(40):
+                    try:
+                        cached = json.loads(f.read_text())
+                        break
+                    except ValueError:
+                        if attempt == 39:
+                            raise
+                        time.sleep(0.25)
+            # Upgrade old native caches: occupied copper alone cannot identify empty planes.
+            # Keep portable, geometry-only archives readable when their native board is absent.
+            stale = (
+                cached is not None
+                and ("copper_layers" not in cached or "airwires" not in cached)
+                and Path(event["board"]).is_file()
+                and self.toolchain.python()[0] is not None
+                and hashlib.sha256(Path(event["board"]).read_bytes()).hexdigest() == sha
+            )
+            if cached is None or stale:
                 tmp = folder / (sha + "." + uuid.uuid4().hex + ".tmp")
                 try:
                     with (folder / (sha + ".log")).open("w") as log:
@@ -711,7 +739,13 @@ class Viewer:
         except GeometryUnavailable as ex:
             if "layout" not in e:
                 return None, str(ex)
-        return (from_graph(e["layout"]) if "layout" in e else None), None
+        if "layout" in e:
+            geo = from_graph(e["layout"])
+            if e.get("data", {}).get("provisional"):
+                geo["provisional"] = True
+                geo["tracks"] = e["data"].get("screening_tracks", [])
+            return geo, None
+        return None, None
 
     # ------------------------------------------------------------------ ingest
     def ingest(self):
@@ -757,22 +791,32 @@ class Viewer:
                 with self.lock:
                     self.state["errors"].append(dict(file=f.name, error=notice))
             layout_sha = None
-            if e["kind"] == "placement_cost_capture":
+            if e["kind"] == "placement_cost_capture" or (
+                e["kind"] == "candidate_complete"
+                and e.get("data", {}).get("provisional")
+                and "layout" in e
+            ):
+                screening = e["kind"] == "candidate_complete"
                 layout_sha = hashlib.sha256(
-                    json.dumps(e["layout"], sort_keys=True, separators=(",", ":")).encode()
+                    json.dumps(
+                        geo if screening else e["layout"], sort_keys=True, separators=(",", ":")
+                    ).encode()
                 ).hexdigest()
                 self.cache[layout_sha] = geo
                 write_json_atomic(self.root / "geometry" / (layout_sha + ".json"), geo)
                 frame = dict(
-                    name=e["data"]["phase"] + " · recorded placement cost",
-                    kind="placement-cost",
+                    name=e["data"]["phase"]
+                    + (
+                        " · unvalidated signal draft" if screening else " · recorded placement cost"
+                    ),
+                    kind="signal-screening" if screening else "placement-cost",
                     layout_sha256=layout_sha,
                     event_id=e["id"],
                     opens=None,
                     violations=None,
                     label_source="data.phase",
                     metric_sources={},
-                    cost_capture=e["data"]["cost_capture"],
+                    cost_capture=e["data"].get("cost_capture"),
                 )
             with self.lock:
                 self.apply_event(e, frame, geo, layout_sha)
@@ -1066,6 +1110,7 @@ class Viewer:
 
     # ------------------------------------------------------------------ lifecycle
     def stop(self, signum, frame):
+        self.placement_lab.close()
         # Kill a running KiCad extractor and drop its temporary file (a SIGKILLed viewer leaves
         # them to the next sweep).
         for proc, tmp in list(self.extracting.items()):
@@ -1139,6 +1184,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_about(self, path):
         return self.send(self.viewer.about())
+
+    def get_placement_lab(self, path):
+        q = self.query()
+        try:
+            lab = self.viewer.placement_lab
+            if path.endswith("/v1"):
+                from yapnr.viewer.services.placement_api import schema
+
+                return self.send(schema())
+            return self.send(
+                lab.get(q.get("id", [""])[0], q.get("step", [None])[0])
+                if path.endswith("/run")
+                else lab.catalog()
+            )
+        except (ValueError, KeyError, TypeError, FileNotFoundError) as exc:
+            return self.send(dict(error=str(exc)), 400)
 
     def get_component_cost(self, path):
         q = self.query()
@@ -1400,6 +1461,11 @@ class Handler(BaseHTTPRequestHandler):
         # rejected too (other POSTs allow it).
         if self.path == "/api/agent/chat" and origin not in v.origins():
             return self.send({"error": "origin required for the assistant"}, 403)
+        if (
+            self.path in ("/api/placement-lab", "/api/placement-lab/v1")
+            and origin not in v.origins()
+        ):
+            return self.send({"error": "origin required for placement runs"}, 403)
         notes_path = self.path == "/api/notes" or self.path.startswith("/api/notes/")
         if notes_path and origin not in v.origins():
             return self.send({"error": "origin required for notes"}, 403)
@@ -1420,6 +1486,12 @@ class Handler(BaseHTTPRequestHandler):
                 if v.agent_service is None:
                     return self.agent_disabled()
                 return self.send(v.agent_service.cancel(body.get("session")))
+            if self.path == "/api/placement-lab/v1":
+                from yapnr.viewer.services.placement_api import PlacementAPI
+
+                return self.send(PlacementAPI(v.placement_lab, v.notes).call(body))
+            if self.path == "/api/placement-lab":
+                return self.send(v.placement_lab.command(body))
             if self.path == "/api/controls":
                 return self.post_controls(body)
             if self.path == "/api/pin":
@@ -1494,8 +1566,8 @@ class Handler(BaseHTTPRequestHandler):
         """POST /api/notes (create), /api/notes/<id> (fields, comment, expect_rev) and
         /api/notes/<id>/delete.
 
-        Always a user actor: the assistant writes only through its MCP server, so nothing here can
-        act as the agent (or set its provenance).
+        Always a user actor. Agent writes use separate MCP/placement API handlers that force an
+        agent actor and derive provenance; callers cannot choose their authority here.
         """
         from yapnr.viewer.notes.store import NoteConflict, NoteNotFound
 
@@ -1560,6 +1632,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 GET_ROUTES = {
+    "/api/placement-lab/v1": Handler.get_placement_lab,
+    "/api/placement-lab": Handler.get_placement_lab,
+    "/api/placement-lab/run": Handler.get_placement_lab,
     "/api/about": Handler.get_about,
     "/api/component-cost": Handler.get_component_cost,
     "/api/schematic": Handler.get_schematic,

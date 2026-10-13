@@ -109,6 +109,12 @@ collapsed. At ≤900px width it lives in the Experiments drawer like the rest of
 
 ### The phase/progress model
 
+Initial-placement signal screening is provisional. Its count excludes deferred
+USB/power nets and is labeled with that deferred-net count and pending native DRC.
+Saved screening layouts and draft routes are inspectable in 2D and 3D; purple draft
+copper is not an accepted native checkpoint. Selecting another lane discards any
+late poll response from the previous lane before requesting its geometry.
+
 One place, `yapnr/viewer/progress.py`, turns a lane's raw telemetry into a progress bar and a
 status string; nothing else in the viewer derives a phase from an event. Every lane is placed on
 one canonical, ordered pipeline (`PHASES`), independent of which campaign produced it — a
@@ -477,3 +483,24 @@ viewer's own; runs do not record the engine commit that produced them yet. The f
 third-party libraries, served unmodified next to their licenses: elkjs (EPL-2.0, with an
 Apache-2.0 web-worker shim; both texts are served) and three.js (MIT); see
 [THIRD_PARTY.md](../THIRD_PARTY.md).
+
+### Copper layer controls
+
+The PCB and 3D layer lists follow the native board's enabled copper stack in physical
+order, including empty inner layers. Each row shows the layer name followed by its
+visibility checkbox. The 3D list also reports the copper-layer count. Visibility
+choices survive live updates and lane changes; annotation drafts retain their own
+selected layers. Older cached geometry is refreshed from its native board when
+available. Archives without that board can only show layers identifiable from the
+saved geometry and cannot establish the original stack count.
+
+### Unconnected airwires
+
+The airwire overlay contracts native KiCad copper connectivity (tracks, vias and
+filled zone islands) before drawing a minimum spanning tree between disconnected
+pad-bearing groups. Distances use pad/via centres and track endpoints; they are
+geometric guides, not proposed routes or copper-edge clearance measurements. Fully
+connected nets have no airwires. Coincident anchors on disconnected layers retain
+a marker. The overlay is unavailable on graph-only previews or legacy geometry
+archives without native connectivity; it never falls back to a tree of all pads.
+Matching native boards automatically refresh older geometry caches.

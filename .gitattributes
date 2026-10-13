@@ -1,0 +1,4 @@
+
+# Frozen visualization geometry; inspect the renderer and board hashes.
+docs/design/assets/mini-engine-repair/*.json linguist-generated=true
+docs/design/assets/mini-pad-locality/*.json linguist-generated=true

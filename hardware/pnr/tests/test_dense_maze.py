@@ -613,7 +613,7 @@ def fixture_grid(wide_net=None):
     import yaml
 
     from pnr.constraints import compile_constraints, compile_routing_rules
-    from pnr.graph import BoardGraph
+    from pnr.graph import BoardGraph, BoardOutline
     from pnr.route.detail import router
     from pnr.route.detail.maze import RouteResult
 
@@ -622,6 +622,8 @@ def fixture_grid(wide_net=None):
         graph = BoardGraph.from_json(fh.read())
     with open(os.path.join(here, "constraints.yaml"), encoding="utf-8") as fh:
         constraints = compile_constraints(yaml.safe_load(fh), graph.refs)
+    # This synthetic grid fixture explicitly reframes the exported assembly row.
+    graph.outline = BoardOutline(constraints.board.width, constraints.board.height)
     rules = compile_routing_rules(constraints, [n.name for n in graph.nets])
     if wide_net:
         rules["net_classes"].append(dict(name="wide", width_mm=0.9, nets=[wide_net]))

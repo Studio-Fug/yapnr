@@ -1160,9 +1160,11 @@ def select_initial_placement(
                     )
                 emit(
                     "candidate_complete",
+                    layout=json.loads(candidate["graph"].to_json()),
                     data=dict(
                         phase="initial-placement screening complete",
                         provisional=True,
+                        screening_tracks=route.tracks,
                         **_route_metrics(route),
                     ),
                 )

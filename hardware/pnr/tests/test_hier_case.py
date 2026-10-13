@@ -293,6 +293,71 @@ class HierCaseTest(unittest.TestCase):
             sub.write_text(text)
 
 
+class HullClearanceTest(unittest.TestCase):
+    def test_hull_masks_keep_physical_clearance_without_growing_cell_cover_twice(self):
+        import copy
+
+        from pnr.constraints import compile_constraints
+        from pnr.hier.layout_search import macro_clearance_violations
+        from pnr.place.metrics import hard_violations
+
+        for shape in ("rect", "cap"):
+            for other_hull in (False, True):
+                hull = dict(
+                    grid_mm=0.25,
+                    top=[[-0.75, -0.75, 0.75, 0.75]],
+                    bottom=[],
+                    inner=[],
+                    shapes={
+                        "top": {
+                            shape: (
+                                [[-0.5, -0.5, 0.5, 0.5]]
+                                if shape == "rect"
+                                else [[-0.4, 0, 0.4, 0, 0.1]]
+                            )
+                        }
+                    },
+                )
+                a = Component("MA", "block:a", (3, 3), 0, "top", (1.5, 1.5), (1.5, 1.5), hull=hull)
+                b = Component(
+                    "MB",
+                    "block:b" if other_hull else "R_0603",
+                    (4.6, 3),
+                    0,
+                    "top",
+                    (1.5, 1.5) if other_hull else (1, 1),
+                    (1.5, 1.5) if other_hull else (1, 1),
+                    hull=copy.deepcopy(hull) if other_hull else None,
+                    smd_body=True,
+                )
+                g = BoardGraph("hull-clearance", [a, b], [], BoardOutline(10, 10))
+                con = compile_constraints(
+                    dict(
+                        board=dict(
+                            width=10,
+                            height=10,
+                            default_clearance_mm=0.4,
+                            courtyard_clearance_mm=0.4,
+                        )
+                    ),
+                    g.refs,
+                )
+                with mock.patch.dict(os.environ, {"PNR_MACRO_HULL": "1"}):
+                    # Actual shape gap 0.6 mm passes the unchanged 0.4 mm
+                    # contract; outward-rounded cover gap alone is smaller.
+                    self.assertEqual(hard_violations(g, con, 0.4)["overlaps"], [("MA", "MB")])
+                    self.assertEqual(macro_clearance_violations(g, con)["overlaps"], [])
+                    # A real 0.3 mm gap must still fail, for both body rectangles
+                    # and copper capsules, beside either another hull or a part.
+                    b.pos = (4.3, 3)
+                    self.assertEqual(macro_clearance_violations(g, con)["overlaps"], [("MA", "MB")])
+                    # A cover without its physical source shapes cannot justify
+                    # clearing the conservative collision finding.
+                    b.pos = (4.6, 3)
+                    a.hull.pop("shapes")
+                    self.assertEqual(macro_clearance_violations(g, con)["overlaps"], [("MA", "MB")])
+
+
 class RouteCompactTest(unittest.TestCase):
     """PNR_ROUTE_COMPACT TOP and BLOCK on the synthetic design (and with PNR_MACRO_HULL):
     the knit stays complete, the layout gets no larger, every kept step is traced."""

@@ -49,6 +49,7 @@ offsets. Without the flag every term is computed exactly as before.
 
 from __future__ import annotations
 
+import itertools
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -203,6 +204,13 @@ def global_place(
     w_plane: float = 0.05,
     w_plane_sep: float = 0.35,
     w_match: float = 1.0,
+    w_wire: float = 1.0,
+    w_locality: float = 4.0,
+    control=None,
+    progress=None,
+    initialized=None,
+    updated=None,
+    run_forever: bool = False,
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
     pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
@@ -245,10 +253,16 @@ def global_place(
     the legalizer's slots, the optional channel term, the overlap weight ramped and a fresh
     positions-only Adam with a decaying step (:mod:`pnr.place.gp_polish`).
 
+    ``run_forever`` is an opt-in interactive mode: ``iters`` sets the annealing
+    horizon, then temperature stays at 0.2 and the same optimizer continues until
+    the control callback interrupts it. Finite production runs are unchanged.
+
     Returns ``({ref: (x, y)}, {ref: angle_deg})`` for every component (angle is
     the arg-max of the relaxed rotation distribution, a legal 0/90/180/270), and
     with ``return_sides`` a third map ``{ref: side}`` (free parts snapped at
     ``q > 0.5``, every other part its current side)."""
+    if run_forever and (control is None or polish is not None):
+        raise ValueError("run_forever requires an interactive control and does not support polish")
     torch.manual_seed(seed)
     comps = graph.components
     n = len(comps)
@@ -401,6 +415,13 @@ def global_place(
     net_pin_idx = [[pin_key[p] for p in net.pins if p in pin_key] for net in graph.nets]
     net_pin_idx = [pins for pins in net_pin_idx if len(pins) >= 2]
     pairs = pair_tensors(pair_weights, pin_key)
+    from .pad_locality import Cost, anchor_index
+    from .pad_locality import enabled as locality_enabled
+
+    locality = Cost(graph, constraints) if locality_enabled() else None
+    from . import smps_cost
+
+    smps = smps_cost.Cost(graph, constraints) if smps_cost.enabled() else None
     match_sets = matched_pin_sets(graph, constraints, pin_key)
     batched_wl = None
     if os.environ.get("PNR_BATCHED_WIRELENGTH") == "1":
@@ -437,9 +458,14 @@ def global_place(
                 edge_terms.append((idx[ref], axis, edge, con.weight or 1.0))
 
     # Grouping (soft): pull members within radius of the anchor.
-    group_terms: List[Tuple[List[int], int, float, float]] = []
+    group_terms: List[Tuple[List[int], int, float, float, Optional[int]]] = []
+    from pnr import placement_banks
+
+    placement_banks.members(graph, constraints)
     for con in constraints.constraints:
         if con.kind != "group":
+            continue
+        if con.params.get("placement_bank") and not placement_banks.enabled():
             continue
         anchor = con.params.get("anchor")
         if anchor not in idx:
@@ -447,7 +473,17 @@ def global_place(
         members = [idx[r] for r in con.refs if r in idx and r != anchor]
         if members:
             group_terms.append(
-                (members, idx[anchor], float(con.params.get("radius_mm") or 5.0), con.weight or 1.0)
+                (
+                    members,
+                    idx[anchor],
+                    float(con.params.get("radius_mm") or 5.0),
+                    con.weight or 1.0,
+                    (
+                        anchor_index(graph, anchor, con.params.get("anchor_pad"))
+                        if locality is not None
+                        else None
+                    ),
+                )
             )
 
     # Regions and aligns (pnr.place.regions): None unless the design declares one,
@@ -489,8 +525,22 @@ def global_place(
     tracer = placement_tracer(comps, iters + extra)
     frozen = None
 
-    for step in range(iters + extra):
-        if step >= iters:
+    if initialized is not None:
+        # Observe the real seeded state before any control wait, loss or Adam update.
+        initialized(full_pos().detach().tolist(), rot_probs(2.0).detach().tolist())
+
+    for step in itertools.count() if run_forever else range(iters + extra):
+        tuning = {}
+        if control is not None:
+            tuning = control(step)
+            w_wire = tuning.get("w_wire", w_wire)
+            w_locality = tuning.get("w_locality", w_locality)
+            w_spread = tuning.get("w_spread", w_spread)
+            w_bound = tuning.get("w_bound", w_bound)
+            w_keep = tuning.get("w_keep", w_keep)
+            w_plane = tuning.get("w_plane", w_plane)
+            w_plane_sep = tuning.get("w_plane_sep", w_plane_sep)
+        if not run_forever and step >= iters:
             # Polish: turns and sides frozen, the legalizer's slots, a decaying step.
             if frozen is None:
                 frozen = _freeze(
@@ -510,7 +560,8 @@ def global_place(
             pos = full_pos()
             p = frozen["p"]
         else:
-            temp = 2.0 - (2.0 - 0.2) * (step / max(1, iters - 1))  # anneal 2.0 -> 0.2
+            temp = 2.0 - (2.0 - 0.2) * min(1.0, step / max(1, iters - 1))  # anneal 2.0 -> 0.2
+            temp = tuning.get("temperature", temp)
             opt.zero_grad()
             pos = full_pos()
             p = rot_probs(temp)  # (n, 4)
@@ -587,7 +638,7 @@ def global_place(
         if frozen is not None:
             bound = slot_bound(pos, frozen, width, height, movable_f)
 
-        loss = wl + w_spread * overlap + w_bound * bound
+        loss = w_wire * wl + w_spread * overlap + w_bound * bound
         if bodies is not None and dovetail > 0.0 and frozen is None:
             # PNR_HULL_DOVETAIL: pack the hull bodies, so a notch takes a neighbour.
             loss = loss + dovetail * gp_pack(bodies, pos, p, gamma)
@@ -609,6 +660,10 @@ def global_place(
                     )
                 ).sum()
             )
+        if locality is not None:
+            loss = loss + w_locality * locality.torch(torch.stack((pin_x, pin_y), dim=-1))
+        if smps is not None:
+            loss = loss + smps_cost.WEIGHT * smps.torch(torch.stack((pin_x, pin_y), dim=-1))
         if match_sets and w_match > 0.0:
             loss = loss + w_match * length_mismatch(match_sets, pin_x, pin_y, gamma)
 
@@ -644,9 +699,14 @@ def global_place(
                 target = (height if axis == 1 else width) - extent
             loss = loss + weight * (body[i, axis] - target) ** 2
 
-        for members, anchor, radius, weight in group_terms:
+        for members, anchor, radius, weight, anchor_pin in group_terms:
             m = torch.tensor(members, dtype=torch.long)
-            d = torch.linalg.vector_norm(pos[m] - pos[anchor], dim=1)
+            target = (
+                pos[anchor]
+                if anchor_pin is None
+                else torch.stack((pin_x[anchor_pin], pin_y[anchor_pin]))
+            )
+            d = torch.linalg.vector_norm(pos[m] - target, dim=1)
             loss = loss + weight * (torch.clamp(d - radius, min=0.0) ** 2).sum()
 
         if related is not None:
@@ -680,6 +740,8 @@ def global_place(
                 exp_half.detach().tolist(),
                 float(loss.detach()),
                 dict(
+                    w_wire=w_wire,
+                    w_locality=w_locality,
                     gamma=gamma,
                     spread=spread,
                     w_spread=w_spread,
@@ -695,8 +757,15 @@ def global_place(
             )
         if tracer is not None and tracer.due(step):
             tracer.snapshot(step, pos, p)
+        if progress is not None:
+            progress(step, pos.detach().tolist(), p.detach().tolist(), float(loss.detach()))
         loss.backward()
         opt.step()
+        if updated is not None:
+            next_temp = 2.0 - 1.8 * min(1.0, (step + 1) / max(1, iters - 1))
+            next_temp = tuning.get("next_temperature", next_temp)
+            next_p = frozen["p"] if frozen is not None else rot_probs(next_temp)
+            updated(step + 1, full_pos().detach().tolist(), next_p.detach().tolist())
 
     pos = full_pos().detach()
     p = rot_probs(0.2).detach()

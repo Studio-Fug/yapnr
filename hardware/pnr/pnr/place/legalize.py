@@ -38,6 +38,7 @@ cheapest outcome. Parts on a matched-length net (``wire_exempt``) keep the plain
 
 from __future__ import annotations
 
+import copy
 import math
 import os
 from typing import Dict, List, Optional, Tuple
@@ -190,6 +191,9 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
     ``regions``/``aligns`` for a ``region`` or ``align``), so every other design
     calls the legalizer exactly as before; so do the ``legalize:`` options
     (:func:`pnr.place.legal_options.legalize_kwargs`)."""
+    from pnr.placement_banks import activate
+
+    constraints = activate(constraints)
     from . import legal_options
     from .geometry import (
         hard_edge_bands,
@@ -200,6 +204,32 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
     )
     from .regions import legalize_kwargs
 
+    # Reuse the exact region legalizer for concave board edges. The mask covers
+    # complete bodies, so the notch between two support ears cannot become a slot.
+    poly = graph.outline.polygon if graph.outline else []
+    if poly and (
+        len(poly) != 4
+        or {tuple(p) for p in poly}
+        != {
+            (0, 0),
+            (graph.outline.width, 0),
+            (graph.outline.width, graph.outline.height),
+            (0, graph.outline.height),
+        }
+    ):
+        from pnr.constraints import Constraint, Enforcement
+
+        constraints = copy.deepcopy(constraints)
+        constraints.constraints.append(
+            Constraint(
+                kind="region",
+                refs=tuple(c.ref for c in graph.components if c.ref not in poses),
+                enforcement=Enforcement.HARD,
+                params={"areas": [{"polygon": poly}]},
+                name="native board outline",
+            )
+        )
+
     out = dict(
         fixed=poses,
         keepouts=keepout_rects(graph, constraints, poses),
@@ -207,6 +237,10 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
         group_edges=hard_group_edges(constraints),
         rotations=resolve_hard_rotations(constraints),
     )
+    from .shove import enabled as shove_enabled
+
+    if shove_enabled():
+        out["shove_constraints"] = constraints
     if pad_edge is not None:
         out["pad_edge"] = pad_edge
     bands = hard_edge_bands(constraints)
@@ -734,7 +768,9 @@ def legalize(
     margins: Optional[Dict[str, float]] = None,
     wire_weight: Optional[float] = None,
     wire_exempt=frozenset(),
+    locality=None,
     keep: Optional[bool] = None,
+    shove_constraints=None,
     _attempt: int = 0,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
@@ -1203,6 +1239,8 @@ def legalize(
             cost += side_weight * float(side_cost(placed))
         if wired(comp):  # PNR_LEGALIZE_HPWL
             cost += wire_weight * float(wire_cost(comp, neighbors, movable, x, y, wire_skip))
+        if locality is not None:
+            cost += float(locality(comp, neighbors, x, y))
         return cost
 
     aid = None
@@ -1799,7 +1837,7 @@ def legalize(
                                     (
                                         xx,
                                         yy,
-                                        (xx - comp.pos[0]) ** 2 + (yy - comp.pos[1]) ** 2,
+                                        (xx - target[0]) ** 2 + (yy - target[1]) ** 2,
                                         ch,
                                         np.zeros(xx.shape),
                                     )
@@ -1833,6 +1871,33 @@ def legalize(
                                     captured_fields.get(_turn), xs, ys, wire
                                 )
                             return value + wire_weight * wire
+
+                    if capturing or locality is not None:
+                        # Retain every additive term, without changing candidate selection.
+                        bound = None
+
+                        def candidate_cost(xs, ys, _base=candidate_cost, _turn=rotation):
+                            value = 0.0 if _base is None else _base(xs, ys)
+                            local = 0.0 if locality is None else locality(comp, neighbors, xs, ys)
+                            if capturing and np.asarray(xs).ndim:
+                                soft = (
+                                    0.0
+                                    if rules is None
+                                    else rules.soft_cost(
+                                        comp, {q.ref: q for q in neighbors}, xs, ys
+                                    )
+                                )
+                                soft = 0.0 if soft is None else soft
+                                array = captured_fields.get(_turn)
+                                if array is not None and len(array) == np.asarray(xs).size:
+                                    captured_fields[_turn] = np.column_stack(
+                                        (
+                                            array,
+                                            np.broadcast_to(local, np.asarray(xs).shape),
+                                            np.broadcast_to(soft, np.asarray(xs).shape),
+                                        )
+                                    )
+                            return value + local
 
                     if snap:
                         # PNR_LEGALIZE_KEEP anchor: the nearest slot; a cost capture still
@@ -1988,7 +2053,11 @@ def legalize(
                 radius *= RING_GROWTH
 
         # PNR_LEGALIZE_HPWL chooses the turn with the slot; otherwise the first turn that fits.
-        run_search = search_scored if wired(comp) else search
+        run_search = (
+            search_scored
+            if wired(comp) or (locality is not None and comp.ref in locality.refs)
+            else search
+        )
         anchored = False
         if comp.ref in anchoring:
             # PNR_LEGALIZE_KEEP: the slot at the (pushed) global pose, at the global turn; else
@@ -2094,7 +2163,8 @@ def legalize(
                 )
             raise LegalizationError(f"{comp.ref}: {error}") from error
         if capturing:
-            target = comp.pos
+            original_position = comp.pos
+            target = target_of(comp)
             position = ((c + bw / 2) * g, (r + bh / 2) * g)
             if body_shift(comp) is not None:  # offset courtyard: the pose, not the slot
                 position = slot_pose(comp, r, c, bw, bh)
@@ -2109,6 +2179,37 @@ def legalize(
                 dict(
                     ref=comp.ref,
                     target=target,
+                    original_position=original_position,
+                    original_rotation=original_rotation,
+                    placement_context=dict(
+                        clearance_mm=clearance,
+                        keepouts=[vars(k) for k in keepouts],
+                        group_limits=limits_for(comp.ref),
+                        edge_box=edge_box(comp),
+                    ),
+                    extra_terms=[
+                        dict(
+                            key="pad_locality",
+                            raw=(
+                                0.0
+                                if locality is None
+                                else float(locality(comp, neighbors, *position))
+                            ),
+                            weight=1.0,
+                        ),
+                        dict(
+                            key="soft_rules",
+                            raw=(
+                                0.0
+                                if rules is None
+                                else float(
+                                    rules.soft_cost(comp, {q.ref: q for q in neighbors}, *position)
+                                    or 0.0
+                                )
+                            ),
+                            weight=1.0,
+                        ),
+                    ],
                     position=position,
                     rotation=comp.rot,
                     neighbors=[n.ref for n in neighbors],
@@ -2170,10 +2271,54 @@ def legalize(
     from .motion import motion as motion_of
     from .motion import summary as motion_summary
 
+    shove_records = []
+    shove_baseline_violations = {}
+    if shove_constraints is not None:
+        from pnr.placement_banks import members as bank_members
+
+        from .metrics import hard_violations
+        from .regions import snap_aligns
+        from .shove import repair
+
+        # Packing enforces a finite alignment band; finish an exact align before
+        # transactional shove, whose incremental checker requires a legal board.
+        snap_aligns(placed, shove_constraints, clearance, pad_edge, (width, height), margins)
+        shove_baseline_violations = {
+            k: v for k, v in hard_violations(placed, shove_constraints).items() if v
+        }
+        # A failed snap stays an illegal result for the caller's diagnostic/retry.
+        # It must neither crash the search nor seed supposedly legal transactions.
+        shove_records = (
+            []
+            if shove_baseline_violations
+            else repair(
+                placed,
+                graph,
+                shove_constraints,
+                grid=g,
+                clearance=clearance,
+                spread=spread,
+                inflation=inflation,
+                margins=margins,
+                pad_edge=pad_edge,
+                locality=locality,
+                channels=channel_model,
+                channel_weight=channel_weight,
+                allow_rotation=allow_rotation,
+                banks=bank_members(placed, shove_constraints),
+            )
+        )
+
     # The motion from the global poses (the input graph), and the triage (PNR_LEGALIZE_KEEP).
     record = motion_of(graph, placed, [c.ref for c in placed.components if c.ref not in fixed])
     held = sorted(ref for ref, pose in anchors.items() if tuple(by_ref[ref].pos) == tuple(pose))
     record["keep"] = keeping
+    if shove_constraints is not None:
+        record["shove"] = dict(
+            transactions=len(shove_records), moved=sum(len(v["moves"]) for v in shove_records)
+        )
+        if shove_baseline_violations:
+            record["shove"].update(skipped="illegal baseline", violations=shove_baseline_violations)
     if keeping:
         from .keep import REASONS
 
@@ -2222,8 +2367,36 @@ def legalize(
                     v["chosen"],
                     g,
                     channel_weight,
+                    original_position=v["original_position"],
+                    original_rotation=v["original_rotation"],
+                    placement_context=v["placement_context"],
+                    extra_terms=v["extra_terms"],
                     # PNR_LEGALIZE_HPWL: the wirelength term of a part it acted on.
                     **({} if len(v["chosen"]) < 4 else dict(wire_weight=wire_weight)),
+                )
+            )
+        for transaction in shove_records:
+            records.append(
+                save(
+                    "legalizer-decision",
+                    dict(
+                        transaction,
+                        transaction_kind="shove",
+                        stationary_neighbors=[
+                            c.ref
+                            for c in placed.components
+                            if c.ref not in {m["ref"] for m in transaction["moves"]}
+                        ],
+                        grid_mm=g,
+                        candidate_fields=[],
+                        placement_constraints={},
+                        terms=[
+                            dict(key=k, raw=v, weight=1.0, weighted=v)
+                            for k, v in transaction["after_terms"].items()
+                        ],
+                        total=sum(transaction["after_terms"].values()),
+                        scope="Atomic shove repair of the completed legal placement; all moved parts and whole-board cost recorded",
+                    ),
                 )
             )
         save(
@@ -2239,6 +2412,8 @@ def legalize(
                 hard_group_edges=list(group_edges),
                 hard_rotations=rotations,
                 backtracks=backtracks,
+                motion=record,
+                input_graph=json.loads(graph.to_json()),
                 scope="Actual per-component sequential legalizer decisions; each field retains its own previously occupied neighbors",
             ),
         )
@@ -2269,6 +2444,9 @@ def refine_channels(
     """
     placed = BoardGraph.from_json(graph.to_json())
     targets = {c.ref: tuple(c.pos) for c in graph.components}
+    from .metrics import outline_contains
+
+    contains = outline_contains(graph, width, height)
     limits = group_limits or {}
     g = grid_mm
     for _ in range(passes):
@@ -2309,6 +2487,11 @@ def refine_channels(
             candidate = ((col + bw / 2) * g, (row + bh / 2) * g)
             if shift is not None:
                 candidate = (candidate[0] - shift[0], candidate[1] - shift[1])
+            saved, comp.pos = comp.pos, candidate
+            on_board = contains(courtyard_rect(comp))
+            comp.pos = saved
+            if not on_board:
+                continue
             if comp.reserves:
                 from .pair_landing import enabled as landing_enabled
 

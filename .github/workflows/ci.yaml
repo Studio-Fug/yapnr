@@ -107,9 +107,9 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Check dock layout transactions
+      - name: Check dock and viewer interactions
         run: |
-          node --test tests/web/dock.test.mjs
+          node --test tests/web/*.test.mjs
           for file in yapnr/agent/web/*.js; do
             node --input-type=module --check < "$file"
           done

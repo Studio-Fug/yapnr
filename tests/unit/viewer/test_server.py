@@ -21,6 +21,25 @@ GRAPH = DESIGN / "graph.json"
 
 
 class ServerIngestionTest(unittest.TestCase):
+    def test_signal_screening_geometry_is_explicitly_provisional(self):
+        from yapnr.viewer.server import Viewer
+
+        viewer = Viewer.__new__(Viewer)
+        tracks = [["signal", "F.Cu", [1, 2], [3, 4], 0.2]]
+        event = dict(
+            layout=json.loads(GRAPH.read_text()),
+            data=dict(
+                provisional=True,
+                screening_tracks=tracks,
+                missing_connections=6,
+            ),
+        )
+        geometry, notice = viewer.event_geometry(event)
+        self.assertIsNone(notice)
+        self.assertTrue(geometry["provisional"])
+        self.assertTrue(geometry["parts"])
+        self.assertEqual(geometry["tracks"], tracks)
+
     def test_missing_label_replays_as_inspectable_phase_and_snapshots_work(self):
         with tempfile.TemporaryDirectory(prefix="viewer-schema-") as tmp:
             root = Path(tmp) / "live"

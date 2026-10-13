@@ -25,7 +25,7 @@ import torch
 import yaml
 
 from pnr.constraints import compile_constraints
-from pnr.graph import BoardGraph
+from pnr.graph import BoardGraph, BoardOutline
 from pnr.place import portable_math as pm
 from pnr.place.geometry import outline_size
 from pnr.place.model import global_place
@@ -138,6 +138,9 @@ def _fixture():
         graph = BoardGraph.from_json(fh.read())
     with open(os.path.join(FIXTURE, "constraints.yaml"), encoding="utf-8") as fh:
         constraints = compile_constraints(yaml.safe_load(fh), graph.refs)
+    # This placement-only fixture deliberately reframes an exported assembly row.
+    # Rebase its outline explicitly; native-board ingest/writeback keeps its contour.
+    graph.outline = BoardOutline(constraints.board.width, constraints.board.height)
     return graph, constraints
 
 
@@ -170,7 +173,9 @@ class GlobalPlaceTest(unittest.TestCase):
         for ref in sorted(positions):
             x, y = positions[ref]
             h.update(("%s %s %s %r\n" % (ref, x.hex(), y.hex(), rotations[ref])).encode())
-        self.assertEqual(h.hexdigest()[:16], "9cc44fdd53772399", "golden: " + h.hexdigest()[:16])
+        # Default pad-locality attraction deliberately changes the model; this
+        # same golden must still hold on both macOS and Linux.
+        self.assertEqual(h.hexdigest()[:16], "79a70710e1f9530f", "golden: " + h.hexdigest()[:16])
 
 
 if __name__ == "__main__":

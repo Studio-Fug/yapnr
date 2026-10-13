@@ -139,6 +139,7 @@ def read_round(round_dir, key=None):
         fab_profile=rules.get("fab_profile", "legacy") if rules else None,
         gloss=progress.get("gloss_key"),
         compact=progress.get("compact_key"),
+        repairs=progress.get("repair_key"),
         conns=[conns[c] for c in sorted(conns)],
         same_part=dict(count=len(same), ids=sorted(same)),
         endpoints={k_: endpoints[k_] for k_ in sorted(endpoints)},
@@ -722,6 +723,8 @@ def compact_key():
 def current_key(stage, budget_seconds, inputs=None):
     """Router key of evaluations this process will run (environment + CLI + evaluation code)."""
     router = _router()
+    from pnr.repair_flags import key as repair_key
+
     return dict(
         router=router,
         stage=stage,
@@ -732,6 +735,7 @@ def current_key(stage, budget_seconds, inputs=None):
         inputs=file_sha(Path(inputs) / "source.kicad_pcb") if inputs else None,
         gloss=gloss_key(),
         compact=compact_key(),
+        repairs=repair_key(),
         code=code_key(PNR_ROOT, router),
         code_key_scheme=CODE_KEY_SCHEME,
     )
@@ -747,8 +751,8 @@ def key_string(key):
     ``compact=<settings key>`` field; without them the string is what it was before
     the flags existed."""
     fields = ["router", "stage", "budget_seconds", "power_first", "fanout_reserve"]
-    fields += ["fab_profile", "inputs", "gloss", "compact", "code", "code_key_scheme"]
-    optional = ("gloss", "compact")
+    fields += ["fab_profile", "inputs", "gloss", "compact", "repairs", "code", "code_key_scheme"]
+    optional = ("gloss", "compact", "repairs")
     return "|".join(
         ("%s=%s" % (f, key[f])) if f in optional else str(key.get(f))
         for f in fields
@@ -768,6 +772,7 @@ def observed_key(fb, *, stage=None, power_first=None):
         fab_profile=fb.get("fab_profile"),
         gloss=fb.get("gloss"),
         compact=fb.get("compact"),
+        repairs=fb.get("repairs"),
     )
 
 
@@ -782,7 +787,7 @@ def check_import(observed, current, budget_policy="error"):
     placement key (None: every compact part and legalizer switch off, also for records
     older than the key)."""
     errors, warnings = [], []
-    for field in ("gloss", "compact"):
+    for field in ("gloss", "compact", "repairs"):
         if observed.get(field) != current.get(field):
             errors.append("%s %r != this run %r" % (field, observed.get(field), current.get(field)))
     for field in ("router", "power_first", "fab_profile", "stage"):

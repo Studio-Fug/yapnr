@@ -113,6 +113,56 @@ class ShoveTest(unittest.TestCase):
                 self.assertEqual(results[0], results[1], (poured, power_channels))
                 self.assertLess(calls[1], calls[0], (poured, power_channels, calls))
 
+    def test_scalar_channel_cache_matches_vector_model_at_changed_poses(self):
+        from itertools import product
+
+        from pnr.constraints import compile_routing_rules
+        from pnr.place.channels import ChannelModel
+        from pnr.place.power_first import PourChannels
+        from pnr.place.shove import _memoized_channels
+
+        g = board()
+        con = constraints(g)
+        model = ChannelModel(g, compile_routing_rules(con, ["V", "G"]))
+        cached = _memoized_channels(model, {c.ref: c for c in g.components})
+        poured = PourChannels(
+            model,
+            dict(
+                elements=[
+                    dict(
+                        kind="bbox",
+                        role="trunk",
+                        net="V",
+                        pins=[[c.ref, "1"] for c in g.components],
+                    )
+                ]
+            ),
+        )
+        poured_cached = _memoized_channels(poured, {c.ref: c for c in g.components})
+        positive = []
+        for angle in (0, 90, 180, 270):
+            for side in ("top", "bottom"):
+                for x, y in product((3.1, 4.0, 5.2, 6.25), (1.0, 5.1, 9.0)):
+                    g.components[1].pos = (x, y)
+                    g.components[1].rot = angle
+                    g.components[1].side = side
+                    for comp in g.components:
+                        others = [c for c in g.components if c is not comp]
+                        expected = float(model.penalty(comp, others, *comp.pos))
+                        actual = float(cached.penalty(comp, others, *comp.pos))
+                        self.assertEqual(actual.hex(), expected.hex())
+                        self.assertEqual(
+                            float(cached.penalty(comp, others, *comp.pos)).hex(), expected.hex()
+                        )
+                        positive.append(expected)
+                        for power_channels in ("0", "1"):
+                            with patch.dict(os.environ, PNR_POWER_CHANNELS=power_channels):
+                                self.assertEqual(
+                                    float(poured_cached.penalty(comp, others, *comp.pos)).hex(),
+                                    float(poured.penalty(comp, others, *comp.pos)).hex(),
+                                )
+        self.assertGreater(max(positive), 0)
+
     def test_fixed_neighbor_and_failed_transactions_do_not_move(self):
         g = board()
         target = copy.deepcopy(g)

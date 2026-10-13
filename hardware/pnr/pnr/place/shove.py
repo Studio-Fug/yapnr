@@ -44,6 +44,13 @@ def _memoized_channels(model, comps):
     cached.__dict__ = model.__dict__.copy()
     if type(model) is PourChannels:
         cached.base = _memoized_channels(model.base, comps)
+
+        def pour_penalty(comp, others, xs, ys):
+            if os.environ.get("PNR_POWER_CHANNELS", "1") == "1":
+                return cached.base.penalty(comp, others, xs, ys)
+            return PourChannels.penalty(cached, comp, others, xs, ys)
+
+        cached.penalty = pour_penalty
         return cached
 
     @lru_cache(maxsize=16384)
@@ -52,9 +59,9 @@ def _memoized_channels(model, comps):
         # precisely those poses when the cache is populated.
         return tuple(model.interactions(comps[a], comps[b], x, y))
 
-    def at(comp, other, xs=None, ys=None):
+    def key(comp, other, xs=None, ys=None):
         x, y = comp.pos if xs is None else (xs, ys)
-        return interactions(
+        return (
             comp.ref,
             tuple(comp.pos),
             comp.rot,
@@ -67,7 +74,49 @@ def _memoized_channels(model, comps):
             y,
         )
 
+    def at(comp, other, xs=None, ys=None):
+        return interactions(*key(comp, other, xs, ys))
+
+    @lru_cache(maxsize=16384)
+    def contributions(*pose):
+        import numpy as np
+
+        from .geometry import occupied_sides
+
+        a, b = comps[pose[0]], comps[pose[4]]
+        if not set(occupied_sides(a)) & set(occupied_sides(b)):
+            return ()
+        sa, sb = model.shape(a), model.shape(b)
+        if sa is None or sb is None:
+            return ()
+        x, y = pose[-2:]
+        ox, oy = b.pos
+        xover = min(x + sa[1], ox + sb[1]) - max(x + sa[0], ox + sb[0])
+        yover = min(y + sa[3], oy + sb[3]) - max(y + sa[2], oy + sb[2])
+        # No facing projection means every original directional contribution
+        # is zero, independent of demand. Avoid computing distant rows' nets.
+        if xover <= 0 and yover <= 0:
+            return ()
+
+        # Keep each directional contribution separate: combining a pair first
+        # changes floating-point summation order and can change search decisions.
+        return tuple(
+            float(np.where((gap >= 0) & (overlap > 0), np.maximum(required - gap, 0) ** 2, 0))
+            for _, gap, overlap, required, _ in interactions(*pose)
+        )
+
+    def penalty(comp, others, xs, ys):
+        # Shove evaluates scalar poses only. Replay the original directional
+        # additions in the same order, avoiding thousands of zero-dimensional
+        # NumPy allocations for unchanged pairs on larger boards.
+        score = 0.0
+        for other in others:
+            for value in contributions(*key(comp, other, xs, ys)):
+                score += value
+        return score
+
     cached.interactions = at
+    cached.penalty = penalty
     return cached
 
 

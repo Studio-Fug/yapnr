@@ -194,6 +194,8 @@ example below is deliberately synthetic and establishes only workflow behavior.
 
 ![Synthetic lifecycle example](examples/feedback/review-loop.gif)
 
+![Review UI showing failed R6 and non-overlap criteria](examples/feedback/review-ui.png)
+
 The [validator](examples/feedback/validator.py) checks both resistor target
 positions, MOSFET displacement and non-overlap. [Before](examples/feedback/before.json)
 fails both target criteria. [Half](examples/feedback/half.json) moves R5 and Q1 but

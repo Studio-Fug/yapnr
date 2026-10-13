@@ -1,0 +1,8 @@
+{
+  "schema": "yapnr-order0-scalars/1",
+  "stackup": "OSHPARK-4L-EM528",
+  "geometry": "OSHPARK-4L-FR408HR design, upload O0-D",
+  "parameters": "nominal",
+  "notches_ghz": {},
+  "lines_csv": "lines.csv"
+}

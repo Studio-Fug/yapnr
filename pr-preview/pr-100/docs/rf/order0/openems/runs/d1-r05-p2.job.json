@@ -1,0 +1,42 @@
+{
+  "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+  "attempt": "s1r0",
+  "command": [
+    "code/order0_em.py",
+    "code/models/d1.json",
+    "--out",
+    "{out}",
+    "--excite",
+    "2",
+    "--threads",
+    "{threads}",
+    "--res",
+    "0.05"
+  ],
+  "cpu": {
+    "avx512f": true,
+    "count": 8,
+    "model": "x86_64"
+  },
+  "engines": ["compressed SSE + multi-threading"],
+  "exit": 0,
+  "id": "d1-r05-p2",
+  "max_rss_mb": 829.1,
+  "ok": true,
+  "openems_options": {
+    "exact_endcriteria": true
+  },
+  "openems_runs": [
+    {
+      "cells": 6361888.0,
+      "iterations": 24426,
+      "mcells_per_s": 282.98,
+      "seconds": 549.13
+    }
+  ],
+  "schema": "yapnr-openems-job-v1",
+  "sys_s": 17.293,
+  "threads": 8,
+  "user_s": 4227.77,
+  "wall_s": 559.062
+}

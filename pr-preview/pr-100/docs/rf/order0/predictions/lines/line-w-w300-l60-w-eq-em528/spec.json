@@ -1,0 +1,106 @@
+{
+  "schema": "yapnr-rf-spec/1",
+  "name": "line-osh-w-w3p00-l60-w-eq-em528",
+  "stackup": {
+    "er": 3.9284,
+    "tan_delta": 0.00498,
+    "h_mm": 1.3484,
+    "f_ref_ghz": 5.0
+  },
+  "grid": {
+    "pitch_mm": 0.25,
+    "substrate_cells": 6,
+    "air_mm": null,
+    "dz_max_mm": null,
+    "margin_mm": null,
+    "meas_cells": null,
+    "src_cells": null,
+    "pml_gap": 3,
+    "core_cells": 2,
+    "pml_cells": 10,
+    "pml_top_cells": 8,
+    "ratio": 1.25,
+    "courant": 0.95,
+    "f_max_ghz": null
+  },
+  "design_region": {
+    "x_mm": [0.0, 60.0],
+    "y_mm": [-7.5, 7.5]
+  },
+  "symmetry": "mirror_y",
+  "rules": {
+    "min_width_mm": 0.0,
+    "min_space_mm": 0.0
+  },
+  "ports": [
+    {
+      "n": 1,
+      "side": "W",
+      "at_mm": 0.0,
+      "width_cells": 12
+    },
+    {
+      "n": 2,
+      "side": "E",
+      "at_mm": 0.0,
+      "width_cells": 12
+    }
+  ],
+  "bands": {
+    "pass": {
+      "lo_ghz": 4.25,
+      "hi_ghz": 5.75,
+      "points": 7
+    },
+    "wide": {
+      "lo_ghz": 3.0,
+      "hi_ghz": 7.0,
+      "points": 9
+    }
+  },
+  "requirements": [
+    {
+      "s": [2, 1],
+      "min_db": -3.0,
+      "band": "pass"
+    },
+    {
+      "s": [1, 1],
+      "max_db": 0.0,
+      "band": "wide"
+    }
+  ],
+  "fixed": [],
+  "optimizer": {
+    "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
+    "iterations_per_beta": 30,
+    "min_iterations": 8,
+    "budget_min": null,
+    "move": 0.2,
+    "move_late": 0.1,
+    "init": 0.5,
+    "eta": 0.5,
+    "tau": 0.05,
+    "aggregate": "excitation",
+    "damping": 0.0,
+    "interpolation": "resistive",
+    "reactive_damping": 0.1,
+    "conservative": false,
+    "max_inner": 5,
+    "filter_radius_mm": null,
+    "binary_every": 5,
+    "eta_variants": []
+  },
+  "solver": {
+    "backend": "auto",
+    "dtype": "float64",
+    "tol": 0.001,
+    "adjoint_tol": 0.001,
+    "decimation": "auto",
+    "max_steps": 200000,
+    "threads": 16,
+    "sweep_points": 101,
+    "edge_correction": true,
+    "port_source": "mode"
+  }
+}

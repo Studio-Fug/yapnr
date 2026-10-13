@@ -1,0 +1,484 @@
+# Palace models: planar structures, meshes and configurations
+
+[AWS Palace](https://github.com/awslabs/palace) (Apache-2.0) is a 3D finite-element solver. In
+yapnr it is the independent second solver of the RF sign-offs, next to openEMS (FDTD). openEMS
+stays the sweep workhorse. Palace is used for the results that need a second method's agreement:
+resonances, phase, launches and full arrays.
+
+This page covers the pipeline that prepares Palace's inputs:
+
+1. A **planar document** (`yapnr-planar-v1`) describes the layered structure, independent of the
+   solver.
+2. **Adapters** fill it from generated lines, from a generator record, or from a region of a
+   zone-filled KiCad board.
+3. The **Gmsh builder** meshes the document.
+4. The **configuration writer** produces Palace's JSON, checked against Palace's own schema.
+
+Palace itself runs in its task image on Google Cloud Batch (see
+[Task images (Palace)](cloud-experiments.md#task-images-palace)); `yapnr.rf.palace.results` reads
+what it writes. Section 9 is the whole path of a sign-off run, from a KiCad region to a verdict.
+
+## What is in the repository
+
+| Path                            | Contents                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------- |
+| `yapnr/rf/planar/model.py`      | the document: validation, exact-arc rings, port faces, the geometry hash (stdlib) |
+| `yapnr/rf/planar/stackups.py`   | the radar60 RO4835/RO4450F stack and the Hammerstad roughness factor              |
+| `yapnr/rf/planar/clean.py`      | union, crop, vertex merging, collinear removal, arc refitting, XOR area (shapely) |
+| `yapnr/rf/planar/adapters.py`   | lines, the radar60 patch, the radar60 feed models, KiCad board regions, `fit_box` |
+| `yapnr/rf/palace/mesh.py`       | the Gmsh OCC builder and the mesh record (`mesh.json`)                            |
+| `yapnr/rf/palace/config.py`     | Driven and BoundaryMode configurations                                            |
+| `yapnr/rf/palace/schema.py`     | offline validation against `third_party/palace/config-schema.json` (stdlib)       |
+| `yapnr/rf/palace/validation.py` | the validation models and the sign-off settings (`signoff_settings`)              |
+| `yapnr/rf/palace/results.py`    | Palace's tables, 50-ohm renormalization, line εeff and loss, notch and resonance  |
+
+The document model, the configuration writer and the schema check need only the standard
+library; the results readers need numpy. The cleaner and most adapters need shapely. The builder
+needs gmsh, which is GPL-2.0-or-later and is only ever imported when the builder runs. These tools
+run in the Palace task image (gmsh 4.15.2, shapely 2.1.2, numpy 2.5.3) and in a local environment
+with the same packages (scikit-fem for the 2D cross-section references), never under Bazel:
+
+```sh
+python3.12 -m venv .venv/palace
+.venv/palace/bin/pip install gmsh==4.15.2 shapely==2.1.2 numpy==2.5.3 scikit-fem==12.0.2 scipy
+PYTHONPATH=. .venv/palace/bin/python -m yapnr.rf.palace --help
+```
+
+```sh
+python -m yapnr.rf.palace mesh model.json --out DIR          # model.json, mesh.msh, mesh.json
+python -m yapnr.rf.palace driven DIR --band 54 70 0.025 --adaptive-tol 1e-4 --excite TX1.P0
+python -m yapnr.rf.palace mode DIR --port P1 --freq 62       # 2D mode solve on a port face
+python -m yapnr.rf.palace case model.json --out DIR --band 54 70 0.025   # sign-off setup
+python -m yapnr.rf.palace validate DIR/*.json                # against Palace's schema
+```
+
+## 1. The planar document
+
+A document is JSON, in millimetres:
+
+- **`stack.dielectrics`**: slabs `{name, z0, z1, eps_r, tan_d}`.
+  - A slab can be limited to an `outline` ring, which makes a finite board.
+  - Where two slabs overlap, the later one wins.
+- **`stack.layers`**: conductor layers `{name, z, t, sigma, rough_k, model}`. The `model` field
+  says how solvers represent the copper:
+
+  - `pec`;
+  - `sheet`: zero thickness at `z`, with the surface impedance of `sigma / rough_k²` and
+    thickness `t`. This matches the conducting sheet that openEMS uses.
+  - `solid`: extruded from `z` to `z + t` and removed from the domain. It is allowed only on a
+    layer with nothing but air, or its own coating, above it.
+
+  `rough_k` is the Hammerstad roughness factor at the design frequency. For the radar60 L1
+  (Rq 0.4 µm) it is 1.806 at 62.05 GHz.
+
+- **`conductors`**: `{layer, net, polygons: [{outer, holes}]}`.
+  - A ring is a list of points `[x, y]`.
+  - An item `{"mid": [x, y]}` between two points makes that edge a circular arc through `mid`.
+- **`vias`**: barrels `{at, drill, from, to, net}`. `from` and `to` are layers, or `zmin` for
+  the domain floor.
+- **`ports`**: `{name, kind, net, layer, ref, at, dir, width, z0, excite, face}`.
+  - `at` is the reference plane on the line's centre.
+  - `dir` is the direction the line runs from `at` into the model (`+x`, `-x`, `+y` or `-y`).
+  - `ref` is the layer (or `zmin`) that the line refers to.
+- **Coatings** (solder mask): a dielectric with `coat: {layer, fill}` starts at that layer's `z`;
+  its `z1` is the top of the coating over the copper's full thickness (`z + t + h` for a coating
+  `h` thick). Over `solid` copper, `fill` "conformal" draws it `h` thick on the laminate and `h`
+  around the copper's top and sides (gaps narrower than `2 h` fill up), "level" fills the gaps to
+  the copper's top and covers it by `h`; the copper is cut out of it. Over a sheet it is a slab
+  `h` thick. An `outline` limits it (the mask opening is outside). `stackups.solder_mask(L1)`
+  gives 17 µm, Dk 3.8, Df 0.025 (the stage-2 plan: 15–20 µm, Dk 3.5–4; Df assumed).
+- **`domain`**: the box `[x0, x1, y0, y1, z0, z1]` and a boundary for each face (`xmin` …
+  `zmax`): `abc1` or `abc2` (first- or second-order absorbing), `pec`, `pmc`, or `metal`: a lossy
+  conductor wall whose `{name, sigma, rough_k, t}` is `domain.metal[face]`. The feed and line
+  models' floor is the L2 ground this way (`stackups.floor()`: copper with the same roughness
+  factor as L1, because L2 is the core's other LoPro foil with its treated side towards L1);
+  `floor="pec"` gives the lossless floor the openEMS feed models have.
+- **`mesh`**: sizing hints for the builder.
+- **`provenance`**: the source, the generator, and how much the cleaning moved the copper.
+- **`features`**: named regions of interest, for probes and plots.
+
+**Port faces.**
+
+- A **wave port** is a rectangle on the wall behind `at`. The solver de-embeds the distance from
+  the wall back to `at` (Palace's `Offset`).
+  - Width: 0.8 mm either side of the line (eight 0.2 mm line widths). It is cut at the domain
+    edge, and halfway to a neighbouring port on the same wall.
+  - Height: from the reference layer to 0.7 mm above the signal layer.
+  - The voltage path runs from the strip down to the reference. It sets the mode's polarity and
+    gives Palace's Z_PV.
+- A **lumped port** is the `width` × substrate rectangle across the dielectric at `at`.
+
+`model.geometry_hash` covers what a solver sees: the stack, copper, vias, ports and domain, but
+not the mesh hints or provenance. A mesh record and every result can name the geometry they
+belong to.
+
+## 2. Adapters and cleaning
+
+| Adapter                                        | Input                                                                           | Use                                                                                                                                                                                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `line_model("msl" \| "gcpw", length)`          | none                                                                            | a straight 50 Ω line on the 4-mil RO4835 feed stack between two wave ports. The GCPW variant has GND to the side walls and a via fence on each side (offset 0.5 mm, pitch 0.45 mm, drill 0.15 mm).                              |
+| `patch_from_record(record, "w" \| "finite")`   | an `rfmacro` record (`radar60-rfmacro/1`)                                       | the inset-fed patch alone on its L2 window, as built by the openEMS single-patch run. `w` runs the board into the south wall under the feed and uses a wave port. `finite` is the stage-2 finite board with a 50 Ω lumped port. |
+| `from_feedmodel(model, box)`                   | a radar60 feed model, the JSON that the RF-uniformity `prep.py` cut for openEMS | exactly the geometry of those openEMS runs. The hole-free pieces are re-unioned, then cropped to the box. L2 is the floor, lossy (`metal`) unless `floor="pec"`. P0 ports point east, P1 ports north.                           |
+| `from_kicad(board, box, layers, stack, frame)` | a zone-filled `.kicad_pcb`                                                      | read with `yapnr.fab.board`'s S-expression reader (no pcbnew): zone fills, tracks, arcs, vias and their pads, footprint pads (below). The floor is the lossy L2 unless `floor="pec"`.                                           |
+
+**Footprint pads** (`from_kicad`, `pads=True`): rect, roundrect, circle, oval, and custom pads
+drawn with `gr_poly`, `gr_rect` or `gr_circle` primitives (the BGA lands and the radar60
+patches, which the macro places as custom pads). A pad's `(at x y angle)` is footprint-relative in
+position and absolute in angle, as KiCad writes it; `*.Cu` means every mapped copper layer. A
+plated hole becomes a via barrel. Other shapes (trapezoid, chamfered rect, custom primitives such
+as `gr_arc`) are skipped and listed in `provenance.pads_skipped`, so a launch model shows what it
+is missing.
+
+The **cleaner** runs inside every adapter except the line generator:
+
+- it merges vertices closer than 2 µm;
+- it drops collinear vertices;
+- it refits a run of short chords as one exact arc when every vertex and chord midpoint is within
+  1 µm of a single circle.
+
+A polygonized KiCad fill would otherwise put a mesh node every few micrometres along its curves.
+The cleaner keeps the tangent points where a straight edge meets an arc. `provenance` records the
+XOR area between the input copper and the cleaned copper.
+
+**`fit_box`** moves the x and y walls of a requested box so that no wall cuts a via barrel or
+leaves a sliver of dielectric or copper narrower than 50 µm. It prefers to move a wall outward:
+that only adds stitched pour beyond the fences, while moving inward could cut away a line's
+ground.
+
+**Check against KiCad.** On the radar60 TX feed region, the KiCad reader and the openEMS feed
+model agree to within these XOR areas (cleaned):
+
+| Net | XOR area   | Edge length | Mean offset |
+| --- | ---------- | ----------- | ----------- |
+| GND | 0.0043 mm² | 70 mm       | 0.06 µm     |
+| TX1 | 0.0035 mm² | 29 mm       | 0.12 µm     |
+| TX2 | 0.0040 mm² | 29 mm       | 0.14 µm     |
+
+The 55 vias east of P0 coincide. Cleaning the feed model itself moved its copper by 0.0076,
+0.0021 and 0.0047 mm² (GND, TX1, TX2), mostly where exact arcs replaced `prep.py`'s chords.
+
+## 3. The mesh
+
+`mesh.build(doc, out_dir)` builds the geometry with Gmsh's OpenCASCADE kernel:
+
+- the domain box is the air;
+- the slabs (boxes, or extruded outlines) override the air; a coating over solid copper is its
+  slab plus, when conformal, the copper's outline grown by `h` (shapely) and extruded to `h` over
+  the copper's top;
+- sheet and PEC copper are surfaces with exact arcs;
+- solid copper and via barrels are cut out, so their surfaces are the conductor;
+- port faces are rectangles: wave-port faces on the walls, lumped-port faces embedded in the core.
+
+Two `occ.fragment` passes make the geometry conforming, with the port faces added in the second
+pass. In a single pass, a lumped port touching a window plane made OpenCASCADE return
+overlapping solids of negative volume.
+
+The physical groups are Palace's attributes, numbered from 1 with volumes first:
+
+| Group                | Meaning                                         |
+| -------------------- | ----------------------------------------------- |
+| `air`, `diel:<name>` | volumes (materials)                             |
+| `port:<name>`        | port faces                                      |
+| `cond:<layer>:<net>` | copper surfaces                                 |
+| `via:<net>`          | via barrels and their tops                      |
+| `wall:<face>`        | the parts of each outer face that are not ports |
+
+**Sizes.**
+
+- At every copper and via edge the element size is `edge_h` (0.04 mm), growing by `grade` (0.35)
+  per mm of distance from the edge.
+- Each region is capped at its wavelength / 6 at `f_max` (70 GHz): 0.71 mm in air and 0.38 mm in
+  RO4835.
+- A thin slab is capped at 1.5 × its thickness (0.15 mm in the 0.1016 mm core).
+- Port faces are capped at `port_h` (0.1 mm).
+
+Adaptive refinement in Palace takes it from there.
+
+**Mesh output.**
+
+- Tetrahedra only, written as msh 2.2 binary.
+- With one thread (the default), the same document gives the same mesh every time.
+- A Netgen optimization pass lifts the worst elements: on the patch the minimum gamma goes from
+  0.02 to 0.16. The pass is skipped for models with a lumped port: gmsh 4.15.2's Netgen optimizer
+  crashes on a volume with an embedded face.
+
+`mesh.json` records:
+
+- the attribute map with entity and element counts;
+- the size caps;
+- element quality: gamma and SICN, minimum, first percentile and median;
+- the estimated unknowns of Nédélec elements of order 1–3;
+- the port faces;
+- the geometry hash.
+
+## 4. The configurations
+
+`config.driven` writes a frequency sweep: uniform, or Palace's adaptive fast sweep
+(`AdaptiveTol`). With `amr`, it writes an adaptive-refinement run on a few frequencies instead.
+Palace sums the error estimate over every solved frequency, so refinement belongs on a narrow
+set around the feature. That run saves the adapted mesh, and a second configuration sweeps on
+it (`postpro-amr/mesh.meshgz`).
+
+`config.boundary_mode` writes the 2D mode solve on one wave port's plane of the same 3D mesh
+(`Solver.BoundaryMode.Attributes`). It gives n_eff and Z_PV along the port's voltage path.
+`face="port"` solves the port face alone with the rest of its wall PEC, the shielded guide the 3D
+run's port sees; `face="wall"` solves the whole wall, the line as an open structure. A GCPW's
+coplanar ground floats in the open-wall solve (no vias in a cross-section), so use the port face
+there.
+
+**Copper as `Impedance` (`copper_bc="impedance"`, the default everywhere).** At b797ea8 a
+`Conductivity` boundary that crosses a wave-port face or a BoundaryMode cross-section aborts the
+2D mode solve on more than one MPI rank ("Dimension mismatch for MaterialPropertyCoefficient and
+libCEED integrator"): the ranks that own none of its edges get an empty coefficient. `Impedance`
+boundaries are skipped where empty, so the copper is written as the `Impedance` with the same
+admittance at one frequency (`config.impedance_rl`, the band centre by default). Palace's
+`Impedance` is a parallel R ∥ L per square of the whole boundary, split over the two faces of a
+cracked interior sheet, while `Conductivity` applies its impedance on each face: a sheet gets
+Rs = ωLs = Re Z, the outside of solid copper Rs = ωLs = 2 Re Z (thick copper). One-rank runs with
+`Conductivity` give the same n_eff and Z_PV to the printed digits. Away from that frequency the
+conductor loss goes as 1/(1 + (f0/f)²) instead of √f: about 8 % low at 54 GHz and 6 % high at
+70 GHz for f0 = 62 GHz. `copper_bc="conductivity"` (`driven --copper-bc conductivity`) writes
+`Conductivity` instead, for one-rank checks only. A `metal` wall (the lossy floor) is the outside
+of a thick conductor: `Impedance` with Rs = ωLs = 2 Re Z, or `Conductivity` with `External`.
+
+**Refinement.** `amr` turns on adaptive refinement; by default (`config.REFINEMENT`) one
+nonconforming step, at most 2 M unknowns (Palace stops once a solve exceeds `MaxSize`, so the
+refined mesh can reach about twice that: 4 M unknowns at about 12 kB each is the 64 GB of a
+`c4d-standard-16`). More steps or a larger cap are explicit choices.
+
+| Attribute                                       | Palace boundary or material                                                                             |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `air`, `diel:*`                                 | `Materials`: Permittivity, LossTan                                                                      |
+| `cond:*` of a `pec` layer, `via:*`, `pec` walls | `PEC`                                                                                                   |
+| `cond:*` of a `sheet` layer                     | `Conductivity`: σ / K², `Thickness` t, `External` false (the sheet is internal); or `Impedance` (above) |
+| `cond:*` of a `solid` layer                     | `Conductivity`: σ / K², `External` true (thick-conductor impedance); or `Impedance` (above)             |
+| `metal` walls (the lossy floor)                 | `Impedance` of `domain.metal[face]`, one face (Rs = 2 Re Z); or `Conductivity`, `External` true         |
+| `abc1`/`abc2` walls                             | `Absorbing`, order 1 or 2                                                                               |
+| wave ports                                      | `WavePort`: `Offset` back to the reference plane, `VoltagePath`, `Excitation` = Index for excited ports |
+| walls with wave ports                           | also `WavePortPEC`, so each port face is a shielded guide in its 2D mode solve                          |
+| lumped ports                                    | `LumpedPort`: `R` = z0, `Direction` from the strip down to its reference                                |
+
+Lengths are in mm (`L0` = 1e-3). Frequencies are in GHz. The linear solver is Palace's default
+(AMS-preconditioned GMRES, tolerance 1e-6).
+
+`schema.validate` checks a configuration against Palace's own schema. That schema is vendored
+unmodified from the commit the task image builds (`third_party/palace`, see
+[THIRD_PARTY.md](../THIRD_PARTY.md)). The check uses a small stdlib validator for the JSON Schema
+draft-07 keywords that the schema uses, and it also reports keys that Palace marks deprecated. It
+agrees with `jsonschema` on all 90 configurations in Palace's examples and tests, and on 2,610
+random mutations of them. The image's `palace --dry-run` remains the final check before a solve.
+
+## 5. Sign-off settings and validation models
+
+`python -m yapnr.rf.palace case MODEL.json --out DIR --band F0 F1 DF [--excite PORT ...]
+[--amr-freqs F ...] [--orders 3]` meshes a model and writes its configurations with the validated
+sign-off settings (`validation.signoff_settings`) unless the model is named like a validation
+case (`line-`, `patch-`, `tx12-`; `--settings signoff` overrides that):
+
+- solid copper (`--copper` keeps another model), written as `Impedance` at the band centre;
+- `palace-uniform.json`: the adaptive sweep (`AdaptiveTol` 1e-3, at most 30 full solves) on the
+  initial mesh at order 2; `palace-uniform-p3.json` with `--orders 3`: the order check;
+- `palace-amr.json`: one nonconforming refinement at `--amr-freqs` (default the band centre; put
+  them on the features: resonances, band edges), at most 2 M unknowns, saving the mesh;
+- `palace-sweep.json`: the adaptive sweep of that saved mesh (its sheets written per face).
+
+Run all three in one job (section 6): the sweep of the refined mesh against the initial one is the
+convergence check; order 3 is the other.
+
+`python -m yapnr.rf.palace validation --out DIR [--record R] [--feed NAME=MODEL ...]
+[--feed-result RESULT]` builds the validation models of the Palace plan. Each model goes into its
+own directory with `model.json`, `mesh.msh`, `mesh.json` and these configurations:
+
+- `palace-uniform.json`: the sweep on the initial mesh;
+- `palace-amr.json`: refinement at a few frequencies;
+- `palace-sweep.json`: the sweep on the adapted mesh;
+- `palace-mode-*.json`: the 2D mode solves (lines only).
+
+These are the meshes as built on a developer Mac:
+
+| Model                          | Tetrahedra       | DOFs p = 2 / p = 3 (est.)    | gamma min / p01          | Mesh time   |
+| ------------------------------ | ---------------- | ---------------------------- | ------------------------ | ----------- |
+| `line-msl-5mm` / `-10mm`       | 30,381 / 53,282  | 0.20 / 0.59 M; 0.36 / 1.03 M | 0.20 / 0.46; 0.23 / 0.46 | 1.4 / 2.3 s |
+| `line-gcpw-5mm` / `-10mm`      | 81,136 / 143,771 | 0.55 / 1.58 M; 0.98 / 2.80 M | 0.16 / 0.44; 0.12 / 0.44 | 4.1 / 7.5 s |
+| `patch-w`                      | 142,043          | 0.91 / 2.66 M                | 0.16 / 0.47              | 5.7 s       |
+| `patch-finite`                 | 189,826          | 1.21 / 3.52 M                | 0.18 / 0.35              | 3.2 s       |
+| `tx12-A` (with the GND sliver) | 241,894          | 1.62 / 4.65 M                | 0.14 / 0.45              | 13.6 s      |
+| `tx12-B` (sliver removed)      | 232,944          | 1.56 / 4.48 M                | 0.15 / 0.45              | 12.9 s      |
+
+The feed models' domain is the interior of the PML in the openEMS run that the comparison is
+against. `fit_box` then moves that box off the via barrels. In the openEMS runs, the zone between
+the inner box and the PML holds PEC copper. In these models it holds the same copper, modelled as
+the L1 sheet.
+
+## 6. Running on Google Cloud
+
+A job in a `palace_plan.py` campaign can build its own model. `palace_job.py` runs the `prepare`
+arguments with the task's Python, from the task's work directory, so the package only has to be
+an input there:
+
+```toml
+[inputs]
+yapnr = "bundle/yapnr"               # yapnr/__init__.py, yapnr/rf/planar, yapnr/rf/palace
+third_party = "bundle/third_party"   # third_party/palace, for the schema check
+models = "models"                    # the planar documents
+
+[[jobs]]
+id = "launch-tx1"
+prepare = ["-m", "yapnr.rf.palace", "case", "models/launch-tx1.json", "--out", "{out}",
+  "--band", "54", "70", "0.025", "--excite", "TX1.P0", "--amr-freqs", "60.3", "62.05", "63.8"]
+config = "{out}/palace-uniform.json"
+```
+
+`palace_job.py` makes the mesh path absolute and moves Palace's output to `out/<id>/postpro`.
+Refinement followed by a sweep of the refined mesh is one job: `stages` are solved first (output
+in `out/<id>/stage-<k>-<name>`, `k` their place in the list), and `mesh_from` points the main
+solve at the mesh that stage saved (`results.stage_dirs` lists them in order):
+
+```toml
+[[jobs]]
+id = "tx12-A"
+stages = ["models/tx12-A/palace-uniform.json", "models/tx12-A/palace-amr.json"]
+mesh_from = "models/tx12-A/palace-amr.json"
+config = "models/tx12-A/palace-sweep.json"
+memory_gb = 48            # about 12 kB per unknown at order 2 with the sweep's reduced model
+# ranks = 16, memory_gb = 96: a job may need its own VM shape (an instance policy then)
+```
+
+A stage written `CONFIG@1` runs on one rank. Two things about refinement at b797ea8:
+
+- Sweep the saved mesh in a separate solve rather than trusting the refinement loop's own late
+  iterations: with nonconforming refinement, the wave-port modes inside the loop drift after a
+  few refinements when a zero-thickness strip crosses the port face (line-msl-5mm at 62 GHz:
+  Z_PV 55.9 -> 62.4 ohm and |S21| -0.47 -> -1.76 dB by the fifth mesh; a lossless PEC strip
+  drifts the same way). With solid copper the ports stayed put (Z_PV within 1 %).
+- A saved adapted mesh has its interior sheets split already, so a run that loads it no longer
+  treats them as cracked and gives each face the whole `Impedance`. The sweep of a saved mesh
+  therefore writes the sheets per face (`config.impedance_rl(..., precracked=True)`; validation's
+  `palace-sweep.json` does). Without that, its conductor loss comes out about half.
+
+## 7. What the validation showed
+
+The validation report (`palace/validation.md` in the project notes) has the numbers, all solver
+predictions; for model builders:
+
+- **Copper model.** The zero-thickness sheet that openEMS also uses makes the 4-mil 50-ohm lines
+  about 53 ohm with an effective permittivity about 5 % high, against 35 µm copper (the 2D solver
+  agrees; Palace with solid copper matches the 2D solver within 0.3 % in εeff and 0.6 % in Z at
+  1 GHz). On the radar60 TX1 feed the copper's thickness moves the GND-sliver notch up by about
+  2.4 %: Palace with solid copper and openEMS with the copper as 35 µm PEC agree on that shift.
+  Sign off with `solid` copper; keep `sheet` for comparisons with openEMS's lossy sheet.
+- **The ground is lossy too.** The L2 ground carries about a quarter of the lines' conductor loss
+  (at 62 GHz the 2D solver gives 0.011 of 0.043 dB/mm, Palace's mode solve 0.014, openEMS with
+  a zero-thickness strip 0.007); on the radar60 TX1
+  feed a PEC floor understates the dissipation by about 0.18 dB over 14 mm. Use the `metal` floor
+  (the default of the line, feed and KiCad adapters). A zero-thickness sheet has no
+  mesh-converged loss (its edge current is singular), so validate loss on solid copper.
+- **Port faces.** A wave port's face must not hold a floating conductor: in its 2D mode solve the
+  face's edges are PEC, so a coplanar ground strip that does not reach one floats and the port
+  picks another mode (tx12's TX1.P0 gave Z_PV 24 ohm). `port_geometry` therefore ends a side
+  that has coplanar ground inside it.
+- **Voltage paths.** The BoundaryMode and wave-port `VoltagePath` in 3D coordinates is projected
+  onto the port plane by Palace; Z_PV comes out as expected.
+- **Memory.** About 12 kB per unknown at order 2 for a driven sweep with the reduced model, 8-10
+  kB for a single solve: 1.7 M unknowns took 20-23 GB, 2.6 M ran a 32 GB VM out of memory.
+- **Absorbing walls.** First- and second-order only (no PML); see section 10 before modelling
+  anything that radiates at oblique angles.
+- **openEMS's mesh.** Refine z with x and y: 8 cells across the 4-mil core instead of 4 leave
+  the lines' εeff unchanged but move their impedance by 2 %, their loss by 10 % and small
+  reflections by 2 dB. At 20 µm fill openEMS's εeff is still about 3 % above Palace's.
+- **Agreement with openEMS.** The TX1 sliver notch (sheet copper) agrees within 0.3 % over both
+  solvers' meshes; the line εeff and the patch's |S11| dip agree once openEMS's fill-size trend
+  is taken into account (the patch dip is 1.2 % apart at openEMS's finest mesh: an explained
+  difference, not a pass).
+
+## 8. Reading the results
+
+`yapnr.rf.palace.results` reads what a task leaves in the fetch store
+(`yapnr exp fetch <cid>`, then `<store>/fetched/<cid>/tasks/mc~<id>/summary/<id>/`):
+
+```python
+from yapnr.rf.palace import results
+
+for name, post in results.stage_dirs(task_dir):      # stage-1-palace-uniform, ..., main
+    f, S = results.port_s(post + "/port-S.csv")      # {(i, j): complex S}, modal (own Z_PV)
+    f, Z = results.port_z(post + "/port-Z.csv")      # {port: Z_PV}
+    S50 = results.to_50(S, Z, excite=1)              # openEMS's 50-ohm port waves
+    fn, depth = results.notch(f, 20 * np.log10(abs(S50[(2, 1)])), 55, 66)
+cmp = results.compare((f, S50[(2, 1)]), (f_oems, s21_oems), [60.3, 62.05, 63.8], feature=(55, 66))
+```
+
+- `to_50` turns Palace's modal S (each port matched to its own mode, power waves) into openEMS's
+  convention (50-ohm voltage waves, the lines terminated in their own impedance), so the two
+  solvers' columns compare directly.
+- `eeff_loss(f, s21_short, s21_long, dl)`: εeff and loss per mm from two lines `dl` apart (the
+  ports' ends cancel); `mode_results(post)`: εeff, loss per mm and Z_PV of a BoundaryMode solve.
+- `notch`, `dip`, `re_peak`, `band_below`: feature frequencies (parabolic refinement);
+  `deembed_lumped`: a lumped port's S11 moved along the lead (Z0 and γ from mode solves).
+- `compare`: |S21| and phase differences at chosen frequencies and the notch frequencies of both;
+  `ok` is |Δ|S21|| ≤ 0.5 dB and the notches within 1 %. Phase is reported, not judged: an
+  absolute phase over a long feed carries both solvers' dispersion error (see section 7).
+
+## 9. A sign-off run, step by step
+
+1. **The planar document.** A region of the zone-filled board, with the solid copper, the lossy
+   L2 floor, the pads, and the solder mask where the board has it:
+
+   ```python
+   from yapnr.rf.planar import adapters, model, stackups
+
+   diel, layers = stackups.radar60("feed", l1_model="solid")
+   mask = stackups.solder_mask(layers[0], outline=MASK_RING)   # the launch runs under mask
+   doc = adapters.from_kicad(BOARD, [x0, x1, y0, y1], {"F.Cu": "L1"}, (diel + [mask], layers),
+                             frame=(kx0, ky0, True), nets=["GND", "RF_TX1"])
+   doc["name"] = "launch-tx1"
+   doc["ports"] = [dict(name="TX1.P0", kind="wave", net="RF_TX1", layer="L1", ref="zmin",
+                        at=[x, y], dir="+x", width=0.2, z0=50.0, excite=True), ...]
+   model.check(doc)
+   ```
+
+   Check `provenance.pads_skipped` and `cleaning_xor_mm2`. A wave-port face must end inside
+   coplanar ground (`port_geometry` does this; look at `mesh.json`'s `ports`). Put the walls off
+   the vias (`adapters.fit_box`).
+
+2. **Mesh and configurations:** `python -m yapnr.rf.palace case launch-tx1.json --out
+models/launch-tx1 --band 54 70 0.025 --excite TX1.P0 --amr-freqs 60.3 62.05 63.8
+--orders 3` (the sign-off settings of section 5; `mesh.json` estimates the unknowns).
+3. **The campaign:** one job per model, `stages = [palace-uniform, palace-amr]`, `mesh_from` the
+   refinement, `config = palace-sweep`; `memory_gb` from section 10. `palace_plan.py plan`, then
+   `yapnr exp plan / submit / status / fetch`.
+4. **The comparison:** both solvers at their converged settings (openEMS at 20 µm fill or finer
+   with 8 cells across the 4-mil core; Palace's refined mesh against its initial one, and order
+   3), `results.compare` on the quantities that decide the sign-off. Frequencies of resonances
+   and notches agree within 1 % and transmission within 0.5 dB, or the difference is explained
+   (one solver still moving with its mesh, a model difference such as zero-thickness copper).
+   Report the material range too: the RO4835 Dk range of the stackup (3.33–3.66) moves resonances
+   by more than the solvers differ.
+
+## 10. Sizes, memory and the bank
+
+- **Memory:** about 12 kB per unknown at order 2 for a sweep with the reduced model, 8–10 kB for
+  a single solve, about 8 kB at order 3. Palace counted 0–8 % more unknowns than `mesh.json`'s
+  `dofs_estimate` on the validation models; one refinement step (`UpdateFraction` 0.7) added 4–6 %
+  on the feed and patch models.
+- **Shapes** (Spot, us-west4, October 2026): `c4d-standard-16` 62 GB (up to about 4 M unknowns),
+  `c4d-highmem-16` 126 GB (8 M; no template, an instance policy), `c4d-highmem-32` 252 GB
+  (16 M), `c4d-highmem-48` 378 GB (25 M), `c4d-highmem-64` 504 GB (35 M) at $0.21, 0.43, 0.64
+  and 0.85 an hour. Give such a job `ranks` = the shape's cores (16 ranks on a 32-vCPU shape) and
+  `memory_gb`; the plan places it (section 6).
+- **Quota:** the project's Spot quota is 64 vCPUs per region, shared by every track; a 64-vCPU
+  model needs a whole region to itself and waits until it is free. On-demand VMs are off in the
+  owner configuration.
+- **No checkpoint:** a preempted Palace task starts again; refinement cannot resume. Keep a Spot
+  task under one to two hours.
+- **The bank** (15–30 M unknowns at order 2 with finite board and radome, 180–360 GB): one
+  `c4d-highmem-48/64` and a whole region's quota for one to two hours a sweep, a
+  preemption-sized risk. Measure the rank scaling (4/8/16 ranks on a feed model) first, then
+  prefer smaller models that answer the same questions: a column with its divider (3–5 M), pairs
+  of columns for coupling, the radome on a single column; the full bank once, at the end.
+- **Absorbing walls:** Palace has first- and second-order absorbing boundaries, no PML. A
+  first-order wall reflects (1 − cos θ)/(1 + cos θ) of a plane wave at incidence θ: −15 dB at
+  45°, −9.5 dB at 60° [closed form]. The single-patch box check (0.3 against 0.5 λ0, first against
+  second order) moved its broadside |S11| dip by at most 0.06 GHz but its depth by 6–7 dB. For
+  arrays and anything scanned or with a radome: walls at least λ0 from radiating copper and from
+  the radome, second order, and a box study (two wall distances) on coupling, active S11 and the
+  pattern before trusting them.

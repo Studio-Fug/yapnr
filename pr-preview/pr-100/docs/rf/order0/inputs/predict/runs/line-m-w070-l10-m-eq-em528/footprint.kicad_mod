@@ -1,0 +1,323 @@
+(footprint "RF_line-osh-m-w0p70-l10-m-eq-em528"
+	(version 20260206)
+	(generator "yapnr")
+	(generator_version "rf")
+	(layer "F.Cu")
+	(descr "yapnr RF inverse design 'line-osh-m-w0p70-l10-m-eq-em528': microstrip copper on er 3.5957, tan_delta 0.00487, h 0.1751 mm with a solid ground on the next copper layer; spec sha256 95115260e7bca0ab75954ed12e368a36f645f1f0d777a890ce1507a124cb5f00")
+	(tags "rf microstrip inverse-design")
+	(property "Reference" "REF**"
+		(at 0 -2.8 0)
+		(layer "F.SilkS")
+		(uuid "2606300b-43c0-5219-ae1a-57a77a29073e")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "RF_line-osh-m-w0p70-l10-m-eq-em528"
+		(at 0 2.8 0)
+		(layer "F.Fab")
+		(uuid "2a14ca98-1cb3-525a-8cbe-34e5050c02a6")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "2f730e9e-c3b8-56d1-a891-ce216a8a8997")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" "yapnr RF inverse design 'line-osh-m-w0p70-l10-m-eq-em528': microstrip copper on er 3.5957, tan_delta 0.00487, h 0.1751 mm with a solid ground on the next copper layer; spec sha256 95115260e7bca0ab75954ed12e368a36f645f1f0d777a890ce1507a124cb5f00"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "e0787be8-5cb0-5639-825d-4e8cf5ddcefd")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd exclude_from_pos_files exclude_from_bom)
+	(net_tie_pad_groups "1, 2")
+	(duplicate_pad_numbers_are_jumpers no)
+	(fp_poly
+		(pts
+			(xy 5 0.35) (xy 5 -0.35) (xy -5 -0.35) (xy -5 0.35)
+		)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill yes)
+		(layer "F.Cu")
+		(uuid "30e47a39-8418-57ac-86cd-ff641a79b096")
+	)
+	(fp_rect
+		(start -5 -1.6)
+		(end 5 1.6)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "ae97c24d-6ad6-5bfc-be68-61adf35bc2c1")
+	)
+	(fp_rect
+		(start -5 -1.6)
+		(end 5 1.6)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+		(uuid "9b96e251-3b87-5e67-a786-a81cd0e92241")
+	)
+	(pad "1" smd rect
+		(at -4.95 0)
+		(size 0.1 0.7)
+		(layers "F.Cu")
+		(uuid "aea99068-75c1-56cd-b0d1-1075518d5de7")
+	)
+	(pad "2" smd rect
+		(at 4.95 0)
+		(size 0.1 0.7)
+		(layers "F.Cu")
+		(uuid "f9c14cbb-898d-55f2-b867-140160fe5d51")
+	)
+	(zone
+		(layer "F.Cu")
+		(uuid "d1c83bf5-4b53-5775-909f-b165ddca50dd")
+		(name "yapnr RF keepout: simulated with no other F.Cu within 0.7 mm, a solid ground on the next copper layer")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints not_allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy -5.7004 2.3004) (xy 5.7004 2.3004) (xy 5.7004 -2.3004) (xy -5.7004 -2.3004)
+			)
+		)
+	)
+	(zone
+		(layer "F.Cu")
+		(uuid "1195e530-9ff4-53a1-a8a0-5c4a7005ad21")
+		(name "yapnr RF track keepout (W): no other F.Cu within 0.7 mm, a solid ground on the next copper layer")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints not_allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy -5.7004 2.3004) (xy -5 2.3004) (xy -5 0.4) (xy -5.7004 0.4)
+			)
+		)
+	)
+	(zone
+		(layer "F.Cu")
+		(uuid "2973182d-f5c3-5b35-a979-c5a17131b13b")
+		(name "yapnr RF track keepout (W): no other F.Cu within 0.7 mm, a solid ground on the next copper layer")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints not_allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy -5.7004 -0.4) (xy -5 -0.4) (xy -5 -2.3004) (xy -5.7004 -2.3004)
+			)
+		)
+	)
+	(zone
+		(layer "F.Cu")
+		(uuid "3920f9b2-30cc-5440-9546-bf7870686e77")
+		(name "yapnr RF track keepout (E): no other F.Cu within 0.7 mm, a solid ground on the next copper layer")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints not_allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy 5 2.3004) (xy 5.7004 2.3004) (xy 5.7004 0.4) (xy 5 0.4)
+			)
+		)
+	)
+	(zone
+		(layer "F.Cu")
+		(uuid "b54c4fa2-fcf0-57cb-a3da-57529ea4b593")
+		(name "yapnr RF track keepout (E): no other F.Cu within 0.7 mm, a solid ground on the next copper layer")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints not_allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy 5 -0.4) (xy 5.7004 -0.4) (xy 5.7004 -2.3004) (xy 5 -2.3004)
+			)
+		)
+	)
+	(zone
+		(layer "F.Cu")
+		(uuid "74ca056a-063c-5d6f-8d69-add54ef4e059")
+		(name "yapnr RF track keepout (S): no other F.Cu within 0.7 mm, a solid ground on the next copper layer")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints not_allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy -5 2.3004) (xy 5 2.3004) (xy 5 1.6) (xy -5 1.6)
+			)
+		)
+	)
+	(zone
+		(layer "F.Cu")
+		(uuid "384bec47-e502-5fa5-a32f-39516e67a896")
+		(name "yapnr RF track keepout (N): no other F.Cu within 0.7 mm, a solid ground on the next copper layer")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints not_allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy -5 -1.6) (xy 5 -1.6) (xy 5 -2.3004) (xy -5 -2.3004)
+			)
+		)
+	)
+	(embedded_fonts no)
+)

@@ -57,6 +57,16 @@ def capture(lab, ident, distance=2):
 
 
 class PlacementAPITest(unittest.TestCase):
+    def test_cli_enables_repairs_and_preserves_explicit_opt_outs(self):
+        parser = argparse.ArgumentParser()
+        register(parser.add_subparsers())
+        for extra, enabled in (([], True), (["--no-shove", "--no-placement-banks"], False)):
+            args = parser.parse_args(["placement", "start", "demo", *extra])
+            self.assertEqual(args.shove, enabled)
+            self.assertEqual(args.placement_banks, enabled)
+            self.assertFalse(args.run_forever)
+            self.assertFalse(args.legalize_only)
+
     def test_cli_forwards_step_count_and_surface_parameters(self):
         parser = argparse.ArgumentParser()
         register(parser.add_subparsers())

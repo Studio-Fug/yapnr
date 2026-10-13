@@ -48,6 +48,7 @@ class IntentTests(unittest.TestCase):
             self.assertLessEqual(larger["per_via_loss_w"], FAB["via_barrel_loss_budget_w"])
             self.assertLessEqual(larger["peak_drop_v"], FAB["via_array_peak_drop_v"])
 
+    @patch.dict(os.environ, PNR_PLANE_ACCESS_NATIVE_FIT="0")
     def test_array_space_follows_source_current_and_is_idempotent(self):
         from pnr.graph import BoardGraph, Component, Pad
         from pnr.plane_intent import reserve_array_space

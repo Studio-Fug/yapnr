@@ -288,15 +288,15 @@ def _native(inputs, constraints_path, rec, names, out, seconds, workers, repo, r
                     out["layout"] = layout
                     if stamp:
                         out["input_layout"] = rec["layout"]  # what the router was given (pre-nudge)
-    if _power_first() or os.environ.get("PNR_POWER_BRANCHES") == "1":
+    if _power_first() or os.environ.get("PNR_POWER_BRANCHES", "1") == "1":
         hot = [r.get("hot_loops_open") for r in results]
         out["hot_loops_open"] = sum(hot) if ok and all(h is not None for h in hot) else None
-        if os.environ.get("PNR_POWER_BRANCHES") == "1":
+        if os.environ.get("PNR_POWER_BRANCHES", "1") == "1":
             counts = [r.get("power_loop_failures") for r in results]
             out["power_loop_failures"] = (
                 sum(counts) if ok and all(x is not None for x in counts) else None
             )
-    if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+    if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1":
         for field in ("smps_layout_failures", "smps_layout_unqualified"):
             values = [r.get(field) for r in results]
             out[field] = sum(values) if ok and all(x is not None for x in values) else None
@@ -417,9 +417,9 @@ def rank_key(r, band=None):
     if not o:
         return (math.inf,)
     si = (_num(r.get("si_layout_failures")),) if _si() else ()
-    if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+    if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1":
         si = (_num(r.get("smps_layout_failures")), _num(r.get("smps_layout_unqualified"))) + si
-    if os.environ.get("PNR_POWER_BRANCHES") == "1":
+    if os.environ.get("PNR_POWER_BRANCHES", "1") == "1":
         si = (_num(r.get("power_loop_failures")),) + si
     if _rank_used():
         band_used = _num(r.get("used_band"))
@@ -479,12 +479,12 @@ def rank_key(r, band=None):
 
 
 def is_complete(r):
-    if os.environ.get("PNR_SMPS_LAYOUT") == "1" and any(
+    if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1" and any(
         r.get(field) != 0 for field in ("smps_layout_failures", "smps_layout_unqualified")
     ):
         return False
     o = r.get("objective")
-    if os.environ.get("PNR_POWER_BRANCHES") == "1":
+    if os.environ.get("PNR_POWER_BRANCHES", "1") == "1":
         return bool(
             r.get("status") == "ok"
             and o
@@ -529,19 +529,19 @@ def aggregate(runs):
             for r in runs
         ],
     )
-    if _power_first() or os.environ.get("PNR_POWER_BRANCHES") == "1":
+    if _power_first() or os.environ.get("PNR_POWER_BRANCHES", "1") == "1":
         # Placement terms are shared by every repeat (copied from best); routed hot
         # loops keep the worst repeat, like the other guard terms.
         hot = [r.get("hot_loops_open") for r in runs]
         out["hot_loops_open"] = max(hot) if all(h is not None for h in hot) else None
-        if os.environ.get("PNR_POWER_BRANCHES") == "1":
+        if os.environ.get("PNR_POWER_BRANCHES", "1") == "1":
             counts = [r.get("power_loop_failures") for r in runs]
             out["power_loop_failures"] = max(counts) if all(x is not None for x in counts) else None
         for summary, r in zip(out["runs"], runs):
             summary["hot_loops_open"] = r.get("hot_loops_open")
             if "power_loop_failures" in r:
                 summary["power_loop_failures"] = r["power_loop_failures"]
-    if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+    if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1":
         for field in ("smps_layout_failures", "smps_layout_unqualified"):
             values = [r.get(field) for r in runs]
             out[field] = max(values) if all(x is not None for x in values) else None

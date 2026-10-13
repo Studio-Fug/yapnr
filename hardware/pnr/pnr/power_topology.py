@@ -315,7 +315,7 @@ def derive(graph, constraints, rules, *, block_of=None):
         key = (frozenset(carrying[c.ref]), (block_of or {}).get(c.ref))
         # Keep every parallel branch in the cycle basis and placement objective.
         # Identical net sets do not make devices electrically interchangeable.
-        if os.environ.get("PNR_POWER_BRANCHES") == "1":
+        if os.environ.get("PNR_POWER_BRANCHES", "1") == "1":
             key += (c.ref,)
         if key not in class_of:
             class_of[key] = len(classes)

@@ -1,4 +1,4 @@
-"""Constraint-derived SMPS placement debt, opt-in with PNR_SMPS_PLACEMENT.
+"""Constraint-derived SMPS placement debt; PNR_SMPS_PLACEMENT=0 disables it.
 
 Terminal limits and loop perimeter guide placement; routing and the independent
 SMPS audit remain authoritative. For area-only checks an area budget supplies a
@@ -13,7 +13,7 @@ WEIGHT = 100.0
 
 
 def enabled():
-    return os.environ.get("PNR_SMPS_PLACEMENT") == "1"
+    return os.environ.get("PNR_SMPS_PLACEMENT", "1") == "1"
 
 
 class Cost:

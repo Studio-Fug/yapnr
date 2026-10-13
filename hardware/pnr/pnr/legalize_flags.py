@@ -239,7 +239,7 @@ def active() -> dict:
     """The active switches and their values, for provenance and the trace (empty when off)."""
     out = {}
     for name in ("LEGALIZE_SHOVE", "PLACEMENT_BANKS"):
-        if os.environ.get("PNR_" + name) == "1":
+        if os.environ.get("PNR_" + name, "1") == "1":
             out[name] = True
     if gp_polish():
         out["GP_POLISH"] = POLISH_STEPS

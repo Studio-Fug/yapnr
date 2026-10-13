@@ -77,7 +77,7 @@ def _board_frame(board) -> Tuple[_Frame, Optional[BoardOutline]]:
             frame.point(edges.GetRight(), edges.GetTop()),
             frame.point(edges.GetLeft(), edges.GetTop()),
         ]
-        if os.environ.get("PNR_NATIVE_OUTLINE") == "1":
+        if os.environ.get("PNR_NATIVE_OUTLINE", "1") == "1":
             if contour.OutlineCount() != 1 or contour.HoleCount(0):
                 raise ValueError("native outline requires one closed contour without cutouts")
             chain = contour.COutline(0)
@@ -290,7 +290,7 @@ def _rule_areas(fp, frame: _Frame, pos, rot: float, bottom: bool) -> List[dict]:
 
 def _routing_pad(pad):
     """Opt-in: paste/mask-only apertures are not routing terminals; retain holes."""
-    if os.environ.get("PNR_INGEST_COPPER_PADS") != "1":
+    if os.environ.get("PNR_INGEST_COPPER_PADS", "1") != "1":
         return True
     drill = pad.GetDrillSize()
     return bool(list(pad.GetLayerSet().CuStack()) or drill.x or drill.y)

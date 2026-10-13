@@ -41,7 +41,7 @@ class ParseTest(unittest.TestCase):
         g = board([part("U1", (5, 5), (2, 2))])
         self.assertEqual(
             sorted(legalize_constraint_kwargs(g, c, {})),
-            ["fixed", "group_edges", "group_limits", "keepouts", "rotations"],
+            ["fixed", "group_edges", "group_limits", "keepouts", "rotations", "shove_constraints"],
         )
 
     def test_values(self):

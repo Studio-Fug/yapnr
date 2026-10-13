@@ -618,7 +618,7 @@ def _rank_key(stage):
                 (o[0], o[5], o[4], o[2], o[1], o[3], r["id"]) if o else (math.inf,) * 6 + (r["id"],)
             )
 
-    if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+    if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1":
 
         def smps_key(r, base=key):
             k = base(r)

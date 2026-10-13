@@ -30,11 +30,18 @@ import compact_fixture as fixture  # noqa: E402
 from pnr.compact_flags import PARTS  # noqa: E402
 from pnr.graph import BoardGraph, BoardOutline, Component, Pad  # noqa: E402
 
-FLAGS = ("PNR_COMPACT", "PNR_SHRINK", "PNR_LEGALIZE_KEEP") + tuple(
-    "PNR_COMPACT_" + p for p in PARTS
-)
+FLAGS = (
+    "PNR_COMPACT",
+    "PNR_SHRINK",
+    "PNR_LEGALIZE_KEEP",
+    "PNR_PAD_LOCALITY",
+    "PNR_LEGALIZE_SHOVE",
+    "PNR_PLACEMENT_BANKS",
+) + tuple("PNR_COMPACT_" + p for p in PARTS)
 # The goldens predate PNR_LEGALIZE_KEEP (on by default): the identity runs with it off.
-LEGACY = dict(PNR_LEGALIZE_KEEP="0")
+LEGACY = dict(
+    PNR_LEGALIZE_KEEP="0", PNR_PAD_LOCALITY="0", PNR_LEGALIZE_SHOVE="0", PNR_PLACEMENT_BANKS="0"
+)
 EPS = 1e-9
 
 
@@ -674,7 +681,9 @@ class RelaxTest(unittest.TestCase):
             with compact_flags.relaxed():
                 self.assertFalse(compact_flags.enabled())
                 self.assertEqual([p for p in PARTS if compact_flags.enabled(p)], ["COURTYARD"])
-                self.assertEqual(legalize_flags.active(), {})  # WIRE, TURN, SATELLITES too
+                self.assertEqual(
+                    legalize_flags.active(), dict(LEGALIZE_SHOVE=True, PLACEMENT_BANKS=True)
+                )  # Compact WIRE, TURN, SATELLITES are off; independent repairs remain on.
             self.assertTrue(compact_flags.enabled("GP"))
 
     def test_relax_retains_pin_one_origin_header_geometry_and_ablation(self):

@@ -14,7 +14,7 @@ EPS2 = 0.01
 
 
 def enabled():
-    return os.environ.get("PNR_PAD_LOCALITY") == "1"
+    return os.environ.get("PNR_PAD_LOCALITY", "1") == "1"
 
 
 def attachments(graph, constraints):

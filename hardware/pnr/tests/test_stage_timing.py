@@ -12,7 +12,7 @@ import yaml
 
 from pnr import stage_timing
 from pnr.constraints import compile_constraints
-from pnr.graph import BoardGraph
+from pnr.graph import BoardGraph, BoardOutline
 from pnr.route.feedback import route_and_place
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -115,6 +115,7 @@ class RouteFeedbackStageEventsTests(unittest.TestCase):
             graph = BoardGraph.from_json(fh.read())
         with open(os.path.join(FIXTURE, "constraints.yaml"), encoding="utf-8") as fh:
             constraints = compile_constraints(yaml.safe_load(fh), graph.refs)
+        graph.outline = BoardOutline(constraints.board.width, constraints.board.height)
         with tempfile.TemporaryDirectory() as live_dir:
             with patch.dict(os.environ, {"PNR_LIVE_DIR": live_dir}, clear=True):
                 # detail_rules={} (not None): the production ladder-cell driver always passes real
@@ -161,6 +162,7 @@ class ByteIdenticalResultTests(unittest.TestCase):
         def run():
             graph = BoardGraph.from_json(graph_json)
             constraints = compile_constraints(constraints_yaml, graph.refs)
+            graph.outline = BoardOutline(constraints.board.width, constraints.board.height)
             # No detail_rules: the fast global-lookahead path only (no detailed router) -- plenty
             # to exercise the source-round-place stage() span this test cares about, and far
             # cheaper than the detailed-router acceptance runs above (RouteFeedbackStageEventsTests,

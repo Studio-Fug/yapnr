@@ -122,7 +122,7 @@ def extract_blocks(graph: BoardGraph, constraints: CompiledConstraints) -> List[
             )
         )
 
-    if os.environ.get("PNR_HIER_SAFE_PARTITION") == "1":
+    if os.environ.get("PNR_HIER_SAFE_PARTITION", "1") == "1":
         from pnr.hier.partition import close_partition
 
         blocks = close_partition(blocks, constraints, interface)

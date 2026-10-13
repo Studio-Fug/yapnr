@@ -183,7 +183,8 @@ and returns SVG from that frozen frame, with its surface hash. The CLI is
 ## Experimental legalization repair
 
 `start` accepts optional booleans `shove`, `placement_banks` and `legalize_only`
-(default false), also available as CLI switches `--shove`, `--placement-banks`,
+(shove and banks default true; legalization-only defaults false), also available as
+CLI switches `--shove` / `--no-shove`, `--placement-banks` / `--no-placement-banks`,
 `--legalize-only`. Legalization-only replay consumes the registered source's poses
 without optimizer updates; it rejects `paused` and `run_forever`. Bank membership
 and diameter are authored in the source constraints, never guessed from net names.

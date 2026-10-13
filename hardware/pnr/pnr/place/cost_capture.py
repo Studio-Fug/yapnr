@@ -65,6 +65,7 @@ def save(kind, payload):
             "cost_inspect.py",
             "cost_capture.py",
             "pad_locality.py",
+            "smps_cost.py",
         )
     }
     if os.environ.get("PNR_POWER_FIRST") == "1":
@@ -74,7 +75,10 @@ def save(kind, payload):
                 for name in ("power_first.py", "../power_topology.py")
             }
         )
-    if os.environ.get("PNR_LEGALIZE_SHOVE") == "1" or os.environ.get("PNR_PLACEMENT_BANKS") == "1":
+    if (
+        os.environ.get("PNR_LEGALIZE_SHOVE", "1") == "1"
+        or os.environ.get("PNR_PLACEMENT_BANKS", "1") == "1"
+    ):
         sources.update(
             {
                 name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
@@ -88,11 +92,12 @@ def save(kind, payload):
             phase_context=phase_context(),
             runtime_sources=sources,
             features={
-                "PNR_PAD_LOCALITY": os.environ.get("PNR_PAD_LOCALITY", "0"),
+                "PNR_SMPS_PLACEMENT": os.environ.get("PNR_SMPS_PLACEMENT", "1"),
+                "PNR_PAD_LOCALITY": os.environ.get("PNR_PAD_LOCALITY", "1"),
                 **{
                     key: "1"
                     for key in ("PNR_LEGALIZE_SHOVE", "PNR_PLACEMENT_BANKS")
-                    if os.environ.get(key) == "1"
+                    if os.environ.get(key, "1") == "1"
                 },
             },
             **payload,

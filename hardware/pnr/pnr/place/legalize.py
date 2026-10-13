@@ -2272,26 +2272,41 @@ def legalize(
     from .motion import summary as motion_summary
 
     shove_records = []
+    shove_baseline_violations = {}
     if shove_constraints is not None:
         from pnr.placement_banks import members as bank_members
 
+        from .metrics import hard_violations
+        from .regions import snap_aligns
         from .shove import repair
 
-        shove_records = repair(
-            placed,
-            graph,
-            shove_constraints,
-            grid=g,
-            clearance=clearance,
-            spread=spread,
-            inflation=inflation,
-            margins=margins,
-            pad_edge=pad_edge,
-            locality=locality,
-            channels=channel_model,
-            channel_weight=channel_weight,
-            allow_rotation=allow_rotation,
-            banks=bank_members(placed, shove_constraints),
+        # Packing enforces a finite alignment band; finish an exact align before
+        # transactional shove, whose incremental checker requires a legal board.
+        snap_aligns(placed, shove_constraints, clearance, pad_edge, (width, height), margins)
+        shove_baseline_violations = {
+            k: v for k, v in hard_violations(placed, shove_constraints).items() if v
+        }
+        # A failed snap stays an illegal result for the caller's diagnostic/retry.
+        # It must neither crash the search nor seed supposedly legal transactions.
+        shove_records = (
+            []
+            if shove_baseline_violations
+            else repair(
+                placed,
+                graph,
+                shove_constraints,
+                grid=g,
+                clearance=clearance,
+                spread=spread,
+                inflation=inflation,
+                margins=margins,
+                pad_edge=pad_edge,
+                locality=locality,
+                channels=channel_model,
+                channel_weight=channel_weight,
+                allow_rotation=allow_rotation,
+                banks=bank_members(placed, shove_constraints),
+            )
         )
 
     # The motion from the global poses (the input graph), and the triage (PNR_LEGALIZE_KEEP).
@@ -2302,6 +2317,8 @@ def legalize(
         record["shove"] = dict(
             transactions=len(shove_records), moved=sum(len(v["moves"]) for v in shove_records)
         )
+        if shove_baseline_violations:
+            record["shove"].update(skipped="illegal baseline", violations=shove_baseline_violations)
     if keeping:
         from .keep import REASONS
 

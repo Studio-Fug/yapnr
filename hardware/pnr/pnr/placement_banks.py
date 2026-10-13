@@ -11,7 +11,7 @@ from dataclasses import replace
 
 
 def enabled():
-    return os.environ.get("PNR_PLACEMENT_BANKS") == "1"
+    return os.environ.get("PNR_PLACEMENT_BANKS", "1") == "1"
 
 
 def activate(constraints):

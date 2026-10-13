@@ -1,5 +1,9 @@
 # SMPS layout requirements and validation
 
+Current activation policy and combined regression results are tracked in
+[PR #100 defaults](pr100-defaults.md). The measurements below retain their
+original experiment configuration.
+
 The SMPS screen converts layout intent into named checks over actual terminals
 and copper. Guidance sources are recorded per requirement. Missing inputs,
 missing limits, unsupported copper geometry and stale evidence remain explicit

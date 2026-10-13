@@ -270,7 +270,14 @@ class PowerScenarios(unittest.TestCase):
     def test_branch_screen_alone_preserves_the_worst_repeat(self):
         from pnr.hier.synth_native import aggregate, is_complete
 
-        good = dict(status="ok", objective=[0] * 6, hot_loops_open=0, power_loop_failures=0)
+        good = dict(
+            status="ok",
+            objective=[0] * 6,
+            hot_loops_open=0,
+            power_loop_failures=0,
+            smps_layout_failures=0,
+            smps_layout_unqualified=0,
+        )
         with patch.dict(os.environ, {"PNR_POWER_BRANCHES": "1", "PNR_POWER_FIRST": "0"}):
             for failures in (None, 2):
                 result = aggregate([good, dict(good, power_loop_failures=failures)])
@@ -300,6 +307,47 @@ class PowerScenarios(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertIsNone(result["hot_loops_open"])
         self.assertFalse(result["coverage"]["coverage_complete"])
+
+    def test_native_signal_only_block_has_no_power_obligation(self):
+        from pnr.hier.power_quality import evaluate
+
+        graph, _, dump = bank()
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, {"PNR_POWER_BRANCHES": "1"}
+        ), patch("pnr.power_loop.evaluate") as native_screen:
+            electrical = Path(tmp) / "electrical"
+            electrical.mkdir()
+            (electrical / "board.drc.json").write_text('{"unconnected_items": []}')
+            report = evaluate(tmp, graph, {}, dump=dump)
+            self.assertTrue(report["valid"])
+            self.assertEqual(report["hot_loops_open"], 0)
+            self.assertEqual(report["coverage"]["status"], "not_applicable")
+            self.assertTrue(report["coverage"]["coverage_complete"])
+            self.assertEqual(report["loop_copper"]["failure_count"], 0)
+            native_screen.assert_not_called()
+            # No-power applicability does not substitute for native connectivity evidence.
+            (electrical / "board.drc.json").unlink()
+            report = evaluate(tmp, graph, {}, dump=dump)
+            self.assertFalse(report["valid"])
+            self.assertIsNone(report["hot_loops_open"])
+            self.assertFalse(report["coverage"]["coverage_complete"])
+
+    def test_declared_power_without_current_cannot_be_not_applicable(self):
+        from pnr.hier.power_quality import evaluate
+        from pnr.power_topology import PowerTopologyUnavailable
+
+        graph, _, dump = bank()
+        for rules in (
+            dict(net_classes=[dict(nets=["VIN"], width_mm=1.5)]),
+            dict(net_classes=[dict(nets=["GND"], plane_layer="In1.Cu")]),
+            dict(electrical_nets={"VIN": dict(peak_current_a=5)}),
+            dict(electrical_nets={"VIN": dict(outer_width_mm=1.5)}),
+            dict(current_intents=[dict(net="VIN", ref="D1", rms_current_a=5)]),
+            dict(plane_access_intents=[dict(net="GND", rms_current_a=5)]),
+        ):
+            with self.subTest(rules=rules), tempfile.TemporaryDirectory() as tmp:
+                with self.assertRaises(PowerTopologyUnavailable):
+                    evaluate(tmp, graph, rules, dump=dump)
 
     @unittest.skipUnless(importlib.util.find_spec("pcbnew"), "native KiCad required")
     def test_native_off_centre_pad_contacts_keep_fill_islands_separate(self):
@@ -416,13 +464,25 @@ class PowerScenarios(unittest.TestCase):
     def test_missing_return_model_and_other_electrical_failures_cannot_complete(self):
         from pnr.hier.synth_native import is_complete, rank_key
 
-        good = dict(status="ok", objective=[0] * 6, hot_loops_open=0, power_loop_failures=0)
+        good = dict(
+            status="ok",
+            objective=[0] * 6,
+            hot_loops_open=0,
+            power_loop_failures=0,
+            smps_layout_failures=0,
+            smps_layout_unqualified=0,
+        )
         with patch.dict(os.environ, {"PNR_POWER_BRANCHES": "1", "PNR_POWER_FIRST": "1"}):
             self.assertTrue(is_complete(good))
-            for count in (None, 1):
-                bad = dict(good, power_loop_failures=count)
-                self.assertFalse(is_complete(bad))
-                self.assertLess(rank_key(good), rank_key(bad))
+            for field in (
+                "power_loop_failures",
+                "smps_layout_failures",
+                "smps_layout_unqualified",
+            ):
+                for count in (None, 1):
+                    bad = dict(good, **{field: count})
+                    self.assertFalse(is_complete(bad), (field, count))
+                    self.assertLess(rank_key(good), rank_key(bad))
             for idx in range(6):
                 objective = [0] * 6
                 objective[idx] = 1
@@ -461,7 +521,9 @@ class PowerScenarios(unittest.TestCase):
             self.assertTrue(coverage["coverage_complete"], (name, coverage))
             self.assertFalse(coverage["qualified"])
 
-    def test_equal_budget_placement_improves_every_branch_without_losing_legality(self):
+    def test_equal_budget_branch_portfolio_improves_without_losing_legality(self):
+        import math
+
         import torch
         from power_topology_golden import compile_fixture
 
@@ -469,26 +531,51 @@ class PowerScenarios(unittest.TestCase):
         from pnr.place.power_first import placement_quality
 
         folder = Path(__file__).resolve().parents[1] / "testdata" / "power_topology"
+        # Predeclared portfolios, with the same seeds and iteration budget on
+        # both sides. A nonlinear optimizer need not improve at every seed;
+        # require both the mechanically selected best and the portfolio mean
+        # to improve, while every candidate must remain hard-legal. Score both
+        # variants with the full branch model so erased returns cannot help.
+        seeds = (0, 1)
+        companion_flags = (
+            "PNR_POWER_CHANNELS",
+            "PNR_NATIVE_OUTLINE",
+            "PNR_HIER_SAFE_PARTITION",
+            "PNR_PAD_LOCALITY",
+            "PNR_LEGALIZE_SHOVE",
+            "PNR_PLACEMENT_BANKS",
+            "PNR_SMPS_PLACEMENT",
+            "PNR_PLANE_ACCESS_NATIVE_FIT",
+            "PNR_PLANE_ACCESS_COMPACT_BUS",
+        )
         old_threads = torch.get_num_threads()
         torch.set_num_threads(1)
         try:
-            for name in ("pd", "converter"):
-                fixture = json.loads((folder / (name + ".json")).read_text())
-                for seed in (0, 1):
-                    scores = []
-                    for branches in ("0", "1"):
-                        graph, cons, rules = compile_fixture(fixture)
-                        with patch.dict(
-                            os.environ, {"PNR_POWER_FIRST": "1", "PNR_POWER_BRANCHES": branches}
-                        ):
-                            placed, report = place(
-                                graph, cons, seed=seed, iters=120, channel_rules=rules
-                            )
-                        self.assertTrue(report.legal, (name, seed, branches))
-                        with patch.dict(os.environ, {"PNR_POWER_BRANCHES": "1"}):
-                            roles = derive(graph, cons, rules)
-                        scores.append(placement_quality(placed, roles)["q_place"])
-                    self.assertLess(scores[1], scores[0], (name, seed, scores))
+            for companions in ("0", "1"):
+                flags = dict.fromkeys(companion_flags, companions)
+                for name in ("pd", "converter"):
+                    fixture = json.loads((folder / (name + ".json")).read_text())
+                    scores = {"0": [], "1": []}
+                    for seed in seeds:
+                        for branches in ("0", "1"):
+                            graph, cons, rules = compile_fixture(fixture)
+                            with patch.dict(
+                                os.environ,
+                                dict(flags, PNR_POWER_FIRST="1", PNR_POWER_BRANCHES=branches),
+                            ):
+                                placed, report = place(
+                                    graph, cons, seed=seed, iters=120, channel_rules=rules
+                                )
+                            case = (companions, name, seed, branches)
+                            self.assertTrue(report.legal, case)
+                            with patch.dict(os.environ, dict(flags, PNR_POWER_BRANCHES="1")):
+                                roles = derive(graph, cons, rules)
+                            score = placement_quality(placed, roles)["q_place"]
+                            self.assertTrue(math.isfinite(score), (case, score))
+                            scores[branches].append(score)
+                    case = (companions, name, seeds, scores)
+                    self.assertLess(min(scores["1"]), min(scores["0"]), case)
+                    self.assertLess(sum(scores["1"]), sum(scores["0"]), case)
         finally:
             torch.set_num_threads(old_threads)
 
@@ -546,6 +633,9 @@ class CongestionScenarios(unittest.TestCase):
         with patch.dict(os.environ, {"PNR_POWER_CHANNELS": "0"}):
             self.assertEqual(float(model.penalty(a, [b], *a.pos)), 0)
         with patch.dict(os.environ, {"PNR_POWER_CHANNELS": "1"}):
+            self.assertAlmostEqual(float(model.penalty(a, [b], *a.pos)), 1.21)
+        with patch.dict(os.environ):
+            os.environ.pop("PNR_POWER_CHANNELS", None)
             self.assertAlmostEqual(float(model.penalty(a, [b], *a.pos)), 1.21)
 
     def test_checkpoint_channel_refinement_improves_both_saved_geometries(self):

@@ -70,6 +70,9 @@ class Objective(unittest.TestCase):
                     {"action": "start", "source": "demo", "iterations": 20, "paused": True}
                 )
             folder = lab.folder(result["id"])
+            request = json.loads((folder / "request.json").read_text())
+            self.assertTrue(request["shove"])
+            self.assertTrue(request["placement_banks"])
             self.assertTrue(json.loads((folder / "control.json").read_text())["paused"])
             write(folder / "status.json", dict(state="paused", step=0, control_revision=0))
             for count in (0, 101, True, 1.5, 21):

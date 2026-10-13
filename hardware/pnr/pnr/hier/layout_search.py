@@ -1,4 +1,4 @@
-"""Bounded, per-instance hierarchical layout search; disabled by default.
+"""Bounded, per-instance hierarchical layout search; alternating by default.
 
 Methods: independent seeded draws; frozen-pose coordinate swaps; alternating
 swaps and warm parent optimization; paired swaps to escape one-block minima.
@@ -14,17 +14,17 @@ import json
 import math
 import os
 import random
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 
 @dataclass(frozen=True)
 class LayoutSearch:
-    method: str = "off"
+    method: str = "alternating"
     rounds: int = 3
     max_evaluations: int = 96
     variants: int = 6
     relax_iters: int = 60
-    diverse: bool = False
+    diverse: bool = True
     score: str = "objective"
 
     def __post_init__(self):
@@ -45,8 +45,8 @@ class LayoutSearch:
     @classmethod
     def from_env(cls):
         return cls(
-            method=os.environ.get("PNR_HIER_LAYOUT_SEARCH", "off"),
-            diverse=os.environ.get("PNR_HIER_LAYOUT_DIVERSE") == "1",
+            method=os.environ.get("PNR_HIER_LAYOUT_SEARCH", "alternating"),
+            diverse=os.environ.get("PNR_HIER_LAYOUT_DIVERSE", "1") == "1",
             score="power" if os.environ.get("PNR_POWER_FIRST") == "1" else "objective",
         )
 
@@ -63,8 +63,25 @@ def eligible(record):
     Placement-only synthetic records may omit a native objective; their result
     never claims native validation. Native records must have all six violation /
     connectivity / width / pair counters clear, not just minimum missing count.
+    Every enabled electrical guard also needs explicit evidence: absent native
+    side counters are unknown, never zero.
     """
     objective = record.get("objective")
+    native = "objective" in record or record.get("stage") == "native"
+    if native:
+        if not isinstance(objective, (list, tuple)) or len(objective) < 6:
+            return False
+        required = []
+        if os.environ.get("PNR_POWER_BRANCHES", "1") == "1":
+            required.extend(("hot_loops_open", "power_loop_failures"))
+        elif os.environ.get("PNR_POWER_FIRST") == "1":
+            required.append("hot_loops_open")
+        if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1":
+            required.extend(("smps_layout_failures", "smps_layout_unqualified"))
+        if os.environ.get("PNR_SI") == "1":
+            required.append("si_layout_failures")
+        if any(record.get(k) != 0 for k in required):
+            return False
     return (
         record.get("status", "ok") == "ok"
         and record.get("missing") == 0
@@ -117,10 +134,80 @@ def portfolio(tier, limit, diverse=False):
     return chosen
 
 
+def macro_clearance_violations(graph, constraints):
+    """Validate hull clearance with the same occupancy contract as legalization.
+
+    Hull covers already round the physical shapes out to grid cells. Growing
+    those covers by another half-clearance can reject legal interlocks. Instead
+    test the union of physical shapes grown by half-clearance and the original
+    cover, using the existing conservative hull masks. Ordinary components and
+    landing reservations retain their full authored spacing. Other hard rules
+    and the separate expanded-board check remain unchanged.
+    """
+    from pnr.place import hull
+    from pnr.place.compact import placement_clearance
+    from pnr.place.geometry import MountedRect, Rect, ReserveRect, courtyard_rect, placement_rects
+    from pnr.place.metrics import hard_violations
+
+    clearance = placement_clearance(constraints)
+    violations = hard_violations(graph, constraints, clearance=clearance)
+    if not hull.active(graph.components) or not violations["overlaps"]:
+        return violations
+    comps = {c.ref: c for c in graph.components}
+    occupied = {}
+
+    def shapes(ref):
+        if ref in occupied:
+            return occupied[ref]
+        comp = comps[ref]
+        rects = placement_rects(comp)
+        if not comp.hull:
+            result = [(side, replace(r, w=r.w + clearance, h=r.h + clearance)) for side, r in rects]
+        else:
+            cr = courtyard_rect(comp)
+            grid = float(comp.hull["grid_mm"])
+            bw, bh = (int(math.ceil((size + clearance) / grid)) for size in (cr.w, cr.h))
+            masks = hull.slot_masks(comp, grid, clearance, bw, bh)
+            xs, ys = hull.lattice(bw, grid), hull.lattice(bh, grid)
+            mount = next(
+                (getattr(r, "mount", None) for _, r in rects if not isinstance(r, ReserveRect)),
+                None,
+            )
+            result = []
+            for side, mask in masks.items():
+                for x0, y0, x1, y1 in hull.merge_cells(mask, xs, ys):
+                    args = (
+                        comp.pos[0] + (x0 + x1) / 2,
+                        comp.pos[1] + (y0 + y1) / 2,
+                        x1 - x0,
+                        y1 - y0,
+                    )
+                    rect = Rect(*args) if mount is None else MountedRect(*args, mount=mount)
+                    result.append((side, rect))
+            result.extend(
+                (side, replace(r, w=r.w + clearance, h=r.h + clearance))
+                for side, r in rects
+                if isinstance(r, ReserveRect)
+            )
+        occupied[ref] = result
+        return result
+
+    violations["overlaps"] = [
+        (a, b)
+        for a, b in violations["overlaps"]
+        if not (comps[a].hull or comps[b].hull)
+        or any(c.hull and not c.hull.get("shapes") for c in (comps[a], comps[b]))
+        or any(sa == sb and ra.overlaps(rb) for sa, ra in shapes(a) for sb, rb in shapes(b))
+    ]
+    return violations
+
+
 def search(graph, constraints, rules, library, seed, iters, pair_weights, geometry_of, config):
     from pnr.hier.blocks import extract_blocks
     from pnr.hier.top import _hierarchical_place, draw_layout
+    from pnr.place.compact import placement_clearance
     from pnr.place.initial_pool import _prepared_source, preserve_source_locks
+    from pnr.place.legalize import LegalizationError
     from pnr.place.metrics import hard_violations, hpwl
 
     constraints = preserve_source_locks(graph, constraints)
@@ -166,7 +253,7 @@ def search(graph, constraints, rules, library, seed, iters, pair_weights, geomet
             )
             flat, report, meta = result
             violations = hard_violations(
-                flat, constraints, clearance=constraints.board.default_clearance_mm
+                flat, constraints, clearance=placement_clearance(constraints)
             )
             internal = all(eligible(library[name][i]) for name, i in picks.items())
             legal = (
@@ -205,6 +292,8 @@ def search(graph, constraints, rules, library, seed, iters, pair_weights, geomet
                 hpwl_mm=wire,
                 violations=violations,
                 internal_eligible=internal,
+                macro_violations=meta["macro_clearance_violations"],
+                placement_legal=bool(report.legal),
             )
             return result, cost if legal else math.inf, dict(picks)
         except (ValueError, KeyError, RuntimeError) as error:
@@ -215,7 +304,11 @@ def search(graph, constraints, rules, library, seed, iters, pair_weights, geomet
     current = evaluate(selection)
     if current is None:
         # Preserve the original failure rather than inventing a usable placement.
-        raise ValueError("Initial hierarchical layout failed: " + trials[0].get("error", "unknown"))
+        error = LegalizationError(
+            "Initial hierarchical layout failed: " + trials[0].get("error", "unknown")
+        )
+        error.layout_search_trials = trials
+        raise error
     initial = current
 
     def remember(candidate, stage):
@@ -279,7 +372,9 @@ def search(graph, constraints, rules, library, seed, iters, pair_weights, geomet
                 break
     result, cost, picks = current
     if not math.isfinite(cost):
-        raise ValueError("No eligible legal hierarchical layout within the search budget")
+        error = LegalizationError("No eligible legal hierarchical layout within the search budget")
+        error.layout_search_trials = trials
+        raise error
     meta = result[2]
     meta["layout_search"] = dict(
         schema="pnr-contextual-layout-v1",

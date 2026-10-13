@@ -579,7 +579,7 @@ def analyse(dump, roles, rules, drc=None):
     from pnr.hier.power_coverage import check as check_coverage
 
     coverage = check_coverage(roles, loops, connectivity_valid=valid and drc is not None)
-    if os.environ.get("PNR_POWER_BRANCHES") == "1" and not coverage["coverage_complete"]:
+    if os.environ.get("PNR_POWER_BRANCHES", "1") == "1" and not coverage["coverage_complete"]:
         # Existing native/repeat rankers propagate None as worst. An omitted
         # branch or absent DRC must never beat a measured open loop with zero.
         hot_open = None
@@ -629,7 +629,7 @@ def _group_mst(groups):
 
 def evaluate(round_dir, graph, rules, *, dump=None):
     """Routed power quality of a native block run dir (after the final audit)."""
-    from pnr.power_topology import derive
+    from pnr.power_topology import PowerTopologyUnavailable, derive
 
     round_dir = Path(round_dir)
     board = round_dir / "electrical" / "board.kicad_pcb"
@@ -644,15 +644,47 @@ def evaluate(round_dir, graph, rules, *, dump=None):
         ),
         None,
     )
-    roles = derive(graph, None, rules)
+    try:
+        roles = derive(graph, None, rules)
+    except PowerTopologyUnavailable:
+        # Signal-only blocks have no power-path obligation. Missing current data
+        # on a declared power/plane net is different: preserve that unknown model.
+        from pnr.electrical import net_policy
+        from pnr.stack import plane_nets
+
+        nets = {n.name for n in graph.nets}
+        nominal = rules.get("fab", {}).get("track_width_mm", 0.2)
+        declared = any(
+            net_policy(n, rules)["mode"] in ("power", "plane")
+            or any(
+                key in rules.get("electrical_nets", {}).get(n, {})
+                for key in ("rms_current_a", "peak_current_a")
+            )
+            or any(
+                rules.get("electrical_nets", {}).get(n, {}).get(key, nominal) > nominal
+                for key in ("outer_width_mm", "inner_width_mm")
+            )
+            for n in nets
+        )
+        if (
+            declared
+            or rules.get("current_intents")
+            or rules.get("plane_access_intents")
+            or nets.intersection(plane_nets(rules, getattr(graph, "stack", None)))
+        ):
+            raise
+        roles = dict(power_nets=[], return_nets=[], carrying={}, classes=[], weight={}, loops=[])
     dump = dump if dump is not None else read_board(board)
     drc = json.loads(drc_path.read_text()) if drc_path else None
     out = analyse(dump, roles, rules, drc)
-    if os.environ.get("PNR_POWER_BRANCHES") == "1":
+    if os.environ.get("PNR_POWER_BRANCHES", "1") == "1":
         from pnr.power_loop import evaluate as screen_copper
+        from pnr.power_loop import screen
 
-        out["loop_copper"] = screen_copper(
-            board, roles, rules, ki_py=KI_PY, out_dir=round_dir / "power-loop"
+        out["loop_copper"] = (
+            screen_copper(board, roles, rules, ki_py=KI_PY, out_dir=round_dir / "power-loop")
+            if roles["power_nets"] or roles["carrying"] or roles["loops"]
+            else screen({}, roles, rules)
         )
     if drc is None:
         out.update(valid=False, hot_loops_open=None, self_check="no DRC report found")

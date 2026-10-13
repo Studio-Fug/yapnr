@@ -150,7 +150,7 @@ def reserve_array_space(graph, intents, fab, edge_clearance_mm):
     The normal envelope includes bus copper, via barrels and board clearance;
     its symmetric courtyard keeps the reservation valid at every cardinal pose.
     """
-    if os.environ.get("PNR_PLANE_ACCESS_NATIVE_FIT") == "1":
+    if os.environ.get("PNR_PLANE_ACCESS_NATIVE_FIT", "1") == "1":
         # Experimental late feasibility: a symmetric body reservation excludes
         # even legal same-net pad connections to the bank. The native generator
         # must still construct the complete current-sized bank and reject every
@@ -250,7 +250,7 @@ def array_geometry(pads, center, intent, fab, offset_mm=0.0):
     def point(a, z):
         return (a * ux + z * vx, a * uy + z * vy)
 
-    compact = os.environ.get("PNR_PLANE_ACCESS_COMPACT_BUS") == "1"
+    compact = os.environ.get("PNR_PLANE_ACCESS_COMPACT_BUS", "1") == "1"
     # Collect pad feeds at the via bank. A full-width bus extending to the
     # outermost source-pad centre can encroach on the adjacent gate pad.
     # Shortening its span retains current sizing; each pad feed meets the bus.

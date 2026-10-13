@@ -23,7 +23,8 @@ independently observed obstacles without changing acceptance thresholds.
   same-net pads beside a collector instead of reserving empty space on every side
   of its footprint. Placement alone cannot qualify this mode.
 
-All four switches default off. These are experimental improvements, not a new
+All four switches now default on; set an individual switch to `0` to disable it.
+These are search improvements, not a new
 qualified design or a change to manufacturing/electrical requirements.
 
 ## Native collector counterexample

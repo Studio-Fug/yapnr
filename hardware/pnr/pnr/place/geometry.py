@@ -344,7 +344,7 @@ def outline_size(graph: BoardGraph, constraints: CompiledConstraints) -> Tuple[f
         import os
 
         if (
-            os.environ.get("PNR_NATIVE_OUTLINE") == "1"
+            os.environ.get("PNR_NATIVE_OUTLINE", "1") == "1"
             and graph.outline
             and graph.outline.polygon
             and (

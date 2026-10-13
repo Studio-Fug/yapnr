@@ -1,5 +1,9 @@
 # Pad-locality and legalization laboratory
 
+Current activation policy and combined regression results are tracked in
+[PR #100 defaults](pr100-defaults.md). The measurements below retain their
+original experiment configuration.
+
 A bootstrap capacitor can satisfy a component-centre group radius while sitting far
 from its IC terminals. The existing power branch validator also does not infer a
 BOOT-to-SW bootstrap obligation from supply/return classifications. Neither a legal
@@ -11,7 +15,9 @@ unambiguous private connection plus the second shared net. Shared power/ground a
 hierarchy groups alone cannot assign a part to an arbitrary IC. The candidate also honors
 `anchor_pad` in both global optimizers; previously those optimizers used the anchor's centre
 while the legalizer used its pad. The local term participates in legal site and orientation
-selection. It is **experimental, default-off, and not ready for default enablement**.
+selection. The initial experiment below kept it default-off because the isolated
+change regressed power cost. Current combined-default validation is tracked in
+[PR #100 defaults](pr100-defaults.md).
 
 The independent audit reports every inferred terminal obligation. Explicit geometry limits
 can fail a placement; absent limits remain unqualified. Distances are geometric, including

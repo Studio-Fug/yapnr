@@ -1,5 +1,6 @@
 """JSON client and CLI for a running placement laboratory (stdlib only)."""
 
+import argparse
 import json
 import os
 import time
@@ -135,10 +136,16 @@ def register(commands):
         help="no iteration or wall-time limit; --iterations sets the annealing horizon",
     )
     start.add_argument(
-        "--shove", action="store_true", help="experimental transactional placement shove"
+        "--shove",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="transactional placement shove",
     )
     start.add_argument(
-        "--placement-banks", action="store_true", help="enable authored capacitor banks"
+        "--placement-banks",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="authored capacitor banks",
     )
     start.add_argument(
         "--legalize-only", action="store_true", help="replay legalization of the source poses"

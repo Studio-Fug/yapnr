@@ -191,7 +191,7 @@ def audit_board(board, rules, board_text=""):
     import os
 
     if rules.get("smps_checks"):
-        if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+        if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1":
             from pnr.smps import native_audit
 
             result["smps_layout"] = native_audit(board, rules, board_text)

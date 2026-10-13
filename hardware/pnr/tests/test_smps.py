@@ -268,7 +268,12 @@ class SmpsTest(unittest.TestCase):
         con = compile_constraints(dict(smps_checks=[c]), ["A", "B"])
         self.assertEqual(compile_routing_rules(con, ["P"])["smps_checks"], [c])
         good = dict(
-            status="ok", objective=[0] * 6, smps_layout_failures=0, smps_layout_unqualified=0
+            status="ok",
+            objective=[0] * 6,
+            smps_layout_failures=0,
+            smps_layout_unqualified=0,
+            hot_loops_open=0,
+            power_loop_failures=0,
         )
         bad = dict(good, smps_layout_failures=1)
         unknown = dict(good, smps_layout_unqualified=None)

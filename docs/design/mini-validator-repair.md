@@ -1,5 +1,9 @@
 # Hierarchy, outline and power-loop regression gates
 
+Current activation policy and combined regression results are tracked in
+[PR #100 defaults](pr100-defaults.md). The measurements below retain their
+original experiment configuration.
+
 The Mini review exposed independently testable failures: a hierarchical block
 could lose its external hard-group anchor during sub-board filtering; a native
 outline with connector support ears became its rectangular bounding box; and
@@ -38,7 +42,7 @@ A model with no power nets is
 explicitly not applicable; a power net with missing loop/model evidence is unqualified.
 Reports retain the actual temperature-rise assumption used for the current screen.
 
-## Candidate repairs (default off)
+## Initial candidate repairs (tested with explicit opt-in)
 
 - `PNR_HIER_SAFE_PARTITION=1` closes whole candidate blocks over hard relations.
   Movable connected blocks merge; dependencies touching fixed/line/edge interfaces

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -73,7 +74,15 @@ class KeepOutlineTest(unittest.TestCase):
         self.assertEqual(edges["origin"], [30.0, 30.0])
         self.assertEqual(edges["size"], [20.0, 12.0])
 
-    def test_default_stamps_the_rectangle(self):
+    def test_default_keeps_the_native_rounded_outline(self):
+        edges, _ = self._writeback({"layers": 2})
+        self.assertEqual(edges["stroke_mm"], 0.05)
+        self.assertEqual(sorted(it["kind"] for it in edges["items"]), ["arc"] * 4 + ["line"] * 4)
+        self.assertEqual(edges["origin"], [30.0, 30.0])
+        self.assertEqual(edges["size"], [20.0, 12.0])
+
+    @patch.dict(os.environ, PNR_NATIVE_OUTLINE="0")
+    def test_explicit_legacy_mode_stamps_the_rectangle(self):
         edges, _ = self._writeback({"layers": 2})
         self.assertEqual(edges["stroke_mm"], 0.15)
         self.assertEqual([it["kind"] for it in edges["items"]], ["line"] * 4)

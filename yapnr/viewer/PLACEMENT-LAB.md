@@ -128,7 +128,7 @@ Runs live under `<live>/placement-lab/runs/<id>/`. `request.json`, `input.json`,
 legalizer's decisions and whole-board translation/rotation metrics. Failed trials stay
 visible. Mutations require an allowlisted browser Origin, as design notes do.
 
-`PNR_PAD_LOCALITY=1` remains experimental and default-off in production. It associates
+Pad locality defaults on (`PNR_PAD_LOCALITY=0` disables it). It associates
 both terminals of an unambiguous small part with the matching physical pads of its IC,
 rather than its centroid or a high-fanout net bounding box. Shared rails and a broad
 hierarchy group alone do not establish ownership. Explicit pad groups and private

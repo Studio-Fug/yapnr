@@ -1945,7 +1945,7 @@ def writeback(
 
     board = pcbnew.LoadBoard(in_pcb)
     strict_outline = (
-        os.environ.get("PNR_NATIVE_OUTLINE") == "1"
+        os.environ.get("PNR_NATIVE_OUTLINE", "1") == "1"
         and graph.outline is not None
         and bool(graph.outline.polygon)
     )

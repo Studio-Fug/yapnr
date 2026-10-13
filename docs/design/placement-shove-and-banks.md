@@ -1,5 +1,9 @@
 # Transactional placement shove and capacitor banks
 
+Current activation policy and combined regression results are tracked in
+[PR #100 defaults](pr100-defaults.md). The measurements below retain their
+original experiment configuration.
+
 The sequential legalizer can strand a late component even when small translations
 of earlier neighbours would leave a much better placement. A local rotation can
 also win its own slot comparison while taking space needed by another component.

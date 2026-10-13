@@ -1,12 +1,14 @@
 # Contextual block layout selection
 
-The existing hierarchy samples one layout per template before parent placement;
-all instances of that template share it. The experimental selector permits each
+The legacy hierarchy samples one layout per template before parent placement;
+all instances of that template share it. The contextual selector permits each
 instance to change its internal layout in response to its parent context.
 
 ## Methods and controls
 
-`PNR_HIER_LAYOUT_SEARCH` defaults to `off`, preserving the previous path.
+`PNR_HIER_LAYOUT_SEARCH` defaults to `alternating`; `off` restores the legacy path.
+Geometric diversity also defaults on (`PNR_HIER_LAYOUT_DIVERSE=0` disables it).
+See [combined default validation](pr100-defaults.md).
 
 | Method        | Change                                                       |
 | ------------- | ------------------------------------------------------------ |
@@ -22,7 +24,7 @@ This preserves alternatives within the existing library; it cannot recover
 layouts discarded earlier by a synthesis budget.
 
 Python callers may supply `LayoutSearch(method=..., rounds=3,
-max_evaluations=96, variants=6, relax_iters=60, diverse=False, score="objective")`
+max_evaluations=96, variants=6, relax_iters=60, diverse=True, score="objective")`
 to `hierarchical_place(..., layout_search=...)`. Budgets bound evaluated proposals,
 rounds and optimization steps. The surrounding campaign bounds wall time.
 

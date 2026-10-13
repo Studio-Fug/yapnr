@@ -62,6 +62,57 @@ class ShoveTest(unittest.TestCase):
         self.assertEqual(records, repair(again, target, con, allow_rotation=False))
         self.assertEqual(a.to_json(), again.to_json())
 
+    def test_pose_caches_preserve_every_transaction_and_channel_cost(self):
+        from pnr.constraints import compile_routing_rules
+        from pnr.place.channels import ChannelModel
+        from pnr.place.power_first import PourChannels
+
+        original_interactions = ChannelModel.interactions
+        for poured in (False, True):
+            for power_channels in ("0", "1"):
+                results = []
+                calls = []
+                for caching in (False, True):
+                    g = board()
+                    target = copy.deepcopy(g)
+                    target.component("C1").pos = (5, 5)
+                    target.component("C1").rot = 90
+                    con = constraints(g)
+                    model = ChannelModel(g, compile_routing_rules(con, ["V", "G"]))
+                    if poured:
+                        model = PourChannels(
+                            model,
+                            dict(
+                                elements=[
+                                    dict(
+                                        kind="bbox",
+                                        role="trunk",
+                                        net="V",
+                                        pins=[[c.ref, "1"] for c in g.components],
+                                    )
+                                ]
+                            ),
+                        )
+                    count = [0]
+
+                    def interactions(*args, **kwargs):
+                        count[0] += 1
+                        return original_interactions(*args, **kwargs)
+
+                    from functools import lru_cache
+
+                    cache = lru_cache if caching else lambda **kwargs: lambda fn: fn
+                    with patch("pnr.place.shove.lru_cache", cache), patch.object(
+                        ChannelModel, "interactions", interactions
+                    ), patch.dict(os.environ, {"PNR_POWER_CHANNELS": power_channels}):
+                        records = repair(g, target, con, channels=model)
+                    self.assertTrue(records)
+                    self.assertFalse(any(hard_violations(g, con, 0.2).values()))
+                    results.append((g.to_json(), records))
+                    calls.append(count[0])
+                self.assertEqual(results[0], results[1], (poured, power_channels))
+                self.assertLess(calls[1], calls[0], (poured, power_channels, calls))
+
     def test_fixed_neighbor_and_failed_transactions_do_not_move(self):
         g = board()
         target = copy.deepcopy(g)
@@ -121,7 +172,7 @@ class ShoveTest(unittest.TestCase):
         with self.assertRaises(ConstraintError):
             constraints(g, placement_bank=[bank, dict(bank, name="other")])
 
-    def test_shove_is_opt_in_and_uses_compiled_constraint_adapter(self):
+    def test_shove_switch_uses_compiled_constraint_adapter(self):
         from pnr.place.legalize import legalize, legalize_constraint_kwargs
 
         g = board()
@@ -135,6 +186,37 @@ class ShoveTest(unittest.TestCase):
             placed = legalize(g, 14, 12, **on)
             self.assertIn("shove", placed.legal_motion)
             self.assertFalse(any(hard_violations(placed, con, 0.2).values()))
+
+    def test_exact_alignment_finishes_before_shove_and_failed_snap_stays_illegal(self):
+        from pnr.place.legalize import legalize, legalize_constraint_kwargs
+        from pnr.place.regions import snap_aligns
+
+        g = board()
+        g.component("C2").courtyard = (2, 2.4)
+        con = constraints(g, align=[dict(name="caps", refs=["C1", "C2"], axis="y", tol_mm=0)])
+        before_snap = []
+
+        def snap(placed, *args):
+            before_snap.append(hard_violations(placed, con))
+            return snap_aligns(placed, *args)
+
+        with patch.dict(os.environ, {"PNR_LEGALIZE_SHOVE": "1"}):
+            kwargs = legalize_constraint_kwargs(g, con, {})
+            with patch("pnr.place.regions.snap_aligns", snap):
+                placed = legalize(g, 14, 12, **kwargs)
+            self.assertTrue(before_snap[0]["align_off"])
+            self.assertFalse(any(hard_violations(placed, con, 0.2).values()))
+            self.assertNotIn("skipped", placed.legal_motion["shove"])
+
+            with patch("pnr.place.regions.snap_aligns", return_value=[]), patch(
+                "pnr.place.shove.repair"
+            ) as shove:
+                failed = legalize(g, 14, 12, **kwargs)
+            shove.assert_not_called()
+            self.assertTrue(hard_violations(failed, con)["align_off"])
+            self.assertEqual(failed.legal_motion["shove"]["skipped"], "illegal baseline")
+            with self.assertRaisesRegex(ValueError, "requires a legal baseline"):
+                repair(failed, g, con)
 
     def test_cascade_cannot_drag_an_anchor_away_from_hard_group(self):
         g = board()

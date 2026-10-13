@@ -878,14 +878,13 @@ class StagedPlacer:
 
 
 class PourChannels:
-    """Channel model where a power trunk shared by two parts pours across their gap.
+    """Reserve power escape corridors until native copper proves a usable pour.
 
-    Copper can pour across a gap only on a net both facing parts carry, so only
-    the trunk nets common to both parts lose their escape demand. A trunk net of
-    just one part (a switch-node row facing an input or output capacitor, say)
-    still needs its corridor, as do gate drive, tap and signal nets. Trunk pins
-    exist only on tier-1 parts, so every exempted pair is a tier-1 pair.
-    ``pnr.place.channels`` is unchanged.
+    By default a shared trunk still needs its current-sized channel: common net
+    identity alone cannot prove enough copper fits between the facing parts.
+    ``PNR_POWER_CHANNELS=0`` restores the legacy exemption for trunk nets common
+    to both parts. Nets carried by just one part, gate drive, taps and signal
+    nets always retain their corridor. ``pnr.place.channels`` is unchanged.
     """
 
     def __init__(self, base, roles):
@@ -902,7 +901,7 @@ class PourChannels:
 
     def poured(self, a, b):
         """Trunk nets both parts carry: realised as a pour across the gap between them."""
-        if os.environ.get("PNR_POWER_CHANNELS") == "1":
+        if os.environ.get("PNR_POWER_CHANNELS", "1") == "1":
             # Shared net identity is not evidence of an adequate filled path.
             # Reserve its escape/current corridor until native copper proves it.
             return set()

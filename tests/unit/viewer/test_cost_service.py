@@ -163,6 +163,44 @@ class CostBindingTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid board checksum"):
             self.service.request("7-abc", "C61")
 
+    def test_changed_smps_source_refuses_cache_before_replay(self):
+        d = json.loads(self.record.read_text())
+        d["runtime_sources"]["smps_cost.py"] = "0" * 64
+        self.record.write_text(json.dumps(d))
+        self.capture["sha256"] = hashlib.sha256(self.record.read_bytes()).hexdigest()
+        self.event("10-abc")
+        with self.assertRaisesRegex(ValueError, "Recorded cost runtime changed"):
+            self.service.request("10-abc", "C61")
+
+    def test_shove_replay_includes_moved_neighbors_and_latest_transaction(self):
+        from types import SimpleNamespace
+
+        from yapnr.viewer.services.cost_compute_capture import legalizer_decision
+
+        decisions = []
+        for index, x in enumerate((7, 8)):
+            d = dict(
+                ref="U1",
+                transaction_kind="shove",
+                scope="Whole-board shove transaction",
+                moves=[dict(ref="C61", after=[x, 6], rotation=180)],
+                before_terms={"target_displacement": 3 - index},
+                after_terms={"target_displacement": 2 - index},
+                total=2 - index,
+            )
+            path = self.record.parent / ("shove-" + str(index) + ".json")
+            raw = json.dumps(d).encode()
+            path.write_bytes(raw)
+            decisions.append(dict(path=str(path), sha256=hashlib.sha256(raw).hexdigest()))
+        report = legalizer_decision(
+            dict(decisions=decisions), self.record, SimpleNamespace(side="top"), "C61"
+        )
+        self.assertEqual(report["component"]["position"], [8, 6])
+        self.assertEqual(report["component"]["rotation"], 180)
+        self.assertIsNone(report["component"]["total"])
+        self.assertEqual(report["board_total"], 1)
+        self.assertEqual(report["decision_context"]["decisions_for_component"], 2)
+
     def test_record_requires_matching_replay_model(self):
         d = json.loads(self.record.read_text())
         self.assertEqual(d["runtime_sources"]["cost_inspect.py"], self.service.model_hash)

@@ -12,7 +12,7 @@ import unittest
 import yaml
 
 from pnr.constraints import compile_constraints
-from pnr.graph import BoardGraph
+from pnr.graph import BoardGraph, BoardOutline
 from pnr.place import place
 from pnr.place.geometry import courtyard_rect, outline_size
 
@@ -25,6 +25,9 @@ def _load():
         graph = BoardGraph.from_json(fh.read())
     with open(os.path.join(FIXTURE, "constraints.yaml"), encoding="utf-8") as fh:
         constraints = compile_constraints(yaml.safe_load(fh), graph.refs)
+    # This placement-only fixture deliberately reframes an exported assembly row.
+    # Rebase its outline explicitly; native-board ingest/writeback keeps its contour.
+    graph.outline = BoardOutline(constraints.board.width, constraints.board.height)
     return graph, constraints
 
 

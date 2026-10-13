@@ -354,7 +354,7 @@ def main():
         final=last,
         feedback=str((p / "feedback.json").resolve()),
     )
-    if os.environ.get("PNR_SMPS_LAYOUT") == "1":
+    if os.environ.get("PNR_SMPS_LAYOUT", "1") == "1":
         result.update(smps_side_fields(audit, json.loads(rules.read_text())))
     from pnr.si import enabled as si_enabled
 

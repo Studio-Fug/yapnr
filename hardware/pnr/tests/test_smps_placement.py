@@ -60,6 +60,29 @@ def points(g):
 
 
 class SMPSPlacement(unittest.TestCase):
+    def test_defaults_enable_features_and_explicit_zero_disables_them(self):
+        from pnr import placement_banks, repair_flags
+        from pnr.place import pad_locality, shove, smps_cost
+
+        clean = {k: v for k, v in os.environ.items() if not k.startswith("PNR_")}
+        with patch.dict(os.environ, clean, clear=True):
+            for feature in (placement_banks, pad_locality, shove, smps_cost):
+                self.assertTrue(feature.enabled())
+            active = repair_flags.key().split(",")
+            self.assertIn("PNR_NATIVE_OUTLINE", active)
+            self.assertIn("PNR_POWER_BRANCHES", active)
+            with patch.dict(os.environ, {k: "0" for k in active}):
+                self.assertIsNone(repair_flags.key())
+            with patch.dict(
+                os.environ,
+                PNR_PLACEMENT_BANKS="0",
+                PNR_PAD_LOCALITY="0",
+                PNR_LEGALIZE_SHOVE="0",
+                PNR_SMPS_PLACEMENT="0",
+            ):
+                for feature in (placement_banks, pad_locality, shove, smps_cost):
+                    self.assertFalse(feature.enabled())
+
     def test_numpy_torch_batch_and_gradient_agree(self):
         g, c = fixture()
         cost = Cost(g, c)
@@ -102,7 +125,7 @@ class SMPSPlacement(unittest.TestCase):
         self.assertEqual(g.to_json(), before)
         np.testing.assert_array_equal(Slots(g, c)(comp, [], xs, ys), [0, 0])
 
-    def test_default_off_and_missing_terminal_rejected(self):
+    def test_explicit_opt_out_and_missing_terminal_rejected(self):
         g, c = fixture()
         with patch.dict(os.environ, {"PNR_SMPS_PLACEMENT": "0", "PNR_PAD_LOCALITY": "0"}):
             self.assertEqual(legalize_kwargs(g, c), {})

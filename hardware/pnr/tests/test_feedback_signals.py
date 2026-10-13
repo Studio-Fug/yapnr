@@ -147,6 +147,7 @@ class RouterKeyTest(unittest.TestCase):
         names = ["PNR_COMPACT", "PNR_SHRINK"] + ["PNR_COMPACT_" + p for p in compact_flags.PARTS]
         names += list(legalize_flags.FLAGS)
         clean = {k: v for k, v in os.environ.items() if k not in names}
+        clean.update(PNR_LEGALIZE_SHOVE="0", PNR_PLACEMENT_BANKS="0")
 
         def key(**env):
             with mock.patch.dict(os.environ, dict(clean, **env), clear=True):
@@ -158,7 +159,8 @@ class RouterKeyTest(unittest.TestCase):
         self.assertTrue(signals.key_string(off).endswith("|%s|2" % off["code"]))
         on = key(PNR_COMPACT="1")
         self.assertRegex(on["compact"], "^[0-9a-f]{12}$")
-        self.assertIn("|compact=%s|%s|2" % (on["compact"], on["code"]), signals.key_string(on))
+        self.assertIn("|compact=%s|" % on["compact"], signals.key_string(on))
+        self.assertTrue(signals.key_string(on).endswith("|%s|2" % on["code"]))
         with mock.patch.dict(os.environ, dict(clean, PNR_COMPACT="1"), clear=True):
             conf = compact_flags.settings()
         self.assertEqual(conf["parts"], sorted(compact_flags.PARTS))

@@ -137,10 +137,10 @@ def hierarchical_place(
     *,
     layout_search=None,
 ):
-    """Place hierarchy; optional contextual variant search is default off.
+    """Place hierarchy with bounded contextual variant search by default.
 
     ``layout_search`` is a LayoutSearch configuration; otherwise the
-    PNR_HIER_LAYOUT_SEARCH environment setting selects experimental methods.
+    PNR_HIER_LAYOUT_SEARCH selects a method; off restores the legacy selection.
     """
     from pnr.hier.layout_search import LayoutSearch, search
 
@@ -280,12 +280,9 @@ def _hierarchical_place(
     }
     out = dict(blocks=choice, macro_legal=report.legal, macros=macros)
     if selection is not None:
-        from pnr.hier.layout_search import record_id
-        from pnr.place.metrics import hard_violations
+        from pnr.hier.layout_search import macro_clearance_violations, record_id
 
-        out["macro_clearance_violations"] = hard_violations(
-            placed_macro, mcon, clearance=mcon.board.default_clearance_mm
-        )
+        out["macro_clearance_violations"] = macro_clearance_violations(placed_macro, mcon)
         out["macro_poses"] = {c.ref: [*c.pos, c.rot, c.side] for c in placed_macro.components}
         for b in blocks:
             out["blocks"][b.name]["layout_sha256"] = record_id(library[b.name][selection[b.name]])

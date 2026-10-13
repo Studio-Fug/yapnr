@@ -237,8 +237,8 @@ class PlacementLab:
                     seed=seed,
                     iterations=iterations,
                     frame_delay_ms=delay,
-                    shove=body.get("shove", False),
-                    placement_banks=body.get("placement_banks", False),
+                    shove=body.get("shove", True),
+                    placement_banks=body.get("placement_banks", True),
                     legalize_only=body.get("legalize_only", False),
                     annealing=annealing,
                     engine_sources={

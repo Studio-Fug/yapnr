@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 import os
+from functools import lru_cache
 
 from .geometry import Rect, courtyard_rect, placement_rects, resolve_fixed_poses
 from .metrics import hard_violations, pose_checker
@@ -23,7 +24,51 @@ MAX_NEIGHBOR_MOVE_MM = 4.0
 
 
 def enabled():
-    return os.environ.get("PNR_LEGALIZE_SHOVE") == "1"
+    return os.environ.get("PNR_LEGALIZE_SHOVE", "1") == "1"
+
+
+def _memoized_channels(model, comps):
+    """Cache scalar pair geometry locally, retaining the model's summation order.
+
+    A cascade changes only poses; pads, nets and fabrication rules are fixed for
+    this repair. Keep caches bounded and private to it. Copy the built-in channel
+    adapters so callers and other searches never see a replaced method; unknown
+    adapters retain their original behavior.
+    """
+    from .channels import ChannelModel
+    from .power_first import PourChannels
+
+    if type(model) not in (ChannelModel, PourChannels):
+        return model
+    cached = object.__new__(type(model))
+    cached.__dict__ = model.__dict__.copy()
+    if type(model) is PourChannels:
+        cached.base = _memoized_channels(model.base, comps)
+        return cached
+
+    @lru_cache(maxsize=16384)
+    def interactions(a, axy, arot, aside, b, bxy, brot, bside, x, y):
+        # Pose arguments are the immutable cache key; the live components have
+        # precisely those poses when the cache is populated.
+        return tuple(model.interactions(comps[a], comps[b], x, y))
+
+    def at(comp, other, xs=None, ys=None):
+        x, y = comp.pos if xs is None else (xs, ys)
+        return interactions(
+            comp.ref,
+            tuple(comp.pos),
+            comp.rot,
+            comp.side,
+            other.ref,
+            tuple(other.pos),
+            other.rot,
+            other.side,
+            x,
+            y,
+        )
+
+    cached.interactions = at
+    return cached
 
 
 def repair(
@@ -51,6 +96,7 @@ def repair(
     """
     comps = {c.ref: c for c in graph.components}
     target = {c.ref: c for c in targets.components}
+    channels = _memoized_channels(channels, comps)
     fixed = set(resolve_fixed_poses(graph, constraints))
     held = fixed | {
         c.ref
@@ -101,6 +147,11 @@ def repair(
             (s, Rect(r.cx, r.cy, r.w * factor + 2 * margin, r.h * factor + 2 * margin))
             for s, r in rects
         ]
+
+    @lru_cache(maxsize=4096)
+    def cached_regions(ref, position, rotation):
+        # These are the only component attributes modified by this search.
+        return tuple(regions(comps[ref]))
 
     def poses():
         return {r: (tuple(c.pos), c.rot) for r, c in comps.items()}
@@ -158,7 +209,7 @@ def repair(
         return sum(math.dist(xy, target[r].pos) ** 2 for r, (xy, _) in state.items())
 
     def collision(moved):
-        geometry = {r: regions(c) for r, c in comps.items()}
+        geometry = {r: cached_regions(r, tuple(c.pos), c.rot) for r, c in comps.items()}
         for r in sorted(moved):
             for other in sorted(comps):
                 if other == r or (other in moved and other < r):

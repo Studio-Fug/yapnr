@@ -9,7 +9,18 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
-- **SMPS closure investigation**: default-off constraint-derived placement cost,
+- **PR #100 default activation**: all new engine repairs enabled with explicit
+  opt-outs; alternating contextual layout search and diverse portfolios selected.
+  Full combined native regression validation is in progress. The 310-target unit
+  suite passes; the final hierarchy-spacing correction has 23 passing focused tests
+  and is being checked again in the complete suite. Main and initial default-enabled
+  native ladders pass all eight cases at seeds 0 and 1. Main showcases pass 5/5. Transactional shove
+  caches cut a representative placement from 19.64 to 3.84 seconds with identical
+  decisions and final geometry. Native collectors and all 27 browser tests pass.
+  Do not merge until final combined tests, routing comparison and CI finish.
+  See [activation and validation](docs/design/pr100-defaults.md).
+
+- **SMPS closure investigation**: constraint-derived placement cost,
   copper-only pad ingest, compact current-sized source collectors and native
   array fit. All 310
   Bazel targets pass; native collector regressions pass at all four rotations.
@@ -34,7 +45,7 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
   Unknowns cannot qualify candidates. Full AC/thermal extraction is not implemented.
   See [coverage and limits](docs/design/smps-validation.md).
 
-- **Contextual hierarchical layouts**: default-off independent, frozen, alternating
+- **Contextual hierarchical layouts**: independent, frozen, alternating
   and paired variants with optional geometric diversity. Four synthetic cases,
   six arms and three seeds: 72/72 legal. Parent relaxation helps capacitor banks;
   diverse shortlists help crowded libraries; paired swaps add no benefit here.
@@ -42,7 +53,7 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
   mixed evidence, not a routing win. Power-first improves both converter seed scores,
   while bank compactness is mixed. See [study](docs/design/contextual-block-layouts.md).
 
-- **Experimental placement shove and capacitor banks**: default-off transactional
+- **Placement shove and capacitor banks**: transactional
   repair revisits the completed packer's decisions, recording every affected pose
   and whole-board cost. Same frozen 33-part converter: total motion 46.911 → 37.199 mm,
   max 9.633 → 3.578 mm, turns 2 → 0, hard placement checks pass; R7 unchanged.

@@ -181,6 +181,24 @@ class CostService:
                 status="unavailable",
                 reason="This component was not evaluated in the selected routing-probe phase.",
             )
+        allowed_sources = {
+            "model.py",
+            "legalize.py",
+            "cost_inspect.py",
+            "cost_capture.py",
+            "pad_locality.py",
+            "smps_cost.py",
+            "power_first.py",
+            "../power_topology.py",
+            "shove.py",
+            "../placement_banks.py",
+        }
+        for name, source_sha in document.get("runtime_sources", {}).items():
+            if name not in allowed_sources:
+                raise ValueError("Invalid recorded cost source binding")
+            source = self.runtime / "pnr/place" / name
+            if hashlib.sha256(source.read_bytes()).hexdigest() != source_sha:
+                raise ValueError("Recorded cost runtime changed; refuse stale cost cache")
         for name, sha in document.get("probe_sources", {}).items():
             if name not in ("relocate.py", "batch_relocate.py"):
                 raise ValueError("Invalid routing-probe source binding")

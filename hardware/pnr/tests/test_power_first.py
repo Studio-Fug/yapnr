@@ -135,6 +135,7 @@ SENSE = (("U1", "VIN", ("5",), 0.1), ("U1", "SW", ("6",), 0.2), ("U1", "GND", ("
 
 
 class Derivation(unittest.TestCase):
+    @mock.patch.dict(os.environ, PNR_POWER_BRANCHES="0")
     def test_goldens(self):
         for name in ("converter", "pd"):
             with self.subTest(name):
@@ -143,6 +144,7 @@ class Derivation(unittest.TestCase):
                     plain(derive(g, c, r)), json.loads((DATA / f"{name}.golden.json").read_text())
                 )
 
+    @mock.patch.dict(os.environ, PNR_POWER_BRANCHES="0")
     def test_converter_and_pd_roles(self):
         g, c, r = fixture("converter")
         roles = derive(g, c, r)
@@ -332,11 +334,11 @@ class Objective(unittest.TestCase):
             cost_inspect.Objective(g, c, pf_state={"w_ov": 1.0})
         report = cost_inspect.Objective(g, c).report()
         self.assertEqual(
-            len(next(iter(report["components"].values()))["terms"]), cost_inspect.BASE_TERMS
+            len(next(iter(report["components"].values()))["terms"]), cost_inspect.BASE_TERMS + 2
         )
         report = cost_inspect.Objective(g, c, roles=derive(g, c, r)).report()
         self.assertEqual(
-            len(next(iter(report["components"].values()))["terms"]), len(cost_inspect.TERMS)
+            len(next(iter(report["components"].values()))["terms"]), len(cost_inspect.TERMS) + 2
         )
         self.assertAlmostEqual(
             report["board_total"], sum(v["total"] for v in report["components"].values()), places=6
@@ -492,6 +494,7 @@ class Placement(unittest.TestCase):
 
 
 class Legalization(unittest.TestCase):
+    @mock.patch.dict(os.environ, PNR_POWER_CHANNELS="0")
     def test_pour_exempts_only_trunks_both_parts_carry(self):
         from pnr.place.channels import ChannelModel
         from pnr.place.power_first import PourChannels
@@ -568,7 +571,8 @@ class Ranking(unittest.TestCase):
             power_quality=dict(q_place=band * 5.0, q_band=band, crossings=cross),
         )
 
-    def test_rank_key_default_unchanged(self):
+    @mock.patch.dict(os.environ, PNR_POWER_BRANCHES="0", PNR_SMPS_LAYOUT="0")
+    def test_rank_key_explicit_legacy_unchanged(self):
         from pnr.hier.synth_native import rank_key
 
         with mock.patch.dict(os.environ, {}, clear=False):
@@ -735,6 +739,7 @@ class Routed(unittest.TestCase):
         )
         self.assertEqual(drc_unconnected(drc), {"P": 1})
 
+    @mock.patch.dict(os.environ, PNR_POWER_BRANCHES="0")
     def test_self_check_mismatch_opens_every_hot_link(self):
         from pnr.hier.power_quality import analyse
 

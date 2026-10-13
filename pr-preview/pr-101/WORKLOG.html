@@ -317,8 +317,11 @@ retry/budget/pause handling, manifest evidence and review UI. Synthetic R5/R6/Q1
 examples distinguish a partial fix from a full pass; they make no native routing
 claim. Forty-four focused tests pass, including the 27 parent-authored
 acceptance cases now retained in the regression suite: stale-head, partial-fix,
-pause, concurrency and replay. Pre-commit checks pass. Full Bazel validation is in progress; local
-runfile footprint exceeded the available build volume. See <a class="reference internal" href="docs/feedback-resolution.html"><span class="std std-doc">protocol and receipts</span></a>.</p></li>
+pause, concurrency and replay. All 313 regular Bazel targets and pre-commit checks
+pass locally. Linux CI passes; macOS exposed an existing legalization suite’s
+undersized 60-second limit. Classify that search suite as medium, retaining all
+assertions and search budgets; final CI remains pending. See
+<a class="reference internal" href="docs/feedback-resolution.html"><span class="std std-doc">protocol and receipts</span></a>.</p></li>
 <li><p><strong>PR #100 default activation</strong>: all thirteen new Boolean repairs enabled with
 explicit opt-outs; alternating contextual search and diverse portfolios selected.
 Runtime <code class="docutils literal notranslate"><span class="pre">c50ffdfc</span></code> passes all 310 regular Bazel targets locally and on Linux/macOS

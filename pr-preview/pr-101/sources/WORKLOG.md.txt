@@ -15,8 +15,11 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
   examples distinguish a partial fix from a full pass; they make no native routing
   claim. Forty-four focused tests pass, including the 27 parent-authored
   acceptance cases now retained in the regression suite: stale-head, partial-fix,
-  pause, concurrency and replay. Pre-commit checks pass. Full Bazel validation is in progress; local
-  runfile footprint exceeded the available build volume. See [protocol and receipts](docs/feedback-resolution.md).
+  pause, concurrency and replay. All 313 regular Bazel targets and pre-commit checks
+  pass locally. Linux CI passes; macOS exposed an existing legalization suite's
+  undersized 60-second limit. Classify that search suite as medium, retaining all
+  assertions and search budgets; final CI remains pending. See
+  [protocol and receipts](docs/feedback-resolution.md).
 
 - **PR #100 default activation**: all thirteen new Boolean repairs enabled with
   explicit opt-outs; alternating contextual search and diverse portfolios selected.

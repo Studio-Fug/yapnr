@@ -301,6 +301,9 @@ class Viewer:
         self._init_notes()
         self._init_agent()
         self._init_origins()
+        from yapnr.viewer.services.connection_review import ConnectionReview
+
+        self.connection_review = ConnectionReview(self.root)
 
     # ------------------------------------------------------------------ services
     def _init_controls(self):
@@ -1185,6 +1188,39 @@ class Handler(BaseHTTPRequestHandler):
     def get_about(self, path):
         return self.send(self.viewer.about())
 
+    def get_feedback(self, path):
+        from yapnr.feedback import Feedback
+
+        store = Feedback(self.viewer.root)
+        query = self.query()
+        if "artifact" in query:
+            raw = store.object(query["artifact"][0])
+            # SVG is served as a sandboxed document; model-authored SVG cannot run scripts.
+            kind = (
+                "image/png"
+                if raw.startswith(b"\x89PNG")
+                else "image/jpeg" if raw.startswith(b"\xff\xd8") else "image/svg+xml"
+            )
+            return self.send_raw(
+                raw,
+                kind,
+                "no-store",
+                [
+                    (
+                        "Content-Security-Policy",
+                        "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+                    )
+                ],
+            )
+        return self.send(store.query(query.get("id", [None])[0]))
+
+    def get_connection_review(self, path):
+        from yapnr.viewer.services.connection_review import schema
+
+        if path.endswith("/v1"):
+            return self.send(schema())
+        return self.send(self.viewer.connection_review.list(self.query().get("scope", [""])[0]))
+
     def get_placement_lab(self, path):
         q = self.query()
         try:
@@ -1462,7 +1498,14 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/agent/chat" and origin not in v.origins():
             return self.send({"error": "origin required for the assistant"}, 403)
         if (
-            self.path in ("/api/placement-lab", "/api/placement-lab/v1")
+            self.path
+            in (
+                "/api/placement-lab",
+                "/api/placement-lab/v1",
+                "/api/feedback/v1",
+                "/api/connection-review/v1",
+                "/api/connection-review/decision",
+            )
             and origin not in v.origins()
         ):
             return self.send({"error": "origin required for placement runs"}, 403)
@@ -1490,6 +1533,32 @@ class Handler(BaseHTTPRequestHandler):
                 from yapnr.viewer.services.placement_api import PlacementAPI
 
                 return self.send(PlacementAPI(v.placement_lab, v.notes).call(body))
+            if self.path == "/api/feedback/v1":
+                from yapnr.feedback import Conflict as FeedbackConflict
+                from yapnr.feedback import Feedback
+
+                try:
+                    return self.send(Feedback(v.root).api(body))
+                except FeedbackConflict as error:
+                    return self.send({"error": str(error)}, 409)
+            if self.path in ("/api/connection-review/v1", "/api/connection-review/decision"):
+                from yapnr.viewer.services.connection_review import Conflict
+
+                try:
+                    if self.path.endswith("/decision"):
+                        return self.send(
+                            v.connection_review.decide(
+                                body.get("id"),
+                                body.get("expect_revision"),
+                                body.get("verdict"),
+                                body.get("body", ""),
+                                body.get("rectangles", []),
+                            )
+                        )
+                    lanes = v.current(full=False)["lanes"] if body.get("action") == "scan" else None
+                    return self.send(v.connection_review.call(body, lanes))
+                except Conflict as error:
+                    return self.send({"error": str(error)}, 409)
             if self.path == "/api/placement-lab":
                 return self.send(v.placement_lab.command(body))
             if self.path == "/api/controls":
@@ -1632,6 +1701,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 GET_ROUTES = {
+    "/api/feedback/v1": Handler.get_feedback,
+    "/api/connection-review/v1": Handler.get_connection_review,
+    "/api/connection-review": Handler.get_connection_review,
     "/api/placement-lab/v1": Handler.get_placement_lab,
     "/api/placement-lab": Handler.get_placement_lab,
     "/api/placement-lab/run": Handler.get_placement_lab,

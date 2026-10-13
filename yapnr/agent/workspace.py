@@ -248,6 +248,11 @@ def index(project):
                 if (folder / "note-threads.json").is_file()
                 else None
             ),
+            "feedback": (
+                ".yapnr/feedback/manifest.json"
+                if (root / ".yapnr/feedback/manifest.json").is_file()
+                else None
+            ),
             "workflow": (
                 ".yapnr/workflow/state.json"
                 if (root / ".yapnr/workflow/state.json").is_file()

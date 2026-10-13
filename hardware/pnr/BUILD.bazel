@@ -2624,7 +2624,9 @@ py_test(
 # legalizer without them.
 py_test(
     name = "legal_options_test",
-    size = "small",
+    # Repeated real legalization searches exceed small's 60 s on shared ARM64
+    # CI. Preserve all cases and search budgets; medium allows 300 s.
+    size = "medium",
     srcs = ["tests/test_legal_options.py"],
     imports = ["."],
     legacy_create_init = False,

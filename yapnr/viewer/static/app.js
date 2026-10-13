@@ -1,7 +1,7 @@
 if(window.parent!==window&&new URLSearchParams(location.search).get('workspace')==='1')document.body.classList.add('workspace-embedded');
 'use strict';
 const $=id=>document.getElementById(id), canvas=$('board'),ctx=canvas.getContext('2d');
-let state=null,pinned=null,pinId=null,laneId=null,phase='live',phaseGeo=null,annotations=[],drawing=false,drag=null,preview=null,view={scale:8,x:40,y:500},fitted=false,revision=-1;
+let state=null,pinned=null,pinId=null,laneId=new URLSearchParams(location.search).get('lane')||null,phase='live',phaseGeo=null,annotations=[],drawing=false,drag=null,preview=null,view={scale:8,x:40,y:500},fitted=false,revision=-1;
 // Gesture performance (see docs/viewer.md "Rendering and performance"): gestureCache is an
 // offscreen raster of the static board layers, blitted with a transform while a gesture is live
 // instead of repainting thousands of vias/tracks every frame; gestureCacheDirty: it does not match
@@ -294,6 +294,9 @@ function annotationChanged(){draftRevision++;backupDraft();$('saved').textConten
 async function restoreDraft(){if(draftRestored||!state?.run)return;draftRestored=true;
  let raw;try{raw=window.localStorage?.getItem(draftKey(state.run));}catch(e){return}if(!raw)return;
  try{let body=JSON.parse(raw);if(body.run!==state.run)return;
+  // An explicit experiment link wins over a draft from another lane; retain that backup.
+  let linkedLane=new URLSearchParams(location.search).get('lane');
+  if(linkedLane&&body.view?.lane!==linkedLane){$('saved').textContent='An annotation draft for another lane is retained in this browser.';return}
   if(!body.pin_id){$('note').value=body.note||'';$('saved').textContent='Recovered a note without a pinned board. Select its checkpoint before saving.';return}
   let recovered=await api('/api/pins/'+body.pin_id);if(recovered.run!==state.run)throw Error('draft belongs to a different run');
   let selected=body.view,entry=recovered.lanes[selected.lane];if(!entry)throw Error('draft lane is missing');

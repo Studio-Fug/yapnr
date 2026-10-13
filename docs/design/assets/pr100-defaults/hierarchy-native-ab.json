@@ -1,0 +1,26 @@
+{
+  "renderer": "pnr.animate.render.Renderer.board",
+  "camera": "same outline_camera for both boards",
+  "frames": [
+    {
+      "label": "A: main",
+      "board_sha256": "6855eb717a32b0582f25112bf395b9168fa9aaec2f17f85af91298de5bbbc302",
+      "native_copper_blob": "b481fba5b2a6abab934e100a3bd56fd629c81e60cff7ac88db739a80fdb96d93",
+      "via_count": 41,
+      "copper_length_mm": 487.012909,
+      "passed": true,
+      "opens": 0,
+      "violations": 0
+    },
+    {
+      "label": "B: PR #100 | 7d4f1b10",
+      "board_sha256": "7797d7a1587c38b83ccb0fa46be2cbd1e6d7eb73ef5dc6386742b73ba33db799",
+      "native_copper_blob": "9fb21814ff0ae911c57dd7addc95e1988e82cb0508aeff30338c23b8efd61d52",
+      "via_count": 43,
+      "copper_length_mm": 443.600134,
+      "passed": true,
+      "opens": 0,
+      "violations": 0
+    }
+  ]
+}

@@ -82,7 +82,28 @@ internal group radii become soft search preferences; current, clearance and SMPS
 acceptance limits do not change. Controller-capacitor catalogs and parent packing
 still have to fit; actual current-array construction remains a native gate.
 Six complete placements pass all nine geometric checks and legality. The first
-two distinct cores also pass native array construction; both are still routing.
+two distinct cores also pass native array construction. Their completed native
+runs retain nine and twelve unconnected items, respectively, with zero native
+geometric DRC violations. They fail nine/eight SMPS checks and leave eight/nine
+checks unqualified. The first has zero unjustified subwidth tracks; the second
+has one. Neither qualifies.
+
+## Native routing counterexamples
+
+Routing the gate signals before power trunks is insufficient in the six generated
+placements: every layout routes one zero-via gate path within 8 mm, but the other
+requires 9.958 or 10.831 mm in the tested native surface search. Straight-line
+placement limits miss these pad-obstacle detours. This is a failure of the tested
+catalog/search, not a proof that no valid placement exists.
+
+A separate controller-only counterexample retains every controller pad and the
+original 5 A RMS / 16 A peak terminal contracts. The native power planner still
+returns `no_current_sized_channel` for the SW2 peripheral/exposed-pad connection,
+with zero qualified source-access ports. No surrounding components or routed
+aggressors are present. This isolates pin-access geometry and current assignment
+as unresolved factors; it does not prove physical impossibility or authorize a
+smaller current budget. The reference design routes and actual branch loads need
+to inform the next terminal-access experiment.
 
 ## Remaining gates
 

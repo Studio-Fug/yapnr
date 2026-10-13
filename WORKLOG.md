@@ -20,9 +20,13 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
   [measured scope and native animation](docs/design/smps-closure.md).
   Coupled feasibility traced to hard internal group radii and symmetric array
   reserves: softening only those heuristics yields six legal full placements
-  passing all nine geometry checks. Two distinct cores are routing under native
-  array checks, with all current/clearance/SMPS gates unchanged. Do not repeat
-  frozen failures or call placement passes full qualification.
+  passing all nine geometry checks. Two distinct cores finish with 9/12 opens,
+  zero geometric DRC violations, 9/8 SMPS failures and 8/9 unknowns. All six
+  generated layouts fail at least one native zero-via gate-length check. An
+  isolated controller also has no current-sized SW2 access under the full source
+  envelope. Next: pad-obstacle-aware gate placement and evidence-based controller
+  terminal access/current assignment. Do not repeat frozen routing failures or
+  call placement passes full qualification.
 
 - **SMPS validator**: ten guidance-derived check types, 28 provisional Mini profile
   requirements, native filled-plane coverage, explicit track paths, and exact-board

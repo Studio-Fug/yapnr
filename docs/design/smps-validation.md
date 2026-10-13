@@ -97,3 +97,10 @@ research profile. The screen detects input-capacitor access, gate routing,
 switch-node extent and ground-reference defects even when native DRC reports
 zero geometric violations. Missing ripple, stability and thermal evidence remains
 unqualified. See [measured results](assets/mini-pad-locality/layout-choice-study.json).
+
+The nine terminal-geometry checks were also applied to all six saved converter
+power-placement candidates. Ordinary placement and power-first each fail seven
+checks at both seeds. Power-first with banks fails five at seed 0 and seven at
+seed 1. Lower aggregate power-placement cost does not by itself satisfy the new
+SMPS criteria. This comparison evaluates placement only; the other nineteen
+copper/electrical checks still require their own evidence.

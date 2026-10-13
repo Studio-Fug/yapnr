@@ -3220,7 +3220,11 @@ py_test(
 py_test(
     name = "smps_test",
     size = "small",
-    srcs = ["tests/test_smps.py"],
+    srcs = [
+        "tests/test_smps.py",
+        "pnr/mc/__init__.py",
+        "pnr/mc/halving.py",
+    ],
     imports = ["."],
     main = "tests/test_smps.py",
     deps = [":pnr", ":pnr_hier"],

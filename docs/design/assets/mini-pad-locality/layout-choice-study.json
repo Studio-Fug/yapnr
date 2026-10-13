@@ -6721,5 +6721,1178 @@
       "placed_sha256": "856ff07336b96699ba02e2b5396e0bf115ffdfabff10e5f461b4ea41d7f68130",
       "seconds": 1.8038694999995641
     }
-  ]
+  ],
+  "power_smps_geometry": {
+    "scope": "Placement-only nine terminal checks; routed/electrical checks not evaluated",
+    "results": [
+      {
+        "mode": "ordinary",
+        "seed": 0,
+        "graph_sha256": "2e14e454f3d269f7508e6813a6ef76f033141d9cf98bcb8c99b050b2cdb7e972",
+        "report": {
+          "schema": "pnr-smps-layout-v1",
+          "board_sha256": null,
+          "checks": [
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Input commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-IN-LOOP",
+              "metrics": {
+                "perimeter_mm": 56.75366416564913,
+                "area_mm2": 96.79095,
+                "polygon": [
+                  [12.5, 22.325],
+                  [23.47, 24.35],
+                  [17.53, 28.16],
+                  [4.9, 18.47],
+                  [1.09, 12.53],
+                  [12.5, 20.925]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "perimeter_mm",
+                  "actual": 56.75366416564913,
+                  "limit": 30,
+                  "relation": "max"
+                },
+                {
+                  "metric": "area_mm2",
+                  "actual": 96.79095,
+                  "limit": 45,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Output commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-OUT-LOOP",
+              "metrics": {
+                "perimeter_mm": 10.000026158383546,
+                "area_mm2": 4.333475000000007,
+                "polygon": [
+                  [11.775, 19.295],
+                  [15.17, 20.75],
+                  [14.33, 20.75],
+                  [12.995, 17.625]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-POS",
+              "metrics": {
+                "mm": 11.15533616705476
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 11.15533616705476,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-RETURN",
+              "metrics": {
+                "mm": 14.165596528208757
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 14.165596528208757,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-POS",
+              "metrics": {
+                "mm": 3.6936499563439944
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 3.6936499563439944,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-RETURN",
+              "metrics": {
+                "mm": 3.3982127655578016
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 3.3982127655578016,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-VCC-POS",
+              "metrics": {
+                "mm": 2.133008438801873
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT1",
+              "metrics": {
+                "mm": 3.4021206621752853
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 3.4021206621752853,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT2",
+              "metrics": {
+                "mm": 3.2602492236023926
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 3.2602492236023926,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            }
+          ],
+          "failure_count": 7,
+          "unqualified_count": 0,
+          "status": "fail",
+          "qualified": false,
+          "scope": "SMPS requirement screening; native DRC and electrical qualification remain separate"
+        }
+      },
+      {
+        "mode": "ordinary",
+        "seed": 1,
+        "graph_sha256": "fa3568e649be0d38406c3bcaaba245112fa13b8f632d095b04cc990c4e6e789d",
+        "report": {
+          "schema": "pnr-smps-layout-v1",
+          "board_sha256": null,
+          "checks": [
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Input commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-IN-LOOP",
+              "metrics": {
+                "perimeter_mm": 46.427213519102665,
+                "area_mm2": 142.4699375,
+                "polygon": [
+                  [13.925, 17.5],
+                  [7.279999999999999, 6.275],
+                  [13.22, 2.465],
+                  [19.475, 3.1550000000000002],
+                  [23.285, 9.094999999999999],
+                  [15.325, 17.5]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "perimeter_mm",
+                  "actual": 46.427213519102665,
+                  "limit": 30,
+                  "relation": "max"
+                },
+                {
+                  "metric": "area_mm2",
+                  "actual": 142.4699375,
+                  "limit": 45,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Output commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-OUT-LOOP",
+              "metrics": {
+                "perimeter_mm": 12.185185733948806,
+                "area_mm2": 4.581750000000028,
+                "polygon": [
+                  [16.525, 15.795],
+                  [21.205, 15.75],
+                  [22.045, 15.75],
+                  [17.745, 14.125]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "perimeter_mm",
+                  "actual": 12.185185733948806,
+                  "limit": 12,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-POS",
+              "metrics": {
+                "mm": 13.044410680440876
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 13.044410680440876,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-RETURN",
+              "metrics": {
+                "mm": 11.576079863235224
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 11.576079863235224,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-POS",
+              "metrics": {
+                "mm": 4.680216341153472
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 4.680216341153472,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-RETURN",
+              "metrics": {
+                "mm": 4.59680595631358
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 4.59680595631358,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-VCC-POS",
+              "metrics": {
+                "mm": 5.738878374734909
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 5.738878374734909,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT1",
+              "metrics": {
+                "mm": 1.40556927968706
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT2",
+              "metrics": {
+                "mm": 1.6773863597871532
+              },
+              "status": "pass",
+              "failures": []
+            }
+          ],
+          "failure_count": 7,
+          "unqualified_count": 0,
+          "status": "fail",
+          "qualified": false,
+          "scope": "SMPS requirement screening; native DRC and electrical qualification remain separate"
+        }
+      },
+      {
+        "mode": "power-first",
+        "seed": 0,
+        "graph_sha256": "bd3ef59c084626b2722f8929f5743655bc0fbd0b92b2976f820ebedff9f4ccd6",
+        "report": {
+          "schema": "pnr-smps-layout-v1",
+          "board_sha256": null,
+          "checks": [
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Input commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-IN-LOOP",
+              "metrics": {
+                "perimeter_mm": 40.94828948207749,
+                "area_mm2": 54.36561249999997,
+                "polygon": [
+                  [20.25, 20.575],
+                  [25.025, 28.72],
+                  [21.215, 22.78],
+                  [14.225, 21.905],
+                  [18.035, 27.845],
+                  [20.25, 19.175]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "perimeter_mm",
+                  "actual": 40.94828948207749,
+                  "limit": 30,
+                  "relation": "max"
+                },
+                {
+                  "metric": "area_mm2",
+                  "actual": 54.36561249999997,
+                  "limit": 45,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Output commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-OUT-LOOP",
+              "metrics": {
+                "perimeter_mm": 11.804200779113717,
+                "area_mm2": 3.5550250000000005,
+                "polygon": [
+                  [19.225, 13.955],
+                  [22.5, 12.205],
+                  [22.5, 13.045],
+                  [18.005, 15.625]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-POS",
+              "metrics": {
+                "mm": 9.441485582258757
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 9.441485582258757,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-RETURN",
+              "metrics": {
+                "mm": 8.94847053970677
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 8.94847053970677,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-POS",
+              "metrics": {
+                "mm": 3.7132364589398277
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 3.7132364589398277,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-RETURN",
+              "metrics": {
+                "mm": 5.182800883692138
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 5.182800883692138,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-VCC-POS",
+              "metrics": {
+                "mm": 6.472806578293532
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 6.472806578293532,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT1",
+              "metrics": {
+                "mm": 2.1411270396685937
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT2",
+              "metrics": {
+                "mm": 3.748816479904023
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 3.748816479904023,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            }
+          ],
+          "failure_count": 7,
+          "unqualified_count": 0,
+          "status": "fail",
+          "qualified": false,
+          "scope": "SMPS requirement screening; native DRC and electrical qualification remain separate"
+        }
+      },
+      {
+        "mode": "power-first",
+        "seed": 1,
+        "graph_sha256": "6ae3ad4e29fd370fa1c54ee01bf1dc91699693259d19d07f5b9e625fa97e71dd",
+        "report": {
+          "schema": "pnr-smps-layout-v1",
+          "board_sha256": null,
+          "checks": [
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Input commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-IN-LOOP",
+              "metrics": {
+                "perimeter_mm": 40.368443270862684,
+                "area_mm2": 65.46693749999999,
+                "polygon": [
+                  [15.075, 16.0],
+                  [19.97, 20.975],
+                  [14.030000000000001, 24.785],
+                  [7.725, 19.405],
+                  [11.535, 25.345],
+                  [13.675, 16.0]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "perimeter_mm",
+                  "actual": 40.368443270862684,
+                  "limit": 30,
+                  "relation": "max"
+                },
+                {
+                  "metric": "area_mm2",
+                  "actual": 65.46693749999999,
+                  "limit": 45,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Output commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-OUT-LOOP",
+              "metrics": {
+                "perimeter_mm": 14.168257992877052,
+                "area_mm2": 6.258400000000066,
+                "polygon": [
+                  [17.455, 15.025],
+                  [23.75, 15.295],
+                  [23.75, 14.455],
+                  [19.125, 16.245]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "perimeter_mm",
+                  "actual": 14.168257992877052,
+                  "limit": 12,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-POS",
+              "metrics": {
+                "mm": 6.979373181024211
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 6.979373181024211,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-RETURN",
+              "metrics": {
+                "mm": 9.586898612168588
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 9.586898612168588,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-POS",
+              "metrics": {
+                "mm": 6.300787649175302
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 6.300787649175302,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-RETURN",
+              "metrics": {
+                "mm": 4.95930690722
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 4.95930690722,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-VCC-POS",
+              "metrics": {
+                "mm": 5.415923282322229
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 5.415923282322229,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT1",
+              "metrics": {
+                "mm": 1.7130163455145442
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT2",
+              "metrics": {
+                "mm": 2.324698905234824
+              },
+              "status": "pass",
+              "failures": []
+            }
+          ],
+          "failure_count": 7,
+          "unqualified_count": 0,
+          "status": "fail",
+          "qualified": false,
+          "scope": "SMPS requirement screening; native DRC and electrical qualification remain separate"
+        }
+      },
+      {
+        "mode": "power-first-banks",
+        "seed": 0,
+        "graph_sha256": "96a6a95bbeeeb4a05cdc0136befce0fa37ee3825794d7f853b0e4366b8846f6b",
+        "report": {
+          "schema": "pnr-smps-layout-v1",
+          "board_sha256": null,
+          "checks": [
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Input commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-IN-LOOP",
+              "metrics": {
+                "perimeter_mm": 43.9157268948425,
+                "area_mm2": 83.27516250000002,
+                "polygon": [
+                  [11.425, 12.5],
+                  [5.029999999999999, 24.525],
+                  [10.97, 20.715],
+                  [7.775, 16.095],
+                  [3.965, 10.155],
+                  [12.825, 12.5]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "perimeter_mm",
+                  "actual": 43.9157268948425,
+                  "limit": 30,
+                  "relation": "max"
+                },
+                {
+                  "metric": "area_mm2",
+                  "actual": 83.27516250000002,
+                  "limit": 45,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Output commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-OUT-LOOP",
+              "metrics": {
+                "perimeter_mm": 10.472846116833345,
+                "area_mm2": 2.078250000000054,
+                "polygon": [
+                  [16.545, 17.225],
+                  [18.0, 19.205],
+                  [18.0, 20.045],
+                  [14.875, 16.005]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-POS",
+              "metrics": {
+                "mm": 13.619715488952036
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 13.619715488952036,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-RETURN",
+              "metrics": {
+                "mm": 9.165076377204938
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 9.165076377204938,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-POS",
+              "metrics": {
+                "mm": 2.457117213321331
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-RETURN",
+              "metrics": {
+                "mm": 5.107565467030258
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 5.107565467030258,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-VCC-POS",
+              "metrics": {
+                "mm": 6.472806578293532
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 6.472806578293532,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT1",
+              "metrics": {
+                "mm": 1.692077125901772
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT2",
+              "metrics": {
+                "mm": 2.2791719987749937
+              },
+              "status": "pass",
+              "failures": []
+            }
+          ],
+          "failure_count": 5,
+          "unqualified_count": 0,
+          "status": "fail",
+          "qualified": false,
+          "scope": "SMPS requirement screening; native DRC and electrical qualification remain separate"
+        }
+      },
+      {
+        "mode": "power-first-banks",
+        "seed": 1,
+        "graph_sha256": "856ff07336b96699ba02e2b5396e0bf115ffdfabff10e5f461b4ea41d7f68130",
+        "report": {
+          "schema": "pnr-smps-layout-v1",
+          "board_sha256": null,
+          "checks": [
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Input commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-IN-LOOP",
+              "metrics": {
+                "perimeter_mm": 50.70244059213177,
+                "area_mm2": 137.67061249999995,
+                "polygon": [
+                  [12.925, 11.0],
+                  [12.219999999999999, 21.975],
+                  [6.28, 25.785],
+                  [16.155, 26.775],
+                  [22.095, 22.965],
+                  [14.325, 11.0]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "perimeter_mm",
+                  "actual": 50.70244059213177,
+                  "limit": 30,
+                  "relation": "max"
+                },
+                {
+                  "metric": "area_mm2",
+                  "actual": 137.67061249999995,
+                  "limit": 45,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "loop_geometry",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Output commutation loop terminal envelope; placement screen.",
+              "id": "SMPS-OUT-LOOP",
+              "metrics": {
+                "perimeter_mm": 13.612531693665103,
+                "area_mm2": 4.21497500000001,
+                "polygon": [
+                  [13.545, 15.975],
+                  [9.705, 10.75],
+                  [10.545, 10.75],
+                  [11.875, 14.755]
+                ],
+                "scope": "terminal geometry only; no routed inductance claim"
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "perimeter_mm",
+                  "actual": 13.612531693665103,
+                  "limit": 12,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-POS",
+              "metrics": {
+                "mm": 10.997620197115376
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 10.997620197115376,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-IN-RETURN",
+              "metrics": {
+                "mm": 14.266538648179523
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 14.266538648179523,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-POS",
+              "metrics": {
+                "mm": 6.484306053850327
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 6.484306053850327,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-OUT-RETURN",
+              "metrics": {
+                "mm": 4.220062203333027
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 4.220062203333027,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-VCC-POS",
+              "metrics": {
+                "mm": 2.435615938525611
+              },
+              "status": "pass",
+              "failures": []
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT1",
+              "metrics": {
+                "mm": 6.046232297886016
+              },
+              "status": "fail",
+              "failures": [
+                {
+                  "metric": "mm",
+                  "actual": 6.046232297886016,
+                  "limit": 3,
+                  "relation": "max"
+                }
+              ]
+            },
+            {
+              "kind": "pad_distance",
+              "provisional": true,
+              "source": "https://www.ti.com/lit/ds/symlink/tps552882.pdf#page=29",
+              "rationale": "Local bypass must reach the relevant power/return pin, not just the package center.",
+              "id": "SMPS-BOOT2",
+              "metrics": {
+                "mm": 2.9371967928622014
+              },
+              "status": "pass",
+              "failures": []
+            }
+          ],
+          "failure_count": 7,
+          "unqualified_count": 0,
+          "status": "fail",
+          "qualified": false,
+          "scope": "SMPS requirement screening; native DRC and electrical qualification remain separate"
+        }
+      }
+    ]
+  }
 }

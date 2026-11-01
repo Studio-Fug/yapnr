@@ -1,0 +1,43 @@
+# Order 0 predictions, D-O0-13a: openEMS 3D models of D1, R1, the 0.40 mm line and the sticks
+# A01/A04 (43 um copper, nominal FR408HR). One model per c4d-highcpu-8 at 8 threads (READY:
+# the best throughput per dollar), the AVX-512 image, exact end criteria (bit-reproducible stop
+# steps). D1 and R1 at two meshes (0.05 and 0.025 mm in the plane), P1 and P2 excited (P3 by the
+# mirror symmetry); the lines and sticks P1 (P2 by symmetry). Written by hand; models.py writes
+# the models/.
+name = "order0-openems-r025"
+image = "openems:0.37.0-rc3-x86-64-v4"
+threads = 8
+models_per_vm = 1
+packing = "vcpu"
+families = ["c4d"]
+memory_gb = 12
+disk_gb = 10
+max_wall_s = 3600
+openems_options = ["exact-endcriteria"]
+
+[inputs]
+code = "."
+
+[[jobs]]
+id = "d1-r025-p1"
+script = "code/order0_em.py"
+args = ["code/models/d1.json", "--out", "{out}", "--excite", "1", "--threads", "{threads}", "--res", "0.025", "--nz-sub", "8"]
+max_wall_s = 7200
+
+[[jobs]]
+id = "d1-r025-p2"
+script = "code/order0_em.py"
+args = ["code/models/d1.json", "--out", "{out}", "--excite", "2", "--threads", "{threads}", "--res", "0.025", "--nz-sub", "8"]
+max_wall_s = 7200
+
+[[jobs]]
+id = "r1-r025-p1"
+script = "code/order0_em.py"
+args = ["code/models/r1.json", "--out", "{out}", "--excite", "1", "--threads", "{threads}", "--res", "0.025", "--nz-sub", "8"]
+max_wall_s = 7200
+
+[[jobs]]
+id = "r1-r025-p2"
+script = "code/order0_em.py"
+args = ["code/models/r1.json", "--out", "{out}", "--excite", "2", "--threads", "{threads}", "--res", "0.025", "--nz-sub", "8"]
+max_wall_s = 7200

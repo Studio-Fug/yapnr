@@ -1,0 +1,5 @@
+# O0-M fab bundle, built on main 090674e with:
+#   python -m yapnr fab build examples/rf-coupons/order0/O0-M/O0-M.kicad_pcb \
+#     --vendor oshpark --profile oshpark-4l --stackup oshpark-4l-fr408hr --service standard
+# The release order0-prereg-o0-m attaches this exact zip; upload that zip, not a rebuild.
+9ea1aaa88ed306c2ef300735807f8af98f5f8e84c3d0f56d2fbea278b8caa098  O0-M-oshpark-gerbers.zip

@@ -33,13 +33,13 @@ ARG PBS_RELEASE=20260807
 ARG PBS_FULL_SHA256_AMD64=acf9a483357be3afd0618e1db13a86a286f2927d3dd2dea1500448c502bb9018
 ARG PBS_FULL_SHA256_ARM64=d442ee19356e8f018fbc6113b65fd80c67854a09232ea9d60952e23c0f38d07e
 
-FROM ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
 # Replaced by `--build-context dist=<dir>`. Empty on purpose: a build without the wheel fails.
 FROM scratch AS dist
 
 # --- the license texts of the libraries in python-build-standalone's CPython ----------------
-FROM --platform=$BUILDPLATFORM ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3 AS python-licenses
+FROM --platform=$BUILDPLATFORM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS python-licenses
 ARG TARGETARCH
 ARG PYTHON_VERSION
 ARG PBS_RELEASE

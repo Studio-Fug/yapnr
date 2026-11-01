@@ -33,7 +33,7 @@ jobs:
       # architecture nor the lock files, and its Bazelisk cache is not where
       # .bazeliskrc sends Bazelisk. Both download caches are keyed below.
       - name: Setup Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
+        uses: bazel-contrib/setup-bazel@0.19.1
 
       # The environment overrides .bazeliskrc (./.bazelisk), so the Bazel
       # binary lands in the cached directory.

@@ -1,0 +1,12 @@
+{
+  "schema": "qm33120-research-status/1",
+  "baseline": "Original four-port antenna coupon; no accepted optimized geometry",
+  "actual_P3_adjoint_converged": true,
+  "actual_P4_adjoint_completed": false,
+  "actual_array_gradient_qualified": false,
+  "optimizer_updates_enabled": false,
+  "chip_plane_RF_accepted": false,
+  "QM33120_diplexer_optimized": false,
+  "diplexer_status": "Provisional loaded channel-5/channel-9 architecture and requirements only; existing generic 8/12 GHz diplexer example is separate",
+  "raw_fields_included": false
+}

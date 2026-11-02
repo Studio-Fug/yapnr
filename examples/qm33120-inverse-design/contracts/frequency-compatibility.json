@@ -1,0 +1,82 @@
+{
+  "schema": "jointopt-frequency-compatibility/1",
+  "migration": {
+    "schema": "qm33120-policy-frequency-migration/1",
+    "source_sha256_le_f64": "525fdf57ccc8a56a1b2874417c27085d1cbd1dbc3b3d84f377ff5887e7be789e",
+    "target": {
+      "schema": "qm33120-native-frequency-contract/1",
+      "frequencies_hz": [
+        6240000000.0, 6489600000.0, 6739200000.0, 7737600000.0, 7987200000.0, 8236800000.000001
+      ],
+      "binary64_hex": [
+        "0x1.73eed80000000p+32",
+        "0x1.82cf700000000p+32",
+        "0x1.91b0080000000p+32",
+        "0x1.cd32680000000p+32",
+        "0x1.dc13000000000p+32",
+        "0x1.eaf3980000001p+32"
+      ],
+      "sha256_le_f64": "4b077461ea37be6506dde19b775f9096cb74720113a4f77ed2adde449d2e435a",
+      "spec_module_sha256": "d1d16ba4f08deaf63044e3e1fc204b1a7c677eb23ddbb670b59d46b09a73eb79",
+      "original_input_spec_sha256": "2b32ec8f81b32a3eddefee8d252d0dba303264e8ee85dda46f1a982de174c23d",
+      "construction": "Band.frequencies: linspace(GHz endpoints, 3) * 1e9; Spec.objective_frequencies union"
+    },
+    "source_binary64_hex": [
+      "0x1.73eed80000000p+32",
+      "0x1.82cf700000000p+32",
+      "0x1.91b0080000000p+32",
+      "0x1.cd32680000000p+32",
+      "0x1.dc13000000000p+32",
+      "0x1.eaf3980000000p+32"
+    ],
+    "changed_indices": [5],
+    "maximum_delta_hz": 9.5367431640625e-7,
+    "applies_to": "policy_configuration_only",
+    "saved_fields_rewritten": false
+  },
+  "old_policy_sha256": "9e6fcfb76dba1f1e40b0d479b13198ca05245204b4beacf76c56d09a69014003",
+  "new_policy_sha256": "52d4cf2b98f2e5368ba58fbe4c161a9ec426f1e00f4eedeec8d46c3ef0ece832",
+  "other_policy_values_unchanged": true,
+  "parent_r2_manifest_files_verified": 39,
+  "parent_r2_unmodified": true,
+  "engine_or_geometry_changes": false,
+  "field_archives_rewritten": false,
+  "physical_contract_hashes_unchanged_when_already_native_exact": true,
+  "request_schema_changed_from": "jointopt-native-request/1",
+  "request_schema_changed_to": "jointopt-native-request/2",
+  "source_and_objective_derived_hashes_must_be_regenerated": true,
+  "old_MMA_checkpoint_reuse_allowed": false,
+  "synthetic_demo_only_comparison": {
+    "variables.npy": {
+      "bit_identical": true,
+      "max_absolute_delta": 0.0
+    },
+    "density-eta-0.4.npy": {
+      "bit_identical": true,
+      "max_absolute_delta": 0.0
+    },
+    "density-eta-0.5.npy": {
+      "bit_identical": true,
+      "max_absolute_delta": 0.0
+    },
+    "density-eta-0.6.npy": {
+      "bit_identical": true,
+      "max_absolute_delta": 0.0
+    },
+    "binary-eta-0.4.npy": {
+      "bit_identical": true,
+      "max_absolute_delta": 0.0
+    },
+    "binary-eta-0.5.npy": {
+      "bit_identical": true,
+      "max_absolute_delta": 0.0
+    },
+    "binary-eta-0.6.npy": {
+      "bit_identical": true,
+      "max_absolute_delta": 0.0
+    }
+  },
+  "actual_array_field_comparison_performed": false,
+  "FDTD_runs": 0,
+  "paid_jobs": 0
+}

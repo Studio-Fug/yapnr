@@ -1,0 +1,15 @@
+{
+  "schema": "exact-recovered-source-spectrum/1",
+  "dtype": "<c16",
+  "shape": [6],
+  "values_hex": [
+    ["-0x1.d354e092ce94bp-35", "-0x1.6ee2ae7bac4e8p-34"],
+    ["0x1.37c16bc32610ap-33", "0x1.434d85afef439p-34"],
+    ["-0x1.edf0bd076ef7bp-33", "0x1.739a4a55eb528p-37"],
+    ["0x1.0df95b3dfd88ap-33", "0x1.9e487c3e29f17p-33"],
+    ["-0x1.396d266b75d1cp-33", "-0x1.3cc66c228e36dp-34"],
+    ["0x1.b242728811273p-34", "-0x1.8f731426bbabfp-38"]
+  ],
+  "canonical_sha256": "53b7e5d65b514ccce8d6bc03fba158a67e6417cad43e786b2e52d8c14cb22bea",
+  "scope": "Exact 96 canonical spectrum bytes recovered; runtime equivalence not claimed. Values alone do not authenticate omitted forward/source fields."
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "local-observable-acceptance/3",
+  "entrypoint": "jointopt.local_trial.review_local_trial",
+  "objective_revision_unchanged": "local-observable-variation-candidate/2",
+  "physical_thresholds_and_weights_changed": false,
+  "feasibility_order": "Every normalized floor deficit and every positive raw/smooth hard violation nonincreasing; no reference-observable endpoint lost.",
+  "phase_delay_order": "Absolute pair phase and excess pair interval delay componentwise nonincreasing on reference-observable support; every within-Jones/path absolute principal interval-delay difference nonincreasing on reference support.",
+  "other_objectives": "Retained slope/gain/shape/isolation-advice terms individually nonincreasing; no new cross-goal weights.",
+  "candidate_operability": "Both existing observable warning flags false, existing per-frequency/per-interval support nonempty.",
+  "progress_required": "At least one strict improvement in protected feasibility, raw sampled phase/delay, or retained advice; scalar decrease alone is not progress.",
+  "threshold_transitions": "Newly observable support is reported separately, not compared to invented baseline phases; downward crossings are rejected.",
+  "proposal_status": "proposed until all guards pass and decision persistence succeeds; no optimizer-state mutation in adapter.",
+  "accepted_status": "accepted_optimization_progress, with explicit feasibility_restoration / sampled_phase_delay_progress / retained_advisory_progress category; infeasibility retained.",
+  "qualification_and_execution": {
+    "qualified_design": false,
+    "physical_acceptance": false,
+    "delay_certified": false,
+    "full_band_delay_certified": false,
+    "execution_authorized": false
+  },
+  "numerical_comparisons": "Exact finite float64, no hidden tolerance; conservative restriction rather than new physical requirement.",
+  "unresolved_decision": "Any desired compensation between already-observable metrics, directions, bands or retained advisory terms needs explicit bounds/priorities; no tradeoff is invented. Floor/coverage regression remains prohibited.",
+  "persistence": "Both evaluated records including invalid provenance are saved before gating; decision saved before returning; either persistence failure raises without an acceptance result."
+}

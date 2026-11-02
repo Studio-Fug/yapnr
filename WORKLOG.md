@@ -9,6 +9,12 @@ follow-ups are available. PR #94 merged as `9e19d73e`; its tested tree matches `
 
 ## In progress
 
+- **QM33120 UWB research snapshot**: publishes original four-port geometry, current
+  inactive objective/adjoint interfaces and bounded validation evidence. P3
+  converged; actual P4 adjoint, full-array gradient qualification, optimization and
+  loaded channel-5/9 diplexer validation remain open. See
+  [research snapshot](examples/qm33120-inverse-design/README.md). No compute launched.
+
 - **PR #100 default activation**: all thirteen new Boolean repairs enabled with
   explicit opt-outs; alternating contextual search and diverse portfolios selected.
   Runtime `c50ffdfc` passes all 310 regular Bazel targets locally and on Linux/macOS

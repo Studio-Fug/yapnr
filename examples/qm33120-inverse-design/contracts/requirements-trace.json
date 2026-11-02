@@ -1,0 +1,88 @@
+{
+  "schema": "jointopt-requirement-trace/1",
+  "rows": [
+    {
+      "requirements": ["REQ-7"],
+      "component": "matching",
+      "kind": "engineering_hard_screen",
+      "limit_db": -10,
+      "silicon_mandate": false
+    },
+    {
+      "requirements": ["REQ-7"],
+      "component": "active_pair_coupling",
+      "kind": "preserved_engineering_hard_screen",
+      "limit_db": -20,
+      "historical_results_unchanged": true
+    },
+    {
+      "requirements": ["REQ-7", "REQ-16"],
+      "component": "active_pair_isolation_advice",
+      "kind": "recommended_optimization_goal",
+      "goal_db": 25,
+      "chip_plane_evidence": false
+    },
+    {
+      "requirements": ["REQ-7", "REQ-19"],
+      "component": "total_efficiency",
+      "kind": "engineering_hard_screen",
+      "minimum": 0.6
+    },
+    {
+      "requirements": ["REQ-19"],
+      "component": "radiation_efficiency",
+      "kind": "adopted_engineering_search_constraint",
+      "minimum": 0.6,
+      "accepted_power": "all-port net power, including idle incident waves",
+      "not_certified_material_loss": true
+    },
+    {
+      "requirements": ["REQ-7"],
+      "component": "gain_shape",
+      "kind": "optimization_surrogate",
+      "gain_goal_dBi": -6,
+      "uniform_shape_RMS_dB": 3,
+      "polarized_peer_reception_proven": false
+    },
+    {
+      "requirements": ["REQ-13"],
+      "component": "pair_phase_slope_coverage",
+      "kind": "optimization_surrogate",
+      "internal_reference_only": true,
+      "offset": "fixed zero diagnostic, no fitting",
+      "spatial_phase_target": "negative k times fixed baseline dot direction"
+    },
+    {
+      "requirements": ["REQ-17"],
+      "component": "path_delay",
+      "kind": "sparse_RMS_surrogate_only",
+      "scale_ps": 100,
+      "peak_to_peak_bandwidth_orientation_gate": "pending"
+    },
+    {
+      "requirements": ["REQ-18"],
+      "component": "pulse_fidelity",
+      "kind": "executable_optional_metric_pending_waveform",
+      "physical_acceptance": false
+    },
+    {
+      "requirements": ["REQ-15"],
+      "component": "adjoint_filter_projection_MMA",
+      "kind": "implemented_offline_tested",
+      "actual_array_field_qualification": "pending"
+    },
+    {
+      "requirements": ["REQ-8", "REQ-13", "REQ-16"],
+      "component": "chip_plane_loaded_network",
+      "kind": "excluded_from_antenna_only_scope",
+      "qualification": "pending"
+    }
+  ],
+  "all_physical_requirements_satisfied": false,
+  "assumptions": [
+    "Six frozen frequency samples and sparse full-sphere training quadrature",
+    "Four canonical polarization states are not full SO(3) link assessment",
+    "Erosion/dilation thresholds are not calibrated etch statistics",
+    "All objective weights and constraint normalization are engineering optimizer settings"
+  ]
+}

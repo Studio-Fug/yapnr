@@ -1,0 +1,706 @@
+{
+  "publication_note": "Sanitized declarative export; not interchangeable with the original runtime authentication receipt.",
+  "original_contract_sha256": "80d67f441bab8a2e8a6769dcbfbbfe06cef1505b4bd8e45083ca16a6a13eb18c",
+  "contract": {
+    "acceptance": {
+      "acceptance": "all operability/context/protected gates pass, no raw/advice regressions, at least one feasibility restoration OR existing-support raw improvement OR retained-advice improvement",
+      "advice_rule": "each scalar term nonincreasing",
+      "comparison": "exact finite binary64 partial order; no hidden tolerance",
+      "entrypoint": "jointopt.local_trial.review_local_trial",
+      "new_support": "reported separately, not counted as comparable phase/delay improvement; later comparisons use the accepted reference support",
+      "parameter_state_update": false,
+      "persistence": "evaluated_before_gate then decision must both durably persist before result may be used",
+      "priority": [
+        "feasibility_restoration",
+        "sampled_phase_delay_progress",
+        "retained_advisory_progress"
+      ],
+      "protected_feasibility": "every normalized endpoint floor deficit nonincreasing; no lost observable endpoints; positive-part of every raw hard constituent AND conservative smooth hard row nonincreasing",
+      "qualification_flags": "always false in current acceptance",
+      "raw_phase_delay": "absolute pair phase and excess delay per reference-observable sample; every pairwise absolute path-delay difference on reference support perJones/path nonincreasing",
+      "retained_advice": ["slope", "gain", "shape", "isolation_advice"],
+      "revision": "local-observable-acceptance/3",
+      "scalar_merit_role": "surrogate decrease alone is insufficient; safe restoration may be accepted despite scalar increase",
+      "tradeoffs": "reject with unapproved_metric_tradeoff; no automatic compensation or claim of physical infeasibility from stall"
+    },
+    "checkpoint": {
+      "existing_checks_retained": [
+        "file hashes",
+        "policy digest",
+        "map fingerprint",
+        "beta and etas",
+        "field contract"
+      ],
+      "guard": "compatibility.py",
+      "guard_integrated_into_frozen_worker": false,
+      "legacy_action": "reject missing binding, never silently stamp or relabel",
+      "required_new_binding": "objective_acceptance_contract_sha256 plus acceptance_revision and scope_id"
+    },
+    "conventions": {
+      "baselines_m": [
+        [0.0208, 0.0, 0.0],
+        [0.0, 0.0168, 0.0]
+      ],
+      "far_field": "outgoing exp(+ikr)/r; Huygens spatial factors exp(-ik*u dot r_s); same global board origin for all paths",
+      "offset_mode": "fixed_diagnostic_zero",
+      "offsets_rad": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "pair_order": {
+        "ch5": [1, 2],
+        "ch9": [3, 4]
+      },
+      "pair_product": "h_B*conj(h_A)",
+      "path_variation": "Compare every pair of adjacent-interval path phasors across all directions separately for each Jones/path; no detached/frozen fitted center or per-angle offset",
+      "raw_delay": "-principal_arg(adjacent frequency product)/(2*pi*exact_df); interval averages only; no absolute-delay-zero target",
+      "target": "-2*pi*f/c0 * d_band dot u + fixed zero direction-independent offset; c0=299792458",
+      "time": "native e^(-i*omega*t); DTFT uses exp(+i*omega*t), E integer and H half steps"
+    },
+    "coverage": {
+      "fixed_pair_denominator": 384,
+      "fixed_pair_interval_denominator": 256,
+      "floor_infeasible": "any requested endpoint below floor; no claim of feasible coverage from sparse nonempty support",
+      "loss_denominator": "all fixed samples retained even when unobservable",
+      "operability": {
+        "alias_limit_rad": 3.0915926535897933,
+        "delay_certified": false,
+        "minimum_coverage_fraction_adopted": null,
+        "minimum_support": "at least one valid pair sample per each of3freq and2intervals; positive finite fraction; counts/sums checked",
+        "schema": "joint-phase-operability/2",
+        "warning": "abs(principal increment)>=pi-.05 on observable endpoints only; both pair/path flags must be explicit False"
+      },
+      "pair_interval_valid": "both paths at both adjacent frequencies >=floor",
+      "pair_valid": "both endpoints at same freq >=floor",
+      "path_interval_valid": "one path at both adjacent frequencies >=floor",
+      "power_floor": 0.01,
+      "power_units": "dimensionless polarized realized-gain response magnitude squared in the frozen normalization; not W or a received-SNR threshold",
+      "threshold_expression": "abs(h).square()>=.01 in binary64, inclusive; normalization primitive uses real^2+imag^2, preserving implemented rounding distinction",
+      "weighted_fraction": "mean overfrequency/Jones of pair-valid indicator, angular weights fixed; raw unweighted counts also persisted"
+    },
+    "excluded_legacy_objective_paths": [
+      "base/array_model.py:ActualArray.components",
+      "base/array_model.py:ActualArray.objective",
+      "base/array_model.py:ActualArray.joint",
+      "base/config.json:components_weights (historical four-term objective)"
+    ],
+    "execution_authorized": false,
+    "finite_difference_value_evaluator": "Same current JointObjective row/normalization and scope as streamed cotangents, never legacy ActualArray.objective",
+    "frequency": {
+      "binary64_hex": [
+        "0x1.73eed80000000p+32",
+        "0x1.82cf700000000p+32",
+        "0x1.91b0080000000p+32",
+        "0x1.cd32680000000p+32",
+        "0x1.dc13000000000p+32",
+        "0x1.eaf3980000001p+32"
+      ],
+      "construction": "Band.frequencies: linspace(GHz endpoints, 3) * 1e9; Spec.objective_frequencies union",
+      "frequencies_hz": [
+        6240000000.0, 6489600000.0, 6739200000.0, 7737600000.0, 7987200000.0, 8236800000.000001
+      ],
+      "original_input_spec_sha256": "2b32ec8f81b32a3eddefee8d252d0dba303264e8ee85dda46f1a982de174c23d",
+      "schema": "qm33120-native-frequency-contract/1",
+      "sha256_le_f64": "4b077461ea37be6506dde19b775f9096cb74720113a4f77ed2adde449d2e435a",
+      "spec_module_sha256": "d1d16ba4f08deaf63044e3e1fc204b1a7c677eb23ddbb670b59d46b09a73eb79"
+    },
+    "gradient_qualified": false,
+    "gradient_validation": {
+      "adjoint_tolerance": 1e-10,
+      "dense_phase_acceptance_or_sparse_raw_acceptance_differentiated": false,
+      "direction_seed": 20261025,
+      "finite_differences": "validation only, never optimizer gradients",
+      "forward_tolerance": 1e-10,
+      "max_steps": 250000,
+      "native_cotangent": "g=conj(torch_grad)/2, dL=2Re sum(g*dq); preserve full coupled scalar derivative before frequency/excitation partition",
+      "noninformative": "abs(g.d)<=max(1e-12,1e-8*norm(g)*norm(d)) cannot pass",
+      "nonsmooth_caveat": "record active sets near slope clamps, shape ReLU and gain clamps; a branch or active-set crossing is not permission to relax derivative gates",
+      "protocol": "jointopt.validation.check_direction plus both frozen feasible directions and source/replay evidence; central difference not valid at binary endpoint",
+      "recombination": "sum frequency rows and independent excitation contributions, include native conductivity/reactive material AND edge derivatives, then declared map VJP exactly once",
+      "records": "same design/source/grid/origin/reference/frequencies/morphology; exact-DTFT decimation1; full forward design/edge fields plus matching adjoint recording; two terminal convergence checks; save source and replay identity",
+      "relative_gate": 0.001,
+      "required_offsets": [0.0, 5e-5, 0.0001, 0.0002],
+      "scope": "every result must name scope profile, exact objective/hard row, variable differentiand, all contributing excitations and morphology",
+      "stability_gate": 0.00025,
+      "steps_for_one_sided_formula": [0.0001, 5e-5],
+      "tight_tolerances": 1e-12,
+      "time_step_s": 1.3536742835376304e-13
+    },
+    "hard_rows": {
+      "aggregation": "unnormalized tau*logsumexp(all12 constituents/tau), tau=.02; perport feasible iff <=0",
+      "each_port_constituents": [
+        "match: |Sjj|^2/10^(-10/10)-1",
+        "pair isolation: |S_other,j|^2/10^(-20/10)-1",
+        "total efficiency: (.6-eta_total)/.6",
+        "radiation efficiency: (.6-eta_total/max(accepted_fraction,1e-12))/.6"
+      ],
+      "full_definition": "each variant returns2 objective rows and4 hard rows; no averaging away failures. UpdateLoop.step is blocked; no active cross-row MMA/epigraph update policy is claimed",
+      "interpretation": "engineering screens, not asserted silicon mandatory limits",
+      "upper_bias_bound": 0.04969813299576001
+    },
+    "manufacturing": {
+      "default_beta": 16.0,
+      "diagnostic": "unchanged binary geometry only; ratio2 block variables, no density filter/projection; original source receipt density_filter_applied=False",
+      "filter_radius_binding": "native filter_radius(spec) and exact kernel included by Chain.fingerprint; a live full chain/map fingerprint must be supplied for filtered validation, not borrowed from diagnostic BlockMap",
+      "full_chain_shape_fingerprint_required": true,
+      "geometry_gate": "binary unrepaired4 distinct anchor-connected components, protected copper, native planar width/space; no islands; fresh binary forward evaluation required; not full-board DRC",
+      "interpretation": "nominal,dilated,eroded; not calibrated process statistics",
+      "optimizer_definition": "expand uniform blocks -> native material embed/extend -> conic filter -> tanh projection -> reimpose fixed copper; full transpose by sum, no block averaging",
+      "ordered_etas": [0.5, 0.4, 0.6],
+      "spec_beta_schedule": [16, 32, 64],
+      "spec_min_space_mm": 0.8,
+      "spec_min_width_mm": 1.6,
+      "symmetry_scope": "spec says mirror_x, but Chain/BlockMap do not explicitly tie mirrored free variables; do not claim enforced symmetry from that metadata alone"
+    },
+    "objective_revision": "local-observable-variation-candidate/2",
+    "physical_acceptance": false,
+    "policy": {
+      "baselines_m": [
+        [0.0208, 0.0, 0.0],
+        [0.0, 0.0168, 0.0]
+      ],
+      "delay_goal_s": 1e-10,
+      "floor": 0.01,
+      "frequencies_hz": [
+        6240000000.0, 6489600000.0, 6739200000.0, 7737600000.0, 7987200000.0, 8236800000.000001
+      ],
+      "gain_goal_dbi": -6.0,
+      "hard_smooth_tau": 0.02,
+      "isolation_recommendation_db": -25.0,
+      "isolation_screen_db": -20.0,
+      "match_db": -10.0,
+      "n_theta": 4,
+      "objective_revision": "local-observable-variation-candidate/2",
+      "offset_mode": "fixed_diagnostic_zero",
+      "offset_rad": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "radiation_efficiency": 0.6,
+      "shape_goal_rms_db": 3.0,
+      "sign": -1,
+      "tangent_step_rad": 0.001,
+      "total_efficiency": 0.6,
+      "weights": [
+        ["phase", 1.0],
+        ["floor", 1.0],
+        ["slope", 0.1],
+        ["delay", 0.1],
+        ["gain", 1.0],
+        ["shape", 1.0],
+        ["isolation_advice", 1.0],
+        ["path_delay_advice", 0.1]
+      ]
+    },
+    "policy_sha256": "838d07605cdb5069821ee5bd2f9b491948484576c441e3a153cf32fd3b73ae01",
+    "production_activation": false,
+    "reference": {
+      "accepted_power": "sum over ALL four physical ports(0.5|a_i|^2-0.5|b_i|^2), divided by exciting incident power; idle incident waves included",
+      "details_file": "reference-planes.json",
+      "details_sha256": "ae1295563f99ae31463570b625eb017e2c823a186e42b74eacf92035e5ddc534",
+      "distributed_port_power_caveat": "Averaged-voltage wave power is the frozen metric; nonuniform voltage-mode resistor absorption means it is not a certified actual source-work/energy balance",
+      "network": "NO_UPSTREAM_NETWORK_INTERNAL_PAIR_ONLY",
+      "normalization": "E=F projected onto transported basis *sqrt(8*pi*intensity_factor(omega))/a_j; incident power=0.5*abs(a_j)^2; total gain=sum2 polarized powers",
+      "normalization_replay": "Use exact recovered original complex bytes and full receipt; do not substitute ARM recomputation, relabel records, or assume identical source spectra from nominal inputs",
+      "original_field_contract": {
+        "common_origin_m": [0, 0, 0],
+        "design_sha256": "88b4cec6e38e4a2f0e044dde60c28f565acce27dbd94a8d7637ed1342fdbc970",
+        "frequencies_hz": [
+          6240000000.0, 6489600000.0, 6739200000.0, 7737600000.0, 7987200000.0, 8236800000.000001
+        ],
+        "model_sha256": "bccf24c1352d7b6416d76466d8abd17270d30c08731ea8bc178cffbd627a6ef7",
+        "morphology": "binary_unchanged_uniform_0.2mm_block_variables",
+        "network_sha256": "cd8befc9309e6040796a8c7264253fc99d49113ffa0e1395dfe0e9bffd4c6e21",
+        "reference_planes_sha256": "16d6157c5eb5cc887adef8eb131da71bd71c2aff9d7f5e40101b0085a6065ade",
+        "source_normalization_sha256": "53b7e5d65b514ccce8d6bc03fba158a67e6417cad43e786b2e52d8c14cb22bea",
+        "time_step_s": 1.3536742835376304e-13
+      },
+      "power_wave_formula": "a=V_source/(2*sqrt(50)); b=(2*weighted_voltage-V_source)/(2*sqrt(50)); weighted_voltage=sum(Ez*v_weights), exactly per frozen ports.py",
+      "power_wave_reference": "four distributed lumped50ohm ports at exact audited nodes/weights; excited source spectrum included, inactive source spectrum0; not chip balls",
+      "radiation_efficiency": "total_efficiency/max(accepted_fraction,1e-12); accepted-radiated is not certified material loss",
+      "receive_equivalence_certified": false,
+      "scope": "antenna_internal_only",
+      "source_spectrum_sha256": "53b7e5d65b514ccce8d6bc03fba158a67e6417cad43e786b2e52d8c14cb22bea",
+      "total_efficiency": "outward flux / incident power"
+    },
+    "sampling": {
+      "SO3_complete": false,
+      "angle_weights": "quadrature/(4*pi), fixed sum1",
+      "arrays": {
+        "angle_weights": {
+          "dtype": "<f8",
+          "file": "sampling/angle_weights.npy",
+          "file_sha256": "77287b7d91beefa2002f5f3dfd3bae3a2ef46e881d62d1af7151cfbd1231bc1f",
+          "raw_sha256": "022093e35b073f99f8bfd5dca2a7aead30a73ebdb213690104071b3d66fef582",
+          "shape": [32]
+        },
+        "base_directions": {
+          "dtype": "<f8",
+          "file": "sampling/base_directions.npy",
+          "file_sha256": "a8e1cbbb49e3d5d54ca6f76bfbaec078c108f2a4a476cf2261358cda1a8ea3eb",
+          "raw_sha256": "f71493fecf942707d0393d7e79adb9a55fe5c1205b725bf2edec383c06556bf5",
+          "shape": [32, 3]
+        },
+        "directions": {
+          "dtype": "<f8",
+          "file": "sampling/directions.npy",
+          "file_sha256": "4b916daacfdb5c2e9783494e5e78072e136bcff560d5102123119411ae8ba6a2",
+          "raw_sha256": "e1c71484ce193b8db3c9c2fb258064c10abd24e3007ad55c690df83f34d9c9dd",
+          "shape": [160, 3]
+        },
+        "jones": {
+          "dtype": "<c16",
+          "file": "sampling/jones.npy",
+          "file_sha256": "501fa01cb3d821fa738a7694321e34d987e728d49ef42460999d2c291002b841",
+          "raw_sha256": "83246f975ced833ad298b2aeac69f1d32807966f47a309d97d4ddfbe1b2aedb2",
+          "shape": [4, 2]
+        },
+        "tangents": {
+          "dtype": "<f8",
+          "file": "sampling/tangents.npy",
+          "file_sha256": "c51229cfaa56aff62bad9410f0927f4d0e65b583b8f4ae144bb61feb5f835a1d",
+          "raw_sha256": "93cfd1b15851ede0a98b7213abecc6101659c99201d7454bba3319591c870274",
+          "shape": [2, 32, 3]
+        },
+        "transported_bases": {
+          "dtype": "<c16",
+          "file": "sampling/transported_bases.npy",
+          "file_sha256": "b4b291fca066f46522812406c1e9617371ff3e1b68db0e7ea4ce17b8f9498504",
+          "raw_sha256": "74f343d7f0faf7d435d2d1b7ab133b4c14cd0ac9198152b50391e082a04dad5a",
+          "shape": [160, 2, 3]
+        }
+      },
+      "base_direction_count": 32,
+      "direction_set_count": 5,
+      "direction_sets": ["base", "theta_plus", "theta_minus", "phi_plus", "phi_minus"],
+      "held_out": false,
+      "jones_analysis": "h_l=j_l^H E; ordered (1,0),(0,1),(1,+i)/sqrt2,(1,-i)/sqrt2; do not assign receiver handedness beyond this algebra",
+      "n_phi": 8,
+      "n_theta": 4,
+      "polarization_weights": [0.25, 0.25, 0.25, 0.25],
+      "quadrature": "Gauss-Legendre in cos(theta) on[-1,1] times8 uniform phi; theta-major then phi-minor; default Frame(+z,+x)",
+      "transport": "Rodrigues parallel rotation of bases with each +/-0.001 rad tangent sample"
+    },
+    "schema": "fug147-objective-acceptance-contract/1",
+    "scope_profiles": {
+      "ch9_internal_baseline_diagnostic": {
+        "all_rows_gradient_qualified": false,
+        "bands": ["ch9"],
+        "differentiable_quantities": [
+          "objective:ch9:phase_coverage_and_advisory_goals",
+          "hard:ch9:P3:engineering_screen",
+          "hard:ch9:P4:engineering_screen"
+        ],
+        "differentiand": "unchanged_binary_seed_feasible_0.2mm_block_variables_without_filter_or_projection",
+        "excitation_ids": [3, 4],
+        "manufacturing_variants": ["unchanged_baseline_only"],
+        "physical_ports": [1, 2, 3, 4],
+        "row": "ch9:phase_coverage_and_advisory_goals",
+        "source_scalar_prepared": "objective:ch9:phase_coverage_and_advisory_goals"
+      },
+      "two_band_robust_optimizer_definition": {
+        "bands": ["ch5", "ch9"],
+        "differentiable_quantities": [
+          "objective:ch5:phase_coverage_and_advisory_goals",
+          "objective:ch9:phase_coverage_and_advisory_goals",
+          "hard:ch5:P1:engineering_screen",
+          "hard:ch5:P2:engineering_screen",
+          "hard:ch9:P3:engineering_screen",
+          "hard:ch9:P4:engineering_screen"
+        ],
+        "differentiand": "filtered_projected_0.2mm_block_variables_with_full_native_parameterization_VJP",
+        "excitation_ids": [1, 2, 3, 4],
+        "implemented_rows_per_variant": {
+          "hard": 4,
+          "objective": 2
+        },
+        "manufacturing_variants": [0.5, 0.4, 0.6],
+        "optimizer_step": "blocked",
+        "physical_ports": [1, 2, 3, 4],
+        "whole_problem_RF_acceptance": false
+      }
+    },
+    "selected_objective_entrypoint": "JointObjective(Policy(),bands=('ch9',)).rows(response).objective[0]; stable eight-term scalar, coupled P3/P4",
+    "source_pins": [
+      {
+        "bytes": 4607,
+        "sha256": "83fb3a7cbcaf00dd116e3aad46817b87746604e1018047d18e374ee9d9b19487",
+        "snapshot": "sources/contract-tools/compatibility.py"
+      },
+      {
+        "bytes": 81,
+        "sha256": "1b82116ebffc75a4a23b64e74fd289a97529e05f515310a8659ffeb7a11c29e0",
+        "snapshot": "sources/jointopt/__init__.py"
+      },
+      {
+        "bytes": 9726,
+        "sha256": "52dd064a766d1bf1044cd0012259da6dccb5bd6f5889ee0950f2f267ec5f5aa3",
+        "snapshot": "sources/jointopt/acceptance.py"
+      },
+      {
+        "bytes": 3467,
+        "sha256": "776e4a4d386b4e7edc3f6550e4de8c765cc85bb892ab53ad0849f9d9fbb25f7e",
+        "snapshot": "sources/jointopt/algebra_fixture.py"
+      },
+      {
+        "bytes": 5550,
+        "sha256": "b44d41f639cb8354a45366ea785d378799019fc21a7508191057238317289cb5",
+        "snapshot": "sources/jointopt/bridge.py"
+      },
+      {
+        "bytes": 8031,
+        "sha256": "6b1a11c456cbe1aba8226eecc9a7132c4bb079d146374c0cb6d641369bf09d48",
+        "snapshot": "sources/jointopt/evaluator.py"
+      },
+      {
+        "bytes": 2311,
+        "sha256": "cc1ee1ca1d2401d3d0dc36e57f482c852ba085afa5da8f67fd42c856a78ada19",
+        "snapshot": "sources/jointopt/factory.py"
+      },
+      {
+        "bytes": 1637,
+        "sha256": "4fee76a75b557801b54170ff71d36b93fff483560313e6b29ab85ff9732dc682",
+        "snapshot": "sources/jointopt/fidelity.py"
+      },
+      {
+        "bytes": 4336,
+        "sha256": "67dfa39ecad699f93e6ab3868b6d3af3d29133a4fe14cb5463290da89694cbac",
+        "snapshot": "sources/jointopt/frequencies.py"
+      },
+      {
+        "bytes": 1304,
+        "sha256": "d2e3a663ec9b48c821e58634b377e23cbc04b92e42d481e6f569e4ec920912bf",
+        "snapshot": "sources/jointopt/frequency_preflight.py"
+      },
+      {
+        "bytes": 1806,
+        "sha256": "8ed40ee7d3637ce597e5670496dfab9e923ab04e09e1f726ff59835e355c89c6",
+        "snapshot": "sources/jointopt/geometry.py"
+      },
+      {
+        "bytes": 4869,
+        "sha256": "272253c56a4f84a76ebdeed145bc31a93156c3490a1de87bb72e007bb9db5f66",
+        "snapshot": "sources/jointopt/local_trial.py"
+      },
+      {
+        "bytes": 3876,
+        "sha256": "887dfe7c820ee6d66a818790a55997a8cbb2385f5ac6dd73411a208611f13cb7",
+        "snapshot": "sources/jointopt/mapping.py"
+      },
+      {
+        "bytes": 8817,
+        "sha256": "391387c09ba3f648c730ee98baaf43349b23515647f61e52430021c9960fb702",
+        "snapshot": "sources/jointopt/native.py"
+      },
+      {
+        "bytes": 10892,
+        "sha256": "c9a5e8ee9a757e8127087d1e2d16931f4b7b784687d3d831e0ecd3d40bf750f8",
+        "snapshot": "sources/jointopt/objective.py"
+      },
+      {
+        "bytes": 12784,
+        "sha256": "68a6be4e1401ef98af8c34d84762fad6755a336a558503d9480919a263276753",
+        "snapshot": "sources/jointopt/observable_phase.py"
+      },
+      {
+        "bytes": 7925,
+        "sha256": "916344513794b3fb645456057648c2c82a6351cbadd5a36a5db94bccf2dd5b4a",
+        "snapshot": "sources/jointopt/observable_variation.py"
+      },
+      {
+        "bytes": 6278,
+        "sha256": "568e8523aca34df15d3a7efd8a878d9de25dcdebbde58989e32f6694faa825a4",
+        "snapshot": "sources/jointopt/operational_evidence.py"
+      },
+      {
+        "bytes": 4897,
+        "sha256": "0cf5b3513895c904904b220234ab9699dbac3c5a6de674e1f30a044335aa481a",
+        "snapshot": "sources/jointopt/optimizer.py"
+      },
+      {
+        "bytes": 2152,
+        "sha256": "56d6fc95fdcd596c2ab5cb5e3fd9ad685f1ec983c9508f9849842bcb6dadc4ef",
+        "snapshot": "sources/jointopt/pair_source.py"
+      },
+      {
+        "bytes": 6335,
+        "sha256": "d1c9742a23b218f180d852921165b6ac8343cf098211b013bc7ddfe5228a9349",
+        "snapshot": "sources/jointopt/response.py"
+      },
+      {
+        "bytes": 1085,
+        "sha256": "1391782519ff60cd5cefe080774af341d744ed5b0d3cd8f4735dff0787a3f209",
+        "snapshot": "sources/jointopt/trial_diagnostic.py"
+      },
+      {
+        "bytes": 2079,
+        "sha256": "758e2f2cfd2dd221e7554866f5c4423f2c119ef9f4e102467551bbb6f53b593f",
+        "snapshot": "sources/jointopt/validation.py"
+      },
+      {
+        "bytes": 2467,
+        "sha256": "577e4b8f529e655e2468c44c336c2861908ca566e144c7a0cf90f6344715e4bb",
+        "snapshot": "sources/jointopt/validity.py"
+      },
+      {
+        "bytes": 5209,
+        "sha256": "7ec76977c37113f1990fe23b80d384b2f21e41de10d9b56c3c43504927d9abef",
+        "snapshot": "sources/integration/contract_checks.py"
+      },
+      {
+        "bytes": 6567,
+        "sha256": "5edbb59ebea92cfdc7f5a7d4e36189e4f17776b98e234b300a547d96492d02cc",
+        "snapshot": "sources/integration/pilot_adapter.py"
+      },
+      {
+        "bytes": 1181,
+        "sha256": "da293faa706a26ea204f920b9a0bbf47c443c92dfbff4980c44e466f2685b076",
+        "snapshot": "sources/integration/diagnostic_capture.py"
+      },
+      {
+        "bytes": 6405,
+        "sha256": "3894cf9336c6603472eecfcba6d679fba0d6e7b0f341560fd17b4fd26972aa37",
+        "snapshot": "sources/base/array_model.py"
+      },
+      {
+        "bytes": 2559,
+        "sha256": "f7fe2d139872df8d4ed01d066b3e8a8aac2179fb4a9a78bb5d49572c1c217f88",
+        "snapshot": "sources/base/parameterization.py"
+      },
+      {
+        "bytes": 2409,
+        "sha256": "547e88abf07702a473a9a935a67395f774337133acaa038030a48f39b9aa0e01",
+        "snapshot": "sources/base/recording.py"
+      },
+      {
+        "bytes": 6283,
+        "sha256": "ca4b4652060b0547b9021e5b2757bbe1f991db9eeee37615dfa5a993f0b28967",
+        "snapshot": "sources/base/records.py"
+      },
+      {
+        "bytes": 2122,
+        "sha256": "729e58af28e1b7c551a1035c994ff566fbdb0fae25666f2c92281db7b3292335",
+        "snapshot": "sources/base/source_audit.py"
+      },
+      {
+        "bytes": 1905,
+        "sha256": "a515827f38c91e0f768d010dac3340ed708fef84932eb3cb0965e589bda3ee70",
+        "snapshot": "sources/base/config.json"
+      },
+      {
+        "bytes": 21179,
+        "sha256": "2b32ec8f81b32a3eddefee8d252d0dba303264e8ee85dda46f1a982de174c23d",
+        "snapshot": "sources/base/inputs/spec.json"
+      },
+      {
+        "bytes": 19072,
+        "sha256": "4f2c03d4bbfd71a5695122b4757782bfd3d7e71fa5aa2d27b4d3636cc3f03576",
+        "snapshot": "sources/base/inputs/audit.json"
+      },
+      {
+        "bytes": 2390,
+        "sha256": "a567eee22225eb6a14b6fd4eac94298fd29b7922115777f65ace2e1ad4e2e9d3",
+        "snapshot": "sources/historical-documents/objective-contract.json"
+      },
+      {
+        "bytes": 22776,
+        "sha256": "d5c0f7586e30c16951c6f7e9376dcb760bba0d2528f62287a8bef6c64678591c",
+        "snapshot": "sources/historical-documents/requirements-source.yaml"
+      },
+      {
+        "bytes": 3000,
+        "sha256": "1ffae3d658fdc281242fe1d043c67e8828d4a16d9f2d8d851e861dd78dde0bf7",
+        "snapshot": "sources/historical-documents/requirements-trace.json"
+      },
+      {
+        "bytes": 5683,
+        "sha256": "346b8de9dce2cbb689438b318fcf8a82bd37f862e894a0b18708c381f709b09a",
+        "snapshot": "sources/streaming-r2/streaming.py"
+      },
+      {
+        "bytes": 3222,
+        "sha256": "655642dc3937e4baf1811320ae3242aeb7e00d70cf2d4757cd9ffb203b01e16e",
+        "snapshot": "sources/streaming-r2/source_stream.py"
+      },
+      {
+        "bytes": 7778,
+        "sha256": "1ad60062a61a1ef10c6a5def14ceb1f7b6b8a96eb6e93e5aa0ea80efe866337d",
+        "snapshot": "sources/streaming-r2/source_loader.py"
+      },
+      {
+        "bytes": 219476,
+        "sha256": "02dbfc45a7bc576a7ab25f81788ea2d2a72506ba785010c263b5c581d7d71eb4",
+        "snapshot": "sources/streaming-r2/package-p3.json"
+      },
+      {
+        "bytes": 219506,
+        "sha256": "4ce110bd4777cbae27dad8dab2e3300f4ac6ebd3ddb7bb93c7fe6a54a3285e70",
+        "snapshot": "sources/streaming-r2/package-p4.json"
+      },
+      {
+        "bytes": 54771,
+        "sha256": "8cc72734cac61b3f6e5a609def93ea58446cd6a06d9b7b1ebc48d7d7b32758cf",
+        "snapshot": "sources/native/problem.py"
+      },
+      {
+        "bytes": 16207,
+        "sha256": "213dd6e8fb4b24e9498a84cf45d82342ea1d044c158d37a743113d4be9816aa2",
+        "snapshot": "sources/native/farfield.py"
+      },
+      {
+        "bytes": 40296,
+        "sha256": "ad88d29c2d0776a39259c21f6b23e44b464f71f92bfdf6facc7be90146309844",
+        "snapshot": "sources/native/ports.py"
+      },
+      {
+        "bytes": 16698,
+        "sha256": "1b5a7ca3ed46b17b199b1c533d3ffaa0aba4ec6833665362cafb240a9a5eaa5b",
+        "snapshot": "sources/native/board.py"
+      },
+      {
+        "bytes": 53385,
+        "sha256": "d1d16ba4f08deaf63044e3e1fc204b1a7c677eb23ddbb670b59d46b09a73eb79",
+        "snapshot": "sources/native/spec.py"
+      },
+      {
+        "bytes": 10023,
+        "sha256": "5b9215500c5ecd36127bdc6df4d435e2feb0b6c3b0e93d5a1dfdf9eb3baf45e8",
+        "snapshot": "sources/native/adjoint.py"
+      },
+      {
+        "bytes": 2194,
+        "sha256": "307e3460d660b41f48e5384f85c80ec01c3a75e9af33dcaec864f5625a2cd564",
+        "snapshot": "sources/native/fdtd/dtft.py"
+      },
+      {
+        "bytes": 12690,
+        "sha256": "929d23835f2a3b28b213beaefd040591c7a202557fe4efea4447604743843e36",
+        "snapshot": "sources/native/fdtd/sources.py"
+      },
+      {
+        "bytes": 28832,
+        "sha256": "b9b7e0117ab74b77aec79dce1eb68ddd8f8beb128b4b7e060d42e0e8b0f0dd67",
+        "snapshot": "sources/native/fdtd/engine.py"
+      },
+      {
+        "bytes": 4304,
+        "sha256": "5447a5fad951e9ecf78f0ddd39fdc3e504752bdcb368138730ef0e3c977964f1",
+        "snapshot": "sources/native/design/parameterization.py"
+      },
+      {
+        "bytes": 1455,
+        "sha256": "0a1098e28b420108832fbd5f1622da5dbb5f3a3ac71698ec9ef19516ab9fc629",
+        "snapshot": "sources/native/design/projection.py"
+      },
+      {
+        "bytes": 2787,
+        "sha256": "8dfcc1c5282d9b94a01610fe286b56542ebc0bc46412240e40ff360c88a48ddd",
+        "snapshot": "sources/native/design/filters.py"
+      },
+      {
+        "bytes": 7448,
+        "sha256": "25ca93fb1517a5d74d95c4c0bdb6d12acd63b653708df136be62520735f223b8",
+        "snapshot": "sources/evidence/normalization.json"
+      },
+      {
+        "bytes": 5825,
+        "sha256": "1517bcd62f0b15f02361cd3e753dcb7083b67ca9d975e7eba2d1d1839619eab9",
+        "snapshot": "sources/evidence/normalization-binding.json"
+      },
+      {
+        "bytes": 157784,
+        "sha256": "ebd89dac3334b91744629f7974ac782a8d55ca627b7a293d23ae2e65cc899b2d",
+        "snapshot": "sources/evidence/objective-before-gate.json"
+      },
+      {
+        "bytes": 46666,
+        "sha256": "bca46a09303bced0ba559a520f9aa290556d31659b37a2c23a0172e85027857d",
+        "snapshot": "sources/evidence/acceptance-regressions.json"
+      },
+      {
+        "bytes": 9707,
+        "sha256": "7500eaad1e1711290d469bdf6f467974e71d471b603930e378af4e558e4a5bb1",
+        "snapshot": "sources/evidence/surrogate-counterexamples.json"
+      }
+    ],
+    "status": "frozen_current_implementation_for_explicit_scientific_adoption",
+    "surrogate": {
+      "chord": "C(z,t)=|z-|z|exp(i*t)|^2; C1 at zero, derivative zero there",
+      "floor": "fixed mean max((P0-|h|^2)/P0,0)^2 over3freq,4Jones,2paths and weighted32angles; code uses abs().square()",
+      "gain": "gain_db=10log10(max(sum2Jones |E|^2,1e-20)); tau*logsumexp(relu((gain_goal_dbi-gain_db)/10)^2/tau) over3freq*32angles*2ports",
+      "gradient_bound_scope": "primitive normalization Jacobian norm<=1/sqrt(P0); chord bound||grad C||<=8|z|. A per-factor80 bound atP0=.01 is BEFORE product reuse, delay scaling and aggregation; not a bound on the complete objective VJP",
+      "isolation_advice": "mean relu(|S_BA or S_AB|^2/10^(-25/10)-1)",
+      "no_candidate_dependent_loss_masks": true,
+      "normalization": "u=h/sqrt(h.real^2+h.imag^2+P0)",
+      "pair_delay": "fixed weighted mean C(u_A_lo*conj(u_B_lo)*conj(u_A_hi)*u_B_hi,delta_target)/(2*pi*df*100ps)^2 over2 intervals and same fixed samples",
+      "path_variation": "v_i=u_hi*conj(u_lo), i=(interval,angle); sum_ij w_i*w_j*C(v_i*conj(v_j),0)/(2*alpha_i*alpha_j), mean over4 Jones and2 paths; w_i=w_angle/2, alpha_i=2*pi*df_i*100ps",
+      "phase": "fixed weighted mean C(conj(u_A)*u_B,target) over3 frequencies,32 directions,4 Jones states",
+      "shape": "gain_db minus weighted angular mean perfrequency/port; relu(weighted angular variance/3dB^2-1), mean frequency/port",
+      "slope": "finite angular tangent dh=(h_plus-h_minus)/(2*.001); Im(conj(h)*dh)/max(|h|^2,P0), B-A; subtract signed target tangent slope, divide k*norm(d); mean over tangents/freq/Jones and fixed angular weights",
+      "weights": {
+        "delay": 0.1,
+        "floor": 1.0,
+        "gain": 1.0,
+        "isolation_advice": 1.0,
+        "path_delay_advice": 0.1,
+        "phase": 1.0,
+        "shape": 1.0,
+        "slope": 0.1
+      }
+    },
+    "surrogate_differences": {
+      "alias_period_s": 4.0064102564102565e-9,
+      "circle": "periodic chord can descend while raw interval variation rises; acceptance compares raw reference-support differences separately",
+      "confidence_bias": "equal power p small-spread suppression [p/(p+.01)]^4; 1/16 at floor,0.6830 at10*floor. General limit S*sum(w_i*a_i*(tau_i-mu_a)^2)/tau_s^2, a_i=|v_i|^2,S=sum(w_i*a_i)",
+      "delay_bound_available": false,
+      "equal_interval_common_delay_invariance": true,
+      "exact_ch9_interval_mismatch_hz": 9.5367431640625e-7,
+      "exact_unequal_interval_common_delay_invariance": false,
+      "global_equivalence_to_original_delay_variance": false,
+      "near_pi_heuristic_complete": false,
+      "old_counterexamples_preserved": true
+    },
+    "unresolved_decisions": [
+      {
+        "blocks": [
+          "calling surrogate descent physical delay improvement",
+          "general optimizer activation"
+        ],
+        "decision": "Explicit scientific adoption of the circular confidence-weighted merit for the scoped diagnostic gradient comparison; mathematical derivative validation does not imply it equals the original arithmetic delay metric.",
+        "diagnostic_derivative_is_well_defined": true,
+        "id": "ADOPT-SURROGATE"
+      },
+      {
+        "blocks": ["general mixed-tradeoff optimization"],
+        "current_rule_executable": true,
+        "decision": "Retain conservative componentwise rejection as interim acceptance. Any compensation among raw phase/delay/advisory metrics or worsening individual deficient samples needs explicit priorities/bounds; no new weights invented.",
+        "id": "TRADEOFF"
+      },
+      {
+        "blocks": ["full_band_delay_certified", "REQ-17 acceptance"],
+        "decision": "No justified absolute/path-delay or between-sample phase bound is available. Three samples and near-pi warnings cannot certify aliases or continuous-band delay. Dense/adaptive differentiation plus uncertainty/held-out checks required.",
+        "id": "BRANCH"
+      },
+      {
+        "blocks": ["chip_plane_qualification"],
+        "decision": "Loaded chip-ball RF1/H11 and RF2/H5 transfer, real loads, filters/DC blocks/package/return/enclosure and physical receive/reciprocity sign remain unqualified. Current internal transmitting convention is frozen, not relabeled.",
+        "id": "REFERENCE"
+      },
+      {
+        "blocks": ["whole_problem_RF_acceptance", "REQ-13 acceptance"],
+        "decision": "No adopted minimum useful full-sphere/SO(3)/peer polarization coverage fraction or residual/slope physical tolerances. Four Jones states and32 directions do not settle these choices.",
+        "id": "COVERAGE"
+      },
+      {
+        "blocks": ["manufacturing_qualification"],
+        "decision": "Projection etas .4/.5/.6 are deterministic design morphology probes, not calibrated etch/material/temperature/enclosure tolerances. Full-band/all-port/all-variant gradients and physical corners remain separate.",
+        "id": "VARIANTS"
+      },
+      {
+        "blocks": ["REQ-18 acceptance"],
+        "decision": "Freeze channel waveform/STS, receive weighting and loaded reference planes before fidelity evaluation; .99 is a proposed study goal, no measured/result claim.",
+        "id": "PULSE"
+      },
+      {
+        "blocks": ["checkpoint reuse under this freeze"],
+        "decision": "Existing optimizer.save/restore omits acceptance revision/source manifest. Adopt this additional hash/scope checker before future checkpoint use; legacy files without the binding are rejected here and not silently migrated.",
+        "id": "CHECKPOINT-ADOPTION"
+      }
+    ],
+    "version": "1.0.0"
+  }
+}

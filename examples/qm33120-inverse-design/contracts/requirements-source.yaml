@@ -1,0 +1,352 @@
+# Public scientific requirements projection; private conversation and operational data omitted.
+# Original source digest is retained in source-provenance.json; this is not an authenticated original receipt.
+project:
+  name: QM33120 dual printed antenna RF article
+user_needs:
+  - id: UN-1
+    title: Dual printed microstrip antenna and complete QM33120 RF layout
+    description: Design the complete QM33120 RF portion, including printed antennas
+      and microstrip feeds from package fanout.
+  - id: UN-2
+    title: Reproducible work independent of the laptop
+    description: Deliver reproducible editable design sources and independently executable
+      bounded experiments.
+  - id: UN-3
+    title: Both UWB channels and AoA/PDoA; delegated architecture choices
+    description: Support channels 5 and 9 with AoA/PDoA; alternative printed antenna
+      geometries remain within the design exploration.
+  - id: UN-4
+    title: Targeted-pattern inverse design and planar two-baseline feasibility
+    description: Use adjoint inverse design for targeted patterns and investigate channel-dependent
+      orthogonal coplanar pairs through two diplexers. Preserve the verified package/support
+      baseline until candidate integration passes.
+  - id: UN-5
+    title: Preserve mirror ambiguity for temporal and network fusion
+    description: Account for IMU-assisted motion history and network ranging when resolving
+      mirror ambiguity. Do not impose rear suppression solely for ambiguity. Retain
+      alternate hypotheses, timestamps, uncertainty and degeneracy indicators.
+  - id: UN-6
+    title: Arbitrary orientation with maximum feasible coverage and a mounting guide
+    description: Devices may have arbitrary 3D orientation. Maximize feasible near-full-sphere
+      useful reception and two-axis observability, not preferred-facing sectors. Provide
+      a mounting/performance guide with axes, baselines, polarization, nulls, angular
+      uncertainty under explicit noise assumptions, peer-orientation and ambiguity caveats.
+  - id: UN-7
+    title: Direction-cosine PDoA at the chip RF ports
+    description: Target the expected direction-cosine relation between wavefront direction
+      and PDoA at the chip RF ports.
+requirements:
+  - id: REQ-1
+    title: Exact device and package verified
+    description: Verify the QM33120W 52-ball WLCSP orientation, package and land pattern
+      against the applicable datasheet release. Historical source review covered Rev
+      C package geometry and pad names; release qualification still requires Rev D reconciliation,
+      paste specification and dimensioned ground exclusions. This snapshot does not
+      include or independently revalidate that package CAD.
+    satisfies:
+      - UN-1
+    method: inspection
+  - id: REQ-2
+    title: Complete RF connectivity from both package ports through diplexers to four
+      antennas
+    description: Every intended RF/return net connected with zero unintended opens or
+      shorts, including both 2pF DC blocks, both reference Murata filters, per-port
+      diplexers, matching provisions, support circuit and clock. Current E73 intended
+      netlist is design/four_chain_compensation_r2/rf-intended-netlist.json. Digital
+      EXTERNAL interfaces intentionally unrouted. E73 native connectivity passes but
+      its printed diplexer and antenna seed RF responses fail. New isolated components
+      are not integrated or accepted merely because their geometric checks pass.
+    satisfies:
+      - UN-1
+    method: inspection
+  - id: REQ-3
+    title: Controlled return path and package ground exclusions
+    description: Exact Qorvo top/near-inner exclusions and first solid plane >=0.25mm
+      below top remain required. Six-layer trial first solid In2.Cu ground is 0.526mm
+      below top copper bottom. Nondimensioned RevC p43 exclusion geometry remains provisional
+      pending vendor CAD. Four radiator ground exclusions must follow the exact current
+      native board geometry and return-path checks on every relevant layer. The original
+      two-radiator y10.2 void is historical, not the four-radiator rule. Exact vendor
+      CAD, RevC/D reconciliation and aperture data remain release gates.
+    satisfies:
+      - UN-1
+    method: inspection
+  - id: REQ-4
+    title: Confirm operating channels and mode
+    description: 'Confirmed channels5/9 at6.2400-6.7392 and7.7376-8.2368GHz with PDoA.
+      October23 exploration: two diplexers connect both RF ports to an x-baseline pair
+      onch5 and y-baseline pair onch9. Each band still needs TWO antennas; it is not
+      one antenna per band. Sequential channel scheduling, compatible peer STS/PHY,
+      exact-driver setup/PLL/calibration and latency qualification remain open. Existing
+      dual-band two-radiator design is retained as failed baseline.'
+    satisfies:
+      - UN-1
+      - UN-3
+    method: inspection
+  - id: REQ-5
+    title: Document chosen board, stack and enclosure limits
+    description: Printed geometry, outline, stack and enclosure limits are design assumptions;
+      the October23 four-planar-radiator exploration uses a speculative 40x80mm board
+      with nominal x20.8mm/ch5 and y16.8mm/ch9 baselines. Current six-layer stack is
+      design/four_chain_compensation_r2/hdi-stack.json, nominal1.396mm RO4450F/RO4350B
+      with shallow F-In1 125um laser/240um land filled/capped microvias. Pressed dielectric/resin
+      fill, registration, finish/roughness and fabrication capability require validation.
+      Model open air first, then actual mounting/enclosure effects; no verified numeric
+      metal clearance or arbitrary-orientation performance is asserted. The original40x50mm/16mm
+      baseline and four-layer/uniform-substrate studies remain historical. No specific
+      geometry is user-accepted or manufacturing-ready.
+    satisfies:
+      - UN-1
+    method: inspection
+  - id: REQ-6
+    title: Matched microstrip feeds
+    description: 'Proposed criterion pending acceptance: nominal 50 ohm, 45–55 ohm across
+      confirmed channels and fabrication tolerance corners; RF discontinuities and capacitors
+      included in assembly EM/circuit cosimulation. Geometric estimates alone cannot
+      satisfy. Status: open.'
+    satisfies:
+      - UN-1
+    method: simulation
+  - id: REQ-7
+    title: Dual antenna response
+    description: Historical E35 return<=-10dB, coupling<=-15dB and intrinsic efficiency>=0.6
+      results remain failed and unchanged. E44 restricted-sector/fixed-global-y objectives
+      are historical, superseded. Revised native screening proposes full-sphere uniform
+      total-power shape (3dB RMS normalized log error), total realized gain>=-6dBi at
+      native spherical quadrature samples, total efficiency>=0.6, return<=-10dB and
+      active-pair coupling<=-20dB over both bands in historical screening. Following
+      the requested APH511 Rev1.1 p4 section6.2 review, future active-pair isolation
+      goal is >=25dB over both bands, measured at RF1/RF2 chip-ball reference planes
+      with the complete loaded network. This is Qorvo best-performance guidance adopted
+      as a design target, not a mandatory silicon limit or achieved compliance. Preserve
+      all historical15/20dB criteria and outcomes. Antenna-terminal coupling must also
+      be reported separately so lossy feeds cannot appear to fix coupling. Radiation
+      and total efficiency definitions/targets are in REQ-19. No forced null or rear-rejection
+      region. These are ambitious search goals, not achieved results or user-approved
+      performance waivers. Report continuous solid-angle coverage, minima and low percentiles
+      on independent dense samples; sampled total gain does not prove arbitrary-peer
+      reception. Preserve full loaded-array/source/mesh/domain/assembly gates.
+    satisfies:
+      - UN-1
+      - UN-6
+    method: simulation
+  - id: REQ-8
+    title: PDoA feed phase, delay and amplitude balance
+    description: 'Active for confirmed PDoA. Engineering targets: complete branch raw
+      differential feed phase <=5 deg and amplitude imbalance <=0.5 dB over both bands;
+      differential group delay <=1 ps. Evaluate package-ball-to-antenna-feed complex
+      transfer, matched component MPNs/land patterns, DC blocks and returns. Trace length
+      estimates cannot satisfy. Calibration does not excuse failed impedance, excessive
+      differential dispersion or an unqualified source. Status: open. Feed-balance limits
+      apply to excess feed transfer, not to the desired angle-dependent spatial phase.
+      Internal-anchor balance cannot satisfy the complete chip-port target in REQ-13.
+      APH511 p4 permits calibration of a direction-independent offset rather than requiring
+      exact drawn length equality. Existing proposed excess-feed phase/amplitude/differential-delay
+      targets remain unchanged and are separate from REQ-17 absolute path variation
+      and the intended spatial delay. Do not use per-angle recalibration to remove baseline
+      error.'
+    satisfies:
+      - UN-1
+      - UN-3
+    method: simulation
+  - id: REQ-9
+    title: Native final-artifact design-rule validation
+    description: 'Zero unwaived native KiCad 10 DRC violations and zero unintended unconnected
+      items on exact final board; do not suppress violations. Fabricator limits remain
+      pending. Status: open.'
+    satisfies:
+      - UN-1
+    method: inspection
+  - id: REQ-10
+    title: RF numerical evidence
+    description: 'Proposed convergence criteria: <=0.02 max complex S change between
+      final two meshes, resonance shift <=1 percent; residual energy <=1e-6; repeat
+      increased air/PML domain with <=0.02 complex S change. Record material dispersion/loss,
+      boundary, mesh, port/deembedding, passivity, reciprocity and both drives. Status:
+      open.'
+    satisfies:
+      - UN-1
+    method: simulation
+  - id: REQ-11
+    title: Reproducible scientific project
+    description: Deliver editable sources, immutable engine/tool pins, fixed inputs
+      and seeds, commands and hashes. Preserve failed results and distinguish analytical,
+      simulated and measured evidence. Mounting/full-chain figures must state uncertainty,
+      noise and coverage assumptions. Private execution permissions, account details,
+      budgets and operator state are omitted from this public scientific projection;
+      it is not execution authorization.
+    satisfies:
+      - UN-2
+      - UN-6
+    method: inspection
+  - id: REQ-12
+    title: Physical verification before manufacturing readiness
+    description: 'Measured two-port VNA, radiation/efficiency, enclosure/tolerance and
+      calibrated ranging/AoA tests on populated prototypes. No measured or manufacturing-ready
+      claims without evidence. Status: open; no physical hardware available.'
+    satisfies:
+      - UN-1
+    method: hil
+  - id: REQ-13
+    title: Embedded phase, two-baseline observability and ambiguity-aware output
+    description: 'Geometric x baseline20.8mm/ch5 and y baseline16.8mm/ch9 are initial
+      search constraints, not validated electrical phase centres. Require full-sphere
+      common-origin loaded-network complex fields, both band-specific phase differences,
+      pair Jones-vector compatibility, orientation-dependent link and phase bias, angular
+      Jacobian/singular values and ambiguity outputs. No fixed polarization imposed
+      in the new search; final active-pair polarization must support reliable PDoA under
+      supported peer attitudes. Evaluate all relative peer orientations through sampled
+      SO(3), including both-axis versus at-least-one-band link coverage, and near-PCB-plane
+      conditioning. Preserve both sign hypotheses for uz for IMU/network fusion; stationary/degenerate
+      cases can remain unresolved. No instantaneous uniform full-sphere accuracy claim.
+      Explicit October23 clarification: at the RF1/H11 and RF2/H5 package-ball reference
+      planes, target differential phase = signed k(f)*d_band dot u + bounded direction-independent
+      offset; d_ch5 along x and d_ch9 along y. Include all feed/filter/DCblock/return
+      and relevant package/interface transfer. Check residual phase, signed local directional
+      slope, continuity and aliases on dense held-out angles/frequencies across both
+      bandwidths, relative peer polarization and manufacturing variants, with nonzero
+      signal floors and explicitly reported unsupported directions. Freeze offset/calibration
+      parameterization and proposed residual/slope tolerances before optimization; no
+      arbitrary angle-dependent fitted offset. Wrapped-complex loss alone is insufficient.
+      Axis-angle convention gives cos(theta); corresponding broadside angle gives sin(alpha),
+      not linear phase versus angle in degrees. Current native optimizer lacks this
+      cross-excitation objective; no passing evidence exists.'
+    satisfies:
+      - UN-3
+      - UN-4
+      - UN-5
+      - UN-6
+      - UN-7
+    method: simulation
+  - id: REQ-14
+    title: Per-channel PDoA calibration and held-out angular error
+    description: 'Generate per-channel antenna-design LUT plus board/device phase offsets
+      using actual mode and waveform. Design targets: held-out max absolute angular
+      error <=5 deg, RMSE <=3 deg over declared sector, channels, temperature/material
+      corners and supported polarization. Use <=2 deg angular sweep and independently
+      held-out angles; assess phase wrapping, repeatability, frequency dependence and
+      SNR. Physical prototype measurements required; no vendor EVB LUT assumed transferable.
+      Status: open. October23 extension: per-channel/per-pair calibration, time alignment
+      and loaded diplexer phase/delay; simulation LUT interpolation is not independent
+      measured angular validation. Preserve mirror hypotheses and do not cross-compare
+      carrier phases at different frequencies as one coherent measurement. Latest requirement
+      removes preferred-facing sectors: report calibrated error distribution and supported
+      coverage fraction over full-sphere/peer orientations; earlier sector targets remain
+      historical, not waived or counted passed. Absolute angular resolution requires
+      a calibrated noise/model basis. Chip-port electromagnetic direction-cosine behavior
+      is distinct from the device PDoA estimator. Validate actual waveform/STS, receiver
+      frequency weighting, channel calibration, motion timing and multipath responses
+      against physical measurements; do not infer estimator linearity from a single-frequency
+      far-field phase fit.'
+    satisfies:
+      - UN-3
+      - UN-6
+      - UN-7
+    method: hil
+  - id: REQ-15
+    title: Native targeted-pattern inverse synthesis with truthful model scope
+    description:
+      'Run pinned yapnr density/filter/projection/adjoint/MMA with pattern+gain+efficiency+matching+isolation
+      objectives, deterministic seed/budget and objective histories. Verify gradient
+      directional derivatives before trusting updates. Export best repaired binary copper
+      and native manufacturability checks. Native proxy has one dielectric/one ground/no
+      vias and no cross-excitation phase objective; full six-layer loaded-network/common-origin
+      phase validation is mandatory before integration acceptance. No return-loss-only
+      substitute. Revised full-sphere power objectives remove preferred sectors and
+      fixed-global-y polarization. Native engine has no cross-excitation/Jones/SO(3)
+      objective: independently reject inadequate pair polarization/phase/link coverage.
+      Do not claim those were optimized directly. The unified two-port copper concept
+      is assessed in reports/unified-two-port-feasibility.md. Cross-excitation complex-field
+      and cross-frequency delay gradients must be implemented and qualified before claiming
+      this requirement was optimized at chip planes. The conceptual question alone did
+      not launch that implementation.'
+    satisfies:
+      - UN-1
+      - UN-4
+      - UN-6
+    method: simulation
+  - id: REQ-16
+    title: Two-diplexer loaded RF path and phase integrity
+    description: 'Provisional diplexer goals per copy: channel5/9 full499.2MHz passbands,
+      insertion loss<=1.5dB, common/active-port return>=15dB, branch rejection>=30dB.
+      No inherent3dB splitter assumption. Evaluate all complexS and actual inactive
+      loads, pair-to-pair phase/dispersion/tolerance, coherent wrong-baseline leakage,
+      spectral/blocking function of existing Murata filters and per-path ranging-delay
+      calibration. Do not remove original filters silently. Preserve both2pFDCblocks
+      and verified package/support netlist. Historical full-array isolation goal>=20dB
+      remains distinct from filter branch rejection. Future active-pair isolation goal>=25dB
+      follows APH511 p4; no branch-rejection substitution or historical result rewrite.
+      Include absolute per-path group-delay variation under REQ-17 and pulse fidelity
+      under REQ-18. Qorvo APH511 p5 reports66ps for the Murata filter only over7.75-8.25GHz;
+      that is not fullch9/ch5, pairedtolerance or fullchain qualification.'
+    satisfies:
+      - UN-1
+      - UN-4
+    method: simulation
+  - id: REQ-17
+    title: Absolute RF path group-delay variation
+    description: 'Adopt APH511 Rev1.1 p4 Phase Variation / Group Delay recommendation
+      as an engineering goal: variation<100ps within each relevant channel band and
+      useful orientations. It is not an absolute transit-delay bound or a mandatory
+      device limit. Define loaded complex receive H_j(f,u,p) at50ohm RF1/H11 and RF2/H5
+      chip-ball planes from a unit plane wave at one fixed board origin, with unchanged
+      time convention. tau_j=-(1/(2pi))*d unwrap(arg H_j)/df. Remove only declared common
+      free-space propagation delay; do not independently recenter elements or fit angle-dependent
+      offsets. Report per-angle frequency variation, per-frequency orientation variation
+      and conservative joint peak-to-peak variation over each band and declared peer-polarization
+      states; label the joint aggregation as our engineering interpretation. Record
+      known intended spatial delay separately; do not conflate it with differential
+      excess-feed dispersion. Require dense/adaptive frequency differentiation, held-out
+      angles, convergence and uncertainty of derivative, common origin, fixed signal
+      floors and explicit unsupported low-signal coverage. Include feed/filter/DCblock/package/return,
+      enclosure and temperature/manufacturing variation. APH007v1.2 p5 section4.8 independently
+      recommends<=100ps orientation variation. The exact499.2MHz device bands and at-least500MHz
+      guidance/margin must be distinguished. Current source text reviewed; pixels/PDFchecksums
+      and all physical/path qualification remain open.'
+    satisfies:
+      - UN-1
+      - UN-3
+      - UN-7
+    method: simulation
+  - id: REQ-18
+    title: Channel-specific UWB pulse fidelity
+    description: 'APH007v1.2 p5 section4.6 recommends fidelity>=0.99 for DW1000. Adopt
+      this as a proposed QM33120 study goal pending exact waveform/receiver weighting
+      definition, not a verified silicon requirement or transfer of DW1000 channel assumptions.
+      Before evaluating, freeze actual QM33120 channel5/9 transmit waveform/STS pulse
+      spectrum, receive filtering, peer polarization and input/output chip reference
+      planes. Report normalized complex cross-correlation max over one global time shift
+      and constant phase: F=max_tau |integral x(t)*conj(y(t+tau))dt|/sqrt(E_x E_y),
+      without time warping or per-frequency/per-angle equalization. State this explicit
+      engineering metric; the source does not define its formula. Also report the maximizing
+      delay and gain/loss without normalization so poor links or ranging bias cannot
+      be concealed. Test fixed supported orientations and manufacturing/temperature/enclosure
+      cases, with held-out waveform cases and zero/low signal rejected as invalid, not
+      perfect fidelity. Preserve unsupported coverage statistics. Actual pulse measurements
+      and chip estimator tests remain required by REQ-12/14. No fidelity result exists.'
+    satisfies:
+      - UN-1
+      - UN-3
+      - UN-7
+    method: simulation
+  - id: REQ-19
+    title: Radiation and total efficiency with complete power accounting
+    description: APH007v1.2 p4 section4.3 recommends radiation efficiency>=0.60 and
+      aim0.90, defined relative to accepted antenna power. Treat these as engineering
+      goals; keep the separate historical total-efficiency>=0.60 search goal. For antenna-subassembly
+      excitations with all other ports in declared passive terminations, report incident
+      power, reflection, each coupled-port output, radiated power and conductor/dielectric/component
+      dissipation. Use P_net=sum_ports(P_inc-P_out), eta_rad=P_rad/P_net for the enclosing
+      antenna EM volume, eta_total=P_rad/P_inc_active, and separately P_rad/(P_inc_active-P_reflected_active)
+      to expose power absorbed in other terminations. Explicitly identify volume boundaries
+      and whether loads are inside them. At chip planes report complete-chain total
+      efficiency and budget feed/filter loss rather than treating those as antenna intrinsic
+      loss. Verify conservation and uncertainty; require same geometry/materials/frequencies/drive
+      and adequate source/mesh/boundary convergence. E135 min25.923percent is total
+      efficiency of an unqualified one-port coupon and cannot by itself prove the intrinsic
+      radiation-efficiency target failed or passed. No accepted efficiency evidence;
+      physical tests remain REQ-12.
+    satisfies:
+      - UN-1
+      - UN-6
+    method: simulation

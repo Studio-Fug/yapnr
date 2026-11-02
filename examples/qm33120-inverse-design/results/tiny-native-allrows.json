@@ -1,0 +1,231 @@
+{
+  "source_receipt_sha256": "a9949271c1ac11b266c323495bad875455cea0da4aa697b657ffa4dc42991ff6",
+  "publication_scope": "Selected scientific metrics; raw native records are not included.",
+  "status": "PASS_REAL_NATIVE_COMPARISON",
+  "scope": "tiny_filtered_projected_allrows_finer_schedule_v1",
+  "actual_array_qualified": false,
+  "active": false,
+  "comparisons": [
+    {
+      "passed": true,
+      "row_passed": [true, true, true, true, true],
+      "informative": [true, true, true, true, true],
+      "relative_errors": [
+        [
+          4.290458447186934e-6, 3.6570572867892294e-5, 0.0004529586123181408, 3.1485210002455944e-7,
+          3.148493729930092e-7
+        ],
+        [
+          1.079721482262395e-6, 9.149857235381975e-6, 0.00011398159449265194, 7.85407271585768e-8,
+          7.85134302239819e-8
+        ]
+      ],
+      "plateau": [
+        3.2107507405171753e-6, 2.7420715632510318e-5, 0.0003389770178254889, 2.3631144726913806e-7,
+        2.3633601717927414e-7
+      ],
+      "gradient_stability": [
+        2.3378136397899454e-11, 1.693908572961413e-11, 7.883262987552384e-11, 8.929951987810325e-13,
+        2.6455643864317124e-12
+      ],
+      "finite_differences_supply_optimizer_gradients": false,
+      "actual_array_qualified": false,
+      "note": "Requires independent source/record/replay evidence and both frozen directions before array derivative qualification",
+      "direction_id": 0,
+      "row_keys": [
+        "ch5:phase_coverage_and_advisory_goals",
+        "ch5:P1:engineering_screen",
+        "ch5:P2:engineering_screen",
+        "ch9:P3:engineering_screen",
+        "ch9:P4:engineering_screen"
+      ],
+      "steps": [5e-5, 2.5e-5],
+      "protocol_sha256": "03209b5e5e9da1dbbccc62994b90202c7e2ed2bf78a9d0dfc30d9e65539d38d3",
+      "semantic_authentication_sha256": "5fd92bd63ce8264a8f9bc7a0f4d75fb71a2a32884b492aa08153f5b4d897e55b"
+    },
+    {
+      "passed": true,
+      "row_passed": [true, true, true, true, true],
+      "informative": [true, true, true, true, true],
+      "relative_errors": [
+        [
+          2.8759224203816835e-5, 0.00036186999902179575, 0.00015941843366622775,
+          6.796326879598808e-6, 6.796833956917043e-6
+        ],
+        [
+          7.198788777005745e-6, 9.052666832264758e-5, 3.9645219315008277e-5, 1.6735319219213436e-6,
+          1.6742997154410822e-6
+        ]
+      ],
+      "plateau": [
+        2.156043542681109e-5, 0.00027134333069914814, 0.00011979231145387671, 5.122794957677464e-6,
+        5.122534241475961e-6
+      ],
+      "gradient_stability": [
+        2.3378136397899454e-11, 1.693908572961413e-11, 7.883262987552384e-11, 8.929951987810325e-13,
+        2.6455643864317124e-12
+      ],
+      "finite_differences_supply_optimizer_gradients": false,
+      "actual_array_qualified": false,
+      "note": "Requires independent source/record/replay evidence and both frozen directions before array derivative qualification",
+      "direction_id": 1,
+      "row_keys": [
+        "ch5:phase_coverage_and_advisory_goals",
+        "ch5:P1:engineering_screen",
+        "ch5:P2:engineering_screen",
+        "ch9:P3:engineering_screen",
+        "ch9:P4:engineering_screen"
+      ],
+      "steps": [5e-5, 2.5e-5],
+      "protocol_sha256": "03209b5e5e9da1dbbccc62994b90202c7e2ed2bf78a9d0dfc30d9e65539d38d3",
+      "semantic_authentication_sha256": "5fd92bd63ce8264a8f9bc7a0f4d75fb71a2a32884b492aa08153f5b4d897e55b"
+    }
+  ],
+  "noise_diagnostics": [
+    {
+      "direction_id": 0,
+      "adjoint_direction": [
+        40.92223421310943, -0.32771333102742606, -8.802127350360774, -187.97498794345466,
+        -187.97498794375412
+      ],
+      "finest_fd": [
+        40.922278397772516, -0.327710332497233, -8.801124069850452, -187.97500270714806,
+        -187.97500270231637
+      ],
+      "base_normal_tight_scalar_delta": [
+        -6.037925714963421e-11, 3.9640513094241214e-11, -1.1620704398751514e-12,
+        -3.111821911261359e-11, -3.1107560971577186e-11
+      ],
+      "base_only_fd_sensitivity_relative": [
+        8.852770595430109e-8, 7.257656495687152e-6, 7.921292616795789e-9, 9.932667215680886e-9,
+        9.929265229219924e-9
+      ],
+      "first_order_arithmetic_roundoff_relative": [
+        4.551038895578852e-12, 1.9194583247876469e-10, 3.819369453573771e-12, 3.677207301848785e-12,
+        3.677207301943292e-12
+      ],
+      "tight_perturbed_forwards_available": false,
+      "rigorous_noise_bound": false,
+      "note": "Base sensitivity and floating arithmetic are diagnostics, not proof of perturbed-field convergence error. No tolerance waiver."
+    },
+    {
+      "direction_id": 1,
+      "adjoint_direction": [
+        -7.070130664784848, 0.038788123898993554, 0.23923706966311564, -8.176048598925895,
+        -8.176048598950636
+      ],
+      "finest_fd": [
+        -7.070079768407567, 0.03878461253936649, 0.2392465546452449, -8.17603491604757,
+        -8.176034909794794
+      ],
+      "base_normal_tight_scalar_delta": [
+        -6.037925714963421e-11, 3.9640513094241214e-11, -1.1620704398751514e-12,
+        -3.111821911261359e-11, -3.1107560971577186e-11
+      ],
+      "base_only_fd_sensitivity_relative": [
+        5.124028961759361e-7, 6.131853120424282e-5, 2.914325202964626e-7, 2.2836130731929592e-7,
+        2.2828309246280448e-7
+      ],
+      "first_order_arithmetic_roundoff_relative": [
+        2.633712604832362e-11, 1.621719245463386e-9, 1.405434290458922e-10, 8.455707445199376e-11,
+        8.455707445173778e-11
+      ],
+      "tight_perturbed_forwards_available": false,
+      "rigorous_noise_bound": false,
+      "note": "Base sensitivity and floating arithmetic are diagnostics, not proof of perturbed-field convergence error. No tolerance waiver."
+    }
+  ],
+  "new_forward_residuals": {
+    "fd_d0_t2.5e-05_forward_1": [
+      [5303, 7.47903824671041e-11],
+      [5465, 2.6871791252785083e-11]
+    ],
+    "fd_d0_t2.5e-05_forward_2": [
+      [5303, 4.9746652855425356e-11],
+      [5465, 1.9706192575761222e-11]
+    ],
+    "fd_d0_t2.5e-05_forward_3": [
+      [5303, 7.740986122893238e-11],
+      [5465, 2.7511037677877176e-11]
+    ],
+    "fd_d0_t2.5e-05_forward_4": [
+      [5303, 7.485688453238452e-11],
+      [5465, 2.688769108007544e-11]
+    ],
+    "fd_d1_t2.5e-05_forward_1": [
+      [5303, 7.474610902619683e-11],
+      [5465, 2.6854295565908486e-11]
+    ],
+    "fd_d1_t2.5e-05_forward_2": [
+      [5303, 4.9739229867752557e-11],
+      [5465, 1.970485651910043e-11]
+    ],
+    "fd_d1_t2.5e-05_forward_3": [
+      [5303, 7.736000688073253e-11],
+      [5465, 2.7508990799315976e-11]
+    ],
+    "fd_d1_t2.5e-05_forward_4": [
+      [5303, 7.481364397411676e-11],
+      [5465, 2.6870529432018008e-11]
+    ]
+  },
+  "negative_checks": [
+    "fd_d0_t2.5e-05_forward_1-port",
+    "fd_d0_t2.5e-05_forward_1-direction",
+    "fd_d0_t2.5e-05_forward_1-t",
+    "fd_d0_t2.5e-05_forward_1-protocol_sha256",
+    "fd_d0_t2.5e-05_forward_1-mode",
+    "fd_d0_t2.5e-05_forward_2-port",
+    "fd_d0_t2.5e-05_forward_2-direction",
+    "fd_d0_t2.5e-05_forward_2-t",
+    "fd_d0_t2.5e-05_forward_2-protocol_sha256",
+    "fd_d0_t2.5e-05_forward_2-mode",
+    "fd_d0_t2.5e-05_forward_3-port",
+    "fd_d0_t2.5e-05_forward_3-direction",
+    "fd_d0_t2.5e-05_forward_3-t",
+    "fd_d0_t2.5e-05_forward_3-protocol_sha256",
+    "fd_d0_t2.5e-05_forward_3-mode",
+    "fd_d0_t2.5e-05_forward_4-port",
+    "fd_d0_t2.5e-05_forward_4-direction",
+    "fd_d0_t2.5e-05_forward_4-t",
+    "fd_d0_t2.5e-05_forward_4-protocol_sha256",
+    "fd_d0_t2.5e-05_forward_4-mode",
+    "fd_d1_t2.5e-05_forward_1-port",
+    "fd_d1_t2.5e-05_forward_1-direction",
+    "fd_d1_t2.5e-05_forward_1-t",
+    "fd_d1_t2.5e-05_forward_1-protocol_sha256",
+    "fd_d1_t2.5e-05_forward_1-mode",
+    "fd_d1_t2.5e-05_forward_2-port",
+    "fd_d1_t2.5e-05_forward_2-direction",
+    "fd_d1_t2.5e-05_forward_2-t",
+    "fd_d1_t2.5e-05_forward_2-protocol_sha256",
+    "fd_d1_t2.5e-05_forward_2-mode",
+    "fd_d1_t2.5e-05_forward_3-port",
+    "fd_d1_t2.5e-05_forward_3-direction",
+    "fd_d1_t2.5e-05_forward_3-t",
+    "fd_d1_t2.5e-05_forward_3-protocol_sha256",
+    "fd_d1_t2.5e-05_forward_3-mode",
+    "fd_d1_t2.5e-05_forward_4-port",
+    "fd_d1_t2.5e-05_forward_4-direction",
+    "fd_d1_t2.5e-05_forward_4-t",
+    "fd_d1_t2.5e-05_forward_4-protocol_sha256",
+    "fd_d1_t2.5e-05_forward_4-mode"
+  ],
+  "negative_count": 40,
+  "baseline_values": [
+    5.241391808065785, 1.7705740956072455, 0.9464419027254967, 19.45972174179671, 19.459721741796614
+  ],
+  "row_keys": [
+    "ch5:phase_coverage_and_advisory_goals",
+    "ch5:P1:engineering_screen",
+    "ch5:P2:engineering_screen",
+    "ch9:P3:engineering_screen",
+    "ch9:P4:engineering_screen"
+  ],
+  "original_status": "SCIENTIFIC_COMPARISON_FAIL",
+  "original_consumer_sha256": "bd49b00c76a29088c36bf0f026c9729050ef4fe78a184d77c63d405f6efee211",
+  "protocol_sha256": "03209b5e5e9da1dbbccc62994b90202c7e2ed2bf78a9d0dfc30d9e65539d38d3",
+  "new_native_forward_solves": 8,
+  "new_native_adjoint_solves": 0,
+  "reused_native_adjoint_records": 12
+}

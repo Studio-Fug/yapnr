@@ -1,0 +1,16 @@
+{
+ "schema": "yapnr-rf-forward/1",
+ "spec": "line-osh-m-w0p40-l30-m-eq",
+ "spec_sha256": "93efc452bfd48fee5051a369a1c3becba0fb20a11185e4caa431d78a41ce2660",
+ "copper_mm": [
+  [
+   0.0,
+   30.0,
+   -0.2,
+   0.2
+  ]
+ ],
+ "pixels": 4800,
+ "what": "straight 0.4 mm line, 30 mm, run 0b",
+ "substrate": "M-eq"
+}

@@ -1,0 +1,136 @@
+{
+  "schema": "yapnr-order0-rf/1",
+  "s21_criterion_db": -3.4,
+  "loss_offset_db": 0.05,
+  "s21_optimizer_db": -3.35,
+  "band_ghz": [4.25, 5.75],
+  "selection": "Among the formulations whose exported design passes every validation criterion on all three grids (coarse; fine and finer), ship the one with the largest worst-case margin over the fine and finer grids, the margin of a check being (limit - worst) in dB for |S11| and (worst - limit) for |S21| and |S31|; on a tie (within 0.05 dB) the one whose export changed the fewest pixels in the width and space repair (validation.json `repaired_pixels`), then the earlier one in the order base, robust, star, sched. Every attempt and its validation is published (§7 items 1 and 6).",
+  "formulations": {
+    "base": "the plan's §4.4 formulation (round 2's passing divider, V3)",
+    "robust": "a wider robust set (thresholds 0.40/0.60) from β = 8: against designs that pass the optimization grid and miss the finer ones, and against the narrow features and gaps the thickness-equivalent substrate models least well (review R15)",
+    "star": "a junction start (`seed: star`, the ports' lines joined at the window centre, a 50 Ω T) instead of the uniform 0.3: another basin",
+    "sched": "a longer plain epoch at β = 8 (35, as the combiner W11, whose t still fell at its 25th) and adaptive steps measured from the epoch's best t (design §24.3: the current-t rule let t creep)"
+  },
+  "substrates": {
+    "M-eq": {
+      "er": 3.4417,
+      "tan_delta": 0.0088,
+      "h_mm": 0.1795,
+      "f_ref_ghz": 5.0
+    },
+    "M-nom": {
+      "er": 3.561,
+      "tan_delta": 0.0095,
+      "h_mm": 0.1999,
+      "f_ref_ghz": 5.0
+    },
+    "M-eq-em528": {
+      "er": 3.5957,
+      "tan_delta": 0.00487,
+      "h_mm": 0.1751,
+      "f_ref_ghz": 5.0
+    },
+    "W-eq": {
+      "er": 3.7088,
+      "tan_delta": 0.009,
+      "h_mm": 1.3583,
+      "f_ref_ghz": 5.0
+    },
+    "W-nom": {
+      "er": 3.7404,
+      "tan_delta": 0.0095,
+      "h_mm": 1.3904,
+      "f_ref_ghz": 5.0
+    },
+    "W-eq-em528": {
+      "er": 3.9284,
+      "tan_delta": 0.00498,
+      "h_mm": 1.3484,
+      "f_ref_ghz": 5.0
+    }
+  },
+  "specs": {
+    "d1-base": {
+      "name": "divider-osh-m",
+      "sha256": "5f9ddcedefad4aed05d2f8fbcb77e3204e53cba509d5b310db4f5bf76d40bc34"
+    },
+    "d1-robust": {
+      "name": "divider-osh-m-robust",
+      "sha256": "77fdf852d0d26631bb656d9616c4182d62ef43e9964dceb588096e13d75818f1"
+    },
+    "d1-star": {
+      "name": "divider-osh-m-star",
+      "sha256": "5c8ff818df422873aa88d55bef2dedd6a6ce6afaf8815cf4395bdffaf75e430d"
+    },
+    "d1-sched": {
+      "name": "divider-osh-m-sched",
+      "sha256": "bbfd3c2c71fb105c389fb3dd58c947bd2e93bc113f0c1115e98ed0f9a4913da3"
+    },
+    "d2-base": {
+      "name": "divider-osh-w",
+      "sha256": "3cd0f6a2a9a37891d594ed3ba1acf0ce12e8548d047d79a06e902e9534abbdeb"
+    },
+    "d2-robust": {
+      "name": "divider-osh-w-robust",
+      "sha256": "8f479e5f857e9bf54e5d2235affc612db00f1d76f12a4d1e642bda1ef5ee0098"
+    },
+    "d2-star": {
+      "name": "divider-osh-w-star",
+      "sha256": "de4103301f0d5a853c1d2788c34c4c666907e1e8a5769c5e382f9ff9dba72351"
+    },
+    "d2-sched": {
+      "name": "divider-osh-w-sched",
+      "sha256": "26818186929a27e53de2ae2cba2be6dc548d652e38915d03ed060c0f9a833f84"
+    }
+  },
+  "runs": {
+    "r1-m-eq": {
+      "spec": "r1-osh-m-m-eq",
+      "sha256": "769fb6d724e574f22dc93fa04d4aad1b6461bc54a4a1c90037da95c76d8c3b1d"
+    },
+    "r1-m-nom": {
+      "spec": "r1-osh-m-m-nom",
+      "sha256": "c78a055fdeea0098855e21ef95beb26403fe4553a80b5c85c466b745d02602b5"
+    },
+    "r1-m-eq-em528": {
+      "spec": "r1-osh-m-m-eq-em528",
+      "sha256": "dd95213e35834942a596abac4efa3bdce33b844bcec5d314b49280e5b79e71dd"
+    },
+    "r1t-w-eq": {
+      "spec": "r1t-osh-w-w-eq",
+      "sha256": "c3d4cf500781792df2a3374838e874153ff17456793e00e14cea08fe5bd3db94"
+    },
+    "r1t-w-nom": {
+      "spec": "r1t-osh-w-w-nom",
+      "sha256": "1b39f7667ebf57d47b12464abbcca90e938fef1b750bc38b06a7eb75a527d4ee"
+    },
+    "r1t-w-eq-em528": {
+      "spec": "r1t-osh-w-w-eq-em528",
+      "sha256": "d2290b99615c160990ec28ce10777fe32250b82c44eb9106eb30785a72655881"
+    },
+    "line-m-w040-l10": {
+      "spec": "line-osh-m-w0p40-l10-m-eq",
+      "sha256": "c935ef6d7498bb9300fb0b23c3383117289fc7b83088d3c43a507d6c65a34e45"
+    },
+    "line-m-w040-l30": {
+      "spec": "line-osh-m-w0p40-l30-m-eq",
+      "sha256": "93efc452bfd48fee5051a369a1c3becba0fb20a11185e4caa431d78a41ce2660"
+    },
+    "line-m-w070-l10": {
+      "spec": "line-osh-m-w0p70-l10-m-eq",
+      "sha256": "c2e0d767e8492821983a6f2e8a58ab08d845ee94355b6cca7ee6e9c1f13239da"
+    },
+    "line-m-w070-l30": {
+      "spec": "line-osh-m-w0p70-l30-m-eq",
+      "sha256": "2b14f09414fe5124b2a66d810472f7a5070febd8e6cda128ebeb37b74ed78107"
+    },
+    "line-w-w300-l20": {
+      "spec": "line-osh-w-w3p00-l20-w-eq",
+      "sha256": "02ab086eb18a78028ab123eba90ac3ccdcb1745c3cb020d28b6c0be63683f0e8"
+    },
+    "line-w-w300-l60": {
+      "spec": "line-osh-w-w3p00-l60-w-eq",
+      "sha256": "60ca90b75f6ede52711dd7cf3d5b6c520f2e55c1a6071e47c2fda53d67121304"
+    }
+  }
+}

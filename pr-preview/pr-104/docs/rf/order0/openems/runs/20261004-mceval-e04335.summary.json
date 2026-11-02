@@ -1,0 +1,58 @@
+{
+  "campaign": "20261004-mceval-e04335",
+  "missing": [],
+  "models": {
+    "d1-r025-p1": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 3081.1,
+      "mcells_per_s": [280.58],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 4016.349
+    },
+    "d1-r025-p2": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 3081.2,
+      "mcells_per_s": [300.5],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 3619.606
+    },
+    "r1-r025-p1": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 2355.7,
+      "mcells_per_s": [228.81],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 3588.578
+    },
+    "r1-r025-p2": {
+      "arch_flags": "-march=x86-64-v4 -mtune=znver4",
+      "cpu": "x86_64",
+      "full": false,
+      "max_rss_mb": 2355.2,
+      "mcells_per_s": [291.94],
+      "ok": true,
+      "openems_options": {
+        "exact_endcriteria": true
+      },
+      "threads": 8,
+      "wall_s": 2818.628
+    }
+  }
+}

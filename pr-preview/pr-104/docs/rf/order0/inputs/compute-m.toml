@@ -1,0 +1,56 @@
+# Order 0 D1: every formulation in parallel, and the references'
+# forward predictions on the other substrates. One family (c4-highcpu-16)
+# for the comparison. Written by python -m yapnr.rf.order0 write.
+name = "order0-d1"
+image = "edge"
+
+[defaults]
+threads = 16
+cpus = 8
+memory_gb = 24
+disk_gb = 10
+max_wall_s = 10800
+require_native = true
+
+[placement]
+shape = "c4-highcpu-16"
+
+[[jobs]]
+id = "d1-base"
+case = "divider"
+spec = "specs/d1-base.json"
+criteria = "criteria/d1.json"
+
+[[jobs]]
+id = "d1-robust"
+case = "divider"
+spec = "specs/d1-robust.json"
+criteria = "criteria/d1.json"
+
+[[jobs]]
+id = "d1-star"
+case = "divider"
+spec = "specs/d1-star.json"
+criteria = "criteria/d1.json"
+
+[[jobs]]
+id = "d1-sched"
+case = "divider"
+spec = "specs/d1-sched.json"
+criteria = "criteria/d1.json"
+
+[[jobs]]
+id = "r1-m-nom"
+case = "divider"
+validate = "runs/r1-m-nom"
+criteria = "criteria/ref-m.json"
+args = ["--no-fine"]
+max_wall_s = 4800
+
+[[jobs]]
+id = "r1-m-eq-em528"
+case = "divider"
+validate = "runs/r1-m-eq-em528"
+criteria = "criteria/ref-m.json"
+args = ["--no-fine"]
+max_wall_s = 4800

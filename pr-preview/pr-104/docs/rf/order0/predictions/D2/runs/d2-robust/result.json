@@ -1,0 +1,248 @@
+{
+ "schema": "yapnr-rf-result/1",
+ "spec": "divider-osh-w-robust",
+ "spec_sha256": "f072ce9885e97b327236de2692c1743046cec8157b5d87c414d6f32f2c01234a",
+ "solver": {
+  "grid_cells": [
+   103,
+   140,
+   22
+  ],
+  "cells": 317240,
+  "pitch_mm": 0.5,
+  "substrate_cells": 4,
+  "dt_ps": 0.6703502752553736,
+  "courant": 0.95,
+  "cpml_cells": [
+   10,
+   10,
+   10,
+   10,
+   8
+  ],
+  "design_pixels": [
+   40,
+   48
+  ],
+  "port_width_cells": {
+   "1": 6,
+   "2": 6,
+   "3": 6
+  },
+  "port_zc_at_fc_ohm": {
+   "1": [
+    51.24848261892988,
+    -0.165758601407856
+   ],
+   "2": [
+    51.24848261892988,
+    -0.165758601407856
+   ],
+   "3": [
+    51.24848261892988,
+    -0.165758601407856
+   ]
+  },
+  "pulse_ghz": [
+   5.0,
+   1.0
+  ],
+  "objective_ghz": [
+   4.25,
+   4.5,
+   4.75,
+   5.0,
+   5.25,
+   5.5,
+   5.75
+  ],
+  "decimation": 82,
+  "edge_correction": true,
+  "port_source": "mode",
+  "tol": 0.001,
+  "adjoint_tol": 0.001,
+  "backend": "native",
+  "dtype": "float64",
+  "threads": 8,
+  "native": {
+   "loaded": true,
+   "library": "libyapnr_fdtd.so",
+   "sha256": "1a3ab988e1aac1a839f3ec760c241f8836e1550de254586dbe5ebd1a1231deee",
+   "source_sha256": "9f149dc44267e05574813e7482ec39fb5030d5cf3b7f5d7c362dbb40a70d4a33",
+   "compiler": "gcc 13.3.0",
+   "isa": "x86-64 avx512f",
+   "arithmetic": "no contraction, no reassociation (checked at load)",
+   "threads": 8
+  },
+  "filter_radius_mm": 1.0,
+  "material_grid": {
+   "shape": [
+    40,
+    48
+   ],
+   "ring_width": 3,
+   "symmetry": [
+    "y"
+   ],
+   "n_dof": 942,
+   "fixed_pixels": 36
+  },
+  "groups": [
+   {
+    "name": "x1",
+    "excitation": 1,
+    "requirements": 3
+   }
+  ]
+ },
+ "optimizer": {
+  "schedule": {
+   "betas": [
+    8.0,
+    16.0,
+    32.0,
+    64.0
+   ],
+   "iterations": [
+    25,
+    15,
+    15,
+    15
+   ],
+   "min_iterations": 8,
+   "lookback": 5,
+   "t_tol": 0.001,
+   "drho_tol": 0.01,
+   "move": 0.2,
+   "move_late": 0.05,
+   "late_beta": 32.0
+  },
+  "iterations": 70,
+  "stop_reason": "schedule",
+  "final_beta": 64.0,
+  "gray": 0.0051775059436597526,
+  "gray_ok": true,
+  "t_last": 39.18250271793593,
+  "export_iteration": 70,
+  "t_binary_exported": 38.638026548241925,
+  "t_binary_last": 39.13115723940353,
+  "best_iteration_tracked": 65
+ },
+ "coarse_binary": {
+  "frequencies_ghz": [
+   4.25,
+   4.5,
+   4.75,
+   5.0,
+   5.25,
+   5.5,
+   5.75
+  ],
+  "t": 38.638026548241925,
+  "f": [
+   38.638026548241925,
+   37.67596286326766,
+   36.83532252873416,
+   36.09556586279933,
+   35.4396128076487,
+   34.85312086081043,
+   34.32421372578005
+  ],
+  "s_db": {
+   "S11": [
+    -0.35322478553285547,
+    -0.3676362011447695,
+    -0.38104087485286603,
+    -0.39300879132557376,
+    -0.40319491663855705,
+    -0.41136672689575,
+    -0.4174261131568497
+   ],
+   "S21": [
+    -41.95337599881406,
+    -40.99131096075253,
+    -40.150669665962965,
+    -39.41091229583315,
+    -38.754958709089664,
+    -38.1684663503783,
+    -37.63955888872304
+   ],
+   "S31": [
+    -41.95337599881282,
+    -40.9913109607513,
+    -40.150669665961836,
+    -39.41091229583216,
+    -38.7549587090889,
+    -38.168466350377834,
+    -37.639558888722895
+   ]
+  },
+  "eta": {},
+  "requirements": [
+   {
+    "requirement": "|S11| \u2264 -20 dB @ pass",
+    "worst_phi": 1.9646775214938237,
+    "met": false
+   },
+   {
+    "requirement": "|S21| \u2265 -3.35 dB @ pass",
+    "worst_phi": 38.60336918921455,
+    "met": false
+   },
+   {
+    "requirement": "|S31| \u2265 -3.35 dB @ pass",
+    "worst_phi": 38.6033691892133,
+    "met": false
+   }
+  ],
+  "all_met": false
+ },
+ "sweep": {
+  "file": "coarse.s3p",
+  "points": 101,
+  "ghz": [
+   4.0,
+   6.0
+  ],
+  "passivity_margin_min": 0.060089048367523795,
+  "steps": {
+   "1": 8326,
+   "2": 8326,
+   "3": 8326
+  }
+ },
+ "footprint": {
+  "file": "footprint.kicad_mod",
+  "islands": 5,
+  "net_ties": 0,
+  "repair": {
+   "changed_pixels": 4,
+   "added": 2,
+   "removed": 2,
+   "rounds": 2
+  }
+ },
+ "drc": {
+  "min_width_mm": 1.0,
+  "min_space_mm": 1.0,
+  "resolution_mm": 0.0625,
+  "ok": true,
+  "violations": []
+ },
+ "provenance": {
+  "yapnr": "0.0.0.dev195+g688fac3",
+  "python": "3.11.15",
+  "numpy": "1.26.4",
+  "torch": "2.3.1+cpu",
+  "system": "Linux",
+  "machine": "x86_64",
+  "backend": "native",
+  "dtype": "float64",
+  "threads": 8
+ },
+ "wall_s": {
+  "optimization": 1951.3925965859967,
+  "export": 16.992453535000095,
+  "total": 2010.7027087739998
+ }
+}
